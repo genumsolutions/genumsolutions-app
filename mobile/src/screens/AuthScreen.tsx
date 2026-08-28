@@ -17,9 +17,10 @@ type Mode = 'signin' | 'signup' | 'signedout';
 
 type Props = {
   onAuthed: () => void;
+  onSignedOut: () => void;
 };
 
-export function AuthScreen({ onAuthed }: Props) {
+export function AuthScreen({ onAuthed, onSignedOut }: Props) {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,7 +69,7 @@ export function AuthScreen({ onAuthed }: Props) {
     setMode('signin');
     setEmail('');
     setPassword('');
-    onAuthed();
+    onSignedOut();
   };
 
   if (mode === 'signedout') {

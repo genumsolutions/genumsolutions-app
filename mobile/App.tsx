@@ -39,6 +39,11 @@ export default function App() {
     setRoute('home');
   };
 
+  const handleSignedOut = () => {
+    setAuthed(false);
+    setRoute('auth');
+  };
+
   const buildRoute = (screen: string) => setRoute(screen as Route);
 
   if (authed === null) {
@@ -54,7 +59,7 @@ export default function App() {
     return (
       <SafeAreaView className="flex-1 bg-mist">
         <StatusBar style="dark" />
-        <AuthScreen onAuthed={handleAuthed} />
+        <AuthScreen onAuthed={handleAuthed} onSignedOut={handleSignedOut} />
       </SafeAreaView>
     );
   }
@@ -63,7 +68,9 @@ export default function App() {
     <SafeAreaView className="flex-1 bg-mist">
       <StatusBar style="light" />
       {route === 'home' && <HomeScreen onNavigate={buildRoute} />}
-      {route === 'auth' && <AuthScreen onAuthed={handleAuthed} />}
+      {route === 'auth' && (
+        <AuthScreen onAuthed={handleAuthed} onSignedOut={handleSignedOut} />
+      )}
       {route === 'offlineAudit' && <OfflineAuditScreen />}
       {route === 'productEdit' && <ProductEditScreen />}
       {route === 'robotCar' && <RobotCarControlScreen />}
