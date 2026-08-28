@@ -1,15 +1,14 @@
 {
   "project_name": "Genum Solutions Mobile",
   "repo": "https://github.com/genumsolutions/genumsolutions-app.git",
-  "last_run": "2026-08-28T14:28:23Z",
+  "last_run": "2026-08-28T14:36:34Z",
   "last_branch": "dev",
-  "project_status": "configured",
+  "project_status": "auth_and_migration_ready",
   "incomplete_tasks": [
-    "add_android_package_name",
     "upload_high_res_logos",
-    "implement_auth_flows",
     "add_ble_service_characteristics",
-    "create_supabase_tables_and_rls"
+    "run_supabase_migration_in_dashboard",
+    "build_android_dev_client_for_ble"
   ],
   "branding": {
     "colors": { "primary": "#1e3a8a", "secondary": "#b45309" },

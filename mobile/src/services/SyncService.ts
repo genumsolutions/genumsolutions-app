@@ -19,10 +19,22 @@ import { StorageService } from './StorageService';
 
 // Registry mapping entity -> Supabase table name.
 // Extend this when you add more offline entities.
+// Tables are defined by mobile/supabase/migrations/0001_*.sql
 const TABLE_BY_ENTITY: Record<string, string> = {
-  audits: 'audits',
-  products: 'products',
+  audits: 'offline_audits',
+  products: 'offline_product_edits',
 };
+
+// Attach the signed-in user id so RLS insert policies
+// (`with check user_id = auth.uid()`) are satisfied.
+async function withUserId(record: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data } = await supabase.auth.getUser();
+  const userId = data.user?.id;
+  if (!userId) {
+    throw new Error('SyncService: no authenticated user to attach to record');
+  }
+  return { ...record, user_id: userId };
+}
 
 export async function processQueue(entity: string): Promise<number> {
   const table = TABLE_BY_ENTITY[entity];
@@ -35,14 +47,20 @@ export async function processQueue(entity: string): Promise<number> {
   const remaining: Record<string, unknown>[] = [];
   let synced = 0;
 
-  for (const record of queue) {
-    // PLAYLACEHOLDER: handle offline -> skip, online -> upsert
-    const { error } = await supabase.from(table).upsert(record).select();
-    if (error) {
-      // keep the failed record for retry / dead-lettering
-      remaining.push(record);
-    } else {
-      synced += 1;
+  for (const rawRecord of queue) {
+    try {
+      const record = await withUserId(rawRecord);
+      const { error } = await supabase.from(table).upsert(record).select();
+      if (error) {
+        // keep the failed record for retry / dead-lettering
+        remaining.push(rawRecord);
+      } else {
+        synced += 1;
+      }
+    } catch (e) {
+      // e.g. not signed in - keep queued and try again later
+      console.error('SyncService.processQueue error', e);
+      remaining.push(rawRecord);
     }
   }
 
