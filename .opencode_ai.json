@@ -1,0 +1,30 @@
+{
+  "project_name": "Genum Solutions Mobile",
+  "repo": "https://github.com/genumsolutions/genumsolutions-app.git",
+  "last_run": "2026-08-28T13:49:50Z",
+  "last_branch": "dev",
+  "project_status": "scaffolded",
+  "incomplete_tasks": [
+    "fill_supabase_keys",
+    "add_android_package_name",
+    "upload_high_res_logos",
+    "implement_auth_flows",
+    "add_ble_service_characteristics"
+  ],
+  "branding": {
+    "colors": { "primary": "#1e3a8a", "secondary": "#b45309" },
+    "fonts": { "heading": "Sora", "body": "Inter" },
+    "assets": ["logo.png"]
+  },
+  "coding_preferences": {
+    "guidance": "baby-step, extremely detailed",
+    "style": "direct, implementation-focused",
+    "comments": "always explain why and where to change",
+    "refactors": "never perform large refactors without explicit approval"
+  },
+  "user_preferences": {
+    "name": "Casper",
+    "work_style": "iterative; small commits; prefer examples and inline comments"
+  },
+  "notes": "Do not modify website repo. Use placeholders for secrets."
+}
