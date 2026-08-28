@@ -14,7 +14,7 @@ type Props = {
 };
 
 const NAV_ITEMS = [
-  { key: 'auth', label: 'Sign In / Sign Up' },
+  { key: 'auth', label: 'Account' },
   { key: 'offlineAudit', label: 'Offline Audits' },
   { key: 'productEdit', label: 'Edit Products' },
   { key: 'robotCar', label: 'Robot Car (BLE)' },
