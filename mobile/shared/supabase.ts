@@ -1,16 +1,17 @@
 // =====================================================================
-// Supabase client connector (PLACEHOLDERS ONLY).
+// Supabase client connector.
 //
-// Fill in SUPABASE_URL and SUPABASE_ANON_KEY from your Supabase dashboard:
+// SUPABASE_URL and SUPABASE_ANON_KEY come from your Supabase project:
 //   Supabase -> Project Settings -> API
-//   (use the bare project URL, do NOT append /rest/v1/)
+//   (bare project URL, no /rest/v1/ suffix)
 //
-// Do NOT hardcode real keys in git. For local development put them in a
-// mobile/.env file (create it if missing) or use expo prebuild / EAS envs.
+// The anon key is public by design but database rows are protected by
+// Row Level Security policies. Never add the service_role key here.
 // =====================================================================
 import { createClient } from '@supabase/supabase-js';
 
-export const SUPABASE_URL = '<YOUR_SUPABASE_URL>';
-export const SUPABASE_ANON_KEY = '<YOUR_SUPABASE_ANON_KEY>';
+export const SUPABASE_URL = 'https://bkylfnlybtsujwzropru.supabase.co';
+export const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJreWxmbmx5YnRzdWp3enJvcHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDE5NjksImV4cCI6MjEwMzA3Nzk2OX0.M-FOzaR4P1p-AHweG60n5STGpJRgbwdgodAcenMr0IQ';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
