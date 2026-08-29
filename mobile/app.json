@@ -2,7 +2,7 @@
   "expo": {
     "name": "GENUM Solutions",
     "slug": "genum-solutions",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -11,6 +11,7 @@
     },
     "android": {
       "package": "com.genumsolutions.app",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

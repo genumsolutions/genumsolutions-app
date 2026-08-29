@@ -28,6 +28,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "doctor": "npx expo-doctor",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
   },
