@@ -21,6 +21,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { APP_VERSION } from '../config/site';
 
 type Device = {
   id: string;
@@ -245,6 +246,10 @@ export function ToolsScreen({ visible, onClose }: Props) {
               on the website's tools page.
             </Text>
           </View>
+
+          <Text className="mx-5 mt-8 pb-4 text-center text-[11px] text-muted/70">
+            GENUM Solutions v{APP_VERSION}
+          </Text>
         </ScrollView>
       </SafeAreaView>
     </Modal>
