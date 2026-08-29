@@ -19,14 +19,21 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// Current release. Update on every publish (keep in sync with app.json.
+//version / src/config/site.ts / src/config/update.ts).
+const VERSION = '1.2.0';
+const APK_SIZE_MB = '23.4 MB';
+
 const defaultApk = resolve(
   rootDir,
   'releases',
-  'genum-solutions-1.1.0-arm64-v8a.apk',
+  `genum-solutions-${VERSION}-arm64-v8a.apk`,
 );
 
 const BUCKET = 'app-releases';
 const FILE_NAME = 'genum-solutions-latest.apk';
+const MANIFEST_NAME = 'release.json';
 const CONTENT_TYPE = 'application/vnd.android.package-archive';
 
 function loadEnv() {
@@ -114,6 +121,33 @@ async function main() {
   const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${FILE_NAME}`;
   console.log('Uploaded. Public download URL:');
   console.log(publicUrl);
+
+  // Publish the release manifest the native app checks for updates against.
+  const manifest = JSON.stringify(
+    {
+      version: VERSION,
+      apkUrl: publicUrl,
+      size: APK_SIZE_MB,
+      notes: 'Bug fixes and the new in-app update checker.',
+    },
+    null,
+    2,
+  );
+  const manifestUpload = await fetch(`${url}/storage/v1/object/${BUCKET}/${MANIFEST_NAME}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+      'x-upsert': 'true',
+      'cache-control': '300',
+    },
+    body: manifest,
+  });
+  if (!manifestUpload.ok) {
+    const text = await manifestUpload.text().catch(() => '');
+    throw new Error(`Manifest upload failed: ${manifestUpload.status} ${text}`);
+  }
+  console.log(`Released v${VERSION}. Manifest: ${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`);
 }
 
 main().catch((err) => {

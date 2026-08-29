@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_VERSION } from '../config/site';
+import { UpdateScreen } from './UpdateScreen';
 
 type Device = {
   id: string;
@@ -50,6 +51,7 @@ export function ToolsScreen({ visible, onClose }: Props) {
   const [ledOn, setLedOn] = useState(true);
   const [headlightsOn, setHeadlightsOn] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>('Medium');
+  const [showUpdate, setShowUpdate] = useState(false);
 
   const connected = connectedId !== null;
   const connectedDevice = DEMO_DEVICES.find((d) => d.id === connectedId) ?? null;
@@ -247,11 +249,24 @@ export function ToolsScreen({ visible, onClose }: Props) {
             </Text>
           </View>
 
-          <Text className="mx-5 mt-8 pb-4 text-center text-[11px] text-muted/70">
-            GENUM Solutions v{APP_VERSION}
-          </Text>
+          <View className="mx-5 mt-8 rounded-lg border border-line bg-white p-4">
+            <View className="flex-row items-center justify-between">
+              <View>
+                <Text className="text-sm font-semibold text-ink">GENUM Solutions</Text>
+                <Text className="mt-0.5 text-[11px] text-muted">v{APP_VERSION}</Text>
+              </View>
+              <Pressable
+                onPress={() => setShowUpdate(true)}
+                className="rounded-full bg-navy px-4 py-2"
+              >
+                <Text className="text-xs font-bold text-white">Check for update</Text>
+              </Pressable>
+            </View>
+          </View>
         </ScrollView>
       </SafeAreaView>
+
+      <UpdateScreen visible={showUpdate} onClose={() => setShowUpdate(false)} />
     </Modal>
   );
 }

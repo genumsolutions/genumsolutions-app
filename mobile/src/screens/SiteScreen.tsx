@@ -110,6 +110,11 @@ export function SiteScreen() {
         style={{ flex: 1 }}
         originWhitelist={['http://*', 'https://*']}
         allowsBackForwardNavigationGestures
+        // Tell the site we are the native app so it hides the "download the
+        // app" sticker (the app has its own in-app update flow instead).
+        injectedJavaScriptBeforeContentLoaded={
+          'window.GENUM_APP = true; true;'
+        }
         // Browser-like sandbox: persistence, storage, no forced zoom.
         javaScriptEnabled
         domStorageEnabled
