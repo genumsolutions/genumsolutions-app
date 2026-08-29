@@ -220,6 +220,12 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
               )}
             </Pressable>
 
+            {/* Google sign-in notice */}
+            <Text className="mt-2 text-xs text-muted">
+              Google sign-in requires configuration in the app. If it fails, use
+              email & password instead.
+            </Text>
+
             {/* Footer links */}
             <View className="mt-6 flex-row items-center justify-between">
               <Pressable

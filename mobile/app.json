@@ -37,7 +37,8 @@
           "imageWidth": 160,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ]
   }
 }

@@ -2,11 +2,11 @@
 // authService - native sign-in primitives used by AppContext.
 //
 //   signInWithPassword()  -> direct Supabase email/password sign-in.
-//   signInWithGoogle()    -> PKCE OAuth via a system browser tab. The
-//                            browser is opened with openAuthSessionAsync
-//                            (Chrome Custom Tab), NOT the WebView, because
-//                            Google rejects OAuth inside embedded WebViews.
-//                            On return, the code is exchanged for a session.
+//   signInWithGoogle()    -> native Google in-app sign-in via
+//                            @react-native-google-signin/google-signin.
+//                            On success the ID token is exchanged
+//                            for a Supabase session, then forwarded
+//                            to the website via /api/auth/native-handoff.
 //   forwardSessionToWebView() -> injects a fetch() into the loaded site that
 //                            posts the tokens to /api/auth/native-handoff.
 //                            That endpoint validates the tokens and writes
@@ -21,6 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 import type { Session } from '@supabase/supabase-js';
 import type { MutableRefObject } from 'react';
 import type { WebView } from 'react-native-webview';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { NATIVE_AUTH_REDIRECT, supabase, supabaseConfigured } from '../config/supabase';
 
 const SESSION_KEY = 'genum-native-session';
@@ -78,53 +79,40 @@ export async function signInWithPassword(
 }
 
 // ---------------------------------------------------------------------
-// Google (PKCE OAuth in a system browser)
+// Google (native in-app sign-in via Play Services)
 // ---------------------------------------------------------------------
+// Uses @react-native-google-signin/google-signin to open the standard
+// Google account picker inside the app (no Chrome Custom Tab, no browser diversion).
+// On success the ID token is exchanged for a Supabase session via
+// signInWithIdToken, then handed to the website the same way as native password.
+// If Play Services or configuration is missing, a graceful notice is returned.
 export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
     return { status: 'error', message: mapAuthError('not configured') };
   }
   try {
-    // Generate the auth URL WITHOUT opening a browser (skipBrowserRedirect).
-    // We open it ourselves so completion handling is explicit and reliable.
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: NATIVE_AUTH_REDIRECT,
-        skipBrowserRedirect: true,
-      },
-    });
-    if (error) return { status: 'error', message: error.message };
-    if (!data?.url) {
-      return { status: 'error', message: 'Could not start Google sign-in.' };
+    await GoogleSignin.hasPlayServices();
+    const response = await GoogleSignin.signIn();
+    if (response.data?.idToken) {
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.data.idToken,
+      });
+      if (error) {
+        return {
+          status: 'error',
+          message:
+            'Google sign-in failed. Please try signing in with email, or make sure Google is configured in the Supabase dashboard.',
+        };
+      }
+      return { status: 'ok', session: data.session };
     }
-
-    // System browser tab; returns the final redirect URL on success.
-    const result = await WebBrowser.openAuthSessionAsync(data.url, NATIVE_AUTH_REDIRECT);
-    if (result.type !== 'success') {
-      // cancel / dismiss / opened / locked: the user never finished, or the
-      // browser came back without a redirect - treat as cancelled, never error.
-      return { status: 'cancelled' };
-    }
-    const code = extractCode(result.url);
-    if (!code) {
-      return { status: 'error', message: 'Google sign-in callbacks missing a code.' };
-    }
-    const { data: exchanged, error: exchangeError } =
-      await supabase.auth.exchangeCodeForSession(code);
-    if (exchangeError) return { status: 'error', message: exchangeError.message };
-    return { status: 'ok', session: sessionFromResponse(exchanged.session) };
+    // User cancelled the picker or no ID token returned.
+    return { status: 'cancelled' };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Google sign-in failed.';
-    return { status: 'error', message: message || 'Google sign-in failed.' };
+    return { status: 'error', message };
   }
-}
-
-/** Pulls `?code=` (PKCE) out of the redirect URL - works for custom schemes. */
-function extractCode(url: string): string | null {
-  if (!url) return null;
-  const match = url.match(/[?&]code=([^&]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
 }
 
 // ---------------------------------------------------------------------
