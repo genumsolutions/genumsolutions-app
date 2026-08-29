@@ -38,7 +38,7 @@
           "resizeMode": "contain"
         }
       ],
-      "@react-native-google-signin/google-signin"
+      ["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER" }]
     ]
   }
 }

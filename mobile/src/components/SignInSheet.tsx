@@ -26,7 +26,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabaseConfigured } from '../config/supabase';
+import { supabaseConfigured, googleConfigured } from '../config/supabase';
 import { useApp } from '../context/AppContext';
 
 type Props = {
@@ -202,7 +202,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
             {/* Google */}
             <Pressable
               onPress={() => void signInWithGoogle()}
-              disabled={authBusy || !supabaseConfigured}
+              disabled={authBusy || !supabaseConfigured || !googleConfigured}
               accessibilityRole="button"
               className="mt-5 flex-row items-center justify-center rounded-xl border border-border bg-white py-3.5 disabled:opacity-60"
             >
@@ -221,10 +221,11 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
             </Pressable>
 
             {/* Google sign-in notice */}
-            <Text className="mt-2 text-xs text-muted">
-              Google sign-in requires configuration in the app. If it fails, use
-              email & password instead.
-            </Text>
+            {!googleConfigured && (
+              <Text className="mt-2 text-xs text-muted">
+                Google sign-in is being set up — use email & password instead.
+              </Text>
+            )}
 
             {/* Footer links */}
             <View className="mt-6 flex-row items-center justify-between">

@@ -17,12 +17,11 @@
 //                            be cleared by the OS between launches).
 // =====================================================================
 import * as SecureStore from 'expo-secure-store';
-import * as WebBrowser from 'expo-web-browser';
 import type { Session } from '@supabase/supabase-js';
 import type { MutableRefObject } from 'react';
 import type { WebView } from 'react-native-webview';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { NATIVE_AUTH_REDIRECT, supabase, supabaseConfigured } from '../config/supabase';
+import { googleConfigured, supabase, supabaseConfigured } from '../config/supabase';
 
 const SESSION_KEY = 'genum-native-session';
 
@@ -89,6 +88,13 @@ export async function signInWithPassword(
 export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
     return { status: 'error', message: mapAuthError('not configured') };
+  }
+  if (!googleConfigured) {
+    return {
+      status: 'error',
+      message:
+        'Google sign-in isn\'t set up in this build yet. Please use email & password instead.',
+    };
   }
   try {
     await GoogleSignin.hasPlayServices();
