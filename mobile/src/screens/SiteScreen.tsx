@@ -21,6 +21,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 import { WEBSITE_URL } from '../config/site';
 
@@ -72,7 +73,7 @@ export function SiteScreen() {
   const showFallback = offline || loadFailed;
 
   return (
-    <View className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-surface">
       <WebView
         ref={webRef}
         source={{ uri: WEBSITE_URL }}
@@ -120,7 +121,7 @@ export function SiteScreen() {
         animationType="slide"
         onRequestClose={() => setPopupUrl(null)}
       >
-        <View className="flex-1 bg-surface">
+        <SafeAreaView className="flex-1 bg-surface">
           <View className="flex-row items-center justify-between border-b border-line bg-mist px-4 py-3">
             <Text className="text-sm font-bold text-navy">Payment / Sign-in</Text>
             <Pressable onPress={() => setPopupUrl(null)}>
@@ -140,8 +141,8 @@ export function SiteScreen() {
               }}
             />
           ) : null}
-        </View>
+        </SafeAreaView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
