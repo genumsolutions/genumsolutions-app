@@ -23,7 +23,7 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Current release. Update on every publish (keep in sync with app.json.
 //version / src/config/site.ts / src/config/update.ts).
 const VERSION = '1.2.0';
-const APK_SIZE_MB = '23.4 MB';
+const APK_SIZE_MB = '23.3 MB';
 
 const defaultApk = resolve(
   rootDir,
