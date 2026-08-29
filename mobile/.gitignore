@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# release signing credentials - never commit
+/keystores/
+
+# built APK artifacts (rebuild via C:\bs\android -> gradlew assembleRelease)
+/releases/
