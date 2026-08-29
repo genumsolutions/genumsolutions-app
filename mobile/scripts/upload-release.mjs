@@ -22,7 +22,7 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultApk = resolve(
   rootDir,
   'releases',
-  'genum-solutions-1.0.0-arm64-v8a.apk',
+  'genum-solutions-1.1.0-arm64-v8a.apk',
 );
 
 const BUCKET = 'app-releases';
