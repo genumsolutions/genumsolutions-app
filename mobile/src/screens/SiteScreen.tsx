@@ -63,6 +63,15 @@ export function SiteScreen() {
     webRef.current?.reload();
   }, []);
 
+  // Navigate the WebView to a site path. Works for both the live site and the
+  // offline-cached shell once the service worker is installed.
+  const navigateTo = useCallback((path: string) => {
+    setLoadFailed(false);
+    webRef.current?.injectJavaScript(
+      `if (window.location.origin === '${WEBSITE_URL}') { window.location.assign('${path}'); } true;`
+    );
+  }, []);
+
   // Auto-reload the failed page once connectivity returns.
   useEffect(() => {
     if (!offline && loadFailed) {
@@ -103,15 +112,34 @@ export function SiteScreen() {
           </Text>
           <Text className="mt-2 text-center text-sm text-muted">
             {offline
-              ? 'Connect to the internet, then try again.'
+              ? 'Pages you have visited may still work below.'
               : 'We could not reach the site. Please try again.'}
           </Text>
+
           <Pressable
             onPress={reload}
-            className="mt-6 items-center rounded-full bg-navy px-8 py-3"
+            className="mt-6 w-full max-w-xs items-center rounded-full bg-navy px-8 py-3"
           >
             <Text className="font-bold text-white">Retry</Text>
           </Pressable>
+
+          {offline ? (
+            <>
+              <Pressable
+                onPress={() => navigateTo('/')}
+                className="mt-3 w-full max-w-xs items-center rounded-full border border-line bg-white px-8 py-3"
+              >
+                <Text className="font-bold text-navy">Open cached site</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => navigateTo('/offline')}
+                className="mt-3 w-full max-w-xs items-center rounded-full border border-line bg-white px-8 py-3"
+              >
+                <Text className="font-bold text-navy">Offline help</Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       ) : null}
 
