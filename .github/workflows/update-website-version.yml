@@ -1,0 +1,38 @@
+name: Update Website Version
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  update-website:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Get app version from app.json
+        id: get-version
+        run: echo "VERSION=$(node -e "console.log(require('./app.json').expo.version)')" >> $GITHUB_OUTPUT
+
+      - name: Update website APK_VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APP_VERSION="${{ steps.get-version.outputs.VERSION }}"
+          curl -s -X PUT \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/genumsolutions/genumsolutions-website/contents/components/AppBanner.tsx \
+            -d "{\"message\":\"chore: update APK_VERSION to $APP_VERSION\",\"content\":\"$(base64 -w0 <(grep -E 'const APK_VERSION = .*\"AppBanner.tsx' | head -1))\",\"branch\":\"main\"}" > /dev/null
+
+      - name: Commit website version change
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "actions[bot]@github.com"
+          git pull origin main
+          git add components/AppBanner.tsx
+          git commit -m "chore: update APK_VERSION to ${{ steps.get-version.outputs.VERSION }}"
+          git push origin main
