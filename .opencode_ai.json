@@ -1,29 +1,40 @@
 {
-  "project_name": "Genum Solutions Mobile",
-  "repo": "https://github.com/genumsolutions/genumsolutions-app.git",
-  "last_run": "2026-08-28T14:36:34Z",
-  "last_branch": "dev",
-  "project_status": "auth_and_migration_ready",
-  "incomplete_tasks": [
-    "upload_high_res_logos",
-    "add_ble_service_characteristics",
-    "run_supabase_migration_in_dashboard",
-    "build_android_dev_client_for_ble"
-  ],
-  "branding": {
-    "colors": { "primary": "#1e3a8a", "secondary": "#b45309" },
-    "fonts": { "heading": "Sora", "body": "Inter" },
-    "assets": ["logo.png"]
-  },
-  "coding_preferences": {
-    "guidance": "baby-step, extremely detailed",
-    "style": "direct, implementation-focused",
-    "comments": "always explain why and where to change",
-    "refactors": "never perform large refactors without explicit approval"
-  },
-  "user_preferences": {
-    "name": "Casper",
-    "work_style": "iterative; small commits; prefer examples and inline comments"
-  },
-  "notes": "Do not modify website repo. Use placeholders for secrets."
+    "project_name":  "Genum Solutions Mobile",
+    "repo":  "https://github.com/genumsolutions/genumsolutions-app.git",
+    "last_run":  "2026-08-28T14:36:34Z",
+    "last_branch":  "dev",
+    "project_status":  "hybrid_shell_offline_native_auth_done",
+    "incomplete_tasks":  [
+                             "upload_high_res_logos",
+                             "add_ble_service_characteristics",
+                             "run_supabase_migration_in_dashboard",
+                             "build_android_dev_client_for_ble",
+                             "add_native_auth_redirect_allowed_in_supabase",
+                             "verify_native_email_password_signin_on_device",
+                             "verify_google_oauth_on_device"
+                         ],
+    "branding":  {
+                     "colors":  {
+                                    "primary":  "#1e3a8a",
+                                    "secondary":  "#b45309"
+                                },
+                     "fonts":  {
+                                   "heading":  "Sora",
+                                   "body":  "Inter"
+                               },
+                     "assets":  [
+                                    "logo.png"
+                                ]
+                 },
+    "coding_preferences":  {
+                               "guidance":  "baby-step, extremely detailed",
+                               "style":  "direct, implementation-focused",
+                               "comments":  "always explain why and where to change",
+                               "refactors":  "never perform large refactors without explicit approval"
+                           },
+    "user_preferences":  {
+                             "name":  "Casper",
+                             "work_style":  "iterative; small commits; prefer examples and inline comments"
+                         },
+    "notes":  "Hybrid app mirroring genumsolutions-website (sibling repo). User approved editing the website repo for consistency (SW offline caching, auth handoff, checkout list fixes). Use placeholders for secrets."
 }

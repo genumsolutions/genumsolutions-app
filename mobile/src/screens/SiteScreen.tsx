@@ -1,66 +1,55 @@
 // =====================================================================
-// SiteScreen - full-screen WebView mirror of the GENUM Solutions website.
+// SiteScreen - the WebView that renders the GENUM website. It sits inside
+// the native shell (header above, tabs below), so it intentionally takes
+// the full remaining height with no safe-area padding of its own.
 //
-// The app is an exact copy of the live site rendered on mobile: every page
-// (store, cart, checkout, account, admin) works identically because the
-// WebView loads the website itself.
-//
-// Loading / reliability behavior:
-//   - branded splash only on the very first load (with a fail-safe timeout)
-//   - a thin progress bar for every subsequent in-app navigation, so pages
-//     are never hidden behind a blocking spinner
-//   - Android hardware back -> browser back (when available)
-//   - offline / load-failure fallback with Retry, "Open cached site" and
-//     "Offline help" (NetInfo driven + service-worker cached shell)
-//   - popup windows (payment gateways / OAuth) rendered in an in-app modal
-//   - cookies + DOM storage enabled so the login session persists
+//  - loads the live site with the injected bridge (BRIDGE_SCRIPT, which
+//    hides the website header/footer, compacts the content to an app feel,
+//    and streams cart / session / path / online state to native)
+//  - Android hardware back -> browser back
+//  - thin progress bar for in-app navigation (never blocks the page)
+//  - popup windows (payment gateways / OAuth) open in an in-app modal
 // =====================================================================
 import NetInfo from '@react-native-community/netinfo';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  BackHandler,
-  Modal,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { BackHandler, Modal, Pressable, Text, View } from 'react-native';
 import {
   WebView,
+  type WebViewMessageEvent,
   type WebViewNavigation,
 } from 'react-native-webview';
 import { WEBSITE_URL } from '../config/site';
-
-// If a navigation event pair is ever missed (common with client-side routing
-// in the Next.js App Router), stop showing the initial splash after this long
-// so the already-rendered page is never stuck behind the overlay.
-const INITIAL_LOAD_TIMEOUT_MS = 5000;
+import { useApp } from '../context/AppContext';
+import { BRIDGE_SCRIPT } from '../webview/inject';
 
 export function SiteScreen() {
-  const webRef = useRef<WebView>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const {
+    webRef,
+    setCart,
+    setUser,
+    setCurrentPath,
+    setOffline,
+    navigate,
+  } = useApp();
+
   const [progress, setProgress] = useState(0);
-  const [offline, setOffline] = useState(false);
+  const [navigating, setNavigating] = useState(false);
+  const [offlineUi, setOfflineUi] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [popupUrl, setPopupUrl] = useState<string | null>(null);
   const canGoBackRef = useRef(false);
 
-  // Track connectivity so we can show a proper "offline" state and
-  // auto-reload the moment the connection comes back.
+  // Track connectivity so the native shell can react and we can show a
+  // non-blocking "offline" hint (full-screen blocking was removed in the
+  // app redesign - see offline.ts for the caching strategy).
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
-      setOffline(state.isConnected === false);
+      const isOffline = state.isConnected === false;
+      setOffline(isOffline);
+      setOfflineUi(isOffline);
     });
     return () => unsubscribe();
-  }, []);
-
-  // Fail-safe: never let the initial splash block the page forever.
-  useEffect(() => {
-    if (!isInitialLoad) return;
-    const timer = setTimeout(() => setIsInitialLoad(false), INITIAL_LOAD_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [isInitialLoad]);
+  }, [setOffline]);
 
   // Android hardware back navigates the WebView history before exiting.
   useEffect(() => {
@@ -72,49 +61,69 @@ export function SiteScreen() {
       return false;
     });
     return () => subscription.remove();
-  }, []);
+  }, [webRef]);
 
   const handleNavigation = useCallback((state: WebViewNavigation) => {
     canGoBackRef.current = state.canGoBack;
+    setLoadFailed(false);
   }, []);
+
+  // Streaming state from the website's injected bridge.
+  const handleMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+        switch (data.type) {
+          case 'genum:cart':
+            setCart({ count: data.count, size: data.size });
+            break;
+          case 'genum:session':
+            setUser(data.user ?? null);
+            break;
+          case 'genum:path':
+            setCurrentPath(data.path);
+            break;
+          case 'genum:online':
+            setOffline(data.online === false);
+            break;
+          default:
+            break;
+        }
+      } catch {
+        // ignore malformed messages
+      }
+    },
+    [setCart, setUser, setCurrentPath, setOffline],
+  );
 
   const reload = useCallback(() => {
     setLoadFailed(false);
     webRef.current?.reload();
-  }, []);
-
-  // Navigate the WebView to a site path. Works for both the live site and the
-  // offline-cached shell once the service worker is installed.
-  const navigateTo = useCallback((path: string) => {
-    setLoadFailed(false);
-    webRef.current?.injectJavaScript(
-      `if (window.location.origin === '${WEBSITE_URL}') { window.location.assign('${path}'); } true;`
-    );
-  }, []);
+  }, [webRef]);
 
   // Auto-reload the failed page once connectivity returns.
   useEffect(() => {
-    if (!offline && loadFailed) {
+    if (!offlineUi && loadFailed) {
       reload();
     }
-  }, [offline, loadFailed, reload]);
+  }, [offlineUi, loadFailed, reload]);
 
-  const showFallback = offline || loadFailed;
-  const alone = isInitialLoad && !showFallback;
+  const showFallback = loadFailed;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <View className="flex-1 bg-surface">
       <WebView
-        ref={webRef}
+        ref={(ref) => {
+          webRef.current = ref;
+        }}
         source={{ uri: WEBSITE_URL }}
         style={{ flex: 1 }}
         originWhitelist={['http://*', 'https://*']}
         allowsBackForwardNavigationGestures
-        // Tell the site we are the native app so it hides the "download the
-        // app" sticker (the app has its own in-app update flow instead).
-        injectedJavaScriptBeforeContentLoaded={
-          'window.GENUM_APP = true; true;'
-        }
+        // Tell the site we are the native app (hides "download the app"), and
+        // inject the app-feel CSS + native bridge.
+        injectedJavaScriptBeforeContentLoaded={`window.GENUM_APP = true; true;`}
+        injectedJavaScript={BRIDGE_SCRIPT}
         // Browser-like sandbox: persistence, storage, no forced zoom.
         javaScriptEnabled
         domStorageEnabled
@@ -128,35 +137,27 @@ export function SiteScreen() {
         overScrollMode="never"
         onLoadStart={() => {
           setProgress(0.05);
+          setNavigating(true);
         }}
         onLoadProgress={({ nativeEvent }) => {
           setProgress(nativeEvent.progress);
           if (nativeEvent.progress >= 1) {
-            setIsInitialLoad(false);
+            setNavigating(false);
             setLoadFailed(false);
           }
         }}
-        onLoadEnd={() => setIsInitialLoad(false)}
+        onLoadEnd={() => setNavigating(false)}
         onNavigationStateChange={handleNavigation}
         onHttpError={({ nativeEvent }) => {
           if (nativeEvent.statusCode >= 500) setLoadFailed(true);
         }}
         onError={() => setLoadFailed(true)}
         onOpenWindow={(event) => setPopupUrl(event.nativeEvent.targetUrl)}
+        onMessage={handleMessage}
       />
 
-      {/* Branded splash - first load only, auto-dismissed by timeout/progress */}
-      {alone ? (
-        <View className="absolute inset-0 items-center justify-center bg-surface">
-          <ActivityIndicator size="large" color="#1e3a8a" />
-          <Text className="mt-3 text-sm font-semibold text-navy">
-            Loading GENUM Solutions…
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Thin progress bar for in-app navigation (never blocks the page) */}
-      {!alone && !showFallback && progress > 0 && progress < 1 ? (
+      {/* Thin progress bar for navigation - never blocks the page */}
+      {!showFallback && navigating && progress > 0 && progress < 1 ? (
         <View className="absolute inset-x-0 top-0 z-10 h-0.5 bg-transparent">
           <View
             style={{ width: `${Math.max(5, progress * 100)}%` }}
@@ -165,15 +166,24 @@ export function SiteScreen() {
         </View>
       ) : null}
 
+      {/* Non-blocking offline hint */}
+      {!showFallback && offlineUi ? (
+        <View className="absolute inset-x-0 top-0 z-10 flex-row items-center justify-center bg-gold px-4 py-1">
+          <Text className="text-[11px] font-black uppercase tracking-wider text-white">
+            Offline — showing saved content
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Fallback only when a page genuinely cannot be served (no cache) */}
       {showFallback ? (
         <View className="absolute inset-0 items-center justify-center bg-surface px-8">
           <Text className="text-center text-xl font-bold text-ink">
-            {offline ? "You're offline" : 'Something went wrong'}
+            This page needs the internet
           </Text>
           <Text className="mt-2 text-center text-sm text-muted">
-            {offline
-              ? 'Pages you have visited may still work below.'
-              : 'We could not reach the site. Please try again.'}
+            Pages you have visited are saved and work offline. Buying and live
+            search need a connection.
           </Text>
 
           <Pressable
@@ -183,23 +193,19 @@ export function SiteScreen() {
             <Text className="font-bold text-white">Retry</Text>
           </Pressable>
 
-          {offline ? (
-            <>
-              <Pressable
-                onPress={() => navigateTo('/')}
-                className="mt-3 w-full max-w-xs items-center rounded-full border border-line bg-white px-8 py-3"
-              >
-                <Text className="font-bold text-navy">Open cached site</Text>
-              </Pressable>
+          <Pressable
+            onPress={() => navigate('/products')}
+            className="mt-3 w-full max-w-xs items-center rounded-full border border-line bg-white px-8 py-3"
+          >
+            <Text className="font-bold text-navy">Browse saved products</Text>
+          </Pressable>
 
-              <Pressable
-                onPress={() => navigateTo('/offline')}
-                className="mt-3 w-full max-w-xs items-center rounded-full border border-line bg-white px-8 py-3"
-              >
-                <Text className="font-bold text-navy">Offline help</Text>
-              </Pressable>
-            </>
-          ) : null}
+          <Pressable
+            onPress={() => navigate('/')}
+            className="mt-3 w-full max-w-xs items-center rounded-full border border-line bg-white px-8 py-3"
+          >
+            <Text className="font-bold text-navy">Open home</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -209,7 +215,7 @@ export function SiteScreen() {
         animationType="slide"
         onRequestClose={() => setPopupUrl(null)}
       >
-        <SafeAreaView className="flex-1 bg-surface">
+        <View className="flex-1 bg-surface">
           <View className="flex-row items-center justify-between border-b border-line bg-mist px-4 py-3">
             <Text className="text-sm font-bold text-navy">Payment / Sign-in</Text>
             <Pressable onPress={() => setPopupUrl(null)}>
@@ -234,8 +240,8 @@ export function SiteScreen() {
               }}
             />
           ) : null}
-        </SafeAreaView>
+        </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }

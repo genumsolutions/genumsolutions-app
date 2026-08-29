@@ -1,91 +1,77 @@
 # Genum Solutions Mobile App
 
-Expo (React Native + TypeScript) mobile app for Genum Solutions. Scaffolded to match the
-website's branding (colors, fonts, theme tokens) and structured for offline-first auditing,
-operations, and employee product edits, plus a BLE robot-car control scaffold.
+Expo SDK 54 (React Native + TypeScript) app for Genum Solutions. The app is a **hybrid
+native shell around the company website** loaded in a full-screen WebView:
 
-> Do **not** modify the `genumsolutions-website` repo. All work happens in this `mobile/`
-> folder. Secrets are placeholders only.
+- `src/screens/SiteScreen.tsx` — the website (`WEBSITE_URL` in `src/config/site.ts`),
+  restyled to feel like an app via injected CSS/JS (`src/webview/inject.ts`).
+- Native chrome that mirrors the site's state through a postMessage bridge:
+  `AppHeader`, `Drawer`, `TabBar`, `CartBar` (cart count/size, session, current path,
+  connectivity all flow from the WebView into `AppContext`).
+- Native `SignInSheet` (email/password + Google) — Google OAuth runs in a system
+  browser tab because Google blocks OAuth inside embedded WebViews. The session is
+  handed to the website via `/api/auth/native-handoff` so the WebView stays signed in.
+- Offline-first: the website's service worker caches visited pages and the public
+  product catalog; the app shows a non-blocking "offline" pill and reloads on reconnect.
+
+> The website lives in the sibling `genumsolutions-website` repo. The app mirrors it and
+> must stay in sync with it (SW caching, handoff endpoint, brand tokens).
 
 ---
 
 ## Run locally
 
-Prerequisites: Node.js, and the Expo tooling.
-
 ```bash
-npm install          # install dependencies (first time)
-npm start            # start Expo dev server (QR code for Expo Go)
-npm run android      # open on Android emulator / device
-npm run ios          # open on iOS simulator (macOS only)
-npm run web          # open in browser
+npm install         # install dependencies (first time)
+npm start           # start Expo dev server (QR code for Expo Go)
+npm run android     # open on Android emulator / device
 ```
 
-You can also use the Expo Go app on a physical phone by scanning the QR code from
-`npm start`.
-
 ---
 
-## Where to place Supabase keys
+## Environment
 
-Open `mobile/shared/supabase.ts` and replace the placeholders with your project keys
-(Supabase → Project Settings → API). Use the bare project URL — do **not** append `/rest/v1/`.
+Copy/keep the gitignored `.env.local`:
 
-```ts
-export const SUPABASE_URL = '<YOUR_SUPABASE_URL>';
-export const SUPABASE_ANON_KEY = '<YOUR_SUPABASE_ANON_KEY>';
+```
+EXPO_PUBLIC_SUPABASE_URL=        # project URL, e.g. https://<ref>.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=   # public anon key (RLS-gated; fine to embed)
+SUPABASE_URL=                    # same project URL (script/upload fallback)
+SUPABASE_SERVICE_ROLE_KEY=       # server-only, used by scripts/upload-release.mjs
 ```
 
-For local development you can keep them in a `mobile/.env` (create it; it is gitignored) and
-read them via an env loader, or set them via `EAS` environment variables for builds. **Never
-commit real keys.**
+Only the **anon key** reaches the app bundle. The service-role key stays out of it.
+Native sign-in is disabled until the anon key is set — the website's own login page
+is the fallback.
 
 ---
 
-## BLE build notes (robot car)
+## Google sign-in setup (one-time)
 
-`react-native-ble-plx` does **not** run inside Expo Go. To use Bluetooth you must build a
-custom development client or use a prebuild:
+1. In the Supabase dashboard, enable the Google provider
+   (Authentication → Providers → Google) with your OAuth client from
+   https://console.cloud.google.com/apis/credentials.
+2. Add `genumsolutions://auth` to Supabase → Authentication → URL Configuration →
+   **Redirect URLs** (matches `scheme` in `app.json` and `NATIVE_AUTH_REDIRECT` in
+   `src/config/supabase.ts`).
 
-```bash
-npx expo prebuild       # generate native android/ios projects
-npx expo run:android    # build + run a dev client with BLE
-# or build a dev client via EAS:
-npx eas build --profile development --platform android
-```
-
-Required native permissions:
-
-- **Android:** `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION` (older devices).
-- **iOS:** `NSBluetoothAlwaysUsageDescription` usage description.
-
-See `mobile/src/services/BluetoothService.ts` for the scaffold. Replace
-`ROBOT_SERVICE_UUID` and `COMMAND_CHARACTERISTIC_UUID` with your robot's actual UUIDs.
+After a native sign-in the app POSTs the tokens to `/api/auth/native-handoff` on the
+website (see the `genumsolutions-website` repo), which validates them and writes the
+site's Supabase auth cookies so the WebView behaves as signed in.
 
 ---
 
-## Offline sync design
+## Release
 
-1. **Write offline:** screens persist records locally using
-   `src/services/StorageService.ts` (`enqueue`). Records are queued in `AsyncStorage` and
-   survive app restarts.
-2. **Sync when online:** `src/services/SyncService.ts` listens to connectivity
-   (`@react-native-community/netinfo`) and calls `syncAll()` when the network returns,
-   upserting each queued record into its Supabase table and removing it on success.
-3. **Conflict strategy (notes):** baseline is last-write-wins using an `updated_at` field;
-   escalate to per-field merges or a server-side `rev` if edits can collide.
+Bump together on every release so installs update over-the-top:
 
-Extend `TABLE_BY_ENTITY` in `SyncService.ts` to map new offline entities to Supabase tables.
+- `version` and `android.versionCode` in `app.json`
+- `APP_VERSION` in `src/config/site.ts`
+- `APK_VERSION` in `components/AppBanner.tsx` (website repo)
 
----
+Build notes:
 
-## Theme / branding alignment
-
-The website's theme tokens were extracted (read-only) into:
-
-- `mobile/tailwind.config.js` — same color/font/radius/shadow tokens as the website.
-- `mobile/shared/theme.ts` — the same tokens as plain TypeScript for use in styles/JS.
-
-Fonts (Inter for body, Sora for headings) must be bundled with `expo-font` for a finalized
-build; see the TODO markers in `shared/theme.ts`. High-res logos should be placed in
-`mobile/assets/` and referenced from `shared/theme.ts` (`assets.logo`).
+- LongPaths is disabled on `E:\`, so release Gradle builds run from a mirror at
+  `C:\bs` (keep `C:\bs` in sync with `mobile/`).
+- Upload the signed APK with `node scripts/upload-release.mjs` (secrets in
+  `.env.local`).
