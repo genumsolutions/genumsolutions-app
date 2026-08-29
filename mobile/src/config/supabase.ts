@@ -30,6 +30,15 @@ export const supabaseConfigured = Boolean(url && anonKey);
 /** Deep link received back after Google OAuth (matches app.json "scheme"). */
 export const NATIVE_AUTH_REDIRECT = 'genumsolutions://auth';
 
+/** Google Web OAuth client ID from Google Cloud Console (EXPO_PUBLIC_* is
+ * inlined by Metro at build time). Empty until the GCP client is created. */
+export const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+
+/** True once a Google Web OAuth client is set. The native Google button stays
+ * hidden until this is configured so the app never opens a browser for
+ * sign-in or surfaces a DEVELOPER_ERROR. */
+export const googleConfigured = Boolean(googleWebClientId);
+
 export const supabase = createClient(url, anonKey, {
   auth: {
     // The app manages its own tokens (SecureStore + handoff). Disable the
