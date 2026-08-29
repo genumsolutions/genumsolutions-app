@@ -5,11 +5,15 @@
 // (store, cart, checkout, account, admin) works identically because the
 // WebView loads the website itself.
 //
-// Included behavior:
-//   - branded loading overlay while pages load
+// Loading / reliability behavior:
+//   - branded splash only on the very first load (with a fail-safe timeout)
+//   - a thin progress bar for every subsequent in-app navigation, so pages
+//     are never hidden behind a blocking spinner
 //   - Android hardware back -> browser back (when available)
-//   - offline / load-failure fallback with Retry (NetInfo driven)
+//   - offline / load-failure fallback with Retry, "Open cached site" and
+//     "Offline help" (NetInfo driven + service-worker cached shell)
 //   - popup windows (payment gateways / OAuth) rendered in an in-app modal
+//   - cookies + DOM storage enabled so the login session persists
 // =====================================================================
 import NetInfo from '@react-native-community/netinfo';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,12 +26,21 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView, type WebViewNavigation } from 'react-native-webview';
+import {
+  WebView,
+  type WebViewNavigation,
+} from 'react-native-webview';
 import { WEBSITE_URL } from '../config/site';
+
+// If a navigation event pair is ever missed (common with client-side routing
+// in the Next.js App Router), stop showing the initial splash after this long
+// so the already-rendered page is never stuck behind the overlay.
+const INITIAL_LOAD_TIMEOUT_MS = 5000;
 
 export function SiteScreen() {
   const webRef = useRef<WebView>(null);
-  const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [progress, setProgress] = useState(0);
   const [offline, setOffline] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [popupUrl, setPopupUrl] = useState<string | null>(null);
@@ -41,6 +54,13 @@ export function SiteScreen() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Fail-safe: never let the initial splash block the page forever.
+  useEffect(() => {
+    if (!isInitialLoad) return;
+    const timer = setTimeout(() => setIsInitialLoad(false), INITIAL_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isInitialLoad]);
 
   // Android hardware back navigates the WebView history before exiting.
   useEffect(() => {
@@ -80,6 +100,7 @@ export function SiteScreen() {
   }, [offline, loadFailed, reload]);
 
   const showFallback = offline || loadFailed;
+  const alone = isInitialLoad && !showFallback;
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
@@ -89,19 +110,53 @@ export function SiteScreen() {
         style={{ flex: 1 }}
         originWhitelist={['http://*', 'https://*']}
         allowsBackForwardNavigationGestures
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
+        // Browser-like sandbox: persistence, storage, no forced zoom.
+        javaScriptEnabled
+        domStorageEnabled
+        thirdPartyCookiesEnabled
+        sharedCookiesEnabled
+        cacheEnabled
+        setSupportMultipleWindows={false}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        textZoom={100}
+        overScrollMode="never"
+        onLoadStart={() => {
+          setProgress(0.05);
+        }}
+        onLoadProgress={({ nativeEvent }) => {
+          setProgress(nativeEvent.progress);
+          if (nativeEvent.progress >= 1) {
+            setIsInitialLoad(false);
+            setLoadFailed(false);
+          }
+        }}
+        onLoadEnd={() => setIsInitialLoad(false)}
         onNavigationStateChange={handleNavigation}
+        onHttpError={({ nativeEvent }) => {
+          if (nativeEvent.statusCode >= 500) setLoadFailed(true);
+        }}
         onError={() => setLoadFailed(true)}
         onOpenWindow={(event) => setPopupUrl(event.nativeEvent.targetUrl)}
       />
 
-      {loading && !showFallback ? (
+      {/* Branded splash - first load only, auto-dismissed by timeout/progress */}
+      {alone ? (
         <View className="absolute inset-0 items-center justify-center bg-surface">
           <ActivityIndicator size="large" color="#1e3a8a" />
           <Text className="mt-3 text-sm font-semibold text-navy">
             Loading GENUM Solutions…
           </Text>
+        </View>
+      ) : null}
+
+      {/* Thin progress bar for in-app navigation (never blocks the page) */}
+      {!alone && !showFallback && progress > 0 && progress < 1 ? (
+        <View className="absolute inset-x-0 top-0 z-10 h-0.5 bg-transparent">
+          <View
+            style={{ width: `${Math.max(5, progress * 100)}%` }}
+            className="h-full bg-navy"
+          />
         </View>
       ) : null}
 
@@ -161,6 +216,11 @@ export function SiteScreen() {
               source={{ uri: popupUrl }}
               style={{ flex: 1 }}
               originWhitelist={['http://*', 'https://*']}
+              javaScriptEnabled
+              domStorageEnabled
+              thirdPartyCookiesEnabled
+              sharedCookiesEnabled
+              setSupportMultipleWindows={false}
               onNavigationStateChange={(state) => {
                 // Auto-close once the gateway redirects back to the site.
                 if (state.url.startsWith(WEBSITE_URL)) {
