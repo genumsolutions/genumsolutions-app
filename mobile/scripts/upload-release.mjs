@@ -2,6 +2,9 @@
 // Uploads the built Android release APK to the shared Supabase project
 // into a public "app-releases" bucket and prints the public download URL.
 //
+// Self-contained: uses Node's built-in fetch (Node >= 18) and the Supabase
+// Storage REST API, so it has no runtime dependency on @supabase/supabase-js.
+//
 // Secrets come from environment variables (or a local .env.local file):
 //   SUPABASE_URL                 e.g. https://xxxx.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY    Supabase -> Project Settings -> API
@@ -11,7 +14,6 @@
 //   node scripts/upload-release.mjs                       (default APK path)
 //   node scripts/upload-release.mjs --apk <path>          (custom APK path)
 // =====================================================================
-import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +24,10 @@ const defaultApk = resolve(
   'releases',
   'genum-solutions-1.0.0-arm64-v8a.apk',
 );
+
+const BUCKET = 'app-releases';
+const FILE_NAME = 'genum-solutions-latest.apk';
+const CONTENT_TYPE = 'application/vnd.android.package-archive';
 
 function loadEnv() {
   const envFile = resolve(rootDir, '.env.local');
@@ -44,10 +50,37 @@ function parseArgs(argv) {
   return args;
 }
 
+async function ensureBucket(url, key) {
+  const list = await fetch(`${url}/storage/v1/bucket`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (list.ok) {
+    const buckets = await list.json();
+    if (buckets.some((b) => b.name === BUCKET)) return;
+  }
+  const create = await fetch(`${url}/storage/v1/bucket`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: BUCKET, public: true }),
+  });
+  if (!create.ok) {
+    // 400 usually means the bucket already exists (race) - that's fine.
+    const text = await create.text().catch(() => '');
+    if (create.status !== 400) {
+      throw new Error(`Failed to create bucket "${BUCKET}": ${create.status} ${text}`);
+    }
+  } else {
+    console.log(`Created public bucket "${BUCKET}".`);
+  }
+}
+
 async function main() {
   const env = loadEnv();
   const args = parseArgs(process.argv.slice(2));
-  const url = process.env.SUPABASE_URL || env.SUPABASE_URL;
+  const url = (process.env.SUPABASE_URL || env.SUPABASE_URL || '').replace(/\/+$/, '');
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
   const apkPath = args.apk ? resolve(rootDir, args.apk) : defaultApk;
 
@@ -58,33 +91,27 @@ async function main() {
   }
   if (!existsSync(apkPath)) throw new Error(`APK not found: ${apkPath}`);
 
-  const supabase = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  await ensureBucket(url, serviceKey);
 
-  const bucket = 'app-releases';
-  const { data: buckets } = await supabase.storage.listBuckets();
-  if (buckets && !buckets.some((b) => b.name === bucket)) {
-    const { error: createErr } = await supabase.storage.createBucket(bucket, {
-      public: true,
-    });
-    if (createErr) throw new Error(`Failed to create bucket: ${createErr.message}`);
-    console.log(`Created public bucket "${bucket}".`);
+  const body = readFileSync(apkPath);
+  console.log(`Uploading ${apkPath} (${(body.length / 1024 / 1024).toFixed(1)} MB) to ${BUCKET}/${FILE_NAME} ...`);
+
+  const upload = await fetch(`${url}/storage/v1/object/${BUCKET}/${FILE_NAME}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': CONTENT_TYPE,
+      'x-upsert': 'true',
+      'cache-control': '3600',
+    },
+    body,
+  });
+  if (!upload.ok) {
+    const text = await upload.text().catch(() => '');
+    throw new Error(`Upload failed: ${upload.status} ${text}`);
   }
 
-  const fileName = 'genum-solutions-latest.apk';
-  const body = readFileSync(apkPath);
-  console.log(`Uploading ${apkPath} (${(body.length / 1024 / 1024).toFixed(1)} MB) to ${bucket}/${fileName} ...`);
-  const { error: uploadErr } = await supabase.storage
-    .from(bucket)
-    .upload(fileName, body, {
-      upsert: true,
-      contentType: 'application/vnd.android.package-archive',
-      cacheControl: '3600',
-    });
-  if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
-
-  const publicUrl = supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
+  const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${FILE_NAME}`;
   console.log('Uploaded. Public download URL:');
   console.log(publicUrl);
 }
