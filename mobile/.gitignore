@@ -25,6 +25,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # macOS
 .DS_Store
@@ -45,3 +46,7 @@ yarn-error.*
 
 # built APK artifacts (rebuild via C:\bs\android -> gradlew assembleRelease)
 /releases/
+
+# local agent / editor metadata - never commit
+.claude/
+CLAUDE.md
