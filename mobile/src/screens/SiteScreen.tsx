@@ -24,7 +24,7 @@ import {
   roboBridgeConnectGeneric,
   roboBridgeDisconnect,
   roboBridgeSend,
-  setRoboIngress,
+  setRoboIngressCallback,
   type RoboIngressKind,
   type RoboConnectPayload,
 } from '../services/roboCarBridge';
@@ -146,8 +146,8 @@ export function SiteScreen() {
   );
 
   useEffect(() => {
-    setRoboIngress(pushIngress);
-    return () => setRoboIngress(null);
+    setRoboIngressCallback(pushIngress);
+    return () => setRoboIngressCallback(null);
   }, [pushIngress]);
 
   const reload = useCallback(() => {
