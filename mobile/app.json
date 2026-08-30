@@ -30,6 +30,7 @@
       "expo-secure-store",
       "./plugins/with-secure-store-backup.js",
       "./plugins/with-install-permission.js",
+      "./plugins/with-release-signing.js",
       [
         "expo-splash-screen",
         {
