@@ -31,8 +31,15 @@ export const supabaseConfigured = Boolean(url && anonKey);
 export const NATIVE_AUTH_REDIRECT = 'genumsolutions://auth';
 
 /** Google Web OAuth client ID from Google Cloud Console (EXPO_PUBLIC_* is
- * inlined by Metro at build time). Empty until the GCP client is created. */
+ * inlined by Metro at build time). This is the ID the native SDK mints ID
+ * tokens against and the SAME ID configured as the Supabase Google provider. */
 export const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+
+/** Google Android OAuth client ID for package com.genumsolutions.app. Kept as
+ * documentation of the Android client registered against Google Cloud Console;
+ * the SDK (v16) resolves it from the package + SHA-1, not from this value. */
+export const googleAndroidClientId =
+  process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
 
 /** True once a Google Web OAuth client is set. The native Google button stays
  * hidden until this is configured so the app never opens a browser for

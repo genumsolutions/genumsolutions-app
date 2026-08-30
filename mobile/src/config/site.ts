@@ -10,4 +10,4 @@ export const WEBSITE_URL = 'https://genumsolutions-website.vercel.app';
 // Display version for the app (Drawer -> "App v…"). Keep in sync with
 // "version" in ../app.json and bump BOTH on every release (version + android
 // .versionCode must increase) so installs update over-the-top.
-export const APP_VERSION = '1.3.1';
+export const APP_VERSION = '1.3.2';

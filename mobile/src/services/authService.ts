@@ -103,8 +103,9 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   }
   try {
     // The SDK requires the web client ID before signIn() can mint an ID token.
-    // This is the OAuth client ID for the Web *and* Android package - it must
-    // match the value configured in Google Cloud Console (see .env.local).
+    // This SDK version (v16) resolves the Android server client automatically
+    // from GCP via package + SHA-1, so passing webClientId alone is correct;
+    // the Android client ID from .env.local is kept for dashboard reference.
     GoogleSignin.configure({ webClientId: googleWebClientId });
     await GoogleSignin.hasPlayServices();
     const response = await GoogleSignin.signIn();

@@ -20,9 +20,9 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Current release. Update on every publish (keep in sync with app.json.
-//version / src/config/site.ts / src/config/update.ts).
-const VERSION = '1.3.1';
+// Current release. Update on every publish (keep in sync with app.json
+// version / src/config/site.ts / src/config/update.ts).
+const VERSION = '1.3.2';
 const APK_SIZE_MB = '28 MB';
 
 const defaultApk = resolve(
