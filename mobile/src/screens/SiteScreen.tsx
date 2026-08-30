@@ -21,11 +21,12 @@ import {
 import { WEBSITE_URL } from '../config/site';
 import { useApp } from '../context/AppContext';
 import {
-  roboBridgeConnect,
+  roboBridgeConnectGeneric,
   roboBridgeDisconnect,
   roboBridgeSend,
   setRoboIngress,
   type RoboIngressKind,
+  type RoboConnectPayload,
 } from '../services/roboCarBridge';
 import { BRIDGE_SCRIPT } from '../webview/inject';
 
@@ -112,7 +113,9 @@ export function SiteScreen() {
       try {
         switch (action) {
           case 'connect':
-            await roboBridgeConnect(typeof payload === 'string' ? payload : undefined);
+            await roboBridgeConnectGeneric(
+              (typeof payload === 'object' && payload !== null ? payload : {}) as RoboConnectPayload,
+            );
             break;
           case 'send':
             if (typeof payload === 'string') await roboBridgeSend(payload);
