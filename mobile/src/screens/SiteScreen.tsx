@@ -20,6 +20,13 @@ import {
 } from 'react-native-webview';
 import { WEBSITE_URL } from '../config/site';
 import { useApp } from '../context/AppContext';
+import {
+  roboBridgeConnect,
+  roboBridgeDisconnect,
+  roboBridgeSend,
+  setRoboIngress,
+  type RoboIngressKind,
+} from '../services/roboCarBridge';
 import { BRIDGE_SCRIPT } from '../webview/inject';
 
 export function SiteScreen() {
@@ -86,6 +93,9 @@ export function SiteScreen() {
           case 'genum:online':
             setOffline(data.online === false);
             break;
+          case 'genum:robo':
+            void handleRoboAction(data.action, data.payload);
+            break;
           default:
             break;
         }
@@ -95,6 +105,47 @@ export function SiteScreen() {
     },
     [setCart, setUser, setCurrentPath, setOffline],
   );
+
+  // Robo car: the /robocar page delegates its transport to the native shell.
+  const handleRoboAction = useCallback(
+    async (action: string, payload: unknown) => {
+      try {
+        switch (action) {
+          case 'connect':
+            await roboBridgeConnect(typeof payload === 'string' ? payload : undefined);
+            break;
+          case 'send':
+            if (typeof payload === 'string') await roboBridgeSend(payload);
+            break;
+          case 'disconnect':
+            roboBridgeDisconnect();
+            break;
+          default:
+            break;
+        }
+      } catch (e) {
+        // The bridge itself reports errors via ingress('error', ...).
+      }
+    },
+    [],
+  );
+
+  // Push native telemetry/status back into the page. The page registers
+  // window.__GENUM_ROBO__.ingress only while it is mounted; if it is not
+  // there yet the call is a no-op, so this is safe on any URL.
+  const pushIngress = useCallback(
+    (kind: RoboIngressKind, payload: string) => {
+      webRef.current?.injectJavaScript(
+        `(function(){var f=(window.__GENUM_ROBO__||{}).ingress;if(f){try{f(${JSON.stringify(kind)},${JSON.stringify(payload)});}catch(e){}}})();true;`,
+      );
+    },
+    [webRef],
+  );
+
+  useEffect(() => {
+    setRoboIngress(pushIngress);
+    return () => setRoboIngress(null);
+  }, [pushIngress]);
 
   const reload = useCallback(() => {
     setLoadFailed(false);
