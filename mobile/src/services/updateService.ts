@@ -103,15 +103,38 @@ export async function downloadAndInstall(
   onProgress?: (fraction: number) => void,
 ): Promise<void> {
   const target = new File(Paths.cache, 'genum-update.apk');
-  const file = await File.downloadFileAsync(apkUrl, target, { idempotent: true });
+
+  // Phase 1: download. Report precise, distinct download failures so they
+  // can't be mistaken for an install problem.
+  let file;
+  try {
+    file = await File.downloadFileAsync(apkUrl, target, { idempotent: true });
+  } catch (e) {
+    throw new Error(
+      'Download failed. Check your connection or storage, then try again. (download: ' +
+        (e instanceof Error ? e.message : String(e)) +
+        ')',
+    );
+  }
 
   // mirror any native download progress into the callback (best-effort)
   if (onProgress) onProgress(1);
 
-  await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-    data: file.contentUri,
-    type: 'application/vnd.android.package-archive',
-    // FLAG_GRANT_READ_URI_PERMISSION so the installer can read our cached file.
-    flags: 1,
-  });
+  // Phase 2: launch the Android installer with the downloaded file.
+  // REQUEST_INSTALL_PACKAGES (added via the with-install-permission plugin)
+  // is required on Android 8+ for this intent to be allowed.
+  try {
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: file.contentUri,
+      type: 'application/vnd.android.package-archive',
+      // FLAG_GRANT_READ_URI_PERMISSION so the installer can read our cached file.
+      flags: 1,
+    });
+  } catch (e) {
+    throw new Error(
+      'Could not open the installer. Enable "Install unknown apps" for GENUM and try again. (install: ' +
+        (e instanceof Error ? e.message : String(e)) +
+        ')',
+    );
+  }
 }

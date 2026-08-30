@@ -29,6 +29,7 @@
       "expo-web-browser",
       "expo-secure-store",
       "./plugins/with-secure-store-backup.js",
+      "./plugins/with-install-permission.js",
       [
         "expo-splash-screen",
         {
