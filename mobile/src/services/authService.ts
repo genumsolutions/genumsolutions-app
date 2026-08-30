@@ -21,7 +21,12 @@ import type { Session } from '@supabase/supabase-js';
 import type { MutableRefObject } from 'react';
 import type { WebView } from 'react-native-webview';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { googleConfigured, supabase, supabaseConfigured } from '../config/supabase';
+import {
+  googleConfigured,
+  googleWebClientId,
+  supabase,
+  supabaseConfigured,
+} from '../config/supabase';
 
 const SESSION_KEY = 'genum-native-session';
 
@@ -97,6 +102,10 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
     };
   }
   try {
+    // The SDK requires the web client ID before signIn() can mint an ID token.
+    // This is the OAuth client ID for the Web *and* Android package - it must
+    // match the value configured in Google Cloud Console (see .env.local).
+    GoogleSignin.configure({ webClientId: googleWebClientId });
     await GoogleSignin.hasPlayServices();
     const response = await GoogleSignin.signIn();
     if (response.data?.idToken) {
