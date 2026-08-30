@@ -165,7 +165,7 @@ export function SiteScreen() {
   const showFallback = loadFailed;
 
   return (
-    <View className="flex-1 bg-surface">
+    <View className="flex-1">
       <WebView
         ref={(ref) => {
           webRef.current = ref;
