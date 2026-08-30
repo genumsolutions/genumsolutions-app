@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_VERSION } from '../config/site';
+import { useApp } from '../context/AppContext';
 import { UpdateScreen } from './UpdateScreen';
 
 type Device = {
@@ -46,6 +47,7 @@ const DEMO_DEVICES: Device[] = [
 const SPEEDS = ['Slow', 'Medium', 'Fast'] as const;
 
 export function ToolsScreen({ visible, onClose }: Props) {
+  const { navigate } = useApp();
   const [scanning, setScanning] = useState(false);
   const [connectedId, setConnectedId] = useState<string | null>(null);
   const [ledOn, setLedOn] = useState(true);
@@ -110,6 +112,29 @@ export function ToolsScreen({ visible, onClose }: Props) {
               <Text className="font-bold text-gold">Disconnect</Text>
             </Pressable>
           ) : null}
+        </View>
+
+        {/* Robo Car launcher - the full control UI lives on the website's
+            /robocar page, mirrored in the WebView. This opens it in-app. */}
+        <View className="mx-5 rounded-xl border border-navy bg-white">
+          <Pressable
+            onPress={() => {
+              onClose();
+              navigate('/robocar');
+            }}
+            className="flex-row items-center gap-3 p-4"
+          >
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-navy">
+              <Text className="text-lg text-white">🚗</Text>
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-bold text-ink">Robo Car Control</Text>
+              <Text className="mt-0.5 text-xs text-muted">
+                Connect &amp; drive the robot cars (BLE / WiFi)
+              </Text>
+            </View>
+            <Text className="text-navy">›</Text>
+          </Pressable>
         </View>
 
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
@@ -233,7 +258,7 @@ export function ToolsScreen({ visible, onClose }: Props) {
             </View>
             <Text className="mt-2 text-xs text-muted">
               {connected
-                ? 'Controls below are demo-only until BLE integration.'
+                ? 'Controls below are demo-only until native BLE integration.'
                 : 'Connect a device to unlock the quick controls.'}
             </Text>
           </View>
@@ -241,11 +266,12 @@ export function ToolsScreen({ visible, onClose }: Props) {
           {/* Future note */}
           <View className="rounded-lg border border-line bg-sky px-4 py-3 mx-5 mt-6">
             <Text className="text-sm font-semibold text-navy">
-              Coming soon
+              Robo car control
             </Text>
             <Text className="mt-1 text-xs text-muted">
-              Live Bluetooth commands, telemetry, and the same controls mirrored
-              on the website's tools page.
+              Open the Robo Car page above to connect and drive the robot cars
+              over BLE or WiFi, with live telemetry, mode selection, and PID
+              tuning.
             </Text>
           </View>
 

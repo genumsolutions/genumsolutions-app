@@ -46,6 +46,14 @@ const COMPANY_ITEMS: NavItem[] = [
   { label: 'Contact', path: '/contact', icon: 'phone', match: (p) => startsWith(p, '/contact') },
 ];
 
+const PROJECT_ITEMS: NavItem[] = [
+  { label: 'Robo Car', path: '/robocar', icon: 'radio', match: (p) => startsWith(p, '/robocar') },
+  { label: 'Home Automation', path: '/home-automation', icon: 'home', match: (p) => startsWith(p, '/home-automation') },
+  { label: 'Smart Farm', path: '/smart-farm', icon: 'sun', match: (p) => startsWith(p, '/smart-farm') },
+  { label: 'Smart City', path: '/smart-city', icon: 'map-pin', match: (p) => startsWith(p, '/smart-city') },
+  { label: 'Drones', path: '/drones', icon: 'navigation', match: (p) => startsWith(p, '/drones') },
+];
+
 type Props = {
   onOpenTools: () => void;
 };
@@ -214,6 +222,13 @@ export function Drawer({ onOpenTools }: Props) {
                 Company
               </Text>
               {COMPANY_ITEMS.map(renderItem)}
+            </View>
+
+            <View className="px-2 pt-4">
+              <Text className="px-3 pb-1 text-[10px] font-black uppercase tracking-widest text-border">
+                Project categories
+              </Text>
+              {PROJECT_ITEMS.map(renderItem)}
             </View>
 
             <View className="px-2 pt-4">
