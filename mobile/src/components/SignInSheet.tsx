@@ -74,7 +74,8 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     >
       <KeyboardAvoidingView
         style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40}
       >
         <Pressable style={styles.backdrop} onPress={handleClose} disabled={closeDisabled} />
 

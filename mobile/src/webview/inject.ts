@@ -32,12 +32,29 @@ html.genum-native main .mx-auto.max-w-7xl {
   padding-left: 0.875rem !important;
   padding-right: 0.875rem !important;
 }
+html.genum-native main .py-8,
 html.genum-native main .py-10,
 html.genum-native main .py-12,
 html.genum-native main .py-14,
-html.genum-native main .py-16 {
+html.genum-native main .py-16,
+html.genum-native main .py-20,
+html.genum-native main.py-10,
+html.genum-native main.py-12,
+html.genum-native main.py-14,
+html.genum-native main.py-16 {
   padding-top: 0.75rem !important;
   padding-bottom: 1.25rem !important;
+}
+html.genum-native main .pt-10,
+html.genum-native main .pt-20,
+html.genum-native main .pt-24 {
+  padding-top: 0.75rem !important;
+}
+/* Strip stray top margin from the first block so nothing floats above the
+   content when a page only adds top margin (not padding) to its hero. */
+html.genum-native main > section:first-child,
+html.genum-native main > div:first-child:not(.mx-auto) {
+  margin-top: 0 !important;
 }
 
 /* Product categories -> one compact horizontally-scrolling row. */
