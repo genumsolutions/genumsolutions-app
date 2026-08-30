@@ -114,30 +114,7 @@ export function ToolsScreen({ visible, onClose }: Props) {
           ) : null}
         </View>
 
-        {/* Robo Car launcher - the full control UI lives on the website's
-            /robocar page, mirrored in the WebView. This opens it in-app. */}
-        <View className="mx-5 rounded-xl border border-navy bg-white">
-          <Pressable
-            onPress={() => {
-              onClose();
-              navigate('/robocar');
-            }}
-            className="flex-row items-center gap-3 p-4"
-          >
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-navy">
-              <Text className="text-lg text-white">🚗</Text>
-            </View>
-            <View className="flex-1">
-              <Text className="text-sm font-bold text-ink">Robo Car Control</Text>
-              <Text className="mt-0.5 text-xs text-muted">
-                Connect &amp; drive the robot cars (BLE / WiFi)
-              </Text>
-            </View>
-            <Text className="text-navy">›</Text>
-          </Pressable>
-        </View>
 
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
           {/* Bluetooth devices */}
           <View className="px-5">
             <Text className="text-base font-bold text-ink">Devices</Text>
