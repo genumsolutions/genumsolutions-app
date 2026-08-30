@@ -125,7 +125,7 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1 }} className="flex-1 bg-mist">
         {/* Header */}
-        <View className="flex-row items-center justify-between bg-navy px-5 pb-4 pt-3">
+        <View className="flex-row items-center justify-between bg-navy px-5 pb-2 pt-2">
           <View>
             <Text className="text-2xl font-bold text-white">IoT & Remote Controller</Text>
             <Text className="mt-0.5 text-sm text-navy-light">Bluetooth device control</Text>
