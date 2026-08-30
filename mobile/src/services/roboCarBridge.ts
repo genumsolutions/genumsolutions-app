@@ -27,7 +27,7 @@
 //     without a manual scan when the app starts, provided the device is still
 //     paired/connected in the OS Bluetooth settings.
 //   - Command buffer flush: every command sent to the car is removed from the
-//     pending queue immediately after delivery, preventing stale/queued repeats.
+//     pending buffer immediately after delivery, preventing stale/queued repeats.
 // =====================================================================
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
@@ -44,25 +44,26 @@ const BLE_SCAN_TIMEOUT_MS = 15000;
 const LAST_BLE_DEVICE_ID_KEY = 'genum_last_ble_device_id';
 const LAST_BLE_DEVICE_NAME_KEY = 'genum_last_ble_device_name';
 
-// ---- BLE state (kept lazily initialised) ----
-let bleManagerRef: any = null;
-let bleDeviceId: string | null = null;
-let bleTxCharacteristic: any = null;
-let bleDisconnectSub: any = null;
-let bleScanTimeout: ReturnType<typeof setTimeout> | null = null;
+// Types for native->web bridging.
+export type RoboIngressKind =
+  | 'connected'
+  | 'disconnected'
+  | 'error'
+  | 'send';
 
-// ---- Command buffer (flush after each send) ----
-let commandQueue: string[] = [];
+export type RoboIngress = (kind: RoboIngressKind, payload: string) => void;
 
-/** True when running inside Expo Go, where custom-native BLE is impossible. */
-function inExpoGo(): boolean {
-  try {
-    return Constants?.executionEnvironment === 'storeClient';
-  } catch {
-    return false;
-  }
-}
+export type RoboConnectPayload = {
+  transport?: 'ble' | 'ws';
+  url?: string;
+};
 
+// Internal listener callback (typed).
+let listener: RoboIngress | null = null;
+
+/** Emit a kind + payload to the registered listener. */
+function emit(kind: RoboIngressKind, payload: string): void {
+  listener?.(kind, payload);
 /** Persist the last BLE device ID + name to SecureStore. */
 function persistLastBleDevice(id: string | null, name: string | null): void {
   try {
@@ -91,11 +92,6 @@ function retrieveLastBleDevice(): { id: string | null; name: string | null } {
   }
 }
 
-/** Emit a kind + payload to the registered listener. */
-function emit(kind: string, payload: string): void {
-  listener?.(kind, payload);
-}
-
 /** Decode a base64 string to UTF-8 without relying on the Node `Buffer`
  * polyfill (Hermes provides atob; manual UTF-8 decode for safety). */
 function base64ToUtf8(b64: string): string {
@@ -118,7 +114,7 @@ export function roboBridgeConnected(): boolean {
 }
 
 /** Register the callback that forwards ingress to the WebView. */
-export function setRoboIngress(cb: RoboIngress | null): void {
+export function setRoboIngressCallback(cb: RoboIngress | null): void {
   listener = cb;
 }
 
@@ -454,5 +450,7 @@ export async function roboBridgeConnectGeneric(payload: RoboConnectPayload): Pro
   return roboBridgeConnect(payload?.url);
 }
 
+/** Type for the command queue (internal). */
+}
 /** Type for the command queue (internal). */
 export type QueuedCommand = string;

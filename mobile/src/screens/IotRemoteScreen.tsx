@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
-import { roboBridgeConnectGeneric, roboBridgeDisconnect, roboBridgeSend } from '../services/roboCarBridge';
+import { roboBridgeConnectGeneric, roboBridgeDisconnect, roboBridgeSend, type RoboConnectPayload } from '../services/roboCarBridge';
 import { getNativeCategory, NATIVE_CATEGORIES } from '../config/deviceCatalog';
 import { BRIDGE_SCRIPT } from '../webview/inject';
 
@@ -70,7 +70,7 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
   // --- Message handling from the website bridge ---
   const handleMessage = (event: { nativeEvent: { data: string } }) => {
     try {
-      const data = JSON.parse(event.nativeEvent.nativeEvent.data);
+      const data = JSON.parse(event.nativeEvent.data);
       switch (data.type) {
         case 'genum:cart':
           setCart({ count: data.count, size: data.size });
@@ -195,11 +195,13 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
               }
             }}
             onLoadEnd={() => setLoadFailed(false)}
+            onNavigationStateChange={handleNavigation}
             onHttpError={({ nativeEvent }) => {
               if (nativeEvent.statusCode >= 500) setLoadFailed(true);
             }}
             onError={() => setLoadFailed(true)}
             onOpenWindow={(event) => setPopupUrl(event.nativeEvent.targetUrl)}
+            onMessage={handleMessage}
           />
 
           {/* Thin progress bar for navigation - never blocks the page */}
