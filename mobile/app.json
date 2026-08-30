@@ -3,7 +3,7 @@
     "name": "GENUM Solutions",
     "slug": "genum-solutions",
     "scheme": "genumsolutions",
-    "version": "1.3.2",
+    "version": "1.4.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.genumsolutions.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
