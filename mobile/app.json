@@ -3,7 +3,7 @@
     "name": "GENUM Solutions",
     "slug": "genum-solutions",
     "scheme": "genumsolutions",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.genumsolutions.app",
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,7 +39,13 @@
           "resizeMode": "contain"
         }
       ],
-      ["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER" }]
+      ["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER" }],
+      [
+        "@sfourdrinier/react-native-ble-plx",
+        {
+          "bluetoothAlwaysPermission": "Allow GENUM Solutions to connect to your robot car over Bluetooth so you can drive it from the app."
+        }
+      ]
     ]
   }
 }
