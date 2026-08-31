@@ -1,18 +1,3 @@
-// =====================================================================
-// IotRemoteScreen - native "IoT & Remote Controller" screen for the GENUM
-// mobile app. Mirrors the website /iot-remote hub page, with native BLE
-// auto-connect and command-buffer flush wired in via roboCarBridge.
-//
-// This screen:
-//   - Renders a category selector (Robo Car, Home Automation, Smart Farm,
-//     Smart City, Drones).
-//   - For the selected category, renders the website control panel inside a
-//     WebView (same UI as the website, but inside the native shell).
-//   - Auto-connects to the last-paired BLE device on launch (no manual scan
-//     needed if the phone Bluetooth settings already have the car paired).
-//   - Clears the command send buffer after each delivery (no stale repeats).
-// =====================================================================
-
 import React, { useState, useEffect } from 'react';
 import {
   Modal,
@@ -101,7 +86,7 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
   const pushIngress = useCallback(
     (kind: string, payload: string) => {
       webRef.current?.injectJavaScript(
-        `(function(){var f=(window.__GENUM_ROBO__||{}).ingress;if(f){try{f(${JSON.stringify(kind)},${JSON.stringify(payload)});}catch(e){}}})();true;`,
+        `(function(){var f=(window.__GENUM_ROBO__||{}).ingress;if(f){try{f(${JSON.stringify(kind)},${JSON.stringify(payload)});}catch(e){}}())();true;`,
       );
     },
     [webRef],
@@ -124,21 +109,10 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1 }} className="flex-1 bg-mist">
-        {/* Header */}
-        <View className="flex-row items-center justify-between bg-navy px-5 pb-2 pt-2">
-          <View>
-            <Text className="text-2xl font-bold text-white">IoT & Remote Controller</Text>
-            <Text className="mt-0.5 text-sm text-navy-light">Bluetooth device control</Text>
-          </View>
-          <Pressable
-            onPress={onClose}
-            className="rounded-full bg-white/15 px-4 py-2"
-          >
-            <Text className="font-bold text-white">✕ Close</Text>
-          </Pressable>
+        <View className="flex-row items-center justify-between px-5 pb-2">
+          <Text className="text-base font-bold text-white">IoT & Remote Controller</Text>
         </View>
 
-        {/* Category selector */}
         <View className="mx-5 mt-4">
           <Text className="text-base font-bold text-ink">Projects</Text>
           <View className="mt-2 flex flex-wrap gap-2">
@@ -165,8 +139,7 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
           </View>
         </View>
 
-        {/* WebView that mirrors the website /iot-remote page */}
-        <View className="mx-5 mt-8 flex-1">
+        <View className="mx-5 mt-4 flex-1">
           <WebView
             ref={(ref) => {}}
             style={{ flex: 1 }}
@@ -203,42 +176,42 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
             onOpenWindow={(event) => setPopupUrl(event.nativeEvent.targetUrl)}
             onMessage={handleMessage}
           />
-
-          {/* Thin progress bar for navigation - never blocks the page */}
-          {!loadFailed && progress > 0 && progress < 1 ? (
-            <View className="absolute inset-x-0 top-0 z-10 h-0.5 bg-transparent">
-              <View
-                style={{ width: `${Math.max(5, progress * 100)}%` }}
-                className="h-full bg-navy"
-              />
-            </View>
-          ) : null}
-
-          {/* Non-blocking offline hint */}
-          {!loadFailed ? (
-            <View className="absolute inset-x-0 top-0 flex-row items-center justify-center bg-gold px-4 py-1">
-              <Text className="text-[11px] font-black uppercase tracking-wider text-white">
-                Offline — showing saved content
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Fallback only when a page genuinely cannot be served (no cache) */}
-          {loadFailed ? (
-            <View className="absolute inset-0 items-center justify-center bg-surface px-8">
-              <Text className="text-center text-xl font-bold text-ink">
-                This page needs the internet
-              </Text>
-              <Text className="mt-2 text-center text-sm text-muted">
-                Pages you have visited are saved and work offline. Buying and live
-                search need a connection.
-              </Text>
-              <Pressable onPress={() => setLoadFailed(false)} className="mt-6 w-max max-w-xs items-center rounded-full bg-navy px-8 py-3">
-                <Text className="font-bold text-white">Retry</Text>
-              </Pressable>
-            </View>
-          ) : null}
         </View>
+
+        {/* Thin progress bar for navigation - never blocks the page */}
+        {!loadFailed && progress > 0 && progress < 1 ? (
+          <View className="absolute inset-x-0 top-0 z-10 h-0.5 bg-transparent">
+            <View
+              style={{ width: `${Math.max(5, progress * 100)}%` }}
+              className="h-full bg-navy"
+            />
+          </View>
+        ) : null}
+
+        {/* Non-blocking offline hint */}
+        {!loadFailed ? (
+          <View className="absolute inset-x-0 top-0 flex-row items-center justify-center bg-gold px-4 py-1">
+            <Text className="text-[11px] font-black uppercase tracking-wider text-white">
+              Offline — showing saved content
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Fallback only when a page genuinely cannot be served (no cache) */}
+        {loadFailed ? (
+          <View className="absolute inset-0 items-center justify-center bg-surface px-8">
+            <Text className="text-center text-xl font-bold text-ink">
+              This page needs the internet
+            </Text>
+            <Text className="mt-2 text-center text-sm text-muted">
+              Pages you have visited are saved and work offline. Buying and live
+              search need a connection.
+            </Text>
+            <Pressable onPress={() => setLoadFailed(false)} className="mt-6 w-max max-w-xs items-center rounded-full bg-navy px-8 py-3">
+              <Text className="font-bold text-white">Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </SafeAreaView>
     </Modal>
   );
