@@ -1,0 +1,83 @@
+[
+  {
+    "id": "4wd4m-basic",
+    "name": "4WD4M Basic Robot Car",
+    "description": "Basic 4WD4M robot car with ESP32 control for forward, backward, left, right, and stop operations.",
+    "mode_name": "4wd4m",
+    "technologies": ["ESP32", "TB6612FNG motor driver", "4 BO motors", "HC-SR04 ultrasonic sensor"],
+    "control_method": ["Bluetooth", "WiFi"],
+    "difficulty": "Beginner"
+  },
+  {
+    "id": "2wd1m-basic",
+    "name": "2WD1M Basic Robot Car",
+    "description": "Simple 2WD1M robot car with ESP32 Bluetooth control for basic directional operations.",
+    "mode_name": "2wd1m",
+    "technologies": ["ESP32", "L298N motor driver", "2 BO motors", "HC-06 Bluetooth module"],
+    "control_method": ["Bluetooth"],
+    "difficulty": "Beginner"
+  },
+  {
+    "id": "self-balancing-basic",
+    "name": "Self-Balancing Robot Car",
+    "description": "Self-balancing car using PID control algorithm with ESP32 and TB6612FNG motor driver.",
+    "mode_name": "self-balancing",
+    "technologies": ["ESP32", "TB6612FNG motor driver", "IMU sensor", "2 BO motors"],
+    "control_method": ["Bluetooth", "WiFi"],
+    "difficulty": "Intermediate"
+  },
+  {
+    "id": "obstacle-us-basic",
+    "name": "Obstacle-Avoidance (US) Robot Car",
+    "description": "Robot car that autonomously avoids obstacles using HC-SR04 ultrasonic sensor with ESP32.",
+    "mode_name": "obstacle-us",
+    "technologies": ["ESP32", "HC-SR04 ultrasonic sensor", "L298N motor driver", "2 BO motors"],
+    "control_method": ["Bluetooth"],
+    "difficulty": "Beginner"
+  },
+  {
+    "id": "obstacle-ir-basic",
+    "name": "Obstacle-Avoidance (IR) Robot Car",
+    "description": "Robot car that avoids obstacles using IR sensor with ESP32 control.",
+    "mode_name": "obstacle-ir",
+    "technologies": ["ESP32", "IR obstacle sensor", "L298N motor driver", "2 BO motors"],
+    "control_method": ["Bluetooth"],
+    "difficulty": "Beginner"
+  },
+  {
+    "id": "website-client-basic",
+    "name": "Website-Client Robot Car",
+    "description": "ESP32 WiFi client car that connects to web dashboard for remote control operations.",
+    "mode_name": "website-client",
+    "technologies": ["ESP32", "WiFi module", "L298N motor driver", "2 BO motors"],
+    "control_method": ["WiFi"],
+    "difficulty": "Intermediate"
+  },
+  {
+    "id": "website-server-basic",
+    "name": "Website-Server Robot Car",
+    "description": "ESP32 WiFi server car that hosts web interface for browser-based control.",
+    "mode_name": "website-server",
+    "technologies": ["ESP32", "WiFi module", "L298N motor driver", "2 BO motors"],
+    "control_method": ["WiFi"],
+    "difficulty": "Intermediate"
+  },
+  {
+    "id": "path-follow-basic",
+    "name": "Path-Following Robot Car",
+    "description": "Robot car with path following using sensors and ESP32 navigation control.",
+    "mode_name": "path-follow",
+    "technologies": ["ESP32", "Infrared sensors", "L298N motor driver", "2 BO motors"],
+    "control_method": ["Bluetooth", "WiFi"],
+    "difficulty": "Intermediate"
+  },
+  {
+    "id": "rf-manual-basic",
+    "name": "RF Manual Robot Car",
+    "description": "Robot car with RF remote manual control using 433MHz RF module and UNO-compatible controller.",
+    "mode_name": "rf-manual",
+    "technologies": ["UNO or ESP32", "433MHz RF module", "L298N motor driver", "2 BO motors"],
+    "control_method": ["RF"],
+    "difficulty": "Beginner"
+  }
+]
