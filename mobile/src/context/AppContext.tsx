@@ -42,6 +42,7 @@ import {
   signInWithGoogle as nativeGoogleSignIn,
   signInWithPassword as nativePasswordSignIn,
 } from '../services/authService';
+import { loadCarModes, saveCarModes, getModeByToken, getModeByIndex, getNextMode, legacyResolveToken } from '../services/carModeStorage';
 
 export type GenumUser = {
   name: string;
@@ -73,8 +74,12 @@ type AppContextValue = {
   setAuthSheetOpen: (open: boolean) => void;
   authBusy: boolean;
   authError: string | null;
-  signInWithPassword: (email: string, password: string) => Promise<boolean>;
-  signInWithGoogle: () => Promise<boolean>;
+  carModes: CarMode[];
+  setCarModes: (modes: CarMode[]) => void;
+  selectedMode: CarMode | null;
+  setSelectedMode: (mode: CarMode | null) => void;
+  currentModeToken: string;
+  setCurrentModeToken: (token: string) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -226,6 +231,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [sessionReady, user, storedTokens, webRef]);
 
+  // --- load car modes from offline storage on launch ---
+  useEffect(() => {
+    let active = true;
+    loadCarModes().then((modes) => {
+      if (active) setCarModes(modes);
+    });
+    return () => {
+      active = false;
+    };
+  }, [setCarModes]);
+
   const value = useMemo<AppContextValue>(
     () => ({
       webRef,
@@ -249,8 +265,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAuthSheetOpen,
       authBusy,
       authError,
-      signInWithPassword,
-      signInWithGoogle,
+      carModes: [] as CarMode[],
+      setCarModes: async (modes: CarMode[]) => {
+        await saveCarModes(modes);
+      },
+      selectedMode: null as CarMode | null,
+      setSelectedMode: (mode: CarMode | null) => {},
+      currentModeToken: '' as string,
+      setCurrentModeToken: (token: string) => {},
     }),
     [
       webRef,
@@ -267,8 +289,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       authSheetOpen,
       authBusy,
       authError,
-      signInWithPassword,
-      signInWithGoogle,
     ],
   );
 

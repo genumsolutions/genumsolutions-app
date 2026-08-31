@@ -10,8 +10,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import { roboBridgeConnectGeneric, roboBridgeDisconnect, roboBridgeSend, type RoboConnectPayload } from '../services/roboCarBridge';
-import { getNativeCategory, NATIVE_CATEGORIES } from '../config/deviceCatalog';
+import { getModeByToken, getModeByIndex, getNextMode, legacyResolveToken, LOCAL_CAR_MODES } from '../services/carModeStorage';
 import { BRIDGE_SCRIPT } from '../webview/inject';
+import { useCallback } from 'react';
 
 export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const {
@@ -21,13 +22,30 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
     setCurrentPath,
     setOffline,
     navigate,
+    carModes,
+    setCarModes,
+    selectedMode,
+    setSelectedMode,
+    currentModeToken,
+    setCurrentModeToken,
   } = useApp();
+
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [modeSelectorOpen, setModeSelectorOpen] = useState(false);
+
+  // Load car modes from offline storage if not already loaded
+  useEffect(() => {
+    if (carModes.length === 0) {
+      loadCarModes().then((modes) => setCarModes(modes));
+    }
+  }, [carModes.length, setCarModes]);
 
   const [categorySlug, setCategorySlug] = useState('robocar');
   const category = getNativeCategory(categorySlug) ?? NATIVE_CATEGORIES[0]!;
   const [progress, setProgress] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [popupUrl, setPopupUrl] = useState<string | null>(null);
+  const [modeSelectorOpen, setModeSelectorOpen] = useState(false);
 
   // --- BLE auto-connect on mount ---
   useEffect(() => {
@@ -38,6 +56,17 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
         // Auto-connect failed (no remembered device); bridge will fall back to scan UI.
       }
     })();
+  }, []);
+
+  // --- Online/offline state tracking ---
+  useEffect(() => {
+    const handler = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', handler);
+    window.addEventListener('offline', handler);
+    return () => {
+      window.removeEventListener('online', handler);
+      window.removeEventListener('offline', handler);
+    };
   }, []);
 
   // --- Category selector change ---
@@ -52,13 +81,20 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
     setLoadFailed(false);
   };
 
+  // --- Set offline state from app context ---
+  useEffect(() => {
+    if (typeof setOffline === 'function') {
+      // setOffline is already handled via the online event listener above
+    }
+  }, [setOffline]);
+
   // --- Message handling from the website bridge ---
   const handleMessage = (event: { nativeEvent: { data: string } }) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       switch (data.type) {
         case 'genum:cart':
-          setCart({ count: data.count, size: data.size });
+          setCart({ count: data.count, size: data.count });
           break;
         case 'genum:session':
           setUser(data.user ?? null);
@@ -73,6 +109,14 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
           void roboBridgeConnectGeneric(
             (typeof data.payload === 'object' && data.payload !== null ? data.payload : {}) as RoboConnectPayload,
           );
+          break;
+        case 'genum:mode':
+          const mode = carModes.find((m) => m.token === data.payload?.token) ||
+                       LOCAL_CAR_MODES.find((m) => m.token === data.payload?.token);
+          if (mode) {
+            setSelectedMode(mode);
+            setCurrentModeToken(mode.token);
+          }
           break;
         default:
           break;
@@ -141,9 +185,12 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
 
         <View className="mx-5 mt-4 flex-1">
           <WebView
-            ref={(ref) => {}}
+            ref={(ref) => { webRef.current = ref; }}
             style={{ flex: 1 }}
-            source={{ uri: 'https://genumsolutions-website.vercel.app/iot-remote' }}
+            source={isOnline ? 
+              { uri: 'https://genumsolutions-website.vercel.app/iot-remote' } :
+              { uri: 'file:///android_asset/iot_remote_offline.html' }
+            }
             originWhitelist={['http://*', 'https://*']}
             allowsBackForwardNavigationGestures
             injectedJavaScriptBeforeContentLoaded={`window.GENUM_APP = true; true;`}
@@ -167,12 +214,21 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
                 setLoadFailed(false);
               }
             }}
-            onLoadEnd={() => setLoadFailed(false)}
+            onLoadEnd={() => {
+              setLoadFailed(false);
+              // When loading completes, check if we're offline and show mode selector
+              if (!isOnline) {
+                setModeSelectorOpen(true);
+              }
+            }}
             onNavigationStateChange={handleNavigation}
             onHttpError={({ nativeEvent }) => {
               if (nativeEvent.statusCode >= 500) setLoadFailed(true);
             }}
-            onError={() => setLoadFailed(true)}
+            onError={() => {
+              setLoadFailed(true);
+              setModeSelectorOpen(true);
+            }}
             onOpenWindow={(event) => setPopupUrl(event.nativeEvent.targetUrl)}
             onMessage={handleMessage}
           />
@@ -194,6 +250,48 @@ export function IotRemoteScreen({ visible, onClose }: { visible: boolean; onClos
             <Text className="text-[11px] font-black uppercase tracking-wider text-white">
               Offline — showing saved content
             </Text>
+          </View>
+        ) : null}
+
+        {/* Mode selector when offline */}
+        {isOnline === false && modeSelectorOpen ? (
+          <View
+            className="absolute inset-0 items-center justify-center bg-surface/80 backdrop-blur-sm"
+          >
+            <View className="bg-white rounded-xl p-6 max-w-sm w-full shadow-lg">
+              <Text className="text-xl font-bold text-navy mb-4">Car Mode Selection</Text>
+              <View className="space-y-3 max-h-80 overflow-y-auto">
+                {carModes.map((mode) => (
+                  <Pressable
+                    key={mode.id}
+                    onPress={() => {
+                      setSelectedMode(mode);
+                      setCurrentModeToken(mode.token);
+                      setModeSelectorOpen(false);
+                      // Post message to WebView with mode info
+                      webRef.current?.injectJavaScript(
+                        `(function(){var f=(window.__GENUM_ROBO__||{}).ingress;if(f){try{f('genum:mode',${JSON.stringify(mode.token)});}catch(e){}}())();true;`,
+                      );
+                    }}
+                    className={selectedMode?.id === mode.id 
+                      ? 'border-navy bg-navy text-white'
+                      : 'border-line bg-mist text-ink'}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text className="font-medium">{mode.name}</Text>
+                      <Text className="text-xs text-gray-400">{mode.token}</Text>
+                    </View>
+                    <Text className="text-xs text-gray-500 truncate lines-2">{mode.blurb}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable
+                onPress={() => setModeSelectorOpen(false)}
+                className="mt-4 rounded-full bg-navy px-4 py-2"
+              >
+                <Text className="font-bold text-white">Close</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
