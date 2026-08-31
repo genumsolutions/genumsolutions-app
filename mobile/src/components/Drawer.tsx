@@ -56,6 +56,7 @@ const PROJECT_ITEMS: NavItem[] = [
 
 type Props = {
   onOpenTools: () => void;
+  onOpenProjects: () => void;
 };
 
 const PANEL_WIDTH = 300;
@@ -95,14 +96,13 @@ export function Drawer({ onOpenTools }: Props) {
     .map((part) => part[0]?.toUpperCase())
     .join('');
 
-  const renderItem = (item: NavItem) => {
+  const renderItem = (item: NavItem, alternativeOnPress?: () => void) => {
     const active = item.match(currentPath);
+    const handlePress = alternativeOnPress ? alternativeOnPress : () => navigate(item.path);
     return (
       <Pressable
         key={item.label}
-        onPress={() => {
-          navigate(item.path);
-        }}
+        onPress={handlePress}
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
         className={`flex-row items-center rounded-lg px-3 py-2.5 ${
@@ -214,7 +214,7 @@ export function Drawer({ onOpenTools }: Props) {
               <Text className="px-3 pb-1 text-[10px] font-black uppercase tracking-widest text-border">
                 Shop
               </Text>
-              {SHOP_ITEMS.map(renderItem)}
+              {SHOP_ITEMS.map((item) => renderItem(item, item.label === 'Projects' && onOpenProjects))}
             </View>
 
             <View className="px-2 pt-4">

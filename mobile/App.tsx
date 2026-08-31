@@ -24,9 +24,11 @@ import { TabBar } from './src/components/TabBar';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { SiteScreen } from './src/screens/SiteScreen';
 import { ToolsScreen } from './src/screens/ToolsScreen';
+import { ProjectsScreen } from './src/screens/ProjectsScreen';
 
 function Shell() {
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   const { authSheetOpen, setAuthSheetOpen } = useApp();
 
   return (
@@ -38,12 +40,13 @@ function Shell() {
       </View>
       <CartBar />
       <TabBar />
-      <Drawer onOpenTools={() => setToolsOpen(true)} />
+      <Drawer onOpenTools={() => setToolsOpen(true)} onOpenProjects={() => setProjectsOpen(true)} />
       <SignInSheet
         visible={authSheetOpen}
         onRequestClose={() => setAuthSheetOpen(false)}
       />
       <ToolsScreen visible={toolsOpen} onClose={() => setToolsOpen(false)} />
+      <ProjectsScreen visible={projectsOpen} onClose={() => setProjectsOpen(false)} />
     </View>
   );
 }
