@@ -14,7 +14,7 @@ jobs:
       - name: Get app version from app.json
         id: get-version
         run: |
-          VERSION=$(node -e 'console.log(require("./mobile/app.json").expo.version)')
+          VERSION=$(node -e 'const pkg = require("./mobile/app.json"); console.log(pkg.expo.version)')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Update website APK_VERSION
