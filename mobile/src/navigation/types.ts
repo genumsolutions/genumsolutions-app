@@ -23,6 +23,10 @@ export type RootStackParamList = {
   Contact: undefined;
   About: undefined;
   Tools: undefined;
+  Admin: undefined;
+  Journal: undefined;
+  Printing: undefined;
+  OpenTools: undefined;
   OrderSuccess: { orderId?: string };
 };
 

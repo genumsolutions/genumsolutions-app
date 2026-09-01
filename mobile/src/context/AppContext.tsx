@@ -19,8 +19,11 @@ import { getLocalCart, totalCount } from '../services/cartService';
 import type { CarMode } from '../config/roboCarCatalog';
 
 export type GenumUser = {
+  id: string;
   name: string;
   email: string;
+  phone: string;
+  address: string;
   role: string;
 };
 
@@ -49,8 +52,11 @@ function genumUserFromSession(session: Session): GenumUser {
   const meta = session.user?.user_metadata ?? {};
   const app = session.user?.app_metadata ?? {};
   return {
+    id: session.user?.id ?? '',
     name: typeof meta.name === 'string' ? meta.name : '',
     email: session.user?.email ?? '',
+    phone: session.user?.user_metadata?.phone ?? '',
+    address: session.user?.user_metadata?.address ?? '',
     role: app.role === 'admin' ? 'admin' : 'customer',
   };
 }

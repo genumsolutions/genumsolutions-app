@@ -1,0 +1,481 @@
+// =====================================================================
+// AdminScreen - native admin dashboard mirroring the website AdminPanel.
+// Tabs: Orders, Products, Services, Users, Messages, Dashboard.
+// =====================================================================
+import React, { useEffect, useState, useCallback } from 'react'
+import {
+  FlatList,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
+import { Feather } from '@expo/vector-icons'
+import { useApp } from '../context/AppContext'
+import {
+  listAdminOrders,
+  updateOrderStatus,
+  listAdminProducts,
+  upsertAdminProduct,
+  deleteAdminProduct,
+  listAdminServices,
+  upsertAdminService,
+  deleteAdminService,
+  listAdminUsers,
+  toggleAdminRole,
+  listAdminMessages,
+  markMessageReplied,
+  fetchDashboardStats,
+  type AdminOrder,
+  type AdminProduct,
+  type AdminService,
+  type AdminUser,
+  type AdminMessage,
+  type DashboardStats,
+} from '../services/adminService'
+
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'Services' | 'Users' | 'Messages'
+
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'Services', 'Users', 'Messages']
+
+export function AdminScreen() {
+  const { isAdmin, signOut } = useApp()
+  const [tab, setTab] = useState<Tab>('Dashboard')
+  const [loading, setLoading] = useState(false)
+
+  // Orders
+  const [orders, setOrders] = useState<AdminOrder[]>([])
+  const [ordersTotal, setOrdersTotal] = useState(0)
+  const [ordersPage, setOrdersPage] = useState(1)
+  const [orderQuery, setOrderQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+
+  // Products
+  const [products, setProducts] = useState<AdminProduct[]>([])
+  const [productQuery, setProductQuery] = useState('')
+
+  // Services
+  const [services, setServices] = useState<AdminService[]>([])
+
+  // Users
+  const [users, setUsers] = useState<AdminUser[]>([])
+
+  // Messages
+  const [messages, setMessages] = useState<AdminMessage[]>([])
+  const [messagesPage, setMessagesPage] = useState(1)
+
+  // Dashboard
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+
+  // Editing
+  const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null)
+  const [editingService, setEditingService] = useState<AdminService | null>(null)
+
+  useEffect(() => {
+    void loadTab()
+  }, [tab])
+
+  async function loadTab() {
+    setLoading(true)
+    try {
+      if (tab === 'Dashboard') {
+        setStats(await fetchDashboardStats())
+      } else if (tab === 'Orders') {
+        void loadOrders(1)
+      } else if (tab === 'Products') {
+        setProducts(await listAdminProducts())
+      } else if (tab === 'Services') {
+        setServices(await listAdminServices())
+      } else if (tab === 'Users') {
+        setUsers(await listAdminUsers())
+      } else if (tab === 'Messages') {
+        void loadMessages(1)
+      }
+    } catch (e) {
+      console.error('Admin load error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadOrders(page: number) {
+    const result = await listAdminOrders(page, 20, statusFilter || undefined, orderQuery || undefined)
+    setOrders(result.orders)
+    setOrdersTotal(result.total)
+    setOrdersPage(page)
+  }
+
+  async function loadMessages(page: number) {
+    const result = await listAdminMessages(page, 20)
+    setMessages(result.messages)
+    setMessagesPage(page)
+  }
+
+  async function handleUpdateOrderStatus(orderId: string, status: string) {
+    await updateOrderStatus(orderId, status)
+    void loadOrders(ordersPage)
+  }
+
+  async function handleSaveProduct() {
+    if (!editingProduct) return
+    await upsertAdminProduct(editingProduct)
+    setEditingProduct(null)
+    void loadTab()
+  }
+
+  async function handleDeleteProduct(id: string) {
+    if (!window.confirm(`Delete product ${id}?`)) return
+    await deleteAdminProduct(id)
+    void loadTab()
+  }
+
+  async function handleSaveService() {
+    if (!editingService) return
+    await upsertAdminService(editingService)
+    setEditingService(null)
+    void loadTab()
+  }
+
+  async function handleDeleteService(id: string) {
+    await deleteAdminService(id)
+    void loadTab()
+  }
+
+  async function handleToggleUserRole(user: AdminUser) {
+    const newRole = user.role === 'admin' ? 'customer' : 'admin'
+    await toggleAdminRole(user.id, newRole)
+    void loadTab()
+  }
+
+  async function handleMarkReplied(id: string) {
+    await markMessageReplied(id)
+    void loadMessages(messagesPage)
+  }
+
+  const STATUSES = ['pending', 'paid', 'fulfilled', 'cancelled']
+
+  return (
+    <View className="flex-1 bg-mist">
+      {/* Tab bar */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="border-b border-line bg-white">
+        <View className="flex-row">
+          {TABS.map((t) => (
+            <Pressable
+              key={t}
+              onPress={() => { setTab(t); setEditingProduct(null); setEditingService(null) }}
+              className={`px-4 py-3 border-b-2 ${tab === t ? 'border-navy' : 'border-transparent'}`}
+            >
+              <Text className={`text-xs font-bold ${tab === t ? 'text-navy' : 'text-muted'}`}>{t}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Tab content */}
+      {loading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#1e3a8a" />
+        </View>
+      ) : (
+        <>
+          {tab === 'Dashboard' && <DashboardTab stats={stats} />}
+          {tab === 'Orders' && (
+            <OrdersTab
+              orders={orders}
+              total={ordersTotal}
+              page={ordersPage}
+              onLoadMore={() => loadOrders(ordersPage + 1)}
+              onStatusChange={handleUpdateOrderStatus}
+              query={orderQuery}
+              onQueryChange={setOrderQuery}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+            />
+          )}
+          {tab === 'Products' && (
+            <ProductsTab
+              products={products}
+              query={productQuery}
+              onQueryChange={setProductQuery}
+              editing={editingProduct}
+              onEdit={setEditingProduct}
+              onSave={handleSaveProduct}
+              onDelete={handleDeleteProduct}
+            />
+          )}
+          {tab === 'Services' && (
+            <ServicesTab
+              services={services}
+              editing={editingService}
+              onEdit={setEditingService}
+              onSave={handleSaveService}
+              onDelete={handleDeleteService}
+            />
+          )}
+          {tab === 'Users' && (
+            <UsersTab users={users} onToggleRole={handleToggleUserRole} />
+          )}
+          {tab === 'Messages' && (
+            <MessagesTab
+              messages={messages}
+              page={messagesPage}
+              onLoadMore={() => loadMessages(messagesPage + 1)}
+              onMarkReplied={handleMarkReplied}
+            />
+          )}
+        </>
+      )}
+    </View>
+  )
+}
+
+function ActivityIndicator({ size, color }: { size: number | string; color: string }) {
+  return (
+    <View className="items-center justify-center p-8">
+      <View className="h-8 w-8 rounded-full border-2 border-navy/20 border-t-navy" />
+    </View>
+  )
+}
+
+function DashboardTab({ stats }: { stats: DashboardStats | null }) {
+  if (!stats) return <View className="p-6"><Text className="text-muted">Loading…</Text></View>
+  return (
+    <ScrollView className="p-6 space-y-4">
+      <Text className="text-base font-bold text-ink">Dashboard</Text>
+      <View className="grid grid-cols-2 gap-3">
+        <StatCard label="Users" value={String(stats.totalUsers)} />
+        <StatCard label="Orders" value={String(stats.totalOrders)} sub={`${stats.pendingOrders} pending`} />
+        <StatCard label="Products" value={String(stats.totalProducts)} sub={stats.lowStockProducts > 0 ? `${stats.lowStockProducts} low stock` : 'OK'} />
+        <StatCard label="Messages" value={String(stats.totalMessages)} sub={`${stats.unreadMessages} unread`} />
+      </View>
+    </ScrollView>
+  )
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <View className="rounded-xl border border-line bg-white p-4">
+      <Text className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</Text>
+      <Text className="mt-2 font-display text-xl font-bold text-ink">{value}</Text>
+      {sub && <Text className="mt-1 text-[11px] text-slate-500">{sub}</Text>}
+    </View>
+  )
+}
+
+function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQueryChange, statusFilter, onStatusFilterChange }: {
+  orders: AdminOrder[]; total: number; page: number; onLoadMore: () => void;
+  onStatusChange: (id: string, s: string) => void; query: string; onQueryChange: (q: string) => void;
+  statusFilter: string; onStatusFilterChange: (s: string) => void;
+}) {
+  return (
+    <View className="p-4">
+      <View className="flex-row gap-2 mb-4">
+        <View className="flex-1">
+          <TextInput value={query} onChangeText={onQueryChange} placeholder="Search buyer…" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" />
+        </View>
+        <View className="w-32">
+          <TextInput value={statusFilter} onChangeText={onStatusFilterChange} placeholder="Status" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" />
+        </View>
+      </View>
+      {orders.length === 0 ? (
+        <Text className="text-center text-sm text-muted py-8">No orders found.</Text>
+      ) : (
+        <>
+          {orders.map((o) => (
+            <View key={o.id} className="mb-3 rounded-xl border border-line bg-white p-4">
+              <View className="flex-row items-center justify-between">
+                <View>
+                  <Text className="text-sm font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()} · NPR {o.totalNpr.toLocaleString('en-IN')}</Text>
+                  <Text className="text-xs text-muted">{o.customerName} · {o.email}</Text>
+                </View>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-[10px] font-bold uppercase text-navy">{o.status}</Text>
+                </View>
+              </View>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {['pending', 'paid', 'fulfilled', 'cancelled'].map((s) => (
+                  <Pressable key={s} onPress={() => onStatusChange(o.id, s)} className={`rounded-full px-3 py-1 text-[10px] font-bold ${o.status === s ? 'bg-navy text-white' : 'border border-line text-muted'}`}>
+                    {s}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ))}
+          {page * 20 < total && (
+            <Pressable onPress={onLoadMore} className="items-center py-4">
+              <Text className="text-sm font-bold text-navy">Load more</Text>
+            </Pressable>
+          )}
+        </>
+      )}
+    </View>
+  )
+}
+
+function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, onDelete }: {
+  products: AdminProduct[]; query: string; onQueryChange: (q: string) => void;
+  editing: AdminProduct | null; onEdit: (p: AdminProduct) => void; onSave: () => void; onDelete: (id: string) => void;
+}) {
+  const filtered = query
+    ? products.filter((p) => `${p.name} ${p.sku} ${p.id}`.toLowerCase().includes(query.toLowerCase()))
+    : products
+
+  return (
+    <View className="p-4">
+      <TextInput value={query} onChangeText={onQueryChange} placeholder="Search by name, SKU, or id…" className="mb-4 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" />
+      {editing ? (
+        <ProductEditor product={editing} onSave={onSave} onCancel={() => onEdit(null as any)} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(p) => p.id}
+          renderItem={({ item }) => (
+            <View className="mb-3 rounded-xl border border-line bg-white p-4">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm font-bold text-ink">{item.name}</Text>
+                <Text className="text-xs text-navy font-bold">NPR {item.price.toLocaleString('en-IN')}</Text>
+              </View>
+              <View className="mt-2 flex-row gap-2">
+                <Pressable onPress={() => onEdit(item)} className="rounded-full px-3 py-1 bg-navy text-xs font-bold text-white"><Text>Edit</Text></Pressable>
+                <Pressable onPress={() => onDelete(item.id)} className="rounded-full px-3 py-1 border border-red-200 text-xs font-bold text-red-600"><Text>Delete</Text></Pressable>
+              </View>
+            </View>
+          )}
+        />
+      )}
+    </View>
+  )
+}
+
+function ProductEditor({ product, onSave, onCancel }: { product: AdminProduct; onSave: () => void; onCancel: () => void }) {
+  const [name, setName] = useState(product.name)
+  const [price, setPrice] = useState(String(product.price))
+  const [stock, setStock] = useState(String(product.stock))
+  const [desc, setDesc] = useState(product.description)
+
+  return (
+    <View className="mb-4 rounded-xl border border-line bg-white p-4">
+      <Text className="text-sm font-bold text-ink mb-3">Edit Product</Text>
+      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Name" />
+      <View className="flex-row gap-3 mb-3">
+        <View className="flex-1">
+          <TextInput value={price} onChangeText={setPrice} keyboardType="numeric" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Price" />
+        </View>
+        <View className="flex-1">
+          <TextInput value={stock} onChangeText={setStock} keyboardType="numeric" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Stock" />
+        </View>
+      </View>
+      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Description" />
+      <View className="flex-row gap-3">
+        <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2"><Text className="text-xs font-black text-ink">Save</Text></Pressable>
+        <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2"><Text className="text-xs font-black text-ink">Cancel</Text></Pressable>
+      </View>
+    </View>
+  )
+}
+
+function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
+  services: AdminService[]; editing: AdminService | null; onEdit: (s: AdminService) => void; onSave: () => void; onDelete: (id: string) => void;
+}) {
+  if (editing) {
+    return <ServiceEditor service={editing} onSave={onSave} onCancel={() => onEdit(null as any)} />
+  }
+  return (
+    <FlatList
+      data={services}
+      keyExtractor={(s) => s.id}
+      className="p-4"
+      renderItem={({ item }) => (
+        <View className="mb-3 rounded-xl border border-line bg-white p-4">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm font-bold text-ink">{item.name}</Text>
+            <Text className={`text-[10px] font-bold uppercase ${item.active ? 'text-emerald-600' : 'text-red-500'}`}>{item.active ? 'active' : 'inactive'}</Text>
+          </View>
+          <View className="mt-2 flex-row gap-2">
+            <Pressable onPress={() => onEdit(item)} className="rounded-full px-3 py-1 bg-navy text-xs font-bold text-white"><Text>Edit</Text></Pressable>
+            <Pressable onPress={() => onDelete(item.id)} className="rounded-full px-3 py-1 border border-red-200 text-xs font-bold text-red-600"><Text>Delete</Text></Pressable>
+          </View>
+        </View>
+      )}
+    />
+  )
+}
+
+function ServiceEditor({ service, onSave, onCancel }: { service: AdminService; onSave: () => void; onCancel: () => void }) {
+  const [name, setName] = useState(service.name)
+  const [desc, setDesc] = useState(service.description)
+  const [active, setActive] = useState(service.active)
+
+  return (
+    <View className="mb-4 rounded-xl border border-line bg-white p-4">
+      <Text className="text-sm font-bold text-ink mb-3">Edit Service</Text>
+      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Name" />
+      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Description" />
+      <View className="flex-row items-center gap-3 mb-3">
+        <Text className="text-sm font-semibold text-ink">Active</Text>
+        <View className={`h-6 w-11 rounded-full ${active ? 'bg-navy' : 'bg-mist'}`} />
+      </View>
+      <View className="flex-row gap-3">
+        <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2"><Text className="text-xs font-black text-ink">Save</Text></Pressable>
+        <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2"><Text className="text-xs font-black text-ink">Cancel</Text></Pressable>
+      </View>
+    </View>
+  )
+}
+
+function UsersTab({ users, onToggleRole }: { users: AdminUser[]; onToggleRole: (u: AdminUser) => void }) {
+  return (
+    <FlatList
+      data={users}
+      keyExtractor={(u) => u.id}
+      className="p-4"
+      renderItem={({ item }) => (
+        <View className="mb-3 rounded-xl border border-line bg-white p-4">
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text className="text-sm font-bold text-ink">{item.name || item.email}</Text>
+              <Text className="text-xs text-muted">{item.email}</Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <Text className={`text-[10px] font-bold uppercase ${item.role === 'admin' ? 'text-gold bg-ink px-2 py-0.5' : 'text-navy bg-sky px-2 py-0.5'}`}>{item.role}</Text>
+              <Pressable onPress={() => onToggleRole(item)} className="rounded-full px-3 py-1 border border-line text-xs font-bold text-ink">
+                {item.role === 'admin' ? 'Revoke' : 'Make admin'}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+    />
+  )
+}
+
+function MessagesTab({ messages, page, onLoadMore, onMarkReplied }: {
+  messages: AdminMessage[]; page: number; onLoadMore: () => void; onMarkReplied: (id: string) => void;
+}) {
+  return (
+    <View className="p-4">
+      {messages.length === 0 ? (
+        <Text className="text-center text-sm text-muted py-8">No messages.</Text>
+      ) : (
+        <>
+          {messages.map((m) => (
+            <View key={m.id} className={`mb-3 rounded-xl border border-line bg-white p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy' : ''}`}>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-slate-500">· {m.email}</Text></Text>
+                {m.status === 'new'
+                  ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full px-3 py-1 border border-line text-xs font-bold text-navy"><Text>Mark replied</Text></Pressable>
+                  : <Text className="text-[10px] font-bold uppercase text-emerald-600">Replied</Text>
+                }
+              </View>
+              <Text className="mt-2 text-xs leading-5 text-slate-600">{m.message}</Text>
+            </View>
+          ))}
+          <Pressable onPress={onLoadMore} className="items-center py-4">
+            <Text className="text-sm font-bold text-navy">Load more</Text>
+          </Pressable>
+        </>
+      )}
+    </View>
+  )
+}

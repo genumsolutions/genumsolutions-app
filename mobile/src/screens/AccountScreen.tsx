@@ -1,40 +1,55 @@
 // =====================================================================
-// AccountScreen - sign-in state, profile info and the user's orders from
-// the shared Supabase `orders` table.
+// AccountScreen - sign-in state, profile info, orders, admin access,
+// and profile editing. Uses the shared Supabase `orders` table.
 // =====================================================================
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
   Text,
+  TextInput,
   View,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useApp } from '../context/AppContext';
-import { getMyOrders } from '../services/orderService';
-import type { Order } from '../types';
+} from 'react-native'
+import { Feather } from '@expo/vector-icons'
+import { useNavigation } from '@react-navigation/native'
+import { useApp } from '../context/AppContext'
+import { getMyOrders, updateProfile } from '../services/orderService'
+import type { Order } from '../types'
 
 export function AccountScreen() {
-  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen } = useApp();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const navigation = useNavigation<any>()
+  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen } = useApp()
+  const [orders, setOrders] = useState<Order[]>([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [name, setName] = useState(user?.name || '')
+  const [phone, setPhone] = useState(user?.phone || '')
+  const [address, setAddress] = useState(user?.address || '')
 
   useEffect(() => {
-    if (!isSignedIn) return;
-    setOrdersLoading(true);
+    if (!isSignedIn) return
+    setOrdersLoading(true)
     getMyOrders()
       .then(setOrders)
       .catch(() => setOrders([]))
-      .finally(() => setOrdersLoading(false));
-  }, [isSignedIn]);
+      .finally(() => setOrdersLoading(false))
+  }, [isSignedIn])
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '')
+      setPhone(user.phone || '')
+      setAddress(user.address || '')
+    }
+  }, [user])
 
   const initials = (user?.name || 'U')
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
-    .join('');
+    .join('')
 
   if (!isSignedIn) {
     return (
@@ -53,7 +68,7 @@ export function AccountScreen() {
           <Text className="font-bold text-white">Sign in</Text>
         </Pressable>
       </View>
-    );
+    )
   }
 
   return (
@@ -70,12 +85,46 @@ export function AccountScreen() {
               <Text className="text-base font-bold text-ink">{user?.name || 'Genum user'}</Text>
               <Text className="text-xs text-muted">{user?.email}</Text>
             </View>
-            {isAdmin ? (
+            {isAdmin && (
               <View className="rounded-full bg-gold px-2 py-0.5">
                 <Text className="text-[10px] font-black uppercase text-ink">Admin</Text>
               </View>
-            ) : null}
+            )}
           </View>
+
+          {editingProfile ? (
+            <View className="mt-4 rounded-xl border border-line bg-white p-4">
+              <Text className="text-sm font-bold text-ink mb-3">Edit Profile</Text>
+              <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Name" />
+              <TextInput value={phone} onChangeText={setPhone} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Phone" keyboardType="phone-pad" />
+              <TextInput value={address} onChangeText={setAddress} className="mb-4 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Address" multiline />
+              <View className="flex-row gap-3">
+                <Pressable
+                  onPress={async () => {
+                    await updateProfile(user?.id || '', { name, phone, address })
+                    setEditingProfile(false)
+                  }}
+                  className="rounded-full bg-gold px-5 py-2"
+                >
+                  <Text className="text-xs font-black text-ink">Save</Text>
+                </Pressable>
+                <Pressable onPress={() => setEditingProfile(false)} className="rounded-full border border-line px-5 py-2">
+                  <Text className="text-xs font-black text-ink">Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <View className="mt-4 flex-row flex-wrap gap-2">
+              <Pressable onPress={() => setEditingProfile(true)} className="rounded-full bg-navy px-4 py-2">
+                <Text className="text-xs font-bold text-white">Edit Profile</Text>
+              </Pressable>
+              {isAdmin && (
+                <Pressable onPress={() => navigation.navigate('Admin')} className="rounded-full bg-gold px-4 py-2">
+                  <Text className="text-xs font-bold text-ink">Admin Panel</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
 
           <View className="mt-4">
             <Text className="mb-2 text-xs font-black uppercase tracking-[0.2em] text-navy">
@@ -114,26 +163,19 @@ export function AccountScreen() {
         </View>
       )}
       ListFooterComponent={
-        <Pressable
-          onPress={signOut}
-          className="mt-4 items-center rounded-full border border-red-200 bg-white py-3"
-        >
+        <Pressable onPress={signOut} className="mt-4 items-center rounded-full border border-red-200 bg-white py-3">
           <Text className="text-sm font-bold text-red-600">Sign out</Text>
         </Pressable>
       }
     />
-  );
+  )
 }
 
 function statusLabel(status: string): string {
   switch (status) {
-    case 'paid':
-      return 'Paid';
-    case 'fulfilled':
-      return 'Fulfilled';
-    case 'cancelled':
-      return 'Cancelled';
-    default:
-      return 'Pending';
+    case 'paid': return 'Paid'
+    case 'fulfilled': return 'Fulfilled'
+    case 'cancelled': return 'Cancelled'
+    default: return 'Pending'
   }
 }

@@ -23,6 +23,10 @@ import { ProjectsScreen } from '../screens/ProjectsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { AboutScreen } from '../screens/AboutScreen';
 import { ToolsScreen } from '../screens/ToolsScreen';
+import { AdminScreen } from '../screens/AdminScreen';
+import { JournalScreen } from '../screens/JournalScreen';
+import { PrintingScreen } from '../screens/PrintingScreen';
+import { OpenToolsScreen } from '../screens/OpenToolsScreen';
 import { useApp } from '../context/AppContext';
 import { BrandHeader } from '../components/BrandHeader';
 import type { MainTabParamList, RootStackParamList } from './types';
@@ -123,6 +127,26 @@ export function RootNavigator() {
         name="Tools"
         component={ToolsScreen}
         options={{ headerShown: true, title: 'Tools & IoT', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="Admin"
+        component={AdminScreen}
+        options={{ headerShown: true, title: 'Admin', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="Journal"
+        component={JournalScreen}
+        options={{ headerShown: true, title: 'Journal', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="Printing"
+        component={PrintingScreen}
+        options={{ headerShown: true, title: '3D Printing', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="OpenTools"
+        component={OpenToolsScreen}
+        options={{ headerShown: true, title: 'Open Tools', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
     </Stack.Navigator>
   );
