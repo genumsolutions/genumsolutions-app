@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   FlatList,
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -35,9 +36,9 @@ import {
   type DashboardStats,
 } from '../services/adminService'
 
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'Services' | 'Users' | 'Messages'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Users' | 'Messages'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'Services', 'Users', 'Messages']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Users', 'Messages']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
@@ -83,7 +84,7 @@ export function AdminScreen() {
         setStats(await fetchDashboardStats())
       } else if (tab === 'Orders') {
         void loadOrders(1)
-      } else if (tab === 'Products') {
+      } else if (tab === 'Products' || tab === 'ProjectPackages' || tab === 'RobotCarProjects') {
         setProducts(await listAdminProducts())
       } else if (tab === 'Services') {
         setServices(await listAdminServices())
@@ -199,8 +200,19 @@ export function AdminScreen() {
               query={productQuery}
               onQueryChange={setProductQuery}
               editing={editingProduct}
-              onEdit={setEditingProduct}
+              onEdit={(product) => {
+                setEditingProduct(product)
+                if (product) setTab('Products')
+              }}
               onSave={handleSaveProduct}
+              onDelete={handleDeleteProduct}
+            />
+          )}
+          {(tab === 'ProjectPackages' || tab === 'RobotCarProjects') && (
+            <ProjectTab
+              title={tab === 'ProjectPackages' ? 'Project packages' : 'Robot car projects'}
+              products={products.filter((product) => tab === 'ProjectPackages' ? product.productType === 'Project package' : product.category === 'Robot Cars')}
+              onEdit={setEditingProduct}
               onDelete={handleDeleteProduct}
             />
           )}
@@ -345,6 +357,35 @@ function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, 
         />
       )}
     </View>
+  )
+}
+
+function ProjectTab({ title, products, onEdit, onDelete }: {
+  title: string; products: AdminProduct[]; onEdit: (p: AdminProduct) => void; onDelete: (id: string) => void;
+}) {
+  return (
+    <FlatList
+      data={products}
+      keyExtractor={(product) => product.id}
+      className="p-4"
+      ListHeaderComponent={<Text className="mb-4 text-base font-bold text-ink">{title} ({products.length})</Text>}
+      ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No {title.toLowerCase()} found.</Text>}
+      renderItem={({ item }) => (
+        <View className="mb-3 overflow-hidden rounded-xl border border-line bg-white">
+          {item.image ? <Image source={{ uri: item.image }} className="h-36 w-full" resizeMode="cover" /> : null}
+          <View className="p-4">
+            <Text className="text-[10px] font-black uppercase tracking-wide text-gold">{item.category}</Text>
+            <Text className="mt-1 text-sm font-bold text-ink">{item.name}</Text>
+            <Text className="mt-1 text-xs leading-5 text-muted">{item.description || item.note}</Text>
+            {item.specs.length > 0 ? <Text className="mt-2 text-[11px] text-muted">{item.specs.join(' · ')}</Text> : null}
+            <View className="mt-3 flex-row gap-2">
+              <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1"><Text className="text-xs font-bold text-white">Edit</Text></Pressable>
+              <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-red-200 px-3 py-1"><Text className="text-xs font-bold text-red-600">Delete</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+    />
   )
 }
 

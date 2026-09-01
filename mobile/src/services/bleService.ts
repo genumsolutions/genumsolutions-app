@@ -162,13 +162,13 @@ class BleService {
         deviceId,
         service.id,
         rxChar.id,
-        (error: Error, characteristic: Buffer) => {
+        (error: Error, characteristic: { value?: string | null }) => {
           if (error) {
             this.emitStatus('error', error.message)
             return
           }
           if (characteristic?.value) {
-            const text = (characteristic.value as string)
+            const text = characteristic.value
             const lines = text.split('\n').filter(Boolean)
             for (const line of lines) {
               const telemetry = this.parseTelemetryLine(line)

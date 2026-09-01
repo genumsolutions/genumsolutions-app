@@ -11,6 +11,13 @@ import { supabase } from '../config/supabase';
 import type { Product, ProductType, Difficulty } from '../types';
 
 const CATALOG_CACHE_KEY = 'genum_products_v1';
+const WEBSITE_MEDIA_BASE = 'https://genumsolutions-website.vercel.app/media/products';
+
+function normalizeImageUrl(image: string | null, id: string): string {
+  if (!image) return `${WEBSITE_MEDIA_BASE}/${id}.jpg`;
+  if (image.startsWith('/')) return `https://genumsolutions-website.vercel.app${image}`;
+  return image;
+}
 
 function normalizePrice(price: number | null | undefined): number {
   const n = Number(price) || 0;
@@ -67,7 +74,7 @@ export function rowToProduct(row: ProductRow): Product {
     color: row.color || 'from-[#dce8ff] to-[#7e9ff2]',
     ...(row.badge ? { badge: row.badge } : {}),
     ...(row.supplier ? { supplier: row.supplier } : {}),
-    ...(row.image_url ? { image: row.image_url } : {}),
+    image: normalizeImageUrl(row.image_url, row.id),
   };
 }
 
