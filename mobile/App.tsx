@@ -1,52 +1,36 @@
 // =====================================================================
 // App - the GENUM Solutions mobile app.
 //
-// The app is a hybrid native shell around the company website loaded in a
-// WebView (see src/screens/SiteScreen.tsx):
-//   - AppHeader    (native top bar: logo, cart badge, menu toggle)
-//   - SiteScreen   (the website, restyled to feel like an app)
-//   - CartBar      (persistent checkout focus whenever the cart is non-empty)
-//   - TabBar       (Home / Shop / Cart / Account)
-//   - Drawer       (right-side navigation menu)
-//   - ToolsScreen  (native Tools & IoT panel)
+// The app is fully NATIVE with its own UI/UX. It reads and writes the SAME
+// Supabase database as the website (products, services, projects, orders,
+// carts, profiles) - it does NOT load pages from the website. There is no
+// WebView.
+//
+//   NavigationContainer -> RootNavigator (tabs + stack)
+//   AppProvider          native auth + cart state
+//   SignInSheet          global sign-in / sign-up / reset overlay
 // =====================================================================
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
 import './global.css';
 
-import { AppHeader } from './src/components/AppHeader';
-import { CartBar } from './src/components/CartBar';
-import { Drawer } from './src/components/Drawer';
+import { RootNavigator } from './src/navigation/RootNavigator';
 import { SignInSheet } from './src/components/SignInSheet';
-import { TabBar } from './src/components/TabBar';
 import { AppProvider, useApp } from './src/context/AppContext';
-import { SiteScreen } from './src/screens/SiteScreen';
-import { ToolsScreen } from './src/screens/ToolsScreen';
-import { ProjectsScreen } from './src/screens/ProjectsScreen';
 
 function Shell() {
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [projectsOpen, setProjectsOpen] = useState(false);
   const { authSheetOpen, setAuthSheetOpen } = useApp();
 
   return (
     <View className="flex-1 bg-surface">
       <StatusBar style="light" />
-      <AppHeader />
-      <View className="flex-1">
-        <SiteScreen />
-      </View>
-      <CartBar />
-      <TabBar />
-      <Drawer onOpenTools={() => setToolsOpen(true)} onOpenProjects={() => setProjectsOpen(true)} />
-      <SignInSheet
-        visible={authSheetOpen}
-        onRequestClose={() => setAuthSheetOpen(false)}
-      />
-      <ToolsScreen visible={toolsOpen} onClose={() => setToolsOpen(false)} />
-      <ProjectsScreen visible={projectsOpen} onClose={() => setProjectsOpen(false)} />
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>
+      <SignInSheet visible={authSheetOpen} onRequestClose={() => setAuthSheetOpen(false)} />
     </View>
   );
 }

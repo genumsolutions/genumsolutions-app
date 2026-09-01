@@ -1,22 +1,7 @@
 // =====================================================================
-// AppContext - native-side state that mirrors live information from the
-// WebView (cart count, session, current page, connectivity) plus the shared
-// navigation bridge (`navigate`) that drives the loaded website.
-//
-// The Website -> native data flow:
-//   SiteScreen.onMessage -> setCart / setUser / setCurrentPath / setOffline
-// Native -> Website data flow:
-//   navigate(path) injects window.location.assign(path) into the WebView.
-//
-// Native auth also lives here:
-//   signInWithPassword / signInWithGoogle  -> native sign-in (see
-//     authService.ts). On success the session is handed to the website via
-//     /api/auth/native-handoff so the WebView behaves as signed in.
-//   signOut                                -> POSTs /api/auth/logout in the
-//     site, clears the native session, lands on the home page.
-//   restore-on-launch                      -> if a native session survived a
-//     cold start (SecureStore) but the WebView starts signed out, the session
-//     is handed back automatically.
+// AppContext - native-side global state: auth (Supabase), the cart badge,
+// and app-wide toggles. No WebView is involved - the app reads/writes the
+// shared Supabase database directly.
 // =====================================================================
 import {
   createContext,
@@ -24,25 +9,14 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
-import type { MutableRefObject } from 'react';
-import type { WebView } from 'react-native-webview';
 import type { Session } from '@supabase/supabase-js';
-import { WEBSITE_URL } from '../config/site';
-import { supabaseConfigured } from '../config/supabase';
-import {
-  clearNativeSession,
-  forwardSessionToWebView,
-  loadNativeSession,
-  mapAuthError,
-  persistNativeSession,
-  signInWithGoogle as nativeGoogleSignIn,
-  signInWithPassword as nativePasswordSignIn,
-} from '../services/authService';
-import { loadCarModes, saveCarModes, getModeByToken, getModeByIndex, getNextMode, legacyResolveToken } from '../services/carModeStorage';
+import { supabase, supabaseConfigured } from '../config/supabase';
+import * as auth from '../services/authService';
+import { getLocalCart, totalCount } from '../services/cartService';
+import type { CarMode } from '../config/roboCarCatalog';
 
 export type GenumUser = {
   name: string;
@@ -50,36 +24,23 @@ export type GenumUser = {
   role: string;
 };
 
-type StoredTokenPair = { accessToken: string; refreshToken: string };
-
 type AppContextValue = {
-  webRef: MutableRefObject<WebView | null>;
-  cartCount: number;
-  cartSize: number;
   user: GenumUser | null;
   sessionReady: boolean;
   isSignedIn: boolean;
   isAdmin: boolean;
-  currentPath: string;
-  offline: boolean;
-  drawerOpen: boolean;
-  setDrawerOpen: (open: boolean) => void;
+  cartCount: number;
   setCart: (cart: { count: number; size: number }) => void;
-  setUser: (user: GenumUser | null) => void;
-  setCurrentPath: (path: string) => void;
-  setOffline: (offline: boolean) => void;
-  navigate: (path: string) => void;
-  signOut: () => void;
   authSheetOpen: boolean;
   setAuthSheetOpen: (open: boolean) => void;
   authBusy: boolean;
   authError: string | null;
+  signInWithPassword: (email: string, password: string) => Promise<boolean>;
+  signUp: (name: string, email: string, password: string) => Promise<'ok' | 'confirm' | 'error'>;
+  signInWithGoogle: () => Promise<boolean>;
+  resetPassword: (email: string) => Promise<boolean>;
+  signOut: () => void;
   carModes: CarMode[];
-  setCarModes: (modes: CarMode[]) => void;
-  selectedMode: CarMode | null;
-  setSelectedMode: (mode: CarMode | null) => void;
-  currentModeToken: string;
-  setCurrentModeToken: (token: string) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -95,200 +56,199 @@ function genumUserFromSession(session: Session): GenumUser {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const webRef = useRef<WebView | null>(null);
-  const [cart, setCartState] = useState({ count: 0, size: 0 });
-  const [user, setUserState] = useState<GenumUser | null>(null);
+  const [user, setUser] = useState<GenumUser | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
-  const [currentPath, setCurrentPath] = useState('/');
-  const [offline, setOffline] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  // --- native auth state ---
+  const [cartCount, setCartCount] = useState(0);
   const [authSheetOpen, setAuthSheetOpen] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [storedTokens, setStoredTokens] = useState<StoredTokenPair | null>(null);
-  const handoffSentRef = useRef(false);
+  const [carModes, setCarModes] = useState<CarMode[]>([]);
 
   const setCart = useCallback((next: { count: number; size: number }) => {
-    setCartState({ count: Math.max(0, next.count || 0), size: Math.max(0, next.size || 0) });
+    setCartCount(Math.max(0, next.count || 0));
   }, []);
 
-  const setUser = useCallback((u: GenumUser | null) => {
-    setUserState(u);
-    setSessionReady(true);
-  }, []);
-
-  const navigate = useCallback((path: string) => {
-    const safe = path.replace(/\\/g, '').replace(/[\r\n]/g, '');
-    const origin =
-      typeof WEBSITE_URL === 'string'
-        ? WEBSITE_URL.replace(/\/$/, '')
-        : '';
-    webRef.current?.injectJavaScript(
-      `if (window.location.origin === '${origin}') { window.location.assign('${safe}'); } true;`,
-    );
-    setDrawerOpen(false);
-  }, []);
-
-  // --- sign out in the website's session, then clear native state ---
-  const signOut = useCallback(() => {
-    webRef.current?.injectJavaScript(
-      `window.fetch('/api/auth/logout', { method: 'POST' })
-        .catch(function(){})
-        .then(function(){ window.location.assign('/'); }); true;`,
-    );
-    setUser(null);
-    setStoredTokens(null);
-    void clearNativeSession().catch(() => {});
-    setDrawerOpen(false);
-  }, [setUser]);
-
-  // --- native sign-in completion: persist tokens, hand to website, close ---
-  const applyNativeSession = useCallback(
-    async (session: Session) => {
-      setStoredTokens({
-        accessToken: session.access_token,
-        refreshToken: session.refresh_token ?? '',
-      });
+  // --- restore the native session on launch ---
+  useEffect(() => {
+    let active = true;
+    (async () => {
       try {
-        await persistNativeSession(session);
+        const current = await supabase.auth.getSession();
+        const session = current.data.session;
+        if (session) {
+          if (active) setUser(genumUserFromSession(session));
+        } else {
+          // Try to restore from SecureStore so Google/email login survives
+          // an OS restart even if the client did not persist it.
+          const stored = await auth.loadStoredSession();
+          if (stored?.accessToken) {
+            const { data } = await supabase.auth.setSession({
+              access_token: stored.accessToken,
+              refresh_token: stored.refreshToken,
+            });
+            if (data.session && active) setUser(genumUserFromSession(data.session));
+          }
+        }
       } catch {
-        // SecureStore failure must not block sign-in - the site cookies are
-        // the source of truth for the running session.
+        /* ignore */
+      } finally {
+        if (active) setSessionReady(true);
       }
-      forwardSessionToWebView(webRef, session, { thenGoTo: '/account' });
-      setUser(genumUserFromSession(session));
-      setAuthError(null);
-      setAuthSheetOpen(false);
-    },
-    [setUser, webRef],
-  );
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // --- keep the session current (sign-in / sign-out / refresh) ---
+  useEffect(() => {
+    const sub = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session ? genumUserFromSession(session) : null);
+      setSessionReady(true);
+    });
+    return () => sub.data.subscription.unsubscribe();
+  }, []);
+
+  // --- load the cart badge on launch + keep it current ---
+  const refreshCartCount = useCallback(async () => {
+    const lines = await getLocalCart();
+    setCartCount(await totalCount(lines));
+  }, []);
+
+  useEffect(() => {
+    void refreshCartCount();
+  }, [refreshCartCount]);
+
+  const applyAuthed = useCallback(() => {
+    setAuthError(null);
+    setAuthBusy(false);
+    void refreshCartCount();
+  }, [refreshCartCount]);
+
+  const applyError = useCallback((message: string) => {
+    setAuthError(auth.mapAuthError(message));
+    setAuthBusy(false);
+    return false;
+  }, []);
 
   const signInWithPassword = useCallback(
     async (email: string, password: string) => {
       if (!supabaseConfigured) {
-        setAuthError('Native sign-in is not configured yet. Please sign in on the website.');
+        setAuthError('Sign-in is not configured yet.');
         return false;
       }
       setAuthBusy(true);
       setAuthError(null);
       try {
-        const session = await nativePasswordSignIn(email, password);
-        await applyNativeSession(session);
+        await auth.signInWithPassword(email, password);
+        setAuthSheetOpen(false);
+        applyAuthed();
         return true;
       } catch (e) {
-        setAuthError(mapAuthError(e instanceof Error ? e.message : 'Sign-in failed.'));
-        return false;
-      } finally {
-        setAuthBusy(false);
+        return applyError(e instanceof Error ? e.message : 'Sign-in failed.');
       }
     },
-    [applyNativeSession],
+    [applyAuthed, applyError],
+  );
+
+  const signUp = useCallback(
+    async (name: string, email: string, password: string) => {
+      if (!supabaseConfigured) {
+        setAuthError('Sign-up is not configured yet.');
+        return 'error';
+      }
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        const session = await auth.signUp(name, email, password);
+        if (session) {
+          setAuthSheetOpen(false);
+          applyAuthed();
+          return 'ok';
+        }
+        // confirmation email required
+        applyAuthed();
+        return 'confirm';
+      } catch (e) {
+        applyError(e instanceof Error ? e.message : 'Sign-up failed.');
+        return 'error';
+      }
+    },
+    [applyAuthed, applyError],
   );
 
   const signInWithGoogle = useCallback(async () => {
     if (!supabaseConfigured) {
-      setAuthError('Native sign-in is not configured yet. Please sign in on the website.');
+      setAuthError('Sign-in is not configured yet.');
       return false;
     }
     setAuthBusy(true);
     setAuthError(null);
+    const result = await auth.signInWithGoogle();
+    if (result.status === 'ok') {
+      setAuthSheetOpen(false);
+      applyAuthed();
+      return true;
+    }
+    if (result.status === 'error') setAuthError(result.message);
+    setAuthBusy(false);
+    return false;
+  }, [applyAuthed]);
+
+  const resetPassword = useCallback(async (email: string) => {
+    if (!supabaseConfigured) return false;
+    setAuthBusy(true);
+    setAuthError(null);
     try {
-      const result = await nativeGoogleSignIn();
-      if (result.status === 'ok') {
-        await applyNativeSession(result.session);
-        return true;
-      }
-      if (result.status === 'error') {
-        setAuthError(result.message);
-      }
-      return false;
-    } finally {
+      await auth.resetPassword(email);
       setAuthBusy(false);
+      return true;
+    } catch (e) {
+      setAuthBusy(false);
+      return applyError(e instanceof Error ? e.message : 'Failed to send reset link.');
     }
-  }, [applyNativeSession]);
+  }, [applyError]);
 
-  // --- load a persisted native session on launch ---
-  useEffect(() => {
-    let active = true;
-    loadNativeSession()
-      .then((tokens) => {
-        if (active) setStoredTokens(tokens);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // --- if the WebView starts signed out but we hold a native session,
-  // hand it back (one-time per launch) so cookies get re-adopted ---
-  useEffect(() => {
-    if (sessionReady && !user && storedTokens && !handoffSentRef.current) {
-      handoffSentRef.current = true;
-      forwardSessionToWebView(webRef, storedTokens);
-    }
-  }, [sessionReady, user, storedTokens, webRef]);
-
-  // --- load car modes from offline storage on launch ---
-  useEffect(() => {
-    let active = true;
-    loadCarModes().then((modes) => {
-      if (active) setCarModes(modes);
-    });
-    return () => {
-      active = false;
-    };
-  }, [setCarModes]);
+  const signOut = useCallback(() => {
+    void auth.signOut();
+    setUser(null);
+    setAuthSheetOpen(false);
+    void refreshCartCount();
+  }, [refreshCartCount]);
 
   const value = useMemo<AppContextValue>(
     () => ({
-      webRef,
-      cartCount: cart.count,
-      cartSize: cart.size,
       user,
       sessionReady,
       isSignedIn: Boolean(user),
       isAdmin: user?.role === 'admin',
-      currentPath,
-      offline,
-      drawerOpen,
-      setDrawerOpen,
+      cartCount,
       setCart,
-      setUser,
-      setCurrentPath,
-      setOffline,
-      navigate,
-      signOut,
       authSheetOpen,
       setAuthSheetOpen,
       authBusy,
       authError,
-      carModes: [] as CarMode[],
-      setCarModes: async (modes: CarMode[]) => {
-        await saveCarModes(modes);
-      },
-      selectedMode: null as CarMode | null,
-      setSelectedMode: (mode: CarMode | null) => {},
-      currentModeToken: '' as string,
-      setCurrentModeToken: (token: string) => {},
+      signInWithPassword,
+      signUp,
+      signInWithGoogle,
+      resetPassword,
+      signOut,
+      carModes,
     }),
     [
-      webRef,
-      cart,
       user,
       sessionReady,
-      currentPath,
-      offline,
-      drawerOpen,
+      cartCount,
       setCart,
-      setUser,
-      navigate,
-      signOut,
       authSheetOpen,
       authBusy,
       authError,
+      signInWithPassword,
+      signUp,
+      signInWithGoogle,
+      resetPassword,
+      signOut,
+      carModes,
     ],
   );
 
