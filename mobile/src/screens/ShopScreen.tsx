@@ -32,12 +32,16 @@ export function ShopScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
 
   const categories = useMemo(() => distinctCategories(products), [products]);
   const visible = useMemo(
     () => filterProducts(products, category, query),
     [products, category, query],
   );
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
 
   const load = async (asRefresh = false) => {
     if (asRefresh) setRefreshing(true);
@@ -54,6 +58,10 @@ export function ShopScreen() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, query]);
 
   if (loading) {
     return (
@@ -111,7 +119,7 @@ export function ShopScreen() {
 
       {/* Results */}
       <FlatList
-        data={visible}
+        data={pageItems}
         keyExtractor={(p) => p.id}
         numColumns={2}
         columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
@@ -123,6 +131,29 @@ export function ShopScreen() {
             <Feather name="inbox" size={40} color="#cbd5e1" />
             <Text className="mt-3 text-sm text-muted">No products found.</Text>
           </View>
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View className="mt-1 flex-row items-center justify-between px-4">
+              <Pressable
+                onPress={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                accessibilityLabel="Previous products page"
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"
+              >
+                <Feather name="chevron-left" size={18} color="#1e3a8a" />
+              </Pressable>
+              <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}</Text>
+              <Pressable
+                onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page === totalPages}
+                accessibilityLabel="Next products page"
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"
+              >
+                <Feather name="chevron-right" size={18} color="#1e3a8a" />
+              </Pressable>
+            </View>
+          ) : null
         }
         renderItem={({ item }) => (
           <Pressable

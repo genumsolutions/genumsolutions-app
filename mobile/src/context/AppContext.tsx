@@ -13,6 +13,8 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { Appearance } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseConfigured } from '../config/supabase';
 import * as auth from '../services/authService';
 import { getLocalCart, totalCount } from '../services/cartService';
@@ -26,6 +28,8 @@ export type GenumUser = {
   address: string;
   role: string;
 };
+
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 type AppContextValue = {
   user: GenumUser | null;
@@ -44,20 +48,28 @@ type AppContextValue = {
   resetPassword: (email: string) => Promise<boolean>;
   signOut: () => void;
   carModes: CarMode[];
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-function genumUserFromSession(session: Session): GenumUser {
+async function genumUserFromSession(session: Session): Promise<GenumUser> {
   const meta = session.user?.user_metadata ?? {};
   const app = session.user?.app_metadata ?? {};
+  const profileResult = await supabase
+    .from('profiles')
+    .select('name, phone, address, role')
+    .eq('id', session.user.id)
+    .maybeSingle();
+  const profile = profileResult.data;
   return {
     id: session.user?.id ?? '',
-    name: typeof meta.name === 'string' ? meta.name : '',
+    name: profile?.name || (typeof meta.name === 'string' ? meta.name : ''),
     email: session.user?.email ?? '',
-    phone: session.user?.user_metadata?.phone ?? '',
-    address: session.user?.user_metadata?.address ?? '',
-    role: app.role === 'admin' ? 'admin' : 'customer',
+    phone: profile?.phone || session.user?.user_metadata?.phone || '',
+    address: profile?.address || session.user?.user_metadata?.address || '',
+    role: profile?.role === 'admin' || app.role === 'admin' ? 'admin' : 'customer',
   };
 }
 
@@ -69,6 +81,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [carModes, setCarModes] = useState<CarMode[]>([]);
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
 
   const setCart = useCallback((next: { count: number; size: number }) => {
     setCartCount(Math.max(0, next.count || 0));
@@ -82,7 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const current = await supabase.auth.getSession();
         const session = current.data.session;
         if (session) {
-          if (active) setUser(genumUserFromSession(session));
+          if (active) setUser(await genumUserFromSession(session));
         } else {
           // Try to restore from SecureStore so Google/email login survives
           // an OS restart even if the client did not persist it.
@@ -92,7 +105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               access_token: stored.accessToken,
               refresh_token: stored.refreshToken,
             });
-            if (data.session && active) setUser(genumUserFromSession(data.session));
+            if (data.session && active) setUser(await genumUserFromSession(data.session));
           }
         }
       } catch {
@@ -106,10 +119,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    void AsyncStorage.getItem('genum-theme-mode').then((stored) => {
+      if (stored === 'system' || stored === 'light' || stored === 'dark') {
+        setThemeModeState(stored);
+        Appearance.setColorScheme(stored === 'system' ? null : stored);
+      }
+    });
+  }, []);
+
+  const setThemeMode = useCallback((mode: ThemeMode) => {
+    setThemeModeState(mode);
+    Appearance.setColorScheme(mode === 'system' ? null : mode);
+    void AsyncStorage.setItem('genum-theme-mode', mode);
+  }, []);
+
   // --- keep the session current (sign-in / sign-out / refresh) ---
   useEffect(() => {
     const sub = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session ? genumUserFromSession(session) : null);
+      if (session) {
+        void genumUserFromSession(session).then(setUser);
+      } else {
+        setUser(null);
+      }
       setSessionReady(true);
     });
     return () => sub.data.subscription.unsubscribe();
@@ -240,6 +272,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resetPassword,
       signOut,
       carModes,
+      themeMode,
+      setThemeMode,
     }),
     [
       user,
@@ -255,6 +289,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resetPassword,
       signOut,
       carModes,
+      themeMode,
+      setThemeMode,
     ],
   );
 

@@ -136,13 +136,7 @@ export function CheckoutScreen() {
 
       <SectionTitle>Payment method</SectionTitle>
       <View className="overflow-hidden rounded-2xl border border-line bg-white">
-        {(
-          [
-            ['cod', 'Cash on delivery'],
-            ['esewa', 'eSewa'],
-            ['khalti', 'Khalti'],
-          ] as [Provider, string][]
-        ).map(([value, label]) => (
+        {([['cod', 'Cash on delivery']] as [Provider, string][]).map(([value, label]) => (
           <Pressable
             key={value}
             onPress={() => setProvider(value)}

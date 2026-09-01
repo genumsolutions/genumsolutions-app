@@ -6,14 +6,20 @@ import {
   ActivityIndicator,
   FlatList,
   Text,
+  Pressable,
   View,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { getServices } from '../services/serviceService';
 import type { Service } from '../types';
 
 export function ServicesScreen() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
+  const totalPages = Math.max(1, Math.ceil(services.length / pageSize));
+  const pageItems = services.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     getServices()
@@ -34,7 +40,7 @@ export function ServicesScreen() {
     <FlatList
       className="flex-1 bg-surface"
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
-      data={services}
+      data={pageItems}
       keyExtractor={(s) => s.id}
       ListHeaderComponent={
         <View className="mb-3">
@@ -58,6 +64,13 @@ export function ServicesScreen() {
           <Text className="mt-3 text-sm font-black text-navy">{item.priceLabel}</Text>
         </View>
       )}
+      ListFooterComponent={totalPages > 1 ? (
+        <View className="mt-1 flex-row items-center justify-between">
+          <Pressable onPress={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} accessibilityLabel="Previous services page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"><Feather name="chevron-left" size={18} color="#1e3a8a" /></Pressable>
+          <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}</Text>
+          <Pressable onPress={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page === totalPages} accessibilityLabel="Next services page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"><Feather name="chevron-right" size={18} color="#1e3a8a" /></Pressable>
+        </View>
+      ) : null}
     />
   );
 }
