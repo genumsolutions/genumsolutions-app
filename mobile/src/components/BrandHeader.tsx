@@ -100,7 +100,7 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
 
   if (!visible) return null;
 
-  const go = (screen: 'Services' | 'Projects' | 'Contact' | 'About' | 'Tools') =>
+  const go = (screen: 'Services' | 'Projects' | 'Contact' | 'About' | 'Tools' | 'Journal' | 'Printing' | 'OpenTools') =>
     onNavigate(() => rootNav.navigate(screen));
   const initials = (user?.name || 'U')
     .split(/\s+/)
@@ -166,6 +166,12 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
           <MenuItem icon="tool" label="Tools & IoT" onPress={() => go('Tools')} />
           <MenuItem icon="info" label="About" onPress={() => go('About')} />
           <MenuItem icon="phone" label="Contact" onPress={() => go('Contact')} />
+        </MenuGroup>
+
+        <MenuGroup title="More">
+          <MenuItem icon="book-open" label="Journal" onPress={() => go('Journal')} />
+          <MenuItem icon="corner-down-left" label="3D Printing" onPress={() => go('Printing')} />
+          <MenuItem icon="tool" label="Open Tools" onPress={() => go('OpenTools')} />
         </MenuGroup>
 
         <MenuGroup title="Account">
