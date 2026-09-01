@@ -6,7 +6,7 @@
 // unreachable. The data is seeded from the website's robo-car-catalog.ts
 // and updated when the app comes back online.
 // =====================================================================
-import { AsyncStorage } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LOCAL_CAR_MODES, type CarMode, type CarModeId } from '../config/roboCarCatalog'
 import { resolveModeByToken, resolveModeByIndex, nextMode } from '../config/roboCarCatalog'
 
