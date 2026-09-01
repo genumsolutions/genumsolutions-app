@@ -39,6 +39,8 @@ type ProductRow = {
   price_label: string | null;
   sku: string | null;
   product_type: string | null;
+  inventory_type: string | null;
+  active: boolean | null;
   note: string | null;
   description: string | null;
   specs: unknown;
@@ -63,6 +65,8 @@ export function rowToProduct(row: ProductRow): Product {
     priceLabel: priceLabelFrom(price, row.price_label),
     sku: row.sku || '',
     productType: (row.product_type as ProductType) || 'Retail kit',
+    inventoryType: (row.inventory_type as Product['inventoryType']) || 'Catalog',
+    active: row.active !== false,
     note: row.note || '',
     description: row.description || '',
     specs: Array.isArray(row.specs) ? (row.specs as string[]) : [],
@@ -102,6 +106,7 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
     .select('*')
+    .eq('active', true)
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
 
@@ -127,6 +132,7 @@ export async function getProductById(id: string): Promise<Product | null> {
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .eq('active', true)
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;

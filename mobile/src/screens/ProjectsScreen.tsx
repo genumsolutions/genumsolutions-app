@@ -68,7 +68,7 @@ export function ProjectsScreen() {
           </View>
           <View className="flex-1 p-3">
             <Text className="text-[10px] font-black uppercase tracking-wide text-gold">
-              {item.category}
+              {item.category} · {item.inventoryType || 'Catalog'}
             </Text>
             <Text className="mt-0.5 text-sm font-bold leading-tight text-ink">{item.name}</Text>
             <Text className="mt-1 text-xs font-black text-navy">{item.priceLabel}</Text>

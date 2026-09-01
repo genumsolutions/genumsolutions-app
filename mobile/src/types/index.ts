@@ -21,6 +21,8 @@ export interface Product {
   priceLabel: string;
   sku: string;
   productType: ProductType;
+  inventoryType?: 'Inhouse' | 'Catalog' | 'Supplier';
+  active?: boolean;
   note: string;
   description: string;
   specs: string[];
