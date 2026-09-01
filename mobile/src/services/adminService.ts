@@ -66,6 +66,8 @@ export type AdminMessage = {
 
 export type DashboardStats = {
   totalUsers: number
+  totalCartItems: number
+  activeCarts: number
   totalOrders: number
   pendingOrders: number
   revenue: number
@@ -196,11 +198,12 @@ export async function markMessageReplied(id: string) {
 // --- Dashboard stats ---
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const [{ data: orders }, { data: users }, { data: products }] = await Promise.all([
+  const [{ data: orders }, { data: users }, { data: products }, { data: cartStats }] = await Promise.all([
     supabase.from('orders').select('*', { count: 'exact' }),
     // Profiles: owner can read their own; admin sees all via RLS
     supabase.from('profiles').select('*', { count: 'exact' }),
     supabase.from('products').select('*', { count: 'exact' }),
+    supabase.rpc('get_admin_cart_stats'),
   ])
   const [{ data: messages }] = await Promise.all([
     supabase.from('customer_messages').select('*', { count: 'exact' }),
@@ -211,5 +214,6 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   const totalProducts = products?.length ?? 0
   const lowStockProducts = (products ?? []).filter((p: any) => p.stock !== null && p.stock < 5).length
   const totalMessages = messages?.length ?? 0
-  return { totalUsers, totalOrders, pendingOrders, revenue: 0, totalProducts, lowStockProducts, totalMessages, unreadMessages: totalMessages }
+  const cartSummary = Array.isArray(cartStats) ? cartStats[0] : cartStats
+  return { totalUsers, totalOrders, pendingOrders, revenue: 0, totalProducts, lowStockProducts, totalMessages, unreadMessages: totalMessages, totalCartItems: Number(cartSummary?.total_cart_items ?? 0), activeCarts: Number(cartSummary?.active_carts ?? 0) }
 }

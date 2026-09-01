@@ -257,6 +257,7 @@ function DashboardTab({ stats }: { stats: DashboardStats | null }) {
       <Text className="text-base font-bold text-ink">Dashboard</Text>
       <View className="grid grid-cols-2 gap-3">
         <StatCard label="Users" value={String(stats.totalUsers)} />
+        <StatCard label="Cart items" value={String(stats.totalCartItems)} sub={`${stats.activeCarts} active carts`} />
         <StatCard label="Orders" value={String(stats.totalOrders)} sub={`${stats.pendingOrders} pending`} />
         <StatCard label="Products" value={String(stats.totalProducts)} sub={stats.lowStockProducts > 0 ? `${stats.lowStockProducts} low stock` : 'OK'} />
         <StatCard label="Messages" value={String(stats.totalMessages)} sub={`${stats.unreadMessages} unread`} />
