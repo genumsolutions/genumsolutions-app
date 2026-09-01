@@ -1,0 +1,18 @@
+# GitLeaks allowlist for the GENUM mobile app repo.
+#
+# We allow exactly ONE "secret": the Supabase PUBLIC anon API key embedded in
+# an old commit (mobile/shared/supabase.ts). This key is NOT a secret - it is
+# the client's anon key, public by design, and every read/write on it is gated
+# by Row Level Security (see website/supabase/schema.sql). It is only flagged
+# because gitleaks classifies the jwt rule by its eyJ... shape.
+#
+# The service-role key (a real secret) is NEVER committed - it lives only in
+# .env.local and backend env vars.
+#
+# If you ever change the anon key, update the regex below to the new key; do
+# not broaden this allowlist to blanket-ignore jwt.
+[allowlist]
+description = "Supabase public anon key (public by design, RLS-gated)"
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJreWxmbmx5YnRzdWp3enJvcHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDE5NjksImV4cCI6MjEwMzA3Nzk2OX0\.M-FOzaR4P1p-AHweG60n5STGpJRgbwdgodAcenMr0IQ''',
+]
