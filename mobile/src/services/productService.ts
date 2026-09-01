@@ -41,6 +41,19 @@ type ProductRow = {
   product_type: string | null;
   inventory_type: string | null;
   active: boolean | null;
+  project_overview: string | null;
+  objectives: unknown;
+  materials_required: unknown;
+  learning_outcomes: unknown;
+  build_steps: unknown;
+  control_methods: unknown;
+  prerequisites: unknown;
+  deliverables: unknown;
+  estimated_duration: string | null;
+  source_folder: string | null;
+  documentation_url: string | null;
+  video_url: string | null;
+  maintenance_notes: string | null;
   note: string | null;
   description: string | null;
   specs: unknown;
@@ -67,6 +80,19 @@ export function rowToProduct(row: ProductRow): Product {
     productType: (row.product_type as ProductType) || 'Retail kit',
     inventoryType: (row.inventory_type as Product['inventoryType']) || 'Catalog',
     active: row.active !== false,
+    projectOverview: row.project_overview || '',
+    objectives: Array.isArray(row.objectives) ? row.objectives as string[] : [],
+    materialsRequired: Array.isArray(row.materials_required) ? row.materials_required as string[] : [],
+    learningOutcomes: Array.isArray(row.learning_outcomes) ? row.learning_outcomes as string[] : [],
+    buildSteps: Array.isArray(row.build_steps) ? row.build_steps as string[] : [],
+    controlMethods: Array.isArray(row.control_methods) ? row.control_methods as string[] : [],
+    prerequisites: Array.isArray(row.prerequisites) ? row.prerequisites as string[] : [],
+    deliverables: Array.isArray(row.deliverables) ? row.deliverables as string[] : [],
+    estimatedDuration: row.estimated_duration || '',
+    sourceFolder: row.source_folder || '',
+    documentationUrl: row.documentation_url || '',
+    videoUrl: row.video_url || '',
+    maintenanceNotes: row.maintenance_notes || '',
     note: row.note || '',
     description: row.description || '',
     specs: Array.isArray(row.specs) ? (row.specs as string[]) : [],
