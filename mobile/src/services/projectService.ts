@@ -13,6 +13,7 @@ export interface Project {
   description: string;
   mode_name: string;
   category: string;
+  inventoryType?: 'Inhouse' | 'Catalog' | 'Supplier';
   technologies: string[];
   difficulty: string;
   image?: string;
@@ -38,6 +39,7 @@ export async function getProjects(): Promise<Project[]> {
       description: p.description,
       mode_name: p.category,
       category: p.category,
+      inventoryType: p.inventoryType,
       technologies: p.specs,
       difficulty: p.difficulty,
       image: p.image,
