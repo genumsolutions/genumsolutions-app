@@ -23,6 +23,7 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Current release. Update on every publish (keep in sync with app.json
 // version / src/config/site.ts / src/config/update.ts).
 const VERSION = '1.5.3';
+const VERSION_CODE = 11;
 const APK_SIZE_MB = '32.5 MB';
 
 const defaultApk = resolve(
@@ -126,8 +127,12 @@ async function main() {
   const manifest = JSON.stringify(
     {
       version: VERSION,
+      version_code: VERSION_CODE,
       apkUrl: publicUrl,
-      size: APK_SIZE_MB,
+      size_mb: 32.5,
+      sizeLabel: APK_SIZE_MB,
+      releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
+      appsPagePath: '/app',
       notes: 'Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates.',
     },
     null,
