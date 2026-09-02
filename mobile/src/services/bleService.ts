@@ -56,7 +56,7 @@ type TelemetryCallback = (t: CarTelemetry) => void
 type StatusCallback = (kind: 'connecting' | 'connected' | 'disconnected' | 'error', message?: string) => void
 
 class BleService {
-  private manager: BleManager
+  private manager: BleManager | null = null
   private connectedDeviceId: string | null = null
   private connectedDeviceName: string | null = null
   private txCharacteristic: string | null = null
@@ -65,8 +65,12 @@ class BleService {
   private statusCallbacks: Set<StatusCallback> = new Set()
   private monitoring: boolean = false
 
-  constructor() {
-    this.manager = new BleManager()
+  /** Lazily initialize BleManager on first use (prevents crash on import). */
+  private getManager(): BleManager {
+    if (!this.manager) {
+      this.manager = new BleManager()
+    }
+    return this.manager
   }
 
   get isConnected(): boolean {
@@ -110,10 +114,11 @@ class BleService {
         }
       }
 
-      this.manager.onDeviceDiscover(listener)
-      this.manager.startDeviceScan(null, { allowDuplicates: false }, (error: Error) => {
-        this.manager.removeListener('DeviceDiscover', listener)
-        this.manager.stopDeviceScan()
+      const mgr = this.getManager()
+      mgr.onDeviceDiscover(listener)
+      mgr.startDeviceScan(null, { allowDuplicates: false }, (error: Error) => {
+        mgr.removeListener('DeviceDiscover', listener)
+        mgr.stopDeviceScan()
         if (error) {
           reject(error)
           return
@@ -122,7 +127,7 @@ class BleService {
       })
 
       setTimeout(() => {
-        this.manager.stopDeviceScan()
+        mgr.stopDeviceScan()
         resolve(devices)
       }, seconds * 1000)
     })
@@ -132,7 +137,8 @@ class BleService {
   async connect(deviceId: string): Promise<void> {
     try {
       this.emitStatus('connecting', deviceId)
-      const device = await this.manager.connectToDevice(deviceId, { autoConnect: false })
+      const mgr = this.getManager()
+      const device = await mgr.connectToDevice(deviceId, { autoConnect: false })
       if (!device) throw new Error('Device not found')
 
       const services = await device.services()
@@ -158,7 +164,7 @@ class BleService {
       this.connectedDeviceName = device.name ?? 'Device'
 
       // Subscribe to RX for telemetry
-      await this.manager.monitorCharacteristicForDevice(
+      await mgr.monitorCharacteristicForDevice(
         deviceId,
         service.id,
         rxChar.id,
@@ -189,7 +195,7 @@ class BleService {
 
   /** Disconnect from the current device. */
   async disconnect(): Promise<void> {
-    if (this.connectedDeviceId) {
+    if (this.connectedDeviceId && this.manager) {
       try {
         await this.manager.cancelDeviceConnection(this.connectedDeviceId)
       } catch { /* ignore */ }
@@ -208,7 +214,8 @@ class BleService {
       throw new Error('Not connected')
     }
     const message = new TextEncoder().encode(line + '\n')
-    await this.manager.writeCharacteristicWithoutResponseForDevice(
+    const mgr = this.getManager()
+    await mgr.writeCharacteristicWithoutResponseForDevice(
       this.connectedDeviceId,
       this.txCharacteristic,
       message
