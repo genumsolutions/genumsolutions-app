@@ -25,6 +25,8 @@ const CAPABILITY_NOTES: Record<ControlCapability, string> = {
   sensor: 'Read live sensor values from the device',
   weblink: 'Link a client/server ESP connection over WiFi',
   slider: 'Adjust an arbitrary 0..n value (speed, threshold, brightness)',
+  gimbal: 'Control camera gimbal orientation',
+  altitude: 'Control and monitor flight altitude',
 };
 
 export function CategoryHubScreen() {

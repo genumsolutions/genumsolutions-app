@@ -284,22 +284,33 @@ export function ProjectsScreen() {
                 </Text>
                 <View className="mt-2 flex-row items-center justify-between gap-2">
                   <Text className="shrink text-xs font-black text-navy">{item.priceLabel}</Text>
-{quoteOnly ? (
-                      <Pressable
-                        onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-                        accessibilityLabel={`View details for ${item.name}`}
-                        className="rounded-full bg-navy px-3 py-1.5"
-                      >
-                        <Text className="text-[10px] font-black text-white">View details</Text>
-                      </Pressable>
+                  {quoteOnly ? (
+                      <View className="flex-row gap-1.5">
+                        <Pressable
+                          onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+                          accessibilityLabel={`View details for ${item.name}`}
+                          className="rounded-full border border-line px-2.5 py-1.5"
+                        >
+                          <Text className="text-[10px] font-black text-navy">Details</Text>
+                        </Pressable>
+                        {item.productType === 'Project package' && (
+                          <Pressable
+                            onPress={() => navigation.navigate('Tools', { category: item.category })}
+                            accessibilityLabel={`Control ${item.name}`}
+                            className="rounded-full bg-gold px-2.5 py-1.5"
+                          >
+                            <Text className="text-[10px] font-black text-ink">Control</Text>
+                          </Pressable>
+                        )}
+                      </View>
                     ) : (
                       <Pressable
-                        onPress={() => navigation.navigate('Tools')}
-                        accessibilityLabel={`Control ${item.name}`},
-                        className={`rounded-full px-3 py-1.5 ${item.productType === 'Project package' ? 'bg-gold' : 'bg-navy'}`}
+                        onPress={() => handleAdd(item)}
+                        accessibilityLabel={`Add ${item.name} to cart`}
+                        className={`rounded-full px-3 py-1.5 ${added ? 'bg-emerald-500' : 'bg-navy'}`}
                       >
                         <Text className="text-[10px] font-black text-white">
-                          {item.productType === 'Project package' ? 'Control Device' : 'Add'}
+                          {added ? '✓ Added' : 'Add'}
                         </Text>
                       </Pressable>
                     )}
