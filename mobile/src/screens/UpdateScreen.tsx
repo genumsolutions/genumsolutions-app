@@ -82,7 +82,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
 
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
           {/* Current version card */}
-          <View className="rounded-lg border border-line bg-white p-4">
+          <View className="rounded-lg border border-line bg-card p-4">
             <Text className="text-sm font-semibold text-ink">Installed version</Text>
             <Text className="mt-1 font-display text-2xl font-bold text-navy">
               v{APP_VERSION}
@@ -90,7 +90,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
           </View>
 
           {/* Status / result */}
-          <View className="mt-4 rounded-lg border border-line bg-white p-4">
+          <View className="mt-4 rounded-lg border border-line bg-card p-4">
             {state.status === 'unknown' && (
               <Text className="text-sm text-muted">Checking the release server…</Text>
             )}
@@ -169,7 +169,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
               <Text className="text-sm font-bold text-navy">How to finish the install</Text>
               {GUIDE_STEPS.map((step, i) => (
                 <View key={step} className="mt-3 flex-row">
-                  <Text className="mr-3 h-6 w-6 shrink-0 rounded-full bg-white text-center text-xs font-bold text-navy">
+                  <Text className="mr-3 h-6 w-6 shrink-0 rounded-full bg-card text-center text-xs font-bold text-navy">
                     {i + 1}
                   </Text>
                   <Text className="flex-1 text-sm leading-6 text-muted">{step}</Text>
@@ -181,7 +181,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
           <Pressable
             onPress={() => void runCheck()}
             disabled={busy}
-            className="mt-6 items-center rounded-full border border-line bg-white px-5 py-3 disabled:opacity-60"
+            className="mt-6 items-center rounded-full border border-line bg-card px-5 py-3 disabled:opacity-60"
           >
             <Text className="font-bold text-navy">
               {state.status === 'checking' ? 'Checking…' : 'Check again'}

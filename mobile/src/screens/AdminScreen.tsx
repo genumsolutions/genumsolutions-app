@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useApp } from '../context/AppContext'
+import { fetchSiteContent, upsertSiteContent } from '../services/orderService'
 import {
   listAdminOrders,
   updateOrderStatus,
@@ -36,9 +37,9 @@ import {
   type DashboardStats,
 } from '../services/adminService'
 
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Users' | 'Messages'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Users' | 'Messages' | 'Content'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Users', 'Messages']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Users', 'Messages', 'Content']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
@@ -66,6 +67,12 @@ export function AdminScreen() {
   const [messages, setMessages] = useState<AdminMessage[]>([])
   const [messagesPage, setMessagesPage] = useState(1)
 
+  // Site content
+  const [siteContent, setSiteContent] = useState<{ id: number; home_title: string; home_body: string } | null>(null)
+  const [contentTitle, setContentTitle] = useState('')
+  const [contentBody, setContentBody] = useState('')
+  const [contentSaved, setContentSaved] = useState(false)
+
   // Dashboard
   const [stats, setStats] = useState<DashboardStats | null>(null)
 
@@ -92,6 +99,14 @@ export function AdminScreen() {
         setUsers(await listAdminUsers())
       } else if (tab === 'Messages') {
         void loadMessages(1)
+      } else if (tab === 'Content') {
+        const result = await fetchSiteContent()
+        const content = result?.content
+        if (content) {
+          setSiteContent(content)
+          setContentTitle(content.home_title || '')
+          setContentBody(content.home_body || '')
+        }
       }
     } catch (e) {
       console.error('Admin load error:', e)
@@ -159,7 +174,7 @@ export function AdminScreen() {
   return (
     <View className="flex-1 bg-mist">
       {/* Tab bar */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="border-b border-line bg-white">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="border-b border-line bg-card">
         <View className="flex-row">
           {TABS.map((t) => (
             <Pressable
@@ -236,6 +251,26 @@ export function AdminScreen() {
               onMarkReplied={handleMarkReplied}
             />
           )}
+          {tab === 'Content' && (
+            <ContentTab
+              siteContent={siteContent}
+              contentTitle={contentTitle}
+              contentBody={contentBody}
+              onTitleChange={setContentTitle}
+              onBodyChange={setContentBody}
+              onSave={async () => {
+                if (!siteContent) return
+                setContentSaved(false)
+                try {
+                  await upsertSiteContent({ id: siteContent.id, home_title: contentTitle, home_body: contentBody })
+                  setContentSaved(true)
+                } catch (e) {
+                  console.error('Site content save error:', e)
+                }
+              }}
+              saved={contentSaved}
+            />
+          )}
         </>
       )}
     </View>
@@ -268,10 +303,10 @@ function DashboardTab({ stats }: { stats: DashboardStats | null }) {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <View className="rounded-xl border border-line bg-white p-4">
-      <Text className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</Text>
+    <View className="rounded-xl border border-line bg-card p-4">
+      <Text className="text-[10px] font-black uppercase tracking-widest text-muted">{label}</Text>
       <Text className="mt-2 font-display text-xl font-bold text-ink">{value}</Text>
-      {sub && <Text className="mt-1 text-[11px] text-slate-500">{sub}</Text>}
+      {sub && <Text className="mt-1 text-[11px] text-muted">{sub}</Text>}
     </View>
   )
 }
@@ -285,10 +320,10 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
     <View className="p-4">
       <View className="flex-row gap-2 mb-4">
         <View className="flex-1">
-          <TextInput value={query} onChangeText={onQueryChange} placeholder="Search buyer…" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" />
+          <TextInput value={query} onChangeText={onQueryChange} placeholder="Search buyer…" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
         </View>
         <View className="w-32">
-          <TextInput value={statusFilter} onChangeText={onStatusFilterChange} placeholder="Status" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" />
+          <TextInput value={statusFilter} onChangeText={onStatusFilterChange} placeholder="Status" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
         </View>
       </View>
       {orders.length === 0 ? (
@@ -296,7 +331,7 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
       ) : (
         <>
           {orders.map((o) => (
-            <View key={o.id} className="mb-3 rounded-xl border border-line bg-white p-4">
+            <View key={o.id} className="mb-3 rounded-xl border border-line bg-card p-4">
               <View className="flex-row items-center justify-between">
                 <View>
                   <Text className="text-sm font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()} · NPR {o.totalNpr.toLocaleString('en-IN')}</Text>
@@ -336,7 +371,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, 
 
   return (
     <View className="p-4">
-      <TextInput value={query} onChangeText={onQueryChange} placeholder="Search by name, SKU, or id…" className="mb-4 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" />
+      <TextInput value={query} onChangeText={onQueryChange} placeholder="Search by name, SKU, or id…" className="mb-4 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
       {editing ? (
         <ProductEditor product={editing} onSave={onSave} onCancel={() => onEdit(null as any)} />
       ) : (
@@ -344,7 +379,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, 
           data={filtered}
           keyExtractor={(p) => p.id}
           renderItem={({ item }) => (
-            <View className="mb-3 rounded-xl border border-line bg-white p-4">
+            <View className="mb-3 rounded-xl border border-line bg-card p-4">
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm font-bold text-ink">{item.name}</Text>
                 <Text className="text-xs text-navy font-bold">NPR {item.price.toLocaleString('en-IN')}</Text>
@@ -372,7 +407,7 @@ function ProjectTab({ title, products, onEdit, onDelete }: {
       ListHeaderComponent={<Text className="mb-4 text-base font-bold text-ink">{title} ({products.length})</Text>}
       ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No {title.toLowerCase()} found.</Text>}
       renderItem={({ item }) => (
-        <View className="mb-3 overflow-hidden rounded-xl border border-line bg-white">
+        <View className="mb-3 overflow-hidden rounded-xl border border-line bg-card">
           {item.image ? <Image source={{ uri: item.image }} className="h-36 w-full" resizeMode="cover" /> : null}
           <View className="p-4">
             <Text className="text-[10px] font-black uppercase tracking-wide text-gold">{item.category}</Text>
@@ -397,18 +432,18 @@ function ProductEditor({ product, onSave, onCancel }: { product: AdminProduct; o
   const [desc, setDesc] = useState(product.description)
 
   return (
-    <View className="mb-4 rounded-xl border border-line bg-white p-4">
+    <View className="mb-4 rounded-xl border border-line bg-card p-4">
       <Text className="text-sm font-bold text-ink mb-3">Edit Product</Text>
-      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Name" />
+      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
       <View className="flex-row gap-3 mb-3">
         <View className="flex-1">
-          <TextInput value={price} onChangeText={setPrice} keyboardType="numeric" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Price" />
+          <TextInput value={price} onChangeText={setPrice} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Price" />
         </View>
         <View className="flex-1">
-          <TextInput value={stock} onChangeText={setStock} keyboardType="numeric" className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Stock" />
+          <TextInput value={stock} onChangeText={setStock} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Stock" />
         </View>
       </View>
-      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Description" />
+      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
       <View className="flex-row gap-3">
         <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2"><Text className="text-xs font-black text-ink">Save</Text></Pressable>
         <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2"><Text className="text-xs font-black text-ink">Cancel</Text></Pressable>
@@ -429,7 +464,7 @@ function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
       keyExtractor={(s) => s.id}
       className="p-4"
       renderItem={({ item }) => (
-        <View className="mb-3 rounded-xl border border-line bg-white p-4">
+        <View className="mb-3 rounded-xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-sm font-bold text-ink">{item.name}</Text>
             <Text className={`text-[10px] font-bold uppercase ${item.active ? 'text-emerald-600' : 'text-red-500'}`}>{item.active ? 'active' : 'inactive'}</Text>
@@ -450,10 +485,10 @@ function ServiceEditor({ service, onSave, onCancel }: { service: AdminService; o
   const [active, setActive] = useState(service.active)
 
   return (
-    <View className="mb-4 rounded-xl border border-line bg-white p-4">
+    <View className="mb-4 rounded-xl border border-line bg-card p-4">
       <Text className="text-sm font-bold text-ink mb-3">Edit Service</Text>
-      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Name" />
-      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Description" />
+      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
+      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
       <View className="flex-row items-center gap-3 mb-3">
         <Text className="text-sm font-semibold text-ink">Active</Text>
         <View className={`h-6 w-11 rounded-full ${active ? 'bg-navy' : 'bg-mist'}`} />
@@ -473,7 +508,7 @@ function UsersTab({ users, onToggleRole }: { users: AdminUser[]; onToggleRole: (
       keyExtractor={(u) => u.id}
       className="p-4"
       renderItem={({ item }) => (
-        <View className="mb-3 rounded-xl border border-line bg-white p-4">
+        <View className="mb-3 rounded-xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <View>
               <Text className="text-sm font-bold text-ink">{item.name || item.email}</Text>
@@ -492,6 +527,57 @@ function UsersTab({ users, onToggleRole }: { users: AdminUser[]; onToggleRole: (
   )
 }
 
+function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onBodyChange, onSave, saved }: {
+  siteContent: { id: number; home_title: string; home_body: string } | null;
+  contentTitle: string; contentBody: string;
+  onTitleChange: (t: string) => void; onBodyChange: (b: string) => void;
+  onSave: () => void; saved: boolean;
+}) {
+  return (
+    <ScrollView className="p-4">
+      <Text className="text-base font-bold text-ink">Home page content</Text>
+      <Text className="mt-1 text-xs leading-5 text-muted">
+        Edit the hero title and body shown on the app home screen and the website homepage. Saved via the site-content edge function.
+      </Text>
+
+      <View className="mt-4 rounded-xl border border-line bg-card p-4">
+        <Text className="text-xs font-bold uppercase tracking-wide text-muted">Hero title</Text>
+        <TextInput
+          value={contentTitle}
+          onChangeText={onTitleChange}
+          placeholder="Technology you can touch, test, and trust."
+          placeholderTextColor="#94a3b8"
+          className="mt-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+        />
+      </View>
+
+      <View className="mt-3 rounded-xl border border-line bg-card p-4">
+        <Text className="text-xs font-bold uppercase tracking-wide text-muted">Hero body</Text>
+        <TextInput
+          value={contentBody}
+          onChangeText={onBodyChange}
+          placeholder="Robotics kits, project solutions, fabrication, open tools, and training…"
+          placeholderTextColor="#94a3b8"
+          multiline
+          style={{ textAlignVertical: 'top' }}
+          className="mt-1 min-h-24 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+        />
+      </View>
+
+      <Pressable onPress={onSave} className="mt-4 items-center rounded-full bg-navy py-3">
+        <Text className="text-sm font-black text-white">Save changes</Text>
+      </Pressable>
+
+      {saved && (
+        <Text className="mt-3 text-center text-sm font-semibold text-emerald-700">Saved.</Text>
+      )}
+      {!siteContent && (
+        <Text className="mt-3 text-center text-sm text-muted">Content not loaded.</Text>
+      )}
+    </ScrollView>
+  )
+}
+
 function MessagesTab({ messages, page, onLoadMore, onMarkReplied }: {
   messages: AdminMessage[]; page: number; onLoadMore: () => void; onMarkReplied: (id: string) => void;
 }) {
@@ -502,15 +588,15 @@ function MessagesTab({ messages, page, onLoadMore, onMarkReplied }: {
       ) : (
         <>
           {messages.map((m) => (
-            <View key={m.id} className={`mb-3 rounded-xl border border-line bg-white p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy' : ''}`}>
+            <View key={m.id} className={`mb-3 rounded-xl border border-line bg-card p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy' : ''}`}>
               <View className="flex-row items-center justify-between">
-                <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-slate-500">· {m.email}</Text></Text>
+                <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-muted">· {m.email}</Text></Text>
                 {m.status === 'new'
                   ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full px-3 py-1 border border-line text-xs font-bold text-navy"><Text>Mark replied</Text></Pressable>
                   : <Text className="text-[10px] font-bold uppercase text-emerald-600">Replied</Text>
                 }
               </View>
-              <Text className="mt-2 text-xs leading-5 text-slate-600">{m.message}</Text>
+              <Text className="mt-2 text-xs leading-5 text-muted">{m.message}</Text>
             </View>
           ))}
           <Pressable onPress={onLoadMore} className="items-center py-4">

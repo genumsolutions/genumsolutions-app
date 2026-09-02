@@ -1,3 +1,45 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Theme tokens. NativeWind compiles rgb(var(--color-*)) utilities to
+ * variables resolved at runtime, so flipping the app color scheme (the theme
+ * toggle in AccountScreen -> Appearance.setColorScheme, or the OS scheme in
+ * system mode) restyles every screen that uses a semantic token.
+ */
+:root {
+  --color-ink: 15 23 42; /* slate-900       */
+  --color-navy: 30 58 138; /* blue-900        */
+  --color-navy-dark: 23 37 84; /* blue-950        */
+  --color-navy-light: 219 228 248; /* soft blue tint  */
+  --color-sky: 227 234 247; /* pale blue       */
+  --color-mist: 248 250 252; /* slate-50        */
+  --color-gold: 180 83 9; /* amber-700       */
+  --color-gold-dark: 146 64 14; /* amber-800       */
+  --color-line: 226 232 240; /* slate-200       */
+  --color-border: 148 163 184; /* slate-400       */
+  --color-surface: 255 255 255; /* white           */
+  --color-card: 255 255 255; /* white           */
+  --color-muted: 100 116 139; /* slate-500       */
+  --color-accent: 5 150 105; /* emerald-600     */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ink: 226 232 240; /* slate-200       */
+    --color-navy: 37 99 235; /* blue-600 (buttons + labels stay legible) */
+    --color-navy-dark: 29 78 216; /* blue-700        */
+    --color-navy-light: 199 216 247; /* pale blue keeps text-on-navy readable */
+    --color-sky: 30 41 59; /* slate-800       */
+    --color-mist: 15 23 42; /* slate-900       */
+    --color-gold: 245 158 11; /* amber-500       */
+    --color-gold-dark: 217 119 6; /* amber-600       */
+    --color-line: 51 65 85; /* slate-700       */
+    --color-border: 100 116 139; /* slate-500       */
+    --color-surface: 15 23 42; /* slate-900       */
+    --color-card: 30 41 59; /* slate-800       */
+    --color-muted: 148 163 184; /* slate-400       */
+    --color-accent: 16 185 129; /* emerald-500     */
+  }
+}

@@ -27,7 +27,10 @@ import { AdminScreen } from '../screens/AdminScreen';
 import { JournalScreen } from '../screens/JournalScreen';
 import { PrintingScreen } from '../screens/PrintingScreen';
 import { OpenToolsScreen } from '../screens/OpenToolsScreen';
+import { CategoryHubScreen } from '../screens/CategoryHubScreen';
+import { LegalScreen } from '../screens/LegalScreen';
 import { useApp } from '../context/AppContext';
+import { PROJECT_CATEGORIES } from '../config/project-catalog';
 import { BrandHeader } from '../components/BrandHeader';
 import type { MainTabParamList, RootStackParamList } from './types';
 
@@ -147,6 +150,26 @@ export function RootNavigator() {
         name="OpenTools"
         component={OpenToolsScreen}
         options={{ headerShown: true, title: 'Open Tools', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="Category"
+        component={CategoryHubScreen}
+        options={({ route }) => ({
+          headerShown: true,
+          title: PROJECT_CATEGORIES.find((c) => c.slug === route.params.slug)?.name ?? 'Category',
+          headerTintColor: '#1e3a8a',
+          headerBackTitle: 'Back',
+        })}
+      />
+    <Stack.Screen
+        name="Legal"
+        component={LegalScreen}
+        options={({ route }) => ({
+          headerShown: true,
+          title: route.params.doc === 'privacy' ? 'Privacy Policy' : 'Terms of Service',
+          headerTintColor: '#1e3a8a',
+          headerBackTitle: 'Back',
+        })}
       />
     </Stack.Navigator>
   );

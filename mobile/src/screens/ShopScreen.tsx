@@ -75,7 +75,7 @@ export function ShopScreen() {
     <View className="flex-1 bg-surface">
       {/* Search */}
       <View className="px-4 pt-3">
-        <View className="flex-row items-center rounded-xl border border-line bg-white px-3">
+        <View className="flex-row items-center rounded-xl border border-line bg-card px-3">
           <Feather name="search" size={16} color="#64748b" />
           <TextInput
             value={query}
@@ -106,7 +106,7 @@ export function ShopScreen() {
             return (
               <Pressable
                 onPress={() => setCategory(item)}
-                className={`rounded-full px-4 py-1.5 ${active ? 'bg-navy' : 'border border-line bg-white'}`}
+                className={`rounded-full px-4 py-1.5 ${active ? 'bg-navy' : 'border border-line bg-card'}`}
               >
                 <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
                   {item}
@@ -139,7 +139,7 @@ export function ShopScreen() {
                 onPress={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page === 1}
                 accessibilityLabel="Previous products page"
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
               >
                 <Feather name="chevron-left" size={18} color="#1e3a8a" />
               </Pressable>
@@ -148,7 +148,7 @@ export function ShopScreen() {
                 onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page === totalPages}
                 accessibilityLabel="Next products page"
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
               >
                 <Feather name="chevron-right" size={18} color="#1e3a8a" />
               </Pressable>
@@ -160,7 +160,7 @@ export function ShopScreen() {
             onPress={() =>
               navigation.navigate('ProductDetail', { productId: item.id })
             }
-            className="mb-4 w-[48%] flex-1 rounded-2xl border border-line bg-white p-3"
+            className="mb-4 w-[48%] flex-1 rounded-2xl border border-line bg-card p-3"
           >
             <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
               {item.image ? (

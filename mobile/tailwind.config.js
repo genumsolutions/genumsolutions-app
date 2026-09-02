@@ -12,19 +12,24 @@ module.exports = {
     extend: {
       colors: {
         // ---- extracted from website tailwind.config.ts:12-26 ----
-        ink: '#0f172a',
-        navy: '#1e3a8a',
-        'navy-dark': '#172554',
-        'navy-light': '#dbe4f8',
-        sky: '#e3eaf7',
-        mist: '#f8fafc',
-        gold: '#b45309',
-        'gold-dark': '#92400e',
-        line: '#e2e8f0',
-        border: '#94a3b8',
-        surface: '#ffffff',
-        muted: '#64748b',
-        accent: '#059669',
+        // Values come from CSS variables (global.css) so NativeWind can flip
+        // them at runtime when the app color scheme changes (manual theme
+        // toggle calls Appearance.setColorScheme). Light + dark are defined in
+        // global.css under :root and @media (prefers-color-scheme: dark).
+        ink: 'rgb(var(--color-ink) / <alpha-value>)',
+        navy: 'rgb(var(--color-navy) / <alpha-value>)',
+        'navy-dark': 'rgb(var(--color-navy-dark) / <alpha-value>)',
+        'navy-light': 'rgb(var(--color-navy-light) / <alpha-value>)',
+        sky: 'rgb(var(--color-sky) / <alpha-value>)',
+        mist: 'rgb(var(--color-mist) / <alpha-value>)',
+        gold: 'rgb(var(--color-gold) / <alpha-value>)',
+        'gold-dark': 'rgb(var(--color-gold-dark) / <alpha-value>)',
+        line: 'rgb(var(--color-line) / <alpha-value>)',
+        border: 'rgb(var(--color-border) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        card: 'rgb(var(--color-card) / <alpha-value>)',
+        muted: 'rgb(var(--color-muted) / <alpha-value>)',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
       },
       fontFamily: {
         // ---- extracted from website tailwind.config.ts:27-31 ----

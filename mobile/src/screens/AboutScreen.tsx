@@ -35,7 +35,7 @@ export function AboutScreen() {
       <Text className="mt-1 font-sans text-2xl font-bold leading-tight text-ink">
         Technology you can touch, test, and trust.
       </Text>
-      <Text className="mt-3 text-sm leading-6 text-slate-600">
+      <Text className="mt-3 text-sm leading-6 text-muted">
         Robotics kits, project solutions, fabrication, open tools, and training for
         curious builders, schools, and teams — designed in Kathmandu, delivered
         across Nepal.
@@ -43,13 +43,13 @@ export function AboutScreen() {
 
       <View className="mt-5 space-y-3">
         {points.map((p) => (
-          <View key={p.title} className="flex-row items-start rounded-2xl border border-line bg-white p-4">
+          <View key={p.title} className="flex-row items-start rounded-2xl border border-line bg-card p-4">
             <View className="h-10 w-10 items-center justify-center rounded-full bg-navy-light">
               <Feather name={p.icon} size={18} color="#1e3a8a" />
             </View>
             <View className="ml-3 flex-1">
               <Text className="text-base font-bold text-ink">{p.title}</Text>
-              <Text className="mt-1 text-sm leading-5 text-slate-600">{p.body}</Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">{p.body}</Text>
             </View>
           </View>
         ))}

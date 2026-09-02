@@ -77,9 +77,9 @@ export function HomeScreen() {
               </View>
               <View className="mt-3">
                 {services.map((s) => (
-                  <Pressable key={s.id} onPress={() => navigation.navigate('Services')} className="mb-2 rounded-2xl border border-line bg-white p-4">
+                  <Pressable key={s.id} onPress={() => navigation.navigate('Services')} className="mb-2 rounded-2xl border border-line bg-card p-4">
                     <Text className="font-sans text-base font-bold leading-snug text-ink">{s.name}</Text>
-                    <Text className="mt-1 text-sm leading-5 text-slate-600">{s.description}</Text>
+                    <Text className="mt-1 text-sm leading-5 text-muted">{s.description}</Text>
                     <Text className="mt-2 text-sm font-black text-navy">{s.priceLabel}</Text>
                   </Pressable>
                 ))}
@@ -97,11 +97,11 @@ export function HomeScreen() {
             </View>
             <View className="mt-4 space-y-3">
               {Object.entries(stemProjectHighlights).map(([ages, projects]) => (
-                <View key={ages} className="rounded-2xl border border-line bg-white p-4">
+                <View key={ages} className="rounded-2xl border border-line bg-card p-4">
                   <Text className="text-xs font-black uppercase tracking-widest text-gold">{ages}</Text>
                   <View className="mt-2 flex-row flex-wrap gap-x-4 gap-y-1">
                     {projects.map((p) => (
-                      <Text key={p} className="text-sm leading-6 text-slate-600">• {p}</Text>
+                      <Text key={p} className="text-sm leading-6 text-muted">• {p}</Text>
                     ))}
                   </View>
                 </View>
@@ -114,14 +114,14 @@ export function HomeScreen() {
             <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Training programs</Text>
             <View className="mt-4 space-y-3">
               {trainingPrograms.map((prog) => (
-                <View key={prog.title} className="rounded-2xl border border-line bg-white p-4">
+                <View key={prog.title} className="rounded-2xl border border-line bg-card p-4">
                   <View className="flex-row items-center justify-between gap-2">
                     <Text className="font-display text-lg font-bold text-ink">{prog.title}</Text>
                     <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-[10px] font-bold text-navy">{prog.duration}</Text>
                   </View>
                   <Text className="mt-1 text-[10px] font-black uppercase tracking-wide text-gold">{prog.audience}</Text>
-                  <Text className="mt-2 text-sm leading-6 text-slate-600">{prog.description}</Text>
-                  <Text className="mt-2 text-xs leading-5 text-slate-500"><Text className="text-ink font-bold">Outcome:</Text> {prog.outcome}</Text>
+                  <Text className="mt-2 text-sm leading-6 text-muted">{prog.description}</Text>
+                  <Text className="mt-2 text-xs leading-5 text-muted"><Text className="text-ink font-bold">Outcome:</Text> {prog.outcome}</Text>
                 </View>
               ))}
             </View>
@@ -130,11 +130,11 @@ export function HomeScreen() {
           {/* Pilot costing */}
           <View className="px-5 pt-6">
             <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Illustrative pilot costing</Text>
-            <Text className="mt-2 font-display text-2xl font-bold text-navy">NPR 8,40,000 <Text className="font-sans text-sm font-normal text-slate-500">illustrative total</Text></Text>
+            <Text className="mt-2 font-display text-2xl font-bold text-navy">NPR 8,40,000 <Text className="font-sans text-sm font-normal text-muted">illustrative total</Text></Text>
             <View className="mt-4">
               {pilotCosts.map(([item, cost, note]) => (
                 <View key={item} className="flex-row items-center justify-between border-b border-line py-2">
-                  <Text className="flex-1 text-sm font-semibold text-ink">{item}<Text className="text-xs font-normal text-slate-500"> — {note}</Text></Text>
+                  <Text className="flex-1 text-sm font-semibold text-ink">{item}<Text className="text-xs font-normal text-muted"> — {note}</Text></Text>
                   <Text className="font-display font-bold text-navy">{cost}</Text>
                 </View>
               ))}
@@ -152,7 +152,7 @@ export function HomeScreen() {
               </View>
               <View className="mt-3 flex-row flex-wrap justify-between">
                 {featured.map((p) => (
-                  <Pressable key={p.id} onPress={() => navigation.navigate('ProductDetail', { productId: p.id })} className="mb-3 w-[48%] rounded-2xl border border-line bg-white p-3">
+                  <Pressable key={p.id} onPress={() => navigation.navigate('ProductDetail', { productId: p.id })} className="mb-3 w-[48%] rounded-2xl border border-line bg-card p-3">
                     <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
                       {p.image ? (
                         <Image source={{ uri: p.image }} className="h-full w-full" resizeMode="cover" />
@@ -174,7 +174,7 @@ export function HomeScreen() {
               <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">Need a starting point?</Text>
               <Text className="mt-2 font-display text-xl font-bold tracking-tight text-white">Use the open tools or bring us the brief.</Text>
               <View className="mt-4 flex-row flex-wrap gap-3">
-                <Pressable onPress={() => navigation.navigate('Tools')} className="rounded-full bg-white px-5 py-3">
+                <Pressable onPress={() => navigation.navigate('Tools')} className="rounded-full bg-card px-5 py-3">
                   <Text className="text-sm font-black text-ink">Open tools</Text>
                 </Pressable>
                 <Pressable onPress={() => navigation.navigate('Contact')} className="rounded-full border border-white/40 px-5 py-3">
