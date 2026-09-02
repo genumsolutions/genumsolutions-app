@@ -16,14 +16,19 @@ import {
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Slider from '@react-native-community/slider'
+import { useNavigation } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { APP_VERSION } from '../config/site'
 import { bleService, type CarTelemetry } from '../services/bleService'
 import { LOCAL_CAR_MODES, nextMode, type CarMode } from '../config/roboCarCatalog'
 import { PROJECT_CATEGORIES } from '../config/project-catalog'
+import type { RootStackParamList } from '../navigation/types'
 
 type Category = typeof PROJECT_CATEGORIES[number]
+type Nav = NativeStackNavigationProp<RootStackParamList, 'Tools'>
 
 export function ToolsScreen() {
+  const navigation = useNavigation<Nav>()
   const [scanning, setScanning] = useState(false)
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
   const [connected, setConnected] = useState(false)
@@ -196,8 +201,26 @@ export function ToolsScreen() {
         Drive like the handheld remote
       </Text>
 
+      {/* Category hubs */}
+      <View className="mt-4 flex-row flex-wrap gap-2">
+        {PROJECT_CATEGORIES.map((c) => (
+          <Pressable
+            key={c.slug}
+            onPress={() => { setActiveCategory(c.slug); navigation.navigate('Category', { slug: c.slug }) }}
+            className={`rounded-full px-4 py-2 ${activeCategory === c.slug ? 'bg-navy' : 'border border-line bg-card'}`}
+          >
+            <Text className={`text-xs font-bold ${activeCategory === c.slug ? 'text-white' : 'text-navy'}`}>
+              {c.name}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text className="mt-2 text-xs leading-5 text-muted">
+        Explore a category for an overview, or set it below to control its hardware live.
+      </Text>
+
       {/* Connection panel */}
-      <View className="mt-6 rounded-2xl border border-line bg-white p-5 shadow-card">
+      <View className="mt-6 rounded-2xl border border-line bg-card p-5 shadow-card">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
             <View className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-accent' : 'bg-border'}`} />
@@ -265,7 +288,7 @@ export function ToolsScreen() {
               onChangeText={setWifiUrl}
               editable={!connected}
               placeholder="ws://192.168.4.1:81"
-              className="mt-1 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink"
+              className="mt-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
             />
             <Pressable
               onPress={() => {/* WiFi connect via native transport not yet wired */ setError('WiFi connect needs native transport bridge') }}
@@ -289,7 +312,7 @@ export function ToolsScreen() {
       </View>
 
       {/* Mode chooser */}
-      <View className="mt-6 rounded-2xl border border-line bg-white p-5 shadow-card">
+      <View className="mt-6 rounded-2xl border border-line bg-card p-5 shadow-card">
         <Text className="text-xs font-bold uppercase tracking-wide text-muted">Mode</Text>
         <View className="mt-2 flex-wrap flex-row gap-2">
           {LOCAL_CAR_MODES.map((m) => {
@@ -321,7 +344,7 @@ export function ToolsScreen() {
       <View className="mt-4 rounded-xl bg-slate-900 p-3 shadow-inner">
         <View className="flex-row items-center justify-between border-b border-slate-700 px-2 pb-2">
           <Text className="font-mono text-[11px] font-bold text-emerald-400">{activeMode.token}</Text>
-          <Text className="font-mono text-[10px] text-slate-500">{connected ? 'LINK' : '---'}</Text>
+          <Text className="font-mono text-[10px] text-muted">{connected ? 'LINK' : '---'}</Text>
         </View>
         <View className="mt-2 space-y-1 px-2 font-mono text-sm text-emerald-300">
           <Text>
@@ -454,7 +477,7 @@ export function ToolsScreen() {
             <Pressable
               onPress={() => { void bleService.sendLine('S'); setDriveStatus(`${activeMode.name} stopped`) }}
               disabled={!canControl}
-              className="rounded-full border border-line bg-white px-6 py-3"
+              className="rounded-full border border-line bg-card px-6 py-3"
             >
               <Text className="text-sm font-black text-ink">Stop</Text>
             </Pressable>
@@ -506,7 +529,7 @@ export function ToolsScreen() {
       </View>
 
       {/* Footer */}
-      <View className="mt-6 rounded-lg border border-line bg-white p-4">
+      <View className="mt-6 rounded-lg border border-line bg-card p-4">
         <Text className="text-sm font-semibold text-navy">GENUM Solutions</Text>
         <Text className="mt-0.5 text-[11px] text-muted">App v{APP_VERSION} · IoT & Remote Controller</Text>
       </View>

@@ -51,7 +51,7 @@ export function ServicesScreen() {
         </View>
       }
       renderItem={({ item }) => (
-        <View className="mb-3 rounded-2xl border border-line bg-white p-5">
+        <View className="mb-3 rounded-2xl border border-line bg-card p-5">
           <View className="flex-row items-center justify-between">
             <Text className="flex-1 font-sans text-lg font-bold text-ink">{item.name}</Text>
             {item.tag ? (
@@ -60,15 +60,15 @@ export function ServicesScreen() {
               </View>
             ) : null}
           </View>
-          <Text className="mt-2 text-sm leading-6 text-slate-600">{item.description}</Text>
+          <Text className="mt-2 text-sm leading-6 text-muted">{item.description}</Text>
           <Text className="mt-3 text-sm font-black text-navy">{item.priceLabel}</Text>
         </View>
       )}
       ListFooterComponent={totalPages > 1 ? (
         <View className="mt-1 flex-row items-center justify-between">
-          <Pressable onPress={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} accessibilityLabel="Previous services page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"><Feather name="chevron-left" size={18} color="#1e3a8a" /></Pressable>
+          <Pressable onPress={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} accessibilityLabel="Previous services page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"><Feather name="chevron-left" size={18} color="#1e3a8a" /></Pressable>
           <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}</Text>
-          <Pressable onPress={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page === totalPages} accessibilityLabel="Next services page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"><Feather name="chevron-right" size={18} color="#1e3a8a" /></Pressable>
+          <Pressable onPress={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page === totalPages} accessibilityLabel="Next services page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"><Feather name="chevron-right" size={18} color="#1e3a8a" /></Pressable>
         </View>
       ) : null}
     />

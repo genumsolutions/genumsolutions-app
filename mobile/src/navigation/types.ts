@@ -17,7 +17,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   ProductDetail: { productId: string };
-  Checkout: undefined;
+  Checkout: { provider?: 'cod' | 'esewa' | 'khalti'; status?: string } | undefined;
   Services: undefined;
   Projects: undefined;
   Contact: undefined;
@@ -27,7 +27,9 @@ export type RootStackParamList = {
   Journal: undefined;
   Printing: undefined;
   OpenTools: undefined;
-  OrderSuccess: { orderId?: string };
+  Category: { slug: string };
+  Legal: { doc: 'privacy' | 'terms' };
+  OrderSuccess: { orderId?: string; provider?: string; paid?: boolean };
 };
 
 /** Navigation prop for tab screens that can push onto the root stack. */

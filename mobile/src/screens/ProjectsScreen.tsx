@@ -1,33 +1,129 @@
 // =====================================================================
-// ProjectsScreen - native list of project packages & robot-car builds from
-// the shared Supabase `products` table (same data as the website /projects).
+// ProjectsScreen - native two-tab catalog (Project Packages / Robot Car
+// Projects) backed by the shared Supabase `products` table, matching the
+// website's ProjectsCatalog. Supports search, category chips, pagination,
+// and "Add to build list" with quote-only routing to product details.
 // =====================================================================
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
-  Text,
-  View,
   Pressable,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
-import { getProjects, type Project } from '../services/projectService';
+import { addToCart } from '../services/cartService';
+import { filterProducts, getProducts } from '../services/productService';
+import { useApp } from '../context/AppContext';
+import type { Product } from '../types';
+import type { RootStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<RootStackParamList, 'Projects'>;
+type ProjectTab = 'packages' | 'robot-cars';
+
+const TABS: { key: ProjectTab; label: string }[] = [
+  { key: 'packages', label: 'Project Packages' },
+  { key: 'robot-cars', label: 'Robot Car Projects' },
+];
+
+const SECTION_COPY: Record<ProjectTab, string> = {
+  packages: 'Named teaching and automation projects organized by scope.',
+  'robot-cars': 'Assembled robot-car projects separated from components and materials.',
+};
 
 export function ProjectsScreen() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const navigation = useNavigation<Nav>();
+  const { setCart } = useApp();
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<ProjectTab>('packages');
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('All');
   const [page, setPage] = useState(1);
-  const pageSize = 6;
-  const totalPages = Math.max(1, Math.ceil(projects.length / pageSize));
-  const pageItems = projects.slice((page - 1) * pageSize, page * pageSize);
+  const [addedId, setAddedId] = useState<string | null>(null);
+
+  const pageSize = 8;
+
+  const load = useCallback(async (asRefresh = false) => {
+    if (asRefresh) setRefreshing(true);
+    try {
+      setProducts(await getProducts());
+    } catch {
+      // keep previous data
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getProjects()
-      .then(setProjects)
-      .catch(() => setProjects([]))
-      .finally(() => setLoading(false));
-  }, []);
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, category, query]);
+
+  useEffect(() => {
+    if (!addedId) return;
+    const timer = setTimeout(() => setAddedId(null), 1600);
+    return () => clearTimeout(timer);
+  }, [addedId]);
+
+  const tabProducts = useMemo(() => {
+    return products.filter(
+      (p) =>
+        p.active !== false &&
+        (tab === 'packages'
+          ? p.productType === 'Project package'
+          : p.category === 'Robot Cars'),
+    );
+  }, [products, tab]);
+
+  const categories = useMemo(() => {
+    const present: string[] = [];
+    for (const p of tabProducts) {
+      if (!present.includes(p.category)) present.push(p.category);
+    }
+    return present;
+  }, [tabProducts]);
+
+  const visible = useMemo(
+    () => filterProducts(tabProducts, category, query),
+    [tabProducts, category, query],
+  );
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
+
+  function changeTab(next: ProjectTab) {
+    setTab(next);
+    setQuery('');
+    setCategory('All');
+    setPage(1);
+  }
+
+  async function handleAdd(product: Product) {
+    try {
+      const count = await addToCart(product.id, 1);
+      setCart({ count, size: count });
+      setAddedId(product.id);
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleCardPress(product: Product) {
+    const quoteOnly = product.stock === 0 || product.productType === 'Project package';
+    if (quoteOnly) {
+      navigation.navigate('ProductDetail', { productId: product.id });
+    }
+  }
 
   if (loading) {
     return (
@@ -38,53 +134,181 @@ export function ProjectsScreen() {
   }
 
   return (
-    <FlatList
-      className="flex-1 bg-surface"
-      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
-      data={pageItems}
-      keyExtractor={(p) => p.id}
-      ListHeaderComponent={
-        <View className="mb-3">
-          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Projects</Text>
-          <Text className="mt-1 font-sans text-2xl font-bold text-ink">
-            Packages & robot cars
-          </Text>
+    <View className="flex-1 bg-surface">
+      {/* Tabs */}
+      <View className="flex-row px-4 pt-4">
+        <View className="flex-row items-center gap-2">
+          {TABS.map((item, index) => {
+            const active = tab === item.key;
+            const count = item.key === 'packages'
+              ? products.filter((p) => p.productType === 'Project package' && p.active !== false).length
+              : products.filter((p) => p.category === 'Robot Cars' && p.active !== false).length;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => changeTab(item.key)}
+                className={`flex-row items-center rounded-full border px-4 py-2 ${index > 0 ? 'ml-2' : ''} ${active ? 'border-navy bg-navy' : 'border-line bg-card'}`}
+              >
+                <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
+                  {item.label}
+                </Text>
+                <Text
+                  className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-black ${active ? 'bg-navy-light text-navy' : 'bg-mist text-muted'}`}
+                >
+                  {count}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      }
-      ListEmptyComponent={
-        <View className="items-center py-16">
-          <Feather name="inbox" size={40} color="#cbd5e1" />
-          <Text className="mt-3 text-sm text-muted">No projects found.</Text>
+      </View>
+
+      {/* Search */}
+      <View className="px-4 pt-3">
+        <View className="flex-row items-center rounded-xl border border-line bg-card px-3">
+          <Feather name="search" size={16} color="#64748b" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search this section"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+            className="flex-1 px-2 py-2.5 text-sm text-ink"
+          />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')} accessibilityLabel="Clear search">
+              <Feather name="x" size={16} color="#64748b" />
+            </Pressable>
+          )}
         </View>
-      }
-      renderItem={({ item }) => (
-        <View className="mb-3 flex-row overflow-hidden rounded-2xl border border-line bg-white">
-          <View className="h-24 w-24 items-center justify-center bg-mist">
-            {item.image ? (
-              <Image source={{ uri: item.image }} className="h-full w-full" resizeMode="cover" />
-            ) : (
-              <Feather name="box" size={26} color="#94a3b8" />
-            )}
-          </View>
-          <View className="flex-1 p-3">
-            <Text className="text-[10px] font-black uppercase tracking-wide text-gold">
-              {item.category} · {item.inventoryType || 'Catalog'}
-            </Text>
-            <Text className="mt-0.5 text-sm font-bold leading-tight text-ink">{item.name}</Text>
-            <Text className="mt-1 text-xs font-black text-navy">{item.priceLabel}</Text>
-            {item.specs?.length ? (
-              <Text className="mt-1 text-[11px] text-muted">{item.specs.slice(0, 2).join(' · ')}</Text>
-            ) : null}
-          </View>
+        <Text className="mt-2 text-sm leading-6 text-muted">{SECTION_COPY[tab]}</Text>
+      </View>
+
+      {/* Categories */}
+      {categories.length > 1 && (
+        <View>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={['All', ...categories]}
+            keyExtractor={(c) => c}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}
+            renderItem={({ item }) => {
+              const active = item === category;
+              return (
+                <Pressable
+                  onPress={() => setCategory(item)}
+                  className={`rounded-full px-4 py-1.5 ${active ? 'bg-navy' : 'border border-line bg-card'}`}
+                >
+                  <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
+                    {item}
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
         </View>
       )}
-      ListFooterComponent={totalPages > 1 ? (
-        <View className="mt-1 flex-row items-center justify-between">
-          <Pressable onPress={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} accessibilityLabel="Previous projects page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"><Feather name="chevron-left" size={18} color="#1e3a8a" /></Pressable>
-          <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}</Text>
-          <Pressable onPress={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page === totalPages} accessibilityLabel="Next projects page" className="h-10 w-10 items-center justify-center rounded-full border border-line bg-white disabled:opacity-40"><Feather name="chevron-right" size={18} color="#1e3a8a" /></Pressable>
-        </View>
-      ) : null}
-    />
+
+      {/* Results */}
+      <FlatList
+        data={pageItems}
+        keyExtractor={(p) => p.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshing={refreshing}
+        onRefresh={() => load(true)}
+        ListEmptyComponent={
+          <View className="items-center py-16">
+            <Feather name="inbox" size={40} color="#cbd5e1" />
+            <Text className="mt-3 text-sm text-muted">No projects found matching your filters.</Text>
+          </View>
+        }
+        ListFooterComponent={
+          totalPages > 1 ? (
+            <View className="mt-1 flex-row items-center justify-between px-4">
+              <Pressable
+                onPress={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                accessibilityLabel="Previous projects page"
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
+              >
+                <Feather name="chevron-left" size={18} color="#1e3a8a" />
+              </Pressable>
+              <Text className="text-xs font-bold text-muted">
+                Page {page} of {totalPages} · {visible.length} listing{visible.length === 1 ? '' : 's'}
+              </Text>
+              <Pressable
+                onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page === totalPages}
+                accessibilityLabel="Next projects page"
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
+              >
+                <Feather name="chevron-right" size={18} color="#1e3a8a" />
+              </Pressable>
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const quoteOnly = item.stock === 0 || item.productType === 'Project package';
+          const added = addedId === item.id;
+          return (
+            <Pressable
+              onPress={() => handleCardPress(item)}
+              className="mb-4 w-[48%] flex-1 overflow-hidden rounded-2xl border border-line bg-card"
+            >
+              <View className="h-24 items-center justify-center overflow-hidden bg-ink">
+                {item.image ? (
+                  <Image source={{ uri: item.image }} className="h-full w-full" resizeMode="cover" />
+                ) : (
+                  <Feather name="box" size={28} color="#94a3b8" />
+                )}
+                {item.image ? (
+                  <View className="absolute inset-0 bg-ink/40">
+                    <Text className="absolute bottom-2 left-3 text-[10px] font-black uppercase tracking-widest text-white">
+                      {item.category}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View className="p-3">
+                <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+                  {tab === 'robot-cars' ? 'Robot Car' : item.productType}
+                </Text>
+                <Text className="mt-1 text-[13px] font-bold leading-tight text-ink">
+                  {item.name}
+                </Text>
+                <Text className="mt-1 text-[11px] leading-4 text-muted">
+                  {item.note || item.description?.split('. ')[0]}
+                </Text>
+                <View className="mt-2 flex-row items-center justify-between gap-2">
+                  <Text className="shrink text-xs font-black text-navy">{item.priceLabel}</Text>
+                  {quoteOnly ? (
+                    <Pressable
+                      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+                      accessibilityLabel={`View details for ${item.name}`}
+                      className="rounded-full bg-navy px-3 py-1.5"
+                    >
+                      <Text className="text-[10px] font-black text-white">View details</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={() => handleAdd(item)}
+                      accessibilityLabel={`${added ? 'Added' : 'Add'} ${item.name} to build list`}
+                      className={`rounded-full px-3 py-1.5 ${added ? 'bg-emerald-600' : 'bg-navy'}`}
+                    >
+                      <Text className="text-[10px] font-black text-white">
+                        {added ? 'Added ✓' : 'Add'}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            </Pressable>
+          );
+        }}
+      />
+    </View>
   );
 }

@@ -114,7 +114,7 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
       <Pressable style={{ position: 'absolute', inset: 0 }} onPress={onClose} accessibilityLabel="Close menu" />
       <View
         style={{ position: 'absolute', right: 0, top: insets.top + 56, width: 280, paddingBottom: insets.bottom }}
-        className="rounded-l-2xl border border-line bg-white shadow-lg"
+        className="rounded-l-2xl border border-line bg-card shadow-lg"
       >
         <View className="border-b border-line bg-navy px-4 py-3">
           <View className="flex-row items-center justify-between">

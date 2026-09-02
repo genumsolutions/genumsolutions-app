@@ -1,6 +1,8 @@
 // =====================================================================
 // CheckoutScreen - captures contact details and places an order against the
-// shared Supabase `orders` table (requires sign-in, like the website).
+// shared Supabase `orders` table (requires sign-in, like the website). Supports
+// Cash on Delivery plus eSewa / Khalti (opened in the system browser via
+// expo-web-browser; the payer returns on the genumsolutions:// deep link).
 // =====================================================================
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -11,21 +13,31 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import * as WebBrowser from 'expo-web-browser';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { getProducts } from '../services/productService';
 import { resolveCart, clearCart } from '../services/cartService';
-import { createOrder } from '../services/orderService';
+import { createOrder, initiateEsewaPayment, initiateKhaltiPayment, getOrderById } from '../services/orderService';
 import { useApp } from '../context/AppContext';
 import type { CheckoutInput } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
+type Route = RouteProp<RootStackParamList, 'Checkout'>;
 
 type Provider = CheckoutInput['provider'];
 
+const PROVIDERS: [Provider, string, string][] = [
+  ['cod', 'Cash on delivery', 'Pay when your order is delivered.'],
+  ['esewa', 'eSewa', 'Pay securely with your eSewa wallet.'],
+  ['khalti', 'Khalti', 'Pay securely with your Khalti wallet.'],
+];
+
 export function CheckoutScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<Route>();
   const { user, isSignedIn, setAuthSheetOpen, setCart } = useApp();
   const [items, setItems] = useState<
     { productId: string; name: string; priceNpr: number; quantity: number }[]
@@ -34,7 +46,8 @@ export function CheckoutScreen() {
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [provider, setProvider] = useState<Provider>('cod');
+  const [provider, setProvider] = useState<Provider>(route.params?.provider || 'cod');
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +73,19 @@ export function CheckoutScreen() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (route.params?.status) {
+      const labels: Record<string, string> = {
+        cancelled: 'Payment was cancelled. Your order is saved - you can try again below.',
+        'not-paid': 'Payment was not completed. Please try again or switch to cash on delivery.',
+        'no-order': 'We could not confirm that order. Please try checkout again.',
+        'amount-mismatch': 'There was a payment mismatch. Our team will contact you.',
+        'verify-pending': 'Payment is being verified - check your orders shortly.',
+      };
+      setNotice(labels[route.params.status] ?? null);
+    }
+  }, [route.params]);
+
   const total = items.reduce((sum, i) => sum + i.priceNpr * i.quantity, 0);
   const canSubmit =
     name.trim().length > 0 &&
@@ -76,6 +102,7 @@ export function CheckoutScreen() {
     }
     setSubmitting(true);
     setError(null);
+    setNotice(null);
     try {
       const order = await createOrder({
         items,
@@ -86,16 +113,52 @@ export function CheckoutScreen() {
         address: address.trim(),
         provider,
       });
-      await clearCart();
-      setCart({ count: 0, size: 0 });
-      navigation.replace('OrderSuccess', { orderId: order?.id });
+      if (!order) throw new Error('Could not create your order.');
+
+      // COD: done the moment the order exists.
+      if (provider === 'cod') {
+        await clearCart();
+        setCart({ count: 0, size: 0 });
+        navigation.replace('OrderSuccess', { orderId: order.id, provider: 'cod', paid: false });
+        return;
+      }
+
+      // Online: hand off to the gateway in the system browser, then confirm.
+      let gatewayUrl: string;
+      if (provider === 'esewa') {
+        const res = await initiateEsewaPayment(order.id, order.total_npr);
+        gatewayUrl = res.renderUrl;
+      } else {
+        const res = await initiateKhaltiPayment(order.id, order.total_npr);
+        gatewayUrl = res.url;
+      }
+
+      await WebBrowser.openBrowserAsync(gatewayUrl, {
+        toolbarColor: '#1e3a8a',
+        enableBarCollapsing: true,
+      });
+
+      // After the browser closes (deep link may already have navigated), ask
+      // Supabase whether the order was actually paid by the edge function.
+      const fresh = await getOrderById(order.id);
+      const paid = !!fresh && fresh.status === 'paid';
+      if (paid) {
+        await clearCart();
+        setCart({ count: 0, size: 0 });
+        navigation.replace('OrderSuccess', { orderId: order.id, provider, paid: true });
+      } else {
+        setSubmitting(false);
+        setNotice(
+          'Your order is saved but the payment was not confirmed yet. You can retry, switch payment method, or settle later from your account.',
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not place your order.');
       setSubmitting(false);
     }
   }, [items, total, name, email, phone, address, provider, isSignedIn, setAuthSheetOpen, setCart, navigation]);
 
-  if (items.length === 0) {
+  if (items.length === 0 && !submitting) {
     return (
       <View className="flex-1 items-center justify-center bg-surface px-8">
         <Text className="text-base font-bold text-ink">Nothing to check out</Text>
@@ -109,7 +172,7 @@ export function CheckoutScreen() {
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
       <SectionTitle>Order summary</SectionTitle>
-      <View className="rounded-2xl border border-line bg-white p-4">
+      <View className="rounded-2xl border border-line bg-card p-4">
         {items.map((i, idx) => (
           <View key={idx} className="flex-row items-center justify-between py-1.5">
             <Text className="flex-1 pr-3 text-sm text-ink">
@@ -135,21 +198,30 @@ export function CheckoutScreen() {
       <Field label="Address" value={address} onChange={setAddress} placeholder="Street, city, Nepal" />
 
       <SectionTitle>Payment method</SectionTitle>
-      <View className="overflow-hidden rounded-2xl border border-line bg-white">
-        {([['cod', 'Cash on delivery']] as [Provider, string][]).map(([value, label]) => (
-          <Pressable
-            key={value}
-            onPress={() => setProvider(value)}
-            className={`flex-row items-center justify-between border-b border-line px-4 py-3.5 last:border-b-0 ${provider === value ? 'bg-navy-light' : 'bg-white'}`}
-          >
-            <Text className={`text-sm font-semibold ${provider === value ? 'text-navy' : 'text-ink'}`}>
-              {label}
-            </Text>
-            {provider === value ? <View className="h-4 w-4 rounded-full bg-navy" /> : <View className="h-4 w-4 rounded-full border border-border" />}
-          </Pressable>
-        ))}
+      <View className="overflow-hidden rounded-2xl border border-line bg-card">
+        {PROVIDERS.map(([value, label, sub]) => {
+          const selected = provider === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => setProvider(value)}
+              className={`border-b border-line px-4 py-3.5 last:border-b-0 ${selected ? 'bg-navy-light' : 'bg-card'}`}
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className={`text-sm font-semibold ${selected ? 'text-navy' : 'text-ink'}`}>
+                  {label}
+                </Text>
+                {selected ? <View className="h-4 w-4 rounded-full bg-navy" /> : <View className="h-4 w-4 rounded-full border border-border" />}
+              </View>
+              <Text className="mt-0.5 text-xs text-muted">{sub}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
+      {notice ? (
+        <Text className="mt-3 text-center text-xs font-medium leading-5 text-amber-700">{notice}</Text>
+      ) : null}
       {error ? (
         <Text className="mt-3 text-center text-xs font-medium text-red-600">{error}</Text>
       ) : null}
@@ -208,7 +280,7 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor="#94a3b8"
         keyboardType={keyboard ?? 'default'}
-        className="rounded-xl border border-border bg-white px-4 py-3 text-sm text-ink"
+        className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-ink"
       />
     </View>
   );

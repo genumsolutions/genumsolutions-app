@@ -104,7 +104,7 @@ function CartContent({
         keyExtractor={({ line }) => line.productId}
         contentContainerStyle={{ padding: 16 }}
         renderItem={({ item }) => (
-          <View className="mb-3 flex-row rounded-2xl border border-line bg-white p-3">
+          <View className="mb-3 flex-row rounded-2xl border border-line bg-card p-3">
             <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-mist">
               {item.product.image ? (
                 <Image
@@ -145,7 +145,7 @@ function CartContent({
         )}
       />
 
-      <View className="border-t border-line bg-white px-5 py-4">
+      <View className="border-t border-line bg-card px-5 py-4">
         <View className="flex-row items-center justify-between">
           <Text className="text-sm text-muted">Total</Text>
           <Text className="font-sans text-lg font-bold text-ink">

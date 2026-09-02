@@ -1,17 +1,18 @@
 // =====================================================================
 // orderService - writes to the shared `orders` and `transactions` Supabase
 // tables (the same tables the website checkout uses). RLS allows a signed-in
-// user to INSERT an order for themselves. Transaction ledger rows are
-// service-role only, so we record provider/ref on the order row instead;
-// the website's server can reconcile payments.
+// user to INSERT an order for themselves. Online payments (eSewa / Khalti)
+// run through the shared Supabase Edge Functions, which verify and mark the
+// order paid server-side; this module only starts the gateway session and
+// reads the result back.
 // =====================================================================
 import { supabase } from '../config/supabase';
 import type { CheckoutInput, Order } from '../types';
 
 // Supabase Edge Function URLs (configured via environment)
-const EDGE_BASE = 'https://bkylfnlybtsujwzropru.supabase.co/functions/v1'
+export const EDGE_BASE = 'https://bkylfnlybtsujwzropru.supabase.co/functions/v1'
 
-const edgeUrls = {
+export const edgeUrls = {
   paymentEsewa: `${EDGE_BASE}/payment-esewa`,
   paymentKhalti: `${EDGE_BASE}/payment-khalti`,
   paymentWebhook: `${EDGE_BASE}/payment-webhook`,
@@ -55,9 +56,11 @@ export async function getMyOrders(): Promise<Order[]> {
 }
 
 /** Initiate eSewa payment for the given order.
- *  The app calls this then redirects the user to eSewa's payment page.
+ *  Returns a `renderUrl` served by the shared `payment-esewa` edge function:
+ *  a small auto-submitting HTML form page (no website dependency). eSewa then
+ *  bounces the user back to a deep link (genumsolutions://checkout/success).
  */
-export async function initiateEsewaPayment(orderId: string, amountNpr: number): Promise<{ actionUrl: string; fields: Record<string, string> }> {
+export async function initiateEsewaPayment(orderId: string, amountNpr: number, productCode?: string): Promise<{ renderUrl: string }> {
   const res = await fetch(edgeUrls.paymentEsewa, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -65,9 +68,7 @@ export async function initiateEsewaPayment(orderId: string, amountNpr: number): 
       action: 'initiate',
       amount: String(amountNpr),
       transactionUuid: orderId,
-      productCode: 'EPAYTEST',
-      successUrl: `${process.env.EXPO_PUBLIC_SITE_URL || ''}/checkout/success?provider=esewa`,
-      failureUrl: `${process.env.EXPO_PUBLIC_SITE_URL || ''}/checkout`,
+      productCode: productCode || 'EPAYTEST',
     }),
   })
 
@@ -75,11 +76,14 @@ export async function initiateEsewaPayment(orderId: string, amountNpr: number): 
     const err = await res.text()
     throw new Error(`eSewa initiate failed: ${err}`)
   }
-  return res.json()
+  const data = await res.json()
+  if (!data.renderUrl) throw new Error('eSewa is not configured yet.')
+  return { renderUrl: data.renderUrl }
 }
 
 /** Initiate Khalti payment for the given order.
- *  The app calls this then redirects the user to Khalti's payment page.
+ *  Returns the Khalti payment URL; the return trip comes back through the
+ *  shared `payment-khalti` edge function and deep link below.
  */
 export async function initiateKhaltiPayment(orderId: string, amountNpr: number): Promise<{ url: string; pidx: string }> {
   const res = await fetch(edgeUrls.paymentKhalti, {
@@ -90,8 +94,6 @@ export async function initiateKhaltiPayment(orderId: string, amountNpr: number):
       amount: amountNpr,
       purchaseOrderId: orderId,
       purchaseOrderName: `GENUM order ${orderId.slice(0, 8)}`,
-      returnUrl: `${process.env.EXPO_PUBLIC_SITE_URL || ''}/checkout/success?provider=khalti`,
-      websiteUrl: process.env.EXPO_PUBLIC_SITE_URL || '',
     }),
   })
 
@@ -99,7 +101,22 @@ export async function initiateKhaltiPayment(orderId: string, amountNpr: number):
     const err = await res.text()
     throw new Error(`Khalti initiate failed: ${err}`)
   }
-  return res.json()
+  const data = await res.json()
+  if (!data.url) throw new Error('Khalti is not configured yet.')
+  return { url: data.url, pidx: data.pidx || '' }
+}
+
+/** Ask Supabase whether an order is already paid (used after the gateway
+ *  deep-links back or the in-app browser closes without a deep link). */
+export async function getOrderById(orderId: string): Promise<Order | null> {
+  if (!orderId) return null
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (error || !data) return null
+  return data as Order
 }
 
 /** Send a contact inquiry - persists to customer_messages + sends email via Resend. */

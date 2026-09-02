@@ -113,7 +113,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
 
         <View
           style={{ paddingBottom: Math.max(insets.bottom, 12), paddingTop: 18 }}
-          className="rounded-t-3xl bg-white"
+          className="rounded-t-3xl bg-card"
         >
           <View className="mb-3 h-1 w-10 self-center rounded-full bg-line" />
 
@@ -147,7 +147,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   key={m}
                   onPress={() => switchMode(m)}
                   disabled={closeDisabled}
-                  className={`flex-1 items-center rounded-full py-2 ${active ? 'bg-white' : ''}`}
+                  className={`flex-1 items-center rounded-full py-2 ${active ? 'bg-card' : ''}`}
                 >
                   <Text className={`text-xs font-bold ${active ? 'text-navy' : 'text-muted'}`}>
                     {label}
@@ -270,7 +270,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   onPress={() => void signInWithGoogle()}
                   disabled={authBusy}
                   accessibilityRole="button"
-                  className="mt-5 flex-row items-center justify-center rounded-xl border border-border bg-white py-3.5 disabled:opacity-60"
+                  className="mt-5 flex-row items-center justify-center rounded-xl border border-border bg-card py-3.5 disabled:opacity-60"
                 >
                   {authBusy ? (
                     <ActivityIndicator size="small" color="#1e3a8a" />

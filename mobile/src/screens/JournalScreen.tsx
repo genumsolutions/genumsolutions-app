@@ -23,7 +23,7 @@ export function JournalScreen() {
       <View className="px-5 py-8">
         <View className="grid gap-4 sm:grid-cols-2">
           {posts.map((post) => (
-            <View key={post.title} className="border-t-2 border-ink bg-white p-5">
+            <View key={post.title} className="border-t-2 border-ink bg-card p-5">
               <Text className="text-[10px] font-black uppercase tracking-widest text-navy">{post.tag}</Text>
               <Text className="mt-3 font-display text-xl font-bold text-ink">{post.title}</Text>
               <Text className="mt-2 text-sm leading-6 text-muted">{post.text}</Text>

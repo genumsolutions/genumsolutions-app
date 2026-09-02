@@ -77,7 +77,7 @@ export function AccountScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       ListHeaderComponent={
         <>
-          <View className="flex-row items-center rounded-2xl border border-line bg-white p-4">
+          <View className="flex-row items-center rounded-2xl border border-line bg-card p-4">
             <View className="h-12 w-12 items-center justify-center rounded-full bg-navy">
               <Text className="text-sm font-black text-white">{initials}</Text>
             </View>
@@ -93,11 +93,11 @@ export function AccountScreen() {
           </View>
 
           {editingProfile ? (
-            <View className="mt-4 rounded-xl border border-line bg-white p-4">
+            <View className="mt-4 rounded-xl border border-line bg-card p-4">
               <Text className="text-sm font-bold text-ink mb-3">Edit Profile</Text>
-              <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Name" />
-              <TextInput value={phone} onChangeText={setPhone} className="mb-3 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Phone" keyboardType="phone-pad" />
-              <TextInput value={address} onChangeText={setAddress} className="mb-4 rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink" placeholder="Address" multiline />
+              <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
+              <TextInput value={phone} onChangeText={setPhone} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Phone" keyboardType="phone-pad" />
+              <TextInput value={address} onChangeText={setAddress} className="mb-4 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Address" multiline />
               <View className="flex-row gap-3">
                 <Pressable
                   onPress={async () => {
@@ -126,11 +126,11 @@ export function AccountScreen() {
             </View>
           )}
 
-          <View className="mt-4 rounded-xl border border-line bg-white p-4">
+          <View className="mt-4 rounded-xl border border-line bg-card p-4">
             <Text className="text-sm font-bold text-ink">App theme</Text>
             <View className="mt-3 flex-row gap-2">
               {(['system', 'light', 'dark'] as const).map((mode) => (
-                <Pressable key={mode} onPress={() => setThemeMode(mode)} className={`flex-1 items-center rounded-lg border px-2 py-2 ${themeMode === mode ? 'border-navy bg-navy' : 'border-line bg-white'}`}>
+                <Pressable key={mode} onPress={() => setThemeMode(mode)} className={`flex-1 items-center rounded-lg border px-2 py-2 ${themeMode === mode ? 'border-navy bg-navy' : 'border-line bg-card'}`}>
                   <Text className={`text-xs font-bold capitalize ${themeMode === mode ? 'text-white' : 'text-ink'}`}>{mode}</Text>
                 </Pressable>
               ))}
@@ -153,14 +153,14 @@ export function AccountScreen() {
       keyExtractor={(o) => o.id}
       ListEmptyComponent={
         ordersLoading ? null : (
-          <View className="items-center rounded-2xl border border-dashed border-line bg-white py-8">
+          <View className="items-center rounded-2xl border border-dashed border-line bg-card py-8">
             <Feather name="package" size={32} color="#cbd5e1" />
             <Text className="mt-2 text-sm text-muted">No orders yet.</Text>
           </View>
         )
       }
       renderItem={({ item }) => (
-        <View className="mb-2 rounded-2xl border border-line bg-white p-4">
+        <View className="mb-2 rounded-2xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-sm font-bold text-ink">{statusLabel(item.status)}</Text>
             <Text className="text-xs text-muted">
@@ -174,9 +174,20 @@ export function AccountScreen() {
         </View>
       )}
       ListFooterComponent={
-        <Pressable onPress={signOut} className="mt-4 items-center rounded-full border border-red-200 bg-white py-3">
-          <Text className="text-sm font-bold text-red-600">Sign out</Text>
-        </Pressable>
+        <>
+          <View className="mt-4 flex-row items-center justify-center gap-3 py-2">
+            <Pressable onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}>
+              <Text className="text-sm font-bold text-navy underline">Privacy Policy</Text>
+            </Pressable>
+            <Text className="text-sm text-border">·</Text>
+            <Pressable onPress={() => navigation.navigate('Legal', { doc: 'terms' })}>
+              <Text className="text-sm font-bold text-navy underline">Terms of Service</Text>
+            </Pressable>
+          </View>
+          <Pressable onPress={signOut} className="mt-2 items-center rounded-full border border-red-200 bg-card py-3">
+            <Text className="text-sm font-bold text-red-600">Sign out</Text>
+          </Pressable>
+        </>
       }
     />
   )

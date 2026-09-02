@@ -37,7 +37,7 @@ export function OpenToolsScreen() {
             <Pressable
               key={g}
               onPress={() => setFilter(g)}
-              className={`rounded-full px-4 py-2 text-xs font-bold ${filter === g ? 'bg-navy text-white' : 'border border-line bg-white text-muted'}`}
+              className={`rounded-full px-4 py-2 text-xs font-bold ${filter === g ? 'bg-navy text-white' : 'border border-line bg-card text-muted'}`}
             >
               {g}
             </Pressable>
@@ -51,7 +51,7 @@ export function OpenToolsScreen() {
         className="px-5 pt-6"
         scrollEnabled={false}
         renderItem={({ item }) => (
-          <View className="mb-4 rounded-2xl border-t-2 border-navy bg-white p-5">
+          <View className="mb-4 rounded-2xl border-t-2 border-navy bg-card p-5">
             <Text className="text-[10px] font-black uppercase tracking-widest text-navy">{item.group}</Text>
             <Text className="mt-3 font-display text-xl font-bold text-ink">{item.name}</Text>
             <Text className="mt-2 text-sm leading-6 text-muted">{item.description}</Text>
