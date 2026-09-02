@@ -123,7 +123,7 @@ export function AccountScreen() {
             </View>
             {isAdmin && (
               <View className="rounded-full bg-gold px-2 py-0.5">
-                <Text className="text-[10px] font-black uppercase text-ink">Admin</Text>
+                <Text className="text-xs font-black uppercase text-ink">Admin</Text>
               </View>
             )}
           </View>

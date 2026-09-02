@@ -72,7 +72,7 @@ export function HomeScreen() {
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">What GENUM does</Text>
                 <Pressable onPress={() => navigation.navigate('Services')}>
-                  <Text className="text-sm font-bold text-navy underline decoration-gold underline-offset-4">View all</Text>
+                  <Text className="text-sm font-bold text-navy underline">View all</Text>
                 </Pressable>
               </View>
               <View className="mt-3">
@@ -92,7 +92,7 @@ export function HomeScreen() {
             <View className="flex-row items-center justify-between">
               <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">100+ project curriculum</Text>
               <Pressable onPress={() => navigation.navigate('Contact')}>
-                <Text className="text-sm font-bold text-navy underline decoration-gold underline-offset-4">Request the full catalog</Text>
+                <Text className="text-sm font-bold text-navy underline">Request the full catalog</Text>
               </Pressable>
             </View>
             <View className="mt-4 space-y-3">
@@ -117,9 +117,9 @@ export function HomeScreen() {
                 <View key={prog.title} className="rounded-2xl border border-line bg-card p-4">
                   <View className="flex-row items-center justify-between gap-2">
                     <Text className="font-display text-lg font-bold text-ink">{prog.title}</Text>
-                    <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-[10px] font-bold text-navy">{prog.duration}</Text>
+                    <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">{prog.duration}</Text>
                   </View>
-                  <Text className="mt-1 text-[10px] font-black uppercase tracking-wide text-gold">{prog.audience}</Text>
+                  <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">{prog.audience}</Text>
                   <Text className="mt-2 text-sm leading-6 text-muted">{prog.description}</Text>
                   <Text className="mt-2 text-xs leading-5 text-muted"><Text className="text-ink font-bold">Outcome:</Text> {prog.outcome}</Text>
                 </View>
@@ -147,7 +147,7 @@ export function HomeScreen() {
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Shop</Text>
                 <Pressable onPress={() => navigation.navigate('Main', { screen: 'Shop' })}>
-                  <Text className="text-sm font-bold text-navy underline decoration-gold underline-offset-4">Browse catalog</Text>
+                  <Text className="text-sm font-bold text-navy underline">Browse catalog</Text>
                 </Pressable>
               </View>
               <View className="mt-3 flex-row flex-wrap justify-between">

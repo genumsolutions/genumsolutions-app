@@ -41,8 +41,8 @@ export function BrandHeader() {
               <Text className="font-sans text-lg font-bold leading-tight text-white">
                 GENUM
               </Text>
-              <Text className="text-[8px] font-bold uppercase tracking-[0.26em] text-navy-light">
-                Solutions Pvt.&nbsp;Ltd.
+              <Text className="text-xs font-bold uppercase tracking-widest text-navy-light">
+                Solutions Pvt. Ltd.
               </Text>
             </View>
           </Pressable>
@@ -57,7 +57,7 @@ export function BrandHeader() {
               <Feather name="shopping-bag" size={18} color="#ffffff" />
               {cartCount > 0 && (
                 <View className="absolute -right-0.5 -top-0.5 min-w-[18px] items-center justify-center rounded-full bg-gold px-1">
-                  <Text className="text-[10px] font-black text-ink">
+                  <Text className="text-xs font-black text-ink">
                     {cartCount > 99 ? '99+' : cartCount}
                   </Text>
                 </View>
@@ -128,15 +128,15 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
         {isSignedIn ? (
           <View className="flex-row items-center gap-2 border-b border-line px-4 py-2.5">
             <View className="h-8 w-8 items-center justify-center rounded-full bg-navy">
-              <Text className="text-[11px] font-black text-white">{initials}</Text>
+              <Text className="text-xs font-black text-white">{initials}</Text>
             </View>
             <View className="flex-1">
               <Text className="text-xs font-bold text-ink">{user?.name}</Text>
-              <Text className="text-[10px] text-muted">{user?.email}</Text>
+              <Text className="text-xs text-muted">{user?.email}</Text>
             </View>
             {isAdmin ? (
               <View className="rounded-full bg-gold px-2 py-0.5">
-                <Text className="text-[9px] font-black uppercase text-ink">Admin</Text>
+                <Text className="text-xs font-black uppercase text-ink">Admin</Text>
               </View>
             ) : null}
           </View>
@@ -197,7 +197,7 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
 function MenuGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View className="py-2">
-      <Text className="px-4 pb-1 text-[10px] font-black uppercase tracking-widest text-border">
+      <Text className="px-4 pb-1 text-xs font-black uppercase tracking-widest text-border">
         {title}
       </Text>
       {children}

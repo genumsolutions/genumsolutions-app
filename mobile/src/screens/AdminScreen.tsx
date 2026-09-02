@@ -331,9 +331,9 @@ function DashboardTab({ stats }: { stats: DashboardStats | null }) {
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <View className="w-[47%] rounded-xl border border-line bg-card p-4">
-      <Text className="text-[10px] font-black uppercase tracking-widest text-muted">{label}</Text>
+      <Text className="text-xs font-black uppercase tracking-widest text-muted">{label}</Text>
       <Text className="mt-2 font-display text-xl font-bold text-ink">{value}</Text>
-      {sub && <Text className="mt-1 text-[11px] text-muted">{sub}</Text>}
+      {sub && <Text className="mt-1 text-xs text-muted">{sub}</Text>}
     </View>
   )
 }
@@ -364,12 +364,12 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
                   <Text className="text-sm font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()} · NPR {o.totalNpr.toLocaleString('en-IN')}</Text>
                   <Text className="text-xs text-muted">{o.customerName} · {o.email}</Text>
                 </View>
-                <Text className="text-[10px] font-bold uppercase text-navy">{o.status}</Text>
+                <Text className="text-xs font-bold uppercase text-navy">{o.status}</Text>
               </View>
               <View className="mt-2 flex-row flex-wrap gap-2">
                 {['pending', 'paid', 'fulfilled', 'cancelled'].map((s) => (
                   <Pressable key={s} onPress={() => onStatusChange(o.id, s)} className={`rounded-full px-3 py-1 ${o.status === s ? 'bg-navy' : 'border border-line'}`}>
-                    <Text className={`text-[10px] font-bold ${o.status === s ? 'text-white' : 'text-muted'}`}>{s}</Text>
+                    <Text className={`text-xs font-bold ${o.status === s ? 'text-white' : 'text-muted'}`}>{s}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -439,10 +439,10 @@ function ProjectTab({ title, products, onEdit, onDelete }: {
         <View className="mb-3 overflow-hidden rounded-xl border border-line bg-card">
           {item.image ? <Image source={{ uri: item.image }} className="h-36 w-full" resizeMode="cover" /> : null}
           <View className="p-4">
-            <Text className="text-[10px] font-black uppercase tracking-wide text-gold">{item.category}</Text>
+            <Text className="text-xs font-black uppercase tracking-wide text-gold">{item.category}</Text>
             <Text className="mt-1 text-sm font-bold text-ink">{item.name}</Text>
             <Text className="mt-1 text-xs leading-5 text-muted">{item.description || item.note}</Text>
-            {item.specs.length > 0 ? <Text className="mt-2 text-[11px] text-muted">{item.specs.join(' · ')}</Text> : null}
+            {item.specs.length > 0 ? <Text className="mt-2 text-xs text-muted">{item.specs.join(' · ')}</Text> : null}
             <View className="mt-3 flex-row gap-2">
               <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1">
                 <Text className="text-xs font-bold text-white">Edit</Text>
@@ -504,7 +504,7 @@ function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
         <View className="mb-3 rounded-xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-sm font-bold text-ink">{item.name}</Text>
-            <Text className={`text-[10px] font-bold uppercase ${item.active ? 'text-emerald-600' : 'text-red-500'}`}>{item.active ? 'active' : 'inactive'}</Text>
+            <Text className={`text-xs font-bold uppercase ${item.active ? 'text-emerald-600' : 'text-red-500'}`}>{item.active ? 'active' : 'inactive'}</Text>
           </View>
           <Text className="mt-1 text-xs leading-5 text-muted">{item.description}</Text>
           <View className="mt-2 flex-row gap-2">
@@ -565,7 +565,7 @@ function UsersTab({ users, onToggleRole }: { users: AdminUser[]; onToggleRole: (
               <Text className="text-xs text-muted">{item.email}</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <Text className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{item.role}</Text>
+              <Text className={`rounded px-2 py-0.5 text-xs font-bold uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{item.role}</Text>
               <Pressable onPress={() => onToggleRole(item)} className="rounded-full border border-line px-3 py-1">
                 <Text className="text-xs font-bold text-ink">
                   {item.role === 'admin' ? 'Revoke' : 'Make admin'}
@@ -645,7 +645,7 @@ function MessagesTab({ messages, page, onLoadMore, onMarkReplied }: {
                 <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-muted">· {m.email}</Text></Text>
                 {m.status === 'new'
                   ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full border border-line px-3 py-1"><Text className="text-xs font-bold text-navy">Mark replied</Text></Pressable>
-                  : <Text className="text-[10px] font-bold uppercase text-emerald-600">Replied</Text>
+                  : <Text className="text-xs font-bold uppercase text-emerald-600">Replied</Text>
                 }
               </View>
               <Text className="mt-2 text-xs leading-5 text-muted">{m.message}</Text>

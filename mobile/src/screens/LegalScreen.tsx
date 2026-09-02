@@ -144,7 +144,7 @@ export function LegalScreen() {
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-      <Text className="text-[10px] font-black uppercase tracking-[0.24em] text-navy">Legal</Text>
+      <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Legal</Text>
       <Text className="mt-2 font-display text-3xl font-bold tracking-tight text-ink">
         {isPrivacy ? 'Privacy Policy' : 'Terms of Service'}
       </Text>

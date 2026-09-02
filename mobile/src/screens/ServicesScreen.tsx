@@ -56,7 +56,7 @@ export function ServicesScreen() {
             <Text className="flex-1 font-sans text-lg font-bold text-ink">{item.name}</Text>
             {item.tag ? (
               <View className="ml-2 rounded-full bg-sky px-2.5 py-0.5">
-                <Text className="text-[10px] font-black uppercase text-navy">{item.tag}</Text>
+                <Text className="text-xs font-black uppercase text-navy">{item.tag}</Text>
               </View>
             ) : null}
           </View>

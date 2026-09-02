@@ -48,7 +48,7 @@ export function CategoryHubScreen() {
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
-      <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+      <Text className="text-xs font-black uppercase tracking-widest text-navy">
         {category.name}
       </Text>
       <Text className="mt-2 font-display text-3xl font-bold leading-tight text-ink">
