@@ -177,7 +177,7 @@ export function ShopScreen() {
               {item.name}
             </Text>
             {item.badge ? (
-              <Text className="mt-1 text-[10px] font-black uppercase tracking-wide text-gold">
+              <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
                 {item.badge}
               </Text>
             ) : null}

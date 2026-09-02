@@ -109,7 +109,7 @@ export function ProductDetailScreen() {
       </View>
 
       <View className="px-5 pt-4">
-        <Text className="text-[11px] font-black uppercase tracking-[0.24em] text-navy">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
           {product.category} · {product.badge || product.productType}
         </Text>
         <Text className="mt-2 font-sans text-2xl font-bold leading-tight text-ink">
@@ -124,7 +124,7 @@ export function ProductDetailScreen() {
           </Text>
         </View>
 
-        <View className="mt-4 flex-row flex-wrap gap-x-5 gap-y-2 border-y border-line py-3">
+        <View className="mt-4 flex-row flex-wrap gap-x-5 gap-y-2 border-t border-b border-line py-3">
           <Info label="Price" value={product.priceLabel} />
           <Info label="SKU" value={product.sku || '—'} />
           <Info label="Category" value={product.category} />
@@ -134,12 +134,12 @@ export function ProductDetailScreen() {
         {/* Audience / warranty */}
         <View className="mt-4 flex-row border-b border-line pb-4">
           <View className="flex-1 pr-3">
-            <Text className="text-[10px] font-bold uppercase tracking-widest text-navy">Audience</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Audience</Text>
             <Text className="mt-1 text-sm leading-5 text-muted">{product.audience}</Text>
             <Text className="mt-1 text-sm leading-5 text-muted">{product.difficulty}</Text>
           </View>
           <View className="flex-1 pl-3">
-            <Text className="text-[10px] font-bold uppercase tracking-widest text-navy">Warranty</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Warranty</Text>
             <Text className="mt-1 text-sm leading-5 text-muted">{product.warranty}</Text>
           </View>
         </View>
@@ -147,11 +147,11 @@ export function ProductDetailScreen() {
         {/* Color / delivery */}
         <View className="mt-4 flex-row border-b border-line pb-4">
           <View className="flex-1 pr-3">
-            <Text className="text-[10px] font-bold uppercase tracking-widest text-navy">Color</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Color</Text>
             <Text className="mt-1 text-sm leading-5 text-muted">{colorLabel}</Text>
           </View>
           <View className="flex-1 pl-3">
-            <Text className="text-[10px] font-bold uppercase tracking-widest text-navy">Delivery</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Delivery</Text>
             <Text className="mt-1 text-sm leading-5 text-muted">{product.delivery}</Text>
           </View>
         </View>
@@ -264,7 +264,7 @@ export function ProductDetailScreen() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <View className="min-w-[40%]">
-      <Text className="text-[10px] font-bold uppercase tracking-wide text-border">
+      <Text className="text-xs font-bold uppercase tracking-wide text-border">
         {label}
       </Text>
       <Text className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>

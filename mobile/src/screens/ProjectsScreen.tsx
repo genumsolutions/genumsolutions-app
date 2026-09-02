@@ -153,7 +153,7 @@ export function ProjectsScreen() {
                   {item.label}
                 </Text>
                 <Text
-                  className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-black ${active ? 'bg-navy-light text-navy' : 'bg-mist text-muted'}`}
+                  className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-black ${active ? 'bg-navy-light text-navy' : 'bg-mist text-muted'}`}
                 >
                   {count}
                 </Text>
@@ -266,20 +266,20 @@ export function ProjectsScreen() {
                 )}
                 {item.image ? (
                   <View className="absolute inset-0 bg-ink/40">
-                    <Text className="absolute bottom-2 left-3 text-[10px] font-black uppercase tracking-widest text-white">
+                    <Text className="absolute bottom-2 left-3 text-xs font-black uppercase tracking-widest text-white">
                       {item.category}
                     </Text>
                   </View>
                 ) : null}
               </View>
               <View className="p-3">
-                <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+                <Text className="text-xs font-black uppercase tracking-widest text-navy">
                   {tab === 'robot-cars' ? 'Robot Car' : item.productType}
                 </Text>
                 <Text className="mt-1 text-[13px] font-bold leading-tight text-ink">
                   {item.name}
                 </Text>
-                <Text className="mt-1 text-[11px] leading-4 text-muted">
+                <Text className="mt-1 text-xs leading-4 text-muted">
                   {item.note || item.description?.split('. ')[0]}
                 </Text>
                 <View className="mt-2 flex-row items-center justify-between gap-2">
@@ -291,7 +291,7 @@ export function ProjectsScreen() {
                           accessibilityLabel={`View details for ${item.name}`}
                           className="rounded-full border border-line px-2.5 py-1.5"
                         >
-                          <Text className="text-[10px] font-black text-navy">Details</Text>
+                          <Text className="text-xs font-black text-navy">Details</Text>
                         </Pressable>
                         {item.productType === 'Project package' && (
                           <Pressable
@@ -299,7 +299,7 @@ export function ProjectsScreen() {
                             accessibilityLabel={`Control ${item.name}`}
                             className="rounded-full bg-gold px-2.5 py-1.5"
                           >
-                            <Text className="text-[10px] font-black text-ink">Control</Text>
+                            <Text className="text-xs font-black text-ink">Control</Text>
                           </Pressable>
                         )}
                       </View>
@@ -309,7 +309,7 @@ export function ProjectsScreen() {
                         accessibilityLabel={`Add ${item.name} to cart`}
                         className={`rounded-full px-3 py-1.5 ${added ? 'bg-emerald-500' : 'bg-navy'}`}
                       >
-                        <Text className="text-[10px] font-black text-white">
+                        <Text className="text-xs font-black text-white">
                           {added ? '✓ Added' : 'Add'}
                         </Text>
                       </Pressable>

@@ -26,7 +26,7 @@ export function OpenToolsScreen() {
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingBottom: 32 }}>
       <View className="px-5 pt-6">
-        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">Open tools</Text>
+        <Text className="text-xs font-black uppercase tracking-widest text-navy">Open tools</Text>
         <Text className="mt-2 font-display text-3xl font-bold text-ink">Free tools we rely on.</Text>
         <Text className="mt-3 text-base leading-7 text-muted">A small directory of open-source software for CAD, printing, electronics, and simulation.</Text>
       </View>
@@ -52,11 +52,11 @@ export function OpenToolsScreen() {
         scrollEnabled={false}
         renderItem={({ item }) => (
           <View className="mb-4 rounded-2xl border-t-2 border-navy bg-card p-5">
-            <Text className="text-[10px] font-black uppercase tracking-widest text-navy">{item.group}</Text>
+            <Text className="text-xs font-black uppercase tracking-widest text-navy">{item.group}</Text>
             <Text className="mt-3 font-display text-xl font-bold text-ink">{item.name}</Text>
             <Text className="mt-2 text-sm leading-6 text-muted">{item.description}</Text>
-            <Pressable onPress={() => {}} className="mt-5 inline-flex items-center gap-1.5">
-              <Text className="text-sm font-bold text-navy underline decoration-gold underline-offset-4">Open tool ↗</Text>
+            <Pressable onPress={() => {}} className="mt-5 flex-row items-center items-center gap-1.5">
+              <Text className="text-sm font-bold text-navy underline">Open tool ↗</Text>
             </Pressable>
           </View>
         )}

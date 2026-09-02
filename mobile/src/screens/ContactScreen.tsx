@@ -133,7 +133,7 @@ export function ContactScreen() {
           <Pressable
             onPress={submit}
             disabled={sending}
-            className="mt-4 inline-flex h-12 items-center justify-center rounded-xl bg-navy px-5 disabled:opacity-60"
+            className="mt-4 flex-row items-center h-12 items-center justify-center rounded-xl bg-navy px-5 disabled:opacity-60"
           >
             {sending ? (
               <ActivityIndicator size="small" color="#fff" />

@@ -324,7 +324,7 @@ export function ToolsScreen() {
   return (
     <ScrollView className="flex-1 bg-mist" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
       {/* Header */}
-      <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+      <Text className="text-xs font-black uppercase tracking-widest text-navy">
         IoT & Remote Controller
       </Text>
       <Text className="mt-2 font-display text-2xl font-bold text-ink">
@@ -401,7 +401,7 @@ export function ToolsScreen() {
                     className="flex-row items-center justify-between rounded-lg border border-line px-3 py-2 mt-1"
                   >
                     <Text className="text-xs font-semibold text-ink">{item.name}</Text>
-                    <Text className="text-[10px] text-navy font-bold">Connect</Text>
+                    <Text className="text-xs text-navy font-bold">Connect</Text>
                   </Pressable>
                 )}
               />
@@ -478,10 +478,10 @@ export function ToolsScreen() {
       {/* OLED display */}
       <View className="mt-4 rounded-xl bg-slate-900 p-3 shadow-inner">
         <View className="flex-row items-center justify-between border-b border-slate-700 px-2 pb-2">
-          <Text className="font-mono text-[11px] font-bold text-emerald-400">
+          <Text className="font-mono text-xs font-bold text-emerald-400">
             {connected ? deviceName : wifiConnected ? 'WiFi' : '---'}
           </Text>
-          <Text className="font-mono text-[10px] text-slate-500">
+          <Text className="font-mono text-xs text-slate-500">
             {connected ? 'BLE LINK' : wifiConnected ? 'WiFi WS' : 'NO LINK'}
           </Text>
         </View>
@@ -679,7 +679,7 @@ export function ToolsScreen() {
               </View>
               <View className="mt-3 flex-row gap-4">
                 <View className="flex-1">
-                  <Text className="text-[10px] font-bold text-muted">Pan: {gimbalPan}°</Text>
+                  <Text className="text-xs font-bold text-muted">Pan: {gimbalPan}°</Text>
                   <Slider
                     value={gimbalPan}
                     minimumValue={0}
@@ -693,7 +693,7 @@ export function ToolsScreen() {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[10px] font-bold text-muted">Tilt: {gimbalTilt}°</Text>
+                  <Text className="text-xs font-bold text-muted">Tilt: {gimbalTilt}°</Text>
                   <Slider
                     value={gimbalTilt}
                     minimumValue={0}
@@ -834,7 +834,7 @@ export function ToolsScreen() {
       {/* Footer */}
       <View className="mt-6 rounded-lg border border-line bg-card p-4">
         <Text className="text-sm font-semibold text-navy">GENUM Solutions</Text>
-        <Text className="mt-0.5 text-[11px] text-muted">App v{APP_VERSION} · IoT & Remote Controller</Text>
+        <Text className="mt-0.5 text-xs text-muted">App v{APP_VERSION} · IoT & Remote Controller</Text>
       </View>
     </ScrollView>
   )
@@ -850,7 +850,7 @@ function SensorCard({ icon, label, value, color }: {
   return (
     <View className="w-[30%] rounded-xl bg-card border border-line p-3">
       <Feather name={icon as any} size={16} color={color} />
-      <Text className="mt-1 text-[10px] font-bold uppercase text-muted">{label}</Text>
+      <Text className="mt-1 text-xs font-bold uppercase text-muted">{label}</Text>
       <Text className="mt-0.5 font-mono text-sm font-bold" style={{ color }}>{value}</Text>
     </View>
   )

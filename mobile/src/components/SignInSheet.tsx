@@ -263,7 +263,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
               <>
                 <View className="mt-5 flex-row items-center gap-3">
                   <View className="h-px flex-1 bg-line" />
-                  <Text className="text-[11px] font-bold uppercase tracking-widest text-border">or</Text>
+                  <Text className="text-xs font-bold uppercase tracking-widest text-border">or</Text>
                   <View className="h-px flex-1 bg-line" />
                 </View>
                 <Pressable
