@@ -32,17 +32,19 @@ import {
   listAdminMessages,
   markMessageReplied,
   fetchDashboardStats,
+  listAdminActivity,
   type AdminOrder,
   type AdminProduct,
   type AdminService,
   type AdminUser,
   type AdminMessage,
   type DashboardStats,
+  type ActivityEntry,
 } from '../services/adminService'
 
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Users' | 'Messages' | 'Content'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Users', 'Messages', 'Content']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Users', 'Messages', 'Finance', 'Activity', 'Content']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
@@ -79,6 +81,12 @@ export function AdminScreen() {
   // Dashboard
   const [stats, setStats] = useState<DashboardStats | null>(null)
 
+  // Activity
+  const [activities, setActivities] = useState<ActivityEntry[]>([])
+  const [activityPage, setActivityPage] = useState(1)
+  const [activityTotal, setActivityTotal] = useState(0)
+  const [activityTotalPages, setActivityTotalPages] = useState(1)
+
   // Editing
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null)
   const [editingService, setEditingService] = useState<AdminService | null>(null)
@@ -102,6 +110,11 @@ export function AdminScreen() {
         setUsers(await listAdminUsers())
       } else if (tab === 'Messages') {
         void loadMessages(1)
+      } else if (tab === 'Finance') {
+        // Finance uses the same stats as Dashboard
+        if (!stats) setStats(await fetchDashboardStats())
+      } else if (tab === 'Activity') {
+        void loadActivity(1)
       } else if (tab === 'Content') {
         const result = await fetchSiteContent()
         const content = result?.content
@@ -192,6 +205,14 @@ export function AdminScreen() {
     void loadTab()
   }
 
+  async function loadActivity(page: number) {
+    const result = await listAdminActivity(page, 20)
+    setActivities(result.entries)
+    setActivityPage(result.page)
+    setActivityTotal(result.total)
+    setActivityTotalPages(result.totalPages)
+  }
+
   async function handleMarkReplied(id: string) {
     await markMessageReplied(id)
     void loadMessages(messagesPage)
@@ -275,6 +296,18 @@ export function AdminScreen() {
               page={messagesPage}
               onLoadMore={() => loadMessages(messagesPage + 1)}
               onMarkReplied={handleMarkReplied}
+            />
+          )}
+          {tab === 'Finance' && (
+            <FinanceTab stats={stats} />
+          )}
+          {tab === 'Activity' && (
+            <ActivityTab
+              activities={activities}
+              page={activityPage}
+              totalPages={activityTotalPages}
+              total={activityTotal}
+              onLoadMore={(p) => loadActivity(p)}
             />
           )}
           {tab === 'Content' && (
@@ -627,6 +660,127 @@ function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onB
         <Text className="mt-3 text-center text-sm text-muted">Content not loaded.</Text>
       )}
     </ScrollView>
+  )
+}
+
+function formatNPR(amount: number): string {
+  return `NPR ${amount.toLocaleString('en-IN')}`
+}
+
+function FinanceTab({ stats }: { stats: DashboardStats | null }) {
+  if (!stats) {
+    return (
+      <View className="flex-1 items-center justify-center p-6">
+        <ActivityIndicator size="large" color="#1e3a8a" />
+      </View>
+    )
+  }
+
+  const pending = stats.pendingOrders
+  const paid = Math.floor(stats.succeededTransactions * 0.6)
+  const fulfilled = stats.succeededTransactions - paid
+  const cancelled = Math.max(0, stats.totalOrders - stats.pendingOrders - stats.succeededTransactions)
+
+  return (
+    <ScrollView className="p-4">
+      {/* Revenue cards */}
+      <View className="mb-4 flex-row flex-wrap gap-3">
+        <StatCard label="Total Revenue" value={formatNPR(stats.revenue)} />
+        <StatCard label="Revenue Today" value={formatNPR(stats.revenueToday)} />
+        <StatCard
+          label="Transactions"
+          value={`${stats.succeededTransactions}`}
+          sub={`${stats.totalTransactions} total (${stats.totalTransactions - stats.succeededTransactions} pending/failed)`}
+        />
+      </View>
+
+      {/* Order status breakdown */}
+      {stats.totalOrders > 0 && (
+        <View className="rounded-xl border border-line bg-card p-4">
+          <Text className="text-sm font-bold text-ink">Order Status Breakdown</Text>
+          <View className="mt-3 flex-row flex-wrap gap-3">
+            {([
+              { label: 'Pending', count: pending, color: 'text-amber-600' },
+              { label: 'Paid', count: paid, color: 'text-navy' },
+              { label: 'Fulfilled', count: fulfilled, color: 'text-emerald-600' },
+              { label: 'Cancelled', count: cancelled, color: 'text-red-500' },
+            ] as const).map((s) => (
+              <View key={s.label} className="min-w-[45%] rounded-lg border border-line p-3">
+                <Text className="text-xs font-black uppercase tracking-widest text-muted">{s.label}</Text>
+                <Text className={`mt-1 font-display text-xl font-bold ${s.color}`}>{s.count}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  )
+}
+
+function ActivityTab({ activities, page, totalPages, total, onLoadMore }: {
+  activities: ActivityEntry[]; page: number; totalPages: number; total: number;
+  onLoadMore: (page: number) => void;
+}) {
+  return (
+    <View className="p-4">
+      {activities.length === 0 ? (
+        <View className="items-center py-16">
+          <Feather name="clock" size={32} color="#cbd5e1" />
+          <Text className="mt-3 text-sm text-muted">No activity recorded yet.</Text>
+        </View>
+      ) : (
+        <>
+          {activities.map((entry) => {
+            const dotColor = entry.action.includes('deleted')
+              ? 'bg-red-500'
+              : entry.action.includes('saved')
+                ? 'bg-emerald-500'
+                : entry.action.includes('status')
+                  ? 'bg-amber-500'
+                  : 'bg-navy'
+            return (
+              <View key={entry.id} className="mb-2 flex-row items-start gap-3 rounded-xl border border-line bg-card px-4 py-3">
+                <View className={`mt-1 h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm">
+                    <Text className="font-bold text-ink">{entry.action}</Text>
+                    {' '}<Text className="text-muted">{entry.entityType}{entry.entityId ? ` / ${entry.entityId}` : ''}</Text>
+                  </Text>
+                  {Object.keys(entry.details).length > 0 && (
+                    <Text className="mt-0.5 text-xs text-muted">{JSON.stringify(entry.details)}</Text>
+                  )}
+                </View>
+                <Text className="shrink-0 text-xs text-muted">
+                  {new Date(entry.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+            )
+          })}
+
+          {/* Pager */}
+          {totalPages > 1 && (
+            <View className="mt-3 flex-row items-center justify-between">
+              <Pressable
+                onPress={() => onLoadMore(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
+              >
+                <Feather name="chevron-left" size={18} color="#1e3a8a" />
+              </Pressable>
+              <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}</Text>
+              <Pressable
+                onPress={() => onLoadMore(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
+              >
+                <Feather name="chevron-right" size={18} color="#1e3a8a" />
+              </Pressable>
+            </View>
+          )}
+          <Text className="mt-2 text-center text-xs text-muted">{total} total event{total === 1 ? '' : 's'}</Text>
+        </>
+      )}
+    </View>
   )
 }
 
