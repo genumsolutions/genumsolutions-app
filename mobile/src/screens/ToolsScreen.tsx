@@ -49,6 +49,7 @@ export function ToolsScreen() {
   const [pidOut, setPidOut] = useState(0)
   const [pidOff, setPidOff] = useState(0)
   const [relays, setRelays] = useState<Record<number, boolean>>({})
+  const [useJoystick, setUseJoystick] = useState(false)
 
   // Drone controls
   const [gimbalPan, setGimbalPan] = useState(90)
@@ -340,7 +341,28 @@ export function ToolsScreen() {
 
       {/* Controls */}
       <View className={`mt-4 ${!canControl ? 'opacity-40' : ''}`}>
-        {/* Drive controls (d-pad, speed, servo, PID, start/stop) */}
+        {/* Input mode toggle (only for robocar categories with drive controls) */}
+        {!isDrone && activeCategory === 'robocar' && (
+          <View className="mb-3 flex-row items-center justify-between rounded-xl border border-line bg-card px-4 py-3">
+            <Text className="text-xs font-bold text-muted">Control mode</Text>
+            <View className="flex-row gap-2">
+              <Pressable
+                onPress={() => setUseJoystick(false)}
+                className={`rounded-full px-3 py-1.5 ${!useJoystick ? 'bg-navy' : 'border border-line bg-surface'}`}
+              >
+                <Text className={`text-xs font-bold ${!useJoystick ? 'text-white' : 'text-muted'}`}>D-pad</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setUseJoystick(true)}
+                className={`rounded-full px-3 py-1.5 ${useJoystick ? 'bg-navy' : 'border border-line bg-surface'}`}
+              >
+                <Text className={`text-xs font-bold ${useJoystick ? 'text-white' : 'text-muted'}`}>Joystick</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Drive controls (d-pad or joysticks, speed, servo, PID, start/stop) */}
         <DriveControls
           canControl={canControl}
           isDrone={isDrone}
@@ -351,6 +373,7 @@ export function ToolsScreen() {
           pidKi={pidKi}
           pidKd={pidKd}
           pidOut={pidOut}
+          useJoystick={useJoystick}
           onDirection={handleDirection}
           onSpeed={handleSpeed}
           onServo={handleServo}
