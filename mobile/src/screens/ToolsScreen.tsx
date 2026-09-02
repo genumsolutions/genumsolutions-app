@@ -629,9 +629,10 @@ export function ToolsScreen() {
             {/* Altitude control */}
             <View className="rounded-xl border border-line bg-surface p-4">
               <View className="flex-row items-center justify-between">
-                <Text className="text-xs font-bold uppercase tracking-wide text-border">
-                  <Feather name="arrow-up" size={12} /> Altitude (m)
-                </Text>
+                <View className="flex-row items-center gap-1">
+                  <Feather name="arrow-up" size={12} color="#94a3b8" />
+                  <Text className="text-xs font-bold uppercase tracking-wide text-border">Altitude (m)</Text>
+                </View>
                 <Text className="font-mono text-sm font-bold text-navy">{targetAltitude}m</Text>
               </View>
               <Slider
@@ -672,9 +673,10 @@ export function ToolsScreen() {
 
             {/* Gimbal control */}
             <View className="mt-4 rounded-xl border border-line bg-surface p-4">
-              <Text className="text-xs font-bold uppercase tracking-wide text-border">
-                <Feather name="video" size={12} /> Camera Gimbal
-              </Text>
+              <View className="flex-row items-center gap-1">
+                <Feather name="video" size={12} color="#94a3b8" />
+                <Text className="text-xs font-bold uppercase tracking-wide text-border">Camera Gimbal</Text>
+              </View>
               <View className="mt-3 flex-row gap-4">
                 <View className="flex-1">
                   <Text className="text-[10px] font-bold text-muted">Pan: {gimbalPan}°</Text>
@@ -754,9 +756,10 @@ export function ToolsScreen() {
         {/* === SENSOR GRID for non-robocar categories === */}
         {isNonRobocar && (
           <View className="mt-4 rounded-xl border border-line bg-surface p-4">
-            <Text className="text-xs font-bold uppercase tracking-wide text-border">
-              <Feather name="activity" size={12} /> Live Sensors
-            </Text>
+            <View className="flex-row items-center gap-1">
+              <Feather name="activity" size={12} color="#94a3b8" />
+              <Text className="text-xs font-bold uppercase tracking-wide text-border">Live Sensors</Text>
+            </View>
             <View className="mt-3 flex-row flex-wrap gap-2">
               <SensorCard
                 icon="thermometer"
