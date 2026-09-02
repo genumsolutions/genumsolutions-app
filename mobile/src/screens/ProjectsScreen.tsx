@@ -284,25 +284,25 @@ export function ProjectsScreen() {
                 </Text>
                 <View className="mt-2 flex-row items-center justify-between gap-2">
                   <Text className="shrink text-xs font-black text-navy">{item.priceLabel}</Text>
-                  {quoteOnly ? (
-                    <Pressable
-                      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-                      accessibilityLabel={`View details for ${item.name}`}
-                      className="rounded-full bg-navy px-3 py-1.5"
-                    >
-                      <Text className="text-[10px] font-black text-white">View details</Text>
-                    </Pressable>
-                  ) : (
-                    <Pressable
-                      onPress={() => handleAdd(item)}
-                      accessibilityLabel={`${added ? 'Added' : 'Add'} ${item.name} to build list`}
-                      className={`rounded-full px-3 py-1.5 ${added ? 'bg-emerald-600' : 'bg-navy'}`}
-                    >
-                      <Text className="text-[10px] font-black text-white">
-                        {added ? 'Added ✓' : 'Add'}
-                      </Text>
-                    </Pressable>
-                  )}
+{quoteOnly ? (
+                      <Pressable
+                        onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+                        accessibilityLabel={`View details for ${item.name}`}
+                        className="rounded-full bg-navy px-3 py-1.5"
+                      >
+                        <Text className="text-[10px] font-black text-white">View details</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => navigation.navigate('Tools')}
+                        accessibilityLabel={`Control ${item.name}`},
+                        className={`rounded-full px-3 py-1.5 ${item.productType === 'Project package' ? 'bg-gold' : 'bg-navy'}`}
+                      >
+                        <Text className="text-[10px] font-black text-white">
+                          {item.productType === 'Project package' ? 'Control Device' : 'Add'}
+                        </Text>
+                      </Pressable>
+                    )}
                 </View>
               </View>
             </Pressable>

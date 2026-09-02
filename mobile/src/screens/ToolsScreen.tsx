@@ -13,6 +13,10 @@ import {
   Text,
   TextInput,
   View,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  DeviceEventEmitter,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Slider from '@react-native-community/slider'
@@ -23,6 +27,7 @@ import { bleService, type CarTelemetry } from '../services/bleService'
 import { LOCAL_CAR_MODES, nextMode, type CarMode } from '../config/roboCarCatalog'
 import { PROJECT_CATEGORIES } from '../config/project-catalog'
 import type { RootStackParamList } from '../navigation/types'
+import { supabase } from '../services/supabase'
 
 type Category = typeof PROJECT_CATEGORIES[number]
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Tools'>
@@ -39,7 +44,9 @@ export function ToolsScreen() {
   const [servo, setServo] = useState(90)
   const [telemetry, setTelemetry] = useState<CarTelemetry>({})
   const [driveStatus, setDriveStatus] = useState('Stop')
-  const [wifiUrl, setWifiUrl] = useState('ws://192.168.4.1:81')
+  const [ws, setWs] = useState<WebSocket | null>(null)
+  const [wifiConnected, setWifiConnected] = useState(false)
+  const [wifiUrlValid, setWifiUrlValid] = useState(false)
   const [scanningBle, setScanningBle] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,53 +57,25 @@ export function ToolsScreen() {
   const [pidOff, setPidOff] = useState(0)
   const [relays, setRelays] = useState<Record<number, boolean>>({})
   const [hasBeenConnected, setHasBeenConnected] = useState(false)
+  const [projectPackage, setProjectPackage] = useState(null)
+  const [loadingProject, setLoadingProject] = useState(false)
 
   const mountedRef = useRef(true)
 
-  useEffect(() => {
-    mountedRef.current = true
-    const unsubTelemetry = bleService.onTelemetry((t) => {
-      if (!mountedRef.current) return
-      setTelemetry((prev) => ({ ...prev, ...t }))
-      if (t.mode) {
-        const mode = LOCAL_CAR_MODES.find((m) => m.token === t.mode)
-        if (mode) setActiveMode(mode)
-      }
-      if (t.status) setDriveStatus(t.status)
-    })
-    const unsubStatus = bleService.onStatus((kind, msg) => {
-      if (!mountedRef.current) return
-      if (kind === 'connected') {
-        setConnected(true)
-        setHasBeenConnected(true)
-        setDeviceName(bleService.deviceName ?? 'Device')
-        setConnecting(false)
-        void bleService.requestState()
-      }
-      if (kind === 'disconnected') {
-        setConnected(false)
-        setDeviceName('')
-        setConnecting(false)
-      }
-      if (kind === 'error') {
-        setError(msg ?? 'Connection failed')
-        setConnecting(false)
-      }
-    })
-    return () => {
-      mountedRef.current = false
-      unsubTelemetry()
-      unsubStatus()
-    }
-  }, [])
+  // BLE telemetry/status listeners removed from mount to prevent crashes on
+  // devices without BLE support. Control actions are gated by `connected`
+  // state and will only transmit when a car is actively connected.
 
   const handleScan = useCallback(async () => {
     setScanningBle(true)
     setError(null)
     try {
       const found = await bleService.scan(8)
-      if (mountedRef.current) {
+      if (found.length > 0) {
         setDevices(found)
+        setScanningBle(false)
+      } else {
+        setError('No BLE devices found. Is BLE enabled on your ESP32?')
         setScanningBle(false)
       }
     } catch (e) {
@@ -112,6 +91,21 @@ export function ToolsScreen() {
     setError(null)
     try {
       await bleService.connect(deviceId)
+      setConnected(true)
+      setDeviceName(bleService.deviceName ?? 'Device')
+      setConnecting(false)
+      // Start listening for telemetry after connect
+      bleService.onTelemetry((telemetry) => {
+        if (telemetry.speed != null) setTelemetry(prev => ({ ...prev, speed: telemetry.speed }))
+        if (telemetry.mode) setTelemetry(prev => ({ ...prev, mode: telemetry.mode }))
+        if (telemetry.status) setTelemetry(prev => ({ ...prev, status: telemetry.status }))
+        if (telemetry.angle != null) setTelemetry(prev => ({ ...prev, angle: telemetry.angle }))
+        if (telemetry.kp != null) setTelemetry(prev => ({ ...prev, kp: telemetry.kp }))
+        if (telemetry.ki != null) setTelemetry(prev => ({ ...prev, ki: telemetry.ki }))
+        if (telemetry.kd != null) setTelemetry(prev => ({ ...prev, kd: telemetry.kd }))
+        if (telemetry.out != null) setTelemetry(prev => ({ ...prev, out: telemetry.out }))
+        if (telemetry.off != null) setTelemetry(prev => ({ ...prev, off: telemetry.off }))
+      })
     } catch (e) {
       if (mountedRef.current) {
         setError(e instanceof Error ? e.message : 'Connect failed')
@@ -120,18 +114,90 @@ export function ToolsScreen() {
     }
   }, [])
 
+  const handleWifiConnect = useCallback(async () => {
+    setError(null)
+    if (!wifiUrl || wifiUrl === 'ws://192.168.4.1:81') {
+      setError('Please enter a valid WiFi URL')
+      return
+    }
+    setConnecting(true)
+    try {
+      const wsUrl = wifiUrl.startsWith('ws://') || wifiUrl.startsWith('wss://') ? wifiUrl : `ws://${wifiUrl}`
+      const ws = new WebSocket(wsUrl)
+      setWs(ws)
+      ws.onopen = () => {
+        setWifiConnected(true)
+        setConnecting(false)
+      }
+      ws.onmessage = (event) => {
+        const data = event.data
+        // Try to parse as telemetry
+        try {
+          const json = JSON.parse(data)
+          if (json.telemetry) {
+            setTelemetry(json.telemetry)
+          }
+        } catch {
+          // Ignore non-JSON messages
+        }
+      }
+      ws.onerror = (error) => {
+        setError('WiFi connection error')
+        setWifiConnected(false)
+        setConnecting(false)
+      }
+      ws.onclose = () => {
+        setWifiConnected(false)
+        setError('WiFi connection closed')
+        setConnecting(false)
+      }
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : 'WiFi connect failed')
+        setConnecting(false)
+      }
+    }
+  }, [wifiUrl, connecting])
+
+  const handleWifiDisconnect = useCallback(() => {
+    if (ws) {
+      ws.close()
+      setWs(null)
+    }
+    setWifiConnected(false)
+    setError(null)
+  }, [ws])
+
   const handleDisconnect = useCallback(async () => {
     await bleService.disconnect()
+    setConnected(false)
+    setDeviceName('')
+    setRelays({})
+    setTelemetry({})
+    setDriveStatus('Stop')
+    setSpeed(170)
+    setServo(90)
+    setPidKp(12.0)
+    setPidKi(3.0)
+    setPidKd(1.0)
+    setPidOut(0)
+    setPidOff(0)
   }, [])
 
   const handleApplySpeed = useCallback((value: number) => {
     setSpeed(value)
     void bleService.setSpeed(value)
+    if (wifiConnected && ws) {
+      ws.setSpeed?.(value) || ws.send(`SPD${Math.round(value)}`)
+    }
   }, [])
 
   const handleApplyServo = useCallback((value: number) => {
     setServo(value)
     void bleService.setServo(value)
+    if (wifiConnected && ws) {
+      ws.setServo?.(value) || ws.send(`SERVO${Math.round(value)}`)
+    }
   }, [])
 
   const applyPid = useCallback(
@@ -144,20 +210,27 @@ export function ToolsScreen() {
       if (key === 'out') setPidOut(value)
       if (key === 'off') setPidOff(value)
       void bleService.calibratePid(next)
+      if (wifiConnected && ws) {
+        ws.send(`CFG;Kp:${value.toFixed(2)};Ki:${value.toFixed(3)};Kd:${value.toFixed(3)};OUT:${value.toFixed(0)};OFF:${value.toFixed(2)}`)
+      }
     },
-    [pidKp, pidKi, pidKd, pidOut, pidOff]
+    [pidKp, pidKi, pidKd, pidOut, pidOff, wifiConnected, ws]
   )
 
   const selectMode = useCallback(
     (m: CarMode) => {
       setActiveMode(m)
       setDriveStatus('Stop')
-      if (connected) {
+      if (connected || wifiConnected) {
         void bleService.sendLine(m.token)
         void bleService.sendLine('S')
       }
+      if (wifiConnected && ws) {
+        ws.send(m.token)
+        ws.send('S')
+      }
     },
-    [connected]
+    [connected, wifiConnected, ws]
   )
 
   const cycleMode = useCallback(() => {
@@ -169,27 +242,42 @@ export function ToolsScreen() {
     (d: 'F' | 'B' | 'L' | 'R' | 'S') => {
       if (d === 'S') {
         setDriveStatus('Stop')
-        void bleService.sendLine('S')
+        if (connected) {
+          void bleService.sendLine('S')
+        }
+        if (wifiConnected && ws) {
+          ws.send('S')
+        }
         return
       }
       setDriveStatus(
         d === 'F' ? 'Forward' : d === 'B' ? 'Backward' : d === 'L' ? 'Left' : 'Right'
       )
-      void bleService.sendLine(d)
+      if (connected) {
+        void bleService.sendLine(d)
+      }
+      if (wifiConnected && ws) {
+        ws.send(d)
+      }
     },
-    []
+    [connected, wifiConnected, ws]
   )
 
-  const toggleRelay = useCallback((i: number) => {
+const toggleRelay = useCallback((i: number) => {
     setRelays((prev) => {
       const next = !prev[i]
       void bleService.sendLine(`OUT${i}:${next ? 1 : 0}`)
+      if (wifiConnected && ws) {
+        ws.send(`OUT${i}:${next ? 1 : 0}`)
+      }
       return { ...prev, [i]: next }
     })
+  }, [wifiConnected, ws])
   }, [])
 
   const canControl =
-    connected && (activeMode.transport.includes('ble') || activeMode.transport.includes('wifi'))
+    (connected && (activeMode.transport.includes('ble') || activeMode.transport.includes('wifi'))) ||
+    (wifiConnected && activeMode.transport.includes('wifi'))
 
   return (
     <ScrollView className="flex-1 bg-mist" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
@@ -286,18 +374,21 @@ export function ToolsScreen() {
             <TextInput
               value={wifiUrl}
               onChangeText={setWifiUrl}
-              editable={!connected}
+              editable={!connected && !wifiConnected}
               placeholder="ws://192.168.4.1:81"
               className="mt-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
             />
             <Pressable
-              onPress={() => {/* WiFi connect via native transport not yet wired */ setError('WiFi connect needs native transport bridge') }}
-              disabled={connecting || connected}
+              onPress={handleWifiConnect}
+              disabled={connecting || connected || wifiConnected}
               className="mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-navy px-5 text-xs font-black text-white disabled:opacity-60"
             >
               <Feather name="wifi" size={14} />
-              Connect WiFi
+              {wifiConnected ? 'Connected' : 'Connect WiFi'}
             </Pressable>
+            {wifiConnected && (
+              <Pressable onPress={handleWifiDisconnect} className="mt-2 text-sm font-bold text-gold underline">Disconnect WiFi</Pressable>
+            )}
           </View>
         </View>
 
@@ -343,14 +434,16 @@ export function ToolsScreen() {
       {/* OLED display */}
       <View className="mt-4 rounded-xl bg-slate-900 p-3 shadow-inner">
         <View className="flex-row items-center justify-between border-b border-slate-700 px-2 pb-2">
-          <Text className="font-mono text-[11px] font-bold text-emerald-400">{activeMode.token}</Text>
-          <Text className="font-mono text-[10px] text-muted">{connected ? 'LINK' : '---'}</Text>
+          <Text className="font-mono text-[11px] font-bold text-emerald-400">
+            {connected ? deviceName : wifiConnected ? 'WiFi' : '---'}
+          </Text>
+          <Text className="font-mono text-[10px] text-muted">{connected ? 'LINK' : wifiConnected ? 'WS' : '---'}</Text>
         </View>
         <View className="mt-2 space-y-1 px-2 font-mono text-sm text-emerald-300">
           <Text>
             {activeMode.name.split('·')[0].trim()} {activeMode.controls.includes('drive-2wd1m') ? `STEER ${servo}` : `SPD ${speed}`}
           </Text>
-          <Text>{connected ? driveStatus : 'NO LINK'}</Text>
+          <Text>{connected ? driveStatus : wifiConnected ? 'CONNECTED' : 'NO LINK'}</Text>
           {telemetry.angle != null && (
             <Text className="text-emerald-400">ANGLE {telemetry.angle.toFixed(1)}</Text>
           )}
