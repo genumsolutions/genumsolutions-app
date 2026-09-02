@@ -14,6 +14,8 @@ export type ControlCapability =
   | 'sensor'
   | 'weblink'
   | 'slider'
+  | 'gimbal'
+  | 'altitude'
 
 export type ProjectCategory = {
   slug: string
@@ -65,7 +67,8 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
     tagline: 'Flight-controller and telemetry builds.',
     description: 'Flight-controller setup, motor/ESC integration, and telemetry links.',
     hardware: ['ESP32 / STM32', 'Flight cameras', 'ESC + brushless motors', 'GPS & IMU'],
-    capabilities: ['sensor', 'slider'],
+    capabilities: ['sensor', 'slider', 'gimbal', 'altitude'],
+    carType: 'drone',
   },
 ]
 
