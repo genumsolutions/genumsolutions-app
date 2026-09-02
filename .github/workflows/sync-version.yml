@@ -1,0 +1,39 @@
+# =====================================================================
+# Sync app version to Supabase release.json on every push to main.
+#
+# This reads the version from app.json (single source of truth) and
+# uploads the manifest to the public Supabase bucket. The website
+# (AppBanner + /app page) and the native app both read this manifest.
+#
+# Requires secrets:
+#   SUPABASE_URL              e.g. https://xxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY Supabase -> Settings -> API (service_role)
+# =====================================================================
+name: Sync Version to Supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/app.json'  # Only trigger when version changes
+  workflow_dispatch:         # Allow manual trigger
+
+jobs:
+  sync-manifest:
+    name: Upload release manifest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync version to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sync-version.mjs

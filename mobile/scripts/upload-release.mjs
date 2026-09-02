@@ -20,11 +20,16 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Current release. Update on every publish (keep in sync with app.json
-// version / src/config/site.ts / src/config/update.ts).
-const VERSION = '1.5.3';
-const VERSION_CODE = 11;
-const APK_SIZE_MB = '32.5 MB';
+// ── Read version from app.json (single source of truth) ────────────
+const appJson = JSON.parse(readFileSync(resolve(rootDir, 'app.json'), 'utf8'));
+const expo = appJson.expo;
+const VERSION = expo.version;
+const VERSION_CODE = expo.android?.versionCode;
+if (!VERSION || !VERSION_CODE) {
+  console.error('Error: Could not read version/versionCode from app.json');
+  process.exit(1);
+}
+const APK_SIZE_MB = '32.5 MB'; // Updated after APK upload with actual size
 
 const defaultApk = resolve(
   rootDir,
@@ -102,7 +107,8 @@ async function main() {
   await ensureBucket(url, serviceKey);
 
   const body = readFileSync(apkPath);
-  console.log(`Uploading ${apkPath} (${(body.length / 1024 / 1024).toFixed(1)} MB) to ${BUCKET}/${FILE_NAME} ...`);
+  const actualSizeMb = +(body.length / 1024 / 1024).toFixed(1);
+  console.log(`Uploading ${apkPath} (${actualSizeMb} MB) to ${BUCKET}/${FILE_NAME} ...`);
 
   const upload = await fetch(`${url}/storage/v1/object/${BUCKET}/${FILE_NAME}`, {
     method: 'POST',
@@ -129,11 +135,12 @@ async function main() {
       version: VERSION,
       version_code: VERSION_CODE,
       apkUrl: publicUrl,
-      size_mb: 32.5,
-      sizeLabel: APK_SIZE_MB,
+      size_mb: actualSizeMb,
+      sizeLabel: `${actualSizeMb} MB`,
       releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
       appsPagePath: '/app',
       notes: 'Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates.',
+      updated_at: new Date().toISOString(),
     },
     null,
     2,
@@ -144,7 +151,7 @@ async function main() {
       Authorization: `Bearer ${serviceKey}`,
       'Content-Type': 'application/json',
       'x-upsert': 'true',
-      'cache-control': '300',
+      'cache-control': '0',  // No cache — website must always get fresh
     },
     body: manifest,
   });
