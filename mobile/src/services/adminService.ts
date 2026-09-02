@@ -71,10 +71,23 @@ export type DashboardStats = {
   totalOrders: number
   pendingOrders: number
   revenue: number
+  revenueToday: number
   totalProducts: number
   lowStockProducts: number
   totalMessages: number
   unreadMessages: number
+  totalTransactions: number
+  succeededTransactions: number
+}
+
+export type ActivityEntry = {
+  id: string
+  userId: string | null
+  action: string
+  entityType: string
+  entityId: string | null
+  details: Record<string, unknown>
+  createdAt: string
 }
 
 // --- Orders ---
@@ -215,5 +228,40 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   const lowStockProducts = (products ?? []).filter((p: any) => p.stock !== null && p.stock < 5).length
   const totalMessages = messages?.length ?? 0
   const cartSummary = Array.isArray(cartStats) ? cartStats[0] : cartStats
-  return { totalUsers, totalOrders, pendingOrders, revenue: 0, totalProducts, lowStockProducts, totalMessages, unreadMessages: totalMessages, totalCartItems: Number(cartSummary?.total_cart_items ?? 0), activeCarts: Number(cartSummary?.active_carts ?? 0) }
+  // Calculate revenue from orders
+  const allOrders = (orders ?? []) as any[]
+  const revenue = allOrders
+    .filter((o: any) => o.status === 'paid' || o.status === 'fulfilled')
+    .reduce((sum: number, o: any) => sum + (Number(o.total_npr) || 0), 0)
+  const today = new Date().toISOString().slice(0, 10)
+  const revenueToday = allOrders
+    .filter((o: any) => (o.status === 'paid' || o.status === 'fulfilled') && o.created_at?.startsWith(today))
+    .reduce((sum: number, o: any) => sum + (Number(o.total_npr) || 0), 0)
+  const succeededTransactions = allOrders.filter((o: any) => o.status === 'paid' || o.status === 'fulfilled').length
+
+  return {
+    totalUsers, totalOrders, pendingOrders, revenue, revenueToday,
+    totalProducts, lowStockProducts, totalMessages, unreadMessages: totalMessages,
+    totalCartItems: Number(cartSummary?.total_cart_items ?? 0),
+    activeCarts: Number(cartSummary?.active_carts ?? 0),
+    totalTransactions: totalOrders,
+    succeededTransactions,
+  }
+}
+
+// --- Activity log ---
+
+export async function listAdminActivity(page = 1, limit = 20): Promise<{ entries: ActivityEntry[]; total: number; page: number; totalPages: number }> {
+  const { data, error, count } = await supabase
+    .from('admin_activity')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range((page - 1) * limit, page * limit - 1)
+  if (error) throw error
+  return {
+    entries: (data ?? []) as ActivityEntry[],
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  }
 }
