@@ -38,7 +38,8 @@ const defaultApk = resolve(
 );
 
 const BUCKET = 'app-releases';
-const FILE_NAME = 'genum-solutions-latest.apk';
+const LATEST_FILE = 'genum-solutions-latest.apk';
+const VERSIONED_FILE = `genum-solutions-${VERSION}.apk`;
 const MANIFEST_NAME = 'release.json';
 const CONTENT_TYPE = 'application/vnd.android.package-archive';
 
@@ -108,33 +109,38 @@ async function main() {
 
   const body = readFileSync(apkPath);
   const actualSizeMb = +(body.length / 1024 / 1024).toFixed(1);
-  console.log(`Uploading ${apkPath} (${actualSizeMb} MB) to ${BUCKET}/${FILE_NAME} ...`);
-
-  const upload = await fetch(`${url}/storage/v1/object/${BUCKET}/${FILE_NAME}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serviceKey}`,
-      'Content-Type': CONTENT_TYPE,
-      'x-upsert': 'true',
-      'cache-control': '3600',
-    },
-    body,
-  });
-  if (!upload.ok) {
-    const text = await upload.text().catch(() => '');
-    throw new Error(`Upload failed: ${upload.status} ${text}`);
+  // Upload as both versioned and latest filenames
+  for (const fileName of [VERSIONED_FILE, LATEST_FILE]) {
+    console.log(`Uploading ${apkPath} (${actualSizeMb} MB) to ${BUCKET}/${fileName} ...`);
+    const upload = await fetch(`${url}/storage/v1/object/${BUCKET}/${fileName}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': CONTENT_TYPE,
+        'x-upsert': 'true',
+        'cache-control': '3600',
+      },
+      body,
+    });
+    if (!upload.ok) {
+      const text = await upload.text().catch(() => '');
+      throw new Error(`Upload failed for ${fileName}: ${upload.status} ${text}`);
+    }
   }
 
-  const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${FILE_NAME}`;
-  console.log('Uploaded. Public download URL:');
-  console.log(publicUrl);
+  const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${LATEST_FILE}`;
+  const versionedUrl = `${url}/storage/v1/object/public/${BUCKET}/${VERSIONED_FILE}`;
+  console.log('Uploaded. Public download URLs:');
+  console.log('  Latest:', publicUrl);
+  console.log('  Versioned:', versionedUrl);
 
   // Publish the release manifest the native app checks for updates against.
   const manifest = JSON.stringify(
     {
       version: VERSION,
       version_code: VERSION_CODE,
-      apkUrl: publicUrl,
+      apkUrl: versionedUrl,
+      latestApkUrl: publicUrl,
       size_mb: actualSizeMb,
       sizeLabel: `${actualSizeMb} MB`,
       releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
