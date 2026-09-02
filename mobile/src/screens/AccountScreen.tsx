@@ -2,10 +2,12 @@
 // AccountScreen - sign-in state, profile info, orders, admin access,
 // and profile editing. Uses the shared Supabase `orders` table.
 // =====================================================================
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Linking,
   Pressable,
   Text,
   TextInput,
@@ -15,6 +17,12 @@ import { Feather } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import { useApp } from '../context/AppContext'
 import { getMyOrders, updateProfile } from '../services/orderService'
+import { APP_VERSION } from '../config/site'
+import {
+  checkForUpdate,
+  downloadAndInstall,
+  type UpdateState,
+} from '../services/updateService'
 import type { Order } from '../types'
 
 export function AccountScreen() {
@@ -26,6 +34,7 @@ export function AccountScreen() {
   const [name, setName] = useState(user?.name || '')
   const [phone, setPhone] = useState(user?.phone || '')
   const [address, setAddress] = useState(user?.address || '')
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: 'unknown' })
 
   useEffect(() => {
     if (!isSignedIn) return
@@ -43,6 +52,33 @@ export function AccountScreen() {
       setAddress(user.address || '')
     }
   }, [user])
+
+  // Auto-check for updates on mount
+  useEffect(() => {
+    setUpdateState({ status: 'checking' })
+    checkForUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }))
+  }, [])
+
+  const handleCheckUpdate = useCallback(() => {
+    setUpdateState({ status: 'checking' })
+    checkForUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }))
+  }, [])
+
+  const handleDownloadInstall = useCallback(async () => {
+    if (!updateState.apkUrl) return
+    setUpdateState((prev) => ({ ...prev, status: 'downloading' }))
+    try {
+      await downloadAndInstall(updateState.apkUrl)
+      setUpdateState((prev) => ({ ...prev, status: 'installing' }))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Update failed.'
+      Alert.alert('Update failed', msg, [
+        { text: 'Open in browser', onPress: () => Linking.openURL(updateState.apkUrl!) },
+        { text: 'Cancel', style: 'cancel' },
+      ])
+      setUpdateState((prev) => ({ ...prev, status: 'update-available' }))
+    }
+  }, [updateState.apkUrl])
 
   const initials = (user?.name || 'U')
     .split(/\s+/)
@@ -175,6 +211,73 @@ export function AccountScreen() {
       )}
       ListFooterComponent={
         <>
+          {/* ── App version & update check ────────────────────── */}
+          <View className="mt-4 rounded-xl border border-line bg-card p-4">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Feather name="info" size={14} color="#64748b" />
+                <Text className="text-xs font-bold text-muted">App v{APP_VERSION}</Text>
+              </View>
+              {updateState.status === 'checking' && (
+                <ActivityIndicator size="small" color="#1e3a8a" />
+              )}
+            </View>
+
+            {updateState.status === 'up-to-date' && updateState.latestVersion && (
+              <Text className="mt-2 text-xs text-emerald-600 font-medium">
+                ✓ Up to date (latest: v{updateState.latestVersion})
+              </Text>
+            )}
+
+            {updateState.status === 'update-available' && (
+              <View className="mt-3">
+                <Text className="text-xs font-bold text-navy">
+                  Update available: v{updateState.latestVersion}
+                  {updateState.size ? ` (${updateState.size})` : ''}
+                </Text>
+                {updateState.notes && (
+                  <Text className="mt-1 text-xs text-muted" numberOfLines={2}>
+                    {updateState.notes}
+                  </Text>
+                )}
+                <Pressable
+                  onPress={handleDownloadInstall}
+                  className="mt-3 items-center rounded-full bg-navy py-2.5"
+                >
+                  <Text className="text-xs font-black text-white">Download & Install</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {updateState.status === 'downloading' && (
+              <View className="mt-2 flex-row items-center gap-2">
+                <ActivityIndicator size="small" color="#1e3a8a" />
+                <Text className="text-xs text-muted">Downloading update…</Text>
+              </View>
+            )}
+
+            {updateState.status === 'installing' && (
+              <Text className="mt-2 text-xs text-navy font-medium">
+                Installer opened — tap Install on your device.
+              </Text>
+            )}
+
+            {updateState.status === 'error' && (
+              <View className="mt-2 flex-row items-center justify-between">
+                <Text className="text-xs text-red-500">Could not check for updates</Text>
+                <Pressable onPress={handleCheckUpdate}>
+                  <Text className="text-xs font-bold text-navy">Retry</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {updateState.status === 'unknown' && (
+              <Pressable onPress={handleCheckUpdate} className="mt-2">
+                <Text className="text-xs font-bold text-navy">Check for updates</Text>
+              </Pressable>
+            )}
+          </View>
+
           <View className="mt-4 flex-row items-center justify-center gap-3 py-2">
             <Pressable onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}>
               <Text className="text-sm font-bold text-navy underline">Privacy Policy</Text>
