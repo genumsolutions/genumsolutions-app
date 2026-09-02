@@ -66,6 +66,8 @@ export type DriveControlsProps = {
   pidKi: number
   pidKd: number
   pidOut: number
+  /** When true, show dual joysticks instead of d-pad buttons. */
+  useJoystick: boolean
   onDirection: (d: 'F' | 'B' | 'L' | 'R' | 'S') => void
   onSpeed: (v: number) => void
   onServo: (v: number) => void
