@@ -1,13 +1,16 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs: Orders, Products, Services, Users, Messages, Dashboard.
+// Tabs: Dashboard, Orders, Products, Services, Users, Messages, Content.
 // =====================================================================
 import React, { useEffect, useState, useCallback } from 'react'
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
@@ -140,10 +143,22 @@ export function AdminScreen() {
     void loadTab()
   }
 
-  async function handleDeleteProduct(id: string) {
-    if (!window.confirm(`Delete product ${id}?`)) return
-    await deleteAdminProduct(id)
-    void loadTab()
+  function handleDeleteProduct(id: string) {
+    Alert.alert(
+      'Delete Product',
+      `Are you sure you want to delete product ${id.slice(0, 8)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteAdminProduct(id)
+            void loadTab()
+          },
+        },
+      ],
+    )
   }
 
   async function handleSaveService() {
@@ -153,9 +168,22 @@ export function AdminScreen() {
     void loadTab()
   }
 
-  async function handleDeleteService(id: string) {
-    await deleteAdminService(id)
-    void loadTab()
+  function handleDeleteService(id: string) {
+    Alert.alert(
+      'Delete Service',
+      `Are you sure you want to delete this service?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteAdminService(id)
+            void loadTab()
+          },
+        },
+      ],
+    )
   }
 
   async function handleToggleUserRole(user: AdminUser) {
@@ -168,8 +196,6 @@ export function AdminScreen() {
     await markMessageReplied(id)
     void loadMessages(messagesPage)
   }
-
-  const STATUSES = ['pending', 'paid', 'fulfilled', 'cancelled']
 
   return (
     <View className="flex-1 bg-mist">
@@ -277,20 +303,21 @@ export function AdminScreen() {
   )
 }
 
-function ActivityIndicator({ size, color }: { size: number | string; color: string }) {
-  return (
-    <View className="items-center justify-center p-8">
-      <View className="h-8 w-8 rounded-full border-2 border-navy/20 border-t-navy" />
-    </View>
-  )
-}
+// ─── Sub-tabs ────────────────────────────────────────────────────────
 
 function DashboardTab({ stats }: { stats: DashboardStats | null }) {
-  if (!stats) return <View className="p-6"><Text className="text-muted">Loading…</Text></View>
+  if (!stats) {
+    return (
+      <View className="flex-1 items-center justify-center p-6">
+        <ActivityIndicator size="large" color="#1e3a8a" />
+      </View>
+    )
+  }
+
   return (
-    <ScrollView className="p-6 space-y-4">
+    <ScrollView className="p-4">
       <Text className="text-base font-bold text-ink">Dashboard</Text>
-      <View className="grid grid-cols-2 gap-3">
+      <View className="mt-3 flex-row flex-wrap gap-3">
         <StatCard label="Users" value={String(stats.totalUsers)} />
         <StatCard label="Cart items" value={String(stats.totalCartItems)} sub={`${stats.activeCarts} active carts`} />
         <StatCard label="Orders" value={String(stats.totalOrders)} sub={`${stats.pendingOrders} pending`} />
@@ -303,7 +330,7 @@ function DashboardTab({ stats }: { stats: DashboardStats | null }) {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <View className="rounded-xl border border-line bg-card p-4">
+    <View className="w-[47%] rounded-xl border border-line bg-card p-4">
       <Text className="text-[10px] font-black uppercase tracking-widest text-muted">{label}</Text>
       <Text className="mt-2 font-display text-xl font-bold text-ink">{value}</Text>
       {sub && <Text className="mt-1 text-[11px] text-muted">{sub}</Text>}
@@ -318,7 +345,7 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
 }) {
   return (
     <View className="p-4">
-      <View className="flex-row gap-2 mb-4">
+      <View className="mb-4 flex-row gap-2">
         <View className="flex-1">
           <TextInput value={query} onChangeText={onQueryChange} placeholder="Search buyer…" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
         </View>
@@ -327,7 +354,7 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
         </View>
       </View>
       {orders.length === 0 ? (
-        <Text className="text-center text-sm text-muted py-8">No orders found.</Text>
+        <Text className="py-8 text-center text-sm text-muted">No orders found.</Text>
       ) : (
         <>
           {orders.map((o) => (
@@ -337,14 +364,12 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
                   <Text className="text-sm font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()} · NPR {o.totalNpr.toLocaleString('en-IN')}</Text>
                   <Text className="text-xs text-muted">{o.customerName} · {o.email}</Text>
                 </View>
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-[10px] font-bold uppercase text-navy">{o.status}</Text>
-                </View>
+                <Text className="text-[10px] font-bold uppercase text-navy">{o.status}</Text>
               </View>
               <View className="mt-2 flex-row flex-wrap gap-2">
                 {['pending', 'paid', 'fulfilled', 'cancelled'].map((s) => (
-                  <Pressable key={s} onPress={() => onStatusChange(o.id, s)} className={`rounded-full px-3 py-1 text-[10px] font-bold ${o.status === s ? 'bg-navy text-white' : 'border border-line text-muted'}`}>
-                    {s}
+                  <Pressable key={s} onPress={() => onStatusChange(o.id, s)} className={`rounded-full px-3 py-1 ${o.status === s ? 'bg-navy' : 'border border-line'}`}>
+                    <Text className={`text-[10px] font-bold ${o.status === s ? 'text-white' : 'text-muted'}`}>{s}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -363,7 +388,7 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
 
 function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, onDelete }: {
   products: AdminProduct[]; query: string; onQueryChange: (q: string) => void;
-  editing: AdminProduct | null; onEdit: (p: AdminProduct) => void; onSave: () => void; onDelete: (id: string) => void;
+  editing: AdminProduct | null; onEdit: (p: AdminProduct | null) => void; onSave: () => void; onDelete: (id: string) => void;
 }) {
   const filtered = query
     ? products.filter((p) => `${p.name} ${p.sku} ${p.id}`.toLowerCase().includes(query.toLowerCase()))
@@ -373,7 +398,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, 
     <View className="p-4">
       <TextInput value={query} onChangeText={onQueryChange} placeholder="Search by name, SKU, or id…" className="mb-4 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
       {editing ? (
-        <ProductEditor product={editing} onSave={onSave} onCancel={() => onEdit(null as any)} />
+        <ProductEditor product={editing} onSave={onSave} onCancel={() => onEdit(null)} />
       ) : (
         <FlatList
           data={filtered}
@@ -382,11 +407,15 @@ function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, 
             <View className="mb-3 rounded-xl border border-line bg-card p-4">
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm font-bold text-ink">{item.name}</Text>
-                <Text className="text-xs text-navy font-bold">NPR {item.price.toLocaleString('en-IN')}</Text>
+                <Text className="text-xs font-bold text-navy">NPR {item.price.toLocaleString('en-IN')}</Text>
               </View>
               <View className="mt-2 flex-row gap-2">
-                <Pressable onPress={() => onEdit(item)} className="rounded-full px-3 py-1 bg-navy text-xs font-bold text-white"><Text>Edit</Text></Pressable>
-                <Pressable onPress={() => onDelete(item.id)} className="rounded-full px-3 py-1 border border-red-200 text-xs font-bold text-red-600"><Text>Delete</Text></Pressable>
+                <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1">
+                  <Text className="text-xs font-bold text-white">Edit</Text>
+                </Pressable>
+                <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-red-200 px-3 py-1">
+                  <Text className="text-xs font-bold text-red-600">Delete</Text>
+                </Pressable>
               </View>
             </View>
           )}
@@ -415,8 +444,12 @@ function ProjectTab({ title, products, onEdit, onDelete }: {
             <Text className="mt-1 text-xs leading-5 text-muted">{item.description || item.note}</Text>
             {item.specs.length > 0 ? <Text className="mt-2 text-[11px] text-muted">{item.specs.join(' · ')}</Text> : null}
             <View className="mt-3 flex-row gap-2">
-              <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1"><Text className="text-xs font-bold text-white">Edit</Text></Pressable>
-              <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-red-200 px-3 py-1"><Text className="text-xs font-bold text-red-600">Delete</Text></Pressable>
+              <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1">
+                <Text className="text-xs font-bold text-white">Edit</Text>
+              </Pressable>
+              <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-red-200 px-3 py-1">
+                <Text className="text-xs font-bold text-red-600">Delete</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -433,9 +466,9 @@ function ProductEditor({ product, onSave, onCancel }: { product: AdminProduct; o
 
   return (
     <View className="mb-4 rounded-xl border border-line bg-card p-4">
-      <Text className="text-sm font-bold text-ink mb-3">Edit Product</Text>
+      <Text className="mb-3 text-sm font-bold text-ink">Edit Product</Text>
       <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
-      <View className="flex-row gap-3 mb-3">
+      <View className="mb-3 flex-row gap-3">
         <View className="flex-1">
           <TextInput value={price} onChangeText={setPrice} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Price" />
         </View>
@@ -445,18 +478,22 @@ function ProductEditor({ product, onSave, onCancel }: { product: AdminProduct; o
       </View>
       <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
       <View className="flex-row gap-3">
-        <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2"><Text className="text-xs font-black text-ink">Save</Text></Pressable>
-        <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2"><Text className="text-xs font-black text-ink">Cancel</Text></Pressable>
+        <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2">
+          <Text className="text-xs font-black text-ink">Save</Text>
+        </Pressable>
+        <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2">
+          <Text className="text-xs font-black text-ink">Cancel</Text>
+        </Pressable>
       </View>
     </View>
   )
 }
 
 function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
-  services: AdminService[]; editing: AdminService | null; onEdit: (s: AdminService) => void; onSave: () => void; onDelete: (id: string) => void;
+  services: AdminService[]; editing: AdminService | null; onEdit: (s: AdminService | null) => void; onSave: () => void; onDelete: (id: string) => void;
 }) {
   if (editing) {
-    return <ServiceEditor service={editing} onSave={onSave} onCancel={() => onEdit(null as any)} />
+    return <ServiceEditor service={editing} onSave={onSave} onCancel={() => onEdit(null)} />
   }
   return (
     <FlatList
@@ -469,9 +506,14 @@ function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
             <Text className="text-sm font-bold text-ink">{item.name}</Text>
             <Text className={`text-[10px] font-bold uppercase ${item.active ? 'text-emerald-600' : 'text-red-500'}`}>{item.active ? 'active' : 'inactive'}</Text>
           </View>
+          <Text className="mt-1 text-xs leading-5 text-muted">{item.description}</Text>
           <View className="mt-2 flex-row gap-2">
-            <Pressable onPress={() => onEdit(item)} className="rounded-full px-3 py-1 bg-navy text-xs font-bold text-white"><Text>Edit</Text></Pressable>
-            <Pressable onPress={() => onDelete(item.id)} className="rounded-full px-3 py-1 border border-red-200 text-xs font-bold text-red-600"><Text>Delete</Text></Pressable>
+            <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1">
+              <Text className="text-xs font-bold text-white">Edit</Text>
+            </Pressable>
+            <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-red-200 px-3 py-1">
+              <Text className="text-xs font-bold text-red-600">Delete</Text>
+            </Pressable>
           </View>
         </View>
       )}
@@ -486,16 +528,24 @@ function ServiceEditor({ service, onSave, onCancel }: { service: AdminService; o
 
   return (
     <View className="mb-4 rounded-xl border border-line bg-card p-4">
-      <Text className="text-sm font-bold text-ink mb-3">Edit Service</Text>
+      <Text className="mb-3 text-sm font-bold text-ink">Edit Service</Text>
       <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
       <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
-      <View className="flex-row items-center gap-3 mb-3">
+      <View className="mb-3 flex-row items-center gap-3">
         <Text className="text-sm font-semibold text-ink">Active</Text>
-        <View className={`h-6 w-11 rounded-full ${active ? 'bg-navy' : 'bg-mist'}`} />
+        <Switch
+          value={active}
+          onValueChange={setActive}
+          trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }}
+        />
       </View>
       <View className="flex-row gap-3">
-        <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2"><Text className="text-xs font-black text-ink">Save</Text></Pressable>
-        <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2"><Text className="text-xs font-black text-ink">Cancel</Text></Pressable>
+        <Pressable onPress={() => { onSave() }} className="rounded-full bg-gold px-5 py-2">
+          <Text className="text-xs font-black text-ink">Save</Text>
+        </Pressable>
+        <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2">
+          <Text className="text-xs font-black text-ink">Cancel</Text>
+        </Pressable>
       </View>
     </View>
   )
@@ -515,9 +565,11 @@ function UsersTab({ users, onToggleRole }: { users: AdminUser[]; onToggleRole: (
               <Text className="text-xs text-muted">{item.email}</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <Text className={`text-[10px] font-bold uppercase ${item.role === 'admin' ? 'text-gold bg-ink px-2 py-0.5' : 'text-navy bg-sky px-2 py-0.5'}`}>{item.role}</Text>
-              <Pressable onPress={() => onToggleRole(item)} className="rounded-full px-3 py-1 border border-line text-xs font-bold text-ink">
-                {item.role === 'admin' ? 'Revoke' : 'Make admin'}
+              <Text className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>{item.role}</Text>
+              <Pressable onPress={() => onToggleRole(item)} className="rounded-full border border-line px-3 py-1">
+                <Text className="text-xs font-bold text-ink">
+                  {item.role === 'admin' ? 'Revoke' : 'Make admin'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -537,7 +589,7 @@ function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onB
     <ScrollView className="p-4">
       <Text className="text-base font-bold text-ink">Home page content</Text>
       <Text className="mt-1 text-xs leading-5 text-muted">
-        Edit the hero title and body shown on the app home screen and the website homepage. Saved via the site-content edge function.
+        Edit the hero title and body shown on the app home screen and the website homepage.
       </Text>
 
       <View className="mt-4 rounded-xl border border-line bg-card p-4">
@@ -584,15 +636,15 @@ function MessagesTab({ messages, page, onLoadMore, onMarkReplied }: {
   return (
     <View className="p-4">
       {messages.length === 0 ? (
-        <Text className="text-center text-sm text-muted py-8">No messages.</Text>
+        <Text className="py-8 text-center text-sm text-muted">No messages.</Text>
       ) : (
         <>
           {messages.map((m) => (
-            <View key={m.id} className={`mb-3 rounded-xl border border-line bg-card p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy' : ''}`}>
+            <View key={m.id} className={`mb-3 rounded-xl border bg-card p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy border border-line' : 'border-line'}`}>
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-muted">· {m.email}</Text></Text>
                 {m.status === 'new'
-                  ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full px-3 py-1 border border-line text-xs font-bold text-navy"><Text>Mark replied</Text></Pressable>
+                  ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full border border-line px-3 py-1"><Text className="text-xs font-bold text-navy">Mark replied</Text></Pressable>
                   : <Text className="text-[10px] font-bold uppercase text-emerald-600">Replied</Text>
                 }
               </View>

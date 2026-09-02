@@ -22,7 +22,7 @@ export type RootStackParamList = {
   Projects: undefined;
   Contact: undefined;
   About: undefined;
-  Tools: undefined;
+  Tools: { category?: string } | undefined;
   Admin: undefined;
   Journal: undefined;
   Printing: undefined;
