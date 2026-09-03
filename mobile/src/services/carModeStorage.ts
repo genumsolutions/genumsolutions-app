@@ -1,14 +1,20 @@
 // =====================================================================
 // carModeStorage - AsyncStorage persistent store for car modes.
 //
-// Keeps a local copy of the car modes catalogue so the app can render
-// mode information even when the WebView is offline or the website is
-// unreachable. The data is seeded from the website's robo-car-catalog.ts
-// and updated when the app comes back online.
+// Keeps a cached copy of the car-mode catalogue so the app can render
+// mode information offline. The cache is refreshed from the shared
+// `robo_car_modes` Supabase table (DB-first, via services/carModeService)
+// whenever the app comes back online; the bundled config/roboCarCatalog.ts
+// is the ultimate offline fallback.
+//
+// NOTE: the protocol helpers below (resolveModeByToken/Index, nextMode)
+// stay bound to the bundled 9 firmware modes - the ESP32 firmware only
+// understands those fixed tokens. The display catalogue is the DB-first one.
 // =====================================================================
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LOCAL_CAR_MODES, type CarMode, type CarModeId } from '../config/roboCarCatalog'
 import { resolveModeByToken, resolveModeByIndex, nextMode } from '../config/roboCarCatalog'
+import { getCarModes } from './carModeService'
 
 const CACHE_KEY = 'genum_car_modes_v1'
 
@@ -79,26 +85,17 @@ export function legacyResolveToken(token: string): CarMode | undefined {
 }
 
 // -------------------------------------------------------------------
-// Sync car modes from the website Supabase when online.
-// Returns the modes from Supabase, or falls back to local cache.
+// Sync car modes from the shared Supabase table when online.
+// Returns the DB-first catalogue and refreshes the AsyncStorage cache;
+// falls back to the local cache / bundled list on any failure.
 // -------------------------------------------------------------------
 export async function syncCarModesFromWebsite(): Promise<CarMode[]> {
-  // Try to fetch from Supabase if configured
   try {
-    const url = process.env.EXPO_PUBLIC_SUPABASE_URL || ''
-    const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
-    
-    if (url && anonKey) {
-      // In a real implementation, we would create a Supabase client and fetch
-      // the robo_car_modes table. For now, we fall back to the local cache.
-      // This is a placeholder for the actual Supabase integration.
-      console.log('Supabase sync placeholder - using local cache')
-    }
+    const modes = await getCarModes()
+    if (modes.length > 0) await saveCarModes(modes)
+    return modes
   } catch (e) {
-    // Supabase sync failed; fall through to local cache
-    console.error('Failed to sync car modes from website', e)
+    console.error('Failed to sync car modes from Supabase', e)
+    return loadCarModes()
   }
-  
-  // Return local cache as fallback
-  return loadCarModes()
 }

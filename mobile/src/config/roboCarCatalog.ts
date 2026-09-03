@@ -1,13 +1,16 @@
 // =====================================================================
-// roboCarCatalog.ts - local catalogue of robot-car modes for the GENUM app.
+// roboCarCatalog.ts - bundled (OFFLINE FALLBACK) robot-car catalogue.
 //
-// Mirrors the website's lib/robo-car-catalog.ts but is a standalone copy
-// so the app can work offline. Keep in sync with the website catalog
-// (supabase.schema.sql + content-store.ts) when publishing new modes.
+// The DISPLAY catalogue is read DB-first from the shared `robo_car_modes`
+// Supabase table via services/carModeService.ts (the same rows the website
+// admin edits). This bundled list is the fallback when Supabase is
+// unreachable, mirrors the website's lib/robo-car-catalog.ts, and doubles
+// as the seed source for the table. Keep it in sync with that file.
 //
-// Each entry maps the website ModeType enum to a friendly UI description.
-// The app uses these when the WebView is offline or when rendering the
-// native IoT & Remote Controller screen.
+// The protocol helpers below (TOKEN_TO_MODE_ID, resolveModeByToken,
+// resolveModeByIndex, nextMode) stay bound to the bundled 9 firmware modes:
+// the ESP32 firmware only understands those fixed tokens, so they are the
+// command-protocol truth regardless of DB catalogue edits.
 // =====================================================================
 
 export type CarModeId =
