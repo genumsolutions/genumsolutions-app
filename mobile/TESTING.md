@@ -1,11 +1,33 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v1.5.10** (versionCode 18) · Android APK (`genum-solutions-1.5.10-arm64-v8a.apk`)
-> Scope: primarily the **Tools screen** (IoT & Remote Controller); quick regression passes for the rest of v1.5.5.
+> Target: **v1.5.11** (versionCode 19) · Android APK (`genum-solutions-1.5.11-arm64-v8a.apk`)
+> Scope: the **3 v1.5.11 UX fixes** (AppMenu modal, back-nav, pager focus re-sync) + the **Phase G swipe pager**; quick regression over the v1.5.5 Tools scope.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
-> Status: **Pre-flight verified 2026-09-03** (no device needed — see log below). Sections A–H still require a physical phone + car hardware.
+> Status: **Released 2026-09-04** (APK + manifest live). Device pass for the v1.5.10 tab-strip fix and the v1.5.11 UX fixes still pending.
 
 ---
+
+## v1.5.11 device checklist (the new fixes — the priority)
+
+These verify the 3 UX bugs fixed in v1.5.11 plus the Phase G swipe pager.
+
+1. **AppMenu Modal (was "stuck"/blocking)**
+   - Tap the hamburger on Home → menu slides in over a dimmed backdrop; the rest of the screen is inert while open.
+   - Tap a nav item (e.g. Services) → menu closes AND you land on Services in one tap (previously the next tap could be swallowed).
+   - Open the menu, then tap the X → closes; open again quickly → works every time (never "stuck").
+   - From a **deep link / pushed screen** (e.g. reach a screen, then return to Main) → the menu is reliably closed; it never stays open over the next screen.
+   - Menu items on stack screens (Services/Projects/Tools/About/Contact/Journal/Printing/OpenTools) navigate to that screen; Sign in / Sign out work from the menu.
+
+2. **Back navigation (was navigating too far)**
+   - Home → Services → (push) → Tools → … press Android Back repeatedly → you step back **one screen at a time** through the exact screens you opened (previously Back could skip several).
+   - Products → Product detail → back → returns to the same product list / search results.
+   - Place an order → OrderSuccess → Back → returns to where the order flow started (not a far-away screen). Verify a deep-link order flow also steps back sanely (no crash, no overshoot).
+
+3. **Pager focus re-sync (was resetting to Home)**
+   - Swipe to the **Account** tab, go into **Admin** (or any pushed screen), press Back → you return to **Account** (previously reset to Home). Repeat for Shop/Cart — the tab you left is the tab you come back to.
+   - Swipe between tabs → bottom bar highlights the active tab; tapping a tab animates the pager; per-tab state (scroll position / filters) is preserved across swipes and tab taps.
+
+4. **Phase G swipe pager sanity** — swipe Home↔Shop↔Cart↔Account horizontally and via the bottom bar; both stay in sync; no crash, no stuck pager.
 
 ## Pre-flight checks (no device — verified 2026-09-03)
 
@@ -20,7 +42,7 @@ These were run on the build machine against the published artifact and do not ne
 
 ## Setup
 
-- Android phone (≥ Android 9) with the v1.5.5 APK installed
+- Android phone (≥ Android 9) with the v1.5.11 APK installed
 - Robot car powered on and advertising BLE
 - For WiFi tests: phone joined to the car's AP (`192.168.4.1`)
 - Accept all Bluetooth / location permission prompts on first use
@@ -98,3 +120,4 @@ Every step behaves as described above. No app crash or permanently dead control;
 | 2026-09-03 | Owner phone | v1.5.8-admin-fixes QA (`0dc84b44…`) | ✅ PASS (admin scope) | All 12 admin tabs scroll with no dead bottom band; Orders/Messages/Activity no longer clip; Journal Edit/New lands on the fields; ProjectPackages/RobotCarProjects edit in place with filter/page kept; product images load from Supabase only (works in airplane mode). |
 | 2026-09-03 | — (no device) | v1.5.9 | ✅ Pre-flight PASS | sha256 `efe58825…`, bundle contains `1.5.9` + **0** website-URL refs + admin-fix marker, manifest live 1.5.9/17, remote Content-Length == local. v1.5.9 = the QA-passed code + version bump. |
 | 2026-09-03 | — (no device) | v1.5.10 | ✅ Pre-flight PASS | sha256 `789fb692…`, bundle contains `1.5.10` + **0** website-URL refs + `grow-0`/`shrink-0` strip-fix markers, manifest live 1.5.10/18, remote Content-Length == local. v1.5.10 = v1.5.9 + tab-strip gap fix; visual device pass for the strip fix still pending. |
+| 2026-09-04 | — (no device) | v1.5.11 | ✅ Build + manifest PASS | `gradlew assembleRelease` BUILD SUCCESSFUL (36,024,345 B / 34.4 MB); uploaded versioned + latest; fresh manifest 1.5.11/19/34.4 MB (cache-busted GET). Device pass for the AppMenu modal / back-nav / pager re-sync / swipe pager still pending. |
