@@ -70,6 +70,9 @@ export type DashboardStats = {
   activeCarts: number
   totalOrders: number
   pendingOrders: number
+  paidOrders: number
+  fulfilledOrders: number
+  cancelledOrders: number
   revenue: number
   revenueToday: number
   totalProducts: number
@@ -222,14 +225,18 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     supabase.from('customer_messages').select('*', { count: 'exact' }),
   ])
   const totalOrders = orders?.length ?? 0
-  const pendingOrders = (orders ?? []).filter((o: any) => o.status === 'pending').length
+  const allOrders = (orders ?? []) as any[]
+  const pendingOrders = allOrders.filter((o: any) => o.status === 'pending').length
+  const paidOrders = allOrders.filter((o: any) => o.status === 'paid').length
+  const fulfilledOrders = allOrders.filter((o: any) => o.status === 'fulfilled').length
+  const cancelledOrders = allOrders.filter((o: any) => o.status === 'cancelled').length
   const totalUsers = users?.length ?? 0
   const totalProducts = products?.length ?? 0
   const lowStockProducts = (products ?? []).filter((p: any) => p.stock !== null && p.stock < 5).length
   const totalMessages = messages?.length ?? 0
+  const unreadMessages = (messages ?? []).filter((m: any) => m.status === 'new').length
   const cartSummary = Array.isArray(cartStats) ? cartStats[0] : cartStats
-  // Calculate revenue from orders
-  const allOrders = (orders ?? []) as any[]
+  // Calculate revenue from orders (paid + fulfilled)
   const revenue = allOrders
     .filter((o: any) => o.status === 'paid' || o.status === 'fulfilled')
     .reduce((sum: number, o: any) => sum + (Number(o.total_npr) || 0), 0)
@@ -240,8 +247,9 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   const succeededTransactions = allOrders.filter((o: any) => o.status === 'paid' || o.status === 'fulfilled').length
 
   return {
-    totalUsers, totalOrders, pendingOrders, revenue, revenueToday,
-    totalProducts, lowStockProducts, totalMessages, unreadMessages: totalMessages,
+    totalUsers, totalOrders, pendingOrders, paidOrders, fulfilledOrders, cancelledOrders,
+    revenue, revenueToday,
+    totalProducts, lowStockProducts, totalMessages, unreadMessages,
     totalCartItems: Number(cartSummary?.total_cart_items ?? 0),
     activeCarts: Number(cartSummary?.active_carts ?? 0),
     totalTransactions: totalOrders,

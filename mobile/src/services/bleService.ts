@@ -25,6 +25,10 @@ const ALT_RX_UUIDS = [
   '0000ffe2-0000-1000-8000-00805f9b34fb',
 ]
 
+// Default timeout for BLE connection attempts (slow devices can exceed it;
+// override per-call by passing timeoutMs to connect()).
+export const BLE_CONNECT_TIMEOUT_MS = 10000
+
 export type CarTelemetry = {
   mode?: string
   speed?: number
@@ -71,6 +75,19 @@ class BleService {
       this.manager = new BleManager()
     }
     return this.manager
+  }
+
+  /** Reject `promise` with a descriptive error if it doesn't settle in `ms`. */
+  private withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`))
+      }, ms)
+      promise.then(
+        (value) => { clearTimeout(timer); resolve(value) },
+        (error) => { clearTimeout(timer); reject(error) },
+      )
+    })
   }
 
   get isConnected(): boolean {
@@ -134,11 +151,17 @@ class BleService {
   }
 
   /** Connect to a device by ID and discover the UART service/characteristics. */
-  async connect(deviceId: string): Promise<void> {
+  async connect(deviceId: string, timeoutMs: number = BLE_CONNECT_TIMEOUT_MS): Promise<void> {
     try {
       this.emitStatus('connecting', deviceId)
       const mgr = this.getManager()
-      const device = await mgr.connectToDevice(deviceId, { autoConnect: false })
+      // Explicit <any>: the @ts-ignore'd package types resolve to `any`, and
+      // passing `any` into the generic helper would infer `{}` otherwise.
+      const device = await this.withTimeout<any>(
+        mgr.connectToDevice(deviceId, { autoConnect: false }),
+        timeoutMs,
+        'BLE connection',
+      )
       if (!device) throw new Error('Device not found')
 
       const services = await device.services()
