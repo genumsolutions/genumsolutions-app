@@ -23,6 +23,17 @@ import { SignInSheet } from './src/components/SignInSheet';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { navigationRef, navigate } from './src/navigation/navigationRef';
 import { clearCart } from './src/services/cartService';
+import { recordScreenView } from './src/services/analyticsService';
+
+/** Walk the navigation state tree to the focused route and return its name. */
+function getActiveRouteName(state: unknown): string | null {
+  const s = state as { routes?: { state?: unknown; name?: string }[]; index?: number } | null;
+  if (!s || !s.routes || s.index == null) return null;
+  const route = s.routes[s.index];
+  if (!route) return null;
+  if (route.state) return getActiveRouteName(route.state);
+  return route.name ?? null;
+}
 
 /** Parse a return link like genumsolutions://checkout/success?provider=esewa&order=...&paid=1 */
 function handleDeepLink(url: string) {
@@ -65,6 +76,22 @@ function Shell() {
     });
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
     return () => sub.remove();
+  }, []);
+
+  // Record page views into the shared page_views table (best-effort).
+  // Records once when navigation is ready, then on every route change;
+  // the service debounces repeated views of the same screen.
+  useEffect(() => {
+    const track = () => {
+      const name = getActiveRouteName(navigationRef.getRootState());
+      if (name) void recordScreenView(`/${name}`);
+    };
+    const unsubReady = navigationRef.addListener('ready', track);
+    const unsubState = navigationRef.addListener('state', track);
+    return () => {
+      unsubReady();
+      unsubState();
+    };
   }, []);
 
   return (
