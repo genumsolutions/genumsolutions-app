@@ -3,7 +3,7 @@
 // Form posts via the /contact edge function (persists to customer_messages
 // and emails GENUM via Resend), reads up to the website's ContactForm.
 // =====================================================================
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -18,7 +18,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
-import { company } from '../config/company';
+import { company as fallbackCompany } from '../config/company';
+import { getCompany } from '../services/companyService';
 import { sendContactInquiry } from '../services/orderService';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -31,6 +32,17 @@ export function ContactScreen() {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<{ text: string; isError: boolean } | null>(null);
+  // Contact details come from the shared company_info table (bundled copy as
+  // fallback until the read resolves) so app and website stay in sync.
+  const [company, setCompany] = useState(fallbackCompany);
+
+  useEffect(() => {
+    let active = true;
+    getCompany()
+      .then((c) => { if (active) setCompany(c); })
+      .catch(() => { /* keep bundled fallback */ });
+    return () => { active = false; };
+  }, []);
 
   async function submit() {
     if (!name.trim() || !email.trim() || !message.trim()) {
