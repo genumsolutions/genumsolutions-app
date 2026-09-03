@@ -27,7 +27,6 @@ export type RootStackParamList = {
   Journal: undefined;
   Printing: undefined;
   OpenTools: undefined;
-  Category: { slug: string };
   Legal: { doc: 'privacy' | 'terms' };
   OrderSuccess: { orderId?: string; provider?: string; paid?: boolean };
 };

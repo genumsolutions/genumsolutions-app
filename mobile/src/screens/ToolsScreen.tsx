@@ -5,8 +5,7 @@
 // =====================================================================
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { useNavigation, useRoute } from '@react-navigation/native'
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { useRoute } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import { APP_VERSION } from '../config/site'
 import { bleService, type CarTelemetry } from '../services/bleService'
@@ -14,6 +13,7 @@ import { LOCAL_CAR_MODES, nextMode, type CarMode } from '../config/roboCarCatalo
 import { PROJECT_CATEGORIES } from '../config/project-catalog'
 import type { RootStackParamList } from '../navigation/types'
 import { ConnectionPanel } from '../components/tools/ConnectionPanel'
+import { CategoryOverview } from '../components/tools/CategoryOverview'
 import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { DriveControls } from '../components/tools/DriveControls'
@@ -22,7 +22,6 @@ import { SensorGrid } from '../components/tools/SensorGrid'
 import { ModeInfo } from '../components/tools/ModeInfo'
 import type { SensorData } from '../components/tools/types'
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'Tools'>
 type Route = RouteProp<RootStackParamList, 'Tools'>
 
 // WiFi WebSocket resilience: reconnect after an unexpected drop, but give up
@@ -35,7 +34,6 @@ const WIFI_MAX_RECONNECT_ATTEMPTS = 5
 const DRIVE_CMD_MIN_INTERVAL_MS = 50
 
 export function ToolsScreen() {
-  const navigation = useNavigation<Nav>()
   const route = useRoute<Route>()
   const routeCategory = route.params?.category
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
@@ -76,6 +74,7 @@ export function ToolsScreen() {
     distance: 0,
   })
 
+  const scrollViewRef = useRef<ScrollView | null>(null)
   const mountedRef = useRef(true)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -93,6 +92,17 @@ export function ToolsScreen() {
       setActiveCategory(routeCategory)
     }
   }, [routeCategory])
+
+  // Category chips reconfigure the remote window in place and reveal the
+  // selected category's overview at the bottom of the screen — they never
+  // navigate to a separate page (per product decision).
+  const handleCategoryPress = useCallback((slug: string) => {
+    setActiveCategory(slug)
+    // Let the panel render, then bring it into view under the remote window.
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true })
+    }, 80)
+  }, [])
 
   // Cleanup on unmount: stop reconnect timers, close the socket, and mark
   // the close as intentional so onclose never schedules a reconnect.
@@ -345,7 +355,11 @@ export function ToolsScreen() {
   const isNonRobocar = activeCategory !== 'robocar'
 
   return (
-    <ScrollView className="flex-1 bg-mist" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+    <ScrollView
+      ref={scrollViewRef}
+      className="flex-1 bg-mist"
+      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+    >
       {/* Header */}
       <Text className="text-xs font-black uppercase tracking-widest text-navy">
         IoT & Remote Controller
@@ -354,12 +368,15 @@ export function ToolsScreen() {
         {isDrone ? 'Drone & Aerial Controller' : 'Drive like the handheld remote'}
       </Text>
 
-      {/* Category hubs */}
+      {/* Category hubs — choosing one reconfigures the remote below and shows
+          the category overview at the bottom of this screen (no navigation). */}
       <View className="mt-4 flex-row flex-wrap gap-2">
         {PROJECT_CATEGORIES.map((c) => (
           <Pressable
             key={c.slug}
-            onPress={() => { setActiveCategory(c.slug); navigation.navigate('Category', { slug: c.slug }) }}
+            onPress={() => handleCategoryPress(c.slug)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeCategory === c.slug }}
             className={`rounded-full px-4 py-2 ${activeCategory === c.slug ? 'bg-navy' : 'border border-line bg-card'}`}
           >
             <Text className={`text-xs font-bold ${activeCategory === c.slug ? 'text-white' : 'text-navy'}`}>
@@ -369,7 +386,8 @@ export function ToolsScreen() {
         ))}
       </View>
       <Text className="mt-2 text-xs leading-5 text-muted">
-        Explore a category for an overview, or set it below to control its hardware live.
+        Pick a category to set the remote window for its hardware. Its overview and typical
+        hardware are listed below the controls.
       </Text>
 
       {/* Connection panel */}
@@ -497,6 +515,11 @@ export function ToolsScreen() {
           telemetry={telemetry}
           onToggleRelay={toggleRelay}
         />
+      </View>
+
+      {/* Category overview — inline, below the whole remote window */}
+      <View className="mt-6">
+        <CategoryOverview category={PROJECT_CATEGORIES.find((c) => c.slug === activeCategory)} />
       </View>
 
       {/* Footer */}
