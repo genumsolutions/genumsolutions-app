@@ -1,6 +1,6 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v1.5.9** (versionCode 17) · Android APK (`genum-solutions-1.5.9-arm64-v8a.apk`)
+> Target: **v1.5.10** (versionCode 18) · Android APK (`genum-solutions-1.5.10-arm64-v8a.apk`)
 > Scope: primarily the **Tools screen** (IoT & Remote Controller); quick regression passes for the rest of v1.5.5.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
 > Status: **Pre-flight verified 2026-09-03** (no device needed — see log below). Sections A–H still require a physical phone + car hardware.
@@ -97,3 +97,4 @@ Every step behaves as described above. No app crash or permanently dead control;
 | 2026-09-03 | — (no device) | v1.5.5 | ✅ Pre-flight PASS | SHA-256 match, release signature, `1.5.5`+`sizeLabel` in bundle, manifest live. Hardware steps A–H pending. |
 | 2026-09-03 | Owner phone | v1.5.8-admin-fixes QA (`0dc84b44…`) | ✅ PASS (admin scope) | All 12 admin tabs scroll with no dead bottom band; Orders/Messages/Activity no longer clip; Journal Edit/New lands on the fields; ProjectPackages/RobotCarProjects edit in place with filter/page kept; product images load from Supabase only (works in airplane mode). |
 | 2026-09-03 | — (no device) | v1.5.9 | ✅ Pre-flight PASS | sha256 `efe58825…`, bundle contains `1.5.9` + **0** website-URL refs + admin-fix marker, manifest live 1.5.9/17, remote Content-Length == local. v1.5.9 = the QA-passed code + version bump. |
+| 2026-09-03 | — (no device) | v1.5.10 | ✅ Pre-flight PASS | sha256 `789fb692…`, bundle contains `1.5.10` + **0** website-URL refs + `grow-0`/`shrink-0` strip-fix markers, manifest live 1.5.10/18, remote Content-Length == local. v1.5.10 = v1.5.9 + tab-strip gap fix; visual device pass for the strip fix still pending. |
