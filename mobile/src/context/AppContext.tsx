@@ -9,6 +9,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
@@ -18,7 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseConfigured } from '../config/supabase';
 import * as auth from '../services/authService';
 import * as push from '../services/pushService';
-import { getLocalCart, totalCount } from '../services/cartService';
+import * as cart from '../services/cartService';
+import type { CartLine } from '../types';
 import type { CarMode } from '../config/roboCarCatalog';
 
 export type GenumUser = {
@@ -159,13 +161,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- load the cart badge on launch + keep it current ---
   const refreshCartCount = useCallback(async () => {
-    const lines = await getLocalCart();
-    setCartCount(await totalCount(lines));
+    const lines = await cart.getLocalCart();
+    setCartCount(await cart.totalCount(lines));
   }, []);
 
   useEffect(() => {
     void refreshCartCount();
   }, [refreshCartCount]);
+
+  // --- DB-backed cart sync (shared `carts` table = source of truth) ---
+  // Writes are serialized through a promise queue so the LAST user action
+  // always wins on the server even when requests land out of order.
+  const cartWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const pushCartToServer = useCallback((userId: string, lines: CartLine[]) => {
+    cartWriteQueueRef.current = cartWriteQueueRef.current
+      .then(() => cart.pushCartToServer(userId, lines))
+      .catch(() => undefined);
+  }, []);
+
+  // Signed in: adopt the DB cart (merge guest lines, DB wins per product),
+  // write the result back, then push every local mutation to the DB.
+  // Signed out: local cart only, no server writes.
+  useEffect(() => {
+    if (!user?.id) {
+      cart.setCartSyncHandler(null);
+      void refreshCartCount();
+      return;
+    }
+    const userId = user.id;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [serverLines, localLines] = await Promise.all([
+          cart.fetchServerCart(userId),
+          cart.getLocalCart(),
+        ]);
+        if (cancelled) return;
+        const merged = cart.mergeCarts(serverLines, localLines);
+        await cart.replaceLocalCart(merged);
+        if (cancelled) return;
+        // DB sticks with the merged cart so both clients start from the same state.
+        pushCartToServer(userId, merged);
+        setCartCount(await cart.totalCount(merged));
+      } catch {
+        if (!cancelled) void refreshCartCount();
+      }
+    })();
+    cart.setCartSyncHandler((lines) => pushCartToServer(userId, lines));
+    return () => {
+      cancelled = true;
+      cart.setCartSyncHandler(null);
+    };
+  }, [user?.id, pushCartToServer, refreshCartCount]);
 
   const applyAuthed = useCallback(() => {
     setAuthError(null);
