@@ -1,6 +1,7 @@
 // =====================================================================
-// HomeScreen - native home. Reads site_content, services, products
-// from Supabase, plus programs/curriculum from local config.
+// HomeScreen - native home. Reads site_content, services, products, and
+// programs/curriculum from Supabase (shared tables), with the bundled
+// config as offline fallback.
 // =====================================================================
 import React, { useEffect, useState } from 'react'
 import {
@@ -17,7 +18,12 @@ import { Feather } from '@expo/vector-icons'
 import { getProducts } from '../services/productService'
 import { getServices } from '../services/serviceService'
 import { fetchSiteContent } from '../services/orderService'
-import { trainingPrograms, pilotCosts, stemProjectHighlights } from '../config/programs'
+import { getProgramsContent } from '../services/programsService'
+import {
+  pilotCosts as fallbackPilotCosts,
+  stemProjectHighlights as fallbackHighlights,
+  trainingPrograms as fallbackPrograms,
+} from '../config/programs'
 import type { Product, Service } from '../types'
 import type { RootStackParamList } from '../navigation/types'
 
@@ -29,22 +35,29 @@ export function HomeScreen() {
   const [featured, setFeatured] = useState<Product[]>([])
   const [heroTitle, setHeroTitle] = useState('Technology you can touch, test, and trust.')
   const [heroBody, setHeroBody] = useState('Robotics kits, project solutions, fabrication, open tools, and training for curious builders, schools, and teams.')
+  const [trainingPrograms, setTrainingPrograms] = useState(fallbackPrograms)
+  const [pilotCosts, setPilotCosts] = useState(fallbackPilotCosts)
+  const [stemProjectHighlights, setStemProjectHighlights] = useState(fallbackHighlights)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let active = true
     ;(async () => {
       try {
-        const [svcs, prods, content] = await Promise.all([
+        const [svcs, prods, content, programContent] = await Promise.all([
           getServices(),
           getProducts(),
           fetchSiteContent().catch(() => null),
+          getProgramsContent(),
         ])
         if (!active) return
         setServices(svcs.slice(0, 4))
         setFeatured(prods.filter((p) => p.stock > 0).slice(0, 6))
         if (content?.content?.home_title) setHeroTitle(content.content.home_title)
         if (content?.content?.home_body) setHeroBody(content.content.home_body)
+        setTrainingPrograms(programContent.trainingPrograms)
+        setPilotCosts(programContent.pilotCosts)
+        setStemProjectHighlights(programContent.stemProjectHighlights)
       } catch { /* no-op */ }
       finally { if (active) setLoading(false) }
     })()
