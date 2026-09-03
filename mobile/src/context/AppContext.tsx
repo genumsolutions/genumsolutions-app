@@ -17,6 +17,7 @@ import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseConfigured } from '../config/supabase';
 import * as auth from '../services/authService';
+import * as push from '../services/pushService';
 import { getLocalCart, totalCount } from '../services/cartService';
 import type { CarMode } from '../config/roboCarCatalog';
 
@@ -146,6 +147,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => sub.data.subscription.unsubscribe();
   }, []);
+
+  // --- order-status push token: register on sign-in, drop on sign-out ---
+  useEffect(() => {
+    if (!user?.id) return;
+    void push.registerPushToken(user.id);
+    return () => {
+      void push.removePushTokens(user.id);
+    };
+  }, [user?.id]);
 
   // --- load the cart badge on launch + keep it current ---
   const refreshCartCount = useCallback(async () => {
