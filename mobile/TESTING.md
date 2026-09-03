@@ -3,6 +3,18 @@
 > Target: **v1.5.5** (versionCode 13) · Android APK (`genum-solutions-1.5.5-arm64-v8a.apk`)
 > Scope: primarily the **Tools screen** (IoT & Remote Controller); quick regression passes for the rest of v1.5.5.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
+> Status: **Pre-flight verified 2026-09-03** (no device needed — see log below). Sections A–H still require a physical phone + car hardware.
+
+---
+
+## Pre-flight checks (no device — verified 2026-09-03)
+
+These were run on the build machine against the published artifact and do not need a phone:
+
+1. ✅ **Published APK == local build** — SHA-256 of `genum-solutions-latest.apk` on Supabase matches `releases/genum-solutions-1.5.5-arm64-v8a.apk` (`f4c7cff2a94fd16f9599c2262694278dc971f2f3fb963c86a81a2bbfda3c2fd2`).
+2. ✅ **Release-signed** — `apksigner verify --print-certs`: `CN=GENUM Solutions, OU=Mobile, O=GENUM Solutions Pvt Ltd, L=Kathmandu, ST=Bagmati, C=NP` (release keystore, not the Android debug cert).
+3. ✅ **Final code inside the APK** — `assets/index.android.bundle` contains `1.5.5` and the `sizeLabel` fix string from commit `1525291`.
+4. ✅ **Live manifest** — `release.json` reports v1.5.5 / versionCode 13 / 32.9 MB; both repos `npx tsc --noEmit` clean.
 
 ---
 
@@ -82,4 +94,5 @@ Every step behaves as described above. No app crash or permanently dead control;
 
 | Date | Device / Android | v1.5.5 installed | Result | Notes |
 |------|------------------|------------------|--------|-------|
+| 2026-09-03 | — (no device) | — | ✅ Pre-flight PASS | SHA-256 match, release signature, `1.5.5`+`sizeLabel` in bundle, manifest live. Hardware steps A–H pending. |
 |      |                  |                  |        |       |
