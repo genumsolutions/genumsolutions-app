@@ -357,6 +357,7 @@ export function AdminScreen() {
               query={productQuery}
               onQueryChange={setProductQuery}
               editing={editingProduct}
+              onChange={setEditingProduct}
               onEdit={(product) => {
                 setEditingProduct(product)
                 if (product) setTab('Products')
@@ -377,6 +378,7 @@ export function AdminScreen() {
             <ServicesTab
               services={services}
               editing={editingService}
+              onChange={setEditingService}
               onEdit={setEditingService}
               onSave={handleSaveService}
               onDelete={handleDeleteService}
@@ -583,9 +585,9 @@ function OrdersTab({ orders, total, page, onLoadMore, onStatusChange, query, onQ
   )
 }
 
-function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, onDelete }: {
+function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onSave, onDelete }: {
   products: AdminProduct[]; query: string; onQueryChange: (q: string) => void;
-  editing: AdminProduct | null; onEdit: (p: AdminProduct | null) => void; onSave: () => void; onDelete: (id: string) => void;
+  editing: AdminProduct | null; onChange: (p: AdminProduct) => void; onEdit: (p: AdminProduct | null) => void; onSave: () => void; onDelete: (id: string) => void;
 }) {
   const filtered = query
     ? products.filter((p) => `${p.name} ${p.sku} ${p.id}`.toLowerCase().includes(query.toLowerCase()))
@@ -595,7 +597,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onEdit, onSave, 
     <View className="p-4">
       <TextInput value={query} onChangeText={onQueryChange} placeholder="Search by name, SKU, or id…" className="mb-4 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
       {editing ? (
-        <ProductEditor product={editing} onSave={onSave} onCancel={() => onEdit(null)} />
+        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} />
       ) : (
         <FlatList
           data={filtered}
@@ -655,25 +657,29 @@ function ProjectTab({ title, products, onEdit, onDelete }: {
   )
 }
 
-function ProductEditor({ product, onSave, onCancel }: { product: AdminProduct; onSave: () => void; onCancel: () => void }) {
-  const [name, setName] = useState(product.name)
-  const [price, setPrice] = useState(String(product.price))
-  const [stock, setStock] = useState(String(product.stock))
-  const [desc, setDesc] = useState(product.description)
+function ProductEditor({ product, onChange, onSave, onCancel }: {
+  product: AdminProduct
+  onChange: (next: AdminProduct) => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  function patch(patchPart: Partial<AdminProduct>) {
+    onChange({ ...product, ...patchPart })
+  }
 
   return (
     <View className="mb-4 rounded-xl border border-line bg-card p-4">
       <Text className="mb-3 text-sm font-bold text-ink">Edit Product</Text>
-      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
+      <TextInput value={product.name} onChangeText={(name) => patch({ name })} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
       <View className="mb-3 flex-row gap-3">
         <View className="flex-1">
-          <TextInput value={price} onChangeText={setPrice} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Price" />
+          <TextInput value={String(product.price)} onChangeText={(price) => patch({ price: Math.max(0, Number(price) || 0) })} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Price" />
         </View>
         <View className="flex-1">
-          <TextInput value={stock} onChangeText={setStock} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Stock" />
+          <TextInput value={String(product.stock)} onChangeText={(stock) => patch({ stock: Math.max(0, Math.round(Number(stock) || 0)) })} keyboardType="numeric" className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Stock" />
         </View>
       </View>
-      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
+      <TextInput value={product.description} onChangeText={(description) => patch({ description })} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
       <View className="flex-row gap-3">
         <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2">
           <Text className="text-xs font-black text-ink">Save</Text>
@@ -686,11 +692,11 @@ function ProductEditor({ product, onSave, onCancel }: { product: AdminProduct; o
   )
 }
 
-function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
-  services: AdminService[]; editing: AdminService | null; onEdit: (s: AdminService | null) => void; onSave: () => void; onDelete: (id: string) => void;
+function ServicesTab({ services, editing, onChange, onEdit, onSave, onDelete }: {
+  services: AdminService[]; editing: AdminService | null; onChange: (s: AdminService) => void; onEdit: (s: AdminService | null) => void; onSave: () => void; onDelete: (id: string) => void;
 }) {
   if (editing) {
-    return <ServiceEditor service={editing} onSave={onSave} onCancel={() => onEdit(null)} />
+    return <ServiceEditor service={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} />
   }
   return (
     <FlatList
@@ -718,21 +724,26 @@ function ServicesTab({ services, editing, onEdit, onSave, onDelete }: {
   )
 }
 
-function ServiceEditor({ service, onSave, onCancel }: { service: AdminService; onSave: () => void; onCancel: () => void }) {
-  const [name, setName] = useState(service.name)
-  const [desc, setDesc] = useState(service.description)
-  const [active, setActive] = useState(service.active)
+function ServiceEditor({ service, onChange, onSave, onCancel }: {
+  service: AdminService
+  onChange: (next: AdminService) => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  function patch(patchPart: Partial<AdminService>) {
+    onChange({ ...service, ...patchPart })
+  }
 
   return (
     <View className="mb-4 rounded-xl border border-line bg-card p-4">
       <Text className="mb-3 text-sm font-bold text-ink">Edit Service</Text>
-      <TextInput value={name} onChangeText={setName} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
-      <TextInput value={desc} onChangeText={setDesc} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
+      <TextInput value={service.name} onChangeText={(name) => patch({ name })} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Name" />
+      <TextInput value={service.description} onChangeText={(description) => patch({ description })} multiline numberOfLines={3} className="mb-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" placeholder="Description" />
       <View className="mb-3 flex-row items-center gap-3">
         <Text className="text-sm font-semibold text-ink">Active</Text>
         <Switch
-          value={active}
-          onValueChange={setActive}
+          value={service.active}
+          onValueChange={(active) => patch({ active })}
           trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }}
         />
       </View>
