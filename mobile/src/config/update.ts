@@ -14,11 +14,20 @@ export const APK_URL =
 export const RELEASE_MANIFEST_URL =
   'https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json';
 
-// Expected shape of release.json:
-//   { "version": "1.2.0", "apkUrl": "https://...", "size": "23.4 MB", "notes": "..." }
+// Expected shape of release.json (written by scripts/upload-release.mjs):
+//   { "version": "1.5.5", "version_code": 13, "apkUrl": "https://...",
+//     "latestApkUrl": "https://...", "size_mb": 34.5, "sizeLabel": "34.5 MB",
+//     "notes": "...", "updated_at": "..." }
 export type ReleaseManifest = {
   version: string;
+  version_code?: number;
   apkUrl?: string;
+  latestApkUrl?: string;
+  size_mb?: number;
+  /** Human-readable size, e.g. "34.5 MB" (set by upload-release.mjs). */
+  sizeLabel?: string;
+  /** Legacy alias some older manifests use for the size label. */
   size?: string;
   notes?: string;
+  updated_at?: string;
 };

@@ -77,19 +77,20 @@ export async function checkForUpdate(
       return { status: 'error', error: 'Release manifest is missing a version.' };
     }
     const apkUrl = data.apkUrl || APK_URL;
+    const size = data.sizeLabel || data.size;
     if (isVersionNewer(APP_VERSION, latest)) {
       return {
         status: 'update-available',
         latestVersion: latest,
         apkUrl,
-        size: data.size,
+        size,
         notes: data.notes,
       };
     }
     return {
       status: 'up-to-date',
       latestVersion: latest,
-      size: data.size,
+      size,
     };
   } catch {
     return { status: 'error', error: 'Could not reach the update server.' };
