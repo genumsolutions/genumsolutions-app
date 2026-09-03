@@ -11,12 +11,13 @@ import { supabase } from '../config/supabase';
 import type { Product, ProductType, Difficulty } from '../types';
 
 const CATALOG_CACHE_KEY = 'genum_products_v1';
-const WEBSITE_MEDIA_BASE = 'https://genumsolutions-website.vercel.app/media/products';
 
-function normalizeImageUrl(image: string | null, id: string): string {
-  if (!image) return `${WEBSITE_MEDIA_BASE}/${id}.jpg`;
-  if (image.startsWith('/')) return `https://genumsolutions-website.vercel.app${image}`;
-  return image;
+// Product images are stored as absolute public URLs (Supabase Storage) in the
+// shared `products.image_url` column. The native app renders that value as-is
+// and NEVER derives, prefixes, or fabricates image URLs - it must not depend
+// on the website/web app in any way.
+function normalizeImageUrl(image: string | null): string {
+  return image ?? '';
 }
 
 function normalizePrice(price: number | null | undefined): number {
@@ -104,7 +105,7 @@ export function rowToProduct(row: ProductRow): Product {
     color: row.color || 'from-[#dce8ff] to-[#7e9ff2]',
     ...(row.badge ? { badge: row.badge } : {}),
     ...(row.supplier ? { supplier: row.supplier } : {}),
-    image: normalizeImageUrl(row.image_url, row.id),
+    image: normalizeImageUrl(row.image_url),
   };
 }
 

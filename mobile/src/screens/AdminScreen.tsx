@@ -2,7 +2,7 @@
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
 // Tabs: Dashboard, Orders, Products, Services, Users, Messages, Content.
 // =====================================================================
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -196,16 +196,21 @@ export function AdminScreen() {
     void loadOrders(ordersPage)
   }
 
-  async function handleSaveProduct() {
-    if (!editingProduct) return
-    const normalized = { ...editingProduct, id: editingProduct.id.trim().toLowerCase().replace(/\s+/g, '-') }
+  /** Validate + persist a product, then refresh the current tab's rows. */
+  async function saveProduct(product: AdminProduct): Promise<boolean> {
+    const normalized = { ...product, id: product.id.trim().toLowerCase().replace(/\s+/g, '-') }
     if (!normalized.id || !normalized.name.trim()) {
       Alert.alert('Missing fields', 'Give the product at least an id and a name.')
-      return
+      return false
     }
     await upsertAdminProduct(normalized)
-    setEditingProduct(null)
-    void loadTab()
+    await loadTab()
+    return true
+  }
+
+  async function handleSaveProduct() {
+    if (!editingProduct) return
+    if (await saveProduct(editingProduct)) setEditingProduct(null)
   }
 
   function handleDeleteProduct(id: string) {
@@ -455,7 +460,7 @@ export function AdminScreen() {
             <ProjectTab
               title={tab === 'ProjectPackages' ? 'Project packages' : 'Robot car projects'}
               products={products.filter((product) => tab === 'ProjectPackages' ? product.productType === 'Project package' : product.category === 'Robot Cars')}
-              onEdit={(product) => { setEditingProduct(product); setTab('Products') }}
+              onSaveProduct={saveProduct}
               onDelete={handleDeleteProduct}
               onToggleActive={(p) => void handleToggleProductActive(p)}
             />
@@ -575,7 +580,7 @@ function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; anal
     : '—'
 
   return (
-    <ScrollView className="p-4">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text className="font-display text-2xl font-bold tracking-tight text-ink">Dashboard</Text>
       <View className="mt-3 flex-row flex-wrap gap-3">
         <StatCard label="Revenue" value={formatNPR(stats.revenue)} sub={`Today: ${formatNPR(stats.revenueToday)}`} />
@@ -647,7 +652,7 @@ function OrdersTab({ orders, total, page, totalPages, onPage, onStatusChange, qu
 }) {
   const STATUSES = ['pending', 'paid', 'fulfilled', 'cancelled'] as const
   return (
-    <View className="p-4">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       {/* Heading + filters */}
       <View className="mb-3">
         <Text className="font-display text-xl font-bold text-ink">Customer orders ({total})</Text>
@@ -716,7 +721,7 @@ function OrdersTab({ orders, total, page, totalPages, onPage, onStatusChange, qu
           <Text className="mt-1 text-center text-xs text-muted">{total} total order{total === 1 ? '' : 's'}</Text>
         </>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
@@ -748,7 +753,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
       <FlatList
         data={shown}
         keyExtractor={(p) => p.id}
-        className="p-4"
+        className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
             <View className="flex-row items-center justify-between">
@@ -791,10 +796,11 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
   )
 }
 
-function ProjectTab({ title, products, onEdit, onDelete, onToggleActive }: {
-  title: string; products: AdminProduct[]; onEdit: (p: AdminProduct) => void; onDelete: (id: string) => void;
+function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }: {
+  title: string; products: AdminProduct[]; onSaveProduct: (p: AdminProduct) => Promise<boolean>; onDelete: (id: string) => void;
   onToggleActive: (p: AdminProduct) => void;
 }) {
+  const [editing, setEditing] = useState<AdminProduct | null>(null)
   const [category, setCategory] = useState('All')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -810,12 +816,28 @@ function ProjectTab({ title, products, onEdit, onDelete, onToggleActive }: {
   const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   React.useEffect(() => { setPage(1) }, [category, query])
 
+  if (editing) {
+    // Edit stays in this tab: the editor replaces the list (no tab jump), and
+    // returning to the list keeps the chosen category/search/page intact.
+    return (
+      <View className="flex-1">
+        <ProductEditor
+          product={editing}
+          onChange={setEditing}
+          onSave={() => { void onSaveProduct(editing).then((saved) => { if (saved) setEditing(null) }) }}
+          onCancel={() => setEditing(null)}
+          isNew={false}
+        />
+      </View>
+    )
+  }
+
   return (
     <View className="flex-1">
       <FlatList
         data={shown}
         keyExtractor={(p) => p.id}
-        className="p-4"
+        className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
             <Text className="font-display text-xl font-bold text-ink">{title} ({filtered.length})</Text>
@@ -844,8 +866,8 @@ function ProjectTab({ title, products, onEdit, onDelete, onToggleActive }: {
               <Text className="mt-1 text-xs font-black text-navy">{item.priceLabel || 'Request quote'}</Text>
               <Text className="mt-1 text-xs leading-5 text-muted" numberOfLines={3}>{item.description || item.note}</Text>
               {!item.active && <Text className="mt-1 text-[10px] font-black uppercase text-red-500">Hidden from customers</Text>}
-              <View className="mt-3 flex-row flex-wrap gap-2">
-                <AdminAction onPress={() => onEdit(item)} label="Edit" tone="navy" />
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              <AdminAction onPress={() => setEditing(item)} label="Edit" tone="navy" />
                 <AdminAction onPress={() => setPreview(item)} label="Preview" tone="plain" />
                 <AdminAction onPress={() => onToggleActive(item)} label={item.active ? 'Hide' : 'Show'} tone="plain" />
                 <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />
@@ -873,7 +895,7 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew }: {
   const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
 
   return (
-    <ScrollView className="p-4" keyboardShouldPersistTaps="handled">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <View className="rounded-xl border border-line bg-card p-4">
         <Text className="mb-1 font-display text-lg font-bold text-ink">{isNew ? 'Add a new product' : `Edit ${product.id}`}</Text>
         <Text className="mb-3 text-xs text-muted">Type: {product.productType || 'Retail kit'}</Text>
@@ -954,7 +976,7 @@ function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, onDel
       <FlatList
         data={shown}
         keyExtractor={(s) => s.id}
-        className="p-4"
+        className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
             <View className="flex-row items-center justify-between">
@@ -1017,7 +1039,7 @@ function ServiceEditor({ service, onChange, onSave, onCancel, isNew }: {
   const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
 
   return (
-    <ScrollView className="p-4" keyboardShouldPersistTaps="handled">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <View className="rounded-xl border border-line bg-card p-4">
         <Text className="mb-3 font-display text-lg font-bold text-ink">{isNew ? 'Add a new service' : `Edit ${service.id}`}</Text>
         <Text className="mb-1 text-xs font-bold text-muted">Id (slug)</Text>
@@ -1061,7 +1083,7 @@ function UsersTab({ users, total, page, totalPages, query, onQueryChange, onAppl
       <FlatList
         data={users}
         keyExtractor={(u) => u.id}
-        className="p-4"
+        className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
             <Text className="font-display text-xl font-bold text-ink">Users ({total})</Text>
@@ -1114,7 +1136,7 @@ function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onB
   onSave: () => void; saved: boolean;
 }) {
   return (
-    <ScrollView className="p-4">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text className="text-base font-bold text-ink">Home page content</Text>
       <Text className="mt-1 text-xs leading-5 text-muted">
         Edit the hero title and body shown on the app home screen and the website homepage.
@@ -1193,9 +1215,14 @@ function JournalTab({ journals, editorOpen, editId, tag, title, text, sort, acti
   onCancel: () => void
 }) {
   const [preview, setPreview] = useState<AdminJournalPost | null>(null)
+  const scrollRef = useRef<ScrollView | null>(null)
+  React.useEffect(() => {
+    // Editing a post should land you at the data fields, not leave the list in view.
+    if (editorOpen) scrollRef.current?.scrollTo({ y: 0, animated: false })
+  }, [editorOpen])
   return (
     <>
-    <ScrollView className="p-4">
+    <ScrollView ref={scrollRef} className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <View className="mb-4 flex-row items-center justify-between">
         <View>
           <Text className="text-base font-bold text-ink">Journal posts ({journals.length})</Text>
@@ -1307,7 +1334,7 @@ function FinanceTab({ stats }: { stats: DashboardStats | null }) {
   const cancelled = stats.cancelledOrders
 
   return (
-    <ScrollView className="p-4">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       {/* Revenue cards */}
       <View className="mb-4 flex-row flex-wrap gap-3">
         <StatCard label="Total Revenue" value={formatNPR(stats.revenue)} />
@@ -1347,7 +1374,7 @@ function ActivityTab({ activities, page, totalPages, total, onLoadMore }: {
   onLoadMore: (page: number) => void;
 }) {
   return (
-    <View className="p-4">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       {activities.length === 0 ? (
         <View className="items-center py-16">
           <Feather name="clock" size={32} color="#cbd5e1" />
@@ -1405,7 +1432,7 @@ function ActivityTab({ activities, page, totalPages, total, onLoadMore }: {
           <Text className="mt-2 text-center text-xs text-muted">{total} total event{total === 1 ? '' : 's'}</Text>
         </>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
@@ -1414,7 +1441,7 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
   status: string; onStatusFilter: (s: string) => void; onMarkReplied: (id: string) => void;
 }) {
   return (
-    <View className="p-4">
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <View className="mb-3">
         <Text className="font-display text-xl font-bold text-ink">Messages ({total})</Text>
         <View className="mt-2 flex-row flex-wrap gap-2">
@@ -1449,7 +1476,7 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
           <AdminPager page={page} totalPages={totalPages} onPage={onPage} />
         </>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
