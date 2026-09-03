@@ -154,7 +154,7 @@ export function ShopScreen() {
               >
                 <Feather name="chevron-left" size={18} color="#1e3a8a" />
               </Pressable>
-              <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}</Text>
+              <Text className="text-xs font-bold text-muted">Page {page} of {totalPages}{visible.length > 0 ? ` · ${visible.length} item${visible.length === 1 ? '' : 's'}` : ''}</Text>
               <Pressable
                 onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page === totalPages}
