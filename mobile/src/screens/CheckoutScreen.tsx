@@ -185,7 +185,7 @@ export function CheckoutScreen() {
         ))}
         <View className="mt-2 flex-row items-center justify-between border-t border-line pt-3">
           <Text className="text-sm text-muted">Total</Text>
-          <Text className="font-sans text-lg font-bold text-ink">
+          <Text className="font-display text-lg font-bold tracking-tight text-ink">
             NPR {total.toLocaleString('en-IN')}
           </Text>
         </View>
@@ -250,7 +250,7 @@ export function CheckoutScreen() {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <Text className="mb-2 mt-5 text-xs font-black uppercase tracking-[0.2em] text-navy">
+    <Text className="mb-2 mt-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
       {children}
     </Text>
   );

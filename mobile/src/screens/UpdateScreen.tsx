@@ -70,7 +70,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
       <SafeAreaView className="flex-1 bg-mist">
         <View className="flex-row items-center justify-between bg-navy px-5 pb-4 pt-3">
           <View>
-            <Text className="text-2xl font-bold text-white">Update</Text>
+            <Text className="font-display text-2xl font-bold text-white">Update</Text>
             <Text className="mt-0.5 text-sm text-navy-light">
               You are on v{APP_VERSION}
             </Text>

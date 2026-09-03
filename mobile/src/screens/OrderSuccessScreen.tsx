@@ -31,7 +31,7 @@ export function OrderSuccessScreen() {
       <View className={`h-20 w-20 items-center justify-center rounded-full ${paid ? 'bg-emerald-50' : 'bg-amber-50'}`}>
         <Feather name={paid ? 'check-circle' : 'clock'} size={40} color={paid ? '#059669' : '#b45309'} />
       </View>
-      <Text className="mt-5 text-center text-2xl font-bold text-ink">
+      <Text className="mt-5 text-center font-display text-2xl font-bold text-ink">
         {paid ? 'Payment received' : 'Order placed'}
       </Text>
       <Text className="mt-2 text-center text-sm leading-6 text-muted">

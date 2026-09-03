@@ -382,7 +382,7 @@ export function ToolsScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
     >
       {/* Header */}
-      <Text className="text-xs font-black uppercase tracking-widest text-navy">
+      <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
         IoT & Remote Controller
       </Text>
       <Text className="mt-2 font-display text-2xl font-bold text-ink">
