@@ -74,10 +74,11 @@ module.exports = function withReleaseSigning(config) {
       );
     }
 
-    if (!src.includes("signingConfigs {") && src.includes('compileSdk rootProject.ext.compileSdkVersion')) {
+    if (!src.includes('signingConfigs.release') && src.includes('compileSdk rootProject.ext.compileSdkVersion')) {
+      // Replace the existing signingConfigs block (which only has debug) with one that also has release.
       src = src.replace(
-        /^    compileSdk rootProject\.ext\.compileSdkVersion/m,
-        '    compileSdk rootProject.ext.compileSdkVersion\n' + SIGNING_CONFIGS_BLOCK
+        /signingConfigs \{[\s\S]*?\n    \}/m,
+        SIGNING_CONFIGS_BLOCK.trim()
       );
     }
 
