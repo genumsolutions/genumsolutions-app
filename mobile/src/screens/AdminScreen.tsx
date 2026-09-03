@@ -32,6 +32,7 @@ import {
   listAdminMessages,
   markMessageReplied,
   fetchDashboardStats,
+  fetchAdminAnalytics,
   listAdminActivity,
   type AdminOrder,
   type AdminProduct,
@@ -39,6 +40,7 @@ import {
   type AdminUser,
   type AdminMessage,
   type DashboardStats,
+  type AdminAnalytics,
   type ActivityEntry,
 } from '../services/adminService'
 
@@ -80,6 +82,7 @@ export function AdminScreen() {
 
   // Dashboard
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null)
 
   // Activity
   const [activities, setActivities] = useState<ActivityEntry[]>([])
@@ -100,6 +103,14 @@ export function AdminScreen() {
     try {
       if (tab === 'Dashboard') {
         setStats(await fetchDashboardStats())
+        // Analytics is best-effort: a page_views query failure (e.g. RLS)
+        // shouldn't break the rest of the dashboard.
+        try {
+          setAnalytics(await fetchAdminAnalytics(30))
+        } catch (e) {
+          console.error('Admin analytics load error:', e)
+          setAnalytics(null)
+        }
       } else if (tab === 'Orders') {
         void loadOrders(1)
       } else if (tab === 'Products' || tab === 'ProjectPackages' || tab === 'RobotCarProjects') {
@@ -242,7 +253,7 @@ export function AdminScreen() {
         </View>
       ) : (
         <>
-          {tab === 'Dashboard' && <DashboardTab stats={stats} />}
+          {tab === 'Dashboard' && <DashboardTab stats={stats} analytics={analytics} />}
           {tab === 'Orders' && (
             <OrdersTab
               orders={orders}
@@ -338,7 +349,7 @@ export function AdminScreen() {
 
 // ─── Sub-tabs ────────────────────────────────────────────────────────
 
-function DashboardTab({ stats }: { stats: DashboardStats | null }) {
+function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; analytics: AdminAnalytics | null }) {
   if (!stats) {
     return (
       <View className="flex-1 items-center justify-center p-6">
@@ -347,16 +358,61 @@ function DashboardTab({ stats }: { stats: DashboardStats | null }) {
     )
   }
 
+  const conversionRate = stats.totalOrders > 0 && stats.totalUsers > 0
+    ? `${((stats.succeededTransactions / Math.max(1, stats.totalUsers)) * 100).toFixed(1)}%`
+    : '—'
+
   return (
     <ScrollView className="p-4">
       <Text className="text-base font-bold text-ink">Dashboard</Text>
       <View className="mt-3 flex-row flex-wrap gap-3">
+        <StatCard label="Revenue" value={formatNPR(stats.revenue)} sub={`Today: ${formatNPR(stats.revenueToday)}`} />
         <StatCard label="Users" value={String(stats.totalUsers)} />
-        <StatCard label="Cart items" value={String(stats.totalCartItems)} sub={`${stats.activeCarts} active carts`} />
         <StatCard label="Orders" value={String(stats.totalOrders)} sub={`${stats.pendingOrders} pending`} />
+        <StatCard label="Cart items" value={String(stats.totalCartItems)} sub={`${stats.activeCarts} active carts`} />
         <StatCard label="Products" value={String(stats.totalProducts)} sub={stats.lowStockProducts > 0 ? `${stats.lowStockProducts} low stock` : 'OK'} />
         <StatCard label="Messages" value={String(stats.totalMessages)} sub={`${stats.unreadMessages} unread`} />
+        <StatCard label="Page Views (30d)" value={analytics ? String(analytics.totalViews) : '—'} sub={`Today: ${analytics?.todayViews ?? '—'}`} />
+        <StatCard label="Conversion Rate" value={conversionRate} sub="Paid orders / users" />
       </View>
+
+      {analytics && analytics.topPaths.length > 0 && (
+        <View className="mt-3 rounded-xl border border-line bg-card p-4">
+          <Text className="text-sm font-bold text-ink">Top Pages (30 days)</Text>
+          {analytics.topPaths.slice(0, 10).map((pv) => (
+            <View key={pv.path} className="flex-row items-center justify-between gap-3 border-b border-line py-2 last:border-b-0">
+              <Text className="min-w-0 flex-1 font-mono text-xs text-muted" numberOfLines={1}>{pv.path}</Text>
+              <Text className="shrink-0 text-xs font-bold text-ink">{pv.count} views</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {analytics && analytics.viewsByDay.length > 0 && (
+        <View className="mt-3 rounded-xl border border-line bg-card p-4">
+          <Text className="text-sm font-bold text-ink">Daily Traffic (30 days)</Text>
+          <View className="mt-3 flex-row items-end" style={{ height: 120 }}>
+            {(() => {
+              const max = Math.max(...analytics.viewsByDay.map((x) => x.count), 1)
+              return analytics.viewsByDay.map((d) => (
+                <View
+                  key={d.date}
+                  style={{
+                    flex: 1,
+                    height: Math.max((d.count / max) * 110, 2),
+                    backgroundColor: '#1e3a8a',
+                    marginHorizontal: 1,
+                  }}
+                />
+              ))
+            })()}
+          </View>
+          <View className="mt-1 flex-row justify-between">
+            <Text className="text-[10px] text-muted">{analytics.viewsByDay[0]?.date}</Text>
+            <Text className="text-[10px] text-muted">{analytics.viewsByDay[analytics.viewsByDay.length - 1]?.date}</Text>
+          </View>
+        </View>
+      )}
     </ScrollView>
   )
 }

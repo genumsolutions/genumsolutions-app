@@ -6,7 +6,7 @@
 // dual-virtual-joystick) via the `useJoystick` prop.
 // =====================================================================
 import React, { useCallback, useRef } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, Vibration } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Slider from '@react-native-community/slider'
 import type { DriveControlsProps } from './types'
@@ -42,6 +42,11 @@ export function DriveControls({
     lastDirRef.current = d
     onDirection(d)
   }, [onDirection])
+
+  // Light haptic tick on button presses (drive feedback, no extra deps)
+  const hapticTap = useCallback(() => {
+    Vibration.vibrate(10)
+  }, [])
 
   // Reset debounce on stop
   const handleStop = useCallback(() => {
@@ -99,25 +104,25 @@ export function DriveControls({
         <View>
           <View className="flex-row items-center justify-center">
             <View style={{ width: 72 }} />
-            <Pressable onPress={() => onDirection('F')} disabled={!canControl} className="mx-1 items-center rounded-xl bg-navy px-6 py-4">
+            <Pressable onPress={() => { hapticTap(); onDirection('F') }} disabled={!canControl} className="mx-1 items-center rounded-xl bg-navy px-6 py-4">
               <Feather name="chevron-up" size={32} color="#fff" />
             </Pressable>
             <View style={{ width: 72 }} />
           </View>
           <View className="mt-2 flex-row items-center justify-center">
-            <Pressable onPress={() => onDirection('L')} disabled={!canControl} className="mx-1 items-center rounded-xl border border-navy px-6 py-4">
+            <Pressable onPress={() => { hapticTap(); onDirection('L') }} disabled={!canControl} className="mx-1 items-center rounded-xl border border-navy px-6 py-4">
               <Feather name="chevron-left" size={32} color="#1e3a8a" />
             </Pressable>
-            <Pressable onPress={handleStop} disabled={!canControl} className="mx-1 items-center rounded-xl bg-slate-200 px-6 py-4">
+            <Pressable onPress={() => { hapticTap(); handleStop() }} disabled={!canControl} className="mx-1 items-center rounded-xl bg-slate-200 px-6 py-4">
               <Feather name="stop-circle" size={28} color="#1e3a8a" />
             </Pressable>
-            <Pressable onPress={() => onDirection('R')} disabled={!canControl} className="mx-1 items-center rounded-xl border border-navy px-6 py-4">
+            <Pressable onPress={() => { hapticTap(); onDirection('R') }} disabled={!canControl} className="mx-1 items-center rounded-xl border border-navy px-6 py-4">
               <Feather name="chevron-right" size={32} color="#1e3a8a" />
             </Pressable>
           </View>
           <View className="mt-2 flex-row items-center justify-center">
             <View style={{ width: 72 }} />
-            <Pressable onPress={() => onDirection('B')} disabled={!canControl} className="mx-1 items-center rounded-xl border border-navy px-6 py-4">
+            <Pressable onPress={() => { hapticTap(); onDirection('B') }} disabled={!canControl} className="mx-1 items-center rounded-xl border border-navy px-6 py-4">
               <Feather name="chevron-down" size={32} color="#1e3a8a" />
             </Pressable>
             <View style={{ width: 72 }} />
@@ -169,10 +174,10 @@ export function DriveControls({
       {/* Start/Stop */}
       {showStartStop && (
         <View className="mt-4 flex-row flex-wrap gap-3">
-          <Pressable onPress={onRun} disabled={!canControl} className="rounded-full bg-navy px-6 py-3">
+          <Pressable onPress={() => { hapticTap(); onRun() }} disabled={!canControl} className="rounded-full bg-navy px-6 py-3">
             <Text className="text-sm font-black text-white">Run</Text>
           </Pressable>
-          <Pressable onPress={onStop} disabled={!canControl} className="rounded-full border border-line bg-card px-6 py-3">
+          <Pressable onPress={() => { hapticTap(); onStop() }} disabled={!canControl} className="rounded-full border border-line bg-card px-6 py-3">
             <Text className="text-sm font-black text-ink">Stop</Text>
           </Pressable>
         </View>
