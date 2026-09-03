@@ -36,6 +36,8 @@ export type ModeChooserProps = {
   canControl: boolean
   onSelect: (mode: CarMode) => void
   onCycle: () => void
+  /** Display catalogue (DB-first). Defaults to the bundled modes when omitted. */
+  modes?: CarMode[]
 }
 
 export type OledDisplayProps = {

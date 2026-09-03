@@ -9,7 +9,8 @@ import { useRoute } from '@react-navigation/native'
 import type { RouteProp } from '@react-navigation/native'
 import { APP_VERSION } from '../config/site'
 import { bleService, type CarTelemetry } from '../services/bleService'
-import { LOCAL_CAR_MODES, nextMode, type CarMode } from '../config/roboCarCatalog'
+import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog'
+import { getCarModes } from '../services/carModeService'
 import { PROJECT_CATEGORIES } from '../config/project-catalog'
 import type { RootStackParamList } from '../navigation/types'
 import { ConnectionPanel } from '../components/tools/ConnectionPanel'
@@ -58,6 +59,22 @@ export function ToolsScreen() {
   const [pidOff, setPidOff] = useState(0)
   const [relays, setRelays] = useState<Record<number, boolean>>({})
   const [useJoystick, setUseJoystick] = useState(false)
+  // Car-mode catalogue: read DB-first (shared robo_car_modes table, which the
+  // website admin edits) with the bundled LOCAL_CAR_MODES as offline fallback
+  // until the fetch resolves.
+  const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES)
+
+  useEffect(() => {
+    let active = true
+    getCarModes()
+      .then((modes) => {
+        if (!active || modes.length === 0) return
+        setCarModes(modes)
+        setActiveMode((prev) => (modes.some((m) => m.id === prev.id) ? prev : modes[0]))
+      })
+      .catch(() => { /* keep the bundled fallback */ })
+    return () => { active = false }
+  }, [])
 
   // Drone controls
   const [gimbalPan, setGimbalPan] = useState(90)
@@ -331,8 +348,12 @@ export function ToolsScreen() {
   }, [sendCommand])
 
   const cycleMode = useCallback(() => {
-    selectMode(nextMode(activeMode))
-  }, [activeMode, selectMode])
+    // Cycle through the catalogue currently shown (DB-first when loaded),
+    // wrapping like the firmware's mode cycle.
+    const list = carModes.length > 0 ? carModes : LOCAL_CAR_MODES
+    const idx = list.findIndex((m) => m.id === activeMode.id)
+    selectMode(idx === -1 ? list[0] : list[(idx + 1) % list.length])
+  }, [activeMode, selectMode, carModes])
 
   const toggleRelay = useCallback((i: number) => {
     setRelays(prev => {
@@ -418,6 +439,7 @@ export function ToolsScreen() {
           canControl={canControl}
           onSelect={selectMode}
           onCycle={cycleMode}
+          modes={carModes}
         />
       </View>
 

@@ -5,12 +5,15 @@ import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES } from '../../config/roboCarCatalog'
 import type { ModeChooserProps } from './types'
 
-export function ModeChooser({ activeMode, canControl, onSelect, onCycle }: ModeChooserProps) {
+export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }: ModeChooserProps) {
+  // Catalogue is passed in DB-first (carModeService); the bundled modes are
+  // the offline fallback until the fetch resolves.
+  const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
   return (
     <View className="rounded-2xl border border-line bg-card p-5 shadow-card">
       <Text className="text-xs font-bold uppercase tracking-wide text-muted">Mode</Text>
       <View className="mt-2 flex-row flex-wrap gap-2">
-        {LOCAL_CAR_MODES.map((m) => {
+        {catalogue.map((m) => {
           const isActive = activeMode.id === m.id
           return (
             <Pressable
