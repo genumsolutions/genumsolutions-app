@@ -30,6 +30,10 @@ type Route = RouteProp<RootStackParamList, 'Tools'>
 const WIFI_RECONNECT_DELAY_MS = 3000
 const WIFI_MAX_RECONNECT_ATTEMPTS = 5
 
+// Continuous controls (speed/servo sliders, joystick steering) must not flood
+// the BLE/WiFi link — mirror the physical remote's ~30ms resend cadence.
+const DRIVE_CMD_MIN_INTERVAL_MS = 50
+
 export function ToolsScreen() {
   const navigation = useNavigation<Nav>()
   const route = useRoute<Route>()
@@ -79,6 +83,9 @@ export function ToolsScreen() {
   // When true, the socket was closed on purpose (user disconnect / unmount)
   // and must NOT be reconnected automatically.
   const manualCloseRef = useRef(false)
+  // Timestamp of the last wire send per command kind ('spd' | 'servo'), used
+  // to throttle continuous slider/joystick streams.
+  const lastDriveCmdAtRef = useRef<Record<string, number>>({})
 
   // Set category from route params if provided (e.g. from ProjectsScreen)
   useEffect(() => {
@@ -274,15 +281,25 @@ export function ToolsScreen() {
     sendCommand(d)
   }, [sendCommand])
 
+  // Send at most one command of a kind every DRIVE_CMD_MIN_INTERVAL_MS while
+  // still updating UI state on every change (slider value, servo angle).
+  const sendThrottled = useCallback((kind: string, cmd: string) => {
+    const now = Date.now()
+    const last = lastDriveCmdAtRef.current[kind] ?? 0
+    if (now - last < DRIVE_CMD_MIN_INTERVAL_MS) return
+    lastDriveCmdAtRef.current[kind] = now
+    sendCommand(cmd)
+  }, [sendCommand])
+
   const handleSpeed = useCallback((value: number) => {
     setSpeed(value)
-    sendCommand(`SPD${Math.round(value)}`)
-  }, [sendCommand])
+    sendThrottled('spd', `SPD${Math.round(value)}`)
+  }, [sendThrottled])
 
   const handleServo = useCallback((value: number) => {
     setServo(value)
-    sendCommand(`SERVO${Math.round(value)}`)
-  }, [sendCommand])
+    sendThrottled('servo', `SERVO${Math.round(value)}`)
+  }, [sendThrottled])
 
   const applyPid = useCallback((key: 'kp' | 'ki' | 'kd' | 'out' | 'off', value: number) => {
     const next = { kp: pidKp, ki: pidKi, kd: pidKd, out: pidOut, off: pidOff }
@@ -381,7 +398,6 @@ export function ToolsScreen() {
         <ModeChooser
           activeMode={activeMode}
           canControl={canControl}
-          connected={connected}
           onSelect={selectMode}
           onCycle={cycleMode}
         />

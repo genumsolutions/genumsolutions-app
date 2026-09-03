@@ -34,7 +34,6 @@ export type ConnectionPanelProps = {
 export type ModeChooserProps = {
   activeMode: CarMode
   canControl: boolean
-  connected: boolean
   onSelect: (mode: CarMode) => void
   onCycle: () => void
 }
