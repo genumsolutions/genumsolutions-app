@@ -325,3 +325,53 @@ export async function fetchAdminAnalytics(days = 30): Promise<AdminAnalytics> {
 
   return { totalViews, todayViews, topPaths, viewsByDay }
 }
+
+// --- Journal posts (shared journal_posts table) ---
+
+export type AdminJournalPost = {
+  id: string
+  tag: string
+  title: string
+  text: string
+  active: boolean
+  sortOrder: number
+}
+
+export async function listAdminJournalPosts(): Promise<AdminJournalPost[]> {
+  const { data, error } = await supabase
+    .from('journal_posts')
+    .select('id, tag, title, text, active, sort_order')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    tag: row.tag ?? '',
+    title: row.title,
+    text: row.text ?? '',
+    active: row.active !== false,
+    sortOrder: row.sort_order ?? 0,
+  }))
+}
+
+export async function upsertAdminJournalPost(post: AdminJournalPost) {
+  const { data, error } = await supabase
+    .from('journal_posts')
+    .upsert({
+      id: post.id,
+      tag: post.tag,
+      title: post.title,
+      text: post.text,
+      active: post.active !== false,
+      sort_order: Math.max(0, Math.round(Number(post.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+  if (error) throw error
+  return data[0]
+}
+
+export async function deleteAdminJournalPost(id: string) {
+  const { error } = await supabase.from('journal_posts').delete().eq('id', id)
+  if (error) throw error
+}
