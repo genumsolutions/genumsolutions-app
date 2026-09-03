@@ -33,7 +33,11 @@ module.exports = {
       },
       fontFamily: {
         // ---- extracted from website tailwind.config.ts:27-31 ----
-        // NOTE: fonts must be installed/bundled in the mobile app (see README)
+        // Native: Inter (sans) + Sora (display) are EMBEDDED natively through
+        // the expo-font config plugin in app.json (Android XML font defs map
+        // fontFamily + fontWeight; iOS embeds the same weight files). On web
+        // these fall back through the lists below. The type scale roles are
+        // documented in TYPE_SCALE.md — keep this file's families in sync.
         sans: ['Inter', 'system-ui', 'sans-serif'],
         display: ['Sora', 'Georgia', 'serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],

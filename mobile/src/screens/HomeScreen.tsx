@@ -69,7 +69,7 @@ export function HomeScreen() {
       {/* Hero */}
       <View className="bg-navy px-5 pb-8 pt-6">
         <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">Kathmandu · Nepal</Text>
-        <Text className="mt-2 font-sans text-3xl font-bold leading-tight tracking-tight text-white">{heroTitle}</Text>
+        <Text className="mt-2 font-display text-3xl font-bold leading-tight tracking-tight text-white">{heroTitle}</Text>
         <Text className="mt-3 text-sm leading-6 text-white/80">{heroBody}</Text>
       </View>
 
@@ -91,7 +91,7 @@ export function HomeScreen() {
               <View className="mt-3">
                 {services.map((s) => (
                   <Pressable key={s.id} onPress={() => navigation.navigate('Services')} className="mb-2 rounded-2xl border border-line bg-card p-4">
-                    <Text className="font-sans text-base font-bold leading-snug text-ink">{s.name}</Text>
+                    <Text className="font-display text-lg font-bold leading-snug text-ink">{s.name}</Text>
                     <Text className="mt-1 text-sm leading-5 text-muted">{s.description}</Text>
                     <Text className="mt-2 text-sm font-black text-navy">{s.priceLabel}</Text>
                   </Pressable>
@@ -148,7 +148,7 @@ export function HomeScreen() {
               {pilotCosts.map(([item, cost, note]) => (
                 <View key={item} className="flex-row items-center justify-between border-b border-line py-2">
                   <Text className="flex-1 text-sm font-semibold text-ink">{item}<Text className="text-xs font-normal text-muted"> — {note}</Text></Text>
-                  <Text className="font-display font-bold text-navy">{cost}</Text>
+                  <Text className="font-display text-base font-bold text-navy">{cost}</Text>
                 </View>
               ))}
             </View>

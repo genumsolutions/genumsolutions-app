@@ -38,7 +38,7 @@ export function BrandHeader() {
               resizeMode="contain"
             />
             <View className="ml-2">
-              <Text className="font-sans text-lg font-bold leading-tight text-white">
+              <Text className="font-display text-lg font-bold leading-tight tracking-tight text-white">
                 GENUM
               </Text>
               <Text className="text-xs font-bold uppercase tracking-widest text-navy-light">

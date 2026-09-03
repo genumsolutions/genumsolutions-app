@@ -474,7 +474,7 @@ function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; anal
 
   return (
     <ScrollView className="p-4">
-      <Text className="text-base font-bold text-ink">Dashboard</Text>
+      <Text className="font-display text-2xl font-bold tracking-tight text-ink">Dashboard</Text>
       <View className="mt-3 flex-row flex-wrap gap-3">
         <StatCard label="Revenue" value={formatNPR(stats.revenue)} sub={`Today: ${formatNPR(stats.revenueToday)}`} />
         <StatCard label="Users" value={String(stats.totalUsers)} />
@@ -488,7 +488,7 @@ function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; anal
 
       {analytics && analytics.topPaths.length > 0 && (
         <View className="mt-3 rounded-xl border border-line bg-card p-4">
-          <Text className="text-sm font-bold text-ink">Top Pages (30 days)</Text>
+          <Text className="font-display text-lg font-bold text-ink">Top Pages (30 days)</Text>
           {analytics.topPaths.slice(0, 10).map((pv) => (
             <View key={pv.path} className="flex-row items-center justify-between gap-3 border-b border-line py-2 last:border-b-0">
               <Text className="min-w-0 flex-1 font-mono text-xs text-muted" numberOfLines={1}>{pv.path}</Text>
@@ -500,7 +500,7 @@ function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; anal
 
       {analytics && analytics.viewsByDay.length > 0 && (
         <View className="mt-3 rounded-xl border border-line bg-card p-4">
-          <Text className="text-sm font-bold text-ink">Daily Traffic (30 days)</Text>
+          <Text className="font-display text-lg font-bold text-ink">Daily Traffic (30 days)</Text>
           <View className="mt-3 flex-row items-end" style={{ height: 120 }}>
             {(() => {
               const max = Math.max(...analytics.viewsByDay.map((x) => x.count), 1)
