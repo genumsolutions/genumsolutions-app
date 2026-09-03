@@ -29,8 +29,6 @@ if (!VERSION || !VERSION_CODE) {
   console.error('Error: Could not read version/versionCode from app.json');
   process.exit(1);
 }
-const APK_SIZE_MB = '32.5 MB'; // Updated after APK upload with actual size
-
 const defaultApk = resolve(
   rootDir,
   'releases',
