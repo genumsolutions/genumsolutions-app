@@ -119,7 +119,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
 
           <View className="flex-row items-start justify-between px-5">
             <View className="flex-1 pr-4">
-              <Text className="text-xl font-bold text-navy">{title}</Text>
+              <Text className="font-display text-xl font-bold tracking-tight text-navy">{title}</Text>
               <Text className="mt-0.5 text-sm text-muted">{subtitle}</Text>
             </View>
             <Pressable

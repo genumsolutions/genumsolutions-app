@@ -124,13 +124,13 @@ export function ProductDetailScreen() {
         <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
           {product.category} · {product.badge || product.productType}
         </Text>
-        <Text className="mt-2 font-sans text-2xl font-bold leading-tight text-ink">
+        <Text className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-ink">
           {product.name}
         </Text>
         <Text className="mt-3 text-sm leading-6 text-muted">{product.description}</Text>
 
         <View className="mt-6 flex-row flex-wrap items-baseline gap-x-2">
-          <Text className="font-sans text-3xl font-bold text-ink">{product.priceLabel}</Text>
+          <Text className="font-display text-3xl font-bold tracking-tight text-ink">{product.priceLabel}</Text>
           <Text className="text-sm text-muted">
             {product.productType === 'Project package' ? 'indicative package' : 'per unit'}
           </Text>
@@ -170,7 +170,7 @@ export function ProductDetailScreen() {
 
         {product.specs.length > 0 && (
           <View className="mt-4">
-            <Text className="text-xs font-black uppercase tracking-[0.2em] text-navy">Specs</Text>
+            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Specs</Text>
             {product.specs.map((spec, i) => (
               <View key={i} className="mt-2 flex-row items-start">
                 <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-gold" />
@@ -182,7 +182,7 @@ export function ProductDetailScreen() {
 
         {product.productType === 'Project package' && (
           <View className="mt-5 border-t-2 border-line pt-5">
-            <Text className="text-xs font-black uppercase tracking-[0.2em] text-navy">
+            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
               Project information
             </Text>
             {product.projectOverview ? (

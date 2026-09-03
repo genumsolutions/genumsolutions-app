@@ -45,7 +45,7 @@ export function ServicesScreen() {
       ListHeaderComponent={
         <View className="mb-3">
           <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Services</Text>
-          <Text className="mt-1 font-sans text-2xl font-bold text-ink">
+          <Text className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">
             What GENUM does
           </Text>
         </View>
@@ -53,7 +53,7 @@ export function ServicesScreen() {
       renderItem={({ item }) => (
         <View className="mb-3 rounded-2xl border border-line bg-card p-5">
           <View className="flex-row items-center justify-between">
-            <Text className="flex-1 font-sans text-lg font-bold text-ink">{item.name}</Text>
+            <Text className="flex-1 font-display text-lg font-bold leading-snug text-ink">{item.name}</Text>
             {item.tag ? (
               <View className="ml-2 rounded-full bg-sky px-2.5 py-0.5">
                 <Text className="text-xs font-black uppercase text-navy">{item.tag}</Text>

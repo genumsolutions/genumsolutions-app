@@ -75,7 +75,7 @@ export function ContactScreen() {
     >
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
         <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Contact</Text>
-        <Text className="mt-1 font-sans text-2xl font-bold text-ink">Get in touch</Text>
+        <Text className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">Get in touch</Text>
 
         <View className="mt-4 space-y-3">
           <Row

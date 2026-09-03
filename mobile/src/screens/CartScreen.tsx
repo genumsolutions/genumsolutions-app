@@ -84,7 +84,7 @@ function CartContent({
     return (
       <View className="flex-1 items-center justify-center bg-surface px-8">
         <Feather name="shopping-cart" size={44} color="#cbd5e1" />
-        <Text className="mt-3 text-base font-bold text-ink">Your cart is empty</Text>
+        <Text className="mt-3 font-display text-xl font-bold text-ink">Your cart is empty</Text>
         <Text className="mt-1 text-center text-sm text-muted">
           Add products from the shop to start your build list.
         </Text>
@@ -148,7 +148,7 @@ function CartContent({
       <View className="border-t border-line bg-card px-5 py-4">
         <View className="flex-row items-center justify-between">
           <Text className="text-sm text-muted">Total</Text>
-          <Text className="font-sans text-lg font-bold text-ink">
+          <Text className="font-display text-lg font-bold tracking-tight text-ink">
             NPR {(total || 0).toLocaleString('en-IN')}
           </Text>
         </View>

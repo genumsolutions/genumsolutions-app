@@ -32,7 +32,7 @@ export function AboutScreen() {
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
       <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">About</Text>
-      <Text className="mt-1 font-sans text-2xl font-bold leading-tight text-ink">
+      <Text className="mt-1 font-display text-2xl font-bold leading-tight tracking-tight text-ink">
         Technology you can touch, test, and trust.
       </Text>
       <Text className="mt-3 text-sm leading-6 text-muted">
