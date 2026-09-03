@@ -19,6 +19,7 @@ import { OledDisplay } from '../components/tools/OledDisplay'
 import { DriveControls } from '../components/tools/DriveControls'
 import { DroneControls } from '../components/tools/DroneControls'
 import { SensorGrid } from '../components/tools/SensorGrid'
+import { ModeInfo } from '../components/tools/ModeInfo'
 import type { SensorData } from '../components/tools/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Tools'>
@@ -384,6 +385,11 @@ export function ToolsScreen() {
           onSelect={selectMode}
           onCycle={cycleMode}
         />
+      </View>
+
+      {/* Mode info (mobile adaptation of the website's legend side panel) */}
+      <View className="mt-4">
+        <ModeInfo mode={activeMode} />
       </View>
 
       {/* OLED display */}
