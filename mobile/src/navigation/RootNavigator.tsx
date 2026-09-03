@@ -32,7 +32,31 @@ import { LegalScreen } from '../screens/LegalScreen';
 import { useApp } from '../context/AppContext';
 import { PROJECT_CATEGORIES } from '../config/project-catalog';
 import { BrandHeader } from '../components/BrandHeader';
+import { withErrorBoundary } from '../components/withErrorBoundary';
 import type { MainTabParamList, RootStackParamList } from './types';
+
+// Each screen gets its own error boundary so a crash in one screen shows a
+// friendly fallback instead of killing the whole app. Defined at module scope
+// so component identity is stable across renders.
+const MainTabsSafe = withErrorBoundary(MainTabs, 'Main');
+const HomeScreenSafe = withErrorBoundary(HomeScreen, 'Home');
+const ShopScreenSafe = withErrorBoundary(ShopScreen, 'Shop');
+const CartScreenSafe = withErrorBoundary(CartScreen, 'Cart');
+const AccountScreenSafe = withErrorBoundary(AccountScreen, 'Account');
+const ProductDetailScreenSafe = withErrorBoundary(ProductDetailScreen, 'ProductDetail');
+const CheckoutScreenSafe = withErrorBoundary(CheckoutScreen, 'Checkout');
+const OrderSuccessScreenSafe = withErrorBoundary(OrderSuccessScreen, 'OrderSuccess');
+const ServicesScreenSafe = withErrorBoundary(ServicesScreen, 'Services');
+const ProjectsScreenSafe = withErrorBoundary(ProjectsScreen, 'Projects');
+const ContactScreenSafe = withErrorBoundary(ContactScreen, 'Contact');
+const AboutScreenSafe = withErrorBoundary(AboutScreen, 'About');
+const ToolsScreenSafe = withErrorBoundary(ToolsScreen, 'Tools');
+const AdminScreenSafe = withErrorBoundary(AdminScreen, 'Admin');
+const JournalScreenSafe = withErrorBoundary(JournalScreen, 'Journal');
+const PrintingScreenSafe = withErrorBoundary(PrintingScreen, 'Printing');
+const OpenToolsScreenSafe = withErrorBoundary(OpenToolsScreen, 'OpenTools');
+const CategoryHubScreenSafe = withErrorBoundary(CategoryHubScreen, 'Category');
+const LegalScreenSafe = withErrorBoundary(LegalScreen, 'Legal');
 
 type IconName = ComponentProps<typeof Feather>['name'];
 
@@ -67,17 +91,17 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Shop" component={ShopScreen} />
+      <Tab.Screen name="Home" component={HomeScreenSafe} />
+      <Tab.Screen name="Shop" component={ShopScreenSafe} />
       <Tab.Screen
         name="Cart"
-        component={CartScreen}
+        component={CartScreenSafe}
         options={{
           tabBarBadge: cartCount > 0 ? (cartCount > 99 ? '99+' : cartCount) : undefined,
           tabBarBadgeStyle: { backgroundColor: '#b45309', color: '#ffffff', fontSize: 10 },
         }}
       />
-      <Tab.Screen name="Account" component={AccountScreen} />
+      <Tab.Screen name="Account" component={AccountScreenSafe} />
     </Tab.Navigator>
   );
 }
@@ -90,70 +114,70 @@ export function RootNavigator() {
         contentStyle: { backgroundColor: '#ffffff' },
       }}
     >
-      <Stack.Screen name="Main" component={MainTabs} />
+      <Stack.Screen name="Main" component={MainTabsSafe} />
       <Stack.Screen
         name="ProductDetail"
-        component={ProductDetailScreen}
+        component={ProductDetailScreenSafe}
         options={{ headerShown: true, title: 'Product', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Checkout"
-        component={CheckoutScreen}
+        component={CheckoutScreenSafe}
         options={{ headerShown: true, title: 'Checkout', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="OrderSuccess"
-        component={OrderSuccessScreen}
+        component={OrderSuccessScreenSafe}
         options={{ headerShown: false, gestureEnabled: false }}
       />
       <Stack.Screen
         name="Services"
-        component={ServicesScreen}
+        component={ServicesScreenSafe}
         options={{ headerShown: true, title: 'Services', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Projects"
-        component={ProjectsScreen}
+        component={ProjectsScreenSafe}
         options={{ headerShown: true, title: 'Projects', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Contact"
-        component={ContactScreen}
+        component={ContactScreenSafe}
         options={{ headerShown: true, title: 'Contact', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="About"
-        component={AboutScreen}
+        component={AboutScreenSafe}
         options={{ headerShown: true, title: 'About', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Tools"
-        component={ToolsScreen}
+        component={ToolsScreenSafe}
         options={{ headerShown: true, title: 'Tools & IoT', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Admin"
-        component={AdminScreen}
+        component={AdminScreenSafe}
         options={{ headerShown: true, title: 'Admin', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Journal"
-        component={JournalScreen}
+        component={JournalScreenSafe}
         options={{ headerShown: true, title: 'Journal', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Printing"
-        component={PrintingScreen}
+        component={PrintingScreenSafe}
         options={{ headerShown: true, title: '3D Printing', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="OpenTools"
-        component={OpenToolsScreen}
+        component={OpenToolsScreenSafe}
         options={{ headerShown: true, title: 'Open Tools', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Category"
-        component={CategoryHubScreen}
+        component={CategoryHubScreenSafe}
         options={({ route }) => ({
           headerShown: true,
           title: PROJECT_CATEGORIES.find((c) => c.slug === route.params.slug)?.name ?? 'Category',
@@ -163,7 +187,7 @@ export function RootNavigator() {
       />
     <Stack.Screen
         name="Legal"
-        component={LegalScreen}
+        component={LegalScreenSafe}
         options={({ route }) => ({
           headerShown: true,
           title: route.params.doc === 'privacy' ? 'Privacy Policy' : 'Terms of Service',

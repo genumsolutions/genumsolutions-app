@@ -273,3 +273,55 @@ export async function listAdminActivity(page = 1, limit = 20): Promise<{ entries
     totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
   }
 }
+
+// --- Dashboard analytics (page_views) ---
+// Mirrors the website's getPageViewStats: total/today views, top paths, and
+// a per-day traffic series. RLS: admins may read page_views.
+
+export type AdminAnalytics = {
+  totalViews: number
+  todayViews: number
+  topPaths: { path: string; count: number; uniqueUsers: number }[]
+  viewsByDay: { date: string; count: number }[]
+}
+
+export async function fetchAdminAnalytics(days = 30): Promise<AdminAnalytics> {
+  const since = new Date(Date.now() - days * 86400000).toISOString()
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayISO = todayStart.toISOString()
+
+  const [allResult, todayResult] = await Promise.all([
+    supabase.from('page_views').select('path, created_at, user_id').gte('created_at', since),
+    supabase.from('page_views').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+  ])
+
+  const todayViews = todayResult.count ?? 0
+  const rows = (allResult.data ?? []) as { path: string; created_at: string; user_id: string | null }[]
+  const totalViews = rows.length
+
+  // Top paths
+  const pathMap = new Map<string, { count: number; users: Set<string> }>()
+  for (const { path, user_id } of rows) {
+    const entry = pathMap.get(path) ?? { count: 0, users: new Set<string>() }
+    entry.count += 1
+    if (user_id) entry.users.add(user_id)
+    pathMap.set(path, entry)
+  }
+  const topPaths = Array.from(pathMap.entries())
+    .map(([path, { count, users }]) => ({ path, count, uniqueUsers: users.size }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20)
+
+  // Views per day
+  const dayMap = new Map<string, number>()
+  for (const { created_at } of rows) {
+    const day = created_at.slice(0, 10)
+    dayMap.set(day, (dayMap.get(day) ?? 0) + 1)
+  }
+  const viewsByDay = Array.from(dayMap.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  return { totalViews, todayViews, topPaths, viewsByDay }
+}
