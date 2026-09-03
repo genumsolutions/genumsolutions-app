@@ -153,6 +153,20 @@ export async function getProducts(): Promise<Product[]> {
   }
 }
 
+export type CatalogSource = 'live' | 'cache';
+
+/** Like getProducts(), but also reports whether the data is live or cached. */
+export async function getProductsWithSource(): Promise<{ products: Product[]; source: CatalogSource }> {
+  try {
+    const list = await getProductsFromSupabase();
+    cacheProducts(list);
+    return { products: list, source: 'live' };
+  } catch {
+    const cached = await cachedProducts();
+    return { products: cached ?? [], source: 'cache' };
+  }
+}
+
 export async function getProductById(id: string): Promise<Product | null> {
   try {
     const { data, error } = await supabase
@@ -169,6 +183,27 @@ export async function getProductById(id: string): Promise<Product | null> {
       return cached?.find((p) => p.id === id) ?? null;
     } catch {
       return null;
+    }
+  }
+}
+
+/** Like getProductById(), but also reports whether the product is live or cached. */
+export async function getProductByIdWithSource(id: string): Promise<{ product: Product | null; source: CatalogSource }> {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('active', true)
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return { product: data ? rowToProduct(data as ProductRow) : null, source: 'live' };
+  } catch {
+    try {
+      const cached = await cachedProducts();
+      return { product: cached?.find((p) => p.id === id) ?? null, source: 'cache' };
+    } catch {
+      return { product: null, source: 'cache' };
     }
   }
 }

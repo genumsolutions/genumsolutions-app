@@ -17,7 +17,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { getProductById } from '../services/productService';
+import { getProductByIdWithSource } from '../services/productService';
+import { OfflineBadge } from '../components/OfflineBadge';
 import { addToCart } from '../services/cartService';
 import { useApp } from '../context/AppContext';
 import type { Product } from '../types';
@@ -31,6 +32,7 @@ export function ProductDetailScreen() {
   const route = useRoute<Route>();
   const { setCart } = useApp();
   const [product, setProduct] = useState<Product | null>(null);
+  const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
@@ -39,8 +41,11 @@ export function ProductDetailScreen() {
     let active = true;
     (async () => {
       try {
-        const p = await getProductById(route.params.productId);
-        if (active) setProduct(p);
+        const { product, source } = await getProductByIdWithSource(route.params.productId);
+        if (active) {
+          setProduct(product);
+          setOffline(source === 'cache');
+        }
       } catch {
         // no-op
       } finally {
@@ -95,6 +100,13 @@ export function ProductDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingBottom: 32 }}>
+      {/* Offline indicator (product came from local cache) */}
+      {offline && (
+        <View className="px-4 pt-3">
+          <OfflineBadge />
+        </View>
+      )}
+
       {/* Image */}
       <View className="h-64 w-full items-center justify-center bg-ink">
         {product.image ? (
