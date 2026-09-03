@@ -677,9 +677,9 @@ function FinanceTab({ stats }: { stats: DashboardStats | null }) {
   }
 
   const pending = stats.pendingOrders
-  const paid = Math.floor(stats.succeededTransactions * 0.6)
-  const fulfilled = stats.succeededTransactions - paid
-  const cancelled = Math.max(0, stats.totalOrders - stats.pendingOrders - stats.succeededTransactions)
+  const paid = stats.paidOrders
+  const fulfilled = stats.fulfilledOrders
+  const cancelled = stats.cancelledOrders
 
   return (
     <ScrollView className="p-4">

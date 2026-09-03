@@ -24,6 +24,11 @@ import type { SensorData } from '../components/tools/types'
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Tools'>
 type Route = RouteProp<RootStackParamList, 'Tools'>
 
+// WiFi WebSocket resilience: reconnect after an unexpected drop, but give up
+// after a few attempts so we don't retry forever against a dead device.
+const WIFI_RECONNECT_DELAY_MS = 3000
+const WIFI_MAX_RECONNECT_ATTEMPTS = 5
+
 export function ToolsScreen() {
   const navigation = useNavigation<Nav>()
   const route = useRoute<Route>()
@@ -67,6 +72,12 @@ export function ToolsScreen() {
   })
 
   const mountedRef = useRef(true)
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  // When true, the socket was closed on purpose (user disconnect / unmount)
+  // and must NOT be reconnected automatically.
+  const manualCloseRef = useRef(false)
 
   // Set category from route params if provided (e.g. from ProjectsScreen)
   useEffect(() => {
@@ -74,6 +85,23 @@ export function ToolsScreen() {
       setActiveCategory(routeCategory)
     }
   }, [routeCategory])
+
+  // Cleanup on unmount: stop reconnect timers, close the socket, and mark
+  // the close as intentional so onclose never schedules a reconnect.
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+      manualCloseRef.current = true
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+      if (wsRef.current) {
+        try { wsRef.current.close() } catch { /* ignore */ }
+        wsRef.current = null
+      }
+    }
+  }, [])
 
   // BLE telemetry/status listeners removed from mount to prevent crashes on
   // devices without BLE support. Control actions are gated by `connected`
@@ -127,53 +155,92 @@ export function ToolsScreen() {
     }
   }, [])
 
-  const handleWifiConnect = useCallback(async () => {
+  // Open a WiFi WebSocket and wire up telemetry. On an unexpected close,
+  // auto-reconnect up to WIFI_MAX_RECONNECT_ATTEMPTS times; user-initiated
+  // disconnects (manualCloseRef) skip reconnection entirely.
+  const openSocket = useCallback((url: string) => {
+    setConnecting(true)
+    let socket: WebSocket
+    try {
+      socket = new WebSocket(url)
+    } catch (e) {
+      setConnecting(false)
+      setError(e instanceof Error ? e.message : 'WiFi connect failed')
+      return
+    }
+    wsRef.current = socket
+    setWs(socket)
+    socket.onopen = () => {
+      // Connected — reset the counter so a later drop gets a full budget
+      reconnectAttemptsRef.current = 0
+      setWifiConnected(true)
+      setConnecting(false)
+      setError(null)
+    }
+    socket.onmessage = (event) => {
+      try {
+        const json = JSON.parse(event.data)
+        if (json.telemetry) setTelemetry(json.telemetry)
+        if (json.sensors) setSensorData(prev => ({ ...prev, ...json.sensors }))
+      } catch { /* Ignore non-JSON messages */ }
+    }
+    socket.onerror = () => {
+      // onclose always follows onerror — the close handler owns cleanup
+    }
+    socket.onclose = () => {
+      setWifiConnected(false)
+      setConnecting(false)
+      // Only clear state if this socket is still the active one
+      if (wsRef.current === socket) {
+        wsRef.current = null
+        setWs(null)
+      }
+      if (manualCloseRef.current) return
+      if (reconnectAttemptsRef.current >= WIFI_MAX_RECONNECT_ATTEMPTS) {
+        setError('WiFi connection lost — reconnection failed. Tap Connect WiFi to retry.')
+        return
+      }
+      reconnectAttemptsRef.current += 1
+      setError(`WiFi connection lost — reconnecting (attempt ${reconnectAttemptsRef.current}/${WIFI_MAX_RECONNECT_ATTEMPTS})…`)
+      reconnectTimerRef.current = setTimeout(() => openSocket(url), WIFI_RECONNECT_DELAY_MS)
+    }
+  }, [])
+
+  const handleWifiConnect = useCallback(() => {
     setError(null)
     if (!wifiUrl || wifiUrl === 'ws://192.168.4.1:81') {
       setError('Please enter a valid WiFi URL')
       return
     }
-    setConnecting(true)
-    try {
-      const wsUrl = wifiUrl.startsWith('ws://') || wifiUrl.startsWith('wss://') ? wifiUrl : `ws://${wifiUrl}`
-      const socket = new WebSocket(wsUrl)
-      setWs(socket)
-      socket.onopen = () => {
-        setWifiConnected(true)
-        setConnecting(false)
-      }
-      socket.onmessage = (event) => {
-        try {
-          const json = JSON.parse(event.data)
-          if (json.telemetry) setTelemetry(json.telemetry)
-          if (json.sensors) setSensorData(prev => ({ ...prev, ...json.sensors }))
-        } catch { /* Ignore non-JSON messages */ }
-      }
-      socket.onerror = () => {
-        setError('WiFi connection error')
-        setWifiConnected(false)
-        setConnecting(false)
-      }
-      socket.onclose = () => {
-        setWifiConnected(false)
-        setError('WiFi connection closed')
-        setConnecting(false)
-      }
-    } catch (e) {
-      if (mountedRef.current) {
-        setError(e instanceof Error ? e.message : 'WiFi connect failed')
-        setConnecting(false)
-      }
+    // Cancel any pending auto-reconnect so it can't open a second socket
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
     }
-  }, [wifiUrl, connecting])
+    const wsUrl = wifiUrl.startsWith('ws://') || wifiUrl.startsWith('wss://') ? wifiUrl : `ws://${wifiUrl}`
+    manualCloseRef.current = false
+    reconnectAttemptsRef.current = 0
+    openSocket(wsUrl)
+  }, [wifiUrl, openSocket])
 
   const handleWifiDisconnect = useCallback(() => {
+    manualCloseRef.current = true
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
     if (ws) { ws.close(); setWs(null) }
     setWifiConnected(false)
     setError(null)
   }, [ws])
 
   const handleDisconnect = useCallback(async () => {
+    manualCloseRef.current = true
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
+    reconnectAttemptsRef.current = 0
     await bleService.disconnect()
     if (ws) { ws.close(); setWs(null) }
     setConnected(false)

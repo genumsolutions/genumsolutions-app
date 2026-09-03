@@ -26,10 +26,19 @@ export function Joystick({ onMove, disabled, size = 144 }: Props) {
   const knobX = useRef(new Animated.Value(0)).current
   const knobY = useRef(new Animated.Value(0)).current
 
+  // The PanResponder is created once, so it must read the *current* values
+  // of `disabled`/`onMove` through refs — otherwise it captures the values
+  // from the first render (e.g. disabled=true before the device connects)
+  // and the joystick never becomes interactive.
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
+  const onMoveRef = useRef(onMove)
+  onMoveRef.current = onMove
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
+      onStartShouldSetPanResponder: () => !disabledRef.current,
+      onMoveShouldSetPanResponder: () => !disabledRef.current,
       onPanResponderMove: (_, gestureState) => {
         // Clamp to circular boundary
         let dx = gestureState.dx
@@ -43,7 +52,7 @@ export function Joystick({ onMove, disabled, size = 144 }: Props) {
         knobX.setValue(dx)
         knobY.setValue(dy)
         // Report normalized values to parent
-        onMove(dx / knobMaxRadius, dy / knobMaxRadius)
+        onMoveRef.current(dx / knobMaxRadius, dy / knobMaxRadius)
       },
       onPanResponderRelease: () => {
         // Snap back to center
@@ -51,12 +60,12 @@ export function Joystick({ onMove, disabled, size = 144 }: Props) {
           Animated.spring(knobX, { toValue: 0, useNativeDriver: true, friction: 5 }),
           Animated.spring(knobY, { toValue: 0, useNativeDriver: true, friction: 5 }),
         ]).start()
-        onMove(0, 0)
+        onMoveRef.current(0, 0)
       },
       onPanResponderTerminate: () => {
         knobX.setValue(0)
         knobY.setValue(0)
-        onMove(0, 0)
+        onMoveRef.current(0, 0)
       },
     }),
   ).current

@@ -21,7 +21,7 @@ export function SensorGrid({
           {[1, 2, 3, 4].map((i) => (
             <View key={i} className="flex-row items-center gap-2">
               <Switch
-                value={relays[i]}
+                value={!!relays[i]}
                 onValueChange={() => onToggleRelay(i)}
                 disabled={!canControl}
                 trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }}
