@@ -18,8 +18,9 @@ import { Feather } from '@expo/vector-icons';
 import {
   distinctCategories,
   filterProducts,
-  getProducts,
+  getProductsWithSource,
 } from '../services/productService';
+import { OfflineBadge } from '../components/OfflineBadge';
 import type { Product } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -28,6 +29,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 export function ShopScreen() {
   const navigation = useNavigation<Nav>();
   const [products, setProducts] = useState<Product[]>([]);
+  const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState('All');
@@ -46,7 +48,9 @@ export function ShopScreen() {
   const load = async (asRefresh = false) => {
     if (asRefresh) setRefreshing(true);
     try {
-      setProducts(await getProducts());
+      const { products, source } = await getProductsWithSource();
+      setProducts(products);
+      setOffline(source === 'cache');
     } catch {
       // keep previous data
     } finally {
@@ -92,6 +96,13 @@ export function ShopScreen() {
           )}
         </View>
       </View>
+
+      {/* Offline indicator (data came from local cache) */}
+      {offline && (
+        <View className="px-4 pb-1">
+          <OfflineBadge />
+        </View>
+      )}
 
       {/* Categories */}
       <View>
