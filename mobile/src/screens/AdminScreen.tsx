@@ -401,8 +401,11 @@ export function AdminScreen() {
 
   return (
     <View className="flex-1 bg-mist">
-      {/* Tab bar */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="border-b border-line bg-card">
+      {/* Tab bar — grow-0 keeps the strip at its own height: RN ScrollViews
+          default to flexGrow:1, so without it the strip stretches into a huge
+          empty band under the tabs whenever the tab content is shorter than
+          the screen. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="grow-0 shrink-0 border-b border-line bg-card">
         <View className="flex-row">
           {TABS.map((t) => (
             <Pressable
