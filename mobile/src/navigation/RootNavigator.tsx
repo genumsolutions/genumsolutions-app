@@ -1,20 +1,18 @@
 // =====================================================================
 // RootNavigator - native navigation tree:
 //   RootStack
-//     ├─ Main      (bottom tab navigator: Home / Shop / Cart / Account)
+//     ├─ Main      (swipeable pager: Home / Shop / Cart / Account)
 //     └─ ProductDetail, Checkout, OrderSuccess, Services, Projects,
 //        Contact, About, Tools
 // =====================================================================
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Feather } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
 
 import { HomeScreen } from '../screens/HomeScreen';
 import { ShopScreen } from '../screens/ShopScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { AccountScreen } from '../screens/AccountScreen';
+import { MainTabPager } from './MainTabPager';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { OrderSuccessScreen } from '../screens/OrderSuccessScreen';
@@ -29,9 +27,8 @@ import { PrintingScreen } from '../screens/PrintingScreen';
 import { OpenToolsScreen } from '../screens/OpenToolsScreen';
 import { LegalScreen } from '../screens/LegalScreen';
 import { useApp } from '../context/AppContext';
-import { BrandHeader } from '../components/BrandHeader';
 import { withErrorBoundary } from '../components/withErrorBoundary';
-import type { MainTabParamList, RootStackParamList } from './types';
+import type { RootStackParamList } from './types';
 
 // Each screen gets its own error boundary so a crash in one screen shows a
 // friendly fallback instead of killing the whole app. Defined at module scope
@@ -55,51 +52,18 @@ const PrintingScreenSafe = withErrorBoundary(PrintingScreen, 'Printing');
 const OpenToolsScreenSafe = withErrorBoundary(OpenToolsScreen, 'OpenTools');
 const LegalScreenSafe = withErrorBoundary(LegalScreen, 'Legal');
 
-type IconName = ComponentProps<typeof Feather>['name'];
-
-const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const TAB_ICONS: Record<keyof MainTabParamList, { on: IconName; off: IconName }> = {
-  Home: { on: 'home', off: 'home' },
-  Shop: { on: 'grid', off: 'grid' },
-  Cart: { on: 'shopping-bag', off: 'shopping-bag' },
-  Account: { on: 'user', off: 'user' },
-};
-
 function MainTabs() {
-  const { cartCount } = useApp();
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        header: () => <BrandHeader />,
-        tabBarActiveTintColor: '#1e3a8a',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700' },
-        tabBarIcon: ({ color, size, focused }) => {
-          const icons = TAB_ICONS[route.name];
-          return (
-            <Feather
-              name={focused ? icons.on : icons.off}
-              size={size}
-              color={color}
-            />
-          );
-        },
-      })}
-    >
-      <Tab.Screen name="Home" component={HomeScreenSafe} />
-      <Tab.Screen name="Shop" component={ShopScreenSafe} />
-      <Tab.Screen
-        name="Cart"
-        component={CartScreenSafe}
-        options={{
-          tabBarBadge: cartCount > 0 ? (cartCount > 99 ? '99+' : cartCount) : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#b45309', color: '#ffffff', fontSize: 10 },
-        }}
-      />
-      <Tab.Screen name="Account" component={AccountScreenSafe} />
-    </Tab.Navigator>
+    <MainTabPager
+      screens={{
+        Home: HomeScreenSafe,
+        Shop: ShopScreenSafe,
+        Cart: CartScreenSafe,
+        Account: AccountScreenSafe,
+      }}
+    />
   );
 }
 
