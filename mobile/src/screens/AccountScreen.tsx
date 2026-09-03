@@ -93,7 +93,7 @@ export function AccountScreen() {
         <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
           <Feather name="user" size={26} color="#ffffff" />
         </View>
-        <Text className="mt-4 text-lg font-bold text-ink">Sign in to account</Text>
+        <Text className="mt-4 font-display text-xl font-bold text-ink">Sign in to account</Text>
         <Text className="mt-1 text-center text-sm text-muted">
           Access your profile, orders, and synced build list.
         </Text>
@@ -174,7 +174,7 @@ export function AccountScreen() {
           </View>
 
           <View className="mt-4">
-            <Text className="mb-2 text-xs font-black uppercase tracking-[0.2em] text-navy">
+            <Text className="mb-2 text-xs font-black uppercase tracking-[0.24em] text-navy">
               Your orders
             </Text>
             {ordersLoading ? (
@@ -203,7 +203,7 @@ export function AccountScreen() {
               {new Date(item.created_at).toLocaleDateString()}
             </Text>
           </View>
-          <Text className="mt-2 font-sans text-lg font-bold text-navy">
+          <Text className="mt-2 font-display text-lg font-bold text-navy">
             NPR {item.total_npr.toLocaleString('en-IN')}
           </Text>
           <Text className="mt-1 text-xs text-muted">#{item.id.slice(0, 8)}</Text>
