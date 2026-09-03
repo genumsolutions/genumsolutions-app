@@ -17,7 +17,11 @@ import {
   View,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
+import PagerView from 'react-native-pager-view'
+import type { PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
 import { useApp } from '../context/AppContext'
+import { CategoryDropdown } from '../components/CategoryDropdown'
+import { isProjectPackage } from '../services/projectService'
 import { fetchSiteContent, upsertSiteContent } from '../services/orderService'
 import {
   listAdminOrders,
@@ -49,14 +53,25 @@ import {
   type ActivityEntry,
 } from '../services/adminService'
 
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
   const [tab, setTab] = useState<Tab>('Dashboard')
+  const pagerRef = useRef<PagerView>(null)
+  const tabScrollRef = useRef<ScrollView>(null)
+  const currentPageRef = useRef<number>(0)
+  const [visited, setVisited] = useState<Record<string, boolean>>({ Dashboard: true })
   const [loading, setLoading] = useState(false)
+
+  // Keep the horizontal tab strip scrolled so the active tab stays visible.
+  useEffect(() => {
+    const index = TABS.indexOf(tab)
+    if (index < 0) return
+    tabScrollRef.current?.scrollTo({ x: index * 96 - 40, y: 0, animated: true })
+  }, [tab])
 
   // Orders
   const [orders, setOrders] = useState<AdminOrder[]>([])
@@ -136,7 +151,7 @@ export function AdminScreen() {
         }
       } else if (tab === 'Orders') {
         void loadOrders(1)
-      } else if (tab === 'Products' || tab === 'ProjectPackages' || tab === 'RobotCarProjects') {
+      } else if (tab === 'Products' || tab === 'ProjectPackages') {
         setProducts(await listAdminProducts())
       } else if (tab === 'Services') {
         setServices(await listAdminServices())
@@ -164,6 +179,7 @@ export function AdminScreen() {
       console.error('Admin load error:', e)
     } finally {
       setLoading(false)
+      setVisited((v) => ({ ...v, [tab]: true }))
     }
   }
 
@@ -399,18 +415,198 @@ export function AdminScreen() {
     void loadMessages(messagesPage)
   }
 
+  const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
+    const index = event.nativeEvent.position
+    currentPageRef.current = index
+    const key = TABS[index]
+    if (key) {
+      setTab(key)
+      setEditingProduct(null)
+      setEditingService(null)
+      setJournalOpen(false)
+    }
+  }, [])
+
+  const goToTab = useCallback((key: Tab) => {
+    const index = TABS.indexOf(key)
+    if (index < 0 || index === currentPageRef.current) return
+    currentPageRef.current = index
+    setTab(key)
+    setEditingProduct(null)
+    setEditingService(null)
+    setJournalOpen(false)
+    pagerRef.current?.setPage(index)
+  }, [])
+
+  function renderTabContent(t: Tab) {
+    switch (t) {
+      case 'Dashboard':
+        return <DashboardTab stats={stats} analytics={analytics} />
+      case 'Orders':
+        return (
+          <OrdersTab
+            orders={orders}
+            total={ordersTotal}
+            page={ordersPage}
+            totalPages={ordersTotalPages}
+            onPage={(p) => void loadOrders(p)}
+            onStatusChange={handleUpdateOrderStatus}
+            query={orderQuery}
+            onQueryChange={setOrderQuery}
+            status={statusFilter}
+            onStatusFilter={(s) => { setStatusFilter(s); void loadOrders(1) }}
+            onApply={() => void loadOrders(1)}
+          />
+        )
+      case 'Products':
+        return (
+          <ProductsTab
+            products={products}
+            query={productQuery}
+            onQueryChange={setProductQuery}
+            editing={editingProduct}
+            onChange={setEditingProduct}
+            onEdit={(product) => {
+              setEditingProduct(product)
+              if (product) goToTab('Products')
+            }}
+            onNew={handleNewProduct}
+            onSave={handleSaveProduct}
+            onDelete={handleDeleteProduct}
+            onToggleActive={(p) => void handleToggleProductActive(p)}
+          />
+        )
+      case 'ProjectPackages':
+        return (
+          <ProjectTab
+            title="Project packages"
+            products={products.filter(isProjectPackage)}
+            onSaveProduct={saveProduct}
+            onDelete={handleDeleteProduct}
+            onToggleActive={(p) => void handleToggleProductActive(p)}
+          />
+        )
+      case 'Services':
+        return (
+          <ServicesTab
+            services={services}
+            editing={editingService}
+            onChange={setEditingService}
+            onEdit={setEditingService}
+            onNew={handleNewService}
+            onSave={handleSaveService}
+            onDelete={handleDeleteService}
+            onToggleActive={(s) => void handleToggleServiceActive(s)}
+          />
+        )
+      case 'Journal':
+        return (
+          <JournalTab
+            journals={journals}
+            editorOpen={journalOpen}
+            editId={journalEditId}
+            tag={journalTag}
+            title={journalTitle}
+            text={journalText}
+            sort={journalSort}
+            active={journalActive}
+            onNew={() => startEditJournal(null)}
+            onEdit={(post) => startEditJournal(post)}
+            onTogglePublish={(post) => void handleToggleJournalPublished(post)}
+            onDelete={handleDeleteJournal}
+            onEditIdChange={setJournalEditId}
+            onTagChange={setJournalTag}
+            onTitleChange={setJournalTitle}
+            onTextChange={setJournalText}
+            onSortChange={setJournalSort}
+            onActiveChange={setJournalActive}
+            onSave={() => void handleSaveJournal()}
+            onCancel={() => setJournalOpen(false)}
+          />
+        )
+      case 'Users':
+        return (
+          <UsersTab
+            users={users}
+            total={usersTotal}
+            page={usersPage}
+            totalPages={usersTotalPages}
+            query={userQuery}
+            onQueryChange={setUserQuery}
+            onApply={() => void loadUsers(1)}
+            onPage={(p) => void loadUsers(p)}
+            onToggleRole={handleToggleUserRole}
+          />
+        )
+      case 'Messages':
+        return (
+          <MessagesTab
+            messages={messages}
+            total={messagesTotal}
+            page={messagesPage}
+            totalPages={messagesTotalPages}
+            onPage={(p) => void loadMessages(p)}
+            status={messageStatus}
+            onStatusFilter={(s) => { setMessageStatus(s); void loadMessages(1) }}
+            onMarkReplied={handleMarkReplied}
+          />
+        )
+      case 'Finance':
+        return <FinanceTab stats={stats} />
+      case 'Activity':
+        return (
+          <ActivityTab
+            activities={activities}
+            page={activityPage}
+            totalPages={activityTotalPages}
+            total={activityTotal}
+            onLoadMore={(p) => loadActivity(p)}
+          />
+        )
+      case 'Content':
+        return (
+          <ContentTab
+            siteContent={siteContent}
+            contentTitle={contentTitle}
+            contentBody={contentBody}
+            onTitleChange={setContentTitle}
+            onBodyChange={setContentBody}
+            onSave={async () => {
+              if (!siteContent) return
+              setContentSaved(false)
+              try {
+                await upsertSiteContent({ id: siteContent.id, home_title: contentTitle, home_body: contentBody })
+                setContentSaved(true)
+              } catch (e) {
+                console.error('Site content save error:', e)
+              }
+            }}
+            saved={contentSaved}
+          />
+        )
+    }
+  }
+
   return (
     <View className="flex-1 bg-mist">
       {/* Tab bar — grow-0 keeps the strip at its own height: RN ScrollViews
           default to flexGrow:1, so without it the strip stretches into a huge
           empty band under the tabs whenever the tab content is shorter than
           the screen. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="grow-0 shrink-0 border-b border-line bg-card">
+      <ScrollView
+        ref={tabScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="grow-0 shrink-0 border-b border-line bg-card"
+      >
         <View className="flex-row">
           {TABS.map((t) => (
             <Pressable
               key={t}
-              onPress={() => { setTab(t); setEditingProduct(null); setEditingService(null); setJournalOpen(false) }}
+              onPress={() => goToTab(t)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === t }}
+              accessibilityLabel={t}
               className={`px-4 py-3 border-b-2 ${tab === t ? 'border-navy' : 'border-transparent'}`}
             >
               <Text className={`text-xs font-bold ${tab === t ? 'text-navy' : 'text-muted'}`}>{t}</Text>
@@ -419,150 +615,28 @@ export function AdminScreen() {
         </View>
       </ScrollView>
 
-      {/* Tab content */}
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#1e3a8a" />
-        </View>
-      ) : (
-        <>
-          {tab === 'Dashboard' && <DashboardTab stats={stats} analytics={analytics} />}
-          {tab === 'Orders' && (
-            <OrdersTab
-              orders={orders}
-              total={ordersTotal}
-              page={ordersPage}
-              totalPages={ordersTotalPages}
-              onPage={(p) => void loadOrders(p)}
-              onStatusChange={handleUpdateOrderStatus}
-              query={orderQuery}
-              onQueryChange={setOrderQuery}
-              status={statusFilter}
-              onStatusFilter={(s) => { setStatusFilter(s); void loadOrders(1) }}
-              onApply={() => void loadOrders(1)}
-            />
-          )}
-          {tab === 'Products' && (
-            <ProductsTab
-              products={products}
-              query={productQuery}
-              onQueryChange={setProductQuery}
-              editing={editingProduct}
-              onChange={setEditingProduct}
-              onEdit={(product) => {
-                setEditingProduct(product)
-                if (product) setTab('Products')
-              }}
-              onNew={handleNewProduct}
-              onSave={handleSaveProduct}
-              onDelete={handleDeleteProduct}
-              onToggleActive={(p) => void handleToggleProductActive(p)}
-            />
-          )}
-          {(tab === 'ProjectPackages' || tab === 'RobotCarProjects') && (
-            <ProjectTab
-              title={tab === 'ProjectPackages' ? 'Project packages' : 'Robot car projects'}
-              products={products.filter((product) => tab === 'ProjectPackages' ? product.productType === 'Project package' : product.category === 'Robot Cars')}
-              onSaveProduct={saveProduct}
-              onDelete={handleDeleteProduct}
-              onToggleActive={(p) => void handleToggleProductActive(p)}
-            />
-          )}
-          {tab === 'Services' && (
-            <ServicesTab
-              services={services}
-              editing={editingService}
-              onChange={setEditingService}
-              onEdit={setEditingService}
-              onNew={handleNewService}
-              onSave={handleSaveService}
-              onDelete={handleDeleteService}
-              onToggleActive={(s) => void handleToggleServiceActive(s)}
-            />
-          )}
-          {tab === 'Journal' && (
-            <JournalTab
-              journals={journals}
-              editorOpen={journalOpen}
-              editId={journalEditId}
-              tag={journalTag}
-              title={journalTitle}
-              text={journalText}
-              sort={journalSort}
-              active={journalActive}
-              onNew={() => startEditJournal(null)}
-              onEdit={(post) => startEditJournal(post)}
-              onTogglePublish={(post) => void handleToggleJournalPublished(post)}
-              onDelete={handleDeleteJournal}
-              onEditIdChange={setJournalEditId}
-              onTagChange={setJournalTag}
-              onTitleChange={setJournalTitle}
-              onTextChange={setJournalText}
-              onSortChange={setJournalSort}
-              onActiveChange={setJournalActive}
-              onSave={() => void handleSaveJournal()}
-              onCancel={() => setJournalOpen(false)}
-            />
-          )}
-          {tab === 'Users' && (
-            <UsersTab
-              users={users}
-              total={usersTotal}
-              page={usersPage}
-              totalPages={usersTotalPages}
-              query={userQuery}
-              onQueryChange={setUserQuery}
-              onApply={() => void loadUsers(1)}
-              onPage={(p) => void loadUsers(p)}
-              onToggleRole={handleToggleUserRole}
-            />
-          )}
-          {tab === 'Messages' && (
-            <MessagesTab
-              messages={messages}
-              total={messagesTotal}
-              page={messagesPage}
-              totalPages={messagesTotalPages}
-              onPage={(p) => void loadMessages(p)}
-              status={messageStatus}
-              onStatusFilter={(s) => { setMessageStatus(s); void loadMessages(1) }}
-              onMarkReplied={handleMarkReplied}
-            />
-          )}
-          {tab === 'Finance' && (
-            <FinanceTab stats={stats} />
-          )}
-          {tab === 'Activity' && (
-            <ActivityTab
-              activities={activities}
-              page={activityPage}
-              totalPages={activityTotalPages}
-              total={activityTotal}
-              onLoadMore={(p) => loadActivity(p)}
-            />
-          )}
-          {tab === 'Content' && (
-            <ContentTab
-              siteContent={siteContent}
-              contentTitle={contentTitle}
-              contentBody={contentBody}
-              onTitleChange={setContentTitle}
-              onBodyChange={setContentBody}
-              onSave={async () => {
-                if (!siteContent) return
-                setContentSaved(false)
-                try {
-                  await upsertSiteContent({ id: siteContent.id, home_title: contentTitle, home_body: contentBody })
-                  setContentSaved(true)
-                } catch (e) {
-                  console.error('Site content save error:', e)
-                }
-              }}
-              saved={contentSaved}
-            />
-          )}
-        </>
-      )}
+        <ActivityIndicator size="small" color="#1e3a8a" className="py-1.5" />
+      ) : null}
+
+      {/* Swipeable tab content — each of the 12 tabs is a pager page synced
+          with the tab strip above (swipe -> onPageSelected -> setTab; tab tap
+          -> goToTab -> setPage). Pages mount lazily on first visit so the
+          admin doesn't fire all 12 data loads at once, then stay mounted so
+          per-tab state (search, category, page) survives swiping away. */}
+      <PagerView
+        ref={pagerRef}
+        style={{ flex: 1 }}
+        initialPage={0}
+        onPageSelected={onPageSelected}
+        offscreenPageLimit={1}
+      >
+        {TABS.map((t) => (
+          <View key={t} className="flex-1 bg-mist">
+            {visited[t] ? renderTabContent(t) : <View className="flex-1" />}
+          </View>
+        ))}
+      </PagerView>
     </View>
   )
 }
@@ -735,18 +809,22 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null)
   const [page, setPage] = useState(1)
+  const [category, setCategory] = useState('All')
   const PAGE_SIZE = 8
-  const filtered = query
-    ? products.filter((p) => `${p.name} ${p.sku} ${p.id} ${p.category}`.toLowerCase().includes(query.toLowerCase()))
-    : products
+  const categories = ['All', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))]
+  const needle = query.trim().toLowerCase()
+  const filtered = products.filter((p) =>
+    (category === 'All' || p.category === category) &&
+    (!needle || `${p.name} ${p.sku} ${p.id} ${p.category}`.toLowerCase().includes(needle))
+  )
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  React.useEffect(() => { setPage(1) }, [query])
+  React.useEffect(() => { setPage(1) }, [query, category])
 
   if (editing) {
     return (
       <View className="flex-1">
-        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} isNew={!products.some((p) => p.id === editing.id)} />
+        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} isNew={!products.some((p) => p.id === editing.id)} categoryOptions={categories.filter((c) => c !== 'All')} />
       </View>
     )
   }
@@ -765,7 +843,18 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
                 <Text className="text-xs font-black text-white">+ New product</Text>
               </Pressable>
             </View>
-            <TextInput value={query} onChangeText={onQueryChange} placeholder="Search by name, SKU, id, or category…" className="mt-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
+            <View className="mt-3 flex-row items-center gap-2">
+              <View className="flex-1">
+                <CategoryDropdown
+                  value={category}
+                  options={categories}
+                  onChange={setCategory}
+                  placeholder="All categories"
+                  title="Filter by category"
+                />
+              </View>
+              <TextInput value={query} onChangeText={onQueryChange} placeholder="Search name, SKU, id…" className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
+            </View>
           </View>
         }
         ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No products found.</Text>}
@@ -830,6 +919,7 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
           onSave={() => { void onSaveProduct(editing).then((saved) => { if (saved) setEditing(null) }) }}
           onCancel={() => setEditing(null)}
           isNew={false}
+          categoryOptions={categories.filter((c) => c !== 'All')}
         />
       </View>
     )
@@ -844,18 +934,18 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
         ListHeaderComponent={
           <View className="mb-3">
             <Text className="font-display text-xl font-bold text-ink">{title} ({filtered.length})</Text>
-            <View className="mt-2 flex-row flex-wrap gap-2">
-              {categories.map((c) => (
-                <Pressable
-                  key={c}
-                  onPress={() => setCategory(c)}
-                  className={`rounded-full px-3 py-1.5 ${category === c ? 'bg-navy' : 'border border-line bg-card'}`}
-                >
-                  <Text className={`text-xs font-bold ${category === c ? 'text-white' : 'text-muted'}`}>{c}</Text>
-                </Pressable>
-              ))}
+            <View className="mt-2 flex-row items-center gap-2">
+              <View className="flex-1">
+                <CategoryDropdown
+                  value={category}
+                  options={categories}
+                  onChange={setCategory}
+                  placeholder="All categories"
+                  title="Filter by category"
+                />
+              </View>
+              <TextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, id…" className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
             </View>
-            <TextInput value={query} onChangeText={setQuery} placeholder="Search by name, SKU, or id…" className="mt-2 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
           </View>
         }
         ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No {title.toLowerCase()} found.</Text>}
@@ -884,12 +974,13 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
   )
 }
 
-function ProductEditor({ product, onChange, onSave, onCancel, isNew }: {
+function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOptions }: {
   product: AdminProduct
   onChange: (next: AdminProduct) => void
   onSave: () => void
   onCancel: () => void
   isNew: boolean
+  categoryOptions: string[]
 }) {
   function patch(patchPart: Partial<AdminProduct>) {
     onChange({ ...product, ...patchPart })
@@ -908,7 +999,16 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew }: {
         <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
         <TextInput value={product.name} onChangeText={(name) => patch({ name })} className={`mb-3 ${inputClass}`} placeholder="Product name" />
         <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
-        <TextInput value={product.category} onChangeText={(category) => patch({ category })} className={`mb-3 ${inputClass}`} placeholder="Controllers & Boards" />
+        <View className="mb-3">
+          <CategoryDropdown
+            value={product.category || ''}
+            options={categoryOptions}
+            onChange={(category) => patch({ category })}
+            placeholder="Select a category"
+            title="Category"
+            allowCustom
+          />
+        </View>
 
         <View className="mb-3 flex-row gap-3">
           <View className="flex-1">
@@ -959,17 +1059,22 @@ function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, onDel
   const [preview, setPreview] = useState<AdminService | null>(null)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [category, setCategory] = useState('All')
   const PAGE_SIZE = 8
+  const categories = ['All', ...Array.from(new Set(services.map((s) => s.category).filter(Boolean)))]
   const needle = query.trim().toLowerCase()
-  const filtered = services.filter((s) => !needle || `${s.name} ${s.category} ${s.id} ${s.description}`.toLowerCase().includes(needle))
+  const filtered = services.filter((s) =>
+    (category === 'All' || s.category === category) &&
+    (!needle || `${s.name} ${s.category} ${s.id} ${s.description}`.toLowerCase().includes(needle))
+  )
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  React.useEffect(() => { setPage(1) }, [query])
+  React.useEffect(() => { setPage(1) }, [query, category])
 
   if (editing) {
     return (
       <View className="flex-1">
-        <ServiceEditor service={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} isNew={!services.some((s) => s.id === editing.id)} />
+        <ServiceEditor service={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} isNew={!services.some((s) => s.id === editing.id)} categoryOptions={categories.filter((c) => c !== 'All')} />
       </View>
     )
   }
@@ -988,7 +1093,18 @@ function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, onDel
                 <Text className="text-xs font-black text-white">+ New service</Text>
               </Pressable>
             </View>
-            <TextInput value={query} onChangeText={setQuery} placeholder="Search by name, category, or id…" className="mt-3 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
+            <View className="mt-3 flex-row items-center gap-2">
+              <View className="flex-1">
+                <CategoryDropdown
+                  value={category}
+                  options={categories}
+                  onChange={setCategory}
+                  placeholder="All categories"
+                  title="Filter by category"
+                />
+              </View>
+              <TextInput value={query} onChangeText={setQuery} placeholder="Search name, category, id…" className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
+            </View>
           </View>
         }
         ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No services found.</Text>}
@@ -1028,12 +1144,13 @@ function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, onDel
   )
 }
 
-function ServiceEditor({ service, onChange, onSave, onCancel, isNew }: {
+function ServiceEditor({ service, onChange, onSave, onCancel, isNew, categoryOptions }: {
   service: AdminService
   onChange: (next: AdminService) => void
   onSave: () => void
   onCancel: () => void
   isNew: boolean
+  categoryOptions: string[]
 }) {
   function patch(patchPart: Partial<AdminService>) {
     onChange({ ...service, ...patchPart })
@@ -1050,7 +1167,16 @@ function ServiceEditor({ service, onChange, onSave, onCancel, isNew }: {
         <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
         <TextInput value={service.name} onChangeText={(name) => patch({ name })} className={`mb-3 ${inputClass}`} placeholder="Service name" />
         <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
-        <TextInput value={service.category} onChangeText={(category) => patch({ category })} className={`mb-3 ${inputClass}`} placeholder="General" />
+        <View className="mb-3">
+          <CategoryDropdown
+            value={service.category || ''}
+            options={categoryOptions}
+            onChange={(category) => patch({ category })}
+            placeholder="Select a category"
+            title="Category"
+            allowCustom
+          />
+        </View>
         <Text className="mb-1 text-xs font-bold text-muted">Price label</Text>
         <TextInput value={service.priceLabel} onChangeText={(priceLabel) => patch({ priceLabel })} className={`mb-3 ${inputClass}`} placeholder="from NPR 35,000" />
         <Text className="mb-1 text-xs font-bold text-muted">Tag / badge</Text>

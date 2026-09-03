@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { CategoryDropdown } from '../components/CategoryDropdown';
 import { getServices } from '../services/serviceService';
 import type { Service } from '../types';
 
@@ -93,28 +94,15 @@ export function ServicesScreen() {
             )}
           </View>
 
-          {/* Categories (derived from the DB rows) */}
+          {/* Category filter (derived from the DB rows) */}
           {categories.length > 1 && (
             <View className="mt-2">
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={categories}
-                keyExtractor={(c) => c}
-                contentContainerStyle={{ gap: 8 }}
-                renderItem={({ item }) => {
-                  const active = item === category;
-                  return (
-                    <Pressable
-                      onPress={() => setCategory(item)}
-                      className={`rounded-full px-4 py-1.5 ${active ? 'bg-navy' : 'border border-line bg-card'}`}
-                    >
-                      <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
-                        {item}
-                      </Text>
-                    </Pressable>
-                  );
-                }}
+              <CategoryDropdown
+                value={category}
+                options={categories}
+                onChange={setCategory}
+                placeholder="All categories"
+                title="Filter by category"
               />
             </View>
           )}

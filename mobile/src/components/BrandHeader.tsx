@@ -7,13 +7,14 @@
 // inert.
 // =====================================================================
 import React from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useApp } from '../context/AppContext';
+import { APP_VERSION } from '../config/site';
 import type { RootStackParamList } from '../navigation/types';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -114,7 +115,7 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
     .join('');
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1 }}>
         <Pressable
           style={StyleSheet.absoluteFillObject}
@@ -123,82 +124,110 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
           accessibilityLabel="Close menu"
         />
         <View
-          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 280, paddingTop: insets.top, paddingBottom: insets.bottom }}
-          className="border-l border-line bg-card shadow-lg"
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 300, paddingTop: insets.top, paddingBottom: insets.bottom }}
+          className="border-l border-line bg-white shadow-xl"
         >
-          <View className="border-b border-line bg-navy px-4 py-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-sans text-base font-bold text-white">Menu</Text>
-              <Pressable onPress={onClose} className="h-8 w-8 items-center justify-center rounded-full bg-white/10" accessibilityLabel="Close">
-                <Feather name="x" size={16} color="#ffffff" />
-              </Pressable>
+          {/* Brand header */}
+          <View className="flex-row items-center justify-between border-b border-line bg-navy px-4 py-3.5">
+            <View className="flex-row items-center gap-2.5">
+              <Image
+                source={require('../../assets/logo.png')}
+                style={{ width: 30, height: 30, borderRadius: 15 }}
+                className="border border-white/40"
+                resizeMode="contain"
+              />
+              <View>
+                <Text className="font-display text-base font-bold leading-tight tracking-tight text-white">GENUM</Text>
+                <Text className="text-[10px] font-bold uppercase tracking-widest text-navy-light">Solutions</Text>
+              </View>
             </View>
+            <Pressable
+              onPress={onClose}
+              className="h-8 w-8 items-center justify-center rounded-full bg-white/10"
+              accessibilityLabel="Close menu"
+            >
+              <Feather name="x" size={18} color="#ffffff" />
+            </Pressable>
           </View>
 
+          {/* Signed-in profile / sign-in strip */}
           {isSignedIn ? (
-            <View className="flex-row items-center gap-2 border-b border-line px-4 py-2.5">
-              <View className="h-8 w-8 items-center justify-center rounded-full bg-navy">
+            <View className="flex-row items-center gap-2.5 border-b border-line bg-mist/50 px-4 py-3">
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-navy">
                 <Text className="text-xs font-black text-white">{initials}</Text>
               </View>
               <View className="flex-1">
-                <Text className="text-xs font-bold text-ink">{user?.name}</Text>
-                <Text className="text-xs text-muted">{user?.email}</Text>
+                <Text className="text-sm font-bold text-ink" numberOfLines={1}>{user?.name}</Text>
+                <Text className="text-xs text-muted" numberOfLines={1}>{user?.email}</Text>
               </View>
               {isAdmin ? (
                 <View className="rounded-full bg-gold px-2 py-0.5">
-                  <Text className="text-xs font-black uppercase text-ink">Admin</Text>
+                  <Text className="text-[10px] font-black uppercase text-ink">Admin</Text>
                 </View>
               ) : null}
             </View>
           ) : (
-            <View className="border-b border-line px-4 py-2.5">
+            <View className="border-b border-line bg-mist/50 px-4 py-3">
               <Pressable
                 onPress={() => {
                   onClose();
                   setAuthSheetOpen(true);
                 }}
-                className="items-center rounded-full bg-navy py-2"
+                className="items-center rounded-full bg-navy py-2.5"
               >
-                <Text className="text-sm font-bold text-white">Sign in</Text>
+                <Text className="text-sm font-black text-white">Sign in</Text>
               </Pressable>
+              <Text className="mt-2 text-center text-[11px] text-muted">Sign in to sync your cart & orders</Text>
             </View>
           )}
 
-          <MenuGroup title="Shop">
-            <MenuItem icon="home" label="Home" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Home' }))} />
-            <MenuItem icon="grid" label="Products" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Shop' }))} />
-            <MenuItem icon="shopping-bag" label="Cart" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Cart' }))} />
-            <MenuItem icon="layers" label="Projects" onPress={() => go('Projects')} />
-          </MenuGroup>
+          {/* Scrollable nav */}
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ paddingBottom: 12 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <MenuGroup title="Shop">
+              <MenuItem icon="home" label="Home" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Home' }))} />
+              <MenuItem icon="grid" label="Products" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Shop' }))} />
+              <MenuItem icon="shopping-bag" label="Cart" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Cart' }))} />
+              <MenuItem icon="layers" label="Projects" onPress={() => go('Projects')} />
+            </MenuGroup>
 
-          <MenuGroup title="Company">
-            <MenuItem icon="briefcase" label="Services" onPress={() => go('Services')} />
-            <MenuItem icon="tool" label="Tools & IoT" onPress={() => go('Tools')} />
-            <MenuItem icon="info" label="About" onPress={() => go('About')} />
-            <MenuItem icon="phone" label="Contact" onPress={() => go('Contact')} />
-          </MenuGroup>
+            <MenuGroup title="Company">
+              <MenuItem icon="briefcase" label="Services" onPress={() => go('Services')} />
+              <MenuItem icon="tool" label="Tools & IoT" onPress={() => go('Tools')} />
+              <MenuItem icon="info" label="About" onPress={() => go('About')} />
+              <MenuItem icon="phone" label="Contact" onPress={() => go('Contact')} />
+            </MenuGroup>
 
-          <MenuGroup title="More">
-            <MenuItem icon="book-open" label="Journal" onPress={() => go('Journal')} />
-            <MenuItem icon="corner-down-left" label="3D Printing" onPress={() => go('Printing')} />
-            <MenuItem icon="tool" label="Open Tools" onPress={() => go('OpenTools')} />
-          </MenuGroup>
+            <MenuGroup title="More">
+              <MenuItem icon="book-open" label="Journal" onPress={() => go('Journal')} />
+              <MenuItem icon="corner-down-left" label="3D Printing" onPress={() => go('Printing')} />
+              <MenuItem icon="tool" label="Open Tools" onPress={() => go('OpenTools')} />
+            </MenuGroup>
 
-          <MenuGroup title="Account">
-            {isSignedIn ? <MenuItem icon="user" label="My Account" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Account' }))} /> : null}
-            {isSignedIn ? (
-              <Pressable
-                onPress={() => {
-                  onClose();
-                  signOut();
-                }}
-                className="flex-row items-center px-4 py-2.5"
-              >
-                <Feather name="log-out" size={16} color="#dc2626" />
-                <Text className="ml-2.5 text-sm font-bold text-red-600">Sign out</Text>
-              </Pressable>
-            ) : null}
-          </MenuGroup>
+            <MenuGroup title="Account">
+              {isSignedIn ? <MenuItem icon="user" label="My Account" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Account' }))} /> : null}
+              {isSignedIn ? (
+                <Pressable
+                  onPress={() => {
+                    onClose();
+                    signOut();
+                  }}
+                  className="mx-2 mt-1 flex-row items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2.5"
+                >
+                  <Feather name="log-out" size={16} color="#dc2626" />
+                  <Text className="text-sm font-bold text-red-600">Sign out</Text>
+                </Pressable>
+              ) : null}
+            </MenuGroup>
+          </ScrollView>
+
+          {/* Footer */}
+          <View className="border-t border-line px-4 py-3">
+            <Text className="text-center text-[11px] text-muted">GENUM Solutions · App v{APP_VERSION}</Text>
+          </View>
         </View>
       </View>
     </Modal>
@@ -208,7 +237,7 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
 function MenuGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View className="py-2">
-      <Text className="px-4 pb-1 text-xs font-black uppercase tracking-widest text-border">
+      <Text className="px-4 pb-1.5 text-[11px] font-black uppercase tracking-widest text-border">
         {title}
       </Text>
       {children}
@@ -226,9 +255,14 @@ function MenuItem({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} className="flex-row items-center rounded-lg px-4 py-2.5 active:bg-mist">
-      <Feather name={icon} size={16} color="#64748b" />
-      <Text className="ml-2.5 text-sm font-bold text-ink">{label}</Text>
+    <Pressable
+      onPress={onPress}
+      className="mx-2 flex-row items-center rounded-lg px-2.5 py-2.5 active:bg-mist"
+    >
+      <View className="h-7 w-7 items-center justify-center rounded-md bg-navy-light/10">
+        <Feather name={icon} size={16} color="#1e3a8a" />
+      </View>
+      <Text className="ml-3 text-sm font-bold text-ink">{label}</Text>
     </Pressable>
   );
 }
