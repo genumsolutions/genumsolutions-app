@@ -21,7 +21,7 @@ export interface Project {
   specs: string[];
 }
 
-function isProjectPackage(p: Product): boolean {
+export function isProjectPackage(p: { productType?: string | null; category?: string | null }): boolean {
   return (
     p.productType === 'Project package' ||
     p.category === 'Robot Cars' ||

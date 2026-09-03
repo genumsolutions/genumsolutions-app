@@ -21,6 +21,7 @@ import {
   getProductsWithSource,
 } from '../services/productService';
 import { OfflineBadge } from '../components/OfflineBadge';
+import { CategoryDropdown } from '../components/CategoryDropdown';
 import type { Product } from '../types';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -104,27 +105,14 @@ export function ShopScreen() {
         </View>
       )}
 
-      {/* Categories */}
-      <View>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={['All', ...categories]}
-          keyExtractor={(c) => c}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
-          renderItem={({ item }) => {
-            const active = item === category;
-            return (
-              <Pressable
-                onPress={() => setCategory(item)}
-                className={`rounded-full px-4 py-1.5 ${active ? 'bg-navy' : 'border border-line bg-card'}`}
-              >
-                <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
-                  {item}
-                </Text>
-              </Pressable>
-            );
-          }}
+      {/* Category filter */}
+      <View className="px-4 pb-2">
+        <CategoryDropdown
+          value={category}
+          options={['All', ...categories]}
+          onChange={setCategory}
+          placeholder="All categories"
+          title="Filter by category"
         />
       </View>
 

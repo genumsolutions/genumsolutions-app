@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { addToCart } from '../services/cartService';
 import { filterProducts, getProducts } from '../services/productService';
+import { CategoryDropdown } from '../components/CategoryDropdown';
 import { useApp } from '../context/AppContext';
 import type { Product } from '../types';
 import type { RootStackParamList } from '../navigation/types';
@@ -184,28 +185,15 @@ export function ProjectsScreen() {
         <Text className="mt-2 text-sm leading-6 text-muted">{SECTION_COPY[tab]}</Text>
       </View>
 
-      {/* Categories */}
+      {/* Category filter */}
       {categories.length > 1 && (
-        <View>
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={['All', ...categories]}
-            keyExtractor={(c) => c}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}
-            renderItem={({ item }) => {
-              const active = item === category;
-              return (
-                <Pressable
-                  onPress={() => setCategory(item)}
-                  className={`rounded-full px-4 py-1.5 ${active ? 'bg-navy' : 'border border-line bg-card'}`}
-                >
-                  <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
-                    {item}
-                  </Text>
-                </Pressable>
-              );
-            }}
+        <View className="px-4 pb-2">
+          <CategoryDropdown
+            value={category}
+            options={['All', ...categories]}
+            onChange={setCategory}
+            placeholder="All categories"
+            title="Filter by category"
           />
         </View>
       )}
