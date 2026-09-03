@@ -1,6 +1,8 @@
 // =====================================================================
-// programs - training programs, pilot costs, and STEM project highlights.
-// Mirrors the website's lib/programs.ts as app config.
+// programs - training programs, pilot costs, and STEM project highlights
+// used as the OFFLINE FALLBACK for the native home screen (the DB-first
+// read lives in services/programsService.ts). Kept in sync with the
+// website's lib/programs-data.ts, which also seeds the DB tables.
 // =====================================================================
 
 export const trainingPrograms = [
