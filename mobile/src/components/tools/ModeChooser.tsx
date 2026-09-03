@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES } from '../../config/roboCarCatalog'
 import type { ModeChooserProps } from './types'
 
-export function ModeChooser({ activeMode, canControl, connected, onSelect, onCycle }: ModeChooserProps) {
+export function ModeChooser({ activeMode, canControl, onSelect, onCycle }: ModeChooserProps) {
   return (
     <View className="rounded-2xl border border-line bg-card p-5 shadow-card">
       <Text className="text-xs font-bold uppercase tracking-wide text-muted">Mode</Text>
@@ -27,7 +27,7 @@ export function ModeChooser({ activeMode, canControl, connected, onSelect, onCyc
         })}
         <Pressable
           onPress={onCycle}
-          disabled={!connected}
+          disabled={!canControl}
           className="flex-row items-center gap-1 rounded-full bg-navy px-4 py-1.5 disabled:opacity-40"
         >
           <Feather name="rotate-ccw" size={12} color="#fff" />
