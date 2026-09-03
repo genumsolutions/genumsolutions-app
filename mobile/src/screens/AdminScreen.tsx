@@ -34,19 +34,23 @@ import {
   fetchDashboardStats,
   fetchAdminAnalytics,
   listAdminActivity,
+  listAdminJournalPosts,
+  upsertAdminJournalPost,
+  deleteAdminJournalPost,
   type AdminOrder,
   type AdminProduct,
   type AdminService,
   type AdminUser,
   type AdminMessage,
+  type AdminJournalPost,
   type DashboardStats,
   type AdminAnalytics,
   type ActivityEntry,
 } from '../services/adminService'
 
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'RobotCarProjects' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Users', 'Messages', 'Finance', 'Activity', 'Content']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'RobotCarProjects', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
@@ -66,6 +70,16 @@ export function AdminScreen() {
 
   // Services
   const [services, setServices] = useState<AdminService[]>([])
+
+  // Journal posts
+  const [journals, setJournals] = useState<AdminJournalPost[]>([])
+  const [journalOpen, setJournalOpen] = useState(false)
+  const [journalEditId, setJournalEditId] = useState('')
+  const [journalTag, setJournalTag] = useState('')
+  const [journalTitle, setJournalTitle] = useState('')
+  const [journalText, setJournalText] = useState('')
+  const [journalSort, setJournalSort] = useState('0')
+  const [journalActive, setJournalActive] = useState(true)
 
   // Users
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -117,6 +131,8 @@ export function AdminScreen() {
         setProducts(await listAdminProducts())
       } else if (tab === 'Services') {
         setServices(await listAdminServices())
+      } else if (tab === 'Journal') {
+        setJournals(await listAdminJournalPosts())
       } else if (tab === 'Users') {
         setUsers(await listAdminUsers())
       } else if (tab === 'Messages') {
@@ -210,6 +226,74 @@ export function AdminScreen() {
     )
   }
 
+  // --- Journal post handlers ---
+
+  function startEditJournal(post: AdminJournalPost | null) {
+    setJournalOpen(true)
+    setJournalEditId(post?.id ?? '')
+    setJournalTag(post?.tag ?? '')
+    setJournalTitle(post?.title ?? '')
+    setJournalText(post?.text ?? '')
+    setJournalSort(String(post?.sortOrder ?? 0))
+    setJournalActive(post ? post.active : true)
+  }
+
+  function slugify(value: string) {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+  }
+
+  async function handleSaveJournal() {
+    if (!journalTitle.trim()) {
+      Alert.alert('Missing title', 'A journal post needs a title.')
+      return
+    }
+    try {
+      await upsertAdminJournalPost({
+        id: journalEditId.trim() ? slugify(journalEditId) : slugify(journalTitle),
+        tag: journalTag.trim(),
+        title: journalTitle.trim(),
+        text: journalText.trim(),
+        active: journalActive,
+        sortOrder: Math.max(0, Number(journalSort) || 0),
+      })
+      setJournalOpen(false)
+      void loadTab()
+    } catch (e) {
+      console.error('Journal save error:', e)
+    }
+  }
+
+  function handleDeleteJournal(id: string) {
+    Alert.alert(
+      'Delete Journal Post',
+      `Delete journal post "${id}"? This also removes it from the website.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteAdminJournalPost(id)
+            void loadTab()
+          },
+        },
+      ],
+    )
+  }
+
+  async function handleToggleJournalPublished(post: AdminJournalPost) {
+    try {
+      await upsertAdminJournalPost({ ...post, active: !post.active })
+      void loadTab()
+    } catch (e) {
+      console.error('Journal publish toggle error:', e)
+    }
+  }
+
   async function handleToggleUserRole(user: AdminUser) {
     const newRole = user.role === 'admin' ? 'customer' : 'admin'
     await toggleAdminRole(user.id, newRole)
@@ -237,7 +321,7 @@ export function AdminScreen() {
           {TABS.map((t) => (
             <Pressable
               key={t}
-              onPress={() => { setTab(t); setEditingProduct(null); setEditingService(null) }}
+              onPress={() => { setTab(t); setEditingProduct(null); setEditingService(null); setJournalOpen(false) }}
               className={`px-4 py-3 border-b-2 ${tab === t ? 'border-navy' : 'border-transparent'}`}
             >
               <Text className={`text-xs font-bold ${tab === t ? 'text-navy' : 'text-muted'}`}>{t}</Text>
@@ -296,6 +380,30 @@ export function AdminScreen() {
               onEdit={setEditingService}
               onSave={handleSaveService}
               onDelete={handleDeleteService}
+            />
+          )}
+          {tab === 'Journal' && (
+            <JournalTab
+              journals={journals}
+              editorOpen={journalOpen}
+              editId={journalEditId}
+              tag={journalTag}
+              title={journalTitle}
+              text={journalText}
+              sort={journalSort}
+              active={journalActive}
+              onNew={() => startEditJournal(null)}
+              onEdit={(post) => startEditJournal(post)}
+              onTogglePublish={(post) => void handleToggleJournalPublished(post)}
+              onDelete={handleDeleteJournal}
+              onEditIdChange={setJournalEditId}
+              onTagChange={setJournalTag}
+              onTitleChange={setJournalTitle}
+              onTextChange={setJournalText}
+              onSortChange={setJournalSort}
+              onActiveChange={setJournalActive}
+              onSave={() => void handleSaveJournal()}
+              onCancel={() => setJournalOpen(false)}
             />
           )}
           {tab === 'Users' && (
@@ -719,8 +827,129 @@ function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onB
   )
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+}
+
 function formatNPR(amount: number): string {
   return `NPR ${amount.toLocaleString('en-IN')}`
+}
+
+function JournalTab({ journals, editorOpen, editId, tag, title, text, sort, active, onNew, onEdit, onTogglePublish, onDelete, onEditIdChange, onTagChange, onTitleChange, onTextChange, onSortChange, onActiveChange, onSave, onCancel }: {
+  journals: AdminJournalPost[]
+  editorOpen: boolean
+  editId: string
+  tag: string
+  title: string
+  text: string
+  sort: string
+  active: boolean
+  onNew: () => void
+  onEdit: (post: AdminJournalPost) => void
+  onTogglePublish: (post: AdminJournalPost) => void
+  onDelete: (id: string) => void
+  onEditIdChange: (v: string) => void
+  onTagChange: (v: string) => void
+  onTitleChange: (v: string) => void
+  onTextChange: (v: string) => void
+  onSortChange: (v: string) => void
+  onActiveChange: (v: boolean) => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  return (
+    <ScrollView className="p-4">
+      <View className="mb-4 flex-row items-center justify-between">
+        <View>
+          <Text className="text-base font-bold text-ink">Journal posts ({journals.length})</Text>
+          <Text className="mt-0.5 text-xs text-muted">Edits publish to the website and the app immediately.</Text>
+        </View>
+        {!editorOpen && (
+          <Pressable onPress={onNew} className="rounded-full bg-navy px-4 py-2">
+            <Text className="text-xs font-black text-white">+ New post</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {editorOpen && (
+        <View className="mb-4 rounded-xl border border-line bg-card p-4">
+          <Text className="mb-3 text-sm font-bold text-ink">{editId ? `Edit ${editId}` : 'Add a new journal post'}</Text>
+          <Text className="mb-1 text-xs font-bold text-muted">Id (slug, auto-generated from title if blank)</Text>
+          <TextInput
+            value={editId}
+            onChangeText={onEditIdChange}
+            className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+            placeholder="e.g. esp32-beginner-project"
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">Tag / category</Text>
+          <TextInput value={tag} onChangeText={onTagChange} className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Tutorial · Robotics" />
+          <Text className="mb-1 text-xs font-bold text-muted">Title</Text>
+          <TextInput value={title} onChangeText={onTitleChange} className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Post title" />
+          <Text className="mb-1 text-xs font-bold text-muted">Excerpt / summary</Text>
+          <TextInput
+            value={text}
+            onChangeText={onTextChange}
+            multiline
+            style={{ textAlignVertical: 'top' }}
+            className="mb-3 min-h-24 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+            placeholder="One or two sentences shown on the journal page."
+          />
+          <View className="mb-3 flex-row items-center gap-3">
+            <Text className="text-sm font-semibold text-ink">Published (visible on site + app)</Text>
+            <Switch value={active} onValueChange={onActiveChange} trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }} />
+          </View>
+          <TextInput
+            value={sort}
+            onChangeText={onSortChange}
+            keyboardType="numeric"
+            className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+            placeholder="Sort order"
+          />
+          <View className="flex-row gap-3">
+            <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2">
+              <Text className="text-xs font-black text-ink">Save</Text>
+            </Pressable>
+            <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2">
+              <Text className="text-xs font-black text-ink">Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {journals.length === 0 ? (
+        <Text className="py-8 text-center text-sm text-muted">No journal posts yet.</Text>
+      ) : (
+        journals.map((item) => (
+          <View key={item.id} className="mb-3 rounded-xl border border-line bg-card p-4">
+            <View className="flex-row items-center justify-between">
+              <View className="min-w-0 flex-1 pr-2">
+                <Text className="text-sm font-bold text-ink">{item.title}</Text>
+                <Text className="mt-0.5 text-xs text-muted" numberOfLines={2}>{item.tag} · {item.text}</Text>
+              </View>
+              <Text className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                {item.active ? 'Published' : 'Hidden'}
+              </Text>
+            </View>
+            <View className="mt-2 flex-row gap-2">
+              <Pressable onPress={() => onEdit(item)} className="rounded-full bg-navy px-3 py-1">
+                <Text className="text-xs font-bold text-white">Edit</Text>
+              </Pressable>
+              <Pressable onPress={() => onTogglePublish(item)} className="rounded-full border border-line px-3 py-1">
+                <Text className="text-xs font-bold text-ink">{item.active ? 'Unpublish' : 'Publish'}</Text>
+              </Pressable>
+              <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-red-200 px-3 py-1">
+                <Text className="text-xs font-bold text-red-600">Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))
+      )}
+    </ScrollView>
+  )
 }
 
 function FinanceTab({ stats }: { stats: DashboardStats | null }) {
