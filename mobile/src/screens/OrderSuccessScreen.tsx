@@ -40,10 +40,15 @@ export function OrderSuccessScreen() {
           : `Thank you! We've received your order${orderId ? ` (${orderId.slice(0, 8)})` : ''} and will be in touch with payment and delivery details.`}
       </Text>
       <Pressable
-        onPress={() => navigation.popToTop()}
+        onPress={() => {
+          // Go back ONE step to where the order flow started (usually Main/
+          // Checkout). popToTop previously collapsed the whole stack, which
+          // could skip screens when OrderSuccess was reached via a deep link.
+          if (navigation.canGoBack()) navigation.goBack();
+        }}
         className="mt-8 w-full max-w-xs items-center rounded-full bg-navy py-3"
       >
-        <Text className="font-bold text-white">Back to home</Text>
+        <Text className="font-bold text-white">Back</Text>
       </Pressable>
     </View>
   );

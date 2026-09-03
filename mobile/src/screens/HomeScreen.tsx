@@ -84,13 +84,13 @@ export function HomeScreen() {
             <View className="px-5 pt-6">
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">What GENUM does</Text>
-                <Pressable onPress={() => navigation.navigate('Services')}>
+                <Pressable onPress={() => navigation.push('Services')}>
                   <Text className="text-sm font-bold text-navy underline">View all</Text>
                 </Pressable>
               </View>
               <View className="mt-3">
                 {services.map((s) => (
-                  <Pressable key={s.id} onPress={() => navigation.navigate('Services')} className="mb-2 rounded-2xl border border-line bg-card p-4">
+                  <Pressable key={s.id} onPress={() => navigation.push('Services')} className="mb-2 rounded-2xl border border-line bg-card p-4">
                     <Text className="font-display text-lg font-bold leading-snug text-ink">{s.name}</Text>
                     <Text className="mt-1 text-sm leading-5 text-muted">{s.description}</Text>
                     <Text className="mt-2 text-sm font-black text-navy">{s.priceLabel}</Text>
@@ -104,7 +104,7 @@ export function HomeScreen() {
           <View className="px-5 pt-6">
             <View className="flex-row items-center justify-between">
               <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">100+ project curriculum</Text>
-              <Pressable onPress={() => navigation.navigate('Contact')}>
+              <Pressable onPress={() => navigation.push('Contact')}>
                 <Text className="text-sm font-bold text-navy underline">Request the full catalog</Text>
               </Pressable>
             </View>
@@ -165,7 +165,7 @@ export function HomeScreen() {
               </View>
               <View className="mt-3 flex-row flex-wrap justify-between">
                 {featured.map((p) => (
-                  <Pressable key={p.id} onPress={() => navigation.navigate('ProductDetail', { productId: p.id })} className="mb-3 w-[48%] rounded-2xl border border-line bg-card p-3">
+                  <Pressable key={p.id} onPress={() => navigation.push('ProductDetail', { productId: p.id })} className="mb-3 w-[48%] rounded-2xl border border-line bg-card p-3">
                     <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
                       {p.image ? (
                         <Image source={{ uri: p.image }} className="h-full w-full" resizeMode="cover" />
@@ -187,10 +187,10 @@ export function HomeScreen() {
               <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">Need a starting point?</Text>
               <Text className="mt-2 font-display text-xl font-bold tracking-tight text-white">Use the open tools or bring us the brief.</Text>
               <View className="mt-4 flex-row flex-wrap gap-3">
-                <Pressable onPress={() => navigation.navigate('Tools')} className="rounded-full bg-card px-5 py-3">
+                <Pressable onPress={() => navigation.push('Tools')} className="rounded-full bg-card px-5 py-3">
                   <Text className="text-sm font-black text-ink">Open tools</Text>
                 </Pressable>
-                <Pressable onPress={() => navigation.navigate('Contact')} className="rounded-full border border-white/40 px-5 py-3">
+                <Pressable onPress={() => navigation.push('Contact')} className="rounded-full border border-white/40 px-5 py-3">
                   <Text className="text-sm font-black text-white">Contact GENUM</Text>
                 </Pressable>
               </View>

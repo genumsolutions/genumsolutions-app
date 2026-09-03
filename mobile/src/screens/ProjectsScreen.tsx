@@ -121,7 +121,7 @@ export function ProjectsScreen() {
   function handleCardPress(product: Product) {
     const quoteOnly = product.stock === 0 || product.productType === 'Project package';
     if (quoteOnly) {
-      navigation.navigate('ProductDetail', { productId: product.id });
+      navigation.push('ProductDetail', { productId: product.id });
     }
   }
 
@@ -287,7 +287,7 @@ export function ProjectsScreen() {
                   {quoteOnly ? (
                       <View className="flex-row gap-1.5">
                         <Pressable
-                          onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+                          onPress={() => navigation.push('ProductDetail', { productId: item.id })}
                           accessibilityLabel={`View details for ${item.name}`}
                           className="rounded-full border border-line px-2.5 py-1.5"
                         >
@@ -295,7 +295,7 @@ export function ProjectsScreen() {
                         </Pressable>
                         {item.productType === 'Project package' && (
                           <Pressable
-                            onPress={() => navigation.navigate('Tools', { category: item.category })}
+                            onPress={() => navigation.push('Tools', { category: item.category })}
                             accessibilityLabel={`Control ${item.name}`}
                             className="rounded-full bg-gold px-2.5 py-1.5"
                           >

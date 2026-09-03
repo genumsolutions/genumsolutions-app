@@ -60,7 +60,7 @@ export function CartScreen() {
     <CartContent
       products={products}
       onUpdateQty={updateQty}
-      onCheckout={() => navigation.navigate('Checkout')}
+      onCheckout={() => navigation.push('Checkout')}
     />
   );
 }

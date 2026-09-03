@@ -16,7 +16,7 @@
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,7 +51,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   const navigation = useNavigation<Nav>();
   const route = useRoute<MainRoute>();
   const insets = useSafeAreaInsets();
-  const { cartCount } = useApp();
+  const { cartCount, setMenuOpen } = useApp();
   const pagerRef = useRef<PagerView>(null);
   const currentPageRef = useRef<number>(0);
   const [page, setPage] = useState<TabKey>(() => initialTab(route.params?.screen));
@@ -70,6 +70,22 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   useEffect(() => {
     syncToParam();
   }, [syncToParam]);
+
+  // Re-sync whenever Main regains focus (e.g. after a pushed screen like Admin
+  // pops back). The param may not have changed, so the effect above won't run;
+  // this guarantees the pager lands on the tab the user left, not a drifted /
+  // initial one. Also close the global menu so it can never stay "stuck".
+  useFocusEffect(
+    useCallback(() => {
+      setMenuOpen(false);
+      const index = TAB_ORDER.indexOf(initialTab(route.params?.screen));
+      if (index >= 0 && index !== currentPageRef.current) {
+        currentPageRef.current = index;
+        setPage(TAB_ORDER[index]);
+        pagerRef.current?.setPage(index);
+      }
+    }, [route.params?.screen, setMenuOpen]),
+  );
 
   const onPageSelected = useCallback(
     (event: PagerViewOnPageSelectedEvent) => {

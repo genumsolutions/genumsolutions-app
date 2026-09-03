@@ -1,9 +1,13 @@
 // =====================================================================
 // BrandHeader - native top bar (logo + wordmark, cart button, menu toggle).
-// The menu opens the AppMenu navigation sheet.
+// The menu opens the AppMenu navigation sheet. The menu is a native Modal
+// overlay with GLOBAL open/close state (AppContext) so it can never get
+// stuck open or block the next touch: global actions (navigation, deep
+// links, sign-in/out) can always close it, and a hidden Modal is fully
+// inert.
 // =====================================================================
 import React from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,9 +21,8 @@ type IconName = ComponentProps<typeof Feather>['name'];
 
 export function BrandHeader() {
   const insets = useSafeAreaInsets();
-  const { cartCount } = useApp();
+  const { cartCount, menuOpen, setMenuOpen } = useApp();
   const nav = useNavigation<RootNav>();
-  const [menuOpen, setMenuOpen] = React.useState(false);
 
   return (
     <>
@@ -79,8 +82,11 @@ export function BrandHeader() {
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         onNavigate={(target) => {
+          // Close first, then navigate on a later frame. Running navigation in
+          // the same gesture as the Modal teardown used to swallow the next
+          // tap; deferring lets the overlay fully dismiss before we move.
           setMenuOpen(false);
-          target();
+          requestAnimationFrame(target);
         }}
       />
     </>
@@ -98,10 +104,8 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
   const insets = useSafeAreaInsets();
   const rootNav = useNavigation<RootNav>();
 
-  if (!visible) return null;
-
   const go = (screen: 'Services' | 'Projects' | 'Contact' | 'About' | 'Tools' | 'Journal' | 'Printing' | 'OpenTools') =>
-    onNavigate(() => rootNav.navigate(screen));
+    onNavigate(() => rootNav.push(screen));
   const initials = (user?.name || 'U')
     .split(/\s+/)
     .filter(Boolean)
@@ -110,87 +114,94 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
     .join('');
 
   return (
-    <>
-      <Pressable style={{ position: 'absolute', inset: 0 }} onPress={onClose} accessibilityLabel="Close menu" />
-      <View
-        style={{ position: 'absolute', right: 0, top: insets.top + 56, width: 280, paddingBottom: insets.bottom }}
-        className="rounded-l-2xl border border-line bg-card shadow-lg"
-      >
-        <View className="border-b border-line bg-navy px-4 py-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-sans text-base font-bold text-white">Menu</Text>
-            <Pressable onPress={onClose} className="h-8 w-8 items-center justify-center rounded-full bg-white/10" accessibilityLabel="Close">
-              <Feather name="x" size={16} color="#ffffff" />
-            </Pressable>
-          </View>
-        </View>
-
-        {isSignedIn ? (
-          <View className="flex-row items-center gap-2 border-b border-line px-4 py-2.5">
-            <View className="h-8 w-8 items-center justify-center rounded-full bg-navy">
-              <Text className="text-xs font-black text-white">{initials}</Text>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1 }}>
+        <Pressable
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="auto"
+          onPress={onClose}
+          accessibilityLabel="Close menu"
+        />
+        <View
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 280, paddingTop: insets.top, paddingBottom: insets.bottom }}
+          className="border-l border-line bg-card shadow-lg"
+        >
+          <View className="border-b border-line bg-navy px-4 py-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="font-sans text-base font-bold text-white">Menu</Text>
+              <Pressable onPress={onClose} className="h-8 w-8 items-center justify-center rounded-full bg-white/10" accessibilityLabel="Close">
+                <Feather name="x" size={16} color="#ffffff" />
+              </Pressable>
             </View>
-            <View className="flex-1">
-              <Text className="text-xs font-bold text-ink">{user?.name}</Text>
-              <Text className="text-xs text-muted">{user?.email}</Text>
-            </View>
-            {isAdmin ? (
-              <View className="rounded-full bg-gold px-2 py-0.5">
-                <Text className="text-xs font-black uppercase text-ink">Admin</Text>
-              </View>
-            ) : null}
           </View>
-        ) : (
-          <View className="border-b border-line px-4 py-2.5">
-            <Pressable
-              onPress={() => {
-                onClose();
-                setAuthSheetOpen(true);
-              }}
-              className="items-center rounded-full bg-navy py-2"
-            >
-              <Text className="text-sm font-bold text-white">Sign in</Text>
-            </Pressable>
-          </View>
-        )}
 
-        <MenuGroup title="Shop">
-          <MenuItem icon="home" label="Home" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Home' }))} />
-          <MenuItem icon="grid" label="Products" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Shop' }))} />
-          <MenuItem icon="shopping-bag" label="Cart" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Cart' }))} />
-          <MenuItem icon="layers" label="Projects" onPress={() => go('Projects')} />
-        </MenuGroup>
-
-        <MenuGroup title="Company">
-          <MenuItem icon="briefcase" label="Services" onPress={() => go('Services')} />
-          <MenuItem icon="tool" label="Tools & IoT" onPress={() => go('Tools')} />
-          <MenuItem icon="info" label="About" onPress={() => go('About')} />
-          <MenuItem icon="phone" label="Contact" onPress={() => go('Contact')} />
-        </MenuGroup>
-
-        <MenuGroup title="More">
-          <MenuItem icon="book-open" label="Journal" onPress={() => go('Journal')} />
-          <MenuItem icon="corner-down-left" label="3D Printing" onPress={() => go('Printing')} />
-          <MenuItem icon="tool" label="Open Tools" onPress={() => go('OpenTools')} />
-        </MenuGroup>
-
-        <MenuGroup title="Account">
-          {isSignedIn ? <MenuItem icon="user" label="My Account" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Account' }))} /> : null}
           {isSignedIn ? (
-            <Pressable
-              onPress={() => {
-                onClose();
-                signOut();
-              }}
-              className="flex-row items-center px-4 py-2.5"
-            >
-              <Feather name="log-out" size={16} color="#dc2626" />
-              <Text className="ml-2.5 text-sm font-bold text-red-600">Sign out</Text>
-            </Pressable>
-          ) : null}
-        </MenuGroup>
+            <View className="flex-row items-center gap-2 border-b border-line px-4 py-2.5">
+              <View className="h-8 w-8 items-center justify-center rounded-full bg-navy">
+                <Text className="text-xs font-black text-white">{initials}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-bold text-ink">{user?.name}</Text>
+                <Text className="text-xs text-muted">{user?.email}</Text>
+              </View>
+              {isAdmin ? (
+                <View className="rounded-full bg-gold px-2 py-0.5">
+                  <Text className="text-xs font-black uppercase text-ink">Admin</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <View className="border-b border-line px-4 py-2.5">
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  setAuthSheetOpen(true);
+                }}
+                className="items-center rounded-full bg-navy py-2"
+              >
+                <Text className="text-sm font-bold text-white">Sign in</Text>
+              </Pressable>
+            </View>
+          )}
+
+          <MenuGroup title="Shop">
+            <MenuItem icon="home" label="Home" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Home' }))} />
+            <MenuItem icon="grid" label="Products" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Shop' }))} />
+            <MenuItem icon="shopping-bag" label="Cart" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Cart' }))} />
+            <MenuItem icon="layers" label="Projects" onPress={() => go('Projects')} />
+          </MenuGroup>
+
+          <MenuGroup title="Company">
+            <MenuItem icon="briefcase" label="Services" onPress={() => go('Services')} />
+            <MenuItem icon="tool" label="Tools & IoT" onPress={() => go('Tools')} />
+            <MenuItem icon="info" label="About" onPress={() => go('About')} />
+            <MenuItem icon="phone" label="Contact" onPress={() => go('Contact')} />
+          </MenuGroup>
+
+          <MenuGroup title="More">
+            <MenuItem icon="book-open" label="Journal" onPress={() => go('Journal')} />
+            <MenuItem icon="corner-down-left" label="3D Printing" onPress={() => go('Printing')} />
+            <MenuItem icon="tool" label="Open Tools" onPress={() => go('OpenTools')} />
+          </MenuGroup>
+
+          <MenuGroup title="Account">
+            {isSignedIn ? <MenuItem icon="user" label="My Account" onPress={() => onNavigate(() => rootNav.navigate('Main', { screen: 'Account' }))} /> : null}
+            {isSignedIn ? (
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  signOut();
+                }}
+                className="flex-row items-center px-4 py-2.5"
+              >
+                <Feather name="log-out" size={16} color="#dc2626" />
+                <Text className="ml-2.5 text-sm font-bold text-red-600">Sign out</Text>
+              </Pressable>
+            ) : null}
+          </MenuGroup>
+        </View>
       </View>
-    </>
+    </Modal>
   );
 }
 
