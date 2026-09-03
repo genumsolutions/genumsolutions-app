@@ -163,11 +163,11 @@ export function ContactScreen() {
 
         {/* Legal links */}
         <View className="mt-8 flex-row items-center justify-center gap-3">
-          <Pressable onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}>
+          <Pressable onPress={() => navigation.push('Legal', { doc: 'privacy' })}>
             <Text className="text-sm font-bold text-navy underline">Privacy Policy</Text>
           </Pressable>
           <Text className="text-sm text-border">·</Text>
-          <Pressable onPress={() => navigation.navigate('Legal', { doc: 'terms' })}>
+          <Pressable onPress={() => navigation.push('Legal', { doc: 'terms' })}>
             <Text className="text-sm font-bold text-navy underline">Terms of Service</Text>
           </Pressable>
         </View>

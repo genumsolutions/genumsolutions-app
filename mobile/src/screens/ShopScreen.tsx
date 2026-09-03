@@ -169,7 +169,7 @@ export function ShopScreen() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() =>
-              navigation.navigate('ProductDetail', { productId: item.id })
+              navigation.push('ProductDetail', { productId: item.id })
             }
             className="mb-4 w-[48%] flex-1 rounded-2xl border border-line bg-card p-3"
           >

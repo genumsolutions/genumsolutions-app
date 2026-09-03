@@ -155,7 +155,7 @@ export function AccountScreen() {
                 <Text className="text-xs font-bold text-white">Edit Profile</Text>
               </Pressable>
               {isAdmin && (
-                <Pressable onPress={() => navigation.navigate('Admin')} className="rounded-full bg-gold px-4 py-2">
+                <Pressable onPress={() => navigation.push('Admin')} className="rounded-full bg-gold px-4 py-2">
                   <Text className="text-xs font-bold text-ink">Admin Panel</Text>
                 </Pressable>
               )}
@@ -279,11 +279,11 @@ export function AccountScreen() {
           </View>
 
           <View className="mt-4 flex-row items-center justify-center gap-3 py-2">
-            <Pressable onPress={() => navigation.navigate('Legal', { doc: 'privacy' })}>
+            <Pressable onPress={() => navigation.push('Legal', { doc: 'privacy' })}>
               <Text className="text-sm font-bold text-navy underline">Privacy Policy</Text>
             </Pressable>
             <Text className="text-sm text-border">·</Text>
-            <Pressable onPress={() => navigation.navigate('Legal', { doc: 'terms' })}>
+            <Pressable onPress={() => navigation.push('Legal', { doc: 'terms' })}>
               <Text className="text-sm font-bold text-navy underline">Terms of Service</Text>
             </Pressable>
           </View>

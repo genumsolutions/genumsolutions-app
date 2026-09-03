@@ -45,7 +45,7 @@ export function PrintingScreen() {
               <Text className="text-xs font-black uppercase tracking-widest text-navy">{offer.meta}</Text>
               <Text className="mt-3 font-display text-xl font-bold text-ink">{offer.title}</Text>
               <Text className="mt-2 text-sm leading-6 text-muted">{offer.text}</Text>
-              <Pressable onPress={() => navigation.navigate('Contact')} className="mt-5 flex-row items-center h-12 items-center gap-1.5 rounded-full bg-navy px-5">
+              <Pressable onPress={() => navigation.push('Contact')} className="mt-5 flex-row items-center h-12 items-center gap-1.5 rounded-full bg-navy px-5">
                 <Text className="text-sm font-bold text-white">Request a quote</Text>
                 <Feather name="arrow-up-right" size={14} color="#ffffff" />
               </Pressable>
@@ -101,7 +101,7 @@ export function PrintingScreen() {
       <View className="mx-5 mb-8 rounded-2xl bg-ink p-6">
         <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">Have a file?</Text>
         <Text className="mt-2 font-display text-xl font-bold text-ink">Let us review the first print.</Text>
-        <Pressable onPress={() => navigation.navigate('Contact')} className="mt-4 flex-row items-center h-12 items-center gap-1.5 rounded-full bg-gold px-5">
+        <Pressable onPress={() => navigation.push('Contact')} className="mt-4 flex-row items-center h-12 items-center gap-1.5 rounded-full bg-gold px-5">
           <Text className="text-sm font-bold text-ink">Request a print review</Text>
           <Feather name="arrow-up-right" size={14} color="#1e3a8a" />
         </Pressable>

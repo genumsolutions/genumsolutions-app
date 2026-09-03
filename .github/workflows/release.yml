@@ -1,0 +1,119 @@
+# =====================================================================
+# Release - build the signed Android release APK on CI (GitHub Actions)
+# and publish it + the release.json manifest straight to Supabase.
+#
+# Everything version-related is read dynamically from app.json (the single
+# source of truth) - nothing is hardcoded here. The versioned filename and
+# manifest are derived at runtime by scripts/upload-release.mjs.
+#
+# REQUIRED repo secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL               e.g. https://xxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY  Supabase -> Settings -> API (service_role)
+#   ANDROID_KEYSTORE_B64       base64 of mobile/keystores/genum-release.jks
+#   STORE_FILE                 path to the release keystore (relative to
+#                              android/), e.g. ../keystores/genum-release.jks
+#   STORE_PASSWORD             keystore password
+#   KEY_ALIAS                  cert alias, e.g. genum-release
+#   KEY_PASSWORD               cert password
+#
+# If SUPABASE_URL is unset the upload step is skipped (the release APK is
+# still built); if the keystore secrets are unset the build falls back to
+# the debug key exactly like a local machine without the release keystore.
+# =====================================================================
+name: Release Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+  workflow_dispatch: # Allow manual trigger
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    if: github.ref == 'refs/heads/main'
+    name: Build + upload signed APK
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Check Supabase config
+        id: check-supabase
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Supabase not configured::Skipping APK upload; SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set."
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Regenerate android/ (expo prebuild)
+        run: npx expo prebuild -p android --no-install
+
+      - name: Reconstruct release signing credentials
+        run: |
+          mkdir -p keystores
+          # Decode the release keystore from a base64 repo secret (never in git).
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 --decode > keystores/genum-release.jks
+            ls -l keystores/genum-release.jks
+          fi
+          # keystore.properties drives the with-release-signing plugin.
+          KSTORE_FILE="${STORE_FILE:-../keystores/genum-release.jks}"
+          cat > keystores/keystore.properties <<EOF
+          storeFile=$KSTORE_FILE
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+        env:
+          STORE_FILE: ${{ secrets.STORE_FILE }}
+
+      - name: Build signed release APK
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+          ls -l app/build/outputs/apk/release/
+
+      - name: Upload APK + release manifest
+        if: steps.check-supabase.outputs.configured == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload unsigned/debug release as artifact (when Supabase not configured)
+        if: steps.check-supabase.outputs.configured != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error

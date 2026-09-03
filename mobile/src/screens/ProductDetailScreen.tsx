@@ -90,7 +90,7 @@ export function ProductDetailScreen() {
   };
 
   const handleQuote = () => {
-    navigation.navigate('Contact');
+    navigation.push('Contact');
   };
 
   const colorLabel =
