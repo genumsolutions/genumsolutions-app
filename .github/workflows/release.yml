@@ -101,12 +101,11 @@ jobs:
             # storeFile is resolved relative to android/app/, so ../../keystores/... ->
             # <repo>/mobile/keystores/... where the keystore was just decoded.
             STORE_FILE="${STORE_FILE:-../../keystores/genum-release.jks}"
-            cat > keystores/keystore.properties <<EOF
-            storeFile=$STORE_FILE
-            storePassword=${{ secrets.STORE_PASSWORD }}
-            keyAlias=${{ secrets.KEY_ALIAS }}
-            keyPassword=${{ secrets.KEY_PASSWORD }}
-            EOF
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$STORE_FILE" \
+              "${{ secrets.STORE_PASSWORD }}" \
+              "${{ secrets.KEY_ALIAS }}" \
+              "${{ secrets.KEY_PASSWORD }}" > keystores/keystore.properties
           else
             echo "::warning title=No release keystore::ANDROID_KEYSTORE_B64 not set; building with the debug key."
           fi
