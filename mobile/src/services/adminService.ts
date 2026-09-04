@@ -42,6 +42,23 @@ export type AdminProduct = {
   badge: string | null
   active: boolean
   sortOrder: number
+  // Project-package fields (only meaningful for project_type rows)
+  projectOverview: string
+  objectives: string[]
+  materialsRequired: string[]
+  learningOutcomes: string[]
+  buildSteps: string[]
+  controlMethods: string[]
+  prerequisites: string[]
+  deliverables: string[]
+  estimatedDuration: string
+  sourceFolder: string
+  documentationUrl: string
+  videoUrl: string
+  maintenanceNotes: string
+  audience: string
+  difficulty: string
+  warranty: string
 }
 
 export type AdminService = {
@@ -107,6 +124,21 @@ export type ActivityEntry = {
 
 type RawRow = Record<string, unknown>
 
+/** Normalize a jsonb/text array column value to a string[]. */
+export function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return (value as unknown[]).map(String)
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) return parsed.map(String)
+    } catch {
+      // ignore — fall through to the single-element fallback below
+    }
+    return [value]
+  }
+  return []
+}
+
 export function mapProductRow(row: RawRow): AdminProduct {
   return {
     id: String(row.id ?? ''),
@@ -119,13 +151,29 @@ export function mapProductRow(row: RawRow): AdminProduct {
     inventoryType: row.inventory_type != null ? String(row.inventory_type) : null,
     note: String(row.note ?? ''),
     description: String(row.description ?? ''),
-    specs: Array.isArray(row.specs) ? (row.specs as string[]) : [],
+    specs: toStringArray(row.specs),
     stock: Number(row.stock ?? 0),
     delivery: String(row.delivery ?? ''),
     image: String(row.image_url ?? ''),
     badge: row.badge != null ? String(row.badge) : null,
     active: row.active !== false,
     sortOrder: Number(row.sort_order ?? 0),
+    projectOverview: String(row.project_overview ?? ''),
+    objectives: toStringArray(row.objectives),
+    materialsRequired: toStringArray(row.materials_required),
+    learningOutcomes: toStringArray(row.learning_outcomes),
+    buildSteps: toStringArray(row.build_steps),
+    controlMethods: toStringArray(row.control_methods),
+    prerequisites: toStringArray(row.prerequisites),
+    deliverables: toStringArray(row.deliverables),
+    estimatedDuration: String(row.estimated_duration ?? ''),
+    sourceFolder: String(row.source_folder ?? ''),
+    documentationUrl: String(row.documentation_url ?? ''),
+    videoUrl: String(row.video_url ?? ''),
+    maintenanceNotes: String(row.maintenance_notes ?? ''),
+    audience: String(row.audience ?? ''),
+    difficulty: String(row.difficulty ?? 'Beginner'),
+    warranty: String(row.warranty ?? ''),
   }
 }
 
@@ -149,6 +197,22 @@ export function toProductRow(product: AdminProduct): RawRow {
     badge: product.badge,
     active: product.active !== false,
     sort_order: product.sortOrder,
+    project_overview: product.projectOverview,
+    objectives: product.objectives,
+    materials_required: product.materialsRequired,
+    learning_outcomes: product.learningOutcomes,
+    build_steps: product.buildSteps,
+    control_methods: product.controlMethods,
+    prerequisites: product.prerequisites,
+    deliverables: product.deliverables,
+    estimated_duration: product.estimatedDuration,
+    source_folder: product.sourceFolder,
+    documentation_url: product.documentationUrl,
+    video_url: product.videoUrl,
+    maintenance_notes: product.maintenanceNotes,
+    audience: product.audience,
+    difficulty: product.difficulty,
+    warranty: product.warranty,
     updated_at: new Date().toISOString(),
   }
 }
@@ -504,5 +568,210 @@ export async function upsertAdminJournalPost(post: AdminJournalPost) {
 
 export async function deleteAdminJournalPost(id: string) {
   const { error } = await supabase.from('journal_posts').delete().eq('id', id)
+  if (error) throw error
+}
+
+// --- Company info (single-row company_info table) ---
+
+export type AdminCompanyInfo = {
+  name: string
+  shortName: string
+  address: string
+  city: string
+  country: string
+  email: string
+  phone: string
+  pan: string
+  vatLabel: string
+  description: string
+}
+
+export async function getCompanyInfo(): Promise<AdminCompanyInfo | null> {
+  const { data, error } = await supabase.from('company_info').select('*').eq('id', 1).maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    name: String(data.name ?? ''),
+    shortName: String(data.short_name ?? ''),
+    address: String(data.address ?? ''),
+    city: String(data.city ?? ''),
+    country: String(data.country ?? ''),
+    email: String(data.email ?? ''),
+    phone: String(data.phone ?? ''),
+    pan: String(data.pan ?? ''),
+    vatLabel: String(data.vat_label ?? ''),
+    description: String(data.description ?? ''),
+  }
+}
+
+export async function saveCompanyInfo(info: AdminCompanyInfo) {
+  const { data, error } = await supabase
+    .from('company_info')
+    .upsert({
+      id: 1,
+      name: info.name,
+      short_name: info.shortName,
+      address: info.address,
+      city: info.city,
+      country: info.country,
+      email: info.email,
+      phone: info.phone,
+      pan: info.pan,
+      vat_label: info.vatLabel,
+      description: info.description,
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+  if (error) throw error
+  return data[0]
+}
+
+// --- Training programs ---
+
+export type AdminTrainingProgram = {
+  id: string
+  title: string
+  audience: string
+  description: string
+  duration: string
+  outcome: string
+  active: boolean
+  sortOrder: number
+}
+
+export async function listAdminTrainingPrograms(): Promise<AdminTrainingProgram[]> {
+  const { data, error } = await supabase
+    .from('training_programs')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ''),
+    title: String(row.title ?? ''),
+    audience: String(row.audience ?? ''),
+    description: String(row.description ?? ''),
+    duration: String(row.duration ?? ''),
+    outcome: String(row.outcome ?? ''),
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }))
+}
+
+export async function upsertAdminTrainingProgram(program: AdminTrainingProgram) {
+  const { data, error } = await supabase
+    .from('training_programs')
+    .upsert({
+      id: program.id,
+      title: program.title,
+      audience: program.audience,
+      description: program.description,
+      duration: program.duration,
+      outcome: program.outcome,
+      active: program.active !== false,
+      sort_order: Math.max(0, Math.round(Number(program.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+  if (error) throw error
+  return data[0]
+}
+
+export async function deleteAdminTrainingProgram(id: string) {
+  const { error } = await supabase.from('training_programs').delete().eq('id', id)
+  if (error) throw error
+}
+
+// --- Pilot cost lines ---
+
+export type AdminPilotCostLine = {
+  id: string
+  item: string
+  cost: string
+  note: string
+  active: boolean
+  sortOrder: number
+}
+
+export async function listAdminPilotCostLines(): Promise<AdminPilotCostLine[]> {
+  const { data, error } = await supabase
+    .from('pilot_cost_lines')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ''),
+    item: String(row.item ?? ''),
+    cost: String(row.cost ?? ''),
+    note: String(row.note ?? ''),
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }))
+}
+
+export async function upsertAdminPilotCostLine(line: AdminPilotCostLine) {
+  const { data, error } = await supabase
+    .from('pilot_cost_lines')
+    .upsert({
+      id: line.id,
+      item: line.item,
+      cost: line.cost,
+      note: line.note,
+      active: line.active !== false,
+      sort_order: Math.max(0, Math.round(Number(line.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+  if (error) throw error
+  return data[0]
+}
+
+export async function deleteAdminPilotCostLine(id: string) {
+  const { error } = await supabase.from('pilot_cost_lines').delete().eq('id', id)
+  if (error) throw error
+}
+
+// --- Curriculum highlights ---
+
+export type AdminCurriculumHighlight = {
+  id: string
+  ageBand: string
+  items: string[]
+  active: boolean
+  sortOrder: number
+}
+
+export async function listAdminCurriculumHighlights(): Promise<AdminCurriculumHighlight[]> {
+  const { data, error } = await supabase
+    .from('curriculum_highlights')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ''),
+    ageBand: String(row.age_band ?? ''),
+    items: toStringArray(row.items),
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }))
+}
+
+export async function upsertAdminCurriculumHighlight(highlight: AdminCurriculumHighlight) {
+  const { data, error } = await supabase
+    .from('curriculum_highlights')
+    .upsert({
+      id: highlight.id,
+      age_band: highlight.ageBand,
+      items: highlight.items,
+      active: highlight.active !== false,
+      sort_order: Math.max(0, Math.round(Number(highlight.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+  if (error) throw error
+  return data[0]
+}
+
+export async function deleteAdminCurriculumHighlight(id: string) {
+  const { error } = await supabase.from('curriculum_highlights').delete().eq('id', id)
   if (error) throw error
 }
