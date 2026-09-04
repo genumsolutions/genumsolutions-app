@@ -7,9 +7,9 @@
 
 ---
 
-## v1.5.11 device checklist (the new fixes — the priority)
+## v1.5.12 device checklist (adds the v1.5.12 Settings tabs, on top of the v1.5.11 fixes)
 
-These verify the 3 UX bugs fixed in v1.5.11 plus the Phase G swipe pager.
+These verify the Settings tabs added in v1.5.12 (app + website admins), plus the 3 UX bugs fixed in v1.5.11 and the Phase G swipe pager.
 
 1. **AppMenu Modal (was "stuck"/blocking)**
    - Tap the hamburger on Home → menu slides in over a dimmed backdrop; the rest of the screen is inert while open.
