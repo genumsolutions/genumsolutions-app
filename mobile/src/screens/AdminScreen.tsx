@@ -17,8 +17,8 @@ import {
   View,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import PagerView from 'react-native-pager-view'
-import type { PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
+import { PlatformPager } from '../components/PlatformPager'
+import type { PagerViewOnPageSelectedEvent, PlatformPagerRef } from '../components/PlatformPager'
 import { useApp } from '../context/AppContext'
 import { CategoryDropdown } from '../components/CategoryDropdown'
 import { isProjectPackage } from '../services/projectService'
@@ -75,7 +75,7 @@ const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'Serv
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
   const [tab, setTab] = useState<Tab>('Dashboard')
-  const pagerRef = useRef<PagerView>(null)
+  const pagerRef = useRef<PlatformPagerRef>(null)
   const tabScrollRef = useRef<ScrollView>(null)
   const currentPageRef = useRef<number>(0)
   const [visited, setVisited] = useState<Record<string, boolean>>({ Dashboard: true })
@@ -691,7 +691,7 @@ export function AdminScreen() {
           -> goToTab -> setPage). Pages mount lazily on first visit so the
           admin doesn't fire all 12 data loads at once, then stay mounted so
           per-tab state (search, category, page) survives swiping away. */}
-      <PagerView
+      <PlatformPager
         ref={pagerRef}
         style={{ flex: 1 }}
         initialPage={0}
@@ -703,7 +703,7 @@ export function AdminScreen() {
             {visited[t] ? renderTabContent(t) : <View className="flex-1" />}
           </View>
         ))}
-      </PagerView>
+      </PlatformPager>
     </View>
   )
 }

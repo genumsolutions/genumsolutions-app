@@ -61,7 +61,6 @@ function MainTabs() {
         Home: HomeScreenSafe,
         Shop: ShopScreenSafe,
         Cart: CartScreenSafe,
-        Account: AccountScreenSafe,
       }}
     />
   );
@@ -76,6 +75,11 @@ export function RootNavigator() {
       }}
     >
       <Stack.Screen name="Main" component={MainTabsSafe} />
+      <Stack.Screen
+        name="Account"
+        component={AccountScreenSafe}
+        options={{ headerShown: true, title: 'My Account', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
       <Stack.Screen
         name="ProductDetail"
         component={ProductDetailScreenSafe}

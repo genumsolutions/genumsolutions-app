@@ -1,9 +1,11 @@
 // =====================================================================
 // MainTabPager - the main tab area as a horizontal swipeable pager.
 //
-// Home / Shop / Cart / Account live as 4 pages of a react-native-pager-view
-// so the user can swipe between them. The pager is kept in sync with the
-// active tab that lives on the `Main` route's `screen` param:
+// Home / Shop / Cart live as pages of a react-native-pager-view so the user
+// can swipe between them; Account lives in the top bar (website parity) and
+// the Menu button (bottom bar, 4th slot) opens the AppMenu sheet. The pager is
+// kept in sync with the active tab that lives on the `Main` route's `screen`
+// param:
 //   - a swipe  -> onPageSelected -> navigation.setParams({ screen })
 //   - a tab tap / navigate('Main', { screen }) -> params change ->
 //     useEffect -> pagerRef.setPage(index)
@@ -13,9 +15,14 @@
 // Per-screen state is preserved because pager-view keeps all pages mounted.
 // The custom bottom tab bar is rendered here (not by a tab navigator), so the
 // tab strip and page content can never fight for vertical space.
+//
+// Android back is handled here too: a single back press from any non-Home tab
+// goes Home (exactly one step), and once on Home the OS default runs (exit the
+// app / pop a screen beneath Main). This is the standard bottom-nav behavior
+// for a multi-stage app - it never jumps more than one step per press.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { BackHandler, Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,14 +37,13 @@ import type { MainTabParamList, RootStackParamList } from './types';
 
 type TabKey = keyof MainTabParamList;
 
-const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart', 'Account'];
+const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart'];
 
 type IconName = ComponentProps<typeof Feather>['name'];
 const TAB_ICONS: Record<TabKey, IconName> = {
   Home: 'home',
   Shop: 'grid',
   Cart: 'shopping-bag',
-  Account: 'user',
 };
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -71,22 +77,6 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
     syncToParam();
   }, [syncToParam]);
 
-  // Re-sync whenever Main regains focus (e.g. after a pushed screen like Admin
-  // pops back). The param may not have changed, so the effect above won't run;
-  // this guarantees the pager lands on the tab the user left, not a drifted /
-  // initial one. Also close the global menu so it can never stay "stuck".
-  useFocusEffect(
-    useCallback(() => {
-      setMenuOpen(false);
-      const index = TAB_ORDER.indexOf(initialTab(route.params?.screen));
-      if (index >= 0 && index !== currentPageRef.current) {
-        currentPageRef.current = index;
-        setPage(TAB_ORDER[index]);
-        pagerRef.current?.setPage(index);
-      }
-    }, [route.params?.screen, setMenuOpen]),
-  );
-
   const onPageSelected = useCallback(
     (event: PagerViewOnPageSelectedEvent) => {
       const index = event.nativeEvent.position;
@@ -110,6 +100,37 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
       (navigation.setParams as (p: { screen?: TabKey }) => void)({ screen: key });
     }
   }, [navigation, route.params?.screen]);
+
+  // Re-sync whenever Main regains focus (e.g. after a pushed screen like Admin
+  // pops back). The param may not have changed, so the effect above won't run;
+  // this guarantees the pager lands on the tab the user left, not a drifted /
+  // initial one. Also close the global menu so it can never stay "stuck".
+  useFocusEffect(
+    useCallback(() => {
+      setMenuOpen(false);
+      const index = TAB_ORDER.indexOf(initialTab(route.params?.screen));
+      if (index >= 0 && index !== currentPageRef.current) {
+        currentPageRef.current = index;
+        setPage(TAB_ORDER[index]);
+        pagerRef.current?.setPage(index);
+      }
+
+      // Android back while inside the tabs: a SINGLE back press from any
+      // non-Home tab goes Home (one step), and once on Home the OS handles
+      // it (exit app / pop a screen beneath Main). This is the standard
+      // bottom-nav behavior for a multi-stage app - never more than one
+      // step per press.
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        const current = TAB_ORDER[currentPageRef.current];
+        if (current !== 'Home') {
+          goToTab('Home');
+          return true; // consumed - exactly one step back
+        }
+        return false; // on Home -> default (exit app / pop stack)
+      });
+      return () => sub.remove();
+    }, [route.params?.screen, setMenuOpen, goToTab]),
+  );
 
   return (
     <View className="flex-1 bg-white">
@@ -163,6 +184,16 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
             </Pressable>
           );
         })}
+        {/* Menu opens the AppMenu sheet - it is an action, not a swipe page. */}
+        <Pressable
+          onPress={() => setMenuOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Open menu"
+          className="flex-1 items-center justify-center pb-2 pt-2.5"
+        >
+          <Feather name="menu" size={22} color="#64748b" />
+          <Text className="mt-1 text-[10px] font-bold text-slate-500">Menu</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -170,4 +201,4 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
 
 function initialTab(screen: TabKey | undefined): TabKey {
   return screen && TAB_ORDER.includes(screen) ? screen : 'Home';
-}
+}

@@ -1,11 +1,22 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v1.5.12** (versionCode 20) · Android APK (`genum-solutions-1.5.12-arm64-v8a.apk`)
-> Scope: the v1.5.12 app+website **admin Settings tabs** + the **3 v1.5.11 UX fixes** (AppMenu modal, back-nav, pager focus re-sync) + the **Phase G swipe pager**; quick regression over the v1.5.5 Tools scope.
+> Target: **v1.5.13** (versionCode 21) · Android APK (`genum-solutions-1.5.13-arm64-v8a.apk`)
+> Scope: the v1.5.13 **native UX polish** (bottom-sheet menu + theme toggle, Account moved to the top bar / Menu to the bottom bar, tab-aware Android back, web-render support for the pager + admin tabs, web theme fix) + regression over the v1.5.12 admin Settings tabs and the v1.5.11 UX fixes.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
-> Status: **Released 2026-09-04** (APK + manifest live). CI release signing confirmed green (`ca613f8`). Device pass for the v1.5.12 Settings tabs and the v1.5.11 UX fixes still pending.
+> Status: **v1.5.13 code complete** (version bumped 1.5.13/21, both repos synced; typecheck + expo-doctor green; web bundle builds). Physical-device pass pending.
 
 ---
+
+## v1.5.13 device checklist (native UX polish)
+
+These verify the v1.5.13 polish, on top of the v1.5.12 Settings tabs and the v1.5.11 UX fixes.
+
+1. **Bottom-sheet menu** — tap **Menu** in the bottom bar (4th slot) → the sheet slides up over content only (top bar and bottom bar stay put, not covered). It has: grabber + "Menu" title + X, a compact account row (or Sign in), an **App theme** picker (System/Light/Dark), destination groups (Explore / Company / Admin), and Sign out + App version in the footer. No duplicated brand header, no duplicated Home/Shop/Cart tab items.
+2. **Account in the top bar (website parity)** — top bar shows a user icon (initials when signed in). Signed in → tapping it opens **My Account** (a stack screen with back button); signed out → tapping it opens the **sign-in sheet** directly. Back from My Account returns to the tab you left.
+3. **Menu moved to the bottom bar** — Home / Shop / Cart are swipeable pages; the 4th bottom slot is **Menu** and opens the sheet (it is an action, not a swipe page). Swiping Home ↔ Shop ↔ Cart stays in sync with the bottom bar.
+4. **Tab-aware Android back** — from Shop/Cart press Back → lands on **Home** (one step); on Home press Back → app exits (or pops a screen beneath Main after a deep link). Never more than one step per press.
+5. **Theme toggle works** — in the menu pick Light → whole app restyles light even if the OS is dark; pick Dark → restyles dark; System → follows the OS. Choice persists across app restarts. (On the web preview the same toggle must restyle the app too.)
+6. **Web-render regression** — the app runs in a browser (`npm run web`): tabs, admin tabs (PlatformPager web variant), menu, theme, and navigation all render without the native-only pager crashing the bundle.
 
 ## v1.5.12 device checklist (adds the v1.5.12 Settings tabs, on top of the v1.5.11 fixes)
 
