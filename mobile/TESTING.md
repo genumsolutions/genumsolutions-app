@@ -3,7 +3,7 @@
 > Target: **v1.5.12** (versionCode 20) · Android APK (`genum-solutions-1.5.12-arm64-v8a.apk`)
 > Scope: the v1.5.12 app+website **admin Settings tabs** + the **3 v1.5.11 UX fixes** (AppMenu modal, back-nav, pager focus re-sync) + the **Phase G swipe pager**; quick regression over the v1.5.5 Tools scope.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
-> Status: **Released 2026-09-04** (APK + manifest live). Device pass for the v1.5.12 Settings tabs and the v1.5.11 UX fixes still pending.
+> Status: **Released 2026-09-04** (APK + manifest live). CI release signing confirmed green (`ca613f8`). Device pass for the v1.5.12 Settings tabs and the v1.5.11 UX fixes still pending.
 
 ---
 
