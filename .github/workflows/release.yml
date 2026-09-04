@@ -47,12 +47,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: actions/setup-node@v4
+      # The project targets compileSdk 36 / targetSdk 36. GitHub's ubuntu
+      # runner ships a default Android SDK, but not necessarily platform 36
+      # (and building RN codegen for every ABI exhausts runner resources).
+      # Pin the SDK (+ licenses + cmake) and build arm64-only via the prebuild
+      # plugin so the release build is fast and reliable.
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -108,12 +115,12 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-release.apk
+        run: node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
 
       - name: Upload unsigned/debug release as artifact (when Supabase not configured)
         if: steps.check-supabase.outputs.configured != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          path: mobile/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           if-no-files-found: error
