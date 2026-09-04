@@ -42,20 +42,35 @@ import {
   listAdminJournalPosts,
   upsertAdminJournalPost,
   deleteAdminJournalPost,
+  getCompanyInfo,
+  saveCompanyInfo,
+  listAdminTrainingPrograms,
+  upsertAdminTrainingProgram,
+  deleteAdminTrainingProgram,
+  listAdminPilotCostLines,
+  upsertAdminPilotCostLine,
+  deleteAdminPilotCostLine,
+  listAdminCurriculumHighlights,
+  upsertAdminCurriculumHighlight,
+  deleteAdminCurriculumHighlight,
   type AdminOrder,
   type AdminProduct,
   type AdminService,
   type AdminUser,
   type AdminMessage,
   type AdminJournalPost,
+  type AdminCompanyInfo,
+  type AdminTrainingProgram,
+  type AdminPilotCostLine,
+  type AdminCurriculumHighlight,
   type DashboardStats,
   type AdminAnalytics,
   type ActivityEntry,
 } from '../services/adminService'
 
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content' | 'Settings'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content', 'Settings']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
@@ -128,6 +143,12 @@ export function AdminScreen() {
   const [activityTotal, setActivityTotal] = useState(0)
   const [activityTotalPages, setActivityTotalPages] = useState(1)
 
+  // Settings (company + programs)
+  const [companyInfo, setCompanyInfo] = useState<AdminCompanyInfo | null>(null)
+  const [trainingPrograms, setTrainingPrograms] = useState<AdminTrainingProgram[]>([])
+  const [pilotCostLines, setPilotCostLines] = useState<AdminPilotCostLine[]>([])
+  const [curriculumHighlights, setCurriculumHighlights] = useState<AdminCurriculumHighlight[]>([])
+
   // Editing
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null)
   const [editingService, setEditingService] = useState<AdminService | null>(null)
@@ -174,6 +195,11 @@ export function AdminScreen() {
           setContentTitle(content.home_title || '')
           setContentBody(content.home_body || '')
         }
+      } else if (tab === 'Settings') {
+        setCompanyInfo(await getCompanyInfo())
+        setTrainingPrograms(await listAdminTrainingPrograms())
+        setPilotCostLines(await listAdminPilotCostLines())
+        setCurriculumHighlights(await listAdminCurriculumHighlights())
       }
     } catch (e) {
       console.error('Admin load error:', e)
@@ -282,6 +308,9 @@ export function AdminScreen() {
       id: '', name: '', category, price: 0, priceLabel: 'Request quote', sku: '',
       productType, inventoryType: null, note: '', description: '', specs: [], stock: 0,
       delivery: 'Ships in 1-2 working days', image: '', badge: null, active: true, sortOrder: 1000,
+      projectOverview: '', objectives: [], materialsRequired: [], learningOutcomes: [], buildSteps: [],
+      controlMethods: [], prerequisites: [], deliverables: [], estimatedDuration: '', sourceFolder: '',
+      documentationUrl: '', videoUrl: '', maintenanceNotes: '', audience: '', difficulty: 'Beginner', warranty: '',
     }
   }
 
@@ -584,6 +613,44 @@ export function AdminScreen() {
             saved={contentSaved}
           />
         )
+      case 'Settings':
+        return (
+          <SettingsTab
+            company={companyInfo}
+            setCompany={setCompanyInfo}
+            trainingPrograms={trainingPrograms}
+            setTrainingPrograms={setTrainingPrograms}
+            pilotCostLines={pilotCostLines}
+            setPilotCostLines={setPilotCostLines}
+            curriculumHighlights={curriculumHighlights}
+            setCurriculumHighlights={setCurriculumHighlights}
+            onCompanySaved={async (next) => { await saveCompanyInfo(next); setCompanyInfo(next) }}
+            onSaveProgram={async (program, isNew) => {
+              await upsertAdminTrainingProgram(program)
+              setTrainingPrograms(await listAdminTrainingPrograms())
+            }}
+            onDeleteProgram={async (id) => {
+              await deleteAdminTrainingProgram(id)
+              setTrainingPrograms(await listAdminTrainingPrograms())
+            }}
+            onSavePilotLine={async (line, isNew) => {
+              await upsertAdminPilotCostLine(line)
+              setPilotCostLines(await listAdminPilotCostLines())
+            }}
+            onDeletePilotLine={async (id) => {
+              await deleteAdminPilotCostLine(id)
+              setPilotCostLines(await listAdminPilotCostLines())
+            }}
+            onSaveCurriculum={async (highlight, isNew) => {
+              await upsertAdminCurriculumHighlight(highlight)
+              setCurriculumHighlights(await listAdminCurriculumHighlights())
+            }}
+            onDeleteCurriculum={async (id) => {
+              await deleteAdminCurriculumHighlight(id)
+              setCurriculumHighlights(await listAdminCurriculumHighlights())
+            }}
+          />
+        )
     }
   }
 
@@ -641,7 +708,27 @@ export function AdminScreen() {
   )
 }
 
+/** Split a multi-line TextInput value into a trimmed, non-empty string array. */
+function toStringArrayLines(value: string): string[] {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
 // ─── Sub-tabs ────────────────────────────────────────────────────────
+
+/** A blank project-package row for the Project packages tab's "+ New project". */
+function blankProjectProduct(): AdminProduct {
+  return {
+    id: '', name: '', category: 'Project Packages', price: 0, priceLabel: 'Request quote', sku: '',
+    productType: 'Project package', inventoryType: null, note: '', description: '', specs: [], stock: 0,
+    delivery: 'Ships in 1-2 working days', image: '', badge: null, active: true, sortOrder: 1000,
+    projectOverview: '', objectives: [], materialsRequired: [], learningOutcomes: [], buildSteps: [],
+    controlMethods: [], prerequisites: [], deliverables: [], estimatedDuration: '', sourceFolder: '',
+    documentationUrl: '', videoUrl: '', maintenanceNotes: '', audience: '', difficulty: 'Beginner', warranty: '',
+  }
+}
 
 function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; analytics: AdminAnalytics | null }) {
   if (!stats) {
@@ -893,6 +980,7 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
   onToggleActive: (p: AdminProduct) => void;
 }) {
   const [editing, setEditing] = useState<AdminProduct | null>(null)
+  const [isNew, setIsNew] = useState(false)
   const [category, setCategory] = useState('All')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -916,9 +1004,9 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
         <ProductEditor
           product={editing}
           onChange={setEditing}
-          onSave={() => { void onSaveProduct(editing).then((saved) => { if (saved) setEditing(null) }) }}
-          onCancel={() => setEditing(null)}
-          isNew={false}
+          onSave={() => { void onSaveProduct(editing).then((saved) => { if (saved) { setEditing(null); setIsNew(false) } }) }}
+          onCancel={() => { setEditing(null); setIsNew(false) }}
+          isNew={isNew}
           categoryOptions={categories.filter((c) => c !== 'All')}
         />
       </View>
@@ -933,7 +1021,15 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
         className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
-            <Text className="font-display text-xl font-bold text-ink">{title} ({filtered.length})</Text>
+            <View className="flex-row items-center justify-between">
+              <Text className="font-display text-xl font-bold text-ink">{title} ({filtered.length})</Text>
+              <Pressable
+                onPress={() => { setEditing(blankProjectProduct()); setIsNew(true) }}
+                className="rounded-full bg-navy px-4 py-2"
+              >
+                <Text className="text-xs font-black text-white">+ New project</Text>
+              </Pressable>
+            </View>
             <View className="mt-2 flex-row items-center gap-2">
               <View className="flex-1">
                 <CategoryDropdown
@@ -987,6 +1083,10 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOpt
   }
 
   const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
+  const isProject =
+    product.productType === 'Project package' ||
+    product.category === 'Robot Cars' ||
+    product.category === 'Pre-packaged Kits'
 
   return (
     <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
@@ -1032,6 +1132,64 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOpt
         <TextInput value={product.specs.join('\n')} onChangeText={(specs) => patch({ specs: specs.split('\n') })} multiline style={{ textAlignVertical: 'top' }} className={`mb-3 min-h-20 ${inputClass}`} placeholder={'1.3-inch OLED\nI2C interface'} />
         <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
         <TextInput value={product.image} onChangeText={(image) => patch({ image })} className={`mb-3 ${inputClass}`} placeholder="https://…" autoCapitalize="none" />
+
+        <Text className="mb-1 text-xs font-bold text-muted">Product type</Text>
+        <View className="mb-3">
+          <CategoryDropdown
+            value={product.productType || 'Retail kit'}
+            options={['Retail kit', 'Project package', 'Robot Cars', 'Material', 'Service package']}
+            onChange={(productType) => patch({ productType })}
+            placeholder="Select a product type"
+            title="Product type"
+            allowCustom
+          />
+        </View>
+
+        {isProject ? (
+          <View className="mb-3 rounded-xl border border-line bg-surface p-3">
+            <Text className="mb-2 font-display text-base font-bold text-ink">Project information</Text>
+            <Text className="mb-1 text-xs font-bold text-muted">Project overview</Text>
+            <TextInput value={product.projectOverview} onChangeText={(projectOverview) => patch({ projectOverview })} multiline style={{ textAlignVertical: 'top' }} className={`mb-3 min-h-20 ${inputClass}`} placeholder="Fully-built demo car with instructions…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Objectives (one per line)</Text>
+            <TextInput value={product.objectives.join('\n')} onChangeText={(v) => patch({ objectives: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="Control motors and servo via ESP32…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Materials required (one per line)</Text>
+            <TextInput value={product.materialsRequired.join('\n')} onChangeText={(v) => patch({ materialsRequired: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="ESP32 dev board…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Learning outcomes (one per line)</Text>
+            <TextInput value={product.learningOutcomes.join('\n')} onChangeText={(v) => patch({ learningOutcomes: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="Understand PWM signal control…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Build steps (one per line)</Text>
+            <TextInput value={product.buildSteps.join('\n')} onChangeText={(v) => patch({ buildSteps: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="Mount the motors on the chassis…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Control methods (one per line)</Text>
+            <TextInput value={product.controlMethods.join('\n')} onChangeText={(v) => patch({ controlMethods: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="Bluetooth remote (GENUM app)…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Prerequisites (one per line)</Text>
+            <TextInput value={product.prerequisites.join('\n')} onChangeText={(v) => patch({ prerequisites: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="Basic wiring knowledge…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Deliverables (one per line)</Text>
+            <TextInput value={product.deliverables.join('\n')} onChangeText={(v) => patch({ deliverables: toStringArrayLines(v) })} multiline className={`mb-3 ${inputClass}`} placeholder="Fully assembled robot car…" />
+            <Text className="mb-1 text-xs font-bold text-muted">Estimated duration</Text>
+            <TextInput value={product.estimatedDuration} onChangeText={(estimatedDuration) => patch({ estimatedDuration })} className={`mb-3 ${inputClass}`} placeholder="2-3 hours" />
+            <Text className="mb-1 text-xs font-bold text-muted">Source folder</Text>
+            <TextInput value={product.sourceFolder} onChangeText={(sourceFolder) => patch({ sourceFolder })} className={`mb-3 ${inputClass}`} placeholder="Genum_SMART_DUSTBIN_V1.0.0" autoCapitalize="none" />
+            <Text className="mb-1 text-xs font-bold text-muted">Documentation URL</Text>
+            <TextInput value={product.documentationUrl} onChangeText={(documentationUrl) => patch({ documentationUrl })} className={`mb-3 ${inputClass}`} placeholder="https://…" autoCapitalize="none" />
+            <Text className="mb-1 text-xs font-bold text-muted">Video URL</Text>
+            <TextInput value={product.videoUrl} onChangeText={(videoUrl) => patch({ videoUrl })} className={`mb-3 ${inputClass}`} placeholder="https://…" autoCapitalize="none" />
+            <Text className="mb-1 text-xs font-bold text-muted">Maintenance notes</Text>
+            <TextInput value={product.maintenanceNotes} onChangeText={(maintenanceNotes) => patch({ maintenanceNotes })} multiline className={`mb-3 ${inputClass}`} placeholder="Safety / maintenance notes" />
+            <Text className="mb-1 text-xs font-bold text-muted">Audience</Text>
+            <TextInput value={product.audience} onChangeText={(audience) => patch({ audience })} className={`mb-3 ${inputClass}`} placeholder="Students, Makers, Hobbyists" />
+            <Text className="mb-1 text-xs font-bold text-muted">Difficulty</Text>
+            <View className="mb-3">
+              <CategoryDropdown
+                value={product.difficulty || 'Beginner'}
+                options={['Beginner', 'Intermediate', 'Advanced', 'Professional']}
+                onChange={(difficulty) => patch({ difficulty })}
+                placeholder="Difficulty"
+                title="Difficulty"
+              />
+            </View>
+            <Text className="mb-1 text-xs font-bold text-muted">Warranty</Text>
+            <TextInput value={product.warranty} onChangeText={(warranty) => patch({ warranty })} className={`mb-1 ${inputClass}`} placeholder="30 days for manufacturing defects" />
+          </View>
+        ) : null}
 
         <View className="mb-3 flex-row items-center gap-3">
           <Text className="text-sm font-semibold text-ink">Visible to customers</Text>
@@ -1606,6 +1764,308 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
         </>
       )}
     </ScrollView>
+  )
+}
+
+// ─── Settings (company info + programs) ─────────────────────────────
+
+function SettingsTab({ company, setCompany, trainingPrograms, setTrainingPrograms, pilotCostLines, setPilotCostLines, curriculumHighlights, setCurriculumHighlights, onCompanySaved, onSaveProgram, onDeleteProgram, onSavePilotLine, onDeletePilotLine, onSaveCurriculum, onDeleteCurriculum }: {
+  company: AdminCompanyInfo | null; setCompany: (c: AdminCompanyInfo | null) => void
+  trainingPrograms: AdminTrainingProgram[]; setTrainingPrograms: (p: AdminTrainingProgram[]) => void
+  pilotCostLines: AdminPilotCostLine[]; setPilotCostLines: (p: AdminPilotCostLine[]) => void
+  curriculumHighlights: AdminCurriculumHighlight[]; setCurriculumHighlights: (c: AdminCurriculumHighlight[]) => void
+  onCompanySaved: (next: AdminCompanyInfo) => void
+  onSaveProgram: (p: AdminTrainingProgram, isNew: boolean) => void
+  onDeleteProgram: (id: string) => void
+  onSavePilotLine: (p: AdminPilotCostLine, isNew: boolean) => void
+  onDeletePilotLine: (id: string) => void
+  onSaveCurriculum: (c: AdminCurriculumHighlight, isNew: boolean) => void
+  onDeleteCurriculum: (id: string) => void
+}) {
+  const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
+
+  return (
+    <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <Text className="font-display text-2xl font-bold tracking-tight text-ink">Settings</Text>
+      <Text className="mt-1 text-xs text-muted">Company details, training programs, pilot costs, and curriculum highlights — all DB-first (shared with the website).</Text>
+
+      <CompanyInfoEditor company={company} setCompany={setCompany} onSaved={onCompanySaved} inputClass={inputClass} />
+
+      <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} onDelete={onDeleteProgram} inputClass={inputClass} />
+
+      <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} onDelete={onDeletePilotLine} inputClass={inputClass} />
+
+      <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} onDelete={onDeleteCurriculum} inputClass={inputClass} />
+    </ScrollView>
+  )
+}
+
+function SectionCard({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <View className="mt-5 rounded-xl border border-line bg-card p-4">
+      <Text className="font-display text-lg font-bold text-ink">{title}</Text>
+      {hint ? <Text className="mt-0.5 text-xs text-muted">{hint}</Text> : null}
+      <View className="mt-3">{children}</View>
+    </View>
+  )
+}
+
+function CompanyInfoEditor({ company, setCompany, onSaved, inputClass }: {
+  company: AdminCompanyInfo | null; setCompany: (c: AdminCompanyInfo | null) => void
+  onSaved: (next: AdminCompanyInfo) => void; inputClass: string
+}) {
+  const [saved, setSaved] = useState(false)
+  function patch(part: Partial<AdminCompanyInfo>) {
+    if (company) setCompany({ ...company, ...part })
+  }
+  return (
+    <SectionCard title="Company information" hint="Shown in the app Contact/Legal screens and the website footer/contact pages.">
+      {!company ? (
+        <Text className="text-sm text-muted">Loading company info…</Text>
+      ) : (
+        <>
+          <View className="mb-3 flex-row gap-3">
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
+              <TextInput value={company.name} onChangeText={(name) => patch({ name })} className={inputClass} />
+            </View>
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">Short name</Text>
+              <TextInput value={company.shortName} onChangeText={(shortName) => patch({ shortName })} className={inputClass} />
+            </View>
+          </View>
+          <Text className="mb-1 text-xs font-bold text-muted">Address</Text>
+          <TextInput value={company.address} onChangeText={(address) => patch({ address })} multiline className={`mb-3 ${inputClass}`} />
+          <View className="mb-3 flex-row gap-3">
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">City</Text>
+              <TextInput value={company.city} onChangeText={(city) => patch({ city })} className={inputClass} />
+            </View>
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">Country</Text>
+              <TextInput value={company.country} onChangeText={(country) => patch({ country })} className={inputClass} />
+            </View>
+          </View>
+          <View className="mb-3 flex-row gap-3">
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">Email</Text>
+              <TextInput value={company.email} onChangeText={(email) => patch({ email })} autoCapitalize="none" keyboardType="email-address" className={inputClass} />
+            </View>
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">Phone</Text>
+              <TextInput value={company.phone} onChangeText={(phone) => patch({ phone })} keyboardType="phone-pad" className={inputClass} />
+            </View>
+          </View>
+          <View className="mb-3 flex-row gap-3">
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">PAN</Text>
+              <TextInput value={company.pan} onChangeText={(pan) => patch({ pan })} className={inputClass} />
+            </View>
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">VAT label</Text>
+              <TextInput value={company.vatLabel} onChangeText={(vatLabel) => patch({ vatLabel })} className={inputClass} />
+            </View>
+          </View>
+          <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
+          <TextInput value={company.description} onChangeText={(description) => patch({ description })} multiline style={{ textAlignVertical: 'top' }} className={`mb-3 min-h-20 ${inputClass}`} />
+          <View className="flex-row items-center gap-3">
+            <Pressable onPress={() => { onSaved(company); setSaved(true) }} className="rounded-full bg-navy px-5 py-2">
+              <Text className="text-xs font-black text-white">Save company</Text>
+            </Pressable>
+            {saved && <Text className="text-sm font-semibold text-emerald-700">Saved.</Text>}
+          </View>
+        </>
+      )}
+    </SectionCard>
+  )
+}
+
+function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inputClass }: {
+  programs: AdminTrainingProgram[]; setPrograms: (p: AdminTrainingProgram[]) => void
+  onSave: (p: AdminTrainingProgram, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+}) {
+  const [editing, setEditing] = useState<AdminTrainingProgram | null>(null)
+  function blank(): AdminTrainingProgram {
+    return { id: '', title: '', audience: '', description: '', duration: '', outcome: '', active: true, sortOrder: 0 }
+  }
+  function patch(part: Partial<AdminTrainingProgram>) {
+    if (editing) setEditing({ ...editing, ...part })
+  }
+  const isNew = editing ? !programs.some((p) => p.id === editing.id) : false
+  const slug = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return (
+    <SectionCard title={`Training programs (${programs.length})`} hint="Shown on the Home screen and the website /services page.">
+      <Pressable onPress={() => setEditing(blank())} className="mb-3 self-start rounded-full bg-navy px-4 py-2">
+        <Text className="text-xs font-black text-white">+ New program</Text>
+      </Pressable>
+      {editing && (
+        <View className="mb-3 rounded-lg border border-line bg-surface p-3">
+          <Text className="mb-2 text-sm font-bold text-ink">{isNew ? 'Add a training program' : `Edit ${editing.id}`}</Text>
+          <Text className="mb-1 text-xs font-bold text-muted">Title</Text>
+          <TextInput value={editing.title} onChangeText={(title) => patch({ title })} className={`mb-2 ${inputClass}`} />
+          <Text className="mb-1 text-xs font-bold text-muted">Audience</Text>
+          <TextInput value={editing.audience} onChangeText={(audience) => patch({ audience })} className={`mb-2 ${inputClass}`} placeholder="Students / Teachers / Makers" />
+          <Text className="mb-1 text-xs font-bold text-muted">Duration</Text>
+          <TextInput value={editing.duration} onChangeText={(duration) => patch({ duration })} className={`mb-2 ${inputClass}`} placeholder="2 hours / 4 sessions" />
+          <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
+          <TextInput value={editing.description} onChangeText={(description) => patch({ description })} multiline className={`mb-2 ${inputClass}`} />
+          <Text className="mb-1 text-xs font-bold text-muted">Outcome</Text>
+          <TextInput value={editing.outcome} onChangeText={(outcome) => patch({ outcome })} multiline className={`mb-2 ${inputClass}`} />
+          <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+          <TextInput value={String(editing.sortOrder)} onChangeText={(sortOrder) => patch({ sortOrder: Math.max(0, Math.round(Number(sortOrder) || 0)) })} keyboardType="numeric" className={`mb-2 ${inputClass}`} />
+          <View className="mb-3 flex-row items-center gap-3">
+            <Text className="text-sm font-semibold text-ink">Active</Text>
+            <Switch value={editing.active} onValueChange={(active) => patch({ active })} trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }} />
+          </View>
+          <View className="flex-row gap-2">
+            <Pressable onPress={() => { const next = { ...editing, id: (editing.id.trim() || slug(editing.title)) }; onSave(next, isNew); setEditing(null) }} className="rounded-full bg-gold px-5 py-2">
+              <Text className="text-xs font-black text-ink">Save</Text>
+            </Pressable>
+            <Pressable onPress={() => setEditing(null)} className="rounded-full border border-line px-5 py-2">
+              <Text className="text-xs font-black text-ink">Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {programs.length === 0 ? (
+        <Text className="text-sm text-muted">No training programs yet.</Text>
+      ) : (
+        programs.map((program) => (
+          <View key={program.id} className="mb-2 flex-row items-center justify-between gap-2 rounded-lg border border-line p-3">
+            <View className="min-w-0 flex-1">
+              <Text className="text-sm font-bold text-ink" numberOfLines={1}>{program.title}</Text>
+              <Text className="text-xs text-muted" numberOfLines={1}>{program.audience}{program.duration ? ` · ${program.duration}` : ''}</Text>
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              <AdminAction onPress={() => setEditing({ ...program })} label="Edit" tone="navy" />
+              <AdminAction onPress={() => onDelete(program.id)} label="Delete" tone="red" />
+            </View>
+          </View>
+        ))
+      )}
+    </SectionCard>
+  )
+}
+
+function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass }: {
+  lines: AdminPilotCostLine[]; setLines: (p: AdminPilotCostLine[]) => void
+  onSave: (p: AdminPilotCostLine, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+}) {
+  const [editing, setEditing] = useState<AdminPilotCostLine | null>(null)
+  function blank(): AdminPilotCostLine {
+    return { id: '', item: '', cost: '', note: '', active: true, sortOrder: 0 }
+  }
+  function patch(part: Partial<AdminPilotCostLine>) {
+    if (editing) setEditing({ ...editing, ...part })
+  }
+  const isNew = editing ? !lines.some((l) => l.id === editing.id) : false
+  return (
+    <SectionCard title={`Pilot cost lines (${lines.length})`} hint="Shown on the Home screen (pilot program running costs).">
+      <Pressable onPress={() => setEditing(blank())} className="mb-3 self-start rounded-full bg-navy px-4 py-2">
+        <Text className="text-xs font-black text-white">+ New cost line</Text>
+      </Pressable>
+      {editing && (
+        <View className="mb-3 rounded-lg border border-line bg-surface p-3">
+          <Text className="mb-2 text-sm font-bold text-ink">{isNew ? 'Add a cost line' : `Edit ${editing.id}`}</Text>
+          <Text className="mb-1 text-xs font-bold text-muted">Item</Text>
+          <TextInput value={editing.item} onChangeText={(item) => patch({ item })} className={`mb-2 ${inputClass}`} />
+          <Text className="mb-1 text-xs font-bold text-muted">Cost</Text>
+          <TextInput value={editing.cost} onChangeText={(cost) => patch({ cost })} className={`mb-2 ${inputClass}`} placeholder="NPR 25,000 / month" />
+          <Text className="mb-1 text-xs font-bold text-muted">Note</Text>
+          <TextInput value={editing.note} onChangeText={(note) => patch({ note })} multiline className={`mb-2 ${inputClass}`} />
+          <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+          <TextInput value={String(editing.sortOrder)} onChangeText={(sortOrder) => patch({ sortOrder: Math.max(0, Math.round(Number(sortOrder) || 0)) })} keyboardType="numeric" className={`mb-2 ${inputClass}`} />
+          <View className="mb-3 flex-row items-center gap-3">
+            <Text className="text-sm font-semibold text-ink">Active</Text>
+            <Switch value={editing.active} onValueChange={(active) => patch({ active })} trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }} />
+          </View>
+          <View className="flex-row gap-2">
+            <Pressable onPress={() => { const next = { ...editing, id: editing.id.trim() || `cost-${Date.now()}` }; onSave(next, isNew); setEditing(null) }} className="rounded-full bg-gold px-5 py-2">
+              <Text className="text-xs font-black text-ink">Save</Text>
+            </Pressable>
+            <Pressable onPress={() => setEditing(null)} className="rounded-full border border-line px-5 py-2">
+              <Text className="text-xs font-black text-ink">Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {lines.length === 0 ? (
+        <Text className="text-sm text-muted">No pilot cost lines yet.</Text>
+      ) : (
+        lines.map((line) => (
+          <View key={line.id} className="mb-2 flex-row items-center justify-between gap-2 rounded-lg border border-line p-3">
+            <View className="min-w-0 flex-1">
+              <Text className="text-sm font-bold text-ink" numberOfLines={1}>{line.item}</Text>
+              <Text className="text-xs text-muted" numberOfLines={1}>{line.cost}{line.note ? ` · ${line.note}` : ''}</Text>
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              <AdminAction onPress={() => setEditing({ ...line })} label="Edit" tone="navy" />
+              <AdminAction onPress={() => onDelete(line.id)} label="Delete" tone="red" />
+            </View>
+          </View>
+        ))
+      )}
+    </SectionCard>
+  )
+}
+
+function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputClass }: {
+  highlights: AdminCurriculumHighlight[]; setHighlights: (c: AdminCurriculumHighlight[]) => void
+  onSave: (c: AdminCurriculumHighlight, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+}) {
+  const [editing, setEditing] = useState<AdminCurriculumHighlight | null>(null)
+  function blank(): AdminCurriculumHighlight {
+    return { id: '', ageBand: '', items: [], active: true, sortOrder: 0 }
+  }
+  function patch(part: Partial<AdminCurriculumHighlight>) {
+    if (editing) setEditing({ ...editing, ...part })
+  }
+  const isNew = editing ? !highlights.some((h) => h.id === editing.id) : false
+  return (
+    <SectionCard title={`Curriculum highlights (${highlights.length})`} hint="Age-band curriculum items shown on the Home screen.">
+      <Pressable onPress={() => setEditing(blank())} className="mb-3 self-start rounded-full bg-navy px-4 py-2">
+        <Text className="text-xs font-black text-white">+ New highlight</Text>
+      </Pressable>
+      {editing && (
+        <View className="mb-3 rounded-lg border border-line bg-surface p-3">
+          <Text className="mb-2 text-sm font-bold text-ink">{isNew ? 'Add a curriculum highlight' : `Edit ${editing.id}`}</Text>
+          <Text className="mb-1 text-xs font-bold text-muted">Age band</Text>
+          <TextInput value={editing.ageBand} onChangeText={(ageBand) => patch({ ageBand })} className={`mb-2 ${inputClass}`} placeholder="Ages 8-11" />
+          <Text className="mb-1 text-xs font-bold text-muted">Skills / items (one per line)</Text>
+          <TextInput value={editing.items.join('\n')} onChangeText={(v) => patch({ items: toStringArrayLines(v) })} multiline style={{ textAlignVertical: 'top' }} className={`mb-2 min-h-20 ${inputClass}`} />
+          <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+          <TextInput value={String(editing.sortOrder)} onChangeText={(sortOrder) => patch({ sortOrder: Math.max(0, Math.round(Number(sortOrder) || 0)) })} keyboardType="numeric" className={`mb-2 ${inputClass}`} />
+          <View className="mb-3 flex-row items-center gap-3">
+            <Text className="text-sm font-semibold text-ink">Active</Text>
+            <Switch value={editing.active} onValueChange={(active) => patch({ active })} trackColor={{ true: '#1e3a8a', false: '#e2e8f0' }} />
+          </View>
+          <View className="flex-row gap-2">
+            <Pressable onPress={() => { const next = { ...editing, id: editing.id.trim() || `curriculum-${Date.now()}` }; onSave(next, isNew); setEditing(null) }} className="rounded-full bg-gold px-5 py-2">
+              <Text className="text-xs font-black text-ink">Save</Text>
+            </Pressable>
+            <Pressable onPress={() => setEditing(null)} className="rounded-full border border-line px-5 py-2">
+              <Text className="text-xs font-black text-ink">Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {highlights.length === 0 ? (
+        <Text className="text-sm text-muted">No curriculum highlights yet.</Text>
+      ) : (
+        highlights.map((highlight) => (
+          <View key={highlight.id} className="mb-2 flex-row items-center justify-between gap-2 rounded-lg border border-line p-3">
+            <View className="min-w-0 flex-1">
+              <Text className="text-sm font-bold text-ink" numberOfLines={1}>{highlight.ageBand}</Text>
+              <Text className="text-xs text-muted" numberOfLines={1}>{highlight.items.length} skill{highlight.items.length === 1 ? '' : 's'}</Text>
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              <AdminAction onPress={() => setEditing({ ...highlight })} label="Edit" tone="navy" />
+              <AdminAction onPress={() => onDelete(highlight.id)} label="Delete" tone="red" />
+            </View>
+          </View>
+        ))
+      )}
+    </SectionCard>
   )
 }
 
