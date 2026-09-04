@@ -1,6 +1,10 @@
 // =====================================================================
 // Navigation param types for the native app. Matches the structure in
 // src/navigation/RootNavigator.tsx.
+//
+// The bottom bar is Home / Shop / Cart (+ a Menu button that opens the
+// sheet). Account is NOT a tab: it lives in the top bar like the website's
+// header account icon and is a stack screen (website /account parity).
 // =====================================================================
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
@@ -11,7 +15,6 @@ export type MainTabParamList = {
   Home: undefined;
   Shop: undefined;
   Cart: undefined;
-  Account: undefined;
 };
 
 export type RootStackParamList = {
@@ -29,10 +32,11 @@ export type RootStackParamList = {
   OpenTools: undefined;
   Legal: { doc: 'privacy' | 'terms' };
   OrderSuccess: { orderId?: string; provider?: string; paid?: boolean };
+  Account: undefined;
 };
 
 /** Navigation prop for tab screens that can push onto the root stack. */
 export type TabNav<T extends keyof MainTabParamList> = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, T>,
   NativeStackNavigationProp<RootStackParamList>
->;
+>;

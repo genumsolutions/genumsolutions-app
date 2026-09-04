@@ -14,7 +14,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Appearance } from 'react-native';
+import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseConfigured } from '../config/supabase';
 import * as auth from '../services/authService';
@@ -78,6 +78,30 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
   };
 }
 
+/**
+ * Apply the chosen theme everywhere the app can render.
+ *
+ * - Native: `Appearance.setColorScheme` forces the OS scheme (exits there),
+ *   which NativeWind's `@media (prefers-color-scheme: dark)` picks up.
+ * - Web: react-native-web's Appearance has NO `setColorScheme`, so calling it
+ *   would throw. Instead we set `data-theme` on <html> and `global.css` has
+ *   matching `html[data-theme='dark'|'light']` overrides (see global.css).
+ */
+function applyColorScheme(mode: ThemeMode) {
+  try {
+    if (typeof Appearance.setColorScheme === 'function') {
+      Appearance.setColorScheme(mode === 'system' ? null : mode);
+    }
+  } catch {
+    // some platforms (react-native-web) don't implement setColorScheme
+  }
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const root = document.documentElement;
+    if (mode === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', mode);
+  }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<GenumUser | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -129,14 +153,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void AsyncStorage.getItem('genum-theme-mode').then((stored) => {
       if (stored === 'system' || stored === 'light' || stored === 'dark') {
         setThemeModeState(stored);
-        Appearance.setColorScheme(stored === 'system' ? null : stored);
+        applyColorScheme(stored);
       }
     });
   }, []);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
-    Appearance.setColorScheme(mode === 'system' ? null : mode);
+    applyColorScheme(mode);
     void AsyncStorage.setItem('genum-theme-mode', mode);
   }, []);
 

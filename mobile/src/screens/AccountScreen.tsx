@@ -27,7 +27,7 @@ import type { Order } from '../types'
 
 export function AccountScreen() {
   const navigation = useNavigation<any>()
-  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen, themeMode, setThemeMode } = useApp()
+  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen } = useApp()
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
@@ -161,17 +161,6 @@ export function AccountScreen() {
               )}
             </View>
           )}
-
-          <View className="mt-4 rounded-xl border border-line bg-card p-4">
-            <Text className="text-sm font-bold text-ink">App theme</Text>
-            <View className="mt-3 flex-row gap-2">
-              {(['system', 'light', 'dark'] as const).map((mode) => (
-                <Pressable key={mode} onPress={() => setThemeMode(mode)} className={`flex-1 items-center rounded-lg border px-2 py-2 ${themeMode === mode ? 'border-navy bg-navy' : 'border-line bg-card'}`}>
-                  <Text className={`text-xs font-bold capitalize ${themeMode === mode ? 'text-white' : 'text-ink'}`}>{mode}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
 
           <View className="mt-4">
             <Text className="mb-2 text-xs font-black uppercase tracking-[0.24em] text-navy">

@@ -8,7 +8,8 @@
  * toggle in AccountScreen -> Appearance.setColorScheme, or the OS scheme in
  * system mode) restyles every screen that uses a semantic token.
  */
-:root {
+:root,
+html[data-theme='light'] {
   --color-ink: 15 23 42; /* slate-900       */
   --color-navy: 30 58 138; /* blue-900        */
   --color-navy-dark: 23 37 84; /* blue-950        */
@@ -25,6 +26,9 @@
   --color-accent: 5 150 105; /* emerald-600     */
 }
 
+/* OS dark, or the app's manual Dark pick on web (data-theme set in
+   AppContext.applyColorScheme). The explicit dark block wins by coming
+   last (same specificity as :root, later in source order). */
 @media (prefers-color-scheme: dark) {
   :root {
     --color-ink: 226 232 240; /* slate-200       */
@@ -42,4 +46,21 @@
     --color-muted: 148 163 184; /* slate-400       */
     --color-accent: 16 185 129; /* emerald-500     */
   }
+}
+
+html[data-theme='dark'] {
+  --color-ink: 226 232 240; /* slate-200       */
+  --color-navy: 37 99 235; /* blue-600 (buttons + labels stay legible) */
+  --color-navy-dark: 29 78 216; /* blue-700        */
+  --color-navy-light: 199 216 247; /* pale blue keeps text-on-navy readable */
+  --color-sky: 30 41 59; /* slate-800       */
+  --color-mist: 15 23 42; /* slate-900       */
+  --color-gold: 245 158 11; /* amber-500       */
+  --color-gold-dark: 217 119 6; /* amber-600       */
+  --color-line: 51 65 85; /* slate-700       */
+  --color-border: 100 116 139; /* slate-500       */
+  --color-surface: 15 23 42; /* slate-900       */
+  --color-card: 30 41 59; /* slate-800       */
+  --color-muted: 148 163 184; /* slate-400       */
+  --color-accent: 16 185 129; /* emerald-500     */
 }
