@@ -27,6 +27,23 @@ if (keystorePropertiesFile.exists()) {
 }
 `;
 
+// Injected after `compileSdk rootProject.ext.compileSdkVersion` (inside `android {`),
+// before `defaultConfig`. Ships an arm64-only APK (small download, virtually every
+// phone in 2026 is arm64) so `expo prebuild` produces the SAME light build we release,
+// instead of building every ABI (slow / resource-hungry on CI).
+const ABI_SPLITS_BLOCK = `
+    // Ship a trimmed arm64-only APK for the website download (small download,
+    // virtually every phone in 2026 is arm64).
+    splits {
+        abi {
+            reset()
+            enable true
+            universalApk false
+            include "arm64-v8a"
+        }
+    }
+`;
+
 // Injected right after `android {` and the ndk/buildTools/compileSdk line, inside
 // a fresh `signingConfigs { ... }` block.
 const SIGNING_CONFIGS_BLOCK = `
@@ -71,6 +88,18 @@ module.exports = function withReleaseSigning(config) {
       src = src.replace(
         /^android \{/m,
         PREAMBLE_ABOVE_ANDROID + '\nandroid {'
+      );
+    }
+
+    if (!src.includes('compileSdk rootProject.ext.compileSdkVersion')) {
+      return cfg;
+    }
+
+    // Inject the arm64-only ABI split right after the compileSdk line.
+    if (!src.includes('include "arm64-v8a"')) {
+      src = src.replace(
+        /(^[ \t]*compileSdk rootProject\.ext\.compileSdkVersion\r?\n)/m,
+        '$1' + ABI_SPLITS_BLOCK
       );
     }
 
