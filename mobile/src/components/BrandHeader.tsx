@@ -10,7 +10,7 @@
 // brand header, and it does NOT list the main tabs (Home / Shop / Cart)
 // because those already live in the bottom tab bar. It carries the
 // destinations that have no tab of their own, a compact account row, the
-// app theme toggle, and sign-out / version in the footer.
+// app theme toggle, and sign-out + app update check in the footer.
 // =====================================================================
 import React from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,7 +20,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useApp } from '../context/AppContext';
-import { APP_VERSION } from '../config/site';
+import { AppUpdateCard } from './AppUpdateCard';
 import type { RootStackParamList } from '../navigation/types';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -258,21 +258,21 @@ function AppMenu({ visible, onClose, onNavigate }: MenuProps) {
             ) : null}
           </ScrollView>
 
-          {/* Sign out + version */}
-          <View className="border-t border-line px-4 pb-1 pt-1.5">
+          {/* Sign out + app update + version */}
+          <View className="border-t border-line px-4 pb-2 pt-1.5">
             {isSignedIn ? (
               <Pressable
                 onPress={() => {
                   onClose();
                   signOut();
                 }}
-                className="flex-row items-center justify-center gap-1.5 py-1"
+                className="flex-row items-center justify-center gap-1.5 py-1.5"
               >
                 <Feather name="log-out" size={15} color="#dc2626" />
                 <Text className="text-sm font-bold text-red-600">Sign out</Text>
               </Pressable>
             ) : null}
-            <Text className="pb-1 text-center text-[11px] text-muted">GENUM Solutions · App v{APP_VERSION}</Text>
+            <AppUpdateCard compact />
           </View>
         </View>
       </View>
