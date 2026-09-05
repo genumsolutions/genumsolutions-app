@@ -10,11 +10,15 @@
 #   SUPABASE_URL               e.g. https://xxxx.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY  Supabase -> Settings -> API (service_role)
 #   ANDROID_KEYSTORE_B64       base64 of mobile/keystores/genum-release.jks
-#   STORE_FILE                 path to the release keystore (relative to
-#                              android/), e.g. ../keystores/genum-release.jks
 #   STORE_PASSWORD             keystore password
 #   KEY_ALIAS                  cert alias, e.g. genum-release
 #   KEY_PASSWORD               cert password
+#
+# NOTE: keystore.properties `storeFile` is FIXED to "../../keystores/genum-release.jks"
+# (resolved relative to android/app/ -> mobile/keystores/genum-release.jks, the file
+# decoded by ANDROID_KEYSTORE_B64 below). There is NO STORE_FILE secret to configure:
+# a hand-set STORE_FILE secret repeatedly broke this step with "storeFile ... does not
+# exist", so the workflow no longer reads that secret at all.
 #
 # If SUPABASE_URL is unset the upload step is skipped (the release APK is
 # still built); if the keystore secrets are unset the build falls back to
@@ -108,7 +112,8 @@ jobs:
             fi
             # storeFile is resolved relative to android/app/, so ../../keystores/... ->
             # <repo>/mobile/keystores/... where the keystore was just decoded.
-            STORE_FILE="${STORE_FILE:-../../keystores/genum-release.jks}"
+            # Fixed value (see the header comment) - no STORE_FILE secret is read.
+            STORE_FILE="../../keystores/genum-release.jks"
             printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
               "$STORE_FILE" \
               "${{ secrets.STORE_PASSWORD }}" \
@@ -116,26 +121,26 @@ jobs:
               "${{ secrets.KEY_PASSWORD }}" > keystores/keystore.properties
             # Fail fast instead of letting gradle's validateSigningRelease die
             # 10+ minutes into the build: resolve storeFile the way gradle does
-            # (relative to android/app/) and check the keystore + credentials.
+            # (relative to android/app/), normalize the path (.. components) and
+            # check the keystore + credentials.
             case "$STORE_FILE" in
               /*) store_abs="$STORE_FILE" ;;
               *)  store_abs="$(pwd)/android/app/$STORE_FILE" ;;
             esac
-            if [ ! -f "$store_abs" ]; then
-              echo "::error::keystore.properties storeFile='$STORE_FILE' resolves to '$store_abs' which does not exist."
+            store_real="$(cd -- "$(dirname -- "$store_abs")" >/dev/null 2>&1 && pwd)/$(basename -- "$store_abs")"
+            if [ ! -f "$store_real" ]; then
+              echo "::error::keystore.properties storeFile='$STORE_FILE' resolves to '$store_real' which does not exist."
               echo "::error::STORE_FILE is resolved relative to android/app/. Use e.g. ../../keystores/genum-release.jks (decoded keystore is at $(pwd)/keystores/genum-release.jks) or an absolute path."
               exit 1
             fi
-            if ! keytool -list -keystore "$store_abs" -storepass "${{ secrets.STORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
-              echo "::error::Release keystore validation failed for alias '${{ secrets.KEY_ALIAS }}' at $store_abs — wrong STORE_PASSWORD or KEY_ALIAS?"
+            if ! keytool -list -keystore "$store_real" -storepass "${{ secrets.STORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
+              echo "::error::Release keystore validation failed for alias '${{ secrets.KEY_ALIAS }}' at $store_real — wrong STORE_PASSWORD or KEY_ALIAS?"
               exit 1
             fi
             echo "::notice::Release signing configured and validated (storeFile=$STORE_FILE, alias=${{ secrets.KEY_ALIAS }})."
           else
             echo "::warning title=No release keystore::ANDROID_KEYSTORE_B64 not set; building with the debug key."
           fi
-        env:
-          STORE_FILE: ${{ secrets.STORE_FILE }}
 
       - name: Regenerate android/ (expo prebuild)
         run: npx expo prebuild -p android --no-install
