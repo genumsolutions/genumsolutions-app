@@ -86,7 +86,10 @@
           "resizeMode": "contain"
         }
       ],
-      ["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER" }],
+      ["@react-native-google-signin/google-signin", {
+  "androidClientId": "689924722337-tproftgasoa76bk7t6cttkhg2f7pn10u.apps.googleusercontent.com",
+  "iosUrlScheme": "genumsolutions"
+}],
       [
         "@sfourdrinier/react-native-ble-plx",
         {
