@@ -11,6 +11,12 @@
 // Usage:
 //   node scripts/sync-version.mjs              (reads from app.json)
 //   node scripts/sync-version.mjs --dry-run    (print manifest, don't upload)
+//   node scripts/sync-version.mjs --force      (publish even if the versioned APK missing)
+//
+// GUARD: this script aborts unless genum-solutions-<version>.apk already
+// exists in the public bucket (uploaded by upload-release.mjs). Running it
+// right after a version bump but before the APK upload would advertise a
+// version that isn't downloadable — use --force only if you know better.
 //
 // Env vars (or mobile/.env.local):
 //   SUPABASE_URL              e.g. https://xxxx.supabase.co
@@ -51,10 +57,12 @@ function loadEnv() {
 }
 
 function parseArgs(argv) {
+  const args = { dryRun: false, force: false };
   for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--dry-run') return { dryRun: true };
+    if (argv[i] === '--dry-run') args.dryRun = true;
+    if (argv[i] === '--force') args.force = true;
   }
-  return { dryRun: false };
+  return args;
 }
 
 async function ensureBucket(url, key) {
@@ -81,12 +89,39 @@ async function ensureBucket(url, key) {
 
 async function main() {
   const env = loadEnv();
-  const { dryRun } = parseArgs(process.argv);
+  const { dryRun, force } = parseArgs(process.argv);
   const url = (process.env.SUPABASE_URL || env.SUPABASE_URL || '').replace(/\/+$/, '');
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 
   const publicApkUrl = `${url}/storage/v1/object/public/${BUCKET}/${APK_FILE}`;
   const publicManifestUrl = `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_FILE}`;
+  const versionedApkUrl = `${url}/storage/v1/object/public/${BUCKET}/genum-solutions-${VERSION}.apk`;
+
+  // ── APK exists guard ────────────────────────────────────────────────
+  // The versioned APK (genum-solutions-<version>.apk) is only written by
+  // upload-release.mjs AFTER a real release build. If it is missing, this
+  // manifest would advertise a version whose APK is either absent or still
+  // the previous build (the exact bug where the site labeled 1.5.14 but
+  // served the stale 1.5.13 bytes). Abort by default; --force overrides.
+  let apkExists = false;
+  if (url) {
+    try {
+      const head = await fetch(versionedApkUrl, { method: 'HEAD', redirect: 'follow' });
+      apkExists = head.ok;
+    } catch {
+      apkExists = false;
+    }
+  }
+  console.log(`  Versioned APK published?: ${apkExists ? 'yes' : 'NO'}  ${versionedApkUrl}`);
+  if (!apkExists && !force && !dryRun) {
+    throw new Error(
+      `genum-solutions-${VERSION}.apk was NOT found at ${versionedApkUrl}. ` +
+        `Sync the manifest only AFTER the release APK is uploaded:\n` +
+        `  1. Build:  C:\\bs\\android> gradlew assembleRelease\n` +
+        `  2. Upload: node scripts/upload-release.mjs   (uploads APK + manifest in one step)\n` +
+        `Re-run this script with --force to publish the manifest without an APK.`,
+    );
+  }
 
   const manifest = {
     version: VERSION,
