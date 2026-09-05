@@ -22,9 +22,10 @@
 //   SUPABASE_URL              e.g. https://xxxx.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY Supabase -> Settings -> API (service_role)
 // =====================================================================
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadSupabaseEnv } from './supabase-env.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -42,19 +43,6 @@ if (!VERSION || !VERSION_CODE) {
 const BUCKET = 'app-releases';
 const APK_FILE = 'genum-solutions-latest.apk';
 const MANIFEST_FILE = 'release.json';
-
-function loadEnv() {
-  const envFile = resolve(rootDir, '.env.local');
-  if (!existsSync(envFile)) return {};
-  const out = {};
-  for (const raw of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#') || !line.includes('=')) continue;
-    const idx = line.indexOf('=');
-    out[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-  }
-  return out;
-}
 
 function parseArgs(argv) {
   const args = { dryRun: false, force: false };
@@ -88,10 +76,9 @@ async function ensureBucket(url, key) {
 }
 
 async function main() {
-  const env = loadEnv();
   const { dryRun, force } = parseArgs(process.argv);
-  const url = (process.env.SUPABASE_URL || env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+  const { baseUrl: url, serviceRoleKey: serviceKey, urlError } = loadSupabaseEnv();
+  if (urlError) throw new Error(urlError);
 
   const publicApkUrl = `${url}/storage/v1/object/public/${BUCKET}/${APK_FILE}`;
   const publicManifestUrl = `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_FILE}`;
