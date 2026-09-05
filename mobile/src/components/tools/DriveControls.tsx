@@ -24,8 +24,9 @@ function joyToDirection(x: number, y: number): 'F' | 'B' | 'L' | 'R' | 'S' {
 
 export function DriveControls({
   canControl, isDrone, activeMode, speed, servo,
-  pidKp, pidKi, pidKd, pidOut, useJoystick,
+  pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
+  onSignedDrive, steerLimit,
 }: DriveControlsProps) {
   if (isDrone) return null
 
@@ -54,22 +55,39 @@ export function DriveControls({
     onDirection('S')
   }, [onDirection])
 
-  // Left joystick: drives direction
+  // Left joystick: drives direction. With ESP-remote parity (onSignedDrive)
+  // the 2WD1M stick streams signed SPD like the physical remote: forward is
+  // +SPD, backward is -SPD, magnitude proportional to deflection, quantized
+  // to 5-unit steps, and center (release) sends SPD0 = transient stop.
   const handleLeftJoy = useCallback((x: number, y: number) => {
     if (!canControl) return
+    if (is2wd1m && onSignedDrive) {
+      if (Math.abs(y) <= 0.05) {
+        onSignedDrive(0)
+        return
+      }
+      const mag = Math.round((Math.min(1, Math.abs(y)) * 255) / 5) * 5
+      onSignedDrive(y < 0 ? mag : -mag)
+      return
+    }
     // In 2WD1M the left stick only drives motor forward/backward
     const d = is2wd1m
       ? (y < -0.25 ? 'F' : y > 0.25 ? 'B' : 'S')
       : joyToDirection(x, y)
     sendDir(d)
-  }, [canControl, is2wd1m, sendDir])
+  }, [canControl, is2wd1m, onSignedDrive, sendDir])
 
-  // Right joystick X axis: steers servo in 2WD1M
+  // Right joystick X axis: steers servo in 2WD1M. With ESP-remote parity the
+  // deviation from center is clamped to ±steerLimit, so the servo never
+  // exceeds the limit the user set (mirrors the remote's Steer field).
   const handleRightJoy = useCallback((x: number) => {
     if (!canControl || !is2wd1m) return
-    const angle = Math.round(90 - x * 90)
-    onServo(Math.max(0, Math.min(180, angle)))
-  }, [canControl, is2wd1m, onServo])
+    let dev = Math.round(-x * 90)
+    if (onSignedDrive && steerLimit != null) {
+      dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
+    }
+    onServo(Math.max(0, Math.min(180, 90 + dev)))
+  }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo])
 
   return (
     <View className={canControl ? '' : 'opacity-40'}>
@@ -96,7 +114,11 @@ export function DriveControls({
             </View>
           </View>
           <Text className="mt-3 text-center text-[11px] text-muted">
-            Left drives · Right steers (2WD1M)
+            {is2wd1m && onSignedDrive
+              ? 'Left stick = signed speed (SPD) · Right stick steers, clamped to the steer limit'
+              : is2wd1m
+                ? 'Left drives · Right steers (2WD1M)'
+                : 'Left drives · Right steers'}
           </Text>
         </View>
       ) : (
@@ -167,6 +189,10 @@ export function DriveControls({
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={pidOut} minimumValue={0} maximumValue={255} step={1} onValueChange={(v: number) => onPid('out', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-xs text-navy">OUT {pidOut}</Text>
+          </View>
+          <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
+            <Slider value={pidOff} minimumValue={-5} maximumValue={5} step={0.05} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
+            <Text className="mt-1 text-right font-mono text-xs text-navy">OFF {pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°</Text>
           </View>
         </View>
       )}

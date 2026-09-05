@@ -26,6 +26,9 @@ export type RootStackParamList = {
   Contact: undefined;
   About: undefined;
   Tools: { category?: string } | undefined;
+  /** Per-package remote: opens a robot-car product's own control screen,
+   *  preconfigured for that car's firmware mode(s). */
+  CarRemote: { productId: string };
   Admin: undefined;
   Journal: undefined;
   Printing: undefined;

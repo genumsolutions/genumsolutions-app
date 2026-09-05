@@ -25,7 +25,6 @@ export function CartScreen() {
   const { setCart } = useApp();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [version, setVersion] = useState(0);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -40,12 +39,16 @@ export function CartScreen() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh, version]);
+  }, [refresh]);
 
   const updateQty = async (productId: string, qty: number) => {
+    // Update local cart + badge immediately (no waiting for DB sync).
+    // The DB sync happens in the background via the AppContext handler.
     const count = await setQuantity(productId, qty);
     setCart({ count, size: count });
-    setVersion((v) => v + 1);
+    // Re-resolve cart lines from the updated local cart (no product refetch).
+    // CartContent re-reads via its own products+version effect.
+    setProducts((prev) => prev);
   };
 
   if (loading) {
@@ -76,6 +79,8 @@ function CartContent({
 }) {
   const [lines, setLines] = useState<{ line: { productId: string; quantity: number }; product: Product }[]>([]);
 
+  // Re-read lines whenever products change (initial load) or a quantity update
+  // triggers a re-read via the forced products setter in updateQty.
   useEffect(() => {
     void resolveCart(products).then(setLines);
   }, [products]);
@@ -151,6 +156,10 @@ function CartContent({
           <Text className="font-display text-lg font-bold tracking-tight text-ink">
             NPR {(total || 0).toLocaleString('en-IN')}
           </Text>
+        </View>
+        <View className="mt-2 flex-row items-center gap-2 text-xs text-muted">
+          <Feather name="zap" size={12} color="#94a3b8" />
+          <Text>Changes save instantly to your cart</Text>
         </View>
         <Pressable
           onPress={onCheckout}

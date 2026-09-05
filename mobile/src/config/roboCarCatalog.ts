@@ -233,3 +233,45 @@ export function nextMode(from: CarMode): CarMode {
   if (fromIdx === -1) return LOCAL_CAR_MODES[0]
   return LOCAL_CAR_MODES[(fromIdx + 1) % LOCAL_CAR_MODES.length]
 }
+
+// -------------------------------------------------------------------
+// Product → car-mode resolution (per-package remotes)
+// -------------------------------------------------------------------
+
+/**
+ * Resolve the robot-car mode a store product corresponds to, so a
+ * per-package "Control" button can open the remote already configured for
+ * that car. Matches, in order:
+ *  1. the product `badge` when it is a CarModeId or a mode token
+ *  2. the product `id` prefix (e.g. `2wd1m-basic` → `2wd1m`)
+ *
+ * Returns undefined for non-car products (plain kits, materials, services).
+ */
+export function resolveModeForProduct(product: {
+  id?: string
+  badge?: string
+}): CarMode | undefined {
+  const candidates = [product.badge, product.id].filter(Boolean) as string[]
+
+  for (const raw of candidates) {
+    const norm = raw.trim().toLowerCase()
+    if (!norm) continue
+
+    // Exact CarModeId match (badges like `2wd1m`, `self-balancing`, …)
+    const byId = LOCAL_CAR_MODES.find((m) => m.id === norm)
+    if (byId) return byId
+
+    // Mode token match (badges like `2WD1M`, `AUTO`, `BT`, …)
+    const tokenId = TOKEN_TO_MODE_ID[raw.trim().toUpperCase()]
+    if (tokenId) {
+      const byToken = LOCAL_CAR_MODES.find((m) => m.id === tokenId)
+      if (byToken) return byToken
+    }
+
+    // id-prefix match (`2wd1m-basic` → `2wd1m`)
+    const byPrefix = LOCAL_CAR_MODES.find((m) => norm.startsWith(`${m.id}-`))
+    if (byPrefix) return byPrefix
+  }
+
+  return undefined
+}

@@ -1,9 +1,9 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v1.5.13** (versionCode 21) · Android APK (`genum-solutions-1.5.13-arm64-v8a.apk`)
-> Scope: the v1.5.13 **native UX polish** (bottom-sheet menu + theme toggle, Account moved to the top bar / Menu to the bottom bar, tab-aware Android back, web-render support for the pager + admin tabs, web theme fix) + regression over the v1.5.12 admin Settings tabs and the v1.5.11 UX fixes.
+> Target: **v1.5.14** (versionCode 22) · Android APK (`genum-solutions-1.5.14-arm64-v8a.apk`)
+> Scope: the **robot-car per-package remote (Phase A)** — Car Remote screen (Classic BT SPP + BLE + WiFi), ESP-remote 2WD1M joystick parity (signed SPD / steer limit / trim / e-stop), self-balancing PID deck, autonomous Run/Stop decks (token semantics), weblink (wireless-car WS JSON) deck, Tools-hub + website parity — on top of the v1.5.13 native UX polish and the v1.5.12/v1.5.11 fixes.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
-> Status: **v1.5.13 code complete** (version bumped 1.5.13/21, both repos synced; typecheck + expo-doctor green; web bundle builds). Physical-device pass pending.
+> Status: **v1.5.14 code complete + committed + pushed to `main`** (both repos; version bumped 1.5.14/22; typecheck + lint + 33/33 tests + production build + expo-doctor 18/18 all green). Physical-device pass pending; APK not yet built.
 
 ---
 
@@ -17,6 +17,29 @@ These verify the v1.5.13 polish, on top of the v1.5.12 Settings tabs and the v1.
 4. **Tab-aware Android back** — from Shop/Cart press Back → lands on **Home** (one step); on Home press Back → app exits (or pops a screen beneath Main after a deep link). Never more than one step per press.
 5. **Theme toggle works** — in the menu pick Light → whole app restyles light even if the OS is dark; pick Dark → restyles dark; System → follows the OS. Choice persists across app restarts. (On the web preview the same toggle must restyle the app too.)
 6. **Web-render regression** — the app runs in a browser (`npm run web`): tabs, admin tabs (PlatformPager web variant), menu, theme, and navigation all render without the native-only pager crashing the bundle.
+
+## Car Remote device checklist (per-package robot-car remote — in development, after v1.5.13)
+
+Scope: the **Car Remote** screen for robot-car project packages, starting with the **2WD1M Basic Robot Car** paired like the ESP remote over **Classic BT (SPP)**. Same GENUM line protocol as the physical remote / MIT apps (`SPD`/`SERVO`/`STEER`/`TRIM`/`ESTOP`, `STATE;`/`TEL;` telemetry). Requires an Android phone (SPP is Android-only) and a 2WD1M car.
+
+1. **Reach the remote** — on Projects, tap **Control** on the 2WD1M Basic Robot Car package card (or "Control this car" on its product page) → the Car Remote opens preconfigured for 2WD1M (steer-limit/trim/e-stop card present, OLED + drive deck visible). No mode picker detour.
+2. **SPP pairing + connect** — pick **Classic BT (SPP)**, tap **Scan cars (SPP)** → the car appears (show a "Paired" tag when the phone already knows it). Tap Connect → header shows **Connected · <car name>**, and the OLED chip reads **SPP LINK**. If the car asks for a PIN at pairing time, `1234`.
+3. **Left stick = signed speed** — with the car powered and connected, push the left stick forward → car drives forward and the deck sends signed `SPD+n`; pull back → reverse (`SPD−n`); release/center → `SPD0` stop. Speed grows with deflection (5-unit steps, up to ±255) — the ESP-remote transient-drive mapping, not the letter commands.
+4. **Right stick = steering within the limit** — right stick left/right steers the servo around center 90 and never exceeds the **Steer limit** shown on the card (default 90 = full lock-to-lock). Lower the limit (e.g. 45) → full stick deflection only reaches 90±45.
+5. **ESP-remote extras** — Trim ±1 adjusts `TRIM`; **Emergency stop** sends `ESTOP` + `SPD0` and the car halts; the OLED status tracks Forward/Backward/Stop from `STATE;` feedback.
+6. **Disconnect is safe** — tap Disconnect → the app sends neutral `SPD0`/`SERVO90` before dropping the link, like the ESP remote; reconnecting re-syncs state via `REQ_STATE`.
+7. **Other links (same protocol)** — WiFi WebSocket cars connect via `ws://192.168.4.1:81` and BLE cars via the BLE scan; whichever link is used, the same deck + OLED apply (label changes to WiFi WS / BLE LINK).
+
+## Car Remote — remaining modes (self-balancing PID deck + per-mode decks, in development)
+
+1. **Self-Balancing Robot Car package** (Projects → Control, or the product page) opens the **self-balancing deck**, not the generic joystick deck: a live **ANGLE** readout on a dark tile (status pill BALANCING / CORRECTING / TILT! / NO TELEMETRY) fed by the car's `TEL;…ANGLE` frames, plus full PID sliders **Kp / Ki / Kd / OUT / OFF** that send the `CFG;…` line.
+2. **Enter AUTO** chip — with the car connected, tap **Enter AUTO** → the car switches to AUTONOMOUS mode (token `AUTO`) and starts balancing; the angle readout goes live and the status pill reacts to tilting the bot by hand.
+3. **PID live tuning** — drag Kp/Ki/Kd/OUT/OFF while the bot balances: it should visibly react (stiffer/looser), and the value shown under the slider matches what the car echoes in `TEL;…`. Release at sensible values so the bot doesn't oscillate.
+4. **Obstacle / path packages get an autonomous deck (firmware-exact Run/Stop)** — Obstacle-Avoidance (US / IR) and Path-Following packages open the **AutonomousControls** card instead of the joystick deck. Semantics verified against the modular token firmware (`UNO_Base_project_V2.0.1_MOD` `Bluetooth.cpp`/`ModeManager.cpp`): **Run** sends the mode token (`OBS_US`/`OBS_IR`/`PATH`) — the car switches mode and its routine runs continuously from `loop()`; **Stop** sends `BT` — back to manual, motors halt, routine stops (letters `F`/`S` only act in BT mode and can't stop a routine, so they're not used). Device test: tap **Run** → the car (token-capable build) starts avoiding/following; raise the **Run speed (SPD 110–250 / 5-step)** slider and hear the pace change; tap **Stop** → motors stop and the car answers to letters again. On switch-wired (non-token) builds, the panel explains that tokens are ignored and the physical mode switch rules. The **Thresholds on this car** panel documents firmware constants per mode.
+5. **Other packages now say what they are** — 4WD and website packages show an **Enter <token> mode** chip once connected (switches the car into that package's mode, mirroring the ESP remote's mode select) above the normal drive deck; the **RF Manual Robot Car** shows an informational card (RF handset only — no app link) instead of a dead connection panel.
+6. **Tools hub parity** — the shared Tools hub PID grid gained the missing **OFF** slider (same `CFG;…` line), matching the remote's AUTO dashboard P/D/I/OUT/OFF set.
+7. **Hub 2WD1M + autonomous parity** — in the Tools hub, switch the mode to **2WD1M** and the joysticks behave like the Car Remote (left stick = signed SPD, right stick clamped to the Steer limit card that now appears above the controls, plus Trim and Emergency stop — same shared card component as the Car Remote). Switch the hub to an obstacle/path mode and Run now enters the mode token while Stop returns to `BT` (manual), matching the verified firmware semantics; the website `/tools` deck does the same.
+8. **Multimode wireless-car (weblink) deck** — open the Website-Server Robot Car package → connect over WiFi to the car's WS (`ws://<ip>:81`; AP fallback 192.168.4.1) → the **Car status (WS)** tile shows live `M:ESP_SER` / status / SPD / RSSI / IP streamed as JSON from the car's WebServerComm; **Open car web page** opens `http://<ip>/` (the car's own `WebPage.h` UI) in the browser; Enter ESP_SER/ESP_CLI switches modes over the same link; letters + SPD drive from the deck below. Repeat with the Website-Client package: the card explains the car is the client (use the website /tools as the server; the app connects directly only in ESP_SER/AP mode).
 
 ## v1.5.12 device checklist (adds the v1.5.12 Settings tabs, on top of the v1.5.11 fixes)
 

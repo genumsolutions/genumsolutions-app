@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { addToCart } from '../services/cartService';
 import { filterProducts, getProducts } from '../services/productService';
+import { resolveModeForProduct } from '../config/roboCarCatalog';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { useApp } from '../context/AppContext';
 import type { Product } from '../types';
@@ -241,6 +242,9 @@ export function ProjectsScreen() {
         renderItem={({ item }) => {
           const quoteOnly = item.stock === 0 || item.productType === 'Project package';
           const added = addedId === item.id;
+          // Robot-car packages get a dedicated per-package remote (CarRemote
+          // screen) that opens preconfigured for the car's firmware mode(s).
+          const carMode = resolveModeForProduct(item);
           return (
             <Pressable
               onPress={() => handleCardPress(item)}
@@ -271,8 +275,7 @@ export function ProjectsScreen() {
                   {item.note || item.description?.split('. ')[0]}
                 </Text>
                 <View className="mt-2 flex-row items-center justify-between gap-2">
-                  <Text className="shrink text-xs font-black text-navy">{item.priceLabel}</Text>
-                  {quoteOnly ? (
+                  <Text className="shrink text-xs font-black text-navy">{item.priceLabel}</Text>                    {quoteOnly ? (
                       <View className="flex-row gap-1.5">
                         <Pressable
                           onPress={() => navigation.push('ProductDetail', { productId: item.id })}
@@ -281,7 +284,15 @@ export function ProjectsScreen() {
                         >
                           <Text className="text-xs font-black text-navy">Details</Text>
                         </Pressable>
-                        {item.productType === 'Project package' && (
+                        {carMode ? (
+                          <Pressable
+                            onPress={() => navigation.push('CarRemote', { productId: item.id })}
+                            accessibilityLabel={`Control ${item.name}`}
+                            className="rounded-full bg-gold px-2.5 py-1.5"
+                          >
+                            <Text className="text-xs font-black text-ink">Control</Text>
+                          </Pressable>
+                        ) : item.productType === 'Project package' ? (
                           <Pressable
                             onPress={() => navigation.push('Tools', { category: item.category })}
                             accessibilityLabel={`Control ${item.name}`}
@@ -289,7 +300,7 @@ export function ProjectsScreen() {
                           >
                             <Text className="text-xs font-black text-ink">Control</Text>
                           </Pressable>
-                        )}
+                        ) : null}
                       </View>
                     ) : (
                       <Pressable

@@ -6,8 +6,15 @@ import type { OledDisplayProps } from './types'
 export function OledDisplay({
   connected, wifiConnected, deviceName, activeMode,
   speed, servo, driveStatus, targetAltitude, gimbalPan, gimbalTilt,
-  sensorData, telemetry, isDrone, isNonRobocar,
+  sensorData, telemetry, isDrone, isNonRobocar, linkKind,
 }: OledDisplayProps) {
+  const linkLabel =
+    linkKind === 'spp' ? 'SPP LINK'
+      : linkKind === 'ble' ? 'BLE LINK'
+        : linkKind === 'wifi' ? 'WiFi WS'
+          : wifiConnected ? 'WiFi WS'
+            : connected ? 'BLE LINK'
+              : 'NO LINK'
   return (
     <View className="rounded-xl bg-slate-900 p-3 shadow-inner">
       <View className="flex-row items-center justify-between border-b border-slate-700 px-2 pb-2">
@@ -15,7 +22,7 @@ export function OledDisplay({
           {connected ? deviceName : wifiConnected ? 'WiFi' : '---'}
         </Text>
         <Text className="font-mono text-xs text-slate-500">
-          {connected ? 'BLE LINK' : wifiConnected ? 'WiFi WS' : 'NO LINK'}
+          {linkLabel}
         </Text>
       </View>
       <View className="mt-2 px-2">
