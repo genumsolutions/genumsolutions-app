@@ -85,6 +85,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Release preflight — expo-doctor validates that every dependency matches
+      # the installed Expo SDK (bundledNativeModules.json). Without this, a
+      # dependency skew (e.g. expo-linking@57 vs SDK 54) still Google-Play-builds
+      # but crashes on device; the APK would be silently published over a live
+      # release. Running doctor here fails BEFORE prebuild/gradle/upload, so a
+      # mismatched tree can never overwrite the bucket.
+      - name: Expo doctor (release preflight)
+        run: npm run doctor
+
       # Reconstruct the release keystore BEFORE prebuild: the with-release-signing
       # plugin reads keystores/keystore.properties at prebuild time to decide whether
       # to wire the `release` signingConfig into the generated android/app/build.gradle.
