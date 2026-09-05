@@ -1,8 +1,8 @@
 // =====================================================================
 // CategoryDropdown - a reusable "finest dropdown" selector for the app.
 // React Native has no native <select>, so this renders a pressable button
-// that opens a bottom-sheet Modal list (following the AppMenu native-Modal
-// pattern) and calls onChange when an option is picked. `allowCustom` adds a
+// that opens a bottom-sheet Modal list and calls onChange when an option is
+// picked. `allowCustom` adds a
 // "type a new value" row so admins can introduce categories not yet in the
 // list.
 // =====================================================================

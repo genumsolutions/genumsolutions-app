@@ -2,11 +2,12 @@
 // MainTabPager (web) - browser variant of the swipeable pager.
 //
 // react-native-pager-view is native-only, so on web we render the same
-// three tab pages (Home / Shop / Cart) with all screens kept MOUNTED
+// tab pages (Home / Shop / Cart / Menu) with all screens kept MOUNTED
 // (inactive ones hidden with display:none) to preserve per-tab state
 // exactly like the native pager. Account lives in the top bar (website
-// parity) and the Menu button (4th slot) opens the AppMenu sheet. The
-// tab bar, param-sync and focus re-sync logic mirror MainTabPager.tsx.
+// parity). The Menu page is a normal tab - it renders in the same space
+// between the brand header and the bottom tab bar like the other three.
+// The tab bar, param-sync and focus re-sync logic mirror MainTabPager.tsx.
 // =====================================================================
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -22,13 +23,14 @@ import type { MainTabParamList, RootStackParamList } from './types';
 
 type TabKey = keyof MainTabParamList;
 
-const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart'];
+const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart', 'Menu'];
 
 type IconName = ComponentProps<typeof Feather>['name'];
 const TAB_ICONS: Record<TabKey, IconName> = {
   Home: 'home',
   Shop: 'grid',
   Cart: 'shopping-bag',
+  Menu: 'menu',
 };
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -42,7 +44,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   const navigation = useNavigation<Nav>();
   const route = useRoute<MainRoute>();
   const insets = useSafeAreaInsets();
-  const { cartCount, setMenuOpen } = useApp();
+  const { cartCount } = useApp();
   const [page, setPage] = useState<TabKey>(() => initialTab(route.params?.screen));
 
   // Derive the page from the `screen` param so external tab switches land.
@@ -56,13 +58,11 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
     syncToParam();
   }, [syncToParam]);
 
-  // Re-sync whenever Main regains focus and close the global menu so it can
-  // never stay "stuck" (mirrors the native pager behavior).
+  // Re-sync whenever Main regains focus (mirrors the native pager behavior).
   useFocusEffect(
     useCallback(() => {
-      setMenuOpen(false);
       syncToParam();
-    }, [setMenuOpen, syncToParam]),
+    }, [syncToParam]),
   );
 
   const goToTab = useCallback(
@@ -119,16 +119,6 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
             </Pressable>
           );
         })}
-        {/* Menu opens the AppMenu sheet - it is an action, not a swipe page. */}
-        <Pressable
-          onPress={() => setMenuOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Open menu"
-          className="flex-1 items-center justify-center pb-2 pt-2.5"
-        >
-          <Feather name="menu" size={22} color="#64748b" />
-          <Text className="mt-1 text-[10px] font-bold text-slate-500">Menu</Text>
-        </Pressable>
       </View>
     </View>
   );

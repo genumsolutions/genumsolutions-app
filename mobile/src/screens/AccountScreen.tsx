@@ -21,7 +21,7 @@ import type { Order } from '../types'
 
 export function AccountScreen() {
   const navigation = useNavigation<any>()
-  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen, cartCount } = useApp()
+  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen, cartCount, themeMode, setThemeMode } = useApp()
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
@@ -92,36 +92,36 @@ export function AccountScreen() {
   return (
     <View className="flex-1 bg-surface">
       <View className="px-5 pb-2 pt-4">
-        {/* Header card — compact like the website: avatar + name + email + role */}
-        <View className="flex-row items-center rounded-2xl border border-line bg-card p-4">
-          <View className="h-12 w-12 items-center justify-center rounded-full bg-navy">
-            <Text className="text-sm font-black text-white">{initials}</Text>
-          </View>
-          <View className="ml-3 flex-1">
-            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Customer account</Text>
-            <Text className="mt-0.5 text-lg font-display font-bold text-ink">{user?.name || 'Genum user'}</Text>
-            <Text className="text-sm text-muted">{user?.email}</Text>
+        {/* Header card — like the website: avatar + welcome + email + logout */}
+        <View className="flex-row items-center justify-between rounded-2xl border border-line bg-card p-4">
+          <View className="min-w-0 flex-1 flex-row items-center">
+            <View className="h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy">
+              <Text className="text-sm font-black text-white">{initials}</Text>
+            </View>
+            <View className="ml-3 min-w-0 flex-1">
+              <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Customer account</Text>
+              <Text className="mt-0.5 font-display text-xl font-bold tracking-tight text-ink" numberOfLines={1}>
+                Welcome, {user?.name || 'Genum user'}.
+              </Text>
+              <Text className="mt-0.5 text-sm text-muted" numberOfLines={1}>{user?.email}</Text>
+            </View>
           </View>
           {isAdmin && (
-            <View className="rounded-full bg-gold px-2 py-0.5">
+            <View className="shrink-0 rounded-full bg-gold px-2 py-0.5">
               <Text className="text-xs font-black uppercase text-ink">Admin</Text>
             </View>
           )}
         </View>
 
-        {/* Stat cards — like the website's 3-column row */}
+        {/* Stat cards — like the website's row */}
         <View className="mt-4 flex-row flex-wrap gap-3">
           <View className="w-[47%] rounded-2xl border border-line bg-card p-4">
             <Text className="text-xs font-black uppercase tracking-widest text-muted">Orders placed</Text>
             <Text className="mt-1 font-display text-2xl font-bold text-ink">{orders.length}</Text>
           </View>
           <View className="w-[47%] rounded-2xl border border-line bg-card p-4">
-            <Text className="text-xs font-black uppercase tracking-widest text-muted">Items in cart</Text>
+            <Text className="text-xs font-black uppercase tracking-widest text-muted">Items in build list</Text>
             <Text className="mt-1 font-display text-2xl font-bold text-ink">{cartCount}</Text>
-          </View>
-          <View className="w-[47%] rounded-2xl border border-line bg-card p-4">
-            <Text className="text-xs font-black uppercase tracking-widest text-muted">Messages</Text>
-            <Text className="mt-1 font-display text-2xl font-bold text-ink">—</Text>
           </View>
         </View>
 
@@ -198,11 +198,27 @@ export function AccountScreen() {
         )}
       </View>
 
-      {/* Footer: update check + legal links + sign out */}
+      {/* Footer: app update + theme + legal links + sign out */}
       <View className="border-t border-line bg-card px-5 py-4">
         <View className="mb-3">
           <Text className="text-xs font-black uppercase tracking-[0.24em] text-muted">App</Text>
           <AppUpdateCard />
+        </View>
+        <View className="mb-3">
+          <Text className="mb-2 text-xs font-black uppercase tracking-[0.24em] text-muted">App theme</Text>
+          <View className="flex-row gap-2">
+            {(['system', 'light', 'dark'] as const).map((mode) => (
+              <Pressable
+                key={mode}
+                onPress={() => setThemeMode(mode)}
+                className={`flex-1 items-center rounded-lg border py-2 ${themeMode === mode ? 'border-navy bg-navy' : 'border-line bg-surface'}`}
+              >
+                <Text className={`text-xs font-bold capitalize ${themeMode === mode ? 'text-white' : 'text-ink'}`}>
+                  {mode}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
         <View className="flex-row items-center justify-center gap-3 py-1">
           <Pressable onPress={() => navigation.push('Legal', { doc: 'privacy' })}>
