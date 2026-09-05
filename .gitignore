@@ -1,0 +1,10 @@
+# Local machine clutter at the repo root
+node_modules/
+.env*
+*.log
+.DS_Store
+*.tsbuildinfo
+
+# Local agent / editor metadata
+.opencode/
+.claude/
