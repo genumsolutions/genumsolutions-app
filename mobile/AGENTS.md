@@ -35,13 +35,20 @@ signing key changes.
 
 - Keep the version in sync everywhere on every release so installs update over-the-top AND the
   website download page matches:
-  1. `app.json` -> `version` and `android.versionCode`
+  1. `app.json` -> `version` and `android.versionCode` (single source of truth)
   2. `src/config/site.ts` -> `APP_VERSION`
   3. website `lib/company.ts` -> `androidApp.version` / `versionCode` / `sizeLabel`
-  4. `scripts/upload-release.mjs` -> `VERSION` / `APK_SIZE_MB` / `notes`
+  - `scripts/upload-release.mjs` needs NO manual version edit — it reads `version` /
+    `versionCode` from `app.json` at runtime and derives the file name, size and notes.
 - Release builds run from `C:\bs` (LongPaths is disabled on `E:\`, so Gradle must run there); keep
   `C:\bs` as a mirror of `mobile/` (including `keystores/`).
 - Build the signed release APK from `C:\bs\android` via `gradlew assembleRelease`, then upload with
   `node scripts/upload-release.mjs` (secrets in `C:\bs\.env.local`). This pushes the APK + a
   `release.json` manifest to the `app-releases` Supabase bucket that both the website `/app` page
   and the in-app updater read.
+- `scripts/sync-version.mjs` only publishes the manifest — it must NOT be the first thing run after
+  a version bump, because it advertises a version whose APK may not be uploaded yet. It now guards
+  against this: it aborts unless `genum-solutions-<version>.apk` (the versioned file written by
+  `upload-release.mjs`) responds on the bucket, or you pass `--force`. The normal release order is:
+  bump version -> build APK (`gradlew assembleRelease`) -> `upload-release.mjs` (uploads APK +
+  manifest in one step).
