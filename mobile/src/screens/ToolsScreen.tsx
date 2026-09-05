@@ -50,6 +50,10 @@ export function ToolsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
   const [connectionMsgType, setConnectionMsgType] = useState<'success' | 'error' | null>(null)
+  // Immediate SPP connection status for retry and real-time feedback
+  const [sppStatus, setSppStatus] = useState<'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'>('idle')
+  const [sppStatusMsg, setSppStatusMsg] = useState<string | null>(null)
+  const [showSppsRetry, setShowSppsRetry] = useState(false)
 
   // ---- Active mode + state (mirrors ESP remote) ----
   const [activeCategory, setActiveCategory] = useState('robocar')
@@ -158,7 +162,7 @@ export function ToolsScreen() {
     }
   }, [])
 
-  // Telemetry wiring (SPP service)
+  // Telemetry + status wiring (SPP service)
   useEffect(() => {
     if (!activeMode) return
     const applyTelemetry = (t: CarTelemetry) => {
@@ -169,7 +173,37 @@ export function ToolsScreen() {
       if (t.trim != null) setTrim(t.trim)
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
-    return () => { offSpp() }
+
+    // Immediate status callbacks for connection state changes
+    const offStatus = sppService.onStatus((kind, message) => {
+      if (!mountedRef.current) return
+      switch (kind) {
+        case 'connecting':
+          setSppStatus('connecting')
+          setSppStatusMsg(message ?? 'Connecting…')
+          setShowSppsRetry(false)
+          break
+        case 'connected':
+          setSppStatus('connected')
+          setSppStatusMsg(message ?? 'Connected')
+          setShowSppsRetry(false)
+          break
+        case 'disconnected':
+          setSppStatus('disconnected')
+          setSppStatusMsg('Disconnected')
+          setShowSppsRetry(true)
+          break
+        case 'error':
+          setSppStatus('error')
+          setSppStatusMsg(message ?? 'Connection error')
+          setShowSppsRetry(true)
+          break
+        default:
+          break
+      }
+    })
+
+    return () => { offSpp(); offStatus() }
   }, [activeMode])
 
   // Check if SPP is supported on this device
@@ -225,6 +259,19 @@ export function ToolsScreen() {
       }
     }
   }, [showConnectionMessage])
+
+  // Immediate SPP retry (uses last known address from service)
+  const handleSppsRetry = useCallback(async () => {
+    setShowSppsRetry(false)
+    setError(null)
+    try {
+      await sppService.retryConnect()
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : 'Retry failed')
+      }
+    }
+  }, [])
 
   // WiFi WebSocket
   const openSocket = useCallback((url: string) => {
@@ -466,20 +513,44 @@ export function ToolsScreen() {
 
       {/* Connection panel with SPP device selection */}
       <View className="mt-6">
-        {/* Connection status bar */}
+        {/* Connection status bar with immediate SPP status */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
-            <View className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-accent' : 'bg-border'}`} />
+            {/* Status dot - immediate feedback */}
+            <View className={`h-2.5 w-2.5 rounded-full ${sppStatus === 'connected' || sppStatus === 'connecting' ? 'bg-accent animate-pulse' : 'bg-border'}`} />
             <Text className="text-sm font-bold text-ink">
-              {connected ? `Connected · ${deviceName}` : wifiConnected ? 'WiFi Connected' : 'Not connected'}
+              {sppStatus === 'connected' ? `SPP Connected · ${deviceName}` :
+               sppStatus === 'connecting' ? `SPP Connecting…` :
+               wifiConnected ? 'WiFi Connected' :
+               'Not connected'}
             </Text>
           </View>
-          {connected && (
+          {sppStatus === 'connected' && (
             <Pressable onPress={handleDisconnect}>
               <Text className="text-sm font-bold text-gold underline">Disconnect</Text>
             </Pressable>
           )}
         </View>
+
+        {/* Immediate SPP status banner */}
+        {sppStatusMsg && (
+          <View className={`mt-3 rounded-xl px-4 py-3 ${sppStatus === 'connected' ? 'bg-accent/10 border border-accent/20' :
+            sppStatus === 'error' || sppStatus === 'disconnected' ? 'bg-red-50 border border-red-200' :
+            'bg-navy/10 border border-navy/20'}`}>
+            <View className="flex-row items-center justify-between">
+              <Text className={`text-sm font-bold ${sppStatus === 'connected' ? 'text-accent' :
+                sppStatus === 'error' || sppStatus === 'disconnected' ? 'text-red-600' : 'text-navy'}`}>
+                {sppStatusMsg}
+              </Text>
+              {showSppsRetry && sppStatus !== 'connected' && sppStatus !== 'connecting' && (
+                <Pressable onPress={handleSppsRetry} className="flex-row items-center gap-1">
+                  <Text className="text-xs font-bold text-accent underline">Retry</Text>
+                  <Feather name="refresh-cw" size={12} color="#1e3a8a" />
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Connection message */}
         {connectionMessage && (
@@ -726,10 +797,7 @@ export function ToolsScreen() {
           telemetry={telemetry}
           onToggleRelay={toggleRelay}
         />
-      </View>          {/* Category overview */}
-          <View className="mt-6">
-            <CategoryOverview category={PROJECT_CATEGORIES.find((c) => c.slug === activeCategory)} />
-          </View>
+      </View>    
 
       {/* Footer */}
       <View className="mt-6 rounded-lg border border-line bg-card p-4">

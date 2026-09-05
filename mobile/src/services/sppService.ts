@@ -27,6 +27,12 @@ export type SppDevice = {
   name: string
   address: string
   bonded: boolean
+  /** Last known mode from STATE telemetry */
+  lastMode?: string
+  /** Last known speed from STATE telemetry */
+  lastSpeed?: number
+  /** Last known trim from STATE telemetry */
+  lastTrim?: number
 }
 
 type TelemetryCallback = (t: CarTelemetry) => void
@@ -47,6 +53,8 @@ export class SppService {
   private module: any = null
   private connectedAddress: string | null = null
   private connectedName: string | null = null
+  private connectingAddress: string | null = null
+  private lastKnownMode: string | null = null
   private readSubscription: { remove: () => void } | null = null
   private telemetryCallbacks: Set<TelemetryCallback> = new Set()
   private statusCallbacks: Set<StatusCallback> = new Set()
@@ -63,8 +71,21 @@ export class SppService {
     return this.connectedAddress !== null
   }
 
+  get isConnecting(): boolean {
+    return this.connectingAddress !== null
+  }
+
   get deviceName(): string | null {
     return this.connectedName
+  }
+
+  get currentAddress(): string | null {
+    return this.connectedAddress || this.connectingAddress
+  }
+
+  /** Get last known mode from telemetry (for mode sync) */
+  getKnownMode(): string | null {
+    return this.lastKnownMode
   }
 
   onTelemetry(cb: TelemetryCallback): () => void {
@@ -172,13 +193,20 @@ export class SppService {
   async connect(address: string): Promise<void> {
     if (!address) throw new Error('Choose a car from the list first.')
     const mod = await this.getModule()
+    
+    // Immediate: show connecting status
+    this.connectingAddress = address
     this.emitStatus('connecting', address)
 
     try {
       await mod.connectToDevice(address, { delimiter: '\n', charset: 'utf-8' })
+      
+      // Immediate: show connected status
       this.connectedAddress = address
       this.connectedName = address
-
+      this.connectingAddress = null
+      this.lastKnownMode = null // Reset, will be updated by STATE telemetry
+      
       // Start listening for the newline-delimited telemetry stream. The
       // read event is emitted per message by the native 'delimited'
       // connection, so one event == one GENUM line (no manual buffering).
@@ -186,17 +214,52 @@ export class SppService {
       this.readSubscription = mod.onDeviceRead(address, (event: { data?: string }) => {
         if (!event?.data) return
         const telemetry = parseTelemetryLine(event.data)
-        if (Object.keys(telemetry).length > 0) this.emitTelemetry(telemetry)
+        if (Object.keys(telemetry).length > 0) {
+          this.emitTelemetry(telemetry)
+          // Update last known mode from STATE telemetry for sync (immediate status update)
+          if (telemetry.mode) {
+            this.lastKnownMode = telemetry.mode
+            // Emit an immediate status update for mode changes detected from the car
+            this.emitStatus('connected', address)
+          }
+        }
       })
 
       this.emitStatus('connected', address)
     } catch (e) {
+      this.connectingAddress = null
       this.emitStatus('error', e instanceof Error ? e.message : 'Classic BT connection failed')
       throw e
     }
   }
 
-  /** Disconnect and tear down the read subscription. */
+  /** Retry connection to the last connecting/connected device.
+   * Uses the last known address from a previous connect attempt.
+   * If no device was being connected, throws an error.
+   */
+  async retryConnect(): Promise<void> {
+    const addr = this.connectingAddress || this.connectedAddress
+    if (!addr) throw new Error('No device to retry')
+    // Clear previous state before retry to avoid stale UI
+    this.connectingAddress = addr
+    this.connectedAddress = null
+    this.connectedName = null
+    await this.connect(addr)
+  }
+
+  /** Get info about the device currently being connected or connected. */
+  getConnectionInfo(): { address: string | null; name: string | null; status: 'idle' | 'connecting' | 'connected' | 'error' } {
+    if (this.connectingAddress) {
+      return { address: this.connectingAddress, name: this.connectedName, status: 'connecting' }
+    }
+    if (this.connectedAddress) {
+      return { address: this.connectedAddress, name: this.connectedName, status: 'connected' }
+    }
+    return { address: null, name: null, status: 'idle' }
+  }
+
+  /** Force disconnect and reset state. */  /** Disconnect and tear down the read subscription.
+   */
   async disconnect(): Promise<void> {
     if (this.connectedAddress) {
       try {
@@ -208,6 +271,8 @@ export class SppService {
     this.readSubscription = null
     this.connectedAddress = null
     this.connectedName = null
+    this.connectingAddress = null
+    this.lastKnownMode = null
     this.emitStatus('disconnected')
   }
 
@@ -226,3 +291,23 @@ export class SppService {
 
 // Singleton instance used throughout the app (mirrors bleService).
 export const sppService = new SppService()
+
+// Debug helper: get current connection state (for UI status display)
+export function getSppConnectionState(): {
+  isConnected: boolean;
+  isConnecting: boolean;
+  deviceName: string | null;
+  currentAddress: string | null;
+  knownMode: string | null;
+  connectionStatus: 'idle' | 'connecting' | 'connected' | 'error';
+} {
+  const svc = sppService as any
+  return {
+    isConnected: svc.isConnected,
+    isConnecting: svc.isConnecting,
+    deviceName: svc.deviceName,
+    currentAddress: svc.currentAddress,
+    knownMode: svc.getKnownMode ? svc.getKnownMode() : null,
+    connectionStatus: svc.getConnectionInfo?.().status ?? 'idle',
+  }
+}
