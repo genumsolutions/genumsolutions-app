@@ -96,8 +96,16 @@ jobs:
           mkdir -p keystores
           rm -f keystores/keystore.properties
           if [ -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
+            if [ -z "${{ secrets.STORE_PASSWORD }}" ] || [ -z "${{ secrets.KEY_ALIAS }}" ] || [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+              echo "::error::ANDROID_KEYSTORE_B64 is set but STORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD are missing — configure all four keystore secrets."
+              exit 1
+            fi
             echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 --decode > keystores/genum-release.jks
             ls -l keystores/genum-release.jks
+            if [ ! -s keystores/genum-release.jks ]; then
+              echo "::error::ANDROID_KEYSTORE_B64 decoded to an empty keystore file — is the secret set correctly?"
+              exit 1
+            fi
             # storeFile is resolved relative to android/app/, so ../../keystores/... ->
             # <repo>/mobile/keystores/... where the keystore was just decoded.
             STORE_FILE="${STORE_FILE:-../../keystores/genum-release.jks}"
@@ -106,6 +114,23 @@ jobs:
               "${{ secrets.STORE_PASSWORD }}" \
               "${{ secrets.KEY_ALIAS }}" \
               "${{ secrets.KEY_PASSWORD }}" > keystores/keystore.properties
+            # Fail fast instead of letting gradle's validateSigningRelease die
+            # 10+ minutes into the build: resolve storeFile the way gradle does
+            # (relative to android/app/) and check the keystore + credentials.
+            case "$STORE_FILE" in
+              /*) store_abs="$STORE_FILE" ;;
+              *)  store_abs="$(pwd)/android/app/$STORE_FILE" ;;
+            esac
+            if [ ! -f "$store_abs" ]; then
+              echo "::error::keystore.properties storeFile='$STORE_FILE' resolves to '$store_abs' which does not exist."
+              echo "::error::STORE_FILE is resolved relative to android/app/. Use e.g. ../../keystores/genum-release.jks (decoded keystore is at $(pwd)/keystores/genum-release.jks) or an absolute path."
+              exit 1
+            fi
+            if ! keytool -list -keystore "$store_abs" -storepass "${{ secrets.STORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
+              echo "::error::Release keystore validation failed for alias '${{ secrets.KEY_ALIAS }}' at $store_abs — wrong STORE_PASSWORD or KEY_ALIAS?"
+              exit 1
+            fi
+            echo "::notice::Release signing configured and validated (storeFile=$STORE_FILE, alias=${{ secrets.KEY_ALIAS }})."
           else
             echo "::warning title=No release keystore::ANDROID_KEYSTORE_B64 not set; building with the debug key."
           fi
