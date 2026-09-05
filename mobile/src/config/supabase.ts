@@ -28,12 +28,23 @@ export const supabaseConfigured = Boolean(url && anonKey);
 export const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
 export const googleConfigured = Boolean(googleWebClientId);
 
-export const supabase = createClient(url, anonKey, {
-  auth: {
-    persistSession: true,
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-    flowType: 'pkce',
+// createClient() throws at construction when handed empty strings
+// ("supabaseUrl is required." / "supabaseKey is required."). This module is
+// imported at startup, so a release bundle built WITHOUT the EXPO_PUBLIC_*
+// values (e.g. a CI build with no .env file) used to die during module
+// evaluation -> the app installed but never opened. Never pass empty values:
+// fall back to an invalid placeholder so every request fails fast instead
+// (callers gate on supabaseConfigured / treat failures as offline).
+export const supabase = createClient(
+  url || 'https://placeholder.invalid',
+  anonKey || 'placeholder-key',
+  {
+    auth: {
+      persistSession: true,
+      storage: AsyncStorage,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      flowType: 'pkce',
+    },
   },
-});
+);
