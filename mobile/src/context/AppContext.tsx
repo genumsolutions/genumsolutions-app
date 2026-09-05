@@ -81,13 +81,14 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
  *
  * - Native: `Appearance.setColorScheme` forces the OS scheme (exits there),
  *   which NativeWind's `@media (prefers-color-scheme: dark)` picks up.
- * - Web: react-native-web's Appearance has NO `setColorScheme`, so calling it
- *   would throw. Instead we set `data-theme` on <html> and `global.css` has
- *   matching `html[data-theme='dark'|'light']` overrides (see global.css).
+ * - Web: react-native-web's Appearance exposes `setColorScheme` but throws
+ *   ("Cannot manually set color scheme, as dark mode is type 'media'"), so we
+ *   never call it there. Instead we set `data-theme` on <html> and `global.css`
+ *   has matching `html[data-theme='dark'|'light']` overrides (see global.css).
  */
 function applyColorScheme(mode: ThemeMode) {
   try {
-    if (typeof Appearance.setColorScheme === 'function') {
+    if (Platform.OS !== 'web' && typeof Appearance.setColorScheme === 'function') {
       Appearance.setColorScheme(mode === 'system' ? null : mode);
     }
   } catch {

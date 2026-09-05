@@ -34,12 +34,14 @@ type StatusCallback = (kind: 'connecting' | 'connected' | 'disconnected' | 'erro
 
 /** Android runtime permissions needed for classic discovery + connect. */
 const SPP_PERMISSIONS =
-  Platform.OS === 'android' && Platform.Version >= 31
-    ? [
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-      ]
-    : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION]
+  Platform.OS === 'android'
+    ? Platform.Version >= 31
+      ? [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        ]
+      : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION]
+    : []
 
 export class SppService {
   private module: any = null
