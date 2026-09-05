@@ -17,6 +17,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadSupabaseEnv } from './supabase-env.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -40,19 +41,6 @@ const LATEST_FILE = 'genum-solutions-latest.apk';
 const VERSIONED_FILE = `genum-solutions-${VERSION}.apk`;
 const MANIFEST_NAME = 'release.json';
 const CONTENT_TYPE = 'application/vnd.android.package-archive';
-
-function loadEnv() {
-  const envFile = resolve(rootDir, '.env.local');
-  if (!existsSync(envFile)) return {};
-  const out = {};
-  for (const raw of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#') || !line.includes('=')) continue;
-    const idx = line.indexOf('=');
-    out[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-  }
-  return out;
-}
 
 function parseArgs(argv) {
   const args = { apk: null };
@@ -90,10 +78,9 @@ async function ensureBucket(url, key) {
 }
 
 async function main() {
-  const env = loadEnv();
   const args = parseArgs(process.argv.slice(2));
-  const url = (process.env.SUPABASE_URL || env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+  const { baseUrl: url, serviceRoleKey: serviceKey, urlError } = loadSupabaseEnv();
+  if (urlError) throw new Error(urlError);
   const apkPath = args.apk ? resolve(rootDir, args.apk) : defaultApk;
 
   if (!url || !serviceKey) {
