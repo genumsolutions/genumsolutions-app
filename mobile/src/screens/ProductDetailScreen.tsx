@@ -18,6 +18,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { getProductByIdWithSource } from '../services/productService';
+import { resolveModeForProduct } from '../config/roboCarCatalog';
 import { OfflineBadge } from '../components/OfflineBadge';
 import { addToCart } from '../services/cartService';
 import { useApp } from '../context/AppContext';
@@ -254,6 +255,17 @@ export function ProductDetailScreen() {
               <Feather name="plus" size={16} color="#1e3a8a" />
             </Pressable>
           </View>
+        )}
+        {/* Robot-car products get a per-package remote (CarRemote) that opens
+            preconfigured for the car's firmware mode - like the ESP remote. */}
+        {isQuote && resolveModeForProduct(product) && (
+          <Pressable
+            onPress={() => navigation.push('CarRemote', { productId: product.id })}
+            className="flex-1 flex-row items-center justify-center gap-2 rounded-full border-2 border-gold bg-gold/10 py-3"
+          >
+            <Feather name="activity" size={15} color="#1e3a8a" />
+            <Text className="font-bold text-navy">Control this car</Text>
+          </Pressable>
         )}
         <Pressable
           onPress={isQuote ? handleQuote : () => void handleAdd()}

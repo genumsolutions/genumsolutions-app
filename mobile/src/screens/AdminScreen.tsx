@@ -2,10 +2,11 @@
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
 // Tabs: Dashboard, Orders, Products, Services, Users, Messages, Content.
 // =====================================================================
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   FlatList,
   Image,
   Modal,
@@ -68,6 +69,7 @@ import {
   type ActivityEntry,
 } from '../services/adminService'
 
+type BackHandlerRemove = () => void
 type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content' | 'Settings'
 
 const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content', 'Settings']
@@ -80,13 +82,23 @@ export function AdminScreen() {
   const currentPageRef = useRef<number>(0)
   const [visited, setVisited] = useState<Record<string, boolean>>({ Dashboard: true })
   const [loading, setLoading] = useState(false)
+  const [backHandlerRef, setBackHandlerRef] = useState<BackHandlerRemove | null>(null)
 
   // Keep the horizontal tab strip scrolled so the active tab stays visible.
-  useEffect(() => {
+  // Use useLayoutEffect so the scroll happens before the screen paints the
+  // re-render — this keeps the tab strip highlight and scroll position in sync
+  // with the pager's selected page, whether the change came from a swipe or a
+  // tab tap. The -40 offset keeps the active tab visually centered.
+  // Each tab is fixed at 96px wide (w-[96px] shrink-0) so the math is exact.
+  useLayoutEffect(() => {
     const index = TABS.indexOf(tab)
     if (index < 0) return
-    tabScrollRef.current?.scrollTo({ x: index * 96 - 40, y: 0, animated: true })
+    tabScrollRef.current?.scrollTo({ x: index * 96 - 40, y: 0, animated: false })
   }, [tab])
+
+  // (BackHandler for admin editors is registered after the editing state
+  // declarations below, so it can reference editingProduct / editingService /
+  // journalOpen without TypeScript complaining about ordering.)
 
   // Orders
   const [orders, setOrders] = useState<AdminOrder[]>([])
@@ -152,6 +164,46 @@ export function AdminScreen() {
   // Editing
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null)
   const [editingService, setEditingService] = useState<AdminService | null>(null)
+
+  // Admin editor BackHandler: when an inline editor is open (product/service/
+  // journal) on the CURRENT tab, Android Back should close the editor instead
+  // of letting the MainTabPager's BackHandler jump to Home. Only active when
+  // the editor's tab is the one currently visible — if the user swiped away,
+  // Back goes to Home via MainTabPager's handler (the editor state persists
+  // across swipes but the user is no longer looking at it).
+  useEffect(() => {
+    const editorOnCurrentTab =
+      (tab === 'Products' && editingProduct != null) ||
+      (tab === 'Services' && editingService != null) ||
+      (tab === 'Journal' && journalOpen)
+    if (!editorOnCurrentTab) {
+      if (backHandlerRef) {
+        backHandlerRef()
+        setBackHandlerRef(null)
+      }
+      return
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (tab === 'Products' && editingProduct != null) {
+        setEditingProduct(null)
+        return true // consumed
+      }
+      if (tab === 'Services' && editingService != null) {
+        setEditingService(null)
+        return true // consumed
+      }
+      if (tab === 'Journal' && journalOpen) {
+        setJournalOpen(false)
+        return true // consumed
+      }
+      return false
+    })
+    setBackHandlerRef(() => sub.remove)
+    return () => {
+      sub.remove()
+      setBackHandlerRef(null)
+    }
+  }, [tab, editingProduct != null, editingService != null, journalOpen])
 
   useEffect(() => {
     void loadTab()
@@ -446,10 +498,14 @@ export function AdminScreen() {
 
   const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
     const index = event.nativeEvent.position
-    currentPageRef.current = index
     const key = TABS[index]
-    if (key) {
-      setTab(key)
+    if (!key) return
+    // Capture the page we're leaving so we only clear editors when actually
+    // switching tabs (not on a no-op swipe that doesn't change the page).
+    const previousKey = TABS[currentPageRef.current]
+    currentPageRef.current = index
+    setTab(key)
+    if (key !== previousKey) {
       setEditingProduct(null)
       setEditingService(null)
       setJournalOpen(false)
@@ -459,11 +515,17 @@ export function AdminScreen() {
   const goToTab = useCallback((key: Tab) => {
     const index = TABS.indexOf(key)
     if (index < 0 || index === currentPageRef.current) return
+    const previousKey = TABS[currentPageRef.current]
     currentPageRef.current = index
     setTab(key)
-    setEditingProduct(null)
-    setEditingService(null)
-    setJournalOpen(false)
+    // Clear editors when switching to a different tab. If we're already on the
+    // target tab (index === currentPageRef.current, caught above), the caller
+    // (e.g. onEdit) already set the editor state and we must not clear it.
+    if (key !== previousKey) {
+      setEditingProduct(null)
+      setEditingService(null)
+      setJournalOpen(false)
+    }
     pagerRef.current?.setPage(index)
   }, [])
 
@@ -659,7 +721,10 @@ export function AdminScreen() {
       {/* Tab bar — grow-0 keeps the strip at its own height: RN ScrollViews
           default to flexGrow:1, so without it the strip stretches into a huge
           empty band under the tabs whenever the tab content is shorter than
-          the screen. */}
+          the screen.
+          Each tab is given a fixed 96px width so the scroll-to calculation
+          (index * 96 - 40) always lands on the correct tab, regardless of the
+          tab name's text length. */}
       <ScrollView
         ref={tabScrollRef}
         horizontal
@@ -674,7 +739,7 @@ export function AdminScreen() {
               accessibilityRole="tab"
               accessibilityState={{ selected: tab === t }}
               accessibilityLabel={t}
-              className={`px-4 py-3 border-b-2 ${tab === t ? 'border-navy' : 'border-transparent'}`}
+              className={`w-[96px] shrink-0 px-4 py-3 border-b-2 ${tab === t ? 'border-navy' : 'border-transparent'}`}
             >
               <Text className={`text-xs font-bold ${tab === t ? 'text-navy' : 'text-muted'}`}>{t}</Text>
             </Pressable>
@@ -1727,6 +1792,7 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
   messages: AdminMessage[]; total: number; page: number; totalPages: number; onPage: (p: number) => void;
   status: string; onStatusFilter: (s: string) => void; onMarkReplied: (id: string) => void;
 }) {
+  const [preview, setPreview] = useState<AdminMessage | null>(null)
   return (
     <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <View className="mb-3">
@@ -1751,10 +1817,13 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
             <View key={m.id} className={`mb-3 rounded-xl border bg-card p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy border border-line' : 'border-line'}`}>
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-muted">· {m.email}</Text></Text>
-                {m.status === 'new'
-                  ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full border border-line px-3 py-1"><Text className="text-xs font-bold text-navy">Mark replied</Text></Pressable>
-                  : <Text className="text-xs font-bold uppercase text-emerald-600">Replied</Text>
-                }
+                <View className="flex-row flex-wrap gap-2">
+                  <AdminAction onPress={() => setPreview(m)} label="Preview" tone="plain" />
+                  {m.status === 'new'
+                    ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full border border-line px-3 py-1"><Text className="text-xs font-bold text-navy">Mark replied</Text></Pressable>
+                    : <Text className="text-xs font-bold uppercase text-emerald-600">Replied</Text>
+                  }
+                </View>
               </View>
               <Text className="mt-1 text-xs text-muted">{new Date(m.createdAt).toLocaleString()}</Text>
               <Text className="mt-2 text-xs leading-5 text-muted">{m.message}</Text>
@@ -1762,6 +1831,27 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
           ))}
           <AdminPager page={page} totalPages={totalPages} onPage={onPage} />
         </>
+      )}
+      {preview && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setPreview(null)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 }} onPress={() => setPreview(null)} accessibilityLabel="Close preview">
+            <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">Customer message</Text>
+              <Text className="mt-2 font-display text-xl font-bold text-ink">{preview.name}</Text>
+              <Text className="mt-0.5 text-sm text-muted">{preview.email}</Text>
+              <Text className="mt-3 text-xs text-muted">{new Date(preview.createdAt).toLocaleString()}</Text>
+              <View className="mt-3 border-t border-line pt-3">
+                <Text className="text-sm leading-6 text-ink">{preview.message}</Text>
+              </View>
+              <View className="mt-4 flex-row items-center justify-between">
+                <Text className={`text-xs font-bold uppercase ${preview.status === 'new' ? 'text-amber-600' : 'text-emerald-600'}`}>{preview.status === 'new' ? 'New' : 'Replied'}</Text>
+                <Pressable onPress={() => setPreview(null)} className="rounded-full border border-line px-4 py-2">
+                  <Text className="text-xs font-black text-ink">Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
       )}
     </ScrollView>
   )
@@ -1885,6 +1975,7 @@ function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inpu
   onSave: (p: AdminTrainingProgram, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
 }) {
   const [editing, setEditing] = useState<AdminTrainingProgram | null>(null)
+  const [preview, setPreview] = useState<AdminTrainingProgram | null>(null)
   function blank(): AdminTrainingProgram {
     return { id: '', title: '', audience: '', description: '', duration: '', outcome: '', active: true, sortOrder: 0 }
   }
@@ -1893,6 +1984,12 @@ function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inpu
   }
   const isNew = editing ? !programs.some((p) => p.id === editing.id) : false
   const slug = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  function toggleActive(p: AdminTrainingProgram) {
+    const next = { ...p, active: !p.active }
+    setPrograms(programs.map((x) => x.id === p.id ? next : x))
+    // Save the toggled state via the onSave handler (read from current state).
+    void onSave(next, false)
+  }
   return (
     <SectionCard title={`Training programs (${programs.length})`} hint="Shown on the Home screen and the website /services page.">
       <Pressable onPress={() => setEditing(blank())} className="mb-3 self-start rounded-full bg-navy px-4 py-2">
@@ -1935,13 +2032,35 @@ function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inpu
             <View className="min-w-0 flex-1">
               <Text className="text-sm font-bold text-ink" numberOfLines={1}>{program.title}</Text>
               <Text className="text-xs text-muted" numberOfLines={1}>{program.audience}{program.duration ? ` · ${program.duration}` : ''}</Text>
+              {!program.active && <Text className="mt-0.5 text-[10px] font-black uppercase text-red-500">Hidden</Text>}
             </View>
             <View className="flex-row flex-wrap gap-2">
               <AdminAction onPress={() => setEditing({ ...program })} label="Edit" tone="navy" />
+              <AdminAction onPress={() => setPreview(program)} label="Preview" tone="plain" />
+              <AdminAction onPress={() => toggleActive(program)} label={program.active ? 'Hide' : 'Show'} tone="plain" />
               <AdminAction onPress={() => onDelete(program.id)} label="Delete" tone="red" />
             </View>
           </View>
         ))
+      )}
+      {preview && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setPreview(null)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 }} onPress={() => setPreview(null)} accessibilityLabel="Close preview">
+            <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">Training program</Text>
+              <Text className="mt-2 font-display text-lg font-bold text-ink">{preview.title}</Text>
+              <Text className="mt-1 text-xs text-muted">{preview.audience} · {preview.duration}</Text>
+              {preview.description ? <Text className="mt-3 text-sm leading-6 text-muted">{preview.description}</Text> : null}
+              {preview.outcome ? <Text className="mt-2 text-sm font-semibold text-ink">Outcome: {preview.outcome}</Text> : null}
+              <View className="mt-4 flex-row items-center justify-between">
+                <Text className={`text-xs font-bold uppercase ${preview.active ? 'text-emerald-600' : 'text-red-500'}`}>{preview.active ? 'Published' : 'Hidden'}</Text>
+                <Pressable onPress={() => setPreview(null)} className="rounded-full border border-line px-4 py-2">
+                  <Text className="text-xs font-black text-ink">Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
       )}
     </SectionCard>
   )
@@ -1952,6 +2071,7 @@ function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass }: {
   onSave: (p: AdminPilotCostLine, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
 }) {
   const [editing, setEditing] = useState<AdminPilotCostLine | null>(null)
+  const [preview, setPreview] = useState<AdminPilotCostLine | null>(null)
   function blank(): AdminPilotCostLine {
     return { id: '', item: '', cost: '', note: '', active: true, sortOrder: 0 }
   }
@@ -1959,6 +2079,11 @@ function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass }: {
     if (editing) setEditing({ ...editing, ...part })
   }
   const isNew = editing ? !lines.some((l) => l.id === editing.id) : false
+  function toggleActive(p: AdminPilotCostLine) {
+    const next = { ...p, active: !p.active }
+    setLines(lines.map((x) => x.id === p.id ? next : x))
+    void onSave(next, false)
+  }
   return (
     <SectionCard title={`Pilot cost lines (${lines.length})`} hint="Shown on the Home screen (pilot program running costs).">
       <Pressable onPress={() => setEditing(blank())} className="mb-3 self-start rounded-full bg-navy px-4 py-2">
@@ -1997,13 +2122,34 @@ function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass }: {
             <View className="min-w-0 flex-1">
               <Text className="text-sm font-bold text-ink" numberOfLines={1}>{line.item}</Text>
               <Text className="text-xs text-muted" numberOfLines={1}>{line.cost}{line.note ? ` · ${line.note}` : ''}</Text>
+              {!line.active && <Text className="mt-0.5 text-[10px] font-black uppercase text-red-500">Hidden</Text>}
             </View>
             <View className="flex-row flex-wrap gap-2">
               <AdminAction onPress={() => setEditing({ ...line })} label="Edit" tone="navy" />
+              <AdminAction onPress={() => setPreview(line)} label="Preview" tone="plain" />
+              <AdminAction onPress={() => toggleActive(line)} label={line.active ? 'Hide' : 'Show'} tone="plain" />
               <AdminAction onPress={() => onDelete(line.id)} label="Delete" tone="red" />
             </View>
           </View>
         ))
+      )}
+      {preview && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setPreview(null)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 }} onPress={() => setPreview(null)} accessibilityLabel="Close preview">
+            <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">Pilot cost line</Text>
+              <Text className="mt-2 font-display text-lg font-bold text-ink">{preview.item}</Text>
+              <Text className="mt-1 text-sm font-bold text-navy">{preview.cost}</Text>
+              {preview.note ? <Text className="mt-2 text-sm leading-6 text-muted">{preview.note}</Text> : null}
+              <View className="mt-4 flex-row items-center justify-between">
+                <Text className={`text-xs font-bold uppercase ${preview.active ? 'text-emerald-600' : 'text-red-500'}`}>{preview.active ? 'Published' : 'Hidden'}</Text>
+                <Pressable onPress={() => setPreview(null)} className="rounded-full border border-line px-4 py-2">
+                  <Text className="text-xs font-black text-ink">Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
       )}
     </SectionCard>
   )
@@ -2014,6 +2160,7 @@ function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputC
   onSave: (c: AdminCurriculumHighlight, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
 }) {
   const [editing, setEditing] = useState<AdminCurriculumHighlight | null>(null)
+  const [preview, setPreview] = useState<AdminCurriculumHighlight | null>(null)
   function blank(): AdminCurriculumHighlight {
     return { id: '', ageBand: '', items: [], active: true, sortOrder: 0 }
   }
@@ -2021,6 +2168,11 @@ function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputC
     if (editing) setEditing({ ...editing, ...part })
   }
   const isNew = editing ? !highlights.some((h) => h.id === editing.id) : false
+  function toggleActive(p: AdminCurriculumHighlight) {
+    const next = { ...p, active: !p.active }
+    setHighlights(highlights.map((x) => x.id === p.id ? next : x))
+    void onSave(next, false)
+  }
   return (
     <SectionCard title={`Curriculum highlights (${highlights.length})`} hint="Age-band curriculum items shown on the Home screen.">
       <Pressable onPress={() => setEditing(blank())} className="mb-3 self-start rounded-full bg-navy px-4 py-2">
@@ -2057,13 +2209,39 @@ function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputC
             <View className="min-w-0 flex-1">
               <Text className="text-sm font-bold text-ink" numberOfLines={1}>{highlight.ageBand}</Text>
               <Text className="text-xs text-muted" numberOfLines={1}>{highlight.items.length} skill{highlight.items.length === 1 ? '' : 's'}</Text>
+              {!highlight.active && <Text className="mt-0.5 text-[10px] font-black uppercase text-red-500">Hidden</Text>}
             </View>
             <View className="flex-row flex-wrap gap-2">
               <AdminAction onPress={() => setEditing({ ...highlight })} label="Edit" tone="navy" />
+              <AdminAction onPress={() => setPreview(highlight)} label="Preview" tone="plain" />
+              <AdminAction onPress={() => toggleActive(highlight)} label={highlight.active ? 'Hide' : 'Show'} tone="plain" />
               <AdminAction onPress={() => onDelete(highlight.id)} label="Delete" tone="red" />
             </View>
           </View>
         ))
+      )}
+      {preview && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setPreview(null)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 }} onPress={() => setPreview(null)} accessibilityLabel="Close preview">
+            <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">Curriculum highlight</Text>
+              <Text className="mt-2 font-display text-lg font-bold text-ink">{preview.ageBand}</Text>
+              {preview.items.length > 0 ? (
+                <View className="mt-3 space-y-1">
+                  {preview.items.map((item, i) => (
+                    <Text key={i} className="text-sm leading-6 text-muted">• {item}</Text>
+                  ))}
+                </View>
+              ) : null}
+              <View className="mt-4 flex-row items-center justify-between">
+                <Text className={`text-xs font-bold uppercase ${preview.active ? 'text-emerald-600' : 'text-red-500'}`}>{preview.active ? 'Published' : 'Hidden'}</Text>
+                <Pressable onPress={() => setPreview(null)} className="rounded-full border border-line px-4 py-2">
+                  <Text className="text-xs font-black text-ink">Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
       )}
     </SectionCard>
   )

@@ -18,6 +18,7 @@ import { CategoryOverview } from '../components/tools/CategoryOverview'
 import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { DriveControls } from '../components/tools/DriveControls'
+import { TwoWd1mExtras } from '../components/tools/TwoWd1mExtras'
 import { DroneControls } from '../components/tools/DroneControls'
 import { SensorGrid } from '../components/tools/SensorGrid'
 import { ModeInfo } from '../components/tools/ModeInfo'
@@ -44,6 +45,8 @@ export function ToolsScreen() {
   const [activeMode, setActiveMode] = useState<CarMode>(LOCAL_CAR_MODES[0])
   const [speed, setSpeed] = useState(170)
   const [servo, setServo] = useState(90)
+  const [steerLimit, setSteerLimit] = useState(90) // 2WD1M max servo deflection
+  const [trim, setTrim] = useState(0) // 2WD1M steering trim (persisted on car)
   const [telemetry, setTelemetry] = useState<CarTelemetry>({})
   const [driveStatus, setDriveStatus] = useState('Stop')
   const [ws, setWs] = useState<WebSocket | null>(null)
@@ -340,6 +343,32 @@ export function ToolsScreen() {
     sendCommand(`CFG;Kp:${next.kp.toFixed(2)};Ki:${next.ki.toFixed(3)};Kd:${next.kd.toFixed(3)};OUT:${next.out.toFixed(0)};OFF:${next.off.toFixed(2)}`)
   }, [pidKp, pidKi, pidKd, pidOut, pidOff, sendCommand])
 
+  // ESP-remote 2WD1M parity (hub mirrors the per-package Car Remote): the
+  // left stick streams signed SPD (transient drive) and steer limit / trim /
+  // e-stop are the same ESP-remote extras as the Car Remote screen.
+  const handleStickDrive = useCallback((signed: number) => {
+    setDriveStatus(signed > 0 ? 'Forward' : signed < 0 ? 'Backward' : 'Stop')
+    sendThrottled('spd', `SPD${Math.round(signed)}`)
+  }, [sendThrottled])
+
+  const adjustSteerLimit = useCallback((delta: number) => {
+    setSteerLimit((prev) => Math.max(0, Math.min(180, prev + delta)))
+  }, [])
+
+  const adjustTrim = useCallback((delta: number) => {
+    setTrim((prev) => {
+      const next = Math.max(-90, Math.min(90, prev + delta))
+      sendCommand(`TRIM${next}`)
+      return next
+    })
+  }, [sendCommand])
+
+  const handleEStop = useCallback(() => {
+    setDriveStatus('EMERGENCY STOP')
+    sendCommand('ESTOP')
+    sendCommand('SPD0')
+  }, [sendCommand])
+
   const selectMode = useCallback((m: CarMode) => {
     setActiveMode(m)
     setDriveStatus('Stop')
@@ -374,6 +403,7 @@ export function ToolsScreen() {
 
   const isDrone = activeCategory === 'drones'
   const isNonRobocar = activeCategory !== 'robocar'
+  const is2wd1mActive = activeMode.controls.includes('drive-2wd1m')
 
   return (
     <ScrollView
@@ -468,6 +498,18 @@ export function ToolsScreen() {
         />
       </View>
 
+      {/* ESP-remote 2WD1M extras — hub parity with the per-package Car Remote */}
+      {activeCategory === 'robocar' && is2wd1mActive && canControl && (
+        <TwoWd1mExtras
+          canControl={canControl}
+          steerLimit={steerLimit}
+          trim={trim}
+          onAdjustSteerLimit={adjustSteerLimit}
+          onAdjustTrim={adjustTrim}
+          onEStop={handleEStop}
+        />
+      )}
+
       {/* Controls */}
       <View className={`mt-4 ${!canControl ? 'opacity-40' : ''}`}>
         {/* Input mode toggle (only for robocar categories with drive controls) */}
@@ -502,13 +544,19 @@ export function ToolsScreen() {
           pidKi={pidKi}
           pidKd={pidKd}
           pidOut={pidOut}
+          pidOff={pidOff}
           useJoystick={useJoystick}
           onDirection={handleDirection}
           onSpeed={handleSpeed}
           onServo={handleServo}
           onPid={applyPid}
-          onRun={() => { sendCommand('F'); setDriveStatus(`${activeMode.name} running`) }}
-          onStop={() => { sendCommand('S'); setDriveStatus(`${activeMode.name} stopped`) }}
+          onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
+          steerLimit={is2wd1mActive ? steerLimit : undefined}
+          // Firmware-exact autonomous Run/Stop: Run enters the mode token
+          // (the routine then runs from the car's loop); Stop returns to
+          // BT/manual, which halts motors. Letters only act in BT mode.
+          onRun={() => { sendCommand(activeMode.token); setDriveStatus(`${activeMode.name} running`) }}
+          onStop={() => { sendCommand('BT'); setDriveStatus(`${activeMode.name} stopped · BT manual`) }}
         />
 
         {/* Drone controls */}

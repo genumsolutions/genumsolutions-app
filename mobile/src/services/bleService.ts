@@ -2,9 +2,24 @@
 // bleService - native BLE communication for GENUM ESP32 devices.
 // Uses react-native-ble-plx to scan, connect, and send GENUM command
 // lines over the ESP32 UART (HM-10 / Nordic UART) BLE service.
+//
+// The wire protocol itself lives in ./carProtocol (shared with the SPP
+// and WiFi transports) — this file only knows how to move bytes over
+// BLE. Command builders + telemetry parsing import from there.
 // =====================================================================
 // @ts-ignore
 import { BleManager } from '@sfourdrinier/react-native-ble-plx'
+import {
+  parseTelemetryLine as parseLine,
+  buildCalibration,
+  REQ_STATE_LINE,
+  type CarTelemetry as CarTelemetryShared,
+} from './carProtocol'
+
+// CarTelemetry stays exported from this module so existing callers
+// (`import { bleService, type CarTelemetry } from '../services/bleService'`)
+// keep working after the protocol moved to carProtocol.
+export type CarTelemetry = CarTelemetryShared
 
 // ESP32 UART (HM-10 / Nordic UART) service & characteristic UUIDs
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
@@ -28,19 +43,6 @@ const ALT_RX_UUIDS = [
 // Default timeout for BLE connection attempts (slow devices can exceed it;
 // override per-call by passing timeoutMs to connect()).
 export const BLE_CONNECT_TIMEOUT_MS = 10000
-
-export type CarTelemetry = {
-  mode?: string
-  speed?: number
-  trim?: number
-  status?: string
-  kp?: number
-  ki?: number
-  kd?: number
-  out?: number
-  off?: number
-  angle?: number
-}
 
 export type BleDevice = {
   id: string
@@ -245,17 +247,12 @@ class BleService {
     )
   }
 
-  /** Request current state from the device. */
-  async requestState(): Promise<void> {
-    await this.sendLine('REQ_STATE')
-  }
-
   /** Send direction command (F|B|L|R|S). */
   async sendDirection(d: 'F' | 'B' | 'L' | 'R' | 'S'): Promise<void> {
     await this.sendLine(d)
   }
 
-  /** Set speed (0-255). */
+  /** Set speed (±255 signed for 2WD1M, or absolute 0-255). */
   async setSpeed(value: number): Promise<void> {
     await this.sendLine(`SPD${Math.round(value)}`)
   }
@@ -267,59 +264,17 @@ class BleService {
 
   /** Calibrate PID. */
   async calibratePid(p: { kp: number; ki: number; kd: number; out: number; off: number }): Promise<void> {
-    const cmd = `CFG;Kp:${p.kp.toFixed(2)};Ki:${p.ki.toFixed(3)};Kd:${p.kd.toFixed(3)};OUT:${p.out.toFixed(0)};OFF:${p.off.toFixed(2)}`
-    await this.sendLine(cmd)
+    await this.sendLine(buildCalibration(p))
   }
 
-  /** Parse a telemetry line into CarTelemetry. */
+  /** Ask the car to re-broadcast STATE (mode/speed/trim/status). */
+  async requestState(): Promise<void> {
+    await this.sendLine(REQ_STATE_LINE)
+  }
+
+  /** Parse a telemetry line into CarTelemetry (shared carProtocol parser). */
   private parseTelemetryLine(line: string): CarTelemetry {
-    const l = line.trim()
-    if (!l) return {}
-    const up = l.toUpperCase()
-    const telemetry: CarTelemetry = {}
-
-    // STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
-    if (up.startsWith('STATE')) {
-      const body = l.split(/[;:]/)
-      let i = 1
-      while (i < body.length) {
-        const key = body[i]?.toUpperCase()
-        const val = body[i + 1]
-        if (!key || val === undefined) { i += 1; continue }
-        if (key === 'MODE') telemetry.mode = val
-        else if (key === 'SPD') telemetry.speed = Number(val) || 0
-        else if (key === 'TRIM') telemetry.trim = Number(val) || 0
-        else if (key === 'STATUS') telemetry.status = val
-        i += 2
-      }
-      return telemetry
-    }
-
-    // TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
-    if (up.startsWith('TEL')) {
-      const body = l.replace(/^TEL[:;]/i, '')
-      for (const part of body.split(';')) {
-        const m = /^([A-Za-z]+):(.+)$/.exec(part.trim())
-        if (!m) continue
-        const key = m[1]!.toUpperCase()
-        const num = Number(m[2]) || 0
-        if (key === 'KP') telemetry.kp = num
-        else if (key === 'KI') telemetry.ki = num
-        else if (key === 'KD') telemetry.kd = num
-        else if (key === 'OUT') telemetry.out = num
-        else if (key === 'OFF') telemetry.off = num
-        else if (key === 'ANGLE') telemetry.angle = num
-      }
-      return telemetry
-    }
-
-    // SPD<value>
-    if (/^SPD[:]?-?[\d]+$/i.test(l)) {
-      const num = Number(l.replace(/^SPD[:]?/i, '')) || 0
-      if (num > 0) telemetry.speed = num
-    }
-
-    return telemetry
+    return parseLine(line)
   }
 }
 

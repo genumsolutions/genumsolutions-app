@@ -55,6 +55,59 @@ export type OledDisplayProps = {
   telemetry: CarTelemetry
   isDrone: boolean
   isNonRobocar: boolean
+  /** Link label for the status chip; defaults to 'BLE LINK' / 'WiFi WS'. */
+  linkKind?: 'ble' | 'spp' | 'wifi' | 'auto'
+}
+
+export type BalanceControlsProps = {
+  canControl: boolean
+  /** Live tilt from TEL;…ANGLE — null until the first telemetry frame. */
+  angle: number | null
+  /** Latest parsed car telemetry (mode / speed / live PID values). */
+  telemetry: CarTelemetry
+  kp: number
+  ki: number
+  kd: number
+  out: number
+  off: number
+  onPid: (key: 'kp' | 'ki' | 'kd' | 'out' | 'off', v: number) => void
+  /** Switches the car into AUTO (self-balancing) mode. */
+  onEnterMode: () => void
+}
+
+export type AutonomousControlsProps = {
+  canControl: boolean
+  activeMode: CarMode
+  /** Current run speed (100..255, 5-unit steps — absolute SPD). */
+  speed: number
+  /** Latest drive status (e.g. "Running" / "Stopped") for the status row. */
+  driveStatus: string
+  onSpeed: (v: number) => void
+  onRun: () => void
+  onStop: () => void
+}
+
+export type WeblinkControlsProps = {
+  canControl: boolean
+  wifiConnected: boolean
+  activeMode: CarMode
+  /** Latest parsed telemetry — wireless cars stream JSON status over WS. */
+  telemetry: CarTelemetry
+  /** Opens the car's own web page (website-server cars host one on :80). */
+  onOpenWebPage: () => void
+  /** Switches the car into this package's mode (token ESP_SER / ESP_CLI). */
+  onEnterMode: () => void
+}
+
+export type TwoWd1mExtrasProps = {
+  canControl: boolean
+  /** Max servo deflection from center 90 (±). */
+  steerLimit: number
+  /** Steering trim offset (persisted on the car via TRIM). */
+  trim: number
+  onAdjustSteerLimit: (delta: number) => void
+  onAdjustTrim: (delta: number) => void
+  onEStop: () => void
 }
 
 export type DriveControlsProps = {
@@ -67,11 +120,20 @@ export type DriveControlsProps = {
   pidKi: number
   pidKd: number
   pidOut: number
+  pidOff: number
   /** When true, show dual joysticks instead of d-pad buttons. */
   useJoystick: boolean
   onDirection: (d: 'F' | 'B' | 'L' | 'R' | 'S') => void
   onSpeed: (v: number) => void
   onServo: (v: number) => void
+  /** ESP-remote 2WD1M joystick parity: left stick streams signed SPD
+      (-255..255, transient drive) through this callback instead of direction
+      letters, and the right stick clamps to ±steerLimit around center 90.
+      Omit for the legacy letter-based mapping. */
+  onSignedDrive?: (signed: number) => void
+  /** Max servo deflection (±°) from center 90 for the right joystick when
+      onSignedDrive is set (mirrors the ESP remote's Steer limit). */
+  steerLimit?: number
   onPid: (key: 'kp' | 'ki' | 'kd' | 'out' | 'off', v: number) => void
   onRun: () => void
   onStop: () => void
