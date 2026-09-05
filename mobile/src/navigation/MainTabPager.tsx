@@ -1,9 +1,11 @@
 // =====================================================================
 // MainTabPager - the main tab area as a horizontal swipeable pager.
 //
-// Home / Shop / Cart live as pages of a react-native-pager-view so the user
-// can swipe between them; Account lives in the top bar (website parity) and
-// the Menu button (bottom bar, 4th slot) opens the AppMenu sheet. The pager is
+// Home / Shop / Cart / Menu live as pages of a react-native-pager-view so
+// the user can swipe between them; Account lives in the top bar (website
+// parity). The Menu page is a normal tab - it renders in the same space
+// between the brand header and the bottom tab bar like the other three. The
+// pager is
 // kept in sync with the active tab that lives on the `Main` route's `screen`
 // param:
 //   - a swipe  -> onPageSelected -> navigation.setParams({ screen })
@@ -37,13 +39,14 @@ import type { MainTabParamList, RootStackParamList } from './types';
 
 type TabKey = keyof MainTabParamList;
 
-const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart'];
+const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart', 'Menu'];
 
 type IconName = ComponentProps<typeof Feather>['name'];
 const TAB_ICONS: Record<TabKey, IconName> = {
   Home: 'home',
   Shop: 'grid',
   Cart: 'shopping-bag',
+  Menu: 'menu',
 };
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -57,7 +60,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   const navigation = useNavigation<Nav>();
   const route = useRoute<MainRoute>();
   const insets = useSafeAreaInsets();
-  const { cartCount, setMenuOpen } = useApp();
+  const { cartCount } = useApp();
   const pagerRef = useRef<PagerView>(null);
   const currentPageRef = useRef<number>(0);
   const [page, setPage] = useState<TabKey>(() => initialTab(route.params?.screen));
@@ -104,10 +107,9 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   // Re-sync whenever Main regains focus (e.g. after a pushed screen like Admin
   // pops back). The param may not have changed, so the effect above won't run;
   // this guarantees the pager lands on the tab the user left, not a drifted /
-  // initial one. Also close the global menu so it can never stay "stuck".
+  // initial one.
   useFocusEffect(
     useCallback(() => {
-      setMenuOpen(false);
       const index = TAB_ORDER.indexOf(initialTab(route.params?.screen));
       if (index >= 0 && index !== currentPageRef.current) {
         currentPageRef.current = index;
@@ -129,7 +131,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
         return false; // on Home -> default (exit app / pop stack)
       });
       return () => sub.remove();
-    }, [route.params?.screen, setMenuOpen, goToTab]),
+    }, [route.params?.screen, goToTab]),
   );
 
   return (
@@ -184,16 +186,6 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
             </Pressable>
           );
         })}
-        {/* Menu opens the AppMenu sheet - it is an action, not a swipe page. */}
-        <Pressable
-          onPress={() => setMenuOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Open menu"
-          className="flex-1 items-center justify-center pb-2 pt-2.5"
-        >
-          <Feather name="menu" size={22} color="#64748b" />
-          <Text className="mt-1 text-[10px] font-bold text-slate-500">Menu</Text>
-        </Pressable>
       </View>
     </View>
   );

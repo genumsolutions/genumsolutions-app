@@ -7,15 +7,29 @@
 
 ---
 
+## 2026-09-05 device checklist (cart sync · Menu tab · compact My Account) — pending
+
+These verify the UI fixes from the 2026-09-05 session (uncommitted at time of writing).
+
+1. **Cart count matches the list** — add items from Product Detail / Projects (badge increments), then open the Cart tab: the badge and the sum of plus/minus quantities shown match exactly, and the list reflects the adds you made since you last opened the tab (no stale rows).
+2. **Editing the cart works** — on the Cart tab, tap **+ / −** on any line → the quantity, the Total, and the badge all update immediately (list stays in step, no re-fetch). Press **−** down to 0 → the line and row disappear.
+3. **Cart syncs on focus return** — add a product, leave to another tab, come back (or visit the Cart tab fresh) → the cart list is current. After a COD/paid checkout the empty state shows and the badge is 0.
+4. **Menu tab (not a modal)** — bottom bar has **four** tabs (Home/Shop/Cart/Menu). Tapping Menu shows a destinations page in the normal tab area — tabs stay visible + tappable, back bar shows the page, swiping Home↔Shop↔Cart↔Menu works, and Android Back from Menu goes Home in one step. Services/Projects/Journal/3D Printing/Open Tools/Tools & IoT/About/Contact/Privacy/Terms/Admin Dashboard all navigate to their screens.
+5. **My Account is short + neat** — signed in → header card (Welcome, {name}., email, log-out on My Account screen), two stat cards (Orders placed / Items in build list), Your orders, Edit profile, and a compact footer (App version+update, App theme, legal links, Sign out). No repeated account/theme/update rows anywhere in the Menu tab; the only theme control lives on My Account.
+6. **Admin — Project packages tab** — the heading "Project packages (N)" renders on its own big line (no wrap/overflow) with the + New project button in the filter row below; heading font is larger than before and readable.
+7. **Web-render regression** — `npm run web`: all four tab pages + Admin tabs render; Menu tab works; no modal; theme toggle on My Account works.
+
+---
+
 ## v1.5.13 device checklist (native UX polish)
 
 These verify the v1.5.13 polish, on top of the v1.5.12 Settings tabs and the v1.5.11 UX fixes.
 
-1. **Bottom-sheet menu** — tap **Menu** in the bottom bar (4th slot) → the sheet slides up over content only (top bar and bottom bar stay put, not covered). It has: grabber + "Menu" title + X, a compact account row (or Sign in), an **App theme** picker (System/Light/Dark), destination groups (Explore / Company / Admin), and Sign out + App version in the footer. No duplicated brand header, no duplicated Home/Shop/Cart tab items.
+1. **Menu tab (4th bottom slot)** — tap **Menu** in the bottom bar → it opens as a **normal tab page** in the same space between the top bar and the bottom tab bar as Home/Shop/Cart (no modal, no overlay, tabs stay tappable). It lists destination groups (Explore / Company / Admin) only — no duplicate account row / theme / sign-out / update (those live on **My Account**).
 2. **Account in the top bar (website parity)** — top bar shows a user icon (initials when signed in). Signed in → tapping it opens **My Account** (a stack screen with back button); signed out → tapping it opens the **sign-in sheet** directly. Back from My Account returns to the tab you left.
-3. **Menu moved to the bottom bar** — Home / Shop / Cart are swipeable pages; the 4th bottom slot is **Menu** and opens the sheet (it is an action, not a swipe page). Swiping Home ↔ Shop ↔ Cart stays in sync with the bottom bar.
-4. **Tab-aware Android back** — from Shop/Cart press Back → lands on **Home** (one step); on Home press Back → app exits (or pops a screen beneath Main after a deep link). Never more than one step per press.
-5. **Theme toggle works** — in the menu pick Light → whole app restyles light even if the OS is dark; pick Dark → restyles dark; System → follows the OS. Choice persists across app restarts. (On the web preview the same toggle must restyle the app too.)
+3. **Menu is a real 4th tab** — Home / Shop / Cart / **Menu** are all swipeable pager pages; the bottom bar shows four tabs and highlights the active one. Swiping across all four stays in sync with the bottom bar.
+4. **Tab-aware Android back** — from Shop/Cart/Menu press Back → lands on **Home** (one step); on Home press Back → app exits (or pops a screen beneath Main after a deep link). Never more than one step per press.
+5. **Theme toggle works** — on My Account pick Light → whole app restyles light even if the OS is dark; pick Dark → restyles dark; System → follows the OS. Choice persists across app restarts. (On the web preview the same toggle must restyle the app too.)
 6. **Web-render regression** — the app runs in a browser (`npm run web`): tabs, admin tabs (PlatformPager web variant), menu, theme, and navigation all render without the native-only pager crashing the bundle.
 
 ## Car Remote device checklist (per-package robot-car remote — in development, after v1.5.13)
@@ -45,7 +59,7 @@ Scope: the **Car Remote** screen for robot-car project packages, starting with t
 
 These verify the Settings tabs added in v1.5.12 (app + website admins), plus the 3 UX bugs fixed in v1.5.11 and the Phase G swipe pager.
 
-1. **AppMenu Modal (was "stuck"/blocking)**
+1. **AppMenu Modal (historical — the menu is now a 4th tab page, not a Modal; see the 2026-09-05 checklist)**
    - Tap the hamburger on Home → menu slides in over a dimmed backdrop; the rest of the screen is inert while open.
    - Tap a nav item (e.g. Services) → menu closes AND you land on Services in one tap (previously the next tap could be swallowed).
    - Open the menu, then tap the X → closes; open again quickly → works every time (never "stuck").

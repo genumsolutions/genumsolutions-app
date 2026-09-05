@@ -12,6 +12,7 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { ShopScreen } from '../screens/ShopScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { AccountScreen } from '../screens/AccountScreen';
+import { MenuScreen } from '../screens/MenuScreen';
 import { MainTabPager } from './MainTabPager';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
@@ -38,6 +39,7 @@ const MainTabsSafe = withErrorBoundary(MainTabs, 'Main');
 const HomeScreenSafe = withErrorBoundary(HomeScreen, 'Home');
 const ShopScreenSafe = withErrorBoundary(ShopScreen, 'Shop');
 const CartScreenSafe = withErrorBoundary(CartScreen, 'Cart');
+const MenuScreenSafe = withErrorBoundary(MenuScreen, 'Menu');
 const AccountScreenSafe = withErrorBoundary(AccountScreen, 'Account');
 const ProductDetailScreenSafe = withErrorBoundary(ProductDetailScreen, 'ProductDetail');
 const CheckoutScreenSafe = withErrorBoundary(CheckoutScreen, 'Checkout');
@@ -63,6 +65,7 @@ function MainTabs() {
         Home: HomeScreenSafe,
         Shop: ShopScreenSafe,
         Cart: CartScreenSafe,
+        Menu: MenuScreenSafe,
       }}
     />
   );

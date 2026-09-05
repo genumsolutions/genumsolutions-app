@@ -1,6 +1,6 @@
 // =====================================================================
-// AppUpdateCard - shared "app update" control used in two places:
-//   - compact: the AppMenu footer (current version + one-tap update)
+// AppUpdateCard - shared "app update" control:
+//   - compact: a slim row (current version + one-tap update)
 //   - full:    the Account screen's "App version & update check" card
 //
 // Both use the same logic (checkForUpdate / downloadAndInstall) so the

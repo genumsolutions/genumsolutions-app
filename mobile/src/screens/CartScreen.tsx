@@ -1,5 +1,13 @@
 // =====================================================================
 // CartScreen - shows the native cart with quantity controls.
+//
+// The displayed lines are always re-resolved from the actual cart:
+//   - on initial product load
+//   - every time the tab regains focus (adds from other screens, reset
+//     after checkout, DB adopt on sign-in, ...)
+//   - after every quantity edit
+// so the badge (AppContext cartCount) and the list can never drift apart
+// from each other.
 // =====================================================================
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -10,7 +18,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { getProducts } from '../services/productService';
 import { resolveCart, setQuantity } from '../services/cartService';
@@ -19,36 +27,50 @@ import type { Product } from '../types';
 import type { TabNav } from '../navigation/types';
 
 type Nav = TabNav<'Cart'>;
+type CartEntry = { line: { productId: string; quantity: number }; product: Product };
 
 export function CartScreen() {
   const navigation = useNavigation<Nav>();
   const { setCart } = useApp();
   const [products, setProducts] = useState<Product[]>([]);
+  const [lines, setLines] = useState<CartEntry[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      setProducts(await getProducts());
-    } catch {
-      // no-op
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+    setLoading(true);
+    getProducts()
+      .then((prods) => {
+        if (active) setProducts(prods);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Re-resolve the cart whenever the products catalog changes, after a
+  // quantity edit, or when the tab regains focus.
+  useEffect(() => {
+    void resolveCart(products).then(setLines);
+  }, [products, refreshKey]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setRefreshKey((k) => k + 1);
+    }, []),
+  );
 
   const updateQty = async (productId: string, qty: number) => {
-    // Update local cart + badge immediately (no waiting for DB sync).
-    // The DB sync happens in the background via the AppContext handler.
+    // Update the local cart + badge immediately (no waiting for the DB).
+    // The DB sync runs in the background via the AppContext handler.
     const count = await setQuantity(productId, qty);
     setCart({ count, size: count });
-    // Re-resolve cart lines from the updated local cart (no product refetch).
-    // CartContent re-reads via its own products+version effect.
-    setProducts((prev) => prev);
+    setRefreshKey((k) => k + 1);
   };
 
   if (loading) {
@@ -58,32 +80,6 @@ export function CartScreen() {
       </View>
     );
   }
-
-  return (
-    <CartContent
-      products={products}
-      onUpdateQty={updateQty}
-      onCheckout={() => navigation.push('Checkout')}
-    />
-  );
-}
-
-function CartContent({
-  products,
-  onUpdateQty,
-  onCheckout,
-}: {
-  products: Product[];
-  onUpdateQty: (id: string, qty: number) => void;
-  onCheckout: () => void;
-}) {
-  const [lines, setLines] = useState<{ line: { productId: string; quantity: number }; product: Product }[]>([]);
-
-  // Re-read lines whenever products change (initial load) or a quantity update
-  // triggers a re-read via the forced products setter in updateQty.
-  useEffect(() => {
-    void resolveCart(products).then(setLines);
-  }, [products]);
 
   if (lines.length === 0) {
     return (
@@ -130,7 +126,7 @@ function CartContent({
               </Text>
               <View className="mt-2 flex-row items-center">
                 <Pressable
-                  onPress={() => onUpdateQty(item.line.productId, item.line.quantity - 1)}
+                  onPress={() => updateQty(item.line.productId, item.line.quantity - 1)}
                   className="rounded-full border border-line px-2 py-1"
                   accessibilityLabel="Decrease quantity"
                 >
@@ -138,7 +134,7 @@ function CartContent({
                 </Pressable>
                 <Text className="mx-3 text-sm font-bold text-ink">{item.line.quantity}</Text>
                 <Pressable
-                  onPress={() => onUpdateQty(item.line.productId, item.line.quantity + 1)}
+                  onPress={() => updateQty(item.line.productId, item.line.quantity + 1)}
                   className="rounded-full border border-line px-2 py-1"
                   accessibilityLabel="Increase quantity"
                 >
@@ -162,7 +158,7 @@ function CartContent({
           <Text>Changes save instantly to your cart</Text>
         </View>
         <Pressable
-          onPress={onCheckout}
+          onPress={() => navigation.push('Checkout')}
           className="mt-3 items-center rounded-full bg-navy py-3"
         >
           <Text className="font-bold text-white">Checkout</Text>

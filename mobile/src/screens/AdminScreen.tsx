@@ -1086,15 +1086,9 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
         className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-display text-xl font-bold text-ink">{title} ({filtered.length})</Text>
-              <Pressable
-                onPress={() => { setEditing(blankProjectProduct()); setIsNew(true) }}
-                className="rounded-full bg-navy px-4 py-2"
-              >
-                <Text className="text-xs font-black text-white">+ New project</Text>
-              </Pressable>
-            </View>
+            <Text className="font-display text-2xl font-bold tracking-tight text-ink">
+              {title} <Text className="text-base font-bold text-muted">({filtered.length})</Text>
+            </Text>
             <View className="mt-2 flex-row items-center gap-2">
               <View className="flex-1">
                 <CategoryDropdown
@@ -1106,6 +1100,12 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
                 />
               </View>
               <TextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, id…" className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
+              <Pressable
+                onPress={() => { setEditing(blankProjectProduct()); setIsNew(true) }}
+                className="shrink-0 rounded-full bg-navy px-4 py-2"
+              >
+                <Text className="text-xs font-black text-white">+ New project</Text>
+              </Pressable>
             </View>
           </View>
         }
