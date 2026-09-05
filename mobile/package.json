@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.5.13",
+  "version": "1.5.14",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -34,6 +34,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-bluetooth-classic": "^1.73.0-rc.17",
     "react-native-css-interop": "0.2.6",
     "react-native-pager-view": "6.9.1",
     "react-native-reanimated": "~4.1.1",
@@ -57,5 +58,15 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-bluetooth-classic",
+          "@sfourdrinier/react-native-ble-plx"
+        ]
+      }
+    }
+  }
 }
