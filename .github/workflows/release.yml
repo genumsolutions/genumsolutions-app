@@ -110,9 +110,12 @@ jobs:
               echo "::error::ANDROID_KEYSTORE_B64 decoded to an empty keystore file — is the secret set correctly?"
               exit 1
             fi
-            # storeFile is resolved relative to android/app/, so ../../keystores/... ->
-            # <repo>/mobile/keystores/... where the keystore was just decoded.
-            # Fixed value (see the header comment) - no STORE_FILE secret is read.
+            # storeFile is resolved relative to android/app/ (where gradle runs AFTER
+            # expo prebuild), so ../../keystores/... -> mobile/keystores/genum-release.jks.
+            # At THIS step android/ does not exist yet (prebuild runs next), so validate
+            # the decoded keystore directly at mobile/keystores/ and let gradle resolve
+            # the relative storeFile later. Fixed value (see the header comment) - no
+            # STORE_FILE secret is read.
             STORE_FILE="../../keystores/genum-release.jks"
             printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
               "$STORE_FILE" \
@@ -120,21 +123,14 @@ jobs:
               "${{ secrets.KEY_ALIAS }}" \
               "${{ secrets.KEY_PASSWORD }}" > keystores/keystore.properties
             # Fail fast instead of letting gradle's validateSigningRelease die
-            # 10+ minutes into the build: resolve storeFile the way gradle does
-            # (relative to android/app/), normalize the path (.. components) and
-            # check the keystore + credentials.
-            case "$STORE_FILE" in
-              /*) store_abs="$STORE_FILE" ;;
-              *)  store_abs="$(pwd)/android/app/$STORE_FILE" ;;
-            esac
-            store_real="$(cd -- "$(dirname -- "$store_abs")" >/dev/null 2>&1 && pwd)/$(basename -- "$store_abs")"
-            if [ ! -f "$store_real" ]; then
-              echo "::error::keystore.properties storeFile='$STORE_FILE' resolves to '$store_real' which does not exist."
-              echo "::error::STORE_FILE is resolved relative to android/app/. Use e.g. ../../keystores/genum-release.jks (decoded keystore is at $(pwd)/keystores/genum-release.jks) or an absolute path."
+            # 10+ minutes into the build: check the decoded keystore + credentials.
+            keystore_file="$(pwd)/keystores/genum-release.jks"
+            if [ ! -f "$keystore_file" ]; then
+              echo "::error::Decoded release keystore missing at '$keystore_file'."
               exit 1
             fi
-            if ! keytool -list -keystore "$store_real" -storepass "${{ secrets.STORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
-              echo "::error::Release keystore validation failed for alias '${{ secrets.KEY_ALIAS }}' at $store_real — wrong STORE_PASSWORD or KEY_ALIAS?"
+            if ! keytool -list -keystore "$keystore_file" -storepass "${{ secrets.STORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
+              echo "::error::Release keystore validation failed for alias '${{ secrets.KEY_ALIAS }}' at $keystore_file — wrong STORE_PASSWORD or KEY_ALIAS?"
               exit 1
             fi
             echo "::notice::Release signing configured and validated (storeFile=$STORE_FILE, alias=${{ secrets.KEY_ALIAS }})."
