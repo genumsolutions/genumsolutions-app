@@ -22,14 +22,18 @@ import {
   PUSH_CHANNEL_DESCRIPTION,
 } from '../config/push'
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-})
+if (Platform.OS !== 'web') {
+  // expo-notifications has no web handler module; a module-scope call throws
+  // UnavailabilityError on web and white-screens the app. Native-only.
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  })
+}
 
 /** Android channel for order updates (safe no-op elsewhere / when missing). */
 async function ensureChannel(): Promise<void> {
