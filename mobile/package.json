@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.5.19",
+  "version": "1.5.20",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
