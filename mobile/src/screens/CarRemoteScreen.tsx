@@ -419,11 +419,10 @@ export function CarRemoteScreen({ navigation }: Props) {
   const isRf = mode.transport.includes('rf') // RF handset cars: no app link
 
   // Link label for the OLED chip (ESP remote over classic BT shows SPP LINK).
-  const linkKind: 'ble' | 'spp' | 'wifi' | undefined =
+  const linkKind: 'spp' | 'wifi' | undefined =
     wifiConnected ? 'wifi'
-      : connected && transport === 'spp' ? 'spp'
-        : connected && transport === 'ble' ? 'ble'
-          : undefined
+      : connected ? 'spp'
+        : undefined
 
   return (
     <ScrollView className="flex-1 bg-mist" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>

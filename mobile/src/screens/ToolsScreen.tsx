@@ -3,27 +3,33 @@
 // Real Bluetooth SPP + WiFi WebSocket control for GENUM ESP32 cars.
 // Mirrors the hand-held ESP remote (Genum_ESP32_Remote_v1.0.0) OLED display.
 // Full control deck for all 9 car modes and 5 project categories.
+//
+// Remote-parity layer: ESP32-remote safety limits, fullscreen remote view,
+// small mode dropdown/apply, mode sync from car telemetry, and per-device
+// memory so the app remembers last speed/mode/steer/trim/joystick choices.
 // =====================================================================
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { useRoute, type RouteProp } from '@react-navigation/native'
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Platform, ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useRoute, type RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons'
-import { APP_VERSION } from '../config/site'
-import { sppService, type SppDevice } from '../services/sppService'
-import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog'
-import { getCarModes } from '../services/carModeService'
-import { PROJECT_CATEGORIES } from '../config/project-catalog'
-import type { RootStackParamList } from '../navigation/types'
-import { CategoryOverview } from '../components/tools/CategoryOverview'
-import { ModeChooser } from '../components/tools/ModeChooser'
-import { OledDisplay } from '../components/tools/OledDisplay'
-import { DriveControls } from '../components/tools/DriveControls'
-import { TwoWd1mExtras } from '../components/tools/TwoWd1mExtras'
-import { DroneControls } from '../components/tools/DroneControls'
-import { SensorGrid } from '../components/tools/SensorGrid'
-import { ModeInfo } from '../components/tools/ModeInfo'
-import type { SensorData } from '../components/tools/types'
-import type { CarTelemetry } from '../services/carProtocol'
+import { APP_VERSION } from '../config/site';
+import { sppService, type SppDevice, deviceMemoryBridge } from '../services/sppService';
+import { DEFAULT_SAFETY_LIMITS, setDeviceMemoryBridge } from '../components/tools/types';
+import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog';
+import { getCarModes } from '../services/carModeService';
+import { PROJECT_CATEGORIES } from '../config/project-catalog';
+import type { RootStackParamList } from '../navigation/types';
+import { CategoryOverview } from '../components/tools/CategoryOverview';
+import { ModeChooser } from '../components/tools/ModeChooser';
+import { OledDisplay } from '../components/tools/OledDisplay';
+import { DriveControls, JOYSTICK_LAYOUTS, type JoystickLayout } from '../components/tools/DriveControls';
+import { TwoWd1mExtras } from '../components/tools/TwoWd1mExtras';
+import { DroneControls } from '../components/tools/DroneControls';
+import { SensorGrid } from '../components/tools/SensorGrid';
+import { ModeInfo } from '../components/tools/ModeInfo';
+import type { SensorData, DevicePrefs, devicePrefsKey } from '../components/tools/types';
+import { deviceMemory } from '../components/tools/types';
+import type { CarTelemetry } from '../services/carProtocol';
 
 type Route = RouteProp<RootStackParamList, 'Tools'>
 
@@ -90,6 +96,95 @@ export function ToolsScreen() {
   // ---- Control mode toggle ----
   const [useJoystick, setUseJoystick] = useState(false)
 
+  // ---- ESP32-remote safety limits ----
+  const safetyLimits = DEFAULT_SAFETY_LIMITS
+
+  // ---- Joystick layout style (fullscreen remote view + changer) ----
+  const [joystickLayout, setJoystickLayout] = useState<JoystickLayout>(JOYSTICK_LAYOUTS[0])
+  const [joystickLayouts] = useState<JoystickLayout[]>(JOYSTICK_LAYOUTS)
+
+  // ---- Fullscreen remote view ----
+  const [fullscreen, setFullscreen] = useState(false)
+  const [locked, setLocked] = useState(false)
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
+
+  // Fullscreen OLED mirror as a function so it can access isDrone/isNonRobocar
+  const renderFullscreenOled = (isDrone: boolean, isNonRobocar: boolean) => (
+    <View className="flex-1 bg-slate-900 pt-12">
+      {/* Small top chrome for fullscreen mode */}
+      <View className="flex-row items-center justify-between px-4">
+        <View className="flex-row items-center gap-2">
+          <Text className="text-sm font-bold text-emerald-400">
+            {sppService.deviceName ?? deviceName ?? 'Remote'}
+          </Text>
+          <Text className="text-sm font-mono text-slate-500">SPP LINK</Text>
+        </View>
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            onPress={() => setLocked((v) => !v)}
+            className={`rounded-full px-3 py-1.5 ${locked ? 'bg-amber-400' : 'bg-slate-700'}`}
+          >
+            <Text className="text-xs font-bold text-slate-900">{locked ? 'Lock' : 'Unlock'}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setOrientation((v) => (v === 'portrait' ? 'landscape' : 'portrait'))}
+            className="rounded-full bg-slate-700 px-3 py-1.5"
+          >
+            <Text className="text-xs font-bold text-white">{orientation === 'portrait' ? 'Rotate' : 'Portrait'}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* OLED mirror in the center of the fullscreen view */}
+      <View className="flex-1 items-center justify-center">
+        <OledDisplay
+          connected={true}
+          wifiConnected={false}
+          deviceName={sppService.deviceName ?? deviceName ?? ''}
+          activeMode={activeMode}
+          speed={speed}
+          servo={servo}
+          driveStatus={driveStatus}
+          targetAltitude={targetAltitude}
+          gimbalPan={gimbalPan}
+          gimbalTilt={gimbalTilt}
+          sensorData={sensorData}
+          telemetry={telemetry}
+          isDrone={isDrone}
+          isNonRobocar={isNonRobocar}
+          linkKind="spp"
+        />
+      </View>
+
+      {/* Joystick-type changer for fullscreen remote */}
+      <View className="flex-row items-center justify-center gap-3 pb-8">
+        {joystickLayouts.map((layout: JoystickLayout) => (
+          <Pressable
+            key={layout.id}
+            onPress={() => {
+              setJoystickLayout(layout)
+              setUseJoystick(layout.id === 'dual')
+              persistPrefs({ joystickLayout: layout.id, useJoystick: layout.id === 'dual' })
+            }}
+            className={`rounded-full px-4 py-2 ${joystickLayout.id === layout.id ? 'bg-navy' : 'bg-slate-700'}`}
+          >
+            <Text className={`text-sm font-bold ${joystickLayout.id === layout.id ? 'text-white' : 'text-slate-200'}`}>
+              {layout.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  // ---- Mode from car (mode sync) ----
+
+  // ---- Mode from car (mode sync) ----
+  const [carModeId, setCarModeId] = useState<string | null>(null)
+
+  // ---- Device memory ----
+  const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null)
+
   // ---- Relays for non-robocar categories ----
   const [relays, setRelays] = useState<Record<number, boolean>>({})
 
@@ -103,6 +198,30 @@ export function ToolsScreen() {
 
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES)
+
+  // Prefer the app's chosen storage for remembered device prefs.
+  useEffect(() => {
+    if (!(Platform.OS === 'android' || Platform.OS === 'ios')) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { default: storage } = await import('@react-native-async-storage/async-storage')
+        if (!cancelled) {
+          deviceMemoryBridge.getPrefs = async (key: string) => {
+            const v = await storage.getItem(key)
+            return v ?? null
+          }
+          deviceMemoryBridge.setPrefs = async (key: string, value: string) => {
+            await storage.setItem(key, value).catch(() => {})
+          }
+        }
+      } catch {
+        /* storage not available yet; keep memory-only prefs */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   // Load car modes from Supabase (or fallback to bundled)
   useEffect(() => {
@@ -118,6 +237,59 @@ export function ToolsScreen() {
       .catch(() => { /* keep bundled fallback */ })
     return () => { active = false }
   }, [])
+
+  // Restore remembered device prefs when a device address becomes available.
+  const addressForMemory = sppService.currentAddress ?? sppService.getConnectionInfo().address ?? null
+  useFocusEffect(
+    useCallback(
+      () => {
+        if (!addressForMemory) {
+          setSavedPrefs(null)
+          return
+        }
+        const prefs = deviceMemory.read(addressForMemory)
+        setSavedPrefs(prefs)
+        if (prefs) {
+          if (prefs.modeId && carModes.some((m) => m.id === prefs.modeId)) {
+            setActiveMode(carModes.find((m) => m.id === prefs.modeId)!)
+          }
+          if (prefs.speed != null) setSpeed(prefs.speed)
+          if (prefs.servo != null) setServo(prefs.servo)
+          if (prefs.steerLimit != null) setSteerLimit(prefs.steerLimit)
+          if (prefs.trim != null) setTrim(prefs.trim)
+          if (prefs.useJoystick != null) setUseJoystick(prefs.useJoystick)
+          if (prefs.fullscreen != null) setFullscreen(prefs.fullscreen)
+          if (prefs.joystickLayout && joystickLayouts.some((l) => l.id === prefs.joystickLayout)) {
+            setJoystickLayout(joystickLayouts.find((l) => l.id === prefs.joystickLayout)!)
+          }
+        }
+      },
+      [addressForMemory, carModes, joystickLayouts],
+    ),
+  )
+
+  // Persist device prefs whenever the user changes a remembered value.
+  const persistPrefs = useCallback(
+    (patch: Partial<DevicePrefs>) => {
+      if (!addressForMemory) return
+      const next: DevicePrefs = {
+        address: addressForMemory,
+        name: sppService.deviceName ?? deviceName,
+        modeId: activeMode.id,
+        speed,
+        servo,
+        steerLimit,
+        trim,
+        useJoystick,
+        fullscreen,
+        joystickLayout: joystickLayout.id,
+        ...patch,
+      }
+      deviceMemory.write(addressForMemory, next)
+      setSavedPrefs(next)
+    },
+    [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, fullscreen, joystickLayout.id],
+  )
 
   // Set category from route params
   useEffect(() => {
@@ -208,6 +380,25 @@ export function ToolsScreen() {
 
   // Check if SPP is supported on this device
   const sppSupported = sppService.supported
+
+  // Mode changed on the car: keep the app in sync with live telemetry.
+  useFocusEffect(
+    useCallback(
+      () => {
+        return sppService.onTelemetry((t) => {
+          if (!mountedRef.current) return
+          if (t.mode) {
+            setCarModeId(t.mode)
+            const matched = carModes.find((m) => m.id === t.mode || m.token === t.mode)
+            if (matched && matched.id !== activeMode.id) {
+              setActiveMode(matched)
+            }
+          }
+        })
+      },
+      [carModes],
+    ),
+  )
 
   // Scan for SPP devices (Classic Bluetooth)
   const handleScan = useCallback(async () => {
@@ -428,16 +619,21 @@ export function ToolsScreen() {
   }, [sendThrottled])
 
   const adjustSteerLimit = useCallback((delta: number) => {
-    setSteerLimit((prev) => Math.max(0, Math.min(180, prev + delta)))
-  }, [])
+    setSteerLimit((prev) => {
+      const next = Math.max(0, Math.min(safetyLimits.maxSteerDeviation * 2, prev + delta))
+      persistPrefs({ steerLimit: next })
+      return next
+    })
+  }, [safetyLimits.maxSteerDeviation, persistPrefs])
 
   const adjustTrim = useCallback((delta: number) => {
     setTrim((prev) => {
-      const next = Math.max(-90, Math.min(90, prev + delta))
+      const next = Math.max(-safetyLimits.maxTrim, Math.min(safetyLimits.maxTrim, prev + delta))
       sendCommand(`TRIM${next}`)
+      persistPrefs({ trim: next })
       return next
     })
-  }, [sendCommand])
+  }, [safetyLimits.maxTrim, sendCommand, persistPrefs])
 
   const handleEStop = useCallback(() => {
     setDriveStatus('EMERGENCY STOP')
@@ -466,6 +662,14 @@ export function ToolsScreen() {
       return { ...prev, [i]: next }
     })
   }, [sendCommand]) // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const selectedJoystickLayoutId = useCallback((id: string) => {
+    const layout = joystickLayouts.find((l) => l.id === id)
+    if (!layout) return
+    setJoystickLayout(layout)
+    setUseJoystick(id === 'dual')
+    persistPrefs({ joystickLayout: id, useJoystick: id === 'dual' })
+  }, [joystickLayouts, persistPrefs])
 
   const handleGimbalPan = useCallback((value: number) => { setGimbalPan(value); sendCommand(`GIMBAL_PAN:${Math.round(value)}`) }, [sendCommand])
   const handleGimbalTilt = useCallback((value: number) => { setGimbalTilt(value); sendCommand(`GIMBAL_TILT:${Math.round(value)}`) }, [sendCommand])
@@ -769,6 +973,7 @@ export function ToolsScreen() {
           steerLimit={is2wd1mActive ? steerLimit : undefined}
           onRun={() => { sendCommand(activeMode.token); setDriveStatus(`${activeMode.token} running`) }}
           onStop={() => { sendCommand('BT'); setDriveStatus('BT manual · stopped') }}
+          safetyLimits={safetyLimits}
         />
 
         {/* Drone controls */}
@@ -804,6 +1009,26 @@ export function ToolsScreen() {
         <Text className="text-sm font-semibold text-navy">GENUM Solutions</Text>
         <Text className="mt-0.5 text-xs text-muted">App v{APP_VERSION} · IoT & Remote Controller</Text>
       </View>
+
+      {/* Fullscreen remote-control window */}
+      {fullscreen && (
+        <Pressable
+          onPress={() => setFullscreen(false)}
+          className="absolute inset-0 bg-black/40"
+        />
+      )}
+      {fullscreen && (
+        <View className="absolute inset-0 bg-slate-900 pointer-events-auto">
+          {renderFullscreenOled(isDrone, isNonRobocar)}
+          {/* Exit button for fullscreen */}
+          <Pressable
+            onPress={() => setFullscreen(false)}
+            className="absolute top-4 right-4 rounded-full bg-slate-700 px-3 py-1.5"
+          >
+            <Text className="text-xs font-bold text-white">Exit fullscreen</Text>
+          </Pressable>
+        </View>
+      )}
     </ScrollView>
   )
 }

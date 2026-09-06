@@ -20,7 +20,7 @@
 //   parser then turns lines into telemetry.
 // =====================================================================
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native'
-import { parseTelemetryLine, REQ_STATE_LINE, type CarTelemetry } from './carProtocol'
+import { parseTelemetryLine, REQ_STATE_LINE, type CarTelemetry } from './carProtocol';
 
 export type SppDevice = {
   id: string
@@ -224,12 +224,18 @@ export class SppService {
           }
         }
       })
-
+      
       this.emitStatus('connected', address)
     } catch (e) {
       this.connectingAddress = null
       this.emitStatus('error', e instanceof Error ? e.message : 'Classic BT connection failed')
       throw e
+    }
+  }
+
+  setPrefs(key: string, value: string): void {
+    if (this.connectedAddress) {
+      this.writeToDevice(this.connectedAddress, value, 'utf-8').catch(() => {})
     }
   }
 
@@ -276,21 +282,50 @@ export class SppService {
     this.emitStatus('disconnected')
   }
 
+  /** Low-level write to the connected device. */
+  private async writeToDevice(address: string, data: string, charset: string): Promise<void> {
+    const mod = await this.getModule()
+    await mod.writeToDevice(address, data, charset)
+  }
+
   /** Send one GENUM command line to the car (newline terminated). */
   async sendLine(line: string): Promise<void> {
     if (!this.connectedAddress) throw new Error('Not connected')
-    const mod = await this.getModule()
-    await mod.writeToDevice(this.connectedAddress, `${line}\n`, 'utf-8')
+    await this.writeToDevice(this.connectedAddress, `${line}\n`, 'utf-8')
   }
 
   /** Ask the car to re-broadcast STATE (mode/speed/trim/status). */
   async requestState(): Promise<void> {
     await this.sendLine(REQ_STATE_LINE)
   }
+
+  /** Get prefs from storage (for device-memory bridge). */
+  getPrefs(key: string): string | null {
+    return null
+  }
+}
+
+/** Per-device storage bridge for the IoT Tools device memory.
+    The app hooks these at startup to route through its preferred storage
+    (AsyncStorage / MMKV / SQLite). Until then they are no-ops by design and
+    the device-memory layer falls back to in-memory only. */
+export const deviceMemoryBridge = {
+  getPrefs: null as ((key: string) => string | null | Promise<string | null>) | null,
+  setPrefs: null as ((key: string, value: string) => void | Promise<void>) | null,
 }
 
 // Singleton instance used throughout the app (mirrors bleService).
 export const sppService = new SppService()
+
+// Wire the device-memory storage bridge into the device-memory layer.
+if (deviceMemoryBridge) {
+  if (typeof deviceMemoryBridge.getPrefs === 'function') {
+    deviceMemoryBridge.getPrefs = sppService.getPrefs.bind(sppService)
+  }
+  if (typeof deviceMemoryBridge.setPrefs === 'function') {
+    deviceMemoryBridge.setPrefs = sppService.setPrefs.bind(sppService)
+  }
+}
 
 // Debug helper: get current connection state (for UI status display)
 export function getSppConnectionState(): {
@@ -311,3 +346,6 @@ export function getSppConnectionState(): {
     connectionStatus: svc.getConnectionInfo?.().status ?? 'idle',
   }
 }
+
+
+
