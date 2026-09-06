@@ -431,6 +431,10 @@ export function ToolsScreen() {
 
   // Connect to SPP device
   const handleConnect = useCallback(async (device: SppDevice) => {
+    if (!device.address) {
+      setError('This car has no Bluetooth address. Rescan and try again.')
+      return
+    }
     setConnecting(true)
     setError(null)
     try {
@@ -692,7 +696,7 @@ export function ToolsScreen() {
     >
       {/* Header */}
       <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-        IoT & Remote Controller
+        Control Panel
       </Text>
       <Text className="mt-2 font-display text-2xl font-bold text-ink">
         {isDrone ? 'Drone & Aerial Controller' : 'Drive like the handheld remote'}
@@ -1007,7 +1011,7 @@ export function ToolsScreen() {
       {/* Footer */}
       <View className="mt-6 rounded-lg border border-line bg-card p-4">
         <Text className="text-sm font-semibold text-navy">GENUM Solutions</Text>
-        <Text className="mt-0.5 text-xs text-muted">App v{APP_VERSION} · IoT & Remote Controller</Text>
+        <Text className="mt-0.5 text-xs text-muted">App v{APP_VERSION} · Control Panel</Text>
       </View>
 
       {/* Fullscreen remote-control window */}

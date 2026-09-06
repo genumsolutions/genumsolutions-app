@@ -34,7 +34,7 @@ const EXPLORE: Dest[] = [
 ];
 
 const COMPANY: Dest[] = [
-  { icon: 'cpu', label: 'Tools & IoT', screen: 'Tools' },
+  { icon: 'cpu', label: 'Control Panel', screen: 'Tools' },
   { icon: 'info', label: 'About', screen: 'About' },
   { icon: 'phone', label: 'Contact', screen: 'Contact' },
 ];
@@ -44,7 +44,7 @@ export function MenuScreen() {
   const { isAdmin } = useApp();
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingVertical: 8 }}>
+    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingVertical: 12 }}>
       <MenuGroup title="Explore">
         {EXPLORE.map((d) => (
           <MenuItem key={d.label} icon={d.icon} label={d.label} onPress={() => navigation.push(d.screen)} />
@@ -70,8 +70,8 @@ export function MenuScreen() {
 
 function MenuGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <View className="pt-2">
-      <Text className="px-5 pb-1 text-[11px] font-black uppercase tracking-widest text-border">
+    <View className="pt-4">
+      <Text className="px-5 pb-2 text-xs font-black uppercase tracking-widest text-border">
         {title}
       </Text>
       {children}
@@ -91,10 +91,10 @@ function MenuItem({
   return (
     <Pressable
       onPress={onPress}
-      className="mx-3 flex-row items-center rounded-lg px-2.5 py-2.5 active:bg-mist"
+      className="mx-3 flex-row items-center rounded-xl px-4 py-3.5 active:bg-mist"
     >
-      <Feather name={icon} size={16} color="#64748b" />
-      <Text className="ml-3 text-sm font-semibold text-ink">{label}</Text>
+      <Feather name={icon} size={20} color="#64748b" />
+      <Text className="ml-3.5 text-base font-semibold text-ink">{label}</Text>
     </Pressable>
   );
 }
