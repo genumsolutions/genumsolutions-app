@@ -3,7 +3,7 @@
     "name": "GENUM Solutions",
     "slug": "genum-solutions",
     "scheme": "genumsolutions",
-    "version": "1.5.19",
+    "version": "1.5.20",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.genumsolutions.app",
-      "versionCode": 27,
+      "versionCode": 28,
       "permissions": [
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
@@ -89,8 +89,8 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "androidClientId": "689924722337-tproftgasoa76bk7t6cttkhg2f7pn10u.apps.googleusercontent.com",
-          "iosUrlScheme": "com.googleusercontent.apps.689924722337-tproftgasoa76bk7t6cttkhg2f7pn10u"
+          "androidClientId": "689924722337-ksd3e2qdotdl6ce1rsb7mavcph30275c.apps.googleusercontent.com",
+          "iosUrlScheme": "com.googleusercontent.apps.689924722337-ksd3e2qdotdl6ce1rsb7mavcph30275c"
         }
       ],
       [
