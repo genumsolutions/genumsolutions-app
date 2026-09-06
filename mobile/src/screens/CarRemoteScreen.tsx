@@ -398,14 +398,14 @@ export function CarRemoteScreen({ navigation }: Props) {
           </Text>
           <Text className="mt-2 text-sm leading-6 text-muted">
             This product does not map to a GENUM robot-car firmware mode, so it has no
-            dedicated remote. Open the Tools &amp; IoT hub for the general controller.
+            dedicated remote. Open the Control Panel for the general controller.
           </Text>
           <Pressable
             onPress={() => navigation.replace('Tools')}
             className="mt-5 flex-row items-center justify-center gap-2 rounded-full bg-navy px-6 py-3"
           >
             <Feather name="tool" size={14} color="#fff" />
-            <Text className="text-sm font-black text-white">Open Tools &amp; IoT</Text>
+            <Text className="text-sm font-black text-white">Open Control Panel</Text>
           </Pressable>
         </View>
       </ScrollView>

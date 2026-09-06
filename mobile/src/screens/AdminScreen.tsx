@@ -70,9 +70,9 @@ import {
 } from '../services/adminService'
 
 type BackHandlerRemove = () => void
-type Tab = 'Dashboard' | 'Orders' | 'Products' | 'ProjectPackages' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content' | 'Settings'
+type Tab = 'Dashboard' | 'Orders' | 'Products' | 'Projects' | 'Services' | 'Journal' | 'Users' | 'Messages' | 'Finance' | 'Activity' | 'Content' | 'Settings'
 
-const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'ProjectPackages', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content', 'Settings']
+const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'Projects', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content', 'Settings']
 
 export function AdminScreen() {
   const { isAdmin, signOut } = useApp()
@@ -224,7 +224,7 @@ export function AdminScreen() {
         }
       } else if (tab === 'Orders') {
         void loadOrders(1)
-      } else if (tab === 'Products' || tab === 'ProjectPackages') {
+      } else if (tab === 'Products' || tab === 'Projects') {
         setProducts(await listAdminProducts())
       } else if (tab === 'Services') {
         setServices(await listAdminServices())
@@ -567,10 +567,10 @@ export function AdminScreen() {
             onToggleActive={(p) => void handleToggleProductActive(p)}
           />
         )
-      case 'ProjectPackages':
+      case 'Projects':
         return (
           <ProjectTab
-            title="Project packages"
+            title="Projects"
             products={products.filter(isProjectPackage)}
             onSaveProduct={saveProduct}
             onDelete={handleDeleteProduct}
@@ -741,7 +741,7 @@ export function AdminScreen() {
               accessibilityLabel={t}
               className={`w-[96px] shrink-0 px-4 py-3 border-b-2 ${tab === t ? 'border-navy' : 'border-transparent'}`}
             >
-              <Text className={`text-xs font-bold ${tab === t ? 'text-navy' : 'text-muted'}`}>{t}</Text>
+              <Text className={`text-sm font-bold ${tab === t ? 'text-navy' : 'text-muted'}`}>{t}</Text>
             </Pressable>
           ))}
         </View>

@@ -123,7 +123,7 @@ export function RootNavigator() {
       <Stack.Screen
         name="Tools"
         component={ToolsScreenSafe}
-        options={{ headerShown: true, title: 'Tools & IoT', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        options={{ headerShown: true, title: 'Control Panel', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="CarRemote"
