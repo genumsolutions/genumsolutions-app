@@ -4,13 +4,54 @@
 //
 // Toggle between d-pad (classic buttons) and joystick (website-style
 // dual-virtual-joystick) via the `useJoystick` prop.
+//
+// Drive values are clamped to the ESP-remote safety limits before they
+// leave the app, so the phone cannot command unsafe speed/steering/PWM
+// values even if the sliders or joysticks are driven hard.
 // =====================================================================
 import React, { useCallback, useRef } from 'react'
 import { Pressable, Text, View, Vibration } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Slider from '@react-native-community/slider'
-import type { DriveControlsProps } from './types'
+import type { DriveControlsProps, SafetyLimits } from './types'
 import { Joystick } from './Joystick'
+
+/** Default safety limits when the parent does not pass a custom set. */
+const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
+  maxSpeed: 255,
+  maxSignedDrive: 255,
+  servoCenter: 90,
+  maxSteerDeviation: 90,
+  maxTrim: 90,
+}
+
+/** Clamp a motor/speed value to the remote's safe PWM/speed ceiling. */
+function clampSpeed(value: number, limits: SafetyLimits): number {
+  const v = Math.round(value)
+  return Math.max(0, Math.min(limits.maxSpeed, v))
+}
+
+/** Clamp a signed joystick drive value to the remote's safe joystick range. */
+function clampSignedDrive(value: number, limits: SafetyLimits): number {
+  const v = Math.round(value)
+  return Math.max(-limits.maxSignedDrive, Math.min(limits.maxSignedDrive, v))
+}
+
+/** Clamp a SERVO value around the remote's center and steer deviation limit. */
+function clampServo(value: number, limits: SafetyLimits): number {
+  const v = Math.round(value)
+  return Math.max(
+    Math.max(0, limits.servoCenter - limits.maxSteerDeviation),
+    Math.min(180, limits.servoCenter + limits.maxSteerDeviation, v),
+  )
+}
+
+/** Clamp a TRIM value to the remote's safe trim range. */
+function clampTrim(value: number, limits: SafetyLimits): number {
+  const v = Math.round(value)
+  return Math.max(-limits.maxTrim, Math.min(limits.maxTrim, v))
+}
+
 
 // Map normalized joystick position to a direction letter, mirroring the
 // physical remote's 4-way stick → F/B/L/R mapping.
@@ -27,7 +68,8 @@ export function DriveControls({
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
   onSignedDrive, steerLimit,
-}: DriveControlsProps) {
+  safetyLimits,
+}: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   if (isDrone) return null
 
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
@@ -59,6 +101,7 @@ export function DriveControls({
   // the 2WD1M stick streams signed SPD like the physical remote: forward is
   // +SPD, backward is -SPD, magnitude proportional to deflection, quantized
   // to 5-unit steps, and center (release) sends SPD0 = transient stop.
+  // The value is clamped to the remote's SAFE joystick range before sending.
   const handleLeftJoy = useCallback((x: number, y: number) => {
     if (!canControl) return
     if (is2wd1m && onSignedDrive) {
@@ -66,8 +109,9 @@ export function DriveControls({
         onSignedDrive(0)
         return
       }
-      const mag = Math.round((Math.min(1, Math.abs(y)) * 255) / 5) * 5
-      onSignedDrive(y < 0 ? mag : -mag)
+      const raw = Math.round((Math.min(1, Math.abs(y)) * 255) / 5) * 5
+      const mag = clampSignedDrive(raw, safetyLimits ?? DEFAULT_SAFETY_LIMITS)
+      onSignedDrive(y < 0 ? -mag : mag)
       return
     }
     // In 2WD1M the left stick only drives motor forward/backward
@@ -75,19 +119,22 @@ export function DriveControls({
       ? (y < -0.25 ? 'F' : y > 0.25 ? 'B' : 'S')
       : joyToDirection(x, y)
     sendDir(d)
-  }, [canControl, is2wd1m, onSignedDrive, sendDir])
+  }, [canControl, is2wd1m, onSignedDrive, sendDir, safetyLimits])
 
   // Right joystick X axis: steers servo in 2WD1M. With ESP-remote parity the
   // deviation from center is clamped to ±steerLimit, so the servo never
   // exceeds the limit the user set (mirrors the remote's Steer field).
+  // The resulting servo angle is also clamped to the remote's safe servo range.
   const handleRightJoy = useCallback((x: number) => {
     if (!canControl || !is2wd1m) return
     let dev = Math.round(-x * 90)
     if (onSignedDrive && steerLimit != null) {
       dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
     }
-    onServo(Math.max(0, Math.min(180, 90 + dev)))
-  }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo])
+    const rawServo = 90 + dev
+    const safeServo = clampServo(rawServo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)
+    onServo(safeServo)
+  }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo, safetyLimits])
 
   return (
     <View className={canControl ? '' : 'opacity-40'}>
@@ -152,21 +199,42 @@ export function DriveControls({
         </View>
       )}
 
-      {/* Speed */}
+      {/* Speed (clamped to the ESP-remote safe PWM/speed ceiling) */}
       {showSpeed && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-4">
           <Text className="text-xs font-bold uppercase tracking-wide text-border">Speed</Text>
-          <Slider value={speed} minimumValue={0} maximumValue={255} step={5} onValueChange={onSpeed} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-          <Text className="mt-1 text-right font-mono text-sm font-bold text-navy">{speed}</Text>
+          <Slider
+            value={clampSpeed(speed, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}
+            minimumValue={0}
+            maximumValue={safetyLimits?.maxSpeed ?? DEFAULT_SAFETY_LIMITS.maxSpeed}
+            step={5}
+            onValueChange={(v: number) => onSpeed(clampSpeed(v, safetyLimits ?? DEFAULT_SAFETY_LIMITS))}
+            disabled={!canControl}
+            minimumTrackTintColor="#1e3a8a"
+            maximumTrackTintColor="#cbd5e1"
+            thumbTintColor="#1e3a8a"
+          />
+          <Text className="mt-1 text-right font-mono text-sm font-bold text-navy">{clampSpeed(speed, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}</Text>
         </View>
       )}
 
-      {/* Servo (only shown when not using joystick, since joystick controls it directly) */}
+      {/* Servo (only shown when not using joystick, since joystick controls it directly).
+          Value is clamped to the ESP-remote safe servo range. */}
       {showServo && !useJoystick && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-4">
           <Text className="text-xs font-bold uppercase tracking-wide text-border">Steering (servo)</Text>
-          <Slider value={servo} minimumValue={0} maximumValue={180} step={5} onValueChange={onServo} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-          <Text className="mt-1 text-right font-mono text-sm font-bold text-navy">{servo}°</Text>
+          <Slider
+            value={clampServo(servo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}
+            minimumValue={Math.max(0, (safetyLimits ?? DEFAULT_SAFETY_LIMITS).servoCenter - (safetyLimits ?? DEFAULT_SAFETY_LIMITS).maxSteerDeviation)}
+            maximumValue={Math.min(180, (safetyLimits ?? DEFAULT_SAFETY_LIMITS).servoCenter + (safetyLimits ?? DEFAULT_SAFETY_LIMITS).maxSteerDeviation)}
+            step={5}
+            onValueChange={(v: number) => onServo(clampServo(v, safetyLimits ?? DEFAULT_SAFETY_LIMITS))}
+            disabled={!canControl}
+            minimumTrackTintColor="#1e3a8a"
+            maximumTrackTintColor="#cbd5e1"
+            thumbTintColor="#1e3a8a"
+          />
+          <Text className="mt-1 text-right font-mono text-sm font-bold text-navy">{clampServo(servo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}°</Text>
         </View>
       )}
 
@@ -211,3 +279,23 @@ export function DriveControls({
     </View>
   )
 }
+
+export type JoystickLayout = {
+  id: string
+  label: string
+  /** Brief hint shown above the joysticks for this layout. */
+  hint: string
+}
+
+export const JOYSTICK_LAYOUTS: JoystickLayout[] = [
+  {
+    id: 'dual',
+    label: 'Dual stick',
+    hint: 'Left drives · Right steers (2WD1M-style separated hands)',
+  },
+  {
+    id: 'dpad',
+    label: 'D-pad',
+    hint: 'Directional buttons for forward/back/left/right/stop',
+  },
+]
