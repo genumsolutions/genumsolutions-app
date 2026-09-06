@@ -1,9 +1,14 @@
 # =====================================================================
-# Sync app version to Supabase release.json on every push to main.
+# Sync app version to Supabase release.json (MANUAL trigger only).
 #
 # This reads the version from app.json (single source of truth) and
 # uploads the manifest to the public Supabase bucket. The website
 # (AppBanner + /app page) and the native app both read this manifest.
+#
+# NOTE: On normal pushes to main, release.yml already uploads the APK
+# + manifest via upload-release.mjs, so an automatic push trigger here
+# would race with that workflow and fail (the APK wouldn't exist yet).
+# Use this workflow for manual / emergency manifest-only syncs.
 #
 # Requires secrets:
 #   SUPABASE_URL              e.g. https://xxxx.supabase.co
@@ -12,11 +17,9 @@
 name: Sync Version to Supabase
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'mobile/app.json'  # Only trigger when version changes
-  workflow_dispatch:         # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only — release.yml already syncs the manifest on push.
+                     # The old push trigger raced with release.yml: sync-version.mjs would
+                     # abort because the APK wasn't uploaded yet (release.yml was still building).
 
 jobs:
   sync-manifest:
