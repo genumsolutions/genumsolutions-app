@@ -1,21 +1,8 @@
 // Shared types for IoT controller sub-components.
 // ToolsScreen holds all state and passes subsets down as props.
-
-// Storage bridge surface so the rest of the app can persist per-device
-// preferences without importing a specific storage package in this file.
-
-/** Runtime storage bridge provided by the app. Until it is set, device memory
-    falls back to in-memory only. */
-let storageBridge: { getPrefs?: (key: string) => string | null | Promise<string | null>; setPrefs?: (key: string, value: string) => void | Promise<void> } | null = null;
-export { storageBridge as deviceMemoryBridge };
-
-export function setDeviceMemoryBridge(bridge: typeof storageBridge): void {
-  storageBridge = bridge ?? null;
-}
-
+import { Platform } from 'react-native';
 import type { CarTelemetry } from '../../services/carProtocol';
 import type { CarMode } from '../../config/roboCarCatalog';
-import { sppService } from '../../services/sppService';
 
 export type SensorData = {
   temperature: number
@@ -80,22 +67,41 @@ export function devicePrefsKey(address: string): string {
   return `genum.device.${address}`
 }
 
-/** Simple per-device storage backend. Uses Platform.OS to decide where
-    preferences are kept; on supported platforms this integrates with the
-    app's existing storage so remembered values survive restarts. */
+/** Minimal shape of the storage backend used for remembered device prefs. */
+type KVStore = {
+  getItem: (key: string) => Promise<string | null>
+  setItem: (key: string, value: string) => Promise<void>
+}
 
-export const deviceMemory = {
-  read: (address: string): DevicePrefs | null => {
+let storagePromise: Promise<KVStore | null> | null = null
+
+/** Lazy-load AsyncStorage once. Kept behind Platform.OS so web builds stay
+    native-free (mirrors how ToolsScreen handled it before). */
+function getStorage(): Promise<KVStore | null> {
+  if (storagePromise) return storagePromise
+  storagePromise = (async () => {
+    if (!(Platform.OS === 'android' || Platform.OS === 'ios')) return null
     try {
-      const key = devicePrefsKey(address)
-      // Prefer the app's existing storage bridge when available.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bridge = (sppService as any).getPrefs
-      if (typeof bridge === 'function') {
-        const raw = bridge(key)
-        if (typeof raw === 'string' && raw.length > 0) {
-          return JSON.parse(raw) as DevicePrefs
-        }
+      const mod = await import('@react-native-async-storage/async-storage')
+      return (mod.default ?? mod) as unknown as KVStore
+    } catch {
+      return null
+    }
+  })()
+  return storagePromise
+}
+
+/** Simple per-device storage backend. Remembered car prefs (speed, mode,
+    steer, trim, joystick, fullscreen) are persisted per Bluetooth address so
+    they survive app restarts; when storage is unavailable the backend falls
+    back to in-memory only (returns null). */
+export const deviceMemory = {
+  read: async (address: string): Promise<DevicePrefs | null> => {
+    try {
+      const storage = await getStorage()
+      const raw = await storage?.getItem(devicePrefsKey(address))
+      if (typeof raw === 'string' && raw.length > 0) {
+        return JSON.parse(raw) as DevicePrefs
       }
       return null
     } catch {
@@ -103,41 +109,15 @@ export const deviceMemory = {
     }
   },
 
-  write: (address: string, prefs: DevicePrefs): void => {
+  write: async (address: string, prefs: DevicePrefs): Promise<void> => {
     try {
-      const key = devicePrefsKey(address)
-      // Prefer the app's existing storage bridge when available.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bridge = (sppService as any).setPrefs
-      if (typeof bridge === 'function') {
-        bridge(key, JSON.stringify(prefs))
-        return
-      }
-      // Fallback placeholder: persist through the app's chosen storage later.
+      const storage = await getStorage()
+      if (!storage) return
+      await storage.setItem(devicePrefsKey(address), JSON.stringify(prefs))
     } catch {
       /* ignore write failures for now */
     }
   },
-}
-
-// Keep legacy ConnectionPanel import paths working until the panel is retired.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export type ConnectionPanelProps = {
-  connected: boolean
-  wifiConnected: boolean
-  deviceName: string
-  scanningBle: boolean
-  connecting: boolean
-  devices: { id: string; name: string }[]
-  wifiUrl: string
-  error: string | null
-  onScan: () => void
-  onConnectBle: (id: string) => void
-  onWifiConnect: () => void
-  onWifiDisconnect: () => void
-  onDisconnect: () => void
-  onSetWifiUrl: (url: string) => void
-  onClearError: () => void
 }
 
 export type ModeChooserProps = {

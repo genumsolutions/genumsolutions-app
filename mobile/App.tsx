@@ -35,6 +35,40 @@ function getActiveRouteName(state: unknown): string | null {
   return route.name ?? null;
 }
 
+// Web linking maps each screen to a URL so the browser back button (and
+// deep links) move exactly one step through the stack instead of resetting
+// to the entry screen. Payment return links (genumsolutions://checkout/*)
+// are intentionally NOT mapped here — handleDeepLink below owns those so the
+// container and the manual listener never navigate to the same screen twice.
+const linking = {
+  prefixes: [Linking.createURL('/'), 'genumsolutions://'],
+  config: {
+    screens: {
+      Main: {
+        screens: {
+          Home: '',
+          Shop: 'shop',
+          Cart: 'cart',
+          Menu: 'menu',
+        },
+      },
+      Account: 'account',
+      ProductDetail: 'product/:id',
+      Services: 'services',
+      Projects: 'projects',
+      Contact: 'contact',
+      About: 'about',
+      Tools: 'tools',
+      CarRemote: 'car/:productId',
+      Admin: 'admin',
+      Journal: 'journal',
+      Printing: 'printing',
+      OpenTools: 'open-tools',
+      Legal: 'legal/:doc',
+    },
+  },
+}
+
 /** Parse a return link like genumsolutions://checkout/success?provider=esewa&order=...&paid=1 */
 function handleDeepLink(url: string) {
   const { hostname, path, queryParams } = Linking.parse(url);
@@ -97,7 +131,7 @@ function Shell() {
   return (
     <View className="flex-1 bg-surface">
       <StatusBar style="light" />
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer ref={navigationRef} linking={linking}>
         <RootNavigator />
       </NavigationContainer>
       <SignInSheet visible={authSheetOpen} onRequestClose={() => setAuthSheetOpen(false)} />

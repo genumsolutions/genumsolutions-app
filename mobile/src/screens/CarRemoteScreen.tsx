@@ -250,8 +250,6 @@ export function CarRemoteScreen({ navigation }: Props) {
     }
     socket.onclose = () => {
       wsLineBufferRef.current = ''
-    }
-    socket.onclose = () => {
       setWifiConnected(false)
       setConnected(false)
       if (wsRef.current === socket) wsRef.current = null

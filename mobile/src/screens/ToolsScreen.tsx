@@ -9,17 +9,16 @@
 // memory so the app remembers last speed/mode/steer/trim/joystick choices.
 // =====================================================================
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Platform, ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRoute, type RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons'
 import { APP_VERSION } from '../config/site';
-import { sppService, type SppDevice, deviceMemoryBridge } from '../services/sppService';
-import { DEFAULT_SAFETY_LIMITS, setDeviceMemoryBridge } from '../components/tools/types';
+import { sppService, type SppDevice } from '../services/sppService';
+import { DEFAULT_SAFETY_LIMITS } from '../components/tools/types';
 import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog';
 import { getCarModes } from '../services/carModeService';
 import { PROJECT_CATEGORIES } from '../config/project-catalog';
 import type { RootStackParamList } from '../navigation/types';
-import { CategoryOverview } from '../components/tools/CategoryOverview';
 import { ModeChooser } from '../components/tools/ModeChooser';
 import { OledDisplay } from '../components/tools/OledDisplay';
 import { DriveControls, JOYSTICK_LAYOUTS, type JoystickLayout } from '../components/tools/DriveControls';
@@ -46,7 +45,6 @@ export function ToolsScreen() {
 
   // ---- Connection state (SPP primary, WiFi secondary) ----
   const [sppDevices, setSppDevices] = useState<SppDevice[]>([])
-  const [ws, setWs] = useState<WebSocket | null>(null)
   const [connected, setConnected] = useState(false)
   const [deviceName, setDeviceName] = useState('')
   const [scanning, setScanning] = useState(false)
@@ -178,8 +176,6 @@ export function ToolsScreen() {
   );
 
   // ---- Mode from car (mode sync) ----
-
-  // ---- Mode from car (mode sync) ----
   const [carModeId, setCarModeId] = useState<string | null>(null)
 
   // ---- Device memory ----
@@ -195,33 +191,10 @@ export function ToolsScreen() {
   const reconnectAttemptsRef = useRef(0)
   const manualCloseRef = useRef(false)
   const lastDriveCmdAtRef = useRef<Record<string, number>>({})
+  const connectionMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES)
-
-  // Prefer the app's chosen storage for remembered device prefs.
-  useEffect(() => {
-    if (!(Platform.OS === 'android' || Platform.OS === 'ios')) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { default: storage } = await import('@react-native-async-storage/async-storage')
-        if (!cancelled) {
-          deviceMemoryBridge.getPrefs = async (key: string) => {
-            const v = await storage.getItem(key)
-            return v ?? null
-          }
-          deviceMemoryBridge.setPrefs = async (key: string, value: string) => {
-            await storage.setItem(key, value).catch(() => {})
-          }
-        }
-      } catch {
-        /* storage not available yet; keep memory-only prefs */
-      }
-    })()
-    return () => { cancelled = true }
-  }, [])
 
   // Load car modes from Supabase (or fallback to bundled)
   useEffect(() => {
@@ -247,22 +220,26 @@ export function ToolsScreen() {
           setSavedPrefs(null)
           return
         }
-        const prefs = deviceMemory.read(addressForMemory)
-        setSavedPrefs(prefs)
-        if (prefs) {
-          if (prefs.modeId && carModes.some((m) => m.id === prefs.modeId)) {
-            setActiveMode(carModes.find((m) => m.id === prefs.modeId)!)
+        let active = true
+        void deviceMemory.read(addressForMemory).then((prefs) => {
+          if (!active) return
+          setSavedPrefs(prefs)
+          if (prefs) {
+            if (prefs.modeId && carModes.some((m) => m.id === prefs.modeId)) {
+              setActiveMode(carModes.find((m) => m.id === prefs.modeId)!)
+            }
+            if (prefs.speed != null) setSpeed(prefs.speed)
+            if (prefs.servo != null) setServo(prefs.servo)
+            if (prefs.steerLimit != null) setSteerLimit(prefs.steerLimit)
+            if (prefs.trim != null) setTrim(prefs.trim)
+            if (prefs.useJoystick != null) setUseJoystick(prefs.useJoystick)
+            if (prefs.fullscreen != null) setFullscreen(prefs.fullscreen)
+            if (prefs.joystickLayout && joystickLayouts.some((l) => l.id === prefs.joystickLayout)) {
+              setJoystickLayout(joystickLayouts.find((l) => l.id === prefs.joystickLayout)!)
+            }
           }
-          if (prefs.speed != null) setSpeed(prefs.speed)
-          if (prefs.servo != null) setServo(prefs.servo)
-          if (prefs.steerLimit != null) setSteerLimit(prefs.steerLimit)
-          if (prefs.trim != null) setTrim(prefs.trim)
-          if (prefs.useJoystick != null) setUseJoystick(prefs.useJoystick)
-          if (prefs.fullscreen != null) setFullscreen(prefs.fullscreen)
-          if (prefs.joystickLayout && joystickLayouts.some((l) => l.id === prefs.joystickLayout)) {
-            setJoystickLayout(joystickLayouts.find((l) => l.id === prefs.joystickLayout)!)
-          }
-        }
+        })
+        return () => { active = false }
       },
       [addressForMemory, carModes, joystickLayouts],
     ),
@@ -285,7 +262,7 @@ export function ToolsScreen() {
         joystickLayout: joystickLayout.id,
         ...patch,
       }
-      deviceMemory.write(addressForMemory, next)
+      void deviceMemory.write(addressForMemory, next)
       setSavedPrefs(next)
     },
     [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, fullscreen, joystickLayout.id],
@@ -302,11 +279,11 @@ export function ToolsScreen() {
   const showConnectionMessage = useCallback((msg: string, type: 'success' | 'error') => {
     setConnectionMessage(msg)
     setConnectionMsgType(type)
-    setTimeout(() => {
-      if (connectionMessage === msg) {
-        setConnectionMessage(null)
-        setConnectionMsgType(null)
-      }
+    if (connectionMsgTimerRef.current) clearTimeout(connectionMsgTimerRef.current)
+    connectionMsgTimerRef.current = setTimeout(() => {
+      setConnectionMessage(null)
+      setConnectionMsgType(null)
+      connectionMsgTimerRef.current = null
     }, 4000)
   }, [])
 
@@ -322,6 +299,10 @@ export function ToolsScreen() {
     return () => {
       mountedRef.current = false
       manualCloseRef.current = true
+      if (connectionMsgTimerRef.current) {
+        clearTimeout(connectionMsgTimerRef.current)
+        connectionMsgTimerRef.current = null
+      }
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
@@ -534,10 +515,10 @@ export function ToolsScreen() {
       clearTimeout(reconnectTimerRef.current)
       reconnectTimerRef.current = null
     }
-    if (ws) { ws.close(); setWs(null) }
+    wsRef.current?.close()
     setWifiConnected(false)
     setError(null)
-  }, [ws])
+  }, [])
 
   const handleDisconnect = useCallback(async () => {
     manualCloseRef.current = true
@@ -549,7 +530,7 @@ export function ToolsScreen() {
     try { await sppService.sendLine('SPD0') } catch { /* ignore */ }
     try { await sppService.sendLine('SERVO90') } catch { /* ignore */ }
     await sppService.disconnect()
-    if (ws) { ws.close(); setWs(null) }
+    wsRef.current?.close()
     setConnected(false)
     setWifiConnected(false)
     setDeviceName('')

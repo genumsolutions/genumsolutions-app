@@ -6,31 +6,32 @@
 //   src/config/site.ts      APP_VERSION (display string)
 //   package.json            "version"
 //   package-lock.json       "version" (root + package entry)
-//   <website>/lib/company.ts  androidApp.version / versionCode / apkUrl
+//
+// The website does NOT get bumped here on purpose: the /app download page
+// reads the LIVE release.json manifest (written only when an upload actually
+// happens), and its bundled fallback must reflect the LAST RELEASED build.
+// After uploading the release, sync the website fallback with:
+//   (website repo) node scripts/sync-app-fallback.mjs
 //
 // Usage:
 //   node scripts/bump-version.mjs <version> <versionCode>
 //   node scripts/bump-version.mjs 1.5.12 20
-//   node scripts/bump-version.mjs --website <path> 1.5.12 20
 //
 // The version/versionCode are written to app.json first, then every derived
-// value is regenerated from them (apkUrl is derived from the version). The
-// website path defaults to the sibling repo on disk and can be overridden.
+// app-side value is regenerated from them.
 // =====================================================================
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..'); // mobile/
-const appRepoDir = resolve(rootDir, '..'); // genumsolutions-app/
 
 // ── Parse args ───────────────────────────────────────────────────────
-let websiteDir = resolve(appRepoDir, '../genumsolutions-website');
 const positionals = [];
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--website' && argv[i + 1]) {
-    websiteDir = resolve(process.cwd(), argv[i + 1]);
+    // Accepted for backwards compatibility but no longer used.
     i++;
   } else {
     positionals.push(argv[i]);
@@ -38,7 +39,6 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (positionals.length < 2) {
   console.error('Usage: node scripts/bump-version.mjs <version> <versionCode>');
-  console.error('       node scripts/bump-version.mjs --website <path> 1.5.x <code>');
   process.exit(1);
 }
 const VERSION = positionals[0];
@@ -96,17 +96,11 @@ if (lock.packages?.['']) lock.packages[''].version = VERSION;
 writeJson(lockPath, lock);
 changed = true;
 
-// 4) website lib/company.ts -> androidApp
-const companyPath = resolve(websiteDir, 'lib/company.ts');
-const apkUrl = `https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/genum-solutions-${VERSION}.apk`;
-changed =
-  editFile(companyPath, (src) =>
-    src
-      .replace(/version: '\d+\.\d+\.\d+',/, `version: '${VERSION}',`)
-      .replace(/versionCode: \d+,/, `versionCode: ${VERSION_CODE},`)
-      .replace(/genum-solutions-\d+\.\d+\.\d+\.apk/, `genum-solutions-${VERSION}.apk`),
-  ) || changed;
-console.log(`  website company.ts  -> ${VERSION} (${VERSION_CODE})`);
-
-console.log('Version bumped. Commit + push app (and website) repos with:');
+// 4) website lib/company.ts androidApp (fallback) is intentionally NOT bumped
+//    here. Bumping it in advance made /app advertise a version whose APK wasn't
+//    uploaded yet. The live manifest drives the site; after a release upload,
+//    sync the fallback with the website repo's scripts/sync-app-fallback.mjs.
+console.log('Version bumped. Commit + push the app repo with:');
 console.log('  git add -A && git commit -m "chore: bump app version to ..." && git push origin main');
+console.log('After the release uploads, sync the website fallback:');
+console.log('  (genumsolutions-website) node scripts/sync-app-fallback.mjs');
