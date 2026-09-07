@@ -18,6 +18,8 @@ type PlatformPagerProps = {
   offscreenPageLimit?: number;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
+  /** Web has no physical swipe; accepted for API parity with the native pager. */
+  scrollEnabled?: boolean;
 };
 
 export const PlatformPager = forwardRef<PlatformPagerRef, PlatformPagerProps>(

@@ -9,6 +9,7 @@
 // =====================================================================
 // @ts-ignore
 import { BleManager } from '@sfourdrinier/react-native-ble-plx'
+import { PermissionsAndroid, Platform } from 'react-native'
 import {
   parseTelemetryLine as parseLine,
   buildCalibration,
@@ -124,32 +125,63 @@ class BleService {
 
   /** Scan for BLE devices for `seconds` duration. Returns discovered devices. */
   async scan(seconds: number = 10): Promise<BleDevice[]> {
-    return new Promise((resolve, reject) => {
-      const devices: BleDevice[] = []
+    const granted = await this.requestScanPermissions()
+    if (!granted) {
+      throw new Error('Bluetooth permission needed. Allow Bluetooth access and try again.')
+    }
 
-      const listener = (error: Error, device: { id: string; name: string; adData?: { rssi: number } }) => {
-        if (device.name && !devices.find((d) => d.id === device.id)) {
-          devices.push({ id: device.id, name: device.name, rssi: device.adData?.rssi ?? -127 })
-        }
+    const mgr = this.getManager()
+    const devices: BleDevice[] = []
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+
+      const done = (err?: Error) => {
+        if (settled) return
+        settled = true
+        if (timer) clearTimeout(timer)
+        mgr.stopDeviceScan().catch(() => {})
+        if (err) reject(err)
+        else resolve(devices)
       }
 
-      const mgr = this.getManager()
-      mgr.onDeviceDiscover(listener)
-      mgr.startDeviceScan(null, { allowDuplicates: false }, (error: Error) => {
-        mgr.removeListener('DeviceDiscover', listener)
-        mgr.stopDeviceScan()
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(devices)
-      })
+      // ble-plx calls the scan listener once PER discovered device with
+      // (error, device). Accumulate for the full `seconds` window.
+      mgr
+        .startDeviceScan(null, { allowDuplicates: false }, (error: Error | null, device: any) => {
+          if (error || !device) {
+            done(error ?? undefined)
+            return
+          }
+          const name = device.name || device.localName
+          if (name && !devices.find((d) => d.id === device.id)) {
+            devices.push({ id: device.id, name, rssi: device.rssi ?? -127 })
+          }
+        })
+        .catch((e: Error) => done(e))
 
-      setTimeout(() => {
-        mgr.stopDeviceScan()
-        resolve(devices)
-      }, seconds * 1000)
+      timer = setTimeout(() => done(), seconds * 1000)
     })
+  }
+
+  /** Android 12+ needs BLUETOOTH_SCAN/CONNECT granted at runtime before any
+   *  scan/connect call; older Android needs location for discovery. */
+  private async requestScanPermissions(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true
+    try {
+      const list =
+        Platform.Version >= 31
+          ? [
+              PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+              PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            ]
+          : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION]
+      const results = await PermissionsAndroid.requestMultiple(list)
+      return list.every((p) => results[p] === PermissionsAndroid.RESULTS.GRANTED)
+    } catch {
+      return false
+    }
   }
 
   /** Connect to a device by ID and discover the UART service/characteristics. */

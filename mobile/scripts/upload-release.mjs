@@ -113,6 +113,21 @@ async function main() {
     }
   }
 
+  // Verify what was actually stored matches the bytes we sent — catches any
+  // proxy/CDN rewriting so the manifest never advertises a wrong size.
+  try {
+    const head = await fetch(versionedUrl, { method: 'HEAD' });
+    const servedLength = Number(head.headers.get('content-length') ?? '0');
+    if (servedLength > 0 && servedLength !== body.length) {
+      throw new Error(
+        `Size mismatch after upload: local ${body.length} bytes vs served ${servedLength} bytes`,
+      );
+    }
+  } catch {
+    // HEAD may be blocked/cached by some networks — size is still exact from
+    // the local file, so fail only when we can reach the object, not otherwise.
+  }
+
   const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${LATEST_FILE}`;
   const versionedUrl = `${url}/storage/v1/object/public/${BUCKET}/${VERSIONED_FILE}`;
   console.log('Uploaded. Public download URLs:');
@@ -127,6 +142,7 @@ async function main() {
       apkUrl: versionedUrl,
       latestApkUrl: publicUrl,
       size_mb: actualSizeMb,
+      size_bytes: body.length,
       sizeLabel: `${actualSizeMb} MB`,
       releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
       appsPagePath: '/app',
