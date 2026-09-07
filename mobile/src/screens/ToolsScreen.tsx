@@ -705,8 +705,12 @@ export function ToolsScreen() {
         {/* Connection status bar with immediate SPP status */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
-            {/* Status dot - immediate feedback */}
-            <View className={`h-2.5 w-2.5 rounded-full ${sppStatus === 'connected' || sppStatus === 'connecting' ? 'bg-accent animate-pulse' : 'bg-border'}`} />
+            {/* Status dot - immediate feedback. NOTE: must NOT toggle an animate-*
+                Tailwind class here: react-native-css-interop calls useAnimatedStyle()
+                conditionally when a View gains an animation utility after its first
+                render, which crashes with "Rendered more hooks than during the
+                previous render". The colour alone communicates the state. */}
+            <View className={`h-2.5 w-2.5 rounded-full ${sppStatus === 'connected' || sppStatus === 'connecting' ? 'bg-accent' : 'bg-border'}`} />
             <Text className="text-sm font-bold text-ink">
               {sppStatus === 'connected' ? `SPP Connected · ${deviceName}` :
                sppStatus === 'connecting' ? `SPP Connecting…` :
