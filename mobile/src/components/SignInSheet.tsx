@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabaseConfigured, googleConfigured } from '../config/supabase';
 import { useApp } from '../context/AppContext';
+import { GoogleLogo } from './GoogleLogo';
 
 type Props = {
   visible: boolean;
@@ -277,7 +278,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   ) : (
                     <>
                       <View className="h-5 w-5 items-center justify-center">
-                        <Text className="text-base font-black leading-none text-[#4285F4]">G</Text>
+                        <GoogleLogo size={20} />
                       </View>
                       <Text className="ml-2.5 text-sm font-bold text-ink">Continue with Google</Text>
                     </>

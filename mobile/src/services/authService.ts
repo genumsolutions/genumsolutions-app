@@ -101,6 +101,23 @@ export async function resetPassword(email: string): Promise<void> {
 // ---------------------------------------------------------------------
 // Google
 // ---------------------------------------------------------------------
+
+/**
+ * Clear the native Google account cached by GoogleSignin so the next
+ * signIn() always presents the account chooser. Without this, the native
+ * layer silently reuses the last signed-in Google account (even across app
+ * restarts), so signing in again never lets the user pick a different id.
+ */
+async function clearCachedGoogleAccount(): Promise<void> {
+  try {
+    if (GoogleSignin.hasPreviousSignIn()) {
+      await GoogleSignin.signOut();
+    }
+  } catch {
+    // No native Google session to clear - the chooser will appear anyway.
+  }
+}
+
 export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
     return { status: 'error', message: mapAuthError('not configured') };
@@ -115,6 +132,9 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   try {
     GoogleSignin.configure({ webClientId: googleWebClientId });
     await GoogleSignin.hasPlayServices();
+    // Drop any cached native account first so signIn() shows the account
+    // picker instead of instantly reusing the last signed-in Google id.
+    await clearCachedGoogleAccount();
     const response = await GoogleSignin.signIn();
     if (response.data?.idToken) {
       const { data, error } = await supabase.auth.signInWithIdToken({
@@ -180,6 +200,10 @@ export async function clearStoredSession(): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
+  // Clear the native Google cached account too, so a later sign-in via
+  // Google always prompts for which account to use rather than restoring
+  // the last one automatically.
+  await clearCachedGoogleAccount();
   await supabase.auth.signOut();
   await clearStoredSession();
 }
