@@ -93,7 +93,10 @@ async function main() {
   await ensureBucket(url, serviceKey);
 
   const body = readFileSync(apkPath);
-  const actualSizeMb = +(body.length / 1024 / 1024).toFixed(1);
+  const sizeBytes = body.length;
+  // Decimal MB (1,000,000 bytes) — matches what download managers, browsers,
+  // Google Play and file explorers show. Never 1024-based "MiB" labels.
+  const actualSizeMb = +(sizeBytes / 1_000_000).toFixed(1);
   // Upload as both versioned and latest filenames
   for (const fileName of [VERSIONED_FILE, LATEST_FILE]) {
     console.log(`Uploading ${apkPath} (${actualSizeMb} MB) to ${BUCKET}/${fileName} ...`);
@@ -142,7 +145,7 @@ async function main() {
       apkUrl: versionedUrl,
       latestApkUrl: publicUrl,
       size_mb: actualSizeMb,
-      size_bytes: body.length,
+      size_bytes: sizeBytes,
       sizeLabel: `${actualSizeMb} MB`,
       releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
       appsPagePath: '/app',
