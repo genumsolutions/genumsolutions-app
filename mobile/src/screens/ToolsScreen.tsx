@@ -802,6 +802,7 @@ export function ToolsScreen() {
                     data={sppDevices}
                     keyExtractor={(d) => d.address}
                     className="mt-3 max-h-48"
+                    nestedScrollEnabled
                     renderItem={({ item }) => (
                       <Pressable
                         onPress={() => handleConnect(item)}

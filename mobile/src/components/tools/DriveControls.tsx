@@ -70,8 +70,6 @@ export function DriveControls({
   onSignedDrive, steerLimit,
   safetyLimits,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
-  if (isDrone) return null
-
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
   const showServo = activeMode.controls.includes('drive-2wd1m')
   const showPid = activeMode.controls.includes('pid-auto')
@@ -135,6 +133,8 @@ export function DriveControls({
     const safeServo = clampServo(rawServo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)
     onServo(safeServo)
   }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo, safetyLimits])
+
+  if (isDrone) return null
 
   return (
     <View className={canControl ? '' : 'opacity-40'}>

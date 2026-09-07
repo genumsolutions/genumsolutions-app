@@ -56,6 +56,7 @@ export function ConnectionPanel({
               data={devices}
               keyExtractor={(d) => d.id}
               className="mt-2 max-h-32"
+              nestedScrollEnabled
               renderItem={({ item }) => (
                 <Pressable
                   onPress={() => onConnectBle(item.id)}
