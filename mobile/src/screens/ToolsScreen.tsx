@@ -106,8 +106,10 @@ export function ToolsScreen() {
   const [locked, setLocked] = useState(false)
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
 
-  // Fullscreen OLED mirror as a function so it can access isDrone/isNonRobocar
-  const renderFullscreenOled = (isDrone: boolean, isNonRobocar: boolean) => (
+  // Fullscreen dashboard: OLED mirror (compact) + the WHOLE control deck
+  // (dual d-pads / dual joysticks, speed, extras, sensors) so the user can
+  // drive from a full-screen remote.
+  const renderFullscreenDashboard = (isDrone: boolean, isNonRobocar: boolean) => (
     <View className="flex-1 bg-slate-900 pt-12">
       {/* Small top chrome for fullscreen mode */}
       <View className="flex-row items-center justify-between px-4">
@@ -133,12 +135,13 @@ export function ToolsScreen() {
         </View>
       </View>
 
-      {/* OLED mirror in the center of the fullscreen view */}
-      <View className="flex-1 items-center justify-center">
+      {/* Full dashboard scrolls under the chrome */}
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        {/* OLED mirror */}
         <OledDisplay
-          connected={true}
-          wifiConnected={false}
-          deviceName={sppService.deviceName ?? deviceName ?? ''}
+          connected={connected}
+          wifiConnected={wifiConnected}
+          deviceName={deviceName}
           activeMode={activeMode}
           speed={speed}
           servo={servo}
@@ -150,28 +153,78 @@ export function ToolsScreen() {
           telemetry={telemetry}
           isDrone={isDrone}
           isNonRobocar={isNonRobocar}
-          linkKind="spp"
+          linkKind={connected ? 'spp' : wifiConnected ? 'wifi' : undefined}
         />
-      </View>
 
-      {/* Joystick-type changer for fullscreen remote */}
-      <View className="flex-row items-center justify-center gap-3 pb-8">
-        {joystickLayouts.map((layout: JoystickLayout) => (
-          <Pressable
-            key={layout.id}
-            onPress={() => {
-              setJoystickLayout(layout)
-              setUseJoystick(layout.id === 'dual')
-              persistPrefs({ joystickLayout: layout.id, useJoystick: layout.id === 'dual' })
-            }}
-            className={`rounded-full px-4 py-2 ${joystickLayout.id === layout.id ? 'bg-navy' : 'bg-slate-700'}`}
-          >
-            <Text className={`text-sm font-bold ${joystickLayout.id === layout.id ? 'text-white' : 'text-slate-200'}`}>
-              {layout.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+        {/* Control-mode changer */}
+        <View className="mt-4 flex-row items-center justify-center gap-3">
+          {joystickLayouts.map((layout: JoystickLayout) => (
+            <Pressable
+              key={layout.id}
+              onPress={() => {
+                setJoystickLayout(layout)
+                setUseJoystick(layout.id === 'dual')
+                persistPrefs({ joystickLayout: layout.id, useJoystick: layout.id === 'dual' })
+              }}
+              className={`rounded-full px-4 py-2 ${joystickLayout.id === layout.id ? 'bg-navy' : 'bg-slate-700'}`}
+            >
+              <Text className={`text-sm font-bold ${joystickLayout.id === layout.id ? 'text-white' : 'text-slate-200'}`}>
+                {layout.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Whole control deck */}
+        <View className="mt-4">
+          <DriveControls
+            canControl={canControl}
+            isDrone={isDrone}
+            activeMode={activeMode}
+            speed={speed}
+            servo={servo}
+            pidKp={pidKp}
+            pidKi={pidKi}
+            pidKd={pidKd}
+            pidOut={pidOut}
+            pidOff={pidOff}
+            useJoystick={useJoystick}
+            onDirection={handleDirection}
+            onSpeed={handleSpeed}
+            onServo={handleServo}
+            onPid={applyPid}
+            onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
+            steerLimit={is2wd1mActive ? steerLimit : undefined}
+            onRun={() => { sendCommand(activeMode.token); setDriveStatus(`${activeMode.token} running`) }}
+            onStop={() => { sendCommand('BT'); setDriveStatus('BT manual · stopped') }}
+            onEStop={is2wd1mActive ? handleEStop : undefined}
+            safetyLimits={safetyLimits}
+          />
+
+          {/* 2WD1M extras (max steering limit + trim only) */}
+          {activeCategory === 'robocar' && is2wd1mActive && (
+            <TwoWd1mExtras
+              canControl={canControl}
+              steerLimit={steerLimit}
+              trim={trim}
+              onAdjustSteerLimit={adjustSteerLimit}
+              onAdjustTrim={adjustTrim}
+            />
+          )}
+
+          {/* Sensor grid + relays */}
+          <SensorGrid
+            canControl={canControl}
+            isDrone={isDrone}
+            isNonRobocar={isNonRobocar}
+            activeCategory={activeCategory}
+            sensorData={sensorData}
+            relays={relays}
+            telemetry={telemetry}
+            onToggleRelay={toggleRelay}
+          />
+        </View>
+      </ScrollView>
     </View>
   );
 
@@ -1024,7 +1077,7 @@ export function ToolsScreen() {
       )}
       {fullscreen && (
         <View className="absolute inset-0 bg-slate-900 pointer-events-auto">
-          {renderFullscreenOled(isDrone, isNonRobocar)}
+          {renderFullscreenDashboard(isDrone, isNonRobocar)}
           {/* Exit button for fullscreen */}
           <Pressable
             onPress={() => setFullscreen(false)}

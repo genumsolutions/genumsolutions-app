@@ -9,6 +9,7 @@ import {
   BackHandler,
   FlatList,
   Image,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -164,6 +165,12 @@ export function AdminScreen() {
   // Editing
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null)
   const [editingService, setEditingService] = useState<AdminService | null>(null)
+  const [editingProject, setEditingProject] = useState<AdminProduct | null>(null)
+  // Settings editors (company inputs, training programs, pilot costs,
+  // curriculum highlights) report their editing state through this flag —
+  // it is owned here so the admin pager can disable swiping while ANY
+  // Settings item is being edited.
+  const [settingsEditing, setSettingsEditing] = useState(false)
 
   // Admin editor BackHandler: when an inline editor is open (product/service/
   // journal) on the CURRENT tab, Android Back should close the editor instead
@@ -179,6 +186,8 @@ export function AdminScreen() {
   const editorOnCurrentTab =
     (tab === 'Products' && editingProduct != null) ||
     (tab === 'Services' && editingService != null) ||
+    (tab === 'Projects' && editingProject != null) ||
+    (tab === 'Settings' && settingsEditing) ||
     (tab === 'Journal' && journalOpen)
 
   useEffect(() => {
@@ -198,8 +207,18 @@ export function AdminScreen() {
         setEditingService(null)
         return true // consumed
       }
+      if (tab === 'Projects' && editingProject != null) {
+        setEditingProject(null)
+        return true // consumed
+      }
       if (tab === 'Journal' && journalOpen) {
         setJournalOpen(false)
+        return true // consumed
+      }
+      if (tab === 'Settings' && settingsEditing) {
+        // Settings editors hold their own local state; Back just dismisses
+        // the keyboard (company fields) so the pager can swipe again.
+        Keyboard.dismiss()
         return true // consumed
       }
       return false
@@ -209,7 +228,7 @@ export function AdminScreen() {
       sub.remove()
       setBackHandlerRef(null)
     }
-  }, [tab, editingProduct != null, editingService != null, journalOpen])
+  }, [tab, editingProduct != null, editingService != null, editingProject != null, settingsEditing, journalOpen])
 
   useEffect(() => {
     void loadTab()
@@ -578,6 +597,10 @@ export function AdminScreen() {
           <ProjectTab
             title="Projects"
             products={products.filter(isProjectPackage)}
+            editing={editingProject}
+            onChange={setEditingProject}
+            onEdit={setEditingProject}
+            onNew={() => setEditingProject(blankProjectProduct())}
             onSaveProduct={saveProduct}
             onDelete={handleDeleteProduct}
             onToggleActive={(p) => void handleToggleProductActive(p)}
@@ -717,6 +740,7 @@ export function AdminScreen() {
               await deleteAdminCurriculumHighlight(id)
               setCurriculumHighlights(await listAdminCurriculumHighlights())
             }}
+            onEditingChange={setSettingsEditing}
           />
         )
     }
@@ -1047,12 +1071,13 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
   )
 }
 
-function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }: {
-  title: string; products: AdminProduct[]; onSaveProduct: (p: AdminProduct) => Promise<boolean>; onDelete: (id: string) => void;
+function ProjectTab({ title, products, editing, onChange, onEdit, onNew, onSaveProduct, onDelete, onToggleActive }: {
+  title: string; products: AdminProduct[];
+  editing: AdminProduct | null; onChange: (p: AdminProduct | null) => void; onEdit: (p: AdminProduct) => void; onNew: () => void;
+  onSaveProduct: (p: AdminProduct) => Promise<boolean>; onDelete: (id: string) => void;
   onToggleActive: (p: AdminProduct) => void;
 }) {
-  const [editing, setEditing] = useState<AdminProduct | null>(null)
-  const [isNew, setIsNew] = useState(false)
+  const isNew = editing ? !products.some((p) => p.id === editing.id) : false
   const [category, setCategory] = useState('All')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -1075,9 +1100,9 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
       <View className="flex-1">
         <ProductEditor
           product={editing}
-          onChange={setEditing}
-          onSave={() => { void onSaveProduct(editing).then((saved) => { if (saved) { setEditing(null); setIsNew(false) } }) }}
-          onCancel={() => { setEditing(null); setIsNew(false) }}
+          onChange={onChange}
+          onSave={() => { void onSaveProduct(editing).then((saved) => { if (saved) onChange(null) }) }}
+          onCancel={() => onChange(null)}
           isNew={isNew}
           categoryOptions={categories.filter((c) => c !== 'All')}
         />
@@ -1108,7 +1133,7 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
               </View>
               <TextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, id…" className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink" />
               <Pressable
-                onPress={() => { setEditing(blankProjectProduct()); setIsNew(true) }}
+                onPress={onNew}
                 className="shrink-0 rounded-full bg-navy px-4 py-2"
               >
                 <Text className="text-xs font-black text-white">+ New project</Text>
@@ -1128,7 +1153,7 @@ function ProjectTab({ title, products, onSaveProduct, onDelete, onToggleActive }
               <Text className="mt-1 text-xs leading-5 text-muted" numberOfLines={3}>{item.description || item.note}</Text>
               {!item.active && <Text className="mt-1 text-[10px] font-black uppercase text-red-500">Hidden from customers</Text>}
             <View className="mt-3 flex-row flex-wrap gap-2">
-              <AdminAction onPress={() => setEditing(item)} label="Edit" tone="navy" />
+              <AdminAction onPress={() => onEdit(item)} label="Edit" tone="navy" />
                 <AdminAction onPress={() => setPreview(item)} label="Preview" tone="plain" />
                 <AdminAction onPress={() => onToggleActive(item)} label={item.active ? 'Hide' : 'Show'} tone="plain" />
                 <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />
@@ -1866,7 +1891,7 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
 
 // ─── Settings (company info + programs) ─────────────────────────────
 
-function SettingsTab({ company, setCompany, trainingPrograms, setTrainingPrograms, pilotCostLines, setPilotCostLines, curriculumHighlights, setCurriculumHighlights, onCompanySaved, onSaveProgram, onDeleteProgram, onSavePilotLine, onDeletePilotLine, onSaveCurriculum, onDeleteCurriculum }: {
+function SettingsTab({ company, setCompany, trainingPrograms, setTrainingPrograms, pilotCostLines, setPilotCostLines, curriculumHighlights, setCurriculumHighlights, onCompanySaved, onSaveProgram, onDeleteProgram, onSavePilotLine, onDeletePilotLine, onSaveCurriculum, onDeleteCurriculum, onEditingChange }: {
   company: AdminCompanyInfo | null; setCompany: (c: AdminCompanyInfo | null) => void
   trainingPrograms: AdminTrainingProgram[]; setTrainingPrograms: (p: AdminTrainingProgram[]) => void
   pilotCostLines: AdminPilotCostLine[]; setPilotCostLines: (p: AdminPilotCostLine[]) => void
@@ -1878,21 +1903,35 @@ function SettingsTab({ company, setCompany, trainingPrograms, setTrainingProgram
   onDeletePilotLine: (id: string) => void
   onSaveCurriculum: (c: AdminCurriculumHighlight, isNew: boolean) => void
   onDeleteCurriculum: (id: string) => void
+  onEditingChange: (v: boolean) => void
 }) {
   const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
+
+  // Aggregate the 4 Settings editors (company fields + the three item
+  // managers) into ONE flag so the admin pager disables swiping while any
+  // item is being edited. Each child reports its own idempotent flag.
+  const activeEditorsRef = useRef<Record<string, boolean>>({})
+  const [anyEditing, setAnyEditing] = useState(false)
+  const report = useCallback((key: string) => (isEditing: boolean) => {
+    activeEditorsRef.current[key] = isEditing
+    setAnyEditing(Object.values(activeEditorsRef.current).some(Boolean))
+  }, [])
+  useEffect(() => {
+    onEditingChange(anyEditing)
+  }, [anyEditing, onEditingChange])
 
   return (
     <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text className="font-display text-2xl font-bold tracking-tight text-ink">Settings</Text>
       <Text className="mt-1 text-xs text-muted">Company details, training programs, pilot costs, and curriculum highlights — all DB-first (shared with the website).</Text>
 
-      <CompanyInfoEditor company={company} setCompany={setCompany} onSaved={onCompanySaved} inputClass={inputClass} />
+      <CompanyInfoEditor company={company} setCompany={setCompany} onSaved={onCompanySaved} inputClass={inputClass} onEditingChange={report('company')} />
 
-      <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} onDelete={onDeleteProgram} inputClass={inputClass} />
+      <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} onDelete={onDeleteProgram} inputClass={inputClass} onEditingChange={report('programs')} />
 
-      <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} onDelete={onDeletePilotLine} inputClass={inputClass} />
+      <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} onDelete={onDeletePilotLine} inputClass={inputClass} onEditingChange={report('pilot')} />
 
-      <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} onDelete={onDeleteCurriculum} inputClass={inputClass} />
+      <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} onDelete={onDeleteCurriculum} inputClass={inputClass} onEditingChange={report('curriculum')} />
     </ScrollView>
   )
 }
@@ -1907,13 +1946,26 @@ function SectionCard({ title, hint, children }: { title: string; hint?: string; 
   )
 }
 
-function CompanyInfoEditor({ company, setCompany, onSaved, inputClass }: {
+function CompanyInfoEditor({ company, setCompany, onSaved, inputClass, onEditingChange }: {
   company: AdminCompanyInfo | null; setCompany: (c: AdminCompanyInfo | null) => void
   onSaved: (next: AdminCompanyInfo) => void; inputClass: string
+  onEditingChange: (v: boolean) => void
 }) {
   const [saved, setSaved] = useState(false)
   function patch(part: Partial<AdminCompanyInfo>) {
     if (company) setCompany({ ...company, ...part })
+  }
+  // While ANY company field is focused the admin pager must not swipe.
+  const focusCount = useRef(0)
+  const field = {
+    onFocus: () => {
+      focusCount.current += 1
+      onEditingChange(true)
+    },
+    onBlur: () => {
+      focusCount.current = Math.max(0, focusCount.current - 1)
+      if (focusCount.current === 0) onEditingChange(false)
+    },
   }
   return (
     <SectionCard title="Company information" hint="Shown in the app Contact/Legal screens and the website footer/contact pages.">
@@ -1924,47 +1976,47 @@ function CompanyInfoEditor({ company, setCompany, onSaved, inputClass }: {
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
-              <TextInput value={company.name} onChangeText={(name) => patch({ name })} className={inputClass} />
+              <TextInput value={company.name} onChangeText={(name) => patch({ name })} {...field} className={inputClass} />
             </View>
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">Short name</Text>
-              <TextInput value={company.shortName} onChangeText={(shortName) => patch({ shortName })} className={inputClass} />
+              <TextInput value={company.shortName} onChangeText={(shortName) => patch({ shortName })} {...field} className={inputClass} />
             </View>
           </View>
           <Text className="mb-1 text-xs font-bold text-muted">Address</Text>
-          <TextInput value={company.address} onChangeText={(address) => patch({ address })} multiline className={`mb-3 ${inputClass}`} />
+          <TextInput value={company.address} onChangeText={(address) => patch({ address })} multiline {...field} className={`mb-3 ${inputClass}`} />
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">City</Text>
-              <TextInput value={company.city} onChangeText={(city) => patch({ city })} className={inputClass} />
+              <TextInput value={company.city} onChangeText={(city) => patch({ city })} {...field} className={inputClass} />
             </View>
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">Country</Text>
-              <TextInput value={company.country} onChangeText={(country) => patch({ country })} className={inputClass} />
+              <TextInput value={company.country} onChangeText={(country) => patch({ country })} {...field} className={inputClass} />
             </View>
           </View>
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">Email</Text>
-              <TextInput value={company.email} onChangeText={(email) => patch({ email })} autoCapitalize="none" keyboardType="email-address" className={inputClass} />
+              <TextInput value={company.email} onChangeText={(email) => patch({ email })} autoCapitalize="none" keyboardType="email-address" {...field} className={inputClass} />
             </View>
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">Phone</Text>
-              <TextInput value={company.phone} onChangeText={(phone) => patch({ phone })} keyboardType="phone-pad" className={inputClass} />
+              <TextInput value={company.phone} onChangeText={(phone) => patch({ phone })} keyboardType="phone-pad" {...field} className={inputClass} />
             </View>
           </View>
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">PAN</Text>
-              <TextInput value={company.pan} onChangeText={(pan) => patch({ pan })} className={inputClass} />
+              <TextInput value={company.pan} onChangeText={(pan) => patch({ pan })} {...field} className={inputClass} />
             </View>
             <View className="flex-1">
               <Text className="mb-1 text-xs font-bold text-muted">VAT label</Text>
-              <TextInput value={company.vatLabel} onChangeText={(vatLabel) => patch({ vatLabel })} className={inputClass} />
+              <TextInput value={company.vatLabel} onChangeText={(vatLabel) => patch({ vatLabel })} {...field} className={inputClass} />
             </View>
           </View>
           <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
-          <TextInput value={company.description} onChangeText={(description) => patch({ description })} multiline style={{ textAlignVertical: 'top' }} className={`mb-3 min-h-20 ${inputClass}`} />
+          <TextInput value={company.description} onChangeText={(description) => patch({ description })} multiline style={{ textAlignVertical: 'top' }} {...field} className={`mb-3 min-h-20 ${inputClass}`} />
           <View className="flex-row items-center gap-3">
             <Pressable onPress={() => { onSaved(company); setSaved(true) }} className="rounded-full bg-navy px-5 py-2">
               <Text className="text-xs font-black text-white">Save company</Text>
@@ -1977,12 +2029,14 @@ function CompanyInfoEditor({ company, setCompany, onSaved, inputClass }: {
   )
 }
 
-function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inputClass }: {
+function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inputClass, onEditingChange }: {
   programs: AdminTrainingProgram[]; setPrograms: (p: AdminTrainingProgram[]) => void
   onSave: (p: AdminTrainingProgram, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+  onEditingChange: (v: boolean) => void
 }) {
   const [editing, setEditing] = useState<AdminTrainingProgram | null>(null)
   const [preview, setPreview] = useState<AdminTrainingProgram | null>(null)
+  useEffect(() => { onEditingChange(editing != null) }, [editing != null])
   function blank(): AdminTrainingProgram {
     return { id: '', title: '', audience: '', description: '', duration: '', outcome: '', active: true, sortOrder: 0 }
   }
@@ -2073,12 +2127,14 @@ function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inpu
   )
 }
 
-function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass }: {
+function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass, onEditingChange }: {
   lines: AdminPilotCostLine[]; setLines: (p: AdminPilotCostLine[]) => void
   onSave: (p: AdminPilotCostLine, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+  onEditingChange: (v: boolean) => void
 }) {
   const [editing, setEditing] = useState<AdminPilotCostLine | null>(null)
   const [preview, setPreview] = useState<AdminPilotCostLine | null>(null)
+  useEffect(() => { onEditingChange(editing != null) }, [editing != null])
   function blank(): AdminPilotCostLine {
     return { id: '', item: '', cost: '', note: '', active: true, sortOrder: 0 }
   }
@@ -2162,12 +2218,14 @@ function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass }: {
   )
 }
 
-function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputClass }: {
+function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputClass, onEditingChange }: {
   highlights: AdminCurriculumHighlight[]; setHighlights: (c: AdminCurriculumHighlight[]) => void
   onSave: (c: AdminCurriculumHighlight, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+  onEditingChange: (v: boolean) => void
 }) {
   const [editing, setEditing] = useState<AdminCurriculumHighlight | null>(null)
   const [preview, setPreview] = useState<AdminCurriculumHighlight | null>(null)
+  useEffect(() => { onEditingChange(editing != null) }, [editing != null])
   function blank(): AdminCurriculumHighlight {
     return { id: '', ageBand: '', items: [], active: true, sortOrder: 0 }
   }
