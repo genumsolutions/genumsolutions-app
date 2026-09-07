@@ -570,6 +570,13 @@ export function ToolsScreen() {
 
   const sendThrottled = useCallback((kind: string, cmd: string) => {
     const now = Date.now()
+    // Stop lines (S / SPD0 / SERVO90) always go out immediately so the car
+    // stops the instant a button is released — never swallowed by the pump.
+    if (cmd === 'S' || cmd === 'SPD0' || cmd === 'SERVO90') {
+      sendCommand(cmd)
+      lastDriveCmdAtRef.current[kind] = now
+      return
+    }
     const last = lastDriveCmdAtRef.current[kind] ?? 0
     if (now - last < DRIVE_CMD_MIN_INTERVAL_MS) return
     lastDriveCmdAtRef.current[kind] = now
@@ -605,7 +612,7 @@ export function ToolsScreen() {
 
   const adjustSteerLimit = useCallback((delta: number) => {
     setSteerLimit((prev) => {
-      const next = Math.max(0, Math.min(safetyLimits.maxSteerDeviation * 2, prev + delta))
+      const next = Math.max(0, Math.min(safetyLimits.maxSteerDeviation, prev + delta))
       persistPrefs({ steerLimit: next })
       return next
     })
@@ -660,9 +667,11 @@ export function ToolsScreen() {
   const handleGimbalTilt = useCallback((value: number) => { setGimbalTilt(value); sendCommand(`GIMBAL_TILT:${Math.round(value)}`) }, [sendCommand])
   const handleAltitude = useCallback((value: number) => { setTargetAltitude(value); sendCommand(`ALT:${Math.round(value)}`) }, [sendCommand])
 
-  // Determine transport based on mode
-  const useSpp = activeMode.transport.includes('classic-bt') && sppSupported
-  const useWifi = activeMode.transport.includes('wifi')
+  // Determine transport based on mode. Both communication cards are ALWAYS
+  // shown in the dashboard (split into two screens); the one the active mode
+  // does not use is rendered "dull" (dimmed + disabled + hint).
+  const usesBtComm = activeMode.transport.includes('classic-bt') || activeMode.transport.includes('ble')
+  const usesWifi = activeMode.transport.includes('wifi')
   const canControl = connected || wifiConnected
 
   const isDrone = activeCategory === 'drones'
@@ -754,17 +763,25 @@ export function ToolsScreen() {
           </View>
         )}
 
-        {/* SPP Scan + Connect */}
-        {useSpp && (
-          <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
-            <View className="flex-row items-center gap-2">
-              <Feather name="bluetooth" size={16} color="#1e3a8a" />
-              <Text className="text-sm font-bold text-ink">Classic Bluetooth (SPP)</Text>
-            </View>
-            <Text className="mt-1 text-xs leading-5 text-muted">
-              Scan and connect to ESP32 cars. Pairs like the ESP remote. PIN: 1234.
-            </Text>
+        {/* Classic Bluetooth (SPP) card — always shown; "dull" (dimmed,
+            disabled, hinted) when the active mode does not use Classic BT
+            or the platform has no SPP module. */}
+        <View className={`mt-4 rounded-2xl border border-line bg-card p-5 shadow-card ${!usesBtComm ? 'opacity-50' : ''}`}>
+          <View className="flex-row items-center gap-2">
+            <Feather name="bluetooth" size={16} color="#1e3a8a" />
+            <Text className="text-sm font-bold text-ink">Classic Bluetooth (SPP)</Text>
+          </View>
+          <Text className="mt-1 text-xs leading-5 text-muted">
+            Scan and connect to ESP32 cars. Pairs like the ESP remote. PIN: 1234.
+          </Text>
+          {!usesBtComm && (
+            <Text className="mt-2 text-[11px] font-bold italic text-muted">Not used by this mode.</Text>
+          )}
+          {usesBtComm && !sppSupported && (
+            <Text className="mt-2 text-[11px] font-bold italic text-muted">Not supported on this platform.</Text>
+          )}
 
+          <View className={usesBtComm && sppSupported ? '' : 'opacity-40'} pointerEvents={usesBtComm && sppSupported ? 'auto' : 'none'}>
             {!connected && (
               <>
                 <Pressable
@@ -792,7 +809,7 @@ export function ToolsScreen() {
                       <Pressable
                         onPress={() => handleConnect(item)}
                         disabled={connecting}
-                        className="flex-row items-center justify-between rounded-lg border border-line px-3 py-2.5 mt-1"
+                        className="mt-1 flex-row items-center justify-between rounded-lg border border-line px-3 py-2.5"
                       >
                         <View className="min-w-0 flex-1 flex-row items-center gap-2">
                           <Feather name="smartphone" size={13} color="#1e3a8a" />
@@ -821,22 +838,20 @@ export function ToolsScreen() {
                 </Text>
               </View>
             )}
-
-            {error && !connected && (
-              <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <Text className="text-xs leading-5 text-red-600">{error}</Text>
-              </View>
-            )}
           </View>
-        )}
+        </View>
 
-        {/* WiFi panel for wireless car modes */}
-        {useWifi && !useSpp && (
-          <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
-            <View className="flex-row items-center gap-2">
-              <Feather name="wifi" size={16} color="#1e3a8a" />
-              <Text className="text-sm font-bold text-ink">WiFi WebSocket</Text>
-            </View>
+        {/* WiFi WebSocket card — always shown; "dull" (dimmed, disabled,
+            hinted) when the active mode has no WiFi link. */}
+        <View className={`mt-4 rounded-2xl border border-line bg-card p-5 shadow-card ${!usesWifi ? 'opacity-50' : ''}`}>
+          <View className="flex-row items-center gap-2">
+            <Feather name="wifi" size={16} color="#1e3a8a" />
+            <Text className="text-sm font-bold text-ink">WiFi WebSocket</Text>
+          </View>
+          {!usesWifi && (
+            <Text className="mt-1 text-xs leading-5 text-muted">Not used by this mode — no WiFi link for it.</Text>
+          )}
+          <View className={usesWifi ? '' : 'opacity-40'} pointerEvents={usesWifi ? 'auto' : 'none'}>
             <TextInput
               value={wifiUrl}
               onChangeText={setWifiUrl}
@@ -860,7 +875,7 @@ export function ToolsScreen() {
               </Text>
             </Pressable>
           </View>
-        )}
+        </View>
 
         {/* Error display */}
         {error && !connected && !connectionMessage && (
@@ -879,11 +894,6 @@ export function ToolsScreen() {
           onCycle={cycleMode}
           modes={carModes}
         />
-      </View>
-
-      {/* Mode info */}
-      <View className="mt-4">
-        <ModeInfo mode={activeMode} />
       </View>
 
       {/* OLED Display - mirrors the car's 1.3" OLED */}
@@ -907,15 +917,14 @@ export function ToolsScreen() {
         />
       </View>
 
-      {/* 2WD1M extras (steer limit, trim, e-stop) */}
-      {activeCategory === 'robocar' && is2wd1mActive && canControl && (
+      {/* 2WD1M extras (max steering limit + trim only) */}
+      {activeCategory === 'robocar' && is2wd1mActive && (
         <TwoWd1mExtras
           canControl={canControl}
           steerLimit={steerLimit}
           trim={trim}
           onAdjustSteerLimit={adjustSteerLimit}
           onAdjustTrim={adjustTrim}
-          onEStop={handleEStop}
         />
       )}
 
@@ -963,6 +972,7 @@ export function ToolsScreen() {
           steerLimit={is2wd1mActive ? steerLimit : undefined}
           onRun={() => { sendCommand(activeMode.token); setDriveStatus(`${activeMode.token} running`) }}
           onStop={() => { sendCommand('BT'); setDriveStatus('BT manual · stopped') }}
+          onEStop={is2wd1mActive ? handleEStop : undefined}
           safetyLimits={safetyLimits}
         />
 
@@ -993,6 +1003,11 @@ export function ToolsScreen() {
           onToggleRelay={toggleRelay}
         />
       </View>    
+
+      {/* About this mode — bottom section, collapse with the down icon */}
+      <View className="mt-4">
+        <ModeInfo mode={activeMode} />
+      </View>
 
       {/* Footer */}
       <View className="mt-6 rounded-lg border border-line bg-card p-4">

@@ -190,13 +190,12 @@ export type WeblinkControlsProps = {
 
 export type TwoWd1mExtrasProps = {
   canControl: boolean
-  /** Max servo deflection from center 90 (±). */
+  /** Max steering deflection the user allows (0..90). */
   steerLimit: number
   /** Steering trim offset (persisted on the car via TRIM). */
   trim: number
   onAdjustSteerLimit: (delta: number) => void
   onAdjustTrim: (delta: number) => void
-  onEStop: () => void
 }
 
 export type DriveControlsProps = {
@@ -226,6 +225,8 @@ export type DriveControlsProps = {
   onPid: (key: 'kp' | 'ki' | 'kd' | 'out' | 'off', v: number) => void
   onRun: () => void
   onStop: () => void
+  /** Emergency stop (ESTOP + SPD0). Rendered when provided. */
+  onEStop?: () => void
 }
 
 export type DroneControlsProps = {

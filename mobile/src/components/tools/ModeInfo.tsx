@@ -10,7 +10,7 @@ import { Feather } from '@expo/vector-icons'
 import type { CarMode } from '../../config/roboCarCatalog'
 
 export function ModeInfo({ mode }: { mode: CarMode }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
 
   return (
     <View className="rounded-2xl border border-line bg-card p-5 shadow-card">
@@ -19,7 +19,7 @@ export function ModeInfo({ mode }: { mode: CarMode }) {
           <Feather name="info" size={14} color="#1e3a8a" />
           <Text className="text-xs font-black uppercase tracking-widest text-navy">About this mode</Text>
         </View>
-        <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+        <Feather name={expanded ? 'chevron-down' : 'chevron-up'} size={16} color="#64748b" />
       </Pressable>
 
       {expanded && (
