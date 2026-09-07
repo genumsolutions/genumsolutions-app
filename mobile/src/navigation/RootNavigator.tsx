@@ -22,6 +22,7 @@ import { ProjectsScreen } from '../screens/ProjectsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { AboutScreen } from '../screens/AboutScreen';
 import { ToolsScreen } from '../screens/ToolsScreen';
+import { RemoteControlScreen } from '../screens/RemoteControlScreen';
 import { CarRemoteScreen } from '../screens/CarRemoteScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 import { JournalScreen } from '../screens/JournalScreen';
@@ -49,6 +50,7 @@ const ProjectsScreenSafe = withErrorBoundary(ProjectsScreen, 'Projects');
 const ContactScreenSafe = withErrorBoundary(ContactScreen, 'Contact');
 const AboutScreenSafe = withErrorBoundary(AboutScreen, 'About');
 const ToolsScreenSafe = withErrorBoundary(ToolsScreen, 'Tools');
+const RemoteControlScreenSafe = withErrorBoundary(RemoteControlScreen, 'RemoteControl');
 const CarRemoteScreenSafe = withErrorBoundary(CarRemoteScreen, 'CarRemote');
 const AdminScreenSafe = withErrorBoundary(AdminScreen, 'Admin');
 const JournalScreenSafe = withErrorBoundary(JournalScreen, 'Journal');
@@ -129,6 +131,11 @@ export function RootNavigator() {
         name="CarRemote"
         component={CarRemoteScreenSafe}
         options={{ headerShown: true, title: 'Car Remote', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="RemoteControl"
+        component={RemoteControlScreenSafe}
+        options={{ headerShown: false, title: 'Remote', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Admin"

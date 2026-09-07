@@ -10,7 +10,8 @@
 // =====================================================================
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { useRoute, type RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useRoute, type RouteProp, useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons'
 import { APP_VERSION } from '../config/site';
 import { sppService, type SppDevice } from '../services/sppService';
@@ -41,6 +42,7 @@ const WIFI_MAX_RECONNECT_ATTEMPTS = 5
 
 export function ToolsScreen() {
   const route = useRoute<Route>()
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
   const routeCategory = route.params?.category
 
   // ---- Connection state (SPP primary, WiFi secondary) ----
@@ -738,12 +740,27 @@ export function ToolsScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
     >
       {/* Header */}
-      <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-        Control Panel
-      </Text>
-      <Text className="mt-2 font-display text-2xl font-bold text-ink">
-        {isDrone ? 'Drone & Aerial Controller' : 'Drive like the handheld remote'}
-      </Text>
+      <View className="flex-row items-center justify-between">
+        <View className="min-w-0 flex-1">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Control Panel
+          </Text>
+          <Text className="mt-2 font-display text-2xl font-bold text-ink">
+            {isDrone ? 'Drone & Aerial Controller' : 'Drive like the handheld remote'}
+          </Text>
+        </View>
+        {/* Joystick / game remote launcher — opens the full immersive
+            gaming window (RemoteControlScreen) preconfigured for the
+            active category. */}
+        <Pressable
+          onPress={() => navigation.navigate('RemoteControl', { category: activeCategory })}
+          accessibilityRole="button"
+          accessibilityLabel="Open game remote"
+          className="ml-3 shrink-0 rounded-full bg-navy p-3.5 shadow-card"
+        >
+          <Feather name="target" size={22} color="#fff" />
+        </Pressable>
+      </View>
 
       {/* Category hubs */}
       <View className="mt-4 flex-row flex-wrap gap-2">

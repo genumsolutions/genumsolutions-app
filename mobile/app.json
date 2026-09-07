@@ -3,7 +3,7 @@
     "name": "GENUM Solutions",
     "slug": "genum-solutions",
     "scheme": "genumsolutions",
-    "version": "1.6.7",
+    "version": "1.6.8",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.genumsolutions.app",
-      "versionCode": 36,
+      "versionCode": 37,
       "permissions": [
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
