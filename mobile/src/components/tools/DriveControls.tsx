@@ -1,13 +1,17 @@
 // =====================================================================
-// DriveControls — directional pad OR dual joysticks, speed/servo
-// sliders, PID tuning, start/stop.
+// DriveControls — directional pad (single OR dual for 2WD1M) or dual
+// joysticks, speed −/+ steppers, PID tuning, start/stop and emergency
+// stop. Toggle d-pad vs joystick via the `useJoystick` prop.
 //
-// Toggle between d-pad (classic buttons) and joystick (website-style
-// dual-virtual-joystick) via the `useJoystick` prop.
+// 2WD1M gets TWO d-pads mirroring the dual joysticks: the left pad holds
+// motor forward/back at the current speed level, the right pad holds
+// steering to ±steerLimit. Releasing any pad sends SPD0 / SERVO90
+// immediately (stop lines bypass the parent's command throttle, so the
+// car stops the moment a finger lifts — "pronto").
 //
 // Drive values are clamped to the ESP-remote safety limits before they
 // leave the app, so the phone cannot command unsafe speed/steering/PWM
-// values even if the sliders or joysticks are driven hard.
+// values even if the controls are driven hard.
 // =====================================================================
 import React, { useCallback, useRef } from 'react'
 import { Pressable, Text, View, Vibration } from 'react-native'
@@ -46,12 +50,23 @@ function clampServo(value: number, limits: SafetyLimits): number {
   )
 }
 
-/** Clamp a TRIM value to the remote's safe trim range. */
-function clampTrim(value: number, limits: SafetyLimits): number {
-  const v = Math.round(value)
-  return Math.max(-limits.maxTrim, Math.min(limits.maxTrim, v))
+/** Minus/plus stepper button used for the speed and steering controls. */
+function StepperBtn({ onPress, disabled, icon }: {
+  onPress: () => void
+  disabled: boolean
+  icon: 'minus' | 'plus'
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      className="h-12 w-12 items-center justify-center rounded-full border border-line bg-card shadow-sm disabled:opacity-40"
+    >
+      <Feather name={icon} size={20} color="#1e3a8a" />
+    </Pressable>
+  )
 }
-
 
 // Map normalized joystick position to a direction letter, mirroring the
 // physical remote's 4-way stick → F/B/L/R mapping.
@@ -67,11 +82,11 @@ export function DriveControls({
   canControl, isDrone, activeMode, speed, servo,
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
-  onSignedDrive, steerLimit,
+  onSignedDrive, steerLimit, onEStop,
   safetyLimits,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
+  const limits = safetyLimits ?? DEFAULT_SAFETY_LIMITS
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
-  const showServo = activeMode.controls.includes('drive-2wd1m')
   const showPid = activeMode.controls.includes('pid-auto')
   const showStartStop = activeMode.controls.includes('start-stop') || activeMode.controls.includes('tuning')
   const is2wd1m = activeMode.controls.includes('drive-2wd1m')
@@ -95,6 +110,49 @@ export function DriveControls({
     onDirection('S')
   }, [onDirection])
 
+  // 2WD1M dual d-pad: left pad holds motor at the current speed level.
+  // Forward sends SPD+speed, backward SPD−speed; RELEASE sends SPD0 so the
+  // car stops the instant the finger lifts.
+  const pressFwd = useCallback(() => {
+    hapticTap()
+    if (onSignedDrive) onSignedDrive(clampSignedDrive(speed, limits))
+    else onDirection('F')
+  }, [hapticTap, onSignedDrive, speed, limits, onDirection])
+
+  const pressBack = useCallback(() => {
+    hapticTap()
+    if (onSignedDrive) onSignedDrive(clampSignedDrive(-speed, limits))
+    else onDirection('B')
+  }, [hapticTap, onSignedDrive, speed, limits, onDirection])
+
+  const releaseDrive = useCallback(() => {
+    if (onSignedDrive) onSignedDrive(0)
+    else onDirection('S')
+  }, [onSignedDrive, onDirection])
+
+  // 2WD1M right pad: holds steering to ±steerLimit; release straightens.
+  const maxSteer = steerLimit != null ? steerLimit : limits.maxSteerDeviation
+  const pressLeft = useCallback(() => {
+    hapticTap()
+    onServo(clampServo(limits.servoCenter - maxSteer, limits))
+  }, [hapticTap, onServo, maxSteer, limits])
+
+  const pressRight = useCallback(() => {
+    hapticTap()
+    onServo(clampServo(limits.servoCenter + maxSteer, limits))
+  }, [hapticTap, onServo, maxSteer, limits])
+
+  const releaseSteer = useCallback(() => {
+    onServo(limits.servoCenter)
+  }, [onServo, limits])
+
+  // Stop everything (2WD1M center button)
+  const stopAll2wd1m = useCallback(() => {
+    hapticTap()
+    if (onSignedDrive) onSignedDrive(0)
+    onServo(limits.servoCenter)
+  }, [hapticTap, onSignedDrive, onServo, limits])
+
   // Left joystick: drives direction. With ESP-remote parity (onSignedDrive)
   // the 2WD1M stick streams signed SPD like the physical remote: forward is
   // +SPD, backward is -SPD, magnitude proportional to deflection, quantized
@@ -108,7 +166,7 @@ export function DriveControls({
         return
       }
       const raw = Math.round((Math.min(1, Math.abs(y)) * 255) / 5) * 5
-      const mag = clampSignedDrive(raw, safetyLimits ?? DEFAULT_SAFETY_LIMITS)
+      const mag = clampSignedDrive(raw, limits)
       onSignedDrive(y < 0 ? -mag : mag)
       return
     }
@@ -117,7 +175,7 @@ export function DriveControls({
       ? (y < -0.25 ? 'F' : y > 0.25 ? 'B' : 'S')
       : joyToDirection(x, y)
     sendDir(d)
-  }, [canControl, is2wd1m, onSignedDrive, sendDir, safetyLimits])
+  }, [canControl, is2wd1m, onSignedDrive, sendDir, limits])
 
   // Right joystick X axis: steers servo in 2WD1M. With ESP-remote parity the
   // deviation from center is clamped to ±steerLimit, so the servo never
@@ -129,10 +187,10 @@ export function DriveControls({
     if (onSignedDrive && steerLimit != null) {
       dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
     }
-    const rawServo = 90 + dev
-    const safeServo = clampServo(rawServo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)
+    const rawServo = limits.servoCenter + dev
+    const safeServo = clampServo(rawServo, limits)
     onServo(safeServo)
-  }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo, safetyLimits])
+  }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo, limits])
 
   if (isDrone) return null
 
@@ -168,8 +226,52 @@ export function DriveControls({
                 : 'Left drives · Right steers'}
           </Text>
         </View>
+      ) : is2wd1m ? (
+        /* 2WD1M dual d-pads (mirror the dual joysticks) */
+        <View>
+          <View className="flex-row items-stretch justify-center gap-3">
+            {/* Left D-pad: motor */}
+            <View className="flex-1 items-center rounded-2xl border border-line bg-surface px-2 py-4">
+              <Text className="mb-3 text-xs font-bold uppercase tracking-wide text-border">Drive (motor)</Text>
+              <View className="gap-2">
+                <Pressable onPressIn={pressFwd} onPressOut={releaseDrive} disabled={!canControl} className="items-center rounded-xl bg-navy px-6 py-4 disabled:opacity-40">
+                  <Feather name="chevron-up" size={30} color="#fff" />
+                </Pressable>
+                <Pressable onPressIn={pressBack} onPressOut={releaseDrive} disabled={!canControl} className="items-center rounded-xl border border-navy px-6 py-4 disabled:opacity-40">
+                  <Feather name="chevron-down" size={30} color="#1e3a8a" />
+                </Pressable>
+              </View>
+              <Text className="mt-3 text-center text-[11px] leading-4 text-muted">
+                Hold to drive{'\n'}Release stops instantly
+              </Text>
+            </View>
+
+            {/* Right D-pad: steering */}
+            <View className="flex-1 items-center rounded-2xl border border-line bg-surface px-2 py-4">
+              <Text className="mb-3 text-xs font-bold uppercase tracking-wide text-border">Steer (servo)</Text>
+              <View className="flex-row gap-2">
+                <Pressable onPressIn={pressLeft} onPressOut={releaseSteer} disabled={!canControl} className="items-center rounded-xl border border-navy px-6 py-4 disabled:opacity-40">
+                  <Feather name="chevron-left" size={30} color="#1e3a8a" />
+                </Pressable>
+                <Pressable onPressIn={pressRight} onPressOut={releaseSteer} disabled={!canControl} className="items-center rounded-xl border border-navy px-6 py-4 disabled:opacity-40">
+                  <Feather name="chevron-right" size={30} color="#1e3a8a" />
+                </Pressable>
+              </View>
+              <Text className="mt-3 text-center text-[11px] leading-4 text-muted">
+                Hold to steer{'\n'}Release straightens
+              </Text>
+            </View>
+          </View>
+
+          <View className="mt-3 flex-row items-center justify-center">
+            <Pressable onPress={stopAll2wd1m} disabled={!canControl} className="flex-row items-center gap-2 rounded-full bg-slate-200 px-6 py-3 disabled:opacity-40">
+              <Feather name="stop-circle" size={16} color="#1e3a8a" />
+              <Text className="text-xs font-black text-navy">Stop</Text>
+            </Pressable>
+          </View>
+        </View>
       ) : (
-        /* D-pad (classic buttons) */
+        /* Single D-pad (classic buttons, non-2WD1M modes) */
         <View>
           <View className="flex-row items-center justify-center">
             <View style={{ width: 72 }} />
@@ -202,39 +304,15 @@ export function DriveControls({
       {/* Speed (clamped to the ESP-remote safe PWM/speed ceiling) */}
       {showSpeed && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-4">
-          <Text className="text-xs font-bold uppercase tracking-wide text-border">Speed</Text>
-          <Slider
-            value={clampSpeed(speed, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}
-            minimumValue={0}
-            maximumValue={safetyLimits?.maxSpeed ?? DEFAULT_SAFETY_LIMITS.maxSpeed}
-            step={5}
-            onValueChange={(v: number) => onSpeed(clampSpeed(v, safetyLimits ?? DEFAULT_SAFETY_LIMITS))}
-            disabled={!canControl}
-            minimumTrackTintColor="#1e3a8a"
-            maximumTrackTintColor="#cbd5e1"
-            thumbTintColor="#1e3a8a"
-          />
-          <Text className="mt-1 text-right font-mono text-sm font-bold text-navy">{clampSpeed(speed, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}</Text>
-        </View>
-      )}
-
-      {/* Servo (only shown when not using joystick, since joystick controls it directly).
-          Value is clamped to the ESP-remote safe servo range. */}
-      {showServo && !useJoystick && (
-        <View className="mt-4 rounded-xl border border-line bg-surface p-4">
-          <Text className="text-xs font-bold uppercase tracking-wide text-border">Steering (servo)</Text>
-          <Slider
-            value={clampServo(servo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}
-            minimumValue={Math.max(0, (safetyLimits ?? DEFAULT_SAFETY_LIMITS).servoCenter - (safetyLimits ?? DEFAULT_SAFETY_LIMITS).maxSteerDeviation)}
-            maximumValue={Math.min(180, (safetyLimits ?? DEFAULT_SAFETY_LIMITS).servoCenter + (safetyLimits ?? DEFAULT_SAFETY_LIMITS).maxSteerDeviation)}
-            step={5}
-            onValueChange={(v: number) => onServo(clampServo(v, safetyLimits ?? DEFAULT_SAFETY_LIMITS))}
-            disabled={!canControl}
-            minimumTrackTintColor="#1e3a8a"
-            maximumTrackTintColor="#cbd5e1"
-            thumbTintColor="#1e3a8a"
-          />
-          <Text className="mt-1 text-right font-mono text-sm font-bold text-navy">{clampServo(servo, safetyLimits ?? DEFAULT_SAFETY_LIMITS)}°</Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs font-bold uppercase tracking-wide text-border">Speed</Text>
+            <Text className="font-mono text-sm font-bold text-navy">{clampSpeed(speed, limits)}</Text>
+          </View>
+          <View className="mt-3 flex-row items-center justify-center gap-5">
+            <StepperBtn onPress={() => onSpeed(clampSpeed(speed - 5, limits))} disabled={!canControl} icon="minus" />
+            <Text className="w-20 text-center font-mono text-3xl font-bold text-navy">{clampSpeed(speed, limits)}</Text>
+            <StepperBtn onPress={() => onSpeed(clampSpeed(speed + 5, limits))} disabled={!canControl} icon="plus" />
+          </View>
         </View>
       )}
 
@@ -273,6 +351,16 @@ export function DriveControls({
           </Pressable>
           <Pressable onPress={() => { hapticTap(); onStop() }} disabled={!canControl} className="rounded-full border border-line bg-card px-6 py-3">
             <Text className="text-sm font-black text-ink">Stop</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Emergency stop (relocated from TwoWd1mExtras) */}
+      {onEStop && (
+        <View className="mt-4">
+          <Pressable onPress={() => { hapticTap(); onEStop() }} disabled={!canControl} className="flex-row items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 disabled:opacity-60">
+            <Feather name="octagon" size={14} color="#fff" />
+            <Text className="text-sm font-black text-white">Emergency stop</Text>
           </Pressable>
         </View>
       )}

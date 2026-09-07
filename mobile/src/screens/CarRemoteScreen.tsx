@@ -301,6 +301,13 @@ export function CarRemoteScreen({ navigation }: Props) {
 
   const sendThrottled = useCallback((kind: string, cmd: string) => {
     const now = Date.now()
+    // Stop lines (S / SPD0 / SERVO90) always go out immediately so the car
+    // stops the instant a button is released — never swallowed by the pump.
+    if (cmd === 'S' || cmd === 'SPD0' || cmd === 'SERVO90') {
+      sendCommand(cmd)
+      lastDriveCmdAtRef.current[kind] = now
+      return
+    }
     const last = lastDriveCmdAtRef.current[kind] ?? 0
     if (now - last < DRIVE_CMD_MIN_INTERVAL_MS) return
     lastDriveCmdAtRef.current[kind] = now
@@ -344,7 +351,7 @@ export function CarRemoteScreen({ navigation }: Props) {
 
   // ESP-remote 2WD1M extras: steering limit, trim, emergency stop.
   const adjustSteerLimit = useCallback((delta: number) => {
-    setSteerLimit((prev) => Math.max(0, Math.min(180, prev + delta)))
+    setSteerLimit((prev) => Math.max(0, Math.min(90, prev + delta)))
   }, [])
   const adjustTrim = useCallback((delta: number) => {
     setTrim((prev) => {
@@ -592,15 +599,14 @@ export function CarRemoteScreen({ navigation }: Props) {
         )}
       </View>
 
-      {/* ESP-remote extras for the 2WD1M (servo-steer) pairing */}
-      {is2wd1m && canControl && (
+      {/* ESP-remote extras for the 2WD1M (max steering limit + trim only) */}
+      {is2wd1m && (
         <TwoWd1mExtras
           canControl={canControl}
           steerLimit={steerLimit}
           trim={trim}
           onAdjustSteerLimit={adjustSteerLimit}
           onAdjustTrim={adjustTrim}
-          onEStop={handleEStop}
         />
       )}
 
@@ -706,6 +712,7 @@ export function CarRemoteScreen({ navigation }: Props) {
               steerLimit={is2wd1m ? steerLimit : undefined}
               onRun={() => { sendCommand('F'); setDriveStatus(`${mode.name} running`) }}
               onStop={() => { sendCommand('S'); setDriveStatus(`${mode.name} stopped`) }}
+              onEStop={is2wd1m ? handleEStop : undefined}
             />
           </View>
         </>
