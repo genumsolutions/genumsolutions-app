@@ -95,11 +95,6 @@ export class SppService {
     return this.connectedAddress || this.connectingAddress
   }
 
-  /** Get last known mode from telemetry (for mode sync) */
-  getKnownMode(): string | null {
-    return this.lastKnownMode
-  }
-
   onTelemetry(cb: TelemetryCallback): () => void {
     this.telemetryCallbacks.add(cb)
     return () => { this.telemetryCallbacks.delete(cb) }
@@ -296,12 +291,6 @@ export class SppService {
     }
   }
 
-  setPrefs(key: string, value: string): void {
-    if (this.connectedAddress) {
-      this.writeToDevice(this.connectedAddress, value, 'utf-8').catch(() => {})
-    }
-  }
-
   /** Retry connection to the last connecting/connected device.
    * Uses the last known address from a previous connect attempt.
    * If no device was being connected, throws an error.
@@ -361,54 +350,10 @@ export class SppService {
   async requestState(): Promise<void> {
     await this.sendLine(REQ_STATE_LINE)
   }
-
-  /** Get prefs from storage (for device-memory bridge). */
-  getPrefs(key: string): string | null {
-    return null
-  }
-}
-
-/** Per-device storage bridge for the IoT Tools device memory.
-    The app hooks these at startup to route through its preferred storage
-    (AsyncStorage / MMKV / SQLite). Until then they are no-ops by design and
-    the device-memory layer falls back to in-memory only. */
-export const deviceMemoryBridge = {
-  getPrefs: null as ((key: string) => string | null | Promise<string | null>) | null,
-  setPrefs: null as ((key: string, value: string) => void | Promise<void>) | null,
 }
 
 // Singleton instance used throughout the app (mirrors bleService).
 export const sppService = new SppService()
-
-// Wire the device-memory storage bridge into the device-memory layer.
-if (deviceMemoryBridge) {
-  if (typeof deviceMemoryBridge.getPrefs === 'function') {
-    deviceMemoryBridge.getPrefs = sppService.getPrefs.bind(sppService)
-  }
-  if (typeof deviceMemoryBridge.setPrefs === 'function') {
-    deviceMemoryBridge.setPrefs = sppService.setPrefs.bind(sppService)
-  }
-}
-
-// Debug helper: get current connection state (for UI status display)
-export function getSppConnectionState(): {
-  isConnected: boolean;
-  isConnecting: boolean;
-  deviceName: string | null;
-  currentAddress: string | null;
-  knownMode: string | null;
-  connectionStatus: 'idle' | 'connecting' | 'connected' | 'error';
-} {
-  const svc = sppService as any
-  return {
-    isConnected: svc.isConnected,
-    isConnecting: svc.isConnecting,
-    deviceName: svc.deviceName,
-    currentAddress: svc.currentAddress,
-    knownMode: svc.getKnownMode ? svc.getKnownMode() : null,
-    connectionStatus: svc.getConnectionInfo?.().status ?? 'idle',
-  }
-}
 
 
 

@@ -33,11 +33,13 @@ signing key changes.
 
 # Release
 
-- Keep the version in sync everywhere on every release so installs update over-the-top AND the
-  website download page matches:
+- Keep the app-side version in sync on every release so installs update over-the-top:
   1. `app.json` -> `version` and `android.versionCode` (single source of truth)
   2. `src/config/site.ts` -> `APP_VERSION`
-  3. website `lib/company.ts` -> `androidApp.version` / `versionCode` / `sizeLabel`
+  - The website's bundled fallback (`lib/company.ts` -> `androidApp`) is NOT bumped in advance: the
+    `/app` download page reads the LIVE `release.json` manifest (only written by an actual upload),
+    so it never advertises a version whose APK isn't ready. After an upload, sync the fallback to the
+    last released build with `(website repo) node scripts/sync-app-fallback.mjs`.
   - `scripts/upload-release.mjs` needs NO manual version edit — it reads `version` /
     `versionCode` from `app.json` at runtime and derives the file name, size and notes.
 - Release builds run from `C:\bs` (LongPaths is disabled on `E:\`, so Gradle must run there); keep
@@ -51,4 +53,5 @@ signing key changes.
   against this: it aborts unless `genum-solutions-<version>.apk` (the versioned file written by
   `upload-release.mjs`) responds on the bucket, or you pass `--force`. The normal release order is:
   bump version -> build APK (`gradlew assembleRelease`) -> `upload-release.mjs` (uploads APK +
-  manifest in one step).
+  manifest in one step) -> sync the website fallback (`genumsolutions-website`: `node
+  scripts/sync-app-fallback.mjs`) and push it.
