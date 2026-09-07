@@ -171,11 +171,17 @@ export function AdminScreen() {
   // the editor's tab is the one currently visible — if the user swiped away,
   // Back goes to Home via MainTabPager's handler (the editor state persists
   // across swipes but the user is no longer looking at it).
+  //
+  // editorOnCurrentTab lives at render scope (not only inside the effect) so
+  // the pager below can ALSO disable swiping while an editor is open on the
+  // current tab — once an editor is up, the user is "deep" in the tab and a
+  // swipe must not flip to another tab until the editor is closed.
+  const editorOnCurrentTab =
+    (tab === 'Products' && editingProduct != null) ||
+    (tab === 'Services' && editingService != null) ||
+    (tab === 'Journal' && journalOpen)
+
   useEffect(() => {
-    const editorOnCurrentTab =
-      (tab === 'Products' && editingProduct != null) ||
-      (tab === 'Services' && editingService != null) ||
-      (tab === 'Journal' && journalOpen)
     if (!editorOnCurrentTab) {
       if (backHandlerRef) {
         backHandlerRef()
@@ -762,6 +768,7 @@ export function AdminScreen() {
         initialPage={0}
         onPageSelected={onPageSelected}
         offscreenPageLimit={1}
+        scrollEnabled={!editorOnCurrentTab}
       >
         {TABS.map((t) => (
           <View key={t} className="flex-1 bg-mist">
