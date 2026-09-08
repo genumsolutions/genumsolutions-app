@@ -22,7 +22,7 @@ import React, { useEffect, useState } from 'react'
 import { AppState, AppStateStatus, Pressable, Text, View } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
-import { GestureHandlerRootView, ScreenOrientation, allowDefaultOrientation, lockAsync } from 'expo-screen-orientation'
+import * as ScreenOrientation from 'expo-screen-orientation'
 import { Feather } from '@expo/vector-icons'
 import type { RootStackParamList } from '../navigation/types'
 import { useControlHub } from '../components/tools/useControlHub'
@@ -83,17 +83,19 @@ export function RemoteControlScreen({ navigation }: Props) {
     sensorData, relays, toggleRelay,
     // toggle
     useJoystick, setUseJoystick,
+    // persistence
+    savedPrefs, selectJoystickLayout,
     // derived
     isDrone, isNonRobocar, is2wd1mActive,
   } = hub
 
-  // Remote window: professional gaming-style portrait/landscape controller.
+  // Remote window: professional gaming-style landscape controller.
   // We force landscape for this immersive window and keep the game UX self-contained.
   useEffect(() => {
     let cancelled = false
     const asyncLock = async () => {
       try {
-        await ScreenOrientation.LockAsync(ScreenOrientation.UPSIDE_DOWN_ANDROID)
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT)
       } catch {
         /* orientation API may be unavailable on some web/emu setups */
       }
@@ -105,23 +107,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   // Persist joystick layout choice per device.
   useEffect(() => {
     if (!connected && !wifiConnected) return
-    if (savedPrefs?.joystickLayout) {
-      selectJoystickLayout(savedPrefs.joystickLayout)
+    if (hub.savedPrefs?.joystickLayout) {
+      hub.selectJoystickLayout(hub.savedPrefs.joystickLayout)
     }
   }, [connected, wifiConnected])
 
-  // Keep the app from thinking the screen "backgrounded" while the remote is open.
-  useEffect(() => {
-    let alive = true
-    const onAppStateChange = (nextState: AppStateStatus) => {
-      if (!alive) return
-      if (nextState === 'background') {
-        /* keep link alive while the remote is the visible screen */
-      }
-    }
-    const subscription = AppState.addEventListener('change', onAppStateChange)
-    return () => { alive = false; subscription.remove() }
-  }, [])
+  // Settings dock (2WD1M extras) toggled from the game view.
+  const [showSettings, setShowSettings] = useState(false)
 
   const linked = connected || wifiConnected
   const linkLabel = connected ? 'SPP LINK' : wifiConnected ? 'WIFI LINK' : 'NO LINK'
