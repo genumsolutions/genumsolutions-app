@@ -2,13 +2,15 @@
 // expands into the full mode picker) plus a cycle toggle button that walks
 // the firmware mode order like the physical remote's mode select.
 import React, { useState } from 'react'
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
 import type { ModeChooserProps } from './types'
 
 export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }: ModeChooserProps) {
   const [open, setOpen] = useState(false)
+  const { width, height } = useWindowDimensions()
+  const isLandscape = width > height
   // Catalogue is passed in DB-first (carModeService); the bundled modes are
   // the offline fallback until the fetch resolves.
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
@@ -44,7 +46,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
             <Text className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">
               Select a mode
             </Text>
-            <ScrollView className="mt-2 max-h-[60vh]">
+            <ScrollView className={`mt-2 ${isLandscape ? 'max-h-[40vh]' : 'max-h-[60vh]'}`}>
               {catalogue.map((m: CarMode) => {
                 const isActive = activeMode.id === m.id
                 return (

@@ -171,10 +171,11 @@ export function RemoteControlScreen({ navigation }: Props) {
           </View>
           <Pressable
             onPress={() => setShowSettings((v) => !v)}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
+            className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
             accessibilityRole="button"
           >
-            <Text className="text-xs font-bold text-white">{showSettings ? 'Hide settings' : 'Settings'}</Text>
+            <Feather name="settings" size={12} color="#fff" />
+            <Text className="text-xs font-bold text-white">Settings</Text>
           </Pressable>
         </View>
 
@@ -262,15 +263,17 @@ export function RemoteControlScreen({ navigation }: Props) {
                     <View className="flex-row items-center gap-2 flex-shrink-0">
                       <Pressable
                         onPress={() => setUseJoystick(false)}
-                        className={`rounded-full px-3 py-1.5 ${!useJoystick ? 'bg-navy' : 'border border-white/15 bg-black/20'}`}
+                        onPressIn={() => Vibration.vibrate(10)}
+                        className={`rounded-full px-4 py-2 ${!useJoystick ? 'bg-navy' : 'border border-white/15 bg-black/20'}`}
                       >
-                        <Text className={`text-xs font-bold ${!useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
+                        <Text className={`text-sm font-bold ${!useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => setUseJoystick(true)}
-                        className={`rounded-full px-3 py-1.5 ${useJoystick ? 'bg-navy' : 'border border-white/15 bg-black/20'}`}
+                        onPressIn={() => Vibration.vibrate(10)}
+                        className={`rounded-full px-4 py-2 ${useJoystick ? 'bg-navy' : 'border border-white/15 bg-black/20'}`}
                       >
-                        <Text className={`text-xs font-bold ${useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
+                        <Text className={`text-sm font-bold ${useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
                       </Pressable>
                     </View>
                   </View>
