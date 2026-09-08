@@ -20,7 +20,8 @@
 //   drones               → altitude stick + gimbal pan/tilt + flight buttons.
 // =====================================================================
 import React, { useEffect, useRef, useState } from 'react'
-import { Platform, Pressable, ScrollView, Text, View } from 'react-native'
+import { Platform, Pressable, ScrollView, Text, Vibration, View } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -37,34 +38,12 @@ import { DroneControls } from '../components/tools/DroneControls'
 type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
 type Route = RouteProp<RootStackParamList, 'RemoteControl'>
 
-/** The compact top HUD: link chip + mode + speed + steer. */
-function GameHud({
-  linked, linkLabel, activeModeName, speed, servo, is2wd1m,
-}: {
-  linked: boolean
-  linkLabel: string
-  activeModeName: string
-  speed: number
-  servo: number
-  is2wd1m: boolean
-}) {
-  return (
-    <View className="flex-row items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-3 py-1.5">
-      <View className="flex-row items-center gap-1.5">
-        <View className={`h-2 w-2 rounded-full ${linked ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-        <Text className="text-[10px] font-black uppercase tracking-wider text-slate-300">{linkLabel}</Text>
-      </View>
-      <Text className="text-[11px] font-bold text-white">{activeModeName}</Text>
-      <Text className="font-mono text-xs font-bold text-emerald-300">SPD {Math.round(speed)}</Text>
-      {is2wd1m && <Text className="font-mono text-xs font-bold text-amber-300">STR {Math.round(servo)}°</Text>}
-    </View>
-  )
-}
-
 export function RemoteControlScreen({ navigation }: Props) {
   const route = useRoute<Route>()
   const routeCategory = route.params?.category
   const hub = useControlHub(routeCategory)
+  const { width, height } = useWindowDimensions()
+  const isLandscape = width > height
 
   const {
     // connection
@@ -98,12 +77,14 @@ export function RemoteControlScreen({ navigation }: Props) {
   }, [connected, wifiConnected])
 
   const linked = connected || wifiConnected
-  const linkLabel = connected ? 'SPP LINK' : wifiConnected ? 'WIFI LINK' : 'NO LINK'
 
   // Compact in-window settings panel state for the Remote screen's own
   // Settings toggle. This keeps Settings inside the same remote board
   // instead of pushing everything around.
   const [showSettings, setShowSettings] = useState(false)
+
+  // Back button pressed state for visual feedback
+  const [backPressed, setBackPressed] = useState(false)
 
   // Remote-window orientation: only touch orientation for this screen, and
   // restore the phone's previous orientation on back (so the rest of the app
@@ -179,7 +160,9 @@ export function RemoteControlScreen({ navigation }: Props) {
           <View className="flex-row items-center gap-2">
             <Pressable
               onPress={() => navigation.goBack()}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
+              onPressIn={() => { setBackPressed(true); Vibration.vibrate(10) }}
+              onPressOut={() => setBackPressed(false)}
+              className={`rounded-full border border-white/10 px-3 py-1.5 ${backPressed ? 'bg-white/15 opacity-70' : 'bg-white/5'}`}
               accessibilityRole="button"
             >
               <Text className="text-xs font-bold text-white">‹ Back</Text>
@@ -208,7 +191,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         <View className="flex-1">
           {/* Left column: compact device/telemetry card */}
           <View className="flex-row items-start gap-3 flex-shrink-0">
-            <View className="flex-1 min-w-0">
+            <View className={`min-w-0 ${isLandscape ? 'flex-[0.35]' : 'flex-1'}`}>
               <OledDisplay
                 connected={connected}
                 wifiConnected={wifiConnected}
@@ -230,7 +213,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
             {/* Right column: mode + controls — gets more space so the control
                 board stays reachable in landscape without scrolling. */}
-            <View className="flex-1 min-w-0 flex flex-col">
+            <View className={`min-w-0 flex flex-col ${isLandscape ? 'flex-[0.65]' : 'flex-1'}`}>
               {isDrone ? (
                 <View className="flex-1 min-h-0 bg-black/20 rounded-2xl border border-white/10 p-3">
                   <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 6 }}>
@@ -315,6 +298,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                       steerLimit={is2wd1mActive ? steerLimit : undefined}
                       safetyLimits={hub.safetyLimits}
                     />
+                    {/* Floating E-stop FAB — easy thumb reach in landscape */}
+                    <Pressable
+                      onPress={handleEStop}
+                      className="absolute bottom-3 right-3 h-12 w-12 items-center justify-center rounded-full bg-red-600 shadow-lg"
+                      accessibilityRole="button"
+                    >
+                      <Feather name="octagon" size={20} color="#fff" />
+                    </Pressable>
                   </View>
 
                   {/* In-window settings panel for 2WD1M extras — compact,
