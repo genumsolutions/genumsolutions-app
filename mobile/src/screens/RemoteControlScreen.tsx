@@ -181,11 +181,11 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* Simulation banner — kept small so it does not dominate the board */}
+        {/* Simulation banner — compact inline chip */}
         {!linked && (
-          <View className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-1.5">
-            <Text className="text-[10px] font-bold text-amber-300">
-              Simulation — connect from the Control Panel to drive a real car.
+          <View className="mb-1.5 self-start rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1">
+            <Text className="text-[9px] font-bold uppercase tracking-wide text-amber-300">
+              Simulation
             </Text>
           </View>
         )}
@@ -194,7 +194,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         <View className="flex-1">
           {/* Left column: compact device/telemetry card */}
           <View className="flex-row items-start gap-3 flex-shrink-0">
-            <View className={`min-w-0 ${isLandscape ? 'flex-[0.35]' : 'flex-1'}`}>
+            <View className={`min-w-0 ${isLandscape ? 'flex-[0.35]' : 'flex-1'} ${isLandscape ? 'max-h-[55%]' : 'max-h-[40%]'}`}>
               <OledDisplay
                 connected={connected}
                 wifiConnected={wifiConnected}
@@ -305,8 +305,8 @@ export function RemoteControlScreen({ navigation }: Props) {
                     />
                     {/* Floating E-stop FAB — easy thumb reach in landscape */}
                     <Pressable
-                      onPress={handleEStop}
-                      className="absolute bottom-3 right-3 h-12 w-12 items-center justify-center rounded-full bg-red-600 shadow-lg"
+                      onPress={() => { Vibration.vibrate(50); handleEStop() }}
+                      className="absolute bottom-3 right-3 h-12 w-12 items-center justify-center rounded-full bg-red-600 shadow-lg active:scale-95 active:bg-red-700"
                       accessibilityRole="button"
                     >
                       <Feather name="octagon" size={20} color="#fff" />
@@ -342,20 +342,12 @@ export function RemoteControlScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* Persistent bottom bar: E-stop + disconnect + status line */}
+      {/* Persistent bottom bar: disconnect + status line */}
       <View className="border-t border-white/10 bg-black/40 px-3 py-2">
         <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={handleEStop}
-            className="flex-1 flex-row items-center justify-center gap-2 rounded-full bg-red-600 py-2.5"
-            accessibilityRole="button"
-          >
-            <Feather name="octagon" size={14} color="#fff" />
-            <Text className="text-sm font-black text-white">Emergency stop</Text>
-          </Pressable>
           {linked && (
             <Pressable
-              onPress={handleDisconnect}
+              onPress={() => { Vibration.vibrate(10); handleDisconnect() }}
               className="rounded-full border border-white/15 bg-white/5 px-4 py-2.5"
               accessibilityRole="button"
             >

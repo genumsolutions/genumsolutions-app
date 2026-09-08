@@ -363,9 +363,9 @@ function DpadCell({ icon, active, enabled }: {
 }) {
   return (
     <View
-      className={`flex-1 items-center rounded-xl px-3 py-3 ${active ? 'bg-navy' : enabled ? 'border border-navy' : 'border border-slate-200 opacity-50'}`}
+      className={`flex-1 items-center rounded-xl px-3 py-3 ${active ? 'bg-navy' : enabled ? 'border border-navy' : 'border border-white/10 opacity-50'}`}
     >
-      <Feather name={icon} size={24} color={active ? '#fff' : enabled ? '#1e3a8a' : '#cbd5e1'} />
+      <Feather name={icon} size={24} color={active ? '#fff' : enabled ? '#1e3a8a' : 'rgba(255,255,255,0.5)'} />
     </View>
   )
 }
@@ -495,7 +495,7 @@ function DualJoystick({
             return (
               <View key={stick}>
                 <View
-                  className={`absolute rounded-full border-2 ${enabled ? 'border-slate-200 bg-slate-100' : 'border-slate-200 bg-slate-100 opacity-40'}`}
+                  className={`absolute rounded-full border-2 ${enabled ? 'border-white/10 bg-white/5' : 'border-white/10 bg-white/5 opacity-40'}`}
                   style={{
                     left: c.cx - base,
                     top: c.cy - base,
@@ -503,10 +503,10 @@ function DualJoystick({
                     height: base * 2,
                   }}
                 >
-                  <View className="absolute left-1/2 top-1/2 h-1 w-1 -ml-0.5 -mt-0.5 rounded-full bg-slate-300" />
+                  <View className="absolute left-1/2 top-1/2 h-1 w-1 -ml-0.5 -mt-0.5 rounded-full bg-white/20" />
                 </View>
                 <View
-                  className={`absolute rounded-full border-2 bg-white shadow-sm ${enabled ? 'border-navy' : 'border-slate-300'}`}
+                  className={`absolute rounded-full border-2 bg-white shadow-sm ${enabled ? 'border-navy' : 'border-white/10'}`}
                   style={{
                     left: c.cx + knob.x - knobSize / 2,
                     top: c.cy + knob.y - knobSize / 2,
