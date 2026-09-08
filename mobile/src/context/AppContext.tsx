@@ -43,6 +43,8 @@ type AppContextValue = {
   setCart: (cart: { count: number; size: number }) => void;
   authSheetOpen: boolean;
   setAuthSheetOpen: (open: boolean) => void;
+  accountSheetOpen: boolean;
+  setAccountSheetOpen: (open: boolean) => void;
   authBusy: boolean;
   authError: string | null;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
@@ -106,6 +108,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sessionReady, setSessionReady] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [authSheetOpen, setAuthSheetOpen] = useState(false);
+  const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [carModes, setCarModes] = useState<CarMode[]>([]);
@@ -347,6 +350,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCart,
       authSheetOpen,
       setAuthSheetOpen,
+      accountSheetOpen,
+      setAccountSheetOpen,
       authBusy,
       authError,
       signInWithPassword,
@@ -365,6 +370,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCart,
       authSheetOpen,
       setAuthSheetOpen,
+      accountSheetOpen,
+      setAccountSheetOpen,
       authBusy,
       authError,
       signInWithPassword,

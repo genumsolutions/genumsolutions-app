@@ -65,6 +65,7 @@ const linking = {
       Printing: 'printing',
       OpenTools: 'open-tools',
       Legal: 'legal/:doc',
+      Update: 'update',
     },
   },
 }

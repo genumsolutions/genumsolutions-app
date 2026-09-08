@@ -18,7 +18,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
 
   return (
     <View className="rounded-2xl border border-line bg-card p-3 shadow-card">
-      <Text className="text-xs font-bold uppercase tracking-wide text-muted">Mode</Text>
+      <Text className="text-sm font-bold uppercase tracking-wide text-muted">Mode</Text>
       <View className="mt-2 flex-row items-center gap-2">
         <Pressable
           onPress={() => setOpen(true)}
@@ -43,9 +43,9 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
         <View className="flex-1 justify-end bg-black/40">
           <Pressable className="absolute inset-0" onPress={() => setOpen(false)} />
           <View className="rounded-2xl bg-card px-4 pb-5 pt-4 shadow-card">
-            <Text className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">
-              Select a mode
-            </Text>
+<Text className="text-sm font-black uppercase tracking-[0.2em] text-navy">
+               Select a mode
+             </Text>
             <ScrollView className={`mt-2 ${isLandscape ? 'max-h-[40vh]' : 'max-h-[60vh]'}`}>
               {catalogue.map((m: CarMode) => {
                 const isActive = activeMode.id === m.id
@@ -60,7 +60,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
                       <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-ink'}`}>
                         {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
                       </Text>
-                      <Text className={`text-[11px] ${isActive ? 'text-white/70' : 'text-muted'}`} numberOfLines={1}>
+                      <Text className={`text-sm ${isActive ? 'text-white/70' : 'text-muted'}`} numberOfLines={1}>
                         {m.token} · {m.transport.join(' / ')}
                       </Text>
                     </View>

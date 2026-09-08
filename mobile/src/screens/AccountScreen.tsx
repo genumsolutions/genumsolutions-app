@@ -1,8 +1,9 @@
 // =====================================================================
-// AccountScreen - compact account panel (website parity). Shows a header
-// card with the user's avatar + name, 3 stat cards (orders / cart / messages),
-// the orders list, and a profile-edit section — all in a single scrollable
-// panel like the website's /account. Not a full-screen FlatList.
+// AccountScreen - minimal account panel (website parity).
+// Shows user name, email, admin badge, and sign-out.
+// Account dropdown from the header (BrandHeader/AccountSheet) takes
+// precedence; this screen is accessible via navigation but the primary
+// account UI is the header dropdown.
 // =====================================================================
 import React, { useEffect, useState } from 'react'
 import {
@@ -21,7 +22,7 @@ import type { Order } from '../types'
 
 export function AccountScreen() {
   const navigation = useNavigation<any>()
-  const { user, isSignedIn, isAdmin, signOut, setAuthSheetOpen, cartCount, themeMode, setThemeMode } = useApp()
+  const { user, isSignedIn, isAdmin, signOut, cartCount, themeMode, setThemeMode } = useApp()
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
@@ -80,7 +81,7 @@ export function AccountScreen() {
           Access your profile, orders, and synced build list.
         </Text>
         <Pressable
-          onPress={() => setAuthSheetOpen(true)}
+          onPress={() => navigation.push('Auth', { screen: 'SignIn' })}
           className="mt-6 w-full max-w-xs items-center rounded-full bg-navy py-3"
         >
           <Text className="font-bold text-white">Sign in</Text>
@@ -92,7 +93,7 @@ export function AccountScreen() {
   return (
     <View className="flex-1 bg-surface">
       <View className="px-5 pb-2 pt-4">
-        {/* Header card — like the website: avatar + welcome + email + logout */}
+        {/* Header card — avatar + name + email + admin badge */}
         <View className="flex-row items-center justify-between rounded-2xl border border-line bg-card p-4">
           <View className="min-w-0 flex-1 flex-row items-center">
             <View className="h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy">
@@ -113,35 +114,16 @@ export function AccountScreen() {
           )}
         </View>
 
-        {/* Stat cards — like the website's row */}
-        <View className="mt-4 flex-row flex-wrap gap-3">
-          <View className="w-[47%] rounded-2xl border border-line bg-card p-4">
-            <Text className="text-xs font-black uppercase tracking-widest text-muted">Orders placed</Text>
-            <Text className="mt-1 font-display text-2xl font-bold text-ink">{orders.length}</Text>
-          </View>
-          <View className="w-[47%] rounded-2xl border border-line bg-card p-4">
-            <Text className="text-xs font-black uppercase tracking-widest text-muted">Items in build list</Text>
-            <Text className="mt-1 font-display text-2xl font-bold text-ink">{cartCount}</Text>
-          </View>
-        </View>
-
         {/* Profile edit toggle */}
-        <View className="mt-4 flex-row flex-wrap gap-2">
-          {editingProfile ? (
-            <Pressable onPress={() => setEditingProfile(false)} className="rounded-full border border-line px-4 py-2">
-              <Text className="text-xs font-bold text-ink">Cancel</Text>
-            </Pressable>
-          ) : (
-            <Pressable onPress={() => setEditingProfile(true)} className="rounded-full bg-navy px-4 py-2">
-              <Text className="text-xs font-bold text-white">Edit Profile</Text>
-            </Pressable>
-          )}
-          {isAdmin && (
-            <Pressable onPress={() => navigation.push('Admin')} className="rounded-full bg-gold px-4 py-2">
-              <Text className="text-xs font-bold text-ink">Admin Panel</Text>
-            </Pressable>
-          )}
-        </View>
+        {editingProfile ? (
+          <Pressable onPress={() => setEditingProfile(false)} className="rounded-full border border-line px-4 py-2">
+            <Text className="text-xs font-bold text-ink">Cancel</Text>
+          </Pressable>
+        ) : (
+          <Pressable onPress={() => setEditingProfile(true)} className="rounded-full bg-navy px-4 py-2">
+            <Text className="text-xs font-bold text-white">Edit Profile</Text>
+          </Pressable>
+        )}
 
         {/* Profile edit form */}
         {editingProfile && (
@@ -164,72 +146,9 @@ export function AccountScreen() {
             </View>
           </View>
         )}
-      </View>
 
-      {/* Orders section */}
-      <View className="px-5 pb-2">
-        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Your orders</Text>
-        {ordersLoading ? (
-          <View className="mt-3 items-center py-6">
-            <ActivityIndicator size="small" color="#1e3a8a" />
-          </View>
-        ) : orders.length === 0 ? (
-          <View className="mt-3 items-center rounded-2xl border border-dashed border-line bg-card py-8">
-            <Feather name="package" size={32} color="#cbd5e1" />
-            <Text className="mt-2 text-sm text-muted">No orders yet.</Text>
-          </View>
-        ) : (
-          <View className="mt-3 space-y-2">
-            {orders.map((item) => (
-              <View key={item.id} className="rounded-2xl border border-line bg-card p-4">
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-sm font-bold text-ink">{statusLabel(item.status)}</Text>
-                  <Text className="text-xs text-muted">
-                    {new Date(item.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Text className="mt-1 font-display text-lg font-bold text-navy">
-                  NPR {item.total_npr.toLocaleString('en-IN')}
-                </Text>
-                <Text className="mt-0.5 text-xs text-muted">#{item.id.slice(0, 8)}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* Footer: app update + theme + legal links + sign out */}
-      <View className="border-t border-line bg-card px-5 py-4">
-        <View className="mb-3">
-          <Text className="text-xs font-black uppercase tracking-[0.24em] text-muted">App</Text>
-          <AppUpdateCard />
-        </View>
-        <View className="mb-3">
-          <Text className="mb-2 text-xs font-black uppercase tracking-[0.24em] text-muted">App theme</Text>
-          <View className="flex-row gap-2">
-            {(['system', 'light', 'dark'] as const).map((mode) => (
-              <Pressable
-                key={mode}
-                onPress={() => setThemeMode(mode)}
-                className={`flex-1 items-center rounded-lg border py-2 ${themeMode === mode ? 'border-navy bg-navy' : 'border-line bg-surface'}`}
-              >
-                <Text className={`text-xs font-bold capitalize ${themeMode === mode ? 'text-white' : 'text-ink'}`}>
-                  {mode}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-        <View className="flex-row items-center justify-center gap-3 py-1">
-          <Pressable onPress={() => navigation.push('Legal', { doc: 'privacy' })}>
-            <Text className="text-sm font-bold text-navy underline">Privacy Policy</Text>
-          </Pressable>
-          <Text className="text-sm text-border">·</Text>
-          <Pressable onPress={() => navigation.push('Legal', { doc: 'terms' })}>
-            <Text className="text-sm font-bold text-navy underline">Terms of Service</Text>
-          </Pressable>
-        </View>
-        <Pressable onPress={signOut} className="mt-3 items-center rounded-full border border-red-200 bg-card py-3">
+        {/* Sign out */}
+        <Pressable onPress={signOut} className="mt-4 items-center rounded-full border border-red-200 bg-card py-3">
           <Text className="text-sm font-bold text-red-600">Sign out</Text>
         </Pressable>
       </View>

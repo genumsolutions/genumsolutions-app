@@ -22,7 +22,7 @@ type IconName = ComponentProps<typeof Feather>['name'];
 type Dest = {
   icon: IconName;
   label: string;
-  screen: 'Services' | 'Projects' | 'Journal' | 'Printing' | 'OpenTools' | 'Tools' | 'About' | 'Contact';
+  screen?: string;
 };
 
 const EXPLORE: Dest[] = [
@@ -37,11 +37,13 @@ const COMPANY: Dest[] = [
   { icon: 'cpu', label: 'Control Panel', screen: 'Tools' },
   { icon: 'info', label: 'About', screen: 'About' },
   { icon: 'phone', label: 'Contact', screen: 'Contact' },
+  { icon: 'download', label: 'App Updates', screen: 'Update' },
+  { icon: 'settings', label: 'Theme', screen: 'Theme' },
 ];
 
 export function MenuScreen() {
-  const navigation = useNavigation<RootNav>();
-  const { isAdmin } = useApp();
+  const navigation = useNavigation<any>();
+  const { isAdmin, themeMode, setThemeMode } = useApp();
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingVertical: 12 }}>
@@ -51,12 +53,40 @@ export function MenuScreen() {
         ))}
       </MenuGroup>
 
-      <MenuGroup title="Company">
-        {COMPANY.map((d) => (
-          <MenuItem key={d.label} icon={d.icon} label={d.label} onPress={() => navigation.push(d.screen)} />
-        ))}
-        <MenuItem icon="shield" label="Privacy Policy" onPress={() => navigation.push('Legal', { doc: 'privacy' })} />
-        <MenuItem icon="file-text" label="Terms of Service" onPress={() => navigation.push('Legal', { doc: 'terms' })} />
+<MenuGroup title="Company">
+        {COMPANY.map((d) => {
+          // Theme item toggles theme mode instead of navigating
+          if (d.label === 'Theme') {
+            return (
+              <MenuItem
+                key={d.label}
+                icon={d.icon}
+                label={d.label}
+                onPress={() => setThemeMode(
+                  themeMode === 'system' ? 'light' : themeMode === 'light' ? 'dark' : 'system'
+                )}
+              />
+            );
+          }
+          return (
+            <MenuItem
+              key={d.label}
+              icon={d.icon}
+              label={d.label}
+              onPress={() => navigation.push(d.screen)}
+            />
+          );
+        })}
+        <MenuItem
+          icon="shield"
+          label="Privacy Policy"
+          onPress={() => navigation.push('Legal', { doc: 'privacy' })}
+        />
+        <MenuItem
+          icon="file-text"
+          label="Terms of Service"
+          onPress={() => navigation.push('Legal', { doc: 'terms' })}
+        />
       </MenuGroup>
 
       {isAdmin ? (

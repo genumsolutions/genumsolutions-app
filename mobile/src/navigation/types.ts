@@ -41,6 +41,7 @@ export type RootStackParamList = {
   Legal: { doc: 'privacy' | 'terms' };
   OrderSuccess: { orderId?: string; provider?: string; paid?: boolean };
   Account: undefined;
+  Update: undefined;
 };
 
 /** Navigation prop for tab screens that can push onto the root stack. */
