@@ -223,8 +223,8 @@ export type DriveControlsProps = {
       onSignedDrive is set (mirrors the ESP remote's Steer limit). */
   steerLimit?: number
   onPid: (key: 'kp' | 'ki' | 'kd' | 'out' | 'off', v: number) => void
-  onRun: () => void
-  onStop: () => void
+  onRun?: () => void
+  onStop?: () => void
   /** Emergency stop (ESTOP + SPD0). Rendered when provided. */
   onEStop?: () => void
 }

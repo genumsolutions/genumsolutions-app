@@ -44,6 +44,7 @@ export function useControlHub(routeCategory?: string) {
   const [deviceName, setDeviceName] = useState(sppService.deviceName ?? '')
   const [scanning, setScanning] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [connectingAddress, setConnectingAddress] = useState<string | null>(null)
   const [wifiConnected, setWifiConnected] = useState(false)
   const [wifiUrl, setWifiUrl] = useState('ws://192.168.4.1:81')
   const [error, setError] = useState<string | null>(null)
@@ -324,13 +325,14 @@ export function useControlHub(routeCategory?: string) {
       setError('This car has no Bluetooth address. Rescan and try again.')
       return
     }
-    setConnecting(true)
+    setConnectingAddress(device.address)
     setError(null)
     try {
       await sppService.connect(device.address)
       setConnected(true)
       setDeviceName(device.name)
       setConnecting(false)
+      setConnectingAddress(null)
       setWifiConnected(false)
       showConnectionMessage(`Connected to ${device.name}`, 'success')
       void sppService.requestState().catch(() => {})
@@ -338,6 +340,7 @@ export function useControlHub(routeCategory?: string) {
       if (mountedRef.current) {
         setError(e instanceof Error ? e.message : 'Connection failed')
         setConnecting(false)
+        setConnectingAddress(null)
         showConnectionMessage(e instanceof Error ? e.message : 'Connection failed', 'error')
       }
     }
@@ -578,7 +581,7 @@ export function useControlHub(routeCategory?: string) {
 
   return {
     // connection
-    sppDevices, connected, deviceName, scanning, connecting, wifiConnected, wifiUrl,
+    sppDevices, connected, deviceName, scanning, connecting, connectingAddress, wifiConnected, wifiUrl,
     error, connectionMessage, connectionMsgType, sppStatus, sppStatusMsg, showSppsRetry,
     sppSupported, canControl,
     setWifiUrl, handleScan, handleConnect, handleSppsRetry, handleWifiConnect,

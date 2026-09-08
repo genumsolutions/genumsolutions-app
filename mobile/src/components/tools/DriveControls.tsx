@@ -81,6 +81,7 @@ function MiniStepperBtn({ onPress, disabled, icon }: {
 
 // Map normalized joystick position to a direction letter, mirroring the
 // physical remote's 4-way stick → F/B/L/R mapping.
+// Convention: UP (y<0) = Forward, DOWN (y>0) = Backward, LEFT (x<0) = Left, RIGHT (x>0) = Right.
 function joyToDirection(x: number, y: number): 'F' | 'B' | 'L' | 'R' | 'S' {
   const ax = Math.abs(x)
   const ay = Math.abs(y)
@@ -135,8 +136,13 @@ function DualDpad({
   limits: SafetyLimits
   onHaptic?: () => void
 }) {
-  const containerRef = useRef<View | null>(null)
-  const rectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  // Per-pad rects measured via onLayout — touch mapping uses these
+  // instead of a single container rect, so padding/gaps don't offset
+  // the hit areas from the visual cells.
+  const leftPadRef = useRef<View | null>(null)
+  const rightPadRef = useRef<View | null>(null)
+  const leftRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  const rightRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
   const [activeCells, setActiveCells] = useState<ActiveCell[]>([])
 
   // Always-fresh values so the raw touch handlers never see stale closures.
@@ -193,35 +199,50 @@ function DualDpad({
     return () => clearInterval(id)
   }, [canControl, activeCount, forceSendTargets])
 
-  // Cache the container's window rect (pageX/pageY are window coordinates).
-  const measureRect = useCallback(() => {
-    containerRef.current?.measureInWindow((x, y, w, h) => {
-      rectRef.current = { x, y, w, h }
+  // Measure each pad's window rect via onLayout (called once per layout).
+  const measureLeft = useCallback((e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
+    const { x, y, width, height } = e.nativeEvent.layout
+    // pageX/Y ≈ layout x/y + scroll offset; use measureInWindow for accuracy
+    leftPadRef.current?.measureInWindow((px, py, w, h) => {
+      leftRectRef.current = { x: px, y: py, w, h }
+    })
+  }, [])
+  const measureRight = useCallback((e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
+    rightPadRef.current?.measureInWindow((px, py, w, h) => {
+      rightRectRef.current = { x: px, y: py, w, h }
     })
   }, [])
 
-  // Map every active touch to a cell on the left/right pad by position.
-  // Each pad is a complete 3×3 d-pad: the center box is CENTER (stop),
-  // otherwise the dominant axis picks F/B/L/R.
+  // Map a touch point to a zone within a single pad rect.
+  // Each pad is a 3×3 grid: center = C (stop), dominant axis = F/B/L/R.
+  const zoneFromTouch = (wx: number, wy: number, rect: { x: number; y: number; w: number; h: number }): PadZone => {
+    const lx = wx - rect.x  // local X within pad
+    const ly = wy - rect.y  // local Y within pad
+    const cx = rect.w / 2
+    const cy = rect.h / 2
+    const dx = lx - cx
+    const dy = ly - cy
+    const cw = rect.w * 0.18  // center hit zone (slightly generous)
+    const ch = rect.h * 0.18
+    if (Math.abs(dx) < cw && Math.abs(dy) < ch) return 'C'
+    if (Math.abs(dy) >= Math.abs(dx)) return dy < 0 ? 'F' : 'B'
+    return dx < 0 ? 'L' : 'R'
+  }
+
+  // Map every active touch to a cell by checking which pad rect it falls in.
   const cellsFromTouches = useCallback((touches: readonly TouchPoint[]): ActiveCell[] => {
-    const rect = rectRef.current
-    if (!rect) return []
+    const lr = leftRectRef.current
+    const rr = rightRectRef.current
+    if (!lr || !rr) return []
     const cells: ActiveCell[] = []
     for (const t of touches) {
-      const wx = t.pageX - rect.x
-      const wy = t.pageY - rect.y
-      if (wx < 0 || wy < 0 || wx > rect.w || wy > rect.h) continue
-      const pad: PadId = wx < rect.w / 2 ? 'L' : 'R'
-      const cx = pad === 'L' ? rect.w / 4 : (rect.w * 3) / 4
-      const cy = rect.h / 2
-      const dx = wx - cx
-      const dy = wy - cy
-      const cw = rect.w * 0.15
-      const ch = rect.h * 0.16
-      let zone: PadZone
-      if (Math.abs(dx) < cw && Math.abs(dy) < ch) zone = 'C'
-      else if (Math.abs(dy) >= Math.abs(dx)) zone = dy < 0 ? 'F' : 'B'
-      else zone = dx < 0 ? 'L' : 'R'
+      // Check which pad the touch is inside (or nearest to)
+      const inL = t.pageX >= lr.x && t.pageX <= lr.x + lr.w && t.pageY >= lr.y && t.pageY <= lr.y + lr.h
+      const inR = t.pageX >= rr.x && t.pageX <= rr.x + rr.w && t.pageY >= rr.y && t.pageY <= rr.y + rr.h
+      if (!inL && !inR) continue
+      const pad: PadId = inL ? 'L' : inR ? 'R' : t.pageX < (lr.x + lr.w / 2 + rr.x + rr.w / 2) / 2 ? 'L' : 'R'
+      const rect = pad === 'L' ? lr : rr
+      const zone = zoneFromTouch(t.pageX, t.pageY, rect)
       cells.push({ pad, zone })
     }
     return cells
@@ -283,8 +304,6 @@ function DualDpad({
     <View>
       {/* The whole pad area is ONE multi-touch surface. */}
       <View
-        ref={containerRef}
-        onLayout={measureRect}
         onTouchStart={onTouch}
         onTouchMove={onTouch}
         onTouchEnd={onTouch}
@@ -292,7 +311,7 @@ function DualDpad({
       >
         <View className="flex-row items-stretch gap-3">
           {/* Left pad: motor / full 4-way depending on the mode */}
-          <View className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
+          <View ref={leftPadRef} onLayout={measureLeft} className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
             <Text className="mb-3 text-xs font-bold uppercase tracking-wide text-border">
               {is2wd1m ? 'Drive (motor)' : 'Drive (4-way)'}
             </Text>
@@ -311,7 +330,7 @@ function DualDpad({
           </View>
 
           {/* Right pad: servo steer (2WD1M) or shown-but-unused */}
-          <View className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
+          <View ref={rightPadRef} onLayout={measureRight} className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
             <Text className="mb-3 text-xs font-bold uppercase tracking-wide text-border">
               {is2wd1m ? 'Steer (servo)' : 'Not used here'}
             </Text>
@@ -384,7 +403,7 @@ function DualJoystick({
   const onRightRef = useRef(onRight)
   onRightRef.current = onRight
 
-  const radius = geo ? Math.min(geo.w * 0.22, geo.h * 0.5, 84) : 0
+  const radius = geo ? Math.min(geo.w * 0.28, geo.h * 0.42, 100) : 0
   const centerOf = (stick: 'L' | 'R') =>
     geo ? { cx: geo.w * (stick === 'L' ? 0.25 : 0.75), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
 
@@ -451,8 +470,8 @@ function DualJoystick({
     }
   }
 
-  const base = radius + 22
-  const knobSize = 44
+  const base = radius + 24
+  const knobSize = 48
 
   return (
     <View
@@ -553,7 +572,8 @@ export function DriveControls({
       }
       const raw = Math.round((Math.min(1, Math.abs(y)) * 255) / 5) * 5
       const mag = clampSignedDrive(raw, limits)
-      onSignedDrive(y < 0 ? -mag : mag)
+      // Convention: stick UP (y < 0) = forward (positive), stick DOWN = backward (negative)
+      onSignedDrive(y < 0 ? mag : -mag)
       return
     }
     // In 2WD1M the left stick only drives motor forward/backward
@@ -569,7 +589,8 @@ export function DriveControls({
   // The resulting servo angle is also clamped to the remote's safe servo range.
   const handleRightJoy = useCallback((x: number) => {
     if (!canControl || !is2wd1m) return
-    let dev = Math.round(-x * 90)
+    // Convention: stick LEFT (x < 0) = steer left (servo < 90), stick RIGHT = steer right (servo > 90)
+    let dev = Math.round(x * 90)
     if (onSignedDrive && steerLimit != null) {
       dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
     }
@@ -691,10 +712,10 @@ export function DriveControls({
       {/* Start/Stop */}
       {showStartStop && (
         <View className="mt-4 flex-row flex-wrap gap-3">
-          <Pressable onPress={() => { hapticTap(); onRun() }} disabled={!canControl} className="rounded-full bg-navy px-6 py-3">
+          <Pressable onPress={() => { hapticTap(); onRun?.() }} disabled={!canControl} className="rounded-full bg-navy px-6 py-3">
             <Text className="text-sm font-black text-white">Run</Text>
           </Pressable>
-          <Pressable onPress={() => { hapticTap(); onStop() }} disabled={!canControl} className="rounded-full border border-line bg-card px-6 py-3">
+          <Pressable onPress={() => { hapticTap(); onStop?.() }} disabled={!canControl} className="rounded-full border border-line bg-card px-6 py-3">
             <Text className="text-sm font-black text-ink">Stop</Text>
           </Pressable>
         </View>
