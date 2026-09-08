@@ -169,14 +169,16 @@ export function RemoteControlScreen({ navigation }: Props) {
             </Pressable>
             <Text className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Remote</Text>
           </View>
-          <Pressable
-            onPress={() => setShowSettings((v) => !v)}
-            className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
-            accessibilityRole="button"
-          >
-            <Feather name="settings" size={12} color="#fff" />
-            <Text className="text-xs font-bold text-white">Settings</Text>
-          </Pressable>
+          {is2wd1mActive && (
+            <Pressable
+              onPress={() => setShowSettings((v) => !v)}
+              className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
+              accessibilityRole="button"
+            >
+              <Feather name="settings" size={12} color="#fff" />
+              <Text className="text-xs font-bold text-white">Settings</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Simulation banner — kept small so it does not dominate the board */}

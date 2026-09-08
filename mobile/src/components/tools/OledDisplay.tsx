@@ -22,7 +22,7 @@ export function OledDisplay({
   const is2wd1m = activeMode.controls.includes('drive-2wd1m')
 
   return (
-    <View className="rounded-xl bg-slate-900 p-2 shadow-inner">
+    <View className="rounded-2xl bg-slate-900 p-2 shadow-inner">
       {/* Header line - car project name */}
       <View className="flex-row items-center justify-between border-b border-slate-700 px-2 pb-2">
         <Text className="font-mono text-xs font-bold text-emerald-400">
