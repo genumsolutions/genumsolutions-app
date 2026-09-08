@@ -1,0 +1,65 @@
+# =====================================================================
+# OTA Only - publish JS/asset updates without building the APK.
+#
+# Triggers on push to main when ONLY mobile/src/ files changed.
+# Skips the full APK build entirely (~2-3 min saved).
+# Just runs typecheck + expo-doctor + publishes OTA bundle (~2-5 sec).
+#
+# NOTE: Bump runtimeVersion before committing OTA-only pushes
+# to force devices to check for new bundles. See the section
+# "Runtime Version Management" in GUIDE.md.
+# =====================================================================
+name: OTA Only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/src/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ota-only
+  cancel-in-progress: false
+
+jobs:
+  ota-publish:
+    if: github.ref == 'refs/heads/main'
+    name: Publish OTA bundle (no APK)
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Expo doctor
+        run: npm run doctor
+
+      # ── Publish OTA bundle (JS/asset only) ──────────────
+      - name: Publish OTA update
+        run: npx eas update --branch main --non-interactive
+
+      # ── Sync version manifest to Supabase ───────────────
+      # Updates the release.json manifest so the website /app page
+      # reflects the newest OTA-published version.
+      - name: Sync version to Supabase
+        if: secrets.SUPABASE_URL != '' && secrets.SUPABASE_SERVICE_ROLE_KEY != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sync-version.mjs
