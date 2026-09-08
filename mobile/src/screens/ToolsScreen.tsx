@@ -30,7 +30,7 @@ export function ToolsScreen() {
   const {
     // connection
     connected, sppStatus, deviceName,
-    sppSupported, sppDevices, scanning, connecting,
+    sppSupported, sppDevices, scanning, connecting, connectingAddress,
     handleScan, handleConnect, handleDisconnect,
     wifiConnected, wifiUrl, setWifiUrl, handleWifiConnect, handleWifiDisconnect,
     error, connectionMessage, connectionMsgType, sppStatusMsg,
@@ -159,7 +159,7 @@ export function ToolsScreen() {
                       )}
                     </View>
                     <Text className="ml-2 text-xs font-bold text-navy">
-                      {connecting ? 'Connecting…' : 'Connect'}
+                      {connectingAddress === item.address ? 'Connecting…' : 'Connect'}
                     </Text>
                   </Pressable>
                 )}
