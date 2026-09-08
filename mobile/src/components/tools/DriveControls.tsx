@@ -325,7 +325,7 @@ function DualDpad({
               <DpadCell icon={PAD_ICONS.B} active={cellActive('L', 'B')} enabled={enabled.L.includes('B')} />
             </View>
             <Text className="mt-3 text-center text-[11px] leading-4 text-muted">
-              {is2wd1m ? 'Hold to drive\nRelease stops instantly' : 'Hold any direction\nRelease stops'}
+              {is2wd1m ? 'Hold to drive · Release stops instantly' : 'Hold any direction · Release stops'}
             </Text>
           </View>
 
@@ -344,7 +344,7 @@ function DualDpad({
               <DpadCell icon={PAD_ICONS.B} active={cellActive('R', 'B')} enabled={enabled.R.includes('B')} />
             </View>
             <Text className="mt-3 text-center text-[11px] leading-4 text-muted">
-              {is2wd1m ? 'Hold to steer\nRelease straightens' : 'Unused in this mode'}
+              {is2wd1m ? 'Hold to steer · Release straightens' : 'Unused in this mode'}
             </Text>
           </View>
         </View>
@@ -676,7 +676,6 @@ export function DriveControls({
           />
           <View className="mt-1 flex-row items-center justify-center gap-4">
             <MiniStepperBtn onPress={() => onSpeed(clampSpeed(speed - 5, limits))} disabled={!canControl} icon="minus" />
-            <Text className="w-14 text-center font-mono text-lg font-bold text-navy">{clampSpeed(speed, limits)}</Text>
             <MiniStepperBtn onPress={() => onSpeed(clampSpeed(speed + 5, limits))} disabled={!canControl} icon="plus" />
           </View>
         </View>

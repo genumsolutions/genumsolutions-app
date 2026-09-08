@@ -2,7 +2,7 @@
 // expands into the full mode picker) plus a cycle toggle button that walks
 // the firmware mode order like the physical remote's mode select.
 import React, { useState } from 'react'
-import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
+import { Modal, Pressable, ScrollView, Text, View, Vibration, useWindowDimensions } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
 import type { ModeChooserProps } from './types'
@@ -29,7 +29,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
           <Feather name="chevron-down" size={18} color="#64748b" />
         </Pressable>
         <Pressable
-          onPress={onCycle}
+          onPress={() => { Vibration.vibrate(10); onCycle() }}
           disabled={!canControl}
           accessibilityRole="button"
           className="flex-row items-center gap-1.5 rounded-xl bg-navy px-4 py-3 disabled:opacity-40"
@@ -52,7 +52,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
                 return (
                   <Pressable
                     key={m.id}
-                    onPress={() => { onSelect(m); setOpen(false) }}
+                    onPress={() => { Vibration.vibrate(10); onSelect(m); setOpen(false) }}
                     accessibilityRole="button"
                     className={`mt-1 flex-row items-center justify-between rounded-xl px-4 py-3 ${isActive ? 'bg-navy' : 'border border-line bg-surface'}`}
                   >
