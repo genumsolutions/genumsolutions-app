@@ -16,6 +16,7 @@
 // Usage:
 //   node scripts/bump-version.mjs <version> <versionCode>
 //   node scripts/bump-version.mjs 1.5.12 20
+//   node scripts/bump-version.mjs 2.0.0 43 --runtime 1.0.1
 //
 // The version/versionCode are written to app.json first, then every derived
 // app-side value is regenerated from them.
@@ -28,17 +29,21 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..'); // mobil
 
 // ── Parse args ───────────────────────────────────────────────────────
 const positionals = [];
+const flags = {};
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--website' && argv[i + 1]) {
-    // Accepted for backwards compatibility but no longer used.
+    flags.website = argv[i + 1];
+    i++;
+  } else if (argv[i] === '--runtime' && argv[i + 1]) {
+    flags.runtime = argv[i + 1];
     i++;
   } else {
     positionals.push(argv[i]);
   }
 }
 if (positionals.length < 2) {
-  console.error('Usage: node scripts/bump-version.mjs <version> <versionCode>');
+  console.error('Usage: node scripts/bump-version.mjs <version> <versionCode> [--runtime <runtimeVersion>]');
   process.exit(1);
 }
 const VERSION = positionals[0];
@@ -49,6 +54,10 @@ if (!/^\d+\.\d+\.\d+$/.test(VERSION)) {
 }
 if (!/^\d+$/.test(VERSION_CODE)) {
   console.error(`Invalid versionCode '${VERSION_CODE}' - expected an integer`);
+  process.exit(1);
+}
+if (flags.runtime && !/^\d+\.\d+\.\d+$/.test(flags.runtime)) {
+  console.error(`Invalid runtimeVersion '${flags.runtime}' - expected semver like 1.0.0`);
   process.exit(1);
 }
 
@@ -96,6 +105,15 @@ if (lock.packages?.['']) lock.packages[''].version = VERSION;
 writeJson(lockPath, lock);
 changed = true;
 
+// 3b) Bump runtimeVersion in app.json (forces devices to check for new OTA bundle)
+if (flags.runtime) {
+  changed =
+    editFile(appJsonPath, (src) =>
+      src.replace(/"runtimeVersion": "[^"]*"/, `"runtimeVersion": "${flags.runtime}"`),
+    ) || changed;
+  console.log(`  app.json runtimeVersion -> ${flags.runtime}`);
+}
+
 // 4) website lib/company.ts androidApp (fallback) is intentionally NOT bumped
 //    here. Bumping it in advance made /app advertise a version whose APK wasn't
 //    uploaded yet. The live manifest drives the site; after a release upload,
@@ -104,3 +122,6 @@ console.log('Version bumped. Commit + push the app repo with:');
 console.log('  git add -A && git commit -m "chore: bump app version to ..." && git push origin main');
 console.log('After the release uploads, sync the website fallback:');
 console.log('  (genumsolutions-website) node scripts/sync-app-fallback.mjs');
+if (flags.runtime) {
+  console.log('RuntimeVersion bumped for OTA — devices will check for new bundle on next load.');
+}
