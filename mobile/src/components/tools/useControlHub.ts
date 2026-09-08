@@ -98,11 +98,11 @@ export function useControlHub(routeCategory?: string) {
   // Mode from car (mode sync)
   const [carModeId, setCarModeId] = useState<string | null>(null)
 
-  // Fullscreen (legacy overlay flag kept for persistence compatibility)
-  const [fullscreen, setFullscreen] = useState(false)
-
-  // Joystick layout style id ('dual' | 'dpad') persisted per device.
+  // Joystick layout style id persisted per device.
   const [joystickLayoutId, setJoystickLayoutId] = useState<string>('dual')
+
+  // Remote settings drawer (in-window, non-overflowing).
+  const [showSettings, setShowSettings] = useState(false)
 
   const mountedRef = useRef(true)
   const wsRef = useRef<WebSocket | null>(null)
@@ -151,7 +151,6 @@ export function useControlHub(routeCategory?: string) {
             if (prefs.steerLimit != null) setSteerLimit(prefs.steerLimit)
             if (prefs.trim != null) setTrim(prefs.trim)
             if (prefs.useJoystick != null) setUseJoystick(prefs.useJoystick)
-            if (prefs.fullscreen != null) setFullscreen(prefs.fullscreen)
           }
         })
         return () => { active = false }
@@ -173,14 +172,13 @@ export function useControlHub(routeCategory?: string) {
         steerLimit,
         trim,
         useJoystick,
-        fullscreen,
         joystickLayout: joystickLayoutId,
         ...patch,
-      }
+      } as DevicePrefs
       void deviceMemory.write(addressForMemory, next)
       setSavedPrefs(next)
     },
-    [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, fullscreen, joystickLayoutId],
+    [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, joystickLayoutId],
   )
 
   // Set category from route params

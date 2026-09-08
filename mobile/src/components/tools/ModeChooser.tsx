@@ -40,11 +40,11 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <View className="flex-1 justify-end bg-black/40">
           <Pressable className="absolute inset-0" onPress={() => setOpen(false)} />
-          <View className="rounded-t-3xl bg-card px-5 pb-8 pt-5 shadow-card">
-            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          <View className="rounded-t-3xl bg-card px-5 pb-6 pt-5 shadow-card">
+            <Text className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">
               Select a mode
             </Text>
-            <ScrollView className="mt-3 max-h-96">
+            <ScrollView className="mt-2 max-h-[60vh]">
               {catalogue.map((m: CarMode) => {
                 const isActive = activeMode.id === m.id
                 return (
@@ -58,7 +58,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
                       <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-ink'}`}>
                         {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
                       </Text>
-                      <Text className={`text-[11px] ${isActive ? 'text-white/70' : 'text-muted'}`}>
+                      <Text className={`text-[11px] ${isActive ? 'text-white/70' : 'text-muted'}`} numberOfLines={1}>
                         {m.token} · {m.transport.join(' / ')}
                       </Text>
                     </View>
