@@ -19,7 +19,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { APP_VERSION } from '../config/site';
 import {
-  checkForUpdate,
+  checkForAnyUpdate,
   downloadAndInstall,
   type UpdateState,
 } from '../services/updateService';
@@ -35,12 +35,12 @@ export function AppUpdateCard({ compact = false }: Props) {
   // Auto-check once on mount so the badge/status is current when opened.
   useEffect(() => {
     setUpdateState({ status: 'checking' });
-    checkForUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }));
+    checkForAnyUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }));
   }, []);
 
   const handleCheckUpdate = useCallback(() => {
     setUpdateState({ status: 'checking' });
-    checkForUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }));
+    checkForAnyUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }));
   }, []);
 
   const handleDownloadInstall = useCallback(async () => {

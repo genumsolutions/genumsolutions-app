@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_VERSION } from '../config/site';
 import {
-  checkForUpdate,
+  checkForAnyUpdate,
   downloadAndInstall,
   type UpdateState,
 } from '../services/updateService';
@@ -40,7 +40,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
 
   const runCheck = useCallback(async () => {
     setState({ status: 'checking' });
-    const result = await checkForUpdate();
+    const result = await checkForAnyUpdate();
     setState(result);
   }, []);
 

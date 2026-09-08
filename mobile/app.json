@@ -132,6 +132,12 @@
         "projectId": "f09b820e-9318-4267-9651-447ee6ffcd3d"
       }
     },
-    "owner": "genumsolutions"
+    "owner": "genumsolutions",
+    "updates": {
+      "url": "https://u.expo.dev/f09b820e-9318-4267-9651-447ee6ffcd3d",
+      "fallbackToCacheTimeout": 300,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": "1.0.0"
   }
 }

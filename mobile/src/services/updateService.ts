@@ -1,15 +1,21 @@
 // =====================================================================
 // updateService - native in-app "check for update" with guided install.
 //
-// Because the app is a signed APK (no app store), an update means:
-//   1. fetch release.json (the latest published version + APK url)
-//   2. compare it with the running APP_VERSION
-//   3. download the new APK to cache, then launch the Android package
-//      installer via a content:// URI (the user taps INSTALL — Android
-//      always requires the final confirmation, there is no silent install).
+// The app now supports TWO update channels:
+//   1. OTA (Over-The-Air) via expo-updates — for JS/asset changes only.
+//      These are silent updates that apply on next app load.
+//   2. Full APK download — for native module changes (new permissions,
+//      new expo plugins, gradle config). Requires user confirmation.
+//
+// Update flow:
+//   1. Check for OTA update (JS/asset only) — if available, apply silently.
+//   2. If no OTA update, check for APK update (native changes).
+//   3. Download and guide user through APK install.
 // =====================================================================
 import { File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
+import * as Updates from 'expo-updates';
+import { Platform } from 'react-native';
 import { APP_VERSION } from '../config/site';
 import {
   APK_URL,
@@ -34,6 +40,8 @@ export type UpdateState = {
   size?: string;
   notes?: string;
   error?: string;
+  /** true when an OTA (JS/asset) update was found and applied. */
+  otaApplied?: boolean;
 };
 
 // Compare dotted numeric versions (e.g. "1.10.0" vs "1.9.3").
@@ -60,8 +68,36 @@ export function isVersionNewer(current: string, latest: string): boolean {
   return compareVersions(current, latest) < 0;
 }
 
-// Fetch the latest published release info. Pure-ish: accepts an injected
-// fetch so it can be unit tested offline.
+// ── OTA Update Check ──────────────────────────────────────────────
+// Checks for expo-updates OTA bundle. Returns true if an OTA update
+// was found and applied (will take effect on next app reload).
+export async function checkForOtaUpdate(): Promise<{
+  applied: boolean;
+  error?: string;
+}> {
+  // OTA only works on native (Android/iOS), not web
+  if (Platform.OS === 'web') {
+    return { applied: false };
+  }
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (update.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      return { applied: true };
+    }
+    return { applied: false };
+  } catch (e) {
+    // OTA check is best-effort — don't block the app if it fails
+    return {
+      applied: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+// ── APK Update Check ─────────────────────────────────────────────
+// Fetches the latest published release info from Supabase. Pure-ish:
+// accepts an injected fetch so it can be unit tested offline.
 export async function checkForUpdate(
   fetchImpl: typeof fetch = fetch,
   manifestUrl: string = RELEASE_MANIFEST_URL,
@@ -97,6 +133,28 @@ export async function checkForUpdate(
   }
 }
 
+// ── Combined Update Check ─────────────────────────────────────────
+// Checks OTA first, then APK. Returns the OTA result if applied,
+// otherwise falls back to APK check.
+export async function checkForAnyUpdate(
+  fetchImpl: typeof fetch = fetch,
+  manifestUrl: string = RELEASE_MANIFEST_URL,
+): Promise<UpdateState> {
+  // 1. Check for OTA update (JS/asset only, silent)
+  const ota = await checkForOtaUpdate();
+  if (ota.applied) {
+    return {
+      status: 'up-to-date',
+      notes: 'A UI update was applied. Restart the app to see changes.',
+      otaApplied: true,
+    };
+  }
+
+  // 2. Fall back to APK check (native changes, requires install)
+  return checkForUpdate(fetchImpl, manifestUrl);
+}
+
+// ── APK Download + Install ────────────────────────────────────────
 // Download the release APK and launch the Android installer for it.
 // The user taps INSTALL — Android never allows silent installs.
 export async function downloadAndInstall(
