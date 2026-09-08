@@ -17,7 +17,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
   const shortName = MODE_NAMES[activeMode.token] ?? activeMode.name.split('·')[0].trim()
 
   return (
-    <View className="rounded-2xl border border-line bg-card p-5 shadow-card">
+    <View className="rounded-2xl border border-line bg-card p-3 shadow-card">
       <Text className="text-xs font-bold uppercase tracking-wide text-muted">Mode</Text>
       <View className="mt-2 flex-row items-center gap-2">
         <Pressable
@@ -42,7 +42,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <View className="flex-1 justify-end bg-black/40">
           <Pressable className="absolute inset-0" onPress={() => setOpen(false)} />
-          <View className="rounded-t-3xl bg-card px-5 pb-6 pt-5 shadow-card">
+          <View className="rounded-2xl bg-card px-4 pb-5 pt-4 shadow-card">
             <Text className="text-[11px] font-black uppercase tracking-[0.2em] text-navy">
               Select a mode
             </Text>
