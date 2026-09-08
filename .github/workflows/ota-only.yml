@@ -51,15 +51,8 @@ jobs:
         run: npm run doctor
 
       # ── Publish OTA bundle (JS/asset only) ──────────────
+      # OTA bundles are delivered by Expo's servers.
+      # The manifest (Supabase) is only updated by release.yml
+      # after a full APK upload, so OTA-only pushes skip it.
       - name: Publish OTA update
         run: npx eas update --branch main --non-interactive
-
-      # ── Sync version manifest to Supabase ───────────────
-      # Updates the release.json manifest so the website /app page
-      # reflects the newest OTA-published version.
-      - name: Sync version to Supabase
-        if: secrets.SUPABASE_URL != '' && secrets.SUPABASE_SERVICE_ROLE_KEY != ''
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/sync-version.mjs
