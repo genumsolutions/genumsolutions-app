@@ -7,10 +7,11 @@
 // =====================================================================
 import React from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Feather } from '@expo/vector-icons';
+import { AccountSheet } from '../components/AccountSheet';
 import { useApp } from '../context/AppContext';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -18,7 +19,7 @@ type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
 export function BrandHeader() {
   const insets = useSafeAreaInsets();
-  const { cartCount, user, isSignedIn, setAuthSheetOpen } = useApp();
+  const { cartCount, user, isSignedIn, setAuthSheetOpen, accountSheetOpen, setAccountSheetOpen } = useApp();
   const nav = useNavigation<RootNav>();
 
   const initials = (user?.name || 'U')
@@ -56,21 +57,25 @@ export function BrandHeader() {
         <View className="flex-row items-center gap-2">
           {/* Account - mirrors the website header: signed-in opens the
               Account screen, signed-out opens the sign-in sheet. */}
-          <Pressable
-            onPress={() => {
-              if (isSignedIn) nav.push('Account');
-              else setAuthSheetOpen(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={isSignedIn ? 'Open account' : 'Sign in'}
-            className="h-10 w-10 items-center justify-center rounded-full bg-white/10"
-          >
+<Pressable
+              onPress={() => {
+                if (isSignedIn) setAccountSheetOpen(true);
+                else setAuthSheetOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={isSignedIn ? 'Open account' : 'Sign in'}
+              className="h-10 w-10 items-center justify-center rounded-full bg-white/10"
+            >
             {isSignedIn ? (
               <Text className="text-xs font-black text-white">{initials}</Text>
             ) : (
               <Feather name="user" size={18} color="#ffffff" />
             )}
           </Pressable>
+          <AccountSheet
+            visible={accountSheetOpen}
+            onRequestClose={() => setAccountSheetOpen(false)}
+          />
           <Pressable
             onPress={() => nav.navigate('Main', { screen: 'Cart' })}
             accessibilityRole="button"

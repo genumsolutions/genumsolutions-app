@@ -86,67 +86,38 @@ export function RemoteControlScreen({ navigation }: Props) {
   // Back button pressed state for visual feedback
   const [backPressed, setBackPressed] = useState(false)
 
-  // Remote-window orientation: only touch orientation for this screen, and
-  // restore the phone's previous orientation on back (so the rest of the app
-  // never gets stuck in landscape after leaving Remote).
-  //
-  // Behavior: open in landscape only when the phone is already landscape;
-  // otherwise keep portrait. That matches the owner's request that the whole
-  // app should not flip to landscape after leaving the remote view, and it
-  // still gives the game-style remote its best layout when the device is
-  // already held in landscape.
-  const [priorOrientation, setPriorOrientation] = useState<ScreenOrientation.Orientation | null>(null)
-  const remoteOrientationRef = useRef<ScreenOrientation.Orientation | null>(null)
+  // Remote-window orientation: always lock landscape for the game-style
+  // remote layout. Restore the phone's previous orientation on back.
+  const priorOrientationRef = useRef<ScreenOrientation.Orientation | null>(null)
   const [desiredOrientation, setDesiredOrientation] = useState<ScreenOrientation.Orientation | null>(null)
 
-  // Fetch orientation async on mount and derive desired lock state.
   useEffect(() => {
+    let lockCleanup: (() => void) | undefined
     ;(async () => {
-      const orientation = Platform.OS === 'web' ? null : await ScreenOrientation.getOrientationAsync()
-      if (orientation && Platform.OS !== 'web') {
-        setPriorOrientation(orientation as ScreenOrientation.Orientation)
-        // Only force landscape if already landscape; never force from portrait.
-        if (
-          orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-          orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
-        ) {
-          setDesiredOrientation(
-            orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
-              ? ScreenOrientation.Orientation.LANDSCAPE_LEFT
-              : orientation
-          )
-        }
-      }
+      if (Platform.OS === 'web') return
+      const orientation = await ScreenOrientation.getOrientationAsync()
+      priorOrientationRef.current = orientation as ScreenOrientation.Orientation
+      const landscape = ScreenOrientation.Orientation.LANDSCAPE_LEFT
+      setDesiredOrientation(landscape)
+      try {
+        const cleanup = await (ScreenOrientation.lockAsync as any)({ orientation: landscape, errorHandler: () => {} })
+        lockCleanup = cleanup
+      } catch { lockCleanup = undefined }
     })()
+    return () => { if (lockCleanup) lockCleanup() }
   }, [])
 
-  // Apply orientation lock and restore on unmount.
+  // Restore prior orientation on unmount.
   useEffect(() => {
-    let active = true
-    let restored = false
-    let lockCleanup: (() => void) | undefined
-
-    // Lock to desired orientation on mount (if applicable).
-    if (desiredOrientation && Platform.OS !== 'web') {
-      ;(ScreenOrientation.lockAsync as any)({ orientation: desiredOrientation, errorHandler: () => {} })
-        .then((cleanup: any) => { lockCleanup = cleanup })
-        .catch(() => {; lockCleanup = undefined})
-    }
-
     return () => {
-      active = false
-      // Restore the prior orientation when leaving Remote.
-      if (!restored && priorOrientation && Platform.OS !== 'web' && remoteOrientationRef.current !== priorOrientation) {
-        restored = true
+      if (priorOrientationRef.current && Platform.OS !== 'web') {
         try {
-          ;(ScreenOrientation.lockAsync as any)({ orientation: priorOrientation, errorHandler: () => {} })
-            .then((cleanup: any) => { if (lockCleanup) lockCleanup() })
-            .catch(() => {; lockCleanup = undefined})
-        } catch { /* best-effort restore */ }
+          ;(ScreenOrientation.lockAsync as any)({ orientation: priorOrientationRef.current, errorHandler: () => {} })
+            .catch(() => {})
+        } catch {}
       }
-      if (lockCleanup) lockCleanup()
     }
-  }, [desiredOrientation, priorOrientation])
+  }, [])
 
   return (
     <View className="flex-1 bg-slate-950">
@@ -155,6 +126,11 @@ export function RemoteControlScreen({ navigation }: Props) {
           The board is bounded so Settings and controls never overflow the
           remote window or fall below the visible area. */}
       <View className="flex-1 overflow-hidden px-3 pt-8 pb-2">
+        {/* Camera placeholder — reserved for future modes */}
+        <View className="mb-1.5 self-start rounded-lg border border-dashed border-slate-600 bg-slate-900/50 px-3 py-2">
+          <Text className="text-sm font-bold uppercase tracking-wide text-slate-500">📷 Camera — Future Mode</Text>
+        </View>
+
         {/* Top chrome */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
@@ -165,9 +141,9 @@ export function RemoteControlScreen({ navigation }: Props) {
               className={`rounded-full border border-white/10 px-3 py-1.5 ${backPressed ? 'bg-white/15 opacity-70' : 'bg-white/5'}`}
               accessibilityRole="button"
             >
-              <Text className="text-xs font-bold text-white">‹ Back</Text>
+              <Text className="text-sm font-bold text-white">‹ Back</Text>
             </Pressable>
-            <Text className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Remote</Text>
+            <Text className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Remote</Text>
           </View>
           {is2wd1mActive && (
             <Pressable
@@ -175,8 +151,8 @@ export function RemoteControlScreen({ navigation }: Props) {
               className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
               accessibilityRole="button"
             >
-              <Feather name="settings" size={12} color="#fff" />
-              <Text className="text-xs font-bold text-white">Settings</Text>
+              <Feather name="settings" size={14} color="#fff" />
+              <Text className="text-sm font-bold text-white">Settings</Text>
             </Pressable>
           )}
         </View>
@@ -184,7 +160,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         {/* Simulation banner — compact inline chip */}
         {!linked && (
           <View className="mb-1.5 self-start rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1">
-            <Text className="text-[9px] font-bold uppercase tracking-wide text-amber-300">
+            <Text className="text-sm font-bold uppercase tracking-wide text-amber-300">
               Simulation
             </Text>
           </View>
@@ -194,7 +170,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         <View className="flex-1">
           {/* Left column: compact device/telemetry card */}
           <View className="flex-row items-start gap-3 flex-shrink-0">
-            <View className={`min-w-0 ${isLandscape ? 'flex-[0.35]' : 'flex-1'} ${isLandscape ? 'max-h-[55%]' : 'max-h-[40%]'}`}>
+            <View className={`min-w-0 ${isLandscape ? 'flex-[0.3]' : 'flex-1'} ${isLandscape ? 'max-h-[55%]' : 'max-h-[40%]'}`}>
               <OledDisplay
                 connected={connected}
                 wifiConnected={wifiConnected}
@@ -216,7 +192,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
             {/* Right column: mode + controls — gets more space so the control
                 board stays reachable in landscape without scrolling. */}
-            <View className={`min-w-0 flex flex-col ${isLandscape ? 'flex-[0.65]' : 'flex-1'}`}>
+            <View className={`min-w-0 flex flex-col ${isLandscape ? 'flex-[0.7]' : 'flex-1'}`}>
               {isDrone ? (
                 <View className="flex-1 min-h-0 bg-black/20 rounded-2xl border border-white/10 p-3">
                   <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 6 }}>
@@ -306,10 +282,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                     {/* Floating E-stop FAB — easy thumb reach in landscape */}
                     <Pressable
                       onPress={() => { Vibration.vibrate(50); handleEStop() }}
-                      className="absolute bottom-3 right-3 h-12 w-12 items-center justify-center rounded-full bg-red-600 shadow-lg active:scale-95 active:bg-red-700"
+                      className="absolute bottom-3 right-3 h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg active:scale-95 active:bg-red-700"
                       accessibilityRole="button"
                     >
-                      <Feather name="octagon" size={20} color="#fff" />
+                      <Feather name="octagon" size={22} color="#fff" />
                     </Pressable>
                   </View>
 
@@ -317,7 +293,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                       fits inside the same Remote board, never overflows. */}
                   {showSettings && (
                     <View className="mt-2 rounded-2xl border border-white/10 bg-black/40 p-3">
-                      <Text className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">Settings</Text>
+                      <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">Settings</Text>
                       {is2wd1mActive ? (
                         <View className="gap-3">
                           <TwoWd1mExtras
@@ -329,9 +305,11 @@ export function RemoteControlScreen({ navigation }: Props) {
                           />
                         </View>
                       ) : (
-                        <Text className="text-[11px] text-slate-500">
-                          Settings are only available for 2WD1M.
-                        </Text>
+                        <View className="opacity-40">
+                          <Text className="text-sm text-slate-500">
+                            Settings are only available for 2WD1M.
+                          </Text>
+                        </View>
                       )}
                     </View>
                   )}
@@ -351,11 +329,11 @@ export function RemoteControlScreen({ navigation }: Props) {
               className="rounded-full border border-white/15 bg-white/5 px-4 py-2.5"
               accessibilityRole="button"
             >
-              <Feather name="wifi-off" size={14} color="#fff" />
+              <Feather name="wifi-off" size={16} color="#fff" />
             </Pressable>
           )}
         </View>
-        <Text className="mt-0.5 text-center text-[10px] text-slate-500">
+        <Text className="mt-0.5 text-center text-sm text-slate-500">
           {wifiConnected ? `WiFi · ${wifiUrl}` : sppStatus === 'connected' ? `SPP · ${deviceName}` : 'Simulation'}
         </Text>
       </View>

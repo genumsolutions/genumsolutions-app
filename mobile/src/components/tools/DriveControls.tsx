@@ -312,9 +312,9 @@ function DualDpad({
         <View className="flex-row items-stretch gap-3">
           {/* Left pad: motor / full 4-way depending on the mode */}
           <View ref={leftPadRef} onLayout={measureLeft} className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
-            <Text className="mb-3 text-xs font-bold uppercase tracking-wide text-border">
-              {is2wd1m ? 'Drive (motor)' : 'Drive (4-way)'}
-            </Text>
+<Text className="mb-3 text-sm font-bold uppercase tracking-wide text-border">
+               {is2wd1m ? 'Drive (motor)' : 'Drive (4-way)'}
+             </Text>
             <View className="w-full gap-1.5">
               <DpadCell icon={PAD_ICONS.F} active={cellActive('L', 'F')} enabled={enabled.L.includes('F')} />
               <View className="flex-row gap-1.5">
@@ -324,16 +324,16 @@ function DualDpad({
               </View>
               <DpadCell icon={PAD_ICONS.B} active={cellActive('L', 'B')} enabled={enabled.L.includes('B')} />
             </View>
-            <Text className="mt-3 text-center text-[11px] leading-4 text-muted">
-              {is2wd1m ? 'Hold to drive · Release stops instantly' : 'Hold any direction · Release stops'}
-            </Text>
+<Text className="mt-3 text-center text-sm leading-4 text-muted">
+               {is2wd1m ? 'Hold to drive · Release stops instantly' : 'Hold any direction · Release stops'}
+             </Text>
           </View>
 
           {/* Right pad: servo steer (2WD1M) or shown-but-unused */}
           <View ref={rightPadRef} onLayout={measureRight} className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
-            <Text className="mb-3 text-xs font-bold uppercase tracking-wide text-border">
-              {is2wd1m ? 'Steer (servo)' : 'Not used here'}
-            </Text>
+<Text className="mb-3 text-sm font-bold uppercase tracking-wide text-border">
+               {is2wd1m ? 'Steer (servo)' : 'Not used here'}
+             </Text>
             <View className="w-full gap-1.5">
               <DpadCell icon={PAD_ICONS.F} active={cellActive('R', 'F')} enabled={enabled.R.includes('F')} />
               <View className="flex-row gap-1.5">
@@ -343,9 +343,9 @@ function DualDpad({
               </View>
               <DpadCell icon={PAD_ICONS.B} active={cellActive('R', 'B')} enabled={enabled.R.includes('B')} />
             </View>
-            <Text className="mt-3 text-center text-[11px] leading-4 text-muted">
-              {is2wd1m ? 'Hold to steer · Release straightens' : 'Unused in this mode'}
-            </Text>
+<Text className="mt-3 text-center text-sm leading-4 text-muted">
+               {is2wd1m ? 'Hold to steer · Release straightens' : 'Unused in this mode'}
+             </Text>
           </View>
         </View>
       </View>
@@ -608,12 +608,12 @@ export function DriveControls({
         /* Dual joysticks — ONE multi-touch surface so both work together */
         <View>
           <View className="mb-2 flex-row items-center justify-center gap-12">
-            <Text className="text-xs font-bold uppercase tracking-wide text-border">
-              Drive {is2wd1m ? '(Motor)' : '(Left)'}
-            </Text>
-            <Text className="text-xs font-bold uppercase tracking-wide text-border">
-              Steer {is2wd1m ? '(Servo)' : '(Unused)'}
-            </Text>
+<Text className="text-sm font-bold uppercase tracking-wide text-border">
+               Drive {is2wd1m ? '(Motor)' : '(Left)'}
+             </Text>
+             <Text className="text-sm font-bold uppercase tracking-wide text-border">
+               Steer {is2wd1m ? '(Servo)' : '(Unused)'}
+             </Text>
           </View>
           <DualJoystick
             canControl={canControl}
@@ -621,13 +621,13 @@ export function DriveControls({
             onLeft={handleLeftJoy}
             onRight={handleRightJoy}
           />
-          <Text className="mt-3 text-center text-[11px] text-muted">
-            {is2wd1m && onSignedDrive
-              ? 'Both sticks work together · release a stick to stop it'
-              : is2wd1m
-                ? 'Left drives · Right steers (2WD1M)'
-                : 'Left drives · Right is unused in this mode'}
-          </Text>
+<Text className="mt-3 text-center text-sm text-muted">
+             {is2wd1m && onSignedDrive
+               ? 'Both sticks work together · release a stick to stop it'
+               : is2wd1m
+                 ? 'Left drives · Right steers (2WD1M)'
+                 : 'Left drives · Right is unused in this mode'}
+           </Text>
         </View>
       ) : (
         /* Dual complete d-pads for EVERY robocar mode (one multi-touch
@@ -648,7 +648,7 @@ export function DriveControls({
           <View className="mt-3 flex-row items-center justify-center">
             <Pressable onPress={stopAll2wd1m} disabled={!canControl} className="flex-row items-center gap-2 rounded-full bg-slate-200 px-6 py-3 disabled:opacity-40">
               <Feather name="stop-circle" size={16} color="#1e3a8a" />
-              <Text className="text-xs font-black text-navy">Stop</Text>
+              <Text className="text-sm font-black text-navy">Stop</Text>
             </Pressable>
           </View>
         </View>
@@ -659,7 +659,7 @@ export function DriveControls({
       {showSpeed && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-3">
           <View className="flex-row items-center justify-between">
-            <Text className="text-[11px] font-bold uppercase tracking-wide text-border">Speed</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">Speed</Text>
             <Text className="font-mono text-sm font-bold text-navy">{clampSpeed(speed, limits)}</Text>
           </View>
           <Slider
@@ -685,25 +685,25 @@ export function DriveControls({
       {showPid && (
         <View className="mt-4 flex-row flex-wrap gap-3">
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Text className="text-xs font-bold uppercase tracking-wide text-border">PID Tuning</Text>
-            <Slider value={pidKp} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Kp {pidKp.toFixed(1)}</Text>
+<Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
+                    <Slider value={pidKp} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
+                    <Text className="mt-1 text-right font-mono text-sm text-navy">Kp {pidKp.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={pidKi} minimumValue={0} maximumValue={20} step={0.1} onValueChange={(v: number) => onPid('ki', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Ki {pidKi.toFixed(1)}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">Ki {pidKi.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={pidKd} minimumValue={0} maximumValue={20} step={0.1} onValueChange={(v: number) => onPid('kd', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Kd {pidKd.toFixed(1)}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">Kd {pidKd.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={pidOut} minimumValue={0} maximumValue={255} step={1} onValueChange={(v: number) => onPid('out', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">OUT {pidOut}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">OUT {pidOut}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={pidOff} minimumValue={-5} maximumValue={5} step={0.05} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">OFF {pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">OFF {pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°</Text>
           </View>
         </View>
       )}

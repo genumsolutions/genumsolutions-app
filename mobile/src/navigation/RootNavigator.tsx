@@ -11,6 +11,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ShopScreen } from '../screens/ShopScreen';
 import { CartScreen } from '../screens/CartScreen';
+import { AdminScreen } from '../screens/AdminScreen';
 import { AccountScreen } from '../screens/AccountScreen';
 import { MenuScreen } from '../screens/MenuScreen';
 import { MainTabPager } from './MainTabPager';
@@ -24,13 +25,14 @@ import { AboutScreen } from '../screens/AboutScreen';
 import { ToolsScreen } from '../screens/ToolsScreen';
 import { RemoteControlScreen } from '../screens/RemoteControlScreen';
 import { CarRemoteScreen } from '../screens/CarRemoteScreen';
-import { AdminScreen } from '../screens/AdminScreen';
+import { UpdateScreen } from '../screens/UpdateScreen';
 import { JournalScreen } from '../screens/JournalScreen';
 import { PrintingScreen } from '../screens/PrintingScreen';
 import { OpenToolsScreen } from '../screens/OpenToolsScreen';
 import { LegalScreen } from '../screens/LegalScreen';
 import { useApp } from '../context/AppContext';
 import { withErrorBoundary } from '../components/withErrorBoundary';
+import { useNavigation } from '@react-navigation/native';
 import type { RootStackParamList } from './types';
 
 // Each screen gets its own error boundary so a crash in one screen shows a
@@ -57,6 +59,13 @@ const JournalScreenSafe = withErrorBoundary(JournalScreen, 'Journal');
 const PrintingScreenSafe = withErrorBoundary(PrintingScreen, 'Printing');
 const OpenToolsScreenSafe = withErrorBoundary(OpenToolsScreen, 'OpenTools');
 const LegalScreenSafe = withErrorBoundary(LegalScreen, 'Legal');
+
+// Wrapper to adapt UpdateScreen (modal with visible/onClose) to navigation screen
+function UpdateScreenWrapper() {
+  const navigation = useNavigation<any>();
+  return <UpdateScreen visible onClose={() => navigation.goBack()} />;
+}
+const UpdateScreenSafe = withErrorBoundary(UpdateScreenWrapper, 'Update');
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -141,6 +150,11 @@ export function RootNavigator() {
         name="Admin"
         component={AdminScreenSafe}
         options={{ headerShown: true, title: 'Admin', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="Update"
+        component={UpdateScreenSafe}
+        options={{ headerShown: true, title: 'App Update', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Journal"
