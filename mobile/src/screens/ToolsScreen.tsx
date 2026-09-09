@@ -1,51 +1,88 @@
 // =====================================================================
-// ToolsScreen - native IoT & Remote Controller.
-// Real Bluetooth SPP + WiFi WebSocket control for GENUM ESP32 cars.
-// Mirrors the hand-held ESP remote (Genum_ESP32_Remote_v1.0.0) OLED display.
-// Full control deck for all 9 car modes and 5 project categories.
+// ToolsScreen — the Control Panel.
 //
-// Remote-parity layer: ESP32-remote safety limits, fullscreen remote view,
-// small mode dropdown/apply, mode sync from car telemetry, and per-device
-// memory so the app remembers last speed/mode/steer/trim/joystick choices.
+// Round 6 rebuild (owner spec): this page is the project ORGANIZER, the
+// app twin of the website's /tools page (IotRemote.tsx):
+//   • A category selector (Robo Car · Home Automation · Smart Farm ·
+//     Smart City · Drones & Aerial) — the same PROJECT_CATEGORIES as the
+//     website, so both clients present the identical catalog.
+//   • Per-category detail card (description, hardware, capabilities).
+//   • Per-category connection section (SPP scan / WiFi WebSocket).
+//   • Per-category Remote window handoff — the remote icon opens the
+//     immersive Remote window FOR THE SELECTED category (robocar gets the
+//     drive deck; drones the flight deck; home/farm/city the relay +
+//     sensor tiles). Drive controls (joysticks / d-pad / speed / E-stop)
+//     live ONLY in that window, never on this page.
+//   • "About this project" replaces the old "About this mode" card.
 // =====================================================================
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRoute, type RouteProp, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons'
+import type { ComponentProps } from 'react';
 import type { RootStackParamList } from '../navigation/types';
 import { useControlHub } from '../components/tools/useControlHub';
-import { DriveControls } from '../components/tools/DriveControls';
-import { ModeInfo } from '../components/tools/ModeInfo';
+import { ProjectInfo } from '../components/tools/ProjectInfo';
+import { PROJECT_CATEGORIES, type ProjectCategory } from '../config/project-catalog';
 
 type Route = RouteProp<RootStackParamList, 'Tools'>
+
+type FeatherIcon = ComponentProps<typeof Feather>['name'];
+
+const CATEGORY_ICONS: Record<string, FeatherIcon> = {
+  robocar: 'cpu',
+  'home-automation': 'home',
+  'smart-farm': 'droplet',
+  'smart-city': 'zap',
+  drones: 'send',
+}
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  directional: 'Directional drive',
+  servo: 'Servo steering',
+  pid: 'PID tuning',
+  'start-stop': 'Run / Stop routines',
+  relay: 'Relay outputs',
+  sensor: 'Live sensors',
+  weblink: 'Web dashboard link',
+  slider: 'Sliders',
+  gimbal: 'Gimbal pan/tilt',
+  altitude: 'Altitude control',
+}
 
 export function ToolsScreen() {
   const route = useRoute<Route>()
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
   const routeCategory = route.params?.category
 
-  // Shared hook - provides all state; UI only renders connection + about sections.
+  // Shared hook — connection state + everything the Remote window handoff
+  // needs (the window runs its own hub instance on the same transports).
   const hub = useControlHub(routeCategory)
-
   const {
-    // connection
     connected, sppStatus, deviceName,
     sppSupported, sppDevices, scanning, connecting, connectingAddress,
     handleScan, handleConnect, handleDisconnect,
     wifiConnected, wifiUrl, setWifiUrl, handleWifiConnect, handleWifiDisconnect,
     error, connectionMessage, connectionMsgType, sppStatusMsg,
-    // mode/category
-    activeCategory, activeMode, carModes, selectMode, cycleMode,
-    // drive (R5: the Control Panel drives again — the deck lives here too)
-    speed, servo, steerLimit, trim, driveStatus, telemetry,
-    handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
-    adjustSteerLimit, adjustTrim, handleEStop,
-    pidKp, pidKi, pidKd, pidOut, pidOff,
-    useJoystick, setUseJoystick,
-    // derived
-    isDrone, isNonRobocar, is2wd1mActive, safetyLimits,
+    activeMode,
   } = hub
+
+  // Selected category — seeded from the route param when provided.
+  const [selectedSlug, setSelectedSlug] = useState<string>(
+    routeCategory && PROJECT_CATEGORIES.some((c) => c.slug === routeCategory)
+      ? routeCategory
+      : PROJECT_CATEGORIES[0]!.slug,
+  )
+  const category: ProjectCategory =
+    PROJECT_CATEGORIES.find((c) => c.slug === selectedSlug) ?? PROJECT_CATEGORIES[0]!
+
+  const isRobocarCat = category.slug === 'robocar'
+  const remoteLabel = isRobocarCat
+    ? 'Drive deck'
+    : category.slug === 'drones'
+      ? 'Flight deck'
+      : 'Relay & sensor deck'
 
   return (
     <ScrollView
@@ -59,32 +96,104 @@ export function ToolsScreen() {
             Control Panel
           </Text>
           <Text className="mt-2 font-display text-2xl font-bold text-ink">
-            {isDrone ? 'Drone & Aerial Controller' : 'Drive like the handheld remote'}
+            Test &amp; control your projects
           </Text>
         </View>
         <Pressable
-          onPress={() => navigation.navigate('RemoteControl', { category: activeCategory })}
+          onPress={() => navigation.navigate('RemoteControl', { category: category.slug })}
           accessibilityRole="button"
-          accessibilityLabel="Open game remote"
+          accessibilityLabel={`Open ${category.name} remote`}
           className="ml-3 shrink-0 rounded-full bg-navy p-3.5 shadow-card"
         >
           <Feather name="target" size={22} color="#fff" />
         </Pressable>
       </View>
 
-      {/* Connection panel with SPP device selection */}
+      {/* Category selector — same catalog as the website /tools page */}
+      <View className="mt-5 flex-row flex-wrap gap-2">
+        {PROJECT_CATEGORIES.map((c) => {
+          const active = c.slug === selectedSlug
+          return (
+            <Pressable
+              key={c.slug}
+              onPress={() => setSelectedSlug(c.slug)}
+              accessibilityRole="button"
+              accessibilityLabel={`Select category ${c.name}`}
+              accessibilityState={{ selected: active }}
+              className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${active ? 'bg-navy' : 'border border-line bg-card'}`}
+            >
+              <Feather
+                name={CATEGORY_ICONS[c.slug] ?? 'box'}
+                size={13}
+                color={active ? '#fff' : '#1e3a8a'}
+              />
+              <Text numberOfLines={1} className={`text-xs font-bold ${active ? 'text-white' : 'text-navy'}`}>
+                {c.name}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      {/* Category detail card */}
+      <View key={category.slug} className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
+        <View className="flex-row items-start">
+          <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-light">
+            <Feather name={CATEGORY_ICONS[category.slug] ?? 'box'} size={18} color="#1e3a8a" />
+          </View>
+          <View className="ml-3 min-w-0 flex-1">
+            <Text numberOfLines={1} className="font-display text-lg font-bold text-ink">{category.name}</Text>
+            <Text numberOfLines={1} className="mt-0.5 text-xs font-semibold text-navy">{category.tagline}</Text>
+          </View>
+        </View>
+        <Text className="mt-3 text-sm leading-5 text-muted">{category.description}</Text>
+
+        {/* Hardware */}
+        <View className="mt-3 flex-row flex-wrap gap-1.5">
+          {category.hardware.map((h) => (
+            <Text key={h} className="rounded-full bg-mist px-2.5 py-1 text-[10px] font-bold text-navy">{h}</Text>
+          ))}
+        </View>
+
+        {/* Capabilities */}
+        <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
+          {category.capabilities.map((cap) => (
+            <View key={cap} className="flex-row items-center gap-1.5">
+              <Feather name="check-circle" size={12} color="#059669" />
+              <Text className="text-xs font-semibold text-ink">{CAPABILITY_LABELS[cap] ?? cap}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Remote window handoff for THIS category */}
+        <Pressable
+          onPress={() => navigation.navigate('RemoteControl', { category: category.slug })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${category.name} remote window`}
+          className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-3"
+        >
+          <Feather name="target" size={15} color="#fff" />
+          <Text className="text-sm font-black text-white">Open {remoteLabel} · {category.name}</Text>
+          <Feather name="arrow-right" size={15} color="#fff" />
+        </Pressable>
+        <Text className="mt-1.5 text-center text-[11px] text-muted">
+          Drive controls, speed and E-stop live in the Remote window — this page stays a clean organizer.
+        </Text>
+      </View>
+
+      {/* Connection section (shared across categories — the link is per device) */}
       <View className="mt-6">
         <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <View className={`h-2.5 w-2.5 rounded-full ${sppStatus === 'connected' || sppStatus === 'connecting' ? 'bg-accent' : 'bg-border'}`} />
-            <Text className="text-sm font-bold text-ink">
+          <View className="min-w-0 flex-1 flex-row items-center gap-2">
+            <View className={`h-2.5 w-2.5 shrink-0 rounded-full ${sppStatus === 'connected' || sppStatus === 'connecting' ? 'bg-accent' : 'bg-border'}`} />
+            <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-bold text-ink">
               {sppStatus === 'connected' ? `SPP Connected · ${deviceName}` :
-               sppStatus === 'connecting' ? `SPP Connecting…` :
+               sppStatus === 'connecting' ? 'SPP Connecting…' :
                'Not connected'}
             </Text>
           </View>
           {sppStatus === 'connected' && (
-            <Pressable onPress={handleDisconnect}>
+            <Pressable onPress={handleDisconnect} className="shrink-0" hitSlop={8}>
               <Text className="text-sm font-bold text-gold underline">Disconnect</Text>
             </Pressable>
           )}
@@ -95,7 +204,7 @@ export function ToolsScreen() {
           <View className={`mt-3 rounded-xl px-4 py-3 ${sppStatus === 'connected' ? 'bg-accent/10 border border-accent/20' :
             sppStatus === 'error' || sppStatus === 'disconnected' ? 'bg-red-50 border border-red-200' :
             'bg-navy/10 border border-navy/20'}`}>
-            <Text className={`text-sm font-bold ${sppStatus === 'connected' ? 'text-accent' :
+            <Text numberOfLines={2} className={`text-sm font-bold ${sppStatus === 'connected' ? 'text-accent' :
               sppStatus === 'error' || sppStatus === 'disconnected' ? 'text-red-600' : 'text-navy'}`}>
               {sppStatusMsg}
             </Text>
@@ -105,7 +214,7 @@ export function ToolsScreen() {
         {/* Connection message */}
         {connectionMessage && (
           <View className={`mt-3 rounded-xl px-4 py-3 ${connectionMsgType === 'success' ? 'bg-accent/10 border border-accent/20' : 'bg-red-50 border border-red-200'}`}>
-            <Text className={`text-sm font-bold ${connectionMsgType === 'success' ? 'text-accent' : 'text-red-600'}`}>
+            <Text numberOfLines={2} className={`text-sm font-bold ${connectionMsgType === 'success' ? 'text-accent' : 'text-red-600'}`}>
               {connectionMessage}
             </Text>
           </View>
@@ -118,7 +227,7 @@ export function ToolsScreen() {
             <Text className="text-sm font-bold text-ink">Classic Bluetooth (SPP)</Text>
           </View>
           <Text className="mt-1 text-xs leading-5 text-muted">
-            Scan and connect to ESP32 cars. Pairs like the ESP remote. PIN: 1234.
+            Scan and connect to your {category.name.toLowerCase()} hardware. Pairs like the hand-held remote. PIN: 1234.
           </Text>
           {!sppSupported && (
             <Text className="mt-2 text-[11px] font-bold italic text-muted">Not supported on this platform.</Text>
@@ -131,7 +240,7 @@ export function ToolsScreen() {
                 disabled={scanning}
                 className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy px-5 py-2.5 disabled:opacity-60"
                 accessibilityRole="button"
-                accessibilityLabel="Scan cars (SPP)"
+                accessibilityLabel="Scan devices (SPP)"
               >
                 {scanning ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -139,7 +248,7 @@ export function ToolsScreen() {
                   <Feather name="search" size={14} color="#fff" />
                 )}
                 <Text className="text-xs font-black text-white">
-                  {scanning ? 'Scanning…' : 'Scan cars (SPP)'}
+                  {scanning ? 'Scanning…' : 'Scan devices (SPP)'}
                 </Text>
               </Pressable>
             )}
@@ -160,12 +269,12 @@ export function ToolsScreen() {
                   >
                     <View className="min-w-0 flex-1 flex-row items-center gap-2">
                       <Feather name="smartphone" size={13} color="#1e3a8a" />
-                      <Text className="flex-1 text-xs font-semibold text-ink" numberOfLines={1}>{item.name}</Text>
+                      <Text className="min-w-0 flex-1 text-xs font-semibold text-ink" numberOfLines={1}>{item.name}</Text>
                       {item.bonded && (
-                        <Text className="text-[10px] font-bold uppercase tracking-wide text-green-600">Paired</Text>
+                        <Text className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-green-600">Paired</Text>
                       )}
                     </View>
-                    <Text className="ml-2 text-xs font-bold text-navy">
+                    <Text className="ml-2 shrink-0 text-xs font-bold text-navy">
                       {connectingAddress === item.address ? 'Connecting…' : 'Connect'}
                     </Text>
                   </Pressable>
@@ -175,11 +284,9 @@ export function ToolsScreen() {
 
             {connected && (
               <View className="mt-3 rounded-xl bg-accent/10 px-4 py-3">
-                <Text className="text-sm font-bold text-accent">
-                  Connected to {deviceName}
-                </Text>
+                <Text className="text-sm font-bold text-accent">Connected to {deviceName}</Text>
                 <Text className="mt-1 text-xs text-muted">
-                  Use the controls below to drive. Tap Disconnect to stop.
+                  Open the {remoteLabel} above to control the {category.name.toLowerCase()}.
                 </Text>
               </View>
             )}
@@ -231,64 +338,10 @@ export function ToolsScreen() {
         )}
       </View>
 
-      {/* Drive deck (R5): the connected card promises "controls below to
-          drive" — restore the full deck here so the Control Panel drives
-          exactly like the Remote window (same hub, same handlers). Robocar
-          categories only; drones/smart-farm/city keep their own decks. */}
-      {!isDrone && !isNonRobocar && (
-        <View className="mt-4">
-          <View className="mb-3 flex-row items-center justify-between rounded-xl border border-line bg-card px-4 py-3">
-            <Text className="min-w-0 flex-1 text-xs font-bold text-muted" numberOfLines={1}>
-              Control mode · {driveStatus}
-            </Text>
-            <View className="flex-row shrink-0 gap-2">
-              <Pressable
-                onPress={() => setUseJoystick(false)}
-                className={`rounded-full px-3 py-1.5 ${!useJoystick ? 'bg-navy' : 'border border-line bg-surface'}`}
-                accessibilityRole="button"
-                accessibilityLabel="Use D-pad"
-              >
-                <Text className={`text-xs font-bold ${!useJoystick ? 'text-white' : 'text-muted'}`}>D-pad</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setUseJoystick(true)}
-                className={`rounded-full px-3 py-1.5 ${useJoystick ? 'bg-navy' : 'border border-line bg-surface'}`}
-                accessibilityRole="button"
-                accessibilityLabel="Use Joystick"
-              >
-                <Text className={`text-xs font-bold ${useJoystick ? 'text-white' : 'text-muted'}`}>Joystick</Text>
-              </Pressable>
-            </View>
-          </View>
-          <DriveControls
-            canControl={connected || wifiConnected}
-            isDrone={false}
-            activeMode={activeMode}
-            speed={speed}
-            servo={servo}
-            pidKp={pidKp}
-            pidKi={pidKi}
-            pidKd={pidKd}
-            pidOut={pidOut}
-            pidOff={pidOff}
-            useJoystick={useJoystick}
-            onDirection={handleDirection}
-            onSpeed={handleSpeed}
-            onServo={handleServo}
-            onPid={applyPid}
-            onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
-            steerLimit={is2wd1mActive ? steerLimit : undefined}
-            onRun={() => handleDirection('F')}
-            onStop={() => handleDirection('S')}
-            onEStop={is2wd1mActive ? handleEStop : undefined}
-            safetyLimits={safetyLimits}
-          />
-        </View>
-      )}
-
-      {/* About this mode */}
+      {/* About this project (round 6): project-level info for the selected
+          category — robocar shows the active car build profile. */}
       <View className="mt-4">
-        <ModeInfo mode={activeMode} />
+        <ProjectInfo mode={activeMode} categorySlug={category.slug} />
       </View>
     </ScrollView>
   )

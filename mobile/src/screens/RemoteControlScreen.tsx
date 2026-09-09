@@ -68,94 +68,14 @@ function clampSpeed(value: number, limits: SafetyLimits): number {
 }
 
 /**
- * TouchSafePressable (R4-6) — Android touch-coordinate fix.
- *
- * Symptom: icon buttons rendered in one place but registered touches
- * elsewhere (slightly or badly shifted). Root cause: after the runtime
- * landscape lock Android re-insets the window (status bar removed), but
- * RN's native touch hit-testing can keep stale pre-rotation window
- * coordinates for hit-testing on already-mounted views.
- *
- * Fix: hit-test OURSELVES in JS. The wrapper is a plain View that
- * receives raw touches and maps them to a child rect measured in-window
- * at touch time; the visual child is a non-responder, so hits are judged
- * by fresh geometry on every touch — never by stale native hit rects.
+ * Round 6: TouchSafePressable is GONE. It was a JS hit-testing layer built
+ * to work around a coordinate-space mismatch — but the mismatch was in OUR
+ * touch code (pageX/pageY vs measureInWindow), not in React Native. Native
+ * Pressable hit-testing is always correct and instant (no JS geometry, no
+ * async measuring, no bridge round-trips per touch). Every button on this
+ * screen is now a plain Pressable with hitSlop + Android_ripple pressed
+ * feedback: bigger, faster, and accurate by construction.
  */
-function TouchSafePressable({ onPress, onPressIn, onPressOut, hitSlop = 8, style, className, children, accessibilityLabel, accessibilityRole, disabled }: {
-  onPress?: () => void
-  onPressIn?: () => void
-  onPressOut?: () => void
-  hitSlop?: number
-  style?: object | undefined
-  className?: string
-  children: React.ReactNode
-  accessibilityLabel?: string
-  accessibilityRole?: 'button'
-  disabled?: boolean
-}) {
-  const wrapRef = useRef<View | null>(null)
-  const pressedRef = useRef(false)
-  const [pressed, setPressed] = useState(false)
-
-  // PERF (round 5): the previous version ran an ASYNC native bridge call
-  // (measureInWindow) inside every touch event — each tap cost a bridge
-  // round-trip, and touch-move flooded it. Now the wrapper's rect is
-  // cached from onLayout (synchronous per touch) and only re-measured on
-  // layout changes, so taps are handled with plain arithmetic.
-  const rectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
-
-  const isInside = (e: { nativeEvent: { pageX: number; pageY: number } }) => {
-    const r = rectRef.current
-    if (!r) return false
-    const { pageX, pageY } = e.nativeEvent
-    return pageX >= r.x - hitSlop && pageX <= r.x + r.w + hitSlop && pageY >= r.y - hitSlop && pageY <= r.y + r.h + hitSlop
-  }
-
-  return (
-    <View
-      ref={wrapRef}
-      className={className}
-      style={style}
-      onLayout={() => {
-        wrapRef.current?.measureInWindow((x, y, w, h) => {
-          rectRef.current = { x, y, w, h }
-        })
-      }}
-      onTouchStart={(e) => {
-        if (!isInside(e) || disabled) return
-        pressedRef.current = true
-        setPressed(true)
-        onPressIn?.()
-      }}
-      onTouchMove={(e) => {
-        if (!pressedRef.current) return
-        if (!isInside(e)) {
-          pressedRef.current = false
-          setPressed(false)
-          onPressOut?.()
-        }
-      }}
-      onTouchEnd={(e) => {
-        if (disabled) return
-        if (!isInside(e)) return
-        pressedRef.current = false
-        setPressed(false)
-        onPress?.()
-      }}
-      onTouchCancel={() => {
-        if (pressedRef.current) {
-          pressedRef.current = false
-          setPressed(false)
-          onPressOut?.()
-        }
-      }}
-    >
-      <View pointerEvents="none" className={pressed ? 'opacity-70' : undefined}>
-        {children}
-      </View>
-    </View>
-  )
-}
 
 /** Small −/+ stepper pill for the settings dropdown (dark deck styling). */
 function StepperPill({ onPress, disabled, icon }: {
@@ -164,17 +84,23 @@ function StepperPill({ onPress, disabled, icon }: {
   icon: 'minus' | 'plus'
 }) {
   return (
-    <TouchSafePressable onPress={onPress} disabled={disabled} accessibilityRole="button" hitSlop={6}>
-      <View className="h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 disabled:opacity-40">
-        <Feather name={icon} size={16} color="#fff" />
-      </View>
-    </TouchSafePressable>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityRole="button"
+      android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 22 }}
+      className="h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 disabled:opacity-40"
+    >
+      <Feather name={icon} size={16} color="#fff" />
+    </Pressable>
   )
 }
 
-/** Compact inline speed strip for the chrome row (R4-2): a slim slider
-    with its numeric value — small enough to share one row with the mode
-    dropdown and the OLED. Values are clamped to the safe speed ceiling. */
+/** Inline speed strip for the chrome row (R4-2, widened R6): a slider
+    with its numeric value. The row has room — the slider now takes all
+    the free width (min 120, up to 200) instead of a fixed 68px stub.
+    Values are clamped to the safe speed ceiling. */
 function SpeedStrip({ speed, maxSpeed, canControl, onSpeed }: {
   speed: number
   maxSpeed: number
@@ -182,7 +108,7 @@ function SpeedStrip({ speed, maxSpeed, canControl, onSpeed }: {
   onSpeed: (v: number) => void
 }) {
   return (
-    <View className="h-9 min-w-[108px] max-w-[150px] flex-1 flex-row items-center justify-end gap-1 rounded-full border border-white/10 bg-white/5 px-2">
+    <View className="h-9 min-w-[130px] max-w-[220px] flex-1 flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5">
       <Text className="text-[9px] font-black uppercase tracking-widest text-slate-500">Spd</Text>
       <Slider
         value={clampSpeed(speed, { maxSpeed } as SafetyLimits)}
@@ -194,9 +120,9 @@ function SpeedStrip({ speed, maxSpeed, canControl, onSpeed }: {
         minimumTrackTintColor="#60a5fa"
         maximumTrackTintColor="rgba(255,255,255,0.15)"
         thumbTintColor="#3b82f6"
-        style={{ width: 68, height: 28 }}
+        style={{ flex: 1, height: 28 }}
       />
-      <Text className="w-7 text-right font-mono text-[11px] font-bold text-white">{clampSpeed(speed, { maxSpeed } as SafetyLimits)}</Text>
+      <Text className="w-7 shrink-0 text-right font-mono text-[11px] font-bold text-white">{clampSpeed(speed, { maxSpeed } as SafetyLimits)}</Text>
     </View>
   )
 }
@@ -314,16 +240,17 @@ export function RemoteControlScreen({ navigation }: Props) {
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
         {/* ONE chrome row (R4-3): Exit · REMOTE · mode · OLED · speed · toggle · settings */}
         <View className="flex-shrink-0 flex-row items-center gap-2">
-          <TouchSafePressable
+          <Pressable
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Exit remote"
             hitSlop={10}
+            android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 40 }}
           >
             <View className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5">
               <Text className="text-sm font-bold text-white">Exit</Text>
             </View>
-          </TouchSafePressable>
+          </Pressable>
           <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
 
           {isRobocar && (
@@ -345,26 +272,28 @@ export function RemoteControlScreen({ navigation }: Props) {
 
           {isRobocar && (
             <View className="ml-auto flex-row items-center gap-2">
-              <TouchSafePressable
+              <Pressable
                 onPress={() => { Vibration.vibrate(10); setUseJoystick(!useJoystick) }}
                 accessibilityRole="button"
                 accessibilityLabel={useJoystick ? 'Switch to D-pad' : 'Switch to Joystick'}
                 hitSlop={10}
+                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 28 }}
               >
                 <View className={`h-12 w-12 items-center justify-center rounded-full border ${useJoystick ? 'border-white/10 bg-navy' : 'border-white/15 bg-white/5'}`}>
                   <Feather name={useJoystick ? 'move' : 'grid'} size={20} color="#fff" />
                 </View>
-              </TouchSafePressable>
-              <TouchSafePressable
+              </Pressable>
+              <Pressable
                 onPress={() => setShowSettings((v) => !v)}
                 accessibilityRole="button"
                 accessibilityLabel="Settings"
                 hitSlop={10}
+                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 28 }}
               >
                 <View className={`h-12 w-12 items-center justify-center rounded-full border bg-white/5 ${showSettings ? 'border-navy bg-navy/50' : 'border-white/15'}`}>
                   <Feather name="settings" size={20} color="#fff" />
                 </View>
-              </TouchSafePressable>
+              </Pressable>
             </View>
           )}
         </View>
@@ -436,17 +365,18 @@ export function RemoteControlScreen({ navigation }: Props) {
               compact
             />
             {/* Floating E-stop FAB — easy thumb reach in landscape */}
-            <TouchSafePressable
+            <Pressable
               onPress={() => { Vibration.vibrate(50); handleEStop() }}
               accessibilityRole="button"
               accessibilityLabel="Emergency stop"
               hitSlop={10}
+              android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true, radius: 34 }}
               style={{ position: 'absolute', bottom: 8, right: 8 }}
             >
               <View className="h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg">
                 <Feather name="octagon" size={22} color="#fff" />
               </View>
-            </TouchSafePressable>
+            </Pressable>
           </View>
         )}
 
@@ -501,16 +431,17 @@ export function RemoteControlScreen({ navigation }: Props) {
       <View className="border-t border-white/10 bg-black/40 px-3 py-2">
         <View className="flex-row items-center gap-3">
           {linked && (
-            <TouchSafePressable
+            <Pressable
               onPress={() => { Vibration.vibrate(10); handleDisconnect() }}
               accessibilityRole="button"
               accessibilityLabel="Disconnect"
               hitSlop={10}
+              android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 40 }}
             >
               <View className="rounded-full border border-white/15 bg-white/5 px-4 py-2.5">
                 <Feather name="wifi-off" size={16} color="#fff" />
               </View>
-            </TouchSafePressable>
+            </Pressable>
           )}
         </View>
         <Text className="mt-0.5 text-center text-sm text-slate-500">

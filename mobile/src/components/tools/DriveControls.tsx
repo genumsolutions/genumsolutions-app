@@ -1,44 +1,38 @@
 // =====================================================================
-// DriveControls — TWO complete dashboards in every robocar mode:
+// DriveControls — the drive deck shared by the Remote window (compact)
+// and legacy portrait callers (full mode).
 //
-//   D-pad layout:  TWO complete 4-way+center d-pads (up/down/left/right
-//                  + center stop). Both pads are one RAW multi-touch
-//                  surface, so drive + steer actions happen at the same
-//                  time, exactly like the ESP remote streams SPD + SERVO
-//                  together each loop. Buttons that a mode does not use
-//                  stay visible but non-functional (dimmed).
-//   Joystick layout: TWO sticks sharing one multi-touch surface — both
-//                  operate together and releasing a stick returns it to
-//                  center and stops that stick's function immediately.
+// Round 6 REBUILD (touch root cause):
+// The old pads compared ROOT-VIEW touch coordinates (pageX/pageY) against
+// WINDOW-space rects (measureInWindow). On Android those two spaces differ
+// by the status-bar / display-cutout insets — so every hit zone sat
+// shifted from the drawn cells, no matter how often it was re-measured.
+// The correct model needs NO window math at all:
 //
-// Functional mapping per mode:
-//   * 2WD1M        left pad/stick = motor (FWD/BACK → signed SPD),
-//                  right pad/stick = servo steer to ±steerLimit;
-//                  remaining buttons shown but inactive.
-//   * other modes  left pad/stick = F/B/L/R direction letters (+ center
-//                  stop), right pad/stick shown but inactive.
+//   • D-pad: the pad surface captures RAW multi-touch through PanResponder
+//     and reads evt.locationX/locationY — coordinates relative to the
+//     touch surface itself, i.e. the exact space the cells are laid out in.
+//     The surface's own size comes from onLayout (also container-local).
+//     Touch offset is impossible by construction; nothing is re-measured
+//     per touch (no bridge round-trips → no lag).
+//   • Joysticks: same — one PanResponder surface, locationX/Y against the
+//     onLayout size, both sticks working together via touch identifiers.
 //
-// Also carries speed −/+ steppers PLUS a speed slider (full mode only —
-// the compact remote renders its own inline strip on the chrome row),
-// PID tuning, start/stop and emergency stop. Drive values are clamped to
-// the ESP-remote safety limits before they leave the app, so the phone
-// cannot command unsafe speed/steering/PWM values.
+// Buttons (Stop pill, steppers, E-stop) are plain native Pressables —
+// native hit-testing, instant, no JS hit-testing layer.
 //
-// Round 4 touch fixes (R4-6): pad rects are re-measured in window
-// coordinates on EVERY layout change and at every touch start, so hit
-// zones can never sit shifted from the drawn cells after the landscape
-// lock or a layout pass. Cells are laid out on a uniform flex grid
-// (R4-4) so all arrows + centers share one size on both pads.
+// Compact mode (Remote window): board fills its flex parent, no Stop pill,
+// no deck speed slider (the chrome row has its own strip).
 // =====================================================================
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Pressable, Text, View, Vibration } from 'react-native'
-import type { GestureResponderEvent } from 'react-native'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PanResponder, Pressable, Text, View, Vibration } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import type { ComponentProps } from 'react'
 import Slider from '@react-native-community/slider'
 import type { DriveControlsProps, SafetyLimits } from './types'
 
-/** Default safety limits when the parent does not pass a custom set. */
+type IconName = ComponentProps<typeof Feather>['name']
+
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxSpeed: 255,
   maxSignedDrive: 255,
@@ -47,19 +41,16 @@ const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxTrim: 90,
 }
 
-/** Clamp a motor/speed value to the remote's safe PWM/speed ceiling. */
 function clampSpeed(value: number, limits: SafetyLimits): number {
   const v = Math.round(value)
   return Math.max(0, Math.min(limits.maxSpeed, v))
 }
 
-/** Clamp a signed joystick drive value to the remote's safe joystick range. */
 function clampSignedDrive(value: number, limits: SafetyLimits): number {
   const v = Math.round(value)
   return Math.max(-limits.maxSignedDrive, Math.min(limits.maxSignedDrive, v))
 }
 
-/** Clamp a SERVO value around the remote's center and steer deviation limit. */
 function clampServo(value: number, limits: SafetyLimits): number {
   const v = Math.round(value)
   return Math.max(
@@ -97,13 +88,8 @@ function joyToDirection(x: number, y: number): 'F' | 'B' | 'L' | 'R' | 'S' {
   return x < 0 ? 'L' : 'R'
 }
 
-type IconName = ComponentProps<typeof Feather>['name']
-
-type PadId = 'L' | 'R'
 type PadZone = 'F' | 'B' | 'L' | 'R' | 'C'
-type ActiveCell = { pad: PadId; zone: PadZone }
-type TouchPoint = { identifier: string; pageX: number; pageY: number }
-type Rect = { x: number; y: number; w: number; h: number }
+type PadId = 'L' | 'R'
 
 const PAD_ICONS: Record<PadZone, IconName> = {
   F: 'chevron-up',
@@ -121,15 +107,17 @@ function enabledZones(is2wd1m: boolean): { L: PadZone[]; R: PadZone[] } {
 }
 
 // =====================================================================
-// DualDpad — TWO complete 4-way d-pads as ONE raw multi-touch surface.
+// DualDpad — TWO complete d-pads on ONE raw multi-touch surface.
 //
-// Two separate React-Native `Pressable`s cannot drive both pads at once:
-// RN has a single touch responder, so the 2nd press terminates the 1st
-// (holding drive then touching the steer pad fires onPressOut on drive →
-// SPD0). Instead the whole area takes raw multi-touch events, maps every
-// active touch to a cell on the left/right pad by position, and streams
-// the matching commands together — with a small hold-resend (like the ESP
-// remote's ~30ms cadence) so a dropped line self-heals while held.
+// Touch model (round 6 rebuild): the whole pad area is a single
+// PanResponder that reads locationX/locationY — coordinates in the
+// SURFACE's own space. Left pad owns x < splitX, right pad owns the rest,
+// where splitX comes from the surface's onLayout width (same space the
+// two pad columns are flexed into). Each pad maps its local point to a
+// 3×3 zone: center = C (stop), dominant axis = F/B/L/R.
+//
+// Perf: cells only re-render when the pressed-zone set changes
+// (signature-gated state), and nothing measures anything per touch.
 // =====================================================================
 function DualDpad({
   canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits, onHaptic, compact = false,
@@ -145,15 +133,13 @@ function DualDpad({
   onHaptic?: () => void
   compact?: boolean
 }) {
-  // Touch mapping geometry (R4-6): pad rects are measured in WINDOW
-  // coordinates, re-run on every layout change AND at every touch start,
-  // so the rects used for hit-testing are never stale (the old code
-  // measured once and trusted it across the landscape rotation).
-  const padRefs = useRef<{ L: View | null; R: View | null }>({ L: null, R: null })
-  const padRectsRef = useRef<{ L: Rect | null; R: Rect | null }>({ L: null, R: null })
-  const [activeCells, setActiveCells] = useState<ActiveCell[]>([])
+  // Surface size in ITS OWN space (onLayout) — the same space locationX/Y
+  // are reported in. No window/page coordinates anywhere.
+  const [surf, setSurf] = useState<{ w: number; h: number } | null>(null)
+  const [activeCells, setActiveCells] = useState<ActiveCellSet>({})
+  const [firedHaptic, setFiredHaptic] = useState(false)
 
-  // Always-fresh values so the raw touch handlers never see stale closures.
+  // Always-fresh values for the pan handlers (no stale closures).
   const stRef = useRef({ canControl, speed, steerLimit, is2wd1m })
   stRef.current = { canControl, speed, steerLimit, is2wd1m }
   const onSignedDriveRef = useRef(onSignedDrive)
@@ -164,203 +150,200 @@ function DualDpad({
   onServoRef.current = onServo
   const limitsRef = useRef(limits)
   limitsRef.current = limits
+
+  // Track touches by identifier; the pad+zone each finger is currently in.
+  const touchesRef = useRef(new Map<string, { pad: PadId; zone: PadZone }>())
+
+  type ActiveCellSet = Partial<Record<'L1' | 'L2' | 'R1' | 'R2', PadZone>>
+  const keyFor = (pad: PadId, idx: 1 | 2) => `${pad}${idx}` as 'L1' | 'L2' | 'R1' | 'R2'
+
+  // Map a surface-local point to a pad and zone.
+  const resolvePoint = useCallback((x: number, y: number): { pad: PadId; zone: PadZone } | null => {
+    if (!surf || surf.w <= 0) return null
+    const pad: PadId = x < surf.w / 2 ? 'L' : 'R'
+    // Each pad column spans [0, w/2) or [w/2, w); local point within it:
+    const lx = pad === 'L' ? x : x - surf.w / 2
+    const pw = surf.w / 2
+    // 3×3 grid with the middle row full-width F/B on top/bottom; center
+    // zone is a middle rect. Dominant axis decides L/R vs F/B.
+    const dx = lx - pw / 2
+    const dy = y - surf.h / 2
+    const zone: PadZone =
+      Math.abs(dx) < pw * 0.18 && Math.abs(dy) < surf.h * 0.18 ? 'C'
+        : Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'F' : 'B')
+          : (dx < 0 ? 'L' : 'R')
+    return { pad, zone }
+  }, [surf])
+
+  // Emit commands from the current multi-touch state.
+  const emit = useCallback((touches: Map<string, { pad: PadId; zone: PadZone }>) => {
+    const s = stRef.current
+    if (!s.canControl) return
+    const en = enabledZones(s.is2wd1m)
+    const lZones: PadZone[] = []
+    const rZones: PadZone[] = []
+    for (const [, cell] of touches) {
+      if (cell.pad === 'L') {
+        if (en.L.includes(cell.zone)) lZones.push(cell.zone)
+      } else if (en.R.includes(cell.zone)) rZones.push(cell.zone)
+    }
+    const has = (arr: PadZone[], z: PadZone) => arr.includes(z)
+
+    if (s.is2wd1m) {
+      // Left pad → motor (signed SPD), right pad → servo steer.
+      const fwd = has(lZones, 'F')
+      const back = has(lZones, 'B')
+      const spd = has(lZones, 'C') ? 0 : fwd && back ? 0 : fwd ? s.speed : back ? -s.speed : 0
+      const l = has(rZones, 'L')
+      const r = has(rZones, 'R')
+      const servo = l === r ? limitsRef.current.servoCenter
+        : l ? limitsRef.current.servoCenter - s.steerLimit
+          : limitsRef.current.servoCenter + s.steerLimit
+      // Stream through the same clamped path the joysticks use.
+      const sd = clampSignedDrive(spd, limitsRef.current)
+      if (onSignedDriveRef.current) onSignedDriveRef.current(sd)
+      else sendDirRef.current(sd > 0 ? 'F' : sd < 0 ? 'B' : 'S')
+      onServoRef.current(clampServo(servo, limitsRef.current))
+    } else {
+      const d: 'F' | 'B' | 'L' | 'R' | 'S' =
+        has(lZones, 'C') ? 'S'
+          : has(lZones, 'F') ? 'F'
+            : has(lZones, 'B') ? 'B'
+              : has(lZones, 'L') ? 'L'
+                : has(lZones, 'R') ? 'R'
+                  : 'S'
+      sendDirRef.current(d)
+    }
+  }, [])
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (evt) => { syncTouches(evt.nativeEvent.touches, true) },
+    onPanResponderMove: (evt) => { syncTouches(evt.nativeEvent.touches, false) },
+    onPanResponderRelease: (evt) => { dropTouches(evt.nativeEvent.changedTouches) },
+    onPanResponderTerminate: (evt) => { dropTouches(evt.nativeEvent.changedTouches) },
+  }), [])
+
+  // Sync the tracked touches from the current native touch list. On grant
+  // (first contact) functional-entry fires a haptic tick.
+  const syncTouches = (nativeTouches: readonly { identifier: number | string; locationX: number; locationY: number }[], isGrant: boolean) => {
+    let hapticNeeded = false
+    for (const t of nativeTouches) {
+      const hit = resolvePoint(t.locationX, t.locationY)
+      if (!hit) continue
+      const id = String(t.identifier)
+      const prev = touchesRef.current.get(id)
+      if (prev && prev.pad === hit.pad && prev.zone === hit.zone) continue
+      touchesRef.current.set(id, hit)
+      const en = enabledZones(stRef.current.is2wd1m)
+      const functional = hit.pad === 'L' ? en.L.includes(hit.zone) : en.R.includes(hit.zone)
+      if (functional) hapticNeeded = true
+    }
+    if (hapticNeeded && isGrant && !firedHaptic) {
+      setFiredHaptic(true)
+      onHapticRef.current?.()
+      setTimeout(() => setFiredHaptic(false), 60)
+    }
+    publishState()
+    emit(touchesRef.current)
+  }
+
+  const dropTouches = (changed: readonly { identifier: number | string }[]) => {
+    for (const t of changed) touchesRef.current.delete(String(t.identifier))
+    publishState()
+    emit(touchesRef.current)
+  }
+
+  // Render state: which keys are active. Signature-gated to avoid
+  // re-rendering the whole pad tree on every move event.
+  const publishState = () => {
+    const next: ActiveCellSet = {}
+    const seen = new Set<string>()
+    for (const [id, cell] of touchesRef.current) {
+      // One finger per pad zone slot; extra fingers in the same zone are
+      // still tracked for the emit path but only the first lights a key.
+      const sig = cell.pad + cell.zone
+      if (seen.has(sig)) continue
+      seen.add(sig)
+      // Assign to slot 1 or 2 per pad for rendering (up to 2 shown).
+      const key = keyFor(cell.pad, next[keyFor(cell.pad, 1)] ? 2 : 1)
+      next[key] = cell.zone
+    }
+    const sig = Object.keys(next).sort().map((k) => `${k}:${next[k as keyof ActiveCellSet]}`).join(',')
+    setActiveCells((prev) => {
+      const prevSig = Object.keys(prev).sort().map((k) => `${k}:${prev[k as keyof ActiveCellSet]}`).join(',')
+      return sig === prevSig ? prev : next
+    })
+  }
+
   const onHapticRef = useRef(onHaptic)
   onHapticRef.current = onHaptic
 
-  // Last emitted values + current targets (only emit on actual transitions).
-  const lastSpdRef = useRef(0)
-  const lastServoRef = useRef(limits.servoCenter)
-  const targetsRef = useRef({ spd: 0, servo: limits.servoCenter })
-  const prevFuncCountRef = useRef(0)
-
-  const emitTargets = useCallback((spd: number, servo: number) => {
-    const l = limitsRef.current
-    const sd = clampSignedDrive(spd, l)
-    const sv = clampServo(servo, l)
-    targetsRef.current = { spd: sd, servo: sv }
-    if (sd !== lastSpdRef.current) {
-      lastSpdRef.current = sd
-      if (onSignedDriveRef.current) onSignedDriveRef.current(sd)
-      else sendDirRef.current(sd > 0 ? 'F' : sd < 0 ? 'B' : 'S')
-    }
-    if (sv !== lastServoRef.current) {
-      lastServoRef.current = sv
-      onServoRef.current(sv)
-    }
-  }, [])
-
-  // Resend the current targets unconditionally (parent throttle paces it).
-  const forceSendTargets = useCallback(() => {
-    const l = limitsRef.current
-    const t = targetsRef.current
-    if (onSignedDriveRef.current) onSignedDriveRef.current(clampSignedDrive(t.spd, l))
-    else sendDirRef.current(t.spd > 0 ? 'F' : t.spd < 0 ? 'B' : 'S')
-    onServoRef.current(clampServo(t.servo, l))
-  }, [])
-
-  // Mirror the ESP remote cadence: while any cell is held keep re-sending
-  // the current drive/steer so a dropped Bluetooth/WiFi line self-heals.
-  const activeCount = activeCells.length
+  // Hold-resend cadence (ESP-remote parity): while any functional cell is
+  // held, keep re-emitting so a dropped BT/WiFi line self-heals.
+  const anyActive = Object.keys(activeCells).length > 0
   useEffect(() => {
-    if (!canControl || activeCount === 0 || !stRef.current.is2wd1m) return
-    const id = setInterval(forceSendTargets, 80)
+    if (!canControl || !anyActive) return
+    const id = setInterval(() => emit(touchesRef.current), 80)
     return () => clearInterval(id)
-  }, [canControl, activeCount, forceSendTargets])
+  }, [canControl, anyActive, emit])
 
-  // Measure both pad rects in window coordinates. Called by onLayout
-  // (every geometry change) and again at each touch start (R4-6).
-  const measurePads = useCallback(() => {
-    for (const pad of ['L', 'R'] as const) {
-      const node = padRefs.current[pad]
-      node?.measureInWindow((px, py, w, h) => {
-        padRectsRef.current[pad] = { x: px, y: py, w, h }
-      })
-    }
-  }, [])
-
-  // Map a window point to a zone within a single pad rect.
-  // Each pad is a 3×3 grid: center = C (stop), dominant axis = F/B/L/R.
-  const zoneFromTouch = (wx: number, wy: number, rect: Rect): PadZone => {
-    const dx = wx - rect.x - rect.w / 2
-    const dy = wy - rect.y - rect.h / 2
-    const cw = rect.w * 0.18 // center hit zone (slightly generous)
-    const ch = rect.h * 0.18
-    if (Math.abs(dx) < cw && Math.abs(dy) < ch) return 'C'
-    if (Math.abs(dy) >= Math.abs(dx)) return dy < 0 ? 'F' : 'B'
-    return dx < 0 ? 'L' : 'R'
-  }
-
-  // Map every active touch to a cell by checking which pad rect it falls
-  // in. Uses live pageX/pageY against freshly measured rects.
-  const cellsFromTouches = useCallback((touches: readonly TouchPoint[]): ActiveCell[] => {
-    const lr = padRectsRef.current.L
-    const rr = padRectsRef.current.R
-    if (!lr || !rr) return []
-    const cells: ActiveCell[] = []
-    for (const t of touches) {
-      const inL = t.pageX >= lr.x && t.pageX <= lr.x + lr.w && t.pageY >= lr.y && t.pageY <= lr.y + lr.h
-      const inR = t.pageX >= rr.x && t.pageX <= rr.x + rr.w && t.pageY >= rr.y && t.pageY <= rr.y + rr.h
-      if (!inL && !inR) continue
-      const pad: PadId = inL ? 'L' : 'R'
-      const rect = pad === 'L' ? lr : rr
-      cells.push({ pad, zone: zoneFromTouch(t.pageX, t.pageY, rect) })
-    }
-    return cells
-  }, [])
-
-  // Apply a freshly computed set of active cells and stream commands.
-  // PERF (round 5): only re-render when the cell set ACTUALLY changes —
-  // the old code setState'd on every touch-move (new array identity each
-  // time), re-rendering the whole pad tree ~60x/s while a finger drifted
-  // inside one cell. That was the remote freeze/lag.
-  const lastCellsSigRef = useRef('')
-  const handleCells = useCallback((cells: ActiveCell[]) => {
-    if (!stRef.current.canControl) return
-    const s = stRef.current
-    const z = enabledZones(s.is2wd1m)
-    const functional = cells.filter((c) =>
-      (c.pad === 'L' ? z.L : z.R).includes(c.zone),
-    )
-    if (functional.length > prevFuncCountRef.current) onHapticRef.current?.()
-    prevFuncCountRef.current = functional.length
-    const sig = cells.map((c) => c.pad + c.zone).sort().join(',')
-    if (sig === lastCellsSigRef.current) return
-    lastCellsSigRef.current = sig
-    setActiveCells(cells)
-
-    if (s.is2wd1m) {
-      // Left pad → motor (signed SPD), right pad → servo steer. Both
-      // stream together, mirroring the ESP remote's simultaneous SPD+SERVO.
-      const lz = cells.filter((c) => c.pad === 'L' && z.L.includes(c.zone)).map((c) => c.zone)
-      const rz = cells.filter((c) => c.pad === 'R' && z.R.includes(c.zone)).map((c) => c.zone)
-      const fwd = lz.includes('F')
-      const back = lz.includes('B')
-      const spd = lz.includes('C') ? 0 : fwd ? (back ? 0 : s.speed) : back ? -s.speed : 0
-      const lsteer = rz.includes('L')
-      const rsteer = rz.includes('R')
-      const servo = lsteer === rsteer
-        ? limitsRef.current.servoCenter
-        : lsteer
-          ? limitsRef.current.servoCenter - s.steerLimit
-          : limitsRef.current.servoCenter + s.steerLimit
-      emitTargets(spd, servo)
-    } else {
-      // Left pad → direction letters (F/B/L/R), center → S, release → S.
-      const lz = cells.filter((c) => c.pad === 'L' && z.L.includes(c.zone)).map((c) => c.zone)
-      const d: 'F' | 'B' | 'L' | 'R' | 'S' = lz.includes('C')
-        ? 'S'
-        : lz.includes('F') ? 'F'
-          : lz.includes('B') ? 'B'
-            : lz.includes('L') ? 'L'
-              : lz.includes('R') ? 'R'
-                : 'S'
-      sendDirRef.current(d)
-    }
-  }, [emitTargets])
-
-  const onTouch = useCallback((e: GestureResponderEvent) => {
-    handleCells(cellsFromTouches(e.nativeEvent.touches))
-  }, [handleCells, cellsFromTouches])
+  // Release everything when control is lost.
+  useEffect(() => {
+    if (canControl) return
+    touchesRef.current.clear()
+    publishState()
+  }, [canControl])
 
   const cellActive = (pad: PadId, zone: PadZone) =>
-    activeCells.some((c) => c.pad === pad && c.zone === zone)
-  const enabled = enabledZones(is2wd1m)
+    Object.values(activeCells).some((z, i) => z === zone && Object.keys(activeCells)[i]?.startsWith(pad))
+
+  const en = enabledZones(is2wd1m)
+
+  const padView = (pad: PadId) => (
+    <View className="min-h-0 flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-2 py-2">
+      <View className="flex h-full w-full max-w-[240px] flex-col gap-1.5">
+        <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} compact={compact} />
+        <View className="min-h-0 flex-1 flex-row gap-1.5">
+          <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} compact={compact} />
+          <DpadCell
+            icon={pad === 'L' ? 'stop-circle' : 'circle'}
+            active={cellActive(pad, 'C')}
+            enabled={en[pad].includes('C')}
+            compact={compact}
+          />
+          <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} compact={compact} />
+        </View>
+        <DpadCell icon={PAD_ICONS.B} active={cellActive(pad, 'B')} enabled={en[pad].includes('B')} compact={compact} />
+      </View>
+    </View>
+  )
 
   return (
     <View className="min-h-0 flex-1">
-      {/* The whole pad area is ONE multi-touch surface. Geometry is
-          re-measured on every layout change AND at every touch start
-          (R4-6), so hit zones always sit exactly on the drawn cells. */}
+      {/* The whole pad area is ONE PanResponder surface. locationX/Y are
+          surface-local, so hit zones sit exactly on the drawn cells by
+          construction — no measuring, no coordinate-space mismatch. */}
       <View
-        onTouchStart={(e) => { measurePads(); onTouch(e) }}
-        onTouchMove={onTouch}
-        onTouchEnd={onTouch}
-        onTouchCancel={onTouch}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout
+          setSurf((s) => (s && s.w === width && s.h === height ? s : { w: width || 1, h: height || 1 }))
+        }}
+        {...panResponder.panHandlers}
         className="min-h-0 flex-1 flex-row items-stretch gap-2"
       >
-        {/* Left pad: motor / full 4-way depending on the mode */}
-        <View
-          ref={(n) => { padRefs.current.L = n }}
-          onLayout={measurePads}
-          className="min-h-0 flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-2 py-2"
-        >
-          {/* Uniform 3×3 cell grid (R4-4): all three rows share the same
-              flex space so every cell renders at ONE size on BOTH pads. */}
-          <View className="flex h-full w-full max-w-[240px] flex-col gap-1.5">
-            <DpadCell icon={PAD_ICONS.F} active={cellActive('L', 'F')} enabled={enabled.L.includes('F')} compact={compact} />
-            <View className="min-h-0 flex-1 flex-row gap-1.5">
-              <DpadCell icon={PAD_ICONS.L} active={cellActive('L', 'L')} enabled={enabled.L.includes('L')} compact={compact} />
-              <DpadCell icon="stop-circle" active={cellActive('L', 'C')} enabled={enabled.L.includes('C')} compact={compact} />
-              <DpadCell icon={PAD_ICONS.R} active={cellActive('L', 'R')} enabled={enabled.L.includes('R')} compact={compact} />
-            </View>
-            <DpadCell icon={PAD_ICONS.B} active={cellActive('L', 'B')} enabled={enabled.L.includes('B')} compact={compact} />
-          </View>
-        </View>
-
-        {/* Right pad: servo steer (2WD1M) or shown-but-unused */}
-        <View
-          ref={(n) => { padRefs.current.R = n }}
-          onLayout={measurePads}
-          className="min-h-0 flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-2 py-2"
-        >
-          <View className="flex h-full w-full max-w-[240px] flex-col gap-1.5">
-            <DpadCell icon={PAD_ICONS.F} active={cellActive('R', 'F')} enabled={enabled.R.includes('F')} compact={compact} />
-            <View className="min-h-0 flex-1 flex-row gap-1.5">
-              <DpadCell icon={PAD_ICONS.L} active={cellActive('R', 'L')} enabled={enabled.R.includes('L')} compact={compact} />
-              <DpadCell icon="circle" active={cellActive('R', 'C')} enabled={enabled.R.includes('C')} compact={compact} />
-              <DpadCell icon={PAD_ICONS.R} active={cellActive('R', 'R')} enabled={enabled.R.includes('R')} compact={compact} />
-            </View>
-            <DpadCell icon={PAD_ICONS.B} active={cellActive('R', 'B')} enabled={enabled.R.includes('B')} compact={compact} />
-          </View>
-        </View>
+        {padView('L')}
+        {padView('R')}
       </View>
     </View>
   )
 }
 
 /** One cell of a complete d-pad. All cells share the SAME styling and the
-    SAME flex growth (uniform size, R4-4); the center is stop-ish and
-    non-functional buttons stay visible but dimmed. */
+    SAME flex growth (uniform size); the center is stop-ish and
+    non-functional buttons stay visible but dimmed. Cells are VISUAL ONLY —
+    touches are zone-mapped by the parent surface. */
 function DpadCell({ icon, active, enabled, compact }: {
   icon: IconName
   active: boolean
@@ -369,6 +352,7 @@ function DpadCell({ icon, active, enabled, compact }: {
 }) {
   return (
     <View
+      pointerEvents="none"
       className={`min-h-0 flex-1 items-center justify-center rounded-xl ${
         active ? 'bg-navy'
           : enabled ? (compact ? 'border border-emerald-400/60' : 'border border-navy')
@@ -385,14 +369,14 @@ function DpadCell({ icon, active, enabled, compact }: {
 }
 
 // =====================================================================
-// DualJoystick — TWO sticks sharing ONE raw multi-touch surface.
+// DualJoystick — TWO sticks sharing ONE PanResponder surface.
 //
-// Like the d-pads, two PanResponder joysticks cannot be used together:
-// touching the 2nd stick steals the responder from the 1st. Here every
-// touch is assigned to the stick it lands on and tracked independently,
-// so BOTH sticks operate simultaneously (drive + steer). Lifting a finger
-// releases just that stick: it snaps back to center and reports (0, 0),
-// which stops that stick's function (SPD0 / SERVO90) immediately.
+// Round 6: locationX/locationY (surface-local) replace pageX/pageY +
+// window math. A touch belongs to whichever stick CENTER is closer; its
+// origin is the stick center itself (re-grab anywhere re-centers the
+// knob), matching physical game controllers. Both sticks work together
+// via touch identifiers; lifting a finger snaps that stick back to
+// center and reports (0, 0) — SPD0 / SERVO90 immediately.
 // =====================================================================
 function DualJoystick({
   canControl, rightEnabled, onLeft, onRight, height = 220, fill = false,
@@ -402,12 +386,11 @@ function DualJoystick({
   onLeft: (x: number, y: number) => void
   onRight: (x: number) => void
   height?: number
-  /** When true the surface fills its flex parent instead of using a fixed
-      height — the touch area adapts to whatever room the window gives it. */
+  /** When true the surface fills its flex parent instead of a fixed height. */
   fill?: boolean
 }) {
   const [geo, setGeo] = useState<{ w: number; h: number } | null>(null)
-  const touchesRef = useRef(new Map<string, { stick: 'L' | 'R'; ox: number; oy: number }>())
+  const touchesRef = useRef(new Map<string, { stick: 'L' | 'R' }>())
   const [knobL, setKnobL] = useState({ x: 0, y: 0 })
   const [knobR, setKnobR] = useState({ x: 0, y: 0 })
 
@@ -420,8 +403,6 @@ function DualJoystick({
   const onRightRef = useRef(onRight)
   onRightRef.current = onRight
 
-  // Cap the stick radius so a knob never leaves its ring; the freed chrome
-  // row lets the deck grow, so the cap rises to 124 (R4-5) for a full fit.
   const radius = geo ? Math.min(geo.w * 0.28, geo.h * 0.42, 124) : 0
   const centerOf = (stick: 'L' | 'R') =>
     geo ? { cx: geo.w * (stick === 'L' ? 0.25 : 0.75), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
@@ -451,41 +432,46 @@ function DualJoystick({
     }
   }
 
-  const mapTouches = (list: { identifier: string; pageX: number; pageY: number }[]) =>
-    list.map((t) => ({ identifier: t.identifier, pageX: t.pageX, pageY: t.pageY }))
-
-  const handleStart = (touches: TouchPoint[]) => {
-    if (!canControlRef.current) return
-    for (const t of touches) {
-      if (touchesRef.current.has(t.identifier)) continue
-      const stick = resolveStick(t.pageX, t.pageY)
-      if (stick === 'R' && !rightEnabledRef.current) continue
-      touchesRef.current.set(t.identifier, { stick, ox: t.pageX, oy: t.pageY })
-    }
-  }
-
-  const handleMove = (touches: TouchPoint[]) => {
-    if (!canControlRef.current) return
-    for (const t of touches) {
-      const ent = touchesRef.current.get(t.identifier)
-      if (!ent) continue
-      applyKnob(ent.stick, t.pageX - ent.ox, t.pageY - ent.oy)
-    }
-  }
-
-  const handleRelease = (changed: TouchPoint[]) => {
-    for (const t of changed) {
-      const ent = touchesRef.current.get(t.identifier)
-      if (!ent) continue
-      touchesRef.current.delete(t.identifier)
-      let anyLeft = false
-      for (const [, v] of touchesRef.current) {
-        if (v.stick === ent.stick) {
-          anyLeft = true
-          break
-        }
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (evt) => {
+      for (const t of evt.nativeEvent.touches) grab(String(t.identifier), t.locationX, t.locationY)
+    },
+    onPanResponderMove: (evt) => {
+      const c = evt.nativeEvent.touches
+      for (const t of c) {
+        const ent = touchesRef.current.get(String(t.identifier))
+        if (!ent) continue
+        const center = centerOf(ent.stick)
+        applyKnob(ent.stick, t.locationX - center.cx, t.locationY - center.cy)
       }
-      if (!anyLeft) applyKnob(ent.stick, 0, 0)
+    },
+    onPanResponderRelease: (evt) => release(evt.nativeEvent.changedTouches),
+    onPanResponderTerminate: (evt) => release(evt.nativeEvent.changedTouches),
+  }), [geo, radius])
+
+  const grab = (id: string, x: number, y: number) => {
+    if (!canControlRef.current) return
+    if (touchesRef.current.has(id)) return
+    const stick = resolveStick(x, y)
+    if (stick === 'R' && !rightEnabledRef.current) return
+    touchesRef.current.set(id, { stick })
+  }
+
+  const release = (changed: readonly { identifier: number | string }[]) => {
+    const dropped = new Set<'L' | 'R'>()
+    for (const t of changed) {
+      const ent = touchesRef.current.get(String(t.identifier))
+      if (!ent) continue
+      touchesRef.current.delete(String(t.identifier))
+      dropped.add(ent.stick)
+    }
+    // If another finger still holds the same stick, keep it; else snap back.
+    for (const stick of dropped) {
+      let still = false
+      for (const [, v] of touchesRef.current) if (v.stick === stick) { still = true; break }
+      if (!still) applyKnob(stick, 0, 0)
     }
   }
 
@@ -498,10 +484,7 @@ function DualJoystick({
         const { width, height: h } = e.nativeEvent.layout
         setGeo((g) => (g && g.w === width && g.h === h ? g : { w: width || 1, h: h || 1 }))
       }}
-      onTouchStart={(e) => handleStart(mapTouches(e.nativeEvent.touches))}
-      onTouchMove={(e) => handleMove(mapTouches(e.nativeEvent.touches))}
-      onTouchEnd={(e) => handleRelease(mapTouches(e.nativeEvent.changedTouches))}
-      onTouchCancel={(e) => handleRelease(mapTouches(e.nativeEvent.changedTouches))}
+      {...panResponder.panHandlers}
       style={fill ? { flex: 1 } : { height }}
       className="relative overflow-hidden rounded-2xl border border-line bg-surface"
     >
@@ -526,6 +509,7 @@ function DualJoystick({
                 </View>
                 {/* Outer base ring */}
                 <View
+                  pointerEvents="none"
                   className="absolute items-center justify-center rounded-full border-2"
                   style={{
                     left: c.cx - base,
@@ -587,6 +571,7 @@ function DualJoystick({
                 </View>
                 {/* Knob */}
                 <View
+                  pointerEvents="none"
                   className="absolute rounded-full bg-white"
                   style={{
                     left: c.cx + knob.x - knobSize / 2,
@@ -603,7 +588,6 @@ function DualJoystick({
                     elevation: 6,
                   }}
                 >
-                  {/* Grip dot */}
                   <View className="absolute left-1/2 top-1/2 h-3 w-3 -ml-1.5 -mt-1.5 rounded-full bg-navy shadow-sm" />
                 </View>
               </View>
@@ -615,6 +599,9 @@ function DualJoystick({
   )
 }
 
+// =====================================================================
+// DriveControls — public component (unchanged contract).
+// =====================================================================
 export function DriveControls({
   canControl, isDrone, activeMode, speed, servo,
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
@@ -644,7 +631,7 @@ export function DriveControls({
   const maxSteer = steerLimit != null ? steerLimit : limits.maxSteerDeviation
 
   // Stop everything (2WD1M center button — full mode only; the compact
-  // remote uses the pads' center cells + the E-stop FAB instead, R4-1).
+  // remote uses the pads' center cells + the E-stop FAB instead).
   const stopAll2wd1m = useCallback(() => {
     hapticTap()
     if (onSignedDrive) onSignedDrive(0)
@@ -655,7 +642,6 @@ export function DriveControls({
   // the 2WD1M stick streams signed SPD like the physical remote: forward is
   // +SPD, backward is -SPD, magnitude proportional to deflection, quantized
   // to 5-unit steps, and center (release) sends SPD0 = transient stop.
-  // The value is clamped to the remote's SAFE joystick range before sending.
   const handleLeftJoy = useCallback((x: number, y: number) => {
     if (!canControl) return
     if (is2wd1m && onSignedDrive) {
@@ -669,20 +655,15 @@ export function DriveControls({
       onSignedDrive(y < 0 ? mag : -mag)
       return
     }
-    // In 2WD1M the left stick only drives motor forward/backward
     const d = is2wd1m
       ? (y < -0.25 ? 'F' : y > 0.25 ? 'B' : 'S')
       : joyToDirection(x, y)
     sendDir(d)
   }, [canControl, is2wd1m, onSignedDrive, sendDir, limits])
 
-  // Right joystick X axis: steers servo in 2WD1M. With ESP-remote parity the
-  // deviation from center is clamped to ±steerLimit, so the servo never
-  // exceeds the limit the user set (mirrors the remote's Steer field).
-  // The resulting servo angle is also clamped to the remote's safe servo range.
+  // Right joystick X axis: steers servo in 2WD1M, clamped to ±steerLimit.
   const handleRightJoy = useCallback((x: number) => {
     if (!canControl || !is2wd1m) return
-    // Convention: stick LEFT (x < 0) = steer left (servo < 90), stick RIGHT = steer right (servo > 90)
     let dev = Math.round(x * 90)
     if (onSignedDrive && steerLimit != null) {
       dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
@@ -698,7 +679,6 @@ export function DriveControls({
     <View className={canControl ? (compact ? 'min-h-0 flex-1' : '') : (compact ? 'min-h-0 flex-1 opacity-40' : 'opacity-40')}>
       {/* ── Input mode: Joystick or D-pad ── */}
       {useJoystick ? (
-        /* Dual joysticks — ONE multi-touch surface so both work together */
         <View className={compact ? 'min-h-0 flex-1' : ''}>
           {!compact && (
             <View className="mb-2 flex-row items-center justify-center gap-12">
@@ -728,10 +708,6 @@ export function DriveControls({
           )}
         </View>
       ) : (
-        /* Dual complete d-pads for EVERY robocar mode (one multi-touch
-           surface — non-functional buttons stay visible but dimmed).
-           R4-1: no separate Stop pill in compact — the pads' center cells
-           and the E-stop FAB stop everything. */
         <View className={compact ? 'min-h-0 flex-1' : ''}>
           <DualDpad
             canControl={canControl}
@@ -759,7 +735,7 @@ export function DriveControls({
 
       {/* Speed (clamped to the ESP-remote safe PWM/speed ceiling) with a
           slider AND −/+ steppers. Compact renders its own chrome-row strip
-          instead — the deck-bottom strip is gone (R4-2/R4-3). */}
+          instead — the deck-bottom strip is gone in compact. */}
       {showSpeed && !compact && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-3">
           <View className="flex-row items-center justify-between">
@@ -794,18 +770,22 @@ export function DriveControls({
             <Text className="mt-1 text-right font-mono text-sm text-navy">Kp {pidKp.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
             <Slider value={pidKi} minimumValue={0} maximumValue={20} step={0.1} onValueChange={(v: number) => onPid('ki', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-sm text-navy">Ki {pidKi.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
             <Slider value={pidKd} minimumValue={0} maximumValue={20} step={0.1} onValueChange={(v: number) => onPid('kd', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-sm text-navy">Kd {pidKd.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
             <Slider value={pidOut} minimumValue={0} maximumValue={255} step={1} onValueChange={(v: number) => onPid('out', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-sm text-navy">OUT {pidOut}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
             <Slider value={pidOff} minimumValue={-5} maximumValue={5} step={0.05} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-sm text-navy">OFF {pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°</Text>
           </View>
