@@ -41,6 +41,14 @@ jobs:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # CRITICAL: EXPO_PUBLIC_* are inlined into the JS bundle by Metro at
+      # "eas update" publish time — exactly like release.yml. Without these
+      # the published OTA bundle ships with an EMPTY Supabase URL/anon key
+      # and Google client IDs: backend dead, sign-in gone, no version check.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
     defaults:
       run:
         working-directory: mobile

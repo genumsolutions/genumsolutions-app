@@ -31,15 +31,16 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
   const listMaxHeight = anchor ? Math.max(140, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.42)) : height * 0.42
 
   return (
-    // R4-3: single-line control (label removed) so it fits the one chrome
-    // row of the remote — the mode name speaks for itself.
+    // R4-3: compact one-row control on the chrome row. The "Mode" label is
+    // kept inline (approved look) and the trigger keeps its approved 180px
+    // cap so long mode names never truncate.
     <View className="flex-row items-center gap-1.5">
       <Pressable
         ref={triggerRef}
         onPress={openDropdown}
         accessibilityRole="button"
         accessibilityLabel="Choose car mode"
-        className="min-w-0 max-w-[150px] flex-row items-center justify-between gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2"
+        className="min-w-0 max-w-[180px] flex-row items-center justify-between gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2"
       >
         <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-bold text-white">{shortName}</Text>
         <Feather name="chevron-down" size={15} color="#cbd5e1" />
