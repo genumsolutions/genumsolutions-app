@@ -1,9 +1,45 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v1.5.14** (versionCode 22) · Android APK (`genum-solutions-1.5.14-arm64-v8a.apk`)
+> Target: **v2.0.4** (versionCode 47) · Android APK (`genum-solutions-2.0.4.apk`, 41.3 MB) — snag list round 3: **PASSED 2026-09-09 (18/18)**
+> Older targets below: v1.5.14 (Car Remote Phase A), v1.5.13/12/11 polish.
 > Scope: the **robot-car per-package remote (Phase A)** — Car Remote screen (Classic BT SPP + BLE + WiFi), ESP-remote 2WD1M joystick parity (signed SPD / steer limit / trim / e-stop), self-balancing PID deck, autonomous Run/Stop decks (token semantics), weblink (wireless-car WS JSON) deck, Tools-hub + website parity — on top of the v1.5.13 native UX polish and the v1.5.12/v1.5.11 fixes.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
 > Status: **v1.5.14 code complete + committed + pushed to `main`** (both repos; version bumped 1.5.14/22; typecheck + lint + 33/33 tests + production build + expo-doctor 18/18 all green). Physical-device pass pending; APK not yet built.
+
+---
+
+## v2.0.4 device checklist — snag list round 3 (PASSED 2026-09-09 — 18/18)
+
+> Report snags by ID (e.g. "R3-A3 fails"). Scope: everything shipped since v2.0.1 — remote overhaul (v2.0.2), joystick-first OTA remaster, version-accurate update detection (v2.0.4).
+
+### A. Update & OTA (the v2.0.4 headline features)
+- [x] **R3-A1 — OTA pickup at same version:** open the app → it checks on load → gold "update available" pill appears when a newer bundle exists (or "App updated" chip after one just applied).
+- [x] **R3-A2 — version-accurate detection:** Update screen shows the correct live version (2.0.4/47) — not a display-version guess.
+- [x] **R3-A3 — reload banner:** after an OTA applies, the "Update applied — reload" banner offers a reload that lands you on the new bundle.
+- [x] **R3-A4 — no false prompt:** when fully up to date, NO update pill/banner appears.
+
+### B. Remote window (landscape gaming remote)
+- [x] **R3-B1 — landscape lock:** remote opens landscape and stays landscape; on exit the rest of the app returns to normal orientation.
+- [x] **R3-B2 — single screen, no scroll:** HUD + compact 2:1 OLED + mode chooser + drive deck + E-stop all fit without scrolling; nothing overflows in landscape.
+- [x] **R3-B3 — joystick feel:** big pro sticks (drive left / steer right), right stick dims + "UNUSED" on non-2WD1M modes; D-pad layout works via the toggle.
+- [x] **R3-B4 — drive semantics (2WD1M):** left stick up/down = signed SPD, right stick = steer within limit; speed strip reflects changes; E-stop FAB halts instantly (with haptic).
+- [x] **R3-B5 — mode chooser dropdown:** opens below the trigger without overflow; cycle button works; mode changes reach the car AND car-side mode changes sync back into the app.
+- [x] **R3-B6 — settings dropdown:** steer limit + trim steppers work for 2WD1M; on other modes it opens with a note instead of controls; outside-tap closes.
+
+### C. Account dropdown + screens
+- [x] **R3-C1 — dropdown:** top-bar avatar opens the anchored card (initials, name, gold Admin chip if admin, email) — backdrop tap closes it.
+- [x] **R3-C2 — latest orders:** up to 3 orders with correct status pills + provider + total NPR; loading/empty/error states look right.
+- [x] **R3-C3 — My Profile:** opens the full Account screen (order status pills, details form, messages).
+- [x] **R3-C4 — sign out:** inline confirm works; admin-only "Admin Panel" row hidden for customers.
+
+### D. General regression
+- [x] **R3-D1 — cold start:** no crash, sign-in (email + Google) works.
+- [x] **R3-D2 — shop + cart:** browse, add to cart, quantity edit, checkout flow intact.
+- [x] **R3-D3 — admin:** dashboard cards don't overflow right-edge (Messages card), tabs function.
+- [x] **R3-D4 — menu tab:** Downloads & Software Updates group + theme switch behave.
+
+**Pass criteria:** all boxes tick, or failures logged as snags below and triaged (OTA-fixable vs needs-native).
+**Result: 18/18 PASSED on device 2026-09-09.** No snags reported; round 3 closed with no fixes required.
 
 ---
 
