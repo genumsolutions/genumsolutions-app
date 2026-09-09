@@ -30,7 +30,7 @@ const OWNER = 'genumsolutions';
 const REPO = 'genumsolutions-app';
 const API = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows`;
 
-function loadEnv() {
+async function loadEnv() {
   const out = {};
   try {
     const { readFileSync } = await import('node:fs');
@@ -58,7 +58,7 @@ function parseArgs() {
 }
 
 const args = parseArgs();
-const env = loadEnv();
+const env = await loadEnv();
 const token = process.env.GH_TOKEN || env.GH_TOKEN;
 
 if (!token) {
