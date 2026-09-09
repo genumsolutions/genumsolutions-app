@@ -60,7 +60,8 @@ function MenuRow({ icon, label, sub, danger, onPress }: {
         <Feather name={icon} size={16} color={danger ? '#dc2626' : '#1e3a8a'} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className={`text-sm font-bold ${danger ? 'text-red-600' : 'text-ink'}`}>{label}</Text>
+        {/* R5 overflow fix: label ellipsizes within the row. */}
+        <Text numberOfLines={1} className={`text-sm font-bold ${danger ? 'text-red-600' : 'text-ink'}`}>{label}</Text>
         <Text className="text-xs text-muted" numberOfLines={1}>{sub}</Text>
       </View>
       <Feather name="chevron-right" size={16} color="#94a3b8" />

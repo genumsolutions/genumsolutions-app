@@ -68,22 +68,24 @@ export function AppUpdateCard({ compact = false }: Props) {
     return (
       <View className="mx-4 mt-2 rounded-xl border border-line bg-mist px-3 py-2.5">
         <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
+          {/* R5 overflow fix: left block shrinks with min-w-0; status text
+              is capped at one line so it never crosses the card edge. */}
+          <View className="min-w-0 flex-row items-center gap-2">
             <Feather name="download" size={14} color="#64748b" />
-            <Text className="text-xs font-bold text-ink">App v{APP_VERSION}</Text>
+            <Text numberOfLines={1} className="text-xs font-bold text-ink">App v{APP_VERSION}</Text>
           </View>
           {isBusy && <ActivityIndicator size="small" color="#1e3a8a" />}
           {updateState.status === 'up-to-date' && (
-            <Text className="text-[11px] font-bold text-emerald-600">Up to date</Text>
+            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-emerald-600">Up to date</Text>
           )}
           {hasUpdate && (
-            <Text className="text-[11px] font-bold text-gold">v{updateState.latestVersion} available</Text>
+            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-gold">v{updateState.latestVersion} available</Text>
           )}
           {updateState.status === 'error' && (
-            <Text className="text-[11px] font-bold text-red-500">Check failed</Text>
+            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-red-500">Check failed</Text>
           )}
           {updateState.status === 'installing' && (
-            <Text className="text-[11px] font-bold text-navy">Installing…</Text>
+            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-navy">Installing…</Text>
           )}
         </View>
 

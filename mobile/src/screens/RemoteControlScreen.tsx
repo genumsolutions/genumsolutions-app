@@ -97,21 +97,18 @@ function TouchSafePressable({ onPress, onPressIn, onPressOut, hitSlop = 8, style
   const pressedRef = useRef(false)
   const [pressed, setPressed] = useState(false)
 
-  const isInside = (e: { nativeEvent: { pageX: number; pageY: number } }, cb: (ok: boolean) => void) => {
-    wrapRef.current?.measureInWindow((x, y, w, h) => {
-      const { pageX, pageY } = e.nativeEvent
-      cb(pageX >= x - hitSlop && pageX <= x + w + hitSlop && pageY >= y - hitSlop && pageY <= y + h + hitSlop)
-    })
-  }
+  // PERF (round 5): the previous version ran an ASYNC native bridge call
+  // (measureInWindow) inside every touch event — each tap cost a bridge
+  // round-trip, and touch-move flooded it. Now the wrapper's rect is
+  // cached from onLayout (synchronous per touch) and only re-measured on
+  // layout changes, so taps are handled with plain arithmetic.
+  const rectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
 
-  const fire = (e: { nativeEvent: { pageX: number; pageY: number } }) => {
-    if (disabled) return
-    isInside(e, (ok) => {
-      if (!ok) return
-      pressedRef.current = false
-      setPressed(false)
-      onPress?.()
-    })
+  const isInside = (e: { nativeEvent: { pageX: number; pageY: number } }) => {
+    const r = rectRef.current
+    if (!r) return false
+    const { pageX, pageY } = e.nativeEvent
+    return pageX >= r.x - hitSlop && pageX <= r.x + r.w + hitSlop && pageY >= r.y - hitSlop && pageY <= r.y + r.h + hitSlop
   }
 
   return (
@@ -119,21 +116,32 @@ function TouchSafePressable({ onPress, onPressIn, onPressOut, hitSlop = 8, style
       ref={wrapRef}
       className={className}
       style={style}
-      onTouchStart={(e) => isInside(e, (ok) => {
-        if (!ok || disabled) return
+      onLayout={() => {
+        wrapRef.current?.measureInWindow((x, y, w, h) => {
+          rectRef.current = { x, y, w, h }
+        })
+      }}
+      onTouchStart={(e) => {
+        if (!isInside(e) || disabled) return
         pressedRef.current = true
         setPressed(true)
         onPressIn?.()
-      })}
-      onTouchMove={(e) => isInside(e, (ok) => {
+      }}
+      onTouchMove={(e) => {
         if (!pressedRef.current) return
-        if (!ok) {
+        if (!isInside(e)) {
           pressedRef.current = false
           setPressed(false)
           onPressOut?.()
         }
-      })}
-      onTouchEnd={(e) => fire(e)}
+      }}
+      onTouchEnd={(e) => {
+        if (disabled) return
+        if (!isInside(e)) return
+        pressedRef.current = false
+        setPressed(false)
+        onPress?.()
+      }}
       onTouchCancel={() => {
         if (pressedRef.current) {
           pressedRef.current = false

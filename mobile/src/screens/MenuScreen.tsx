@@ -14,7 +14,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useApp } from '../context/AppContext';
-import { AppUpdateCard } from '../components/AppUpdateCard';
 import type { RootStackParamList } from '../navigation/types';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -68,14 +67,16 @@ export function MenuScreen() {
         />
       </MenuGroup>
 
-      {/* Downloads & Software Updates - visible without signing in */}
+      {/* Downloads & Software Updates - visible without signing in.
+          R5: the bordered AppUpdateCard was removed — it duplicated the
+          App Updates row right above it (owner: 'info items twice, remove
+          the one with the borderline'). */}
       <MenuGroup title="Downloads & Software Updates">
         <MenuItem
           icon="download"
           label="App Updates"
           onPress={() => navigation.push('Update')}
         />
-        <AppUpdateCard compact />
       </MenuGroup>
 
       {/* Appearance - theme toggle moved here from the Account page */}
@@ -132,7 +133,9 @@ function MenuItem({
       className="mx-3 flex-row items-center rounded-xl px-4 py-3.5 active:bg-mist"
     >
       <Feather name={icon} size={20} color="#64748b" />
-      <Text className="ml-3.5 text-base font-semibold text-ink">{label}</Text>
+      {/* R5 overflow fix: min-w-0 + flex-1 + numberOfLines so long labels
+          never push past the card's right edge. */}
+      <Text numberOfLines={1} className="ml-3.5 min-w-0 flex-1 text-base font-semibold text-ink">{label}</Text>
     </Pressable>
   );
 }

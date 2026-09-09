@@ -195,9 +195,9 @@ function Row({
       <View className="h-10 w-10 items-center justify-center rounded-full bg-navy-light">
         <Feather name={icon} size={18} color="#1e3a8a" />
       </View>
-      <View className="ml-3 flex-1">
+      <View className="ml-3 min-w-0 flex-1">
         <Text className="text-xs font-bold uppercase tracking-wide text-border">{label}</Text>
-        <Text className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
+        <Text numberOfLines={1} className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
       </View>
       <Feather name="external-link" size={16} color="#94a3b8" />
     </Pressable>

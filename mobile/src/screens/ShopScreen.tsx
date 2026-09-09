@@ -172,7 +172,9 @@ export function ShopScreen() {
                 <Feather name="box" size={28} color="#94a3b8" />
               )}
             </View>
-            <Text className="mt-2 text-[13px] font-bold leading-tight text-ink">
+            {/* R5 overflow fix: numberOfLines so long product names
+                ellipsize inside the 2-col card instead of clipping. */}
+            <Text numberOfLines={2} className="mt-2 text-[13px] font-bold leading-tight text-ink">
               {item.name}
             </Text>
             {item.badge ? (
