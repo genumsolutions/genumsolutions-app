@@ -39,15 +39,23 @@ name: Release Android APK
 on:
   push:
     branches: [main]
+    # POSITIVE list of native-affecting paths only. A push runs this workflow
+    # only when a file under one of these paths changed (GitHub: "if ANY changed
+    # file matches paths"). JS/asset/script-only pushes are therefore skipped
+    # entirely (they ride ota-only.yml) - including src/config/site.ts, which a
+    # version bump always touches, so an app.json bump still triggers the build.
+    #
+    # Do NOT use paths + paths-ignore here: paths-ignore: ['mobile/src/**'] also
+    # swallows site.ts during a version bump, so the whole workflow is excluded
+    # and the APK build silently never runs (a run is created then cancelled with
+    # 0 jobs). See https://docs.github.com/actions/using-workflows/workflow-syntax
+    # for the "workflow runs if ANY changed file matches paths" rule.
     paths:
-      - 'mobile/**'
-    # JS/asset/script-only pushes ride the OTA-only workflow (~5 s, no APK).
-    # This full build fires for native-affecting changes (app.json, native
-    # deps, plugins, keystores, workflows) or a manual dispatch.
-    paths-ignore:
-      - 'mobile/src/**'
-      - 'mobile/assets/**'
-      - 'mobile/scripts/**'
+      - 'mobile/app.json'
+      - 'mobile/package.json'
+      - 'mobile/package-lock.json'
+      - 'mobile/plugins/**'
+      - 'mobile/keystores/**'
   workflow_dispatch: # Allow manual trigger
 
 concurrency:
