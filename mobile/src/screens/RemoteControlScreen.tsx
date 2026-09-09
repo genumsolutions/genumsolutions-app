@@ -163,8 +163,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     // connection
     connected, wifiConnected, sppStatus, deviceName,
     canControl, handleDisconnect, wifiUrl,
-    // SPP auto-reconnect
-    showReconnectPrompt, handleReconnectPromptRetry, handleReconnectPromptCancel,
     // mode/category
     activeCategory, activeMode, carModes, selectMode, cycleMode,
     // drive
@@ -377,9 +375,9 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // OLED slot — rendered centered between joysticks in the DriveControls
   // surface (always visible, pointer-events="none"). Size matches the
-  // physical 1.3" OLED (96×48 at 2:1 aspect ratio).
+  // physical 1.3" SSD1306 OLED (128×64 at 2:1 aspect ratio).
   const oledSlot = isRobocar ? (
-    <View style={{ width: 96, height: 48 }} className="overflow-hidden rounded-lg">
+    <View style={{ width: 128, height: 64 }} className="overflow-hidden rounded-lg">
       <OledDisplay
         {...oledCommonProps}
         compact
@@ -481,19 +479,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                   <Feather name="settings" size={20} color="#fff" />
                 </View>
               </Pressable>
-              {linked && (
-                <Pressable
-                  onPress={() => { Vibration.vibrate(10); handleDisconnect() }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Disconnect"
-                  hitSlop={10}
-                  android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 28 }}
-                >
-                  <View className="h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5">
-                    <Feather name="link-2" size={20} color="#fff" />
-                  </View>
-                </Pressable>
-              )}
             </View>
           )}
         </View>
@@ -626,50 +611,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                   >
                     <View className="rounded-full bg-red-600 px-6 py-2.5">
                       <Text className="text-sm font-black text-white">Disconnect</Text>
-                    </View>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* Reconnect prompt — ESP remote parity: after 4 silent attempts
-            fail, show "Connection lost. Retry?" with [Retry] [Cancel]. */}
-        {showReconnectPrompt && (
-          <>
-            <Pressable
-              className="absolute inset-0 z-30 bg-black/50"
-              onPress={handleReconnectPromptCancel}
-              accessibilityLabel="Cancel reconnect"
-            />
-            <View className="absolute inset-0 z-40 items-center justify-center px-8">
-              <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-xl">
-                <Text className="text-center text-base font-black text-white">Connection lost</Text>
-                <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
-                  Reconnect to continue driving?
-                </Text>
-                <View className="mt-4 flex-row justify-center gap-3">
-                  <Pressable
-                    onPress={handleReconnectPromptCancel}
-                    accessibilityRole="button"
-                    accessibilityLabel="Exit remote"
-                    hitSlop={8}
-                    android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
-                  >
-                    <View className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5">
-                      <Text className="text-sm font-bold text-white">Cancel</Text>
-                    </View>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleReconnectPromptRetry}
-                    accessibilityRole="button"
-                    accessibilityLabel="Retry connection"
-                    hitSlop={8}
-                    android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
-                  >
-                    <View className="rounded-full bg-navy px-6 py-2.5">
-                      <Text className="text-sm font-black text-white">Retry</Text>
                     </View>
                   </Pressable>
                 </View>

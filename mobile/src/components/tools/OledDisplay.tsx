@@ -77,6 +77,7 @@ export function OledDisplay({
   })()
 
   // Bottom status: car status when linked, link state otherwise.
+  // In compact mode, omit the connection status — the chrome row handles it.
   const bottomStatus = connected
     ? (driveStatus || 'READY').toUpperCase()
     : wifiConnected ? 'CONNECTED' : 'READY'
@@ -172,7 +173,7 @@ export function OledDisplay({
           numberOfLines={1}
           className={mono(`font-bold text-slate-900 ${compact ? 'text-[9px]' : 'text-xs'}`)}
         >
-          {compact ? bottomStatus : `${linkLabel} · ${bottomStatus}`}
+          {compact ? (driveStatus || '').toUpperCase() : `${linkLabel} · ${bottomStatus}`}
         </Text>
       </View>
     </View>

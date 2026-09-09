@@ -44,7 +44,8 @@ const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
 
 function clampSpeed(value: number, limits: SafetyLimits): number {
   const v = Math.round(value)
-  return Math.max(0, Math.min(limits.maxSpeed, v))
+  // ESP32 remote enforces SPEED_MIN=100 — never drive below it.
+  return Math.max(100, Math.min(limits.maxSpeed, v))
 }
 
 function clampSignedDrive(value: number, limits: SafetyLimits): number {
@@ -329,8 +330,8 @@ function DualDpad({
   const en = enabledZones(is2wd1m)
 
   const padView = (pad: PadId) => (
-    <View className="min-h-0 flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-2 py-2">
-      <View className="flex h-full w-full max-w-[240px] flex-col gap-1.5">
+    <View className="min-h-0 flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-1 py-2">
+      <View className="flex h-full w-full max-w-[180px] flex-col gap-1.5">
         <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} compact={compact} />
         <View className="min-h-0 flex-1 flex-row gap-1.5">
           <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} compact={compact} />
@@ -358,7 +359,7 @@ function DualDpad({
           setSurf((s) => (s && s.w === width && s.h === height ? s : { w: width || 1, h: height || 1 }))
         }}
         {...panResponder.panHandlers}
-        className="min-h-0 flex-1 flex-row items-stretch gap-2"
+        className="min-h-0 flex-1 flex-row items-stretch gap-1"
       >
         {padView('L')}
         {padView('R')}
@@ -679,10 +680,10 @@ function DualJoystick({
               pointerEvents="none"
               style={{
                 position: 'absolute',
-                left: geo.w * 0.5 - 48,
-                top: geo.h * 0.5 - 24,
-                width: 96,
-                height: 48,
+                left: geo.w * 0.5 - 64,
+                top: geo.h * 0.5 - 32,
+                width: 128,
+                height: 64,
               }}
             >
               {oledSlot}
@@ -710,11 +711,15 @@ export function DriveControls({
   const showStartStop = activeMode.controls.includes('start-stop') || activeMode.controls.includes('tuning')
   const is2wd1m = activeMode.controls.includes('drive-2wd1m')
 
-  // Debounce direction commands to avoid flooding the BLE/WiFi link
+  // Debounce direction commands — allow re-send after 100ms cooldown
+  // (handles lost BLE packets without flooding the link).
   const lastDirRef = useRef<string>('S')
+  const lastDirTimeRef = useRef(0)
   const sendDir = useCallback((d: 'F' | 'B' | 'L' | 'R' | 'S') => {
-    if (lastDirRef.current === d) return
+    const now = Date.now()
+    if (lastDirRef.current === d && now - lastDirTimeRef.current < 100) return
     lastDirRef.current = d
+    lastDirTimeRef.current = now
     onDirection(d)
   }, [onDirection])
 
@@ -846,7 +851,7 @@ export function DriveControls({
           </View>
           <Slider
             value={clampSpeed(speed, limits)}
-            minimumValue={0}
+            minimumValue={100}
             maximumValue={limits.maxSpeed}
             step={5}
             onValueChange={(v: number) => onSpeed(clampSpeed(v, limits))}
