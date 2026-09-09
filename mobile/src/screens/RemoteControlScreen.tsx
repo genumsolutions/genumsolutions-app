@@ -238,7 +238,9 @@ export function RemoteControlScreen({ navigation }: Props) {
   const [showSettings, setShowSettings] = useState(false)
 
   // Actual-size 2:1 OLED for the game remote (128×64 physical shape).
-  const oledWidth = Math.min(width * (isLandscape ? 0.2 : 0.5), 136)
+  // Restored to the approved round-3 size (cap 148, 22% landscape) — the
+  // chrome row still fits since the speed strip is compact.
+  const oledWidth = Math.min(width * (isLandscape ? 0.22 : 0.5), 148)
 
   // Robocar safety limits for the chrome speed strip.
   const limits: SafetyLimits = hub.safetyLimits ?? DEFAULT_SAFETY_LIMITS
