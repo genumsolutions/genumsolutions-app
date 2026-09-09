@@ -204,11 +204,21 @@ jobs:
             echo "::warning title=No release keystore::ANDROID_KEYSTORE_B64 not set; building with the debug key."
           fi
 
+      # Regenerate android/ ONLY when the restored android/ cache does not
+      # match the CURRENT app.json versionCode. The prebuild cache key hashes
+      # app.json, so a version bump makes the primary key miss and the
+      # restore-keys fallback could return a stale android/ whose baked
+      # versionCode is OLDER than app.json — silently shipping versionName
+      # "2.0.4" inside a versionCode 46 APK (Android treats that as a downgrade
+      # and refuses the install). Comparing the cached build.gradle against the
+      # current versionCode catches that drift and forces a regeneration.
       - name: Regenerate android/ (expo prebuild)
         run: |
-          if [ -f android/app/build.gradle ] && [ -d android/.gradle ]; then
-            echo "android/ restored from cache — skipping prebuild"
+          APP_CODE=$(node -p "require('./app.json').android.versionCode")
+          if [ -f android/app/build.gradle ] && grep -q "versionCode $APP_CODE " android/app/build.gradle; then
+            echo "android/ restored from cache, versionCode matches ($APP_CODE) — skipping prebuild"
           else
+            echo "android/ cache missing or stale (need versionCode $APP_CODE) — regenerating with expo prebuild"
             npx expo prebuild -p android --no-install
           fi
 
@@ -256,12 +266,10 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           if-no-files-found: error
 
-      # ── Publish OTA bundle (JS/asset only) ──────────────────────
-      # Pushes any JS/asset changes to existing devices without requiring
-      # a full APK download. Requires EXPO_TOKEN secret.
-      - name: Publish OTA update
-        if: steps.check-supabase.outputs.configured == 'true'
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas-cli update --branch main --message "Release build OTA" --non-interactive
-        continue-on-error: true
+      # NOTE: the release build intentionally does NOT publish an OTA bundle.
+      # The APK + manifest version/versionCode ALWAYS bump on a release, and an
+      # OTA bundle carries the JS copy of APP_VERSION. Publishing it would let a
+      # device on the OLD native build self-report the NEW version, suppressing
+      # the "new APK available" pill until the NEXT bump. OTA (expo-updates) is
+      # the SAME-VERSION hot-patch channel only, handled by ota-only.yml; new
+      # versions are installed via a new APK.

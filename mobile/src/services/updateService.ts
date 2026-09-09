@@ -138,24 +138,32 @@ export async function checkForUpdate(
 }
 
 // ── Combined Update Check ─────────────────────────────────────────
-// Checks OTA first, then APK. Returns the OTA result if applied,
-// otherwise falls back to APK check.
+// Checks OTA AND the APK manifest. These are independent channels, so an
+// OTA must never mask a newer APK: an OTA-only push keeps the SAME app
+// version (see ota-only.yml) while every release bumps version/versionCode,
+// so a large version increment always means "install the new APK".
 export async function checkForAnyUpdate(
   fetchImpl: typeof fetch = fetch,
   manifestUrl: string = RELEASE_MANIFEST_URL,
 ): Promise<UpdateState> {
-  // 1. Check for OTA update (JS/asset only, silent)
+  // 1. Silent OTA check (JS/asset only — same app version, applied on reload)
   const ota = await checkForOtaUpdate();
+
+  // 2. APK check always runs so a newer native release still surfaces a pill
+  //    on the same launch where an OTA bundle happens to be available.
+  const apk = await checkForUpdate(fetchImpl, manifestUrl);
+  if (apk.status === 'update-available' || apk.status === 'error') {
+    return { ...apk, otaApplied: ota.applied };
+  }
   if (ota.applied) {
     return {
       status: 'up-to-date',
       notes: 'A UI update was applied. Restart the app to see changes.',
       otaApplied: true,
+      updatedAt: apk.updatedAt,
     };
   }
-
-  // 2. Fall back to APK check (native changes, requires install)
-  return checkForUpdate(fetchImpl, manifestUrl);
+  return apk;
 }
 
 // ── APK Download + Install ────────────────────────────────────────

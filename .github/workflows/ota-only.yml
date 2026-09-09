@@ -1,13 +1,17 @@
 # =====================================================================
-# OTA Only - publish JS/asset updates without building the APK.
+# OTA Only - publish a SAME-VERSION hot-patch (JS/asset only) without
+# rebuilding the APK - the fast channel for emergency fixes between releases.
 #
 # Triggers on push to main when ONLY mobile/src or mobile/assets files
 # changed (app.json / package.json / plugins / keystores / workflow edits
 # take the full release.yml build instead).
 # Skips the APK build entirely (~15 min saved).
-# Runs typecheck + expo-doctor + publishes OTA bundle (~2-5 sec), then
-# syncs the release.json metadata (notes + updated_at) so the website
-# /app page and the in-app updater instantly show the short update.
+#
+# VERSION SEMANTICS: this channel NEVER bumps the version. It publishes a
+# bundle that keeps the CURRENT app version, so devices just reload with the
+# patch and the release.json "Last published" timestamp advances. Any change
+# that should go out as a NEW version belongs in release.yml (every release
+# bumps app.json version + versionCode and installs as a new APK).
 #
 # NOTE: runtimeVersion stays CONSTANT (1.0.0). Never bump it for OTA-only
 # pushes - a different runtimeVersion is incompatible with the installed
