@@ -59,7 +59,7 @@
     "doctor": "npx expo-doctor",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "publish:ota": "eas update --branch main"
+    "publish:ota": "npx eas-cli update --branch main"
   },
   "private": true,
   "expo": {
