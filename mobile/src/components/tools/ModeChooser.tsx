@@ -31,29 +31,28 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
   const listMaxHeight = anchor ? Math.max(140, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.42)) : height * 0.42
 
   return (
-    <View className="rounded-2xl border border-white/10 bg-black/25 px-2.5 py-1.5">
-      <Text className="px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Mode</Text>
-      <View className="mt-0.5 flex-row items-center gap-1.5">
-        <Pressable
-          ref={triggerRef}
-          onPress={openDropdown}
-          accessibilityRole="button"
-          accessibilityLabel="Choose car mode"
-          className="min-w-0 max-w-[180px] flex-row items-center justify-between gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2"
-        >
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-bold text-white">{shortName}</Text>
-          <Feather name="chevron-down" size={15} color="#cbd5e1" />
-        </Pressable>
-        <Pressable
-          onPress={() => { Vibration.vibrate(10); onCycle() }}
-          disabled={!canControl}
-          accessibilityRole="button"
-          accessibilityLabel="Cycle mode"
-          className="h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy disabled:opacity-40"
-        >
-          <Feather name="rotate-ccw" size={15} color="#fff" />
-        </Pressable>
-      </View>
+    // R4-3: single-line control (label removed) so it fits the one chrome
+    // row of the remote — the mode name speaks for itself.
+    <View className="flex-row items-center gap-1.5">
+      <Pressable
+        ref={triggerRef}
+        onPress={openDropdown}
+        accessibilityRole="button"
+        accessibilityLabel="Choose car mode"
+        className="min-w-0 max-w-[150px] flex-row items-center justify-between gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2"
+      >
+        <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-bold text-white">{shortName}</Text>
+        <Feather name="chevron-down" size={15} color="#cbd5e1" />
+      </Pressable>
+      <Pressable
+        onPress={() => { Vibration.vibrate(10); onCycle() }}
+        disabled={!canControl}
+        accessibilityRole="button"
+        accessibilityLabel="Cycle mode"
+        className="h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy disabled:opacity-40"
+      >
+        <Feather name="rotate-ccw" size={15} color="#fff" />
+      </Pressable>
 
       {open && (
         <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)}>
