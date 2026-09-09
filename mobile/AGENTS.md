@@ -55,3 +55,15 @@ signing key changes.
   bump version -> build APK (`gradlew assembleRelease`) -> `upload-release.mjs` (uploads APK +
   manifest in one step) -> sync the website fallback (`genumsolutions-website`: `node
   scripts/sync-app-fallback.mjs`) and push it.
+
+# Update channels (v2.0.4+)
+
+- **Releases** (`release.yml`): every release bumps `app.json` version + `versionCode` and
+  installs as a NEW APK. The build NEVER publishes an OTA bundle: an OTA bundle carries the JS
+  copy of `APP_VERSION`, so delivering it to a device on the OLD native build makes that device
+  self-report the NEW version and suppresses the "new APK available" pill until the next bump.
+- **OTA** (`ota-only.yml`): the SAME-VERSION hot-patch channel for emergency JS/asset fixes
+  between releases. It never bumps the version. Because a release commit also touches
+  `mobile/src`, the workflow's `release-guard` step skips the run whenever app.json versionCode is
+  newer than the published manifest. Runtime implications: `runtimeVersion` stays constant
+  (`1.0.0`) for a native generation — never bump it without a native rebuild.
