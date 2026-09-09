@@ -1847,9 +1847,13 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
         <>
           {messages.map((m) => (
             <View key={m.id} className={`mb-3 rounded-xl border bg-card p-4 ${m.status === 'new' ? 'border-l-4 border-l-navy border border-line' : 'border-line'}`}>
-              <View className="flex-row items-center justify-between">
-                <Text className="text-sm font-bold text-ink">{m.name} <Text className="font-normal text-muted">· {m.email}</Text></Text>
-                <View className="flex-row flex-wrap gap-2">
+              <View className="flex-row items-center justify-between gap-2">
+                <View className="min-w-0 flex-1">
+                  <Text numberOfLines={1} className="text-sm font-bold text-ink">
+                    {m.name} <Text className="font-normal text-muted">· {m.email}</Text>
+                  </Text>
+                </View>
+                <View className="shrink-0 flex-row flex-wrap gap-2">
                   <AdminAction onPress={() => setPreview(m)} label="Preview" tone="plain" />
                   {m.status === 'new'
                     ? <Pressable onPress={() => onMarkReplied(m.id)} className="rounded-full border border-line px-3 py-1"><Text className="text-xs font-bold text-navy">Mark replied</Text></Pressable>

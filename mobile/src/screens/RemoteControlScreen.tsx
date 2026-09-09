@@ -87,34 +87,27 @@ export function RemoteControlScreen({ navigation }: Props) {
   const [backPressed, setBackPressed] = useState(false)
 
   // Remote-window orientation: always lock landscape for the game-style
-  // remote layout. Restore the phone's previous orientation on back.
-  const priorOrientationRef = useRef<ScreenOrientation.Orientation | null>(null)
-  const [desiredOrientation, setDesiredOrientation] = useState<ScreenOrientation.Orientation | null>(null)
+  // remote layout. Restore the phone's previous lock on back. Uses the SDK
+  // 54 API (lockAsync takes an OrientationLock, not an options object); the
+  // previous call silently no-op'd on device so the remote stayed portrait.
+  const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null)
 
   useEffect(() => {
-    let lockCleanup: (() => void) | undefined
+    if (Platform.OS === 'web') return
     ;(async () => {
-      if (Platform.OS === 'web') return
-      const orientation = await ScreenOrientation.getOrientationAsync()
-      priorOrientationRef.current = orientation as ScreenOrientation.Orientation
-      const landscape = ScreenOrientation.Orientation.LANDSCAPE_LEFT
-      setDesiredOrientation(landscape)
       try {
-        const cleanup = await (ScreenOrientation.lockAsync as any)({ orientation: landscape, errorHandler: () => {} })
-        lockCleanup = cleanup
-      } catch { lockCleanup = undefined }
+        priorLockRef.current = await ScreenOrientation.getOrientationLockAsync()
+      } catch { priorLockRef.current = null }
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE)
+      } catch {
+        // best-effort — some devices/emulators reject runtime locks
+      }
     })()
-    return () => { if (lockCleanup) lockCleanup() }
-  }, [])
-
-  // Restore prior orientation on unmount.
-  useEffect(() => {
     return () => {
-      if (priorOrientationRef.current && Platform.OS !== 'web') {
-        try {
-          ;(ScreenOrientation.lockAsync as any)({ orientation: priorOrientationRef.current, errorHandler: () => {} })
-            .catch(() => {})
-        } catch {}
+      if (Platform.OS === 'web') return
+      if (priorLockRef.current != null) {
+        try { void ScreenOrientation.lockAsync(priorLockRef.current) } catch {}
       }
     }
   }, [])
@@ -141,20 +134,18 @@ export function RemoteControlScreen({ navigation }: Props) {
               className={`rounded-full border border-white/10 px-3 py-1.5 ${backPressed ? 'bg-white/15 opacity-70' : 'bg-white/5'}`}
               accessibilityRole="button"
             >
-              <Text className="text-sm font-bold text-white">‹ Back</Text>
+              <Text className="text-sm font-bold text-white">Exit</Text>
             </Pressable>
             <Text className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Remote</Text>
           </View>
-          {is2wd1mActive && (
-            <Pressable
-              onPress={() => setShowSettings((v) => !v)}
-              className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
-              accessibilityRole="button"
-            >
-              <Feather name="settings" size={14} color="#fff" />
-              <Text className="text-sm font-bold text-white">Settings</Text>
-            </Pressable>
-          )}
+          <Pressable
+            onPress={() => setShowSettings((v) => !v)}
+            className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
+            accessibilityRole="button"
+          >
+            <Feather name="settings" size={14} color="#fff" />
+            <Text className="text-sm font-bold text-white">Settings</Text>
+          </Pressable>
         </View>
 
         {/* Simulation banner — compact inline chip */}
@@ -289,27 +280,27 @@ export function RemoteControlScreen({ navigation }: Props) {
                     </Pressable>
                   </View>
 
-                  {/* In-window settings panel for 2WD1M extras — compact,
-                      fits inside the same Remote board, never overflows. */}
+                  {/* In-window settings panel — settings for ALL modes live
+                      here; controls that the active mode does not use stay
+                      visible but dimmed (never hidden). Never overflows. */}
                   {showSettings && (
                     <View className="mt-2 rounded-2xl border border-white/10 bg-black/40 p-3">
-                      <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">Settings</Text>
-                      {is2wd1mActive ? (
-                        <View className="gap-3">
-                          <TwoWd1mExtras
-                            canControl={canControl}
-                            steerLimit={steerLimit}
-                            trim={trim}
-                            onAdjustSteerLimit={adjustSteerLimit}
-                            onAdjustTrim={adjustTrim}
-                          />
-                        </View>
-                      ) : (
-                        <View className="opacity-40">
-                          <Text className="text-sm text-slate-500">
-                            Settings are only available for 2WD1M.
-                          </Text>
-                        </View>
+                      <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">
+                        Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
+                      </Text>
+                      <View className={is2wd1mActive ? '' : 'opacity-40'} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
+                        <TwoWd1mExtras
+                          canControl={canControl}
+                          steerLimit={steerLimit}
+                          trim={trim}
+                          onAdjustSteerLimit={adjustSteerLimit}
+                          onAdjustTrim={adjustTrim}
+                        />
+                      </View>
+                      {!is2wd1mActive && (
+                        <Text className="mt-2 text-[11px] leading-4 text-slate-500">
+                          Steering limit &amp; trim apply to 2WD1M. This mode's own settings will appear here when added.
+                        </Text>
                       )}
                     </View>
                   )}

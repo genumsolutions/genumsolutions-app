@@ -3,17 +3,18 @@
 // the same space as Home / Shop / Cart (between the brand header and the
 // bottom tab bar), so it never blocks or overlays the tabs.
 //
-// It only carries pages that have no tab of their own. Identity, theme,
-// sign-out and app-update live on the Account screen / header instead, so
-// nothing is shown twice.
+// It carries the destinations that have no tab of their own, plus the
+// app-update + theme controls (previously on the Account screen). Nothing
+// here requires a sign-in: updates and theme work for guests too.
 // =====================================================================
 import React from 'react';
-import { ScrollView, Text, View, Pressable } from 'react-native';
+import { ScrollView, Text, View, Pressable, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useApp } from '../context/AppContext';
+import { AppUpdateCard } from '../components/AppUpdateCard';
 import type { RootStackParamList } from '../navigation/types';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
@@ -37,8 +38,6 @@ const COMPANY: Dest[] = [
   { icon: 'cpu', label: 'Control Panel', screen: 'Tools' },
   { icon: 'info', label: 'About', screen: 'About' },
   { icon: 'phone', label: 'Contact', screen: 'Contact' },
-  { icon: 'download', label: 'App Updates', screen: 'Update' },
-  { icon: 'settings', label: 'Theme', screen: 'Theme' },
 ];
 
 export function MenuScreen() {
@@ -53,30 +52,10 @@ export function MenuScreen() {
         ))}
       </MenuGroup>
 
-<MenuGroup title="Company">
-        {COMPANY.map((d) => {
-          // Theme item toggles theme mode instead of navigating
-          if (d.label === 'Theme') {
-            return (
-              <MenuItem
-                key={d.label}
-                icon={d.icon}
-                label={d.label}
-                onPress={() => setThemeMode(
-                  themeMode === 'system' ? 'light' : themeMode === 'light' ? 'dark' : 'system'
-                )}
-              />
-            );
-          }
-          return (
-            <MenuItem
-              key={d.label}
-              icon={d.icon}
-              label={d.label}
-              onPress={() => navigation.push(d.screen)}
-            />
-          );
-        })}
+      <MenuGroup title="Company">
+        {COMPANY.map((d) => (
+          <MenuItem key={d.label} icon={d.icon} label={d.label} onPress={() => navigation.push(d.screen)} />
+        ))}
         <MenuItem
           icon="shield"
           label="Privacy Policy"
@@ -87,6 +66,35 @@ export function MenuScreen() {
           label="Terms of Service"
           onPress={() => navigation.push('Legal', { doc: 'terms' })}
         />
+      </MenuGroup>
+
+      {/* Downloads & Software Updates - visible without signing in */}
+      <MenuGroup title="Downloads & Software Updates">
+        <MenuItem
+          icon="download"
+          label="App Updates"
+          onPress={() => navigation.push('Update')}
+        />
+        <AppUpdateCard compact />
+      </MenuGroup>
+
+      {/* Appearance - theme toggle moved here from the Account page */}
+      <MenuGroup title="Appearance">
+        <View className="mx-3 flex-row items-center justify-between rounded-xl px-4 py-3.5">
+          <View className="flex-row items-center">
+            <Feather name={themeMode === 'dark' ? 'moon' : 'sun'} size={20} color="#64748b" />
+            <Text className="ml-3.5 text-base font-semibold text-ink">
+              Dark theme
+            </Text>
+          </View>
+          <Switch
+            value={themeMode === 'dark'}
+            onValueChange={(on) => setThemeMode(on ? 'dark' : 'light')}
+            trackColor={{ false: '#cbd5e1', true: '#1e3a8a' }}
+            thumbColor="#ffffff"
+            accessibilityLabel="Toggle dark theme"
+          />
+        </View>
       </MenuGroup>
 
       {isAdmin ? (

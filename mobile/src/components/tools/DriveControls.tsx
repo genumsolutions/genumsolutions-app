@@ -363,9 +363,9 @@ function DpadCell({ icon, active, enabled }: {
 }) {
   return (
     <View
-      className={`flex-1 items-center rounded-xl px-3 py-3 ${active ? 'bg-navy' : enabled ? 'border border-navy' : 'border border-white/10 opacity-50'}`}
+      className={`flex-1 items-center rounded-xl px-3 py-3.5 ${active ? 'bg-navy' : enabled ? 'border border-navy' : 'border border-white/10 opacity-50'}`}
     >
-      <Feather name={icon} size={24} color={active ? '#fff' : enabled ? '#1e3a8a' : 'rgba(255,255,255,0.5)'} />
+      <Feather name={icon} size={28} color={active ? '#fff' : enabled ? '#1e3a8a' : 'rgba(255,255,255,0.5)'} />
     </View>
   )
 }
@@ -381,7 +381,7 @@ function DpadCell({ icon, active, enabled }: {
 // which stops that stick's function (SPD0 / SERVO90) immediately.
 // =====================================================================
 function DualJoystick({
-  canControl, rightEnabled, onLeft, onRight, height = 200,
+  canControl, rightEnabled, onLeft, onRight, height = 220,
 }: {
   canControl: boolean
   rightEnabled: boolean
