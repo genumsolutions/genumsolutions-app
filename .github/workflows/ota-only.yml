@@ -1,13 +1,17 @@
 # =====================================================================
 # OTA Only - publish JS/asset updates without building the APK.
 #
-# Triggers on push to main when ONLY mobile/src/ files changed.
-# Skips the full APK build entirely (~2-3 min saved).
-# Just runs typecheck + expo-doctor + publishes OTA bundle (~2-5 sec).
+# Triggers on push to main when ONLY mobile/src or mobile/assets files
+# changed (app.json / package.json / plugins / keystores / workflow edits
+# take the full release.yml build instead).
+# Skips the APK build entirely (~15 min saved).
+# Runs typecheck + expo-doctor + publishes OTA bundle (~2-5 sec), then
+# syncs the release.json metadata (notes + updated_at) so the website
+# /app page and the in-app updater instantly show the short update.
 #
-# NOTE: Bump runtimeVersion before committing OTA-only pushes
-# to force devices to check for new bundles. See the section
-# "Runtime Version Management" in GUIDE.md.
+# NOTE: runtimeVersion stays CONSTANT (1.0.0). Never bump it for OTA-only
+# pushes - a different runtimeVersion is incompatible with the installed
+# build and every device silently skips the bundle until a native rebuild.
 # =====================================================================
 name: OTA Only
 
@@ -16,6 +20,7 @@ on:
     branches: [main]
     paths:
       - 'mobile/src/**'
+      - 'mobile/assets/**'
   workflow_dispatch:
 
 concurrency:
@@ -29,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     defaults:
       run:
         working-directory: mobile
@@ -51,8 +58,16 @@ jobs:
         run: npm run doctor
 
       # ── Publish OTA bundle (JS/asset only) ──────────────
-      # OTA bundles are delivered by Expo's servers.
-      # The manifest (Supabase) is only updated by release.yml
-      # after a full APK upload, so OTA-only pushes skip it.
+      # OTA bundles are delivered by Expo's servers and apply on next app
+      # load. They keep the SAME app version - no APK is rebuilt.
       - name: Publish OTA update
         run: npx eas-cli update --branch main --message "OTA-only push (${{ github.sha }})" --non-interactive
+
+      # ── Sync release.json metadata (notes + updated_at) ──
+      # The APK fields are untouched (same version, no new APK). This only
+      # flicks the human-facing note + timestamp so the website /app page
+      # and the in-app "Last published" line reflect the short update.
+      - name: Sync OTA manifest metadata
+        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
+        run: node scripts/sync-ota-manifest.mjs --message "Short update (${{ github.sha }})"
+        continue-on-error: true

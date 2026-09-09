@@ -39,6 +39,8 @@ export type UpdateState = {
   apkUrl?: string;
   size?: string;
   notes?: string;
+  /** Last-published timestamp from release.json ("YYYY-MM-DDTHH:mm:ssZ"). */
+  updatedAt?: string;
   error?: string;
   /** true when an OTA (JS/asset) update was found and applied. */
   otaApplied?: boolean;
@@ -121,12 +123,14 @@ export async function checkForUpdate(
         apkUrl,
         size,
         notes: data.notes,
+        updatedAt: data.updated_at,
       };
     }
     return {
       status: 'up-to-date',
       latestVersion: latest,
       size,
+      updatedAt: data.updated_at,
     };
   } catch {
     return { status: 'error', error: 'Could not reach the update server.' };

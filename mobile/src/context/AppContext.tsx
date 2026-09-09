@@ -22,6 +22,7 @@ import * as push from '../services/pushService';
 import * as cart from '../services/cartService';
 import type { CartLine } from '../types';
 import type { CarMode } from '../config/roboCarCatalog';
+import { checkForAnyUpdate } from '../services/updateService';
 
 export type GenumUser = {
   id: string;
@@ -33,6 +34,9 @@ export type GenumUser = {
 };
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+
+/** State for the top-bar "vX available" pill (a NEWER APK exists). */
+export type UpdatePill = { version: string };
 
 type AppContextValue = {
   user: GenumUser | null;
@@ -55,6 +59,14 @@ type AppContextValue = {
   carModes: CarMode[];
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
+  /** True when a newer APK release exists — shows the top-bar update pill. */
+  updatePill: UpdatePill | null;
+  setUpdatePill: (pill: UpdatePill | null) => void;
+  /** True when an OTA bundle was fetched on launch — offer a reload. */
+  appUpdated: boolean;
+  setAppUpdated: (updated: boolean) => void;
+  /** One-shot check on every app open: silent OTA apply + newer-APK pill. */
+  runLaunchUpdateCheck: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -113,6 +125,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [carModes, setCarModes] = useState<CarMode[]>([]);
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
+  const [updatePill, setUpdatePill] = useState<UpdatePill | null>(null);
+  const [appUpdated, setAppUpdated] = useState(false);
 
   const setCart = useCallback((next: { count: number; size: number }) => {
     setCartCount(Math.max(0, next.count || 0));
@@ -164,6 +178,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     applyColorScheme(mode);
     void AsyncStorage.setItem('genum-theme-mode', mode);
   }, []);
+
+  // ── launch-level update check (every app open) ────────────────────
+  // Checks OTA first (silent JS/asset update, applied on next launch) then
+  // falls back to the APK manifest. A NEWER APK exists → show the top-bar
+  // "vX available" pill; an OTA was fetched → offer "App updated · reload".
+  const runLaunchUpdateCheck = useCallback(async () => {
+    const result = await checkForAnyUpdate();
+    if (result.status === 'update-available' && result.latestVersion) {
+      setUpdatePill({ version: result.latestVersion });
+    }
+    if (result.otaApplied) setAppUpdated(true);
+  }, []);
+
+  useEffect(() => {
+    void runLaunchUpdateCheck();
+  }, [runLaunchUpdateCheck]);
 
   // --- keep the session current (sign-in / sign-out / refresh) ---
   useEffect(() => {
@@ -362,6 +392,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       carModes,
       themeMode,
       setThemeMode,
+      updatePill,
+      setUpdatePill,
+      appUpdated,
+      setAppUpdated,
+      runLaunchUpdateCheck,
     }),
     [
       user,
@@ -382,6 +417,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       carModes,
       themeMode,
       setThemeMode,
+      updatePill,
+      setUpdatePill,
+      appUpdated,
+      setAppUpdated,
+      runLaunchUpdateCheck,
     ],
   );
 

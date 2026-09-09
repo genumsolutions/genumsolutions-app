@@ -41,6 +41,13 @@ on:
     branches: [main]
     paths:
       - 'mobile/**'
+    # JS/asset/script-only pushes ride the OTA-only workflow (~5 s, no APK).
+    # This full build fires for native-affecting changes (app.json, native
+    # deps, plugins, keystores, workflows) or a manual dispatch.
+    paths-ignore:
+      - 'mobile/src/**'
+      - 'mobile/assets/**'
+      - 'mobile/scripts/**'
   workflow_dispatch: # Allow manual trigger
 
 concurrency:

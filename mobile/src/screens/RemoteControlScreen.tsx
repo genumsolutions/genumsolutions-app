@@ -107,7 +107,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const [backPressed, setBackPressed] = useState(false)
 
   // Actual-size 2:1 OLED for the game remote (128×64 physical shape).
-  const oledWidth = Math.min(width * (isLandscape ? 0.26 : 0.68), 168)
+  const oledWidth = Math.min(width * (isLandscape ? 0.22 : 0.68), 148)
 
   // Remote-window orientation: always lock landscape for the game-style
   // remote layout. Restore the phone's previous lock on back. Uses the SDK
@@ -238,9 +238,11 @@ export function RemoteControlScreen({ navigation }: Props) {
           </View>
         ) : (
           <>
-            {/* Middle-top: compact mode dropdown + cycle, then the actual-size
-                2:1 OLED just below it (like the physical ESP remote). */}
-            <View className="flex-shrink-0 items-center pt-1.5">
+            {/* Middle-top: compact mode dropdown + cycle SIDE BY SIDE with the
+                2:1 OLED in one compact row so the deck gets maximum room. The
+                row is only as tall as the taller of the two (~74) and the
+                joystick deck below claims every extra pixel. */}
+            <View className="flex-shrink-0 flex-row items-center justify-center gap-3 pt-1.5">
               <ModeChooser
                 activeMode={activeMode}
                 canControl={canControl}
@@ -248,7 +250,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onCycle={cycleMode}
                 modes={carModes}
               />
-              <View style={{ width: oledWidth, aspectRatio: 2 }} className="mt-1.5 overflow-hidden rounded-2xl">
+              <View style={{ width: oledWidth, aspectRatio: 2 }} className="overflow-hidden rounded-2xl">
                 <OledDisplay {...oledCommonProps} compact />
               </View>
             </View>
