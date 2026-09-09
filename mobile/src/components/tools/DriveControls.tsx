@@ -124,7 +124,7 @@ function enabledZones(is2wd1m: boolean): { L: PadZone[]; R: PadZone[] } {
 // remote's ~30ms cadence) so a dropped line self-heals while held.
 // =====================================================================
 function DualDpad({
-  canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits, onHaptic,
+  canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits, onHaptic, compact = false,
 }: {
   canControl: boolean
   speed: number
@@ -135,6 +135,7 @@ function DualDpad({
   onServo: (v: number) => void
   limits: SafetyLimits
   onHaptic?: () => void
+  compact?: boolean
 }) {
   // Per-pad rects measured via onLayout — touch mapping uses these
   // instead of a single container rect, so padding/gaps don't offset
@@ -309,43 +310,51 @@ function DualDpad({
         onTouchEnd={onTouch}
         onTouchCancel={onTouch}
       >
-        <View className="flex-row items-stretch gap-3">
+<View className="flex-row items-stretch gap-3">
           {/* Left pad: motor / full 4-way depending on the mode */}
-          <View ref={leftPadRef} onLayout={measureLeft} className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
-<Text className="mb-3 text-sm font-bold uppercase tracking-wide text-border">
-               {is2wd1m ? 'Drive (motor)' : 'Drive (4-way)'}
-             </Text>
+          <View ref={leftPadRef} onLayout={measureLeft} className={`flex-1 items-center rounded-2xl border ${compact ? 'border-white/15 bg-white/5' : 'border-line bg-surface'} ${compact ? 'px-2 py-2' : 'px-3 py-4'}`}>
+            {!compact && (
+              <Text className="mb-3 text-sm font-bold uppercase tracking-wide text-border">
+                {is2wd1m ? 'Drive (motor)' : 'Drive (4-way)'}
+              </Text>
+            )}
             <View className="w-full gap-1.5">
-              <DpadCell icon={PAD_ICONS.F} active={cellActive('L', 'F')} enabled={enabled.L.includes('F')} />
+              <DpadCell icon={PAD_ICONS.F} active={cellActive('L', 'F')} enabled={enabled.L.includes('F')} compact={compact} />
               <View className="flex-row gap-1.5">
-                <DpadCell icon={PAD_ICONS.L} active={cellActive('L', 'L')} enabled={enabled.L.includes('L')} />
-                <DpadCell icon="stop-circle" active={cellActive('L', 'C')} enabled={enabled.L.includes('C')} />
-                <DpadCell icon={PAD_ICONS.R} active={cellActive('L', 'R')} enabled={enabled.L.includes('R')} />
+                <DpadCell icon={PAD_ICONS.L} active={cellActive('L', 'L')} enabled={enabled.L.includes('L')} compact={compact} />
+                <DpadCell icon="stop-circle" active={cellActive('L', 'C')} enabled={enabled.L.includes('C')} compact={compact} />
+                <DpadCell icon={PAD_ICONS.R} active={cellActive('L', 'R')} enabled={enabled.L.includes('R')} compact={compact} />
               </View>
-              <DpadCell icon={PAD_ICONS.B} active={cellActive('L', 'B')} enabled={enabled.L.includes('B')} />
+              <DpadCell icon={PAD_ICONS.B} active={cellActive('L', 'B')} enabled={enabled.L.includes('B')} compact={compact} />
             </View>
-<Text className="mt-3 text-center text-sm leading-4 text-muted">
-               {is2wd1m ? 'Hold to drive · Release stops instantly' : 'Hold any direction · Release stops'}
-             </Text>
+            {!compact && (
+              <Text className="mt-3 text-center text-sm leading-4 text-muted">
+                {is2wd1m ? 'Hold to drive · Release stops instantly' : 'Hold any direction · Release stops'}
+              </Text>
+            )}
           </View>
 
           {/* Right pad: servo steer (2WD1M) or shown-but-unused */}
-          <View ref={rightPadRef} onLayout={measureRight} className="flex-1 items-center rounded-2xl border border-line bg-surface px-3 py-4">
-<Text className="mb-3 text-sm font-bold uppercase tracking-wide text-border">
-               {is2wd1m ? 'Steer (servo)' : 'Not used here'}
-             </Text>
+          <View ref={rightPadRef} onLayout={measureRight} className={`flex-1 items-center rounded-2xl border ${compact ? 'border-white/15 bg-white/5' : 'border-line bg-surface'} ${compact ? 'px-2 py-2' : 'px-3 py-4'}`}>
+            {!compact && (
+              <Text className="mb-3 text-sm font-bold uppercase tracking-wide text-border">
+                {is2wd1m ? 'Steer (servo)' : 'Not used here'}
+              </Text>
+            )}
             <View className="w-full gap-1.5">
-              <DpadCell icon={PAD_ICONS.F} active={cellActive('R', 'F')} enabled={enabled.R.includes('F')} />
+              <DpadCell icon={PAD_ICONS.F} active={cellActive('R', 'F')} enabled={enabled.R.includes('F')} compact={compact} />
               <View className="flex-row gap-1.5">
-                <DpadCell icon={PAD_ICONS.L} active={cellActive('R', 'L')} enabled={enabled.R.includes('L')} />
-                <DpadCell icon="circle" active={cellActive('R', 'C')} enabled={enabled.R.includes('C')} />
-                <DpadCell icon={PAD_ICONS.R} active={cellActive('R', 'R')} enabled={enabled.R.includes('R')} />
+                <DpadCell icon={PAD_ICONS.L} active={cellActive('R', 'L')} enabled={enabled.R.includes('L')} compact={compact} />
+                <DpadCell icon="circle" active={cellActive('R', 'C')} enabled={enabled.R.includes('C')} compact={compact} />
+                <DpadCell icon={PAD_ICONS.R} active={cellActive('R', 'R')} enabled={enabled.R.includes('R')} compact={compact} />
               </View>
-              <DpadCell icon={PAD_ICONS.B} active={cellActive('R', 'B')} enabled={enabled.R.includes('B')} />
+              <DpadCell icon={PAD_ICONS.B} active={cellActive('R', 'B')} enabled={enabled.R.includes('B')} compact={compact} />
             </View>
-<Text className="mt-3 text-center text-sm leading-4 text-muted">
-               {is2wd1m ? 'Hold to steer · Release straightens' : 'Unused in this mode'}
-             </Text>
+            {!compact && (
+              <Text className="mt-3 text-center text-sm leading-4 text-muted">
+                {is2wd1m ? 'Hold to steer · Release straightens' : 'Unused in this mode'}
+              </Text>
+            )}
           </View>
         </View>
       </View>
@@ -356,16 +365,25 @@ function DualDpad({
 /** One cell of a complete d-pad. All four arrows share the SAME styling
     (parity: no arrow looks different from the others), the center is
     stop-ish, and non-functional buttons stay visible but dimmed. */
-function DpadCell({ icon, active, enabled }: {
+function DpadCell({ icon, active, enabled, compact }: {
   icon: IconName
   active: boolean
   enabled: boolean
+  compact?: boolean
 }) {
   return (
     <View
-      className={`flex-1 items-center rounded-xl px-3 py-3.5 ${active ? 'bg-navy' : enabled ? 'border border-navy' : 'border border-white/10 opacity-50'}`}
+      className={`flex-1 items-center rounded-xl ${compact ? 'px-2 py-1.5' : 'px-3 py-3.5'} ${
+        active ? 'bg-navy'
+          : enabled ? (compact ? 'border border-emerald-400/60' : 'border border-navy')
+            : 'border border-white/10 opacity-50'
+      }`}
     >
-      <Feather name={icon} size={28} color={active ? '#fff' : enabled ? '#1e3a8a' : 'rgba(255,255,255,0.5)'} />
+      <Feather
+        name={icon}
+        size={compact ? 22 : 28}
+        color={active ? '#fff' : enabled ? (compact ? '#34d399' : '#1e3a8a') : 'rgba(255,255,255,0.5)'}
+      />
     </View>
   )
 }
@@ -381,13 +399,16 @@ function DpadCell({ icon, active, enabled }: {
 // which stops that stick's function (SPD0 / SERVO90) immediately.
 // =====================================================================
 function DualJoystick({
-  canControl, rightEnabled, onLeft, onRight, height = 220,
+  canControl, rightEnabled, onLeft, onRight, height = 220, fill = false,
 }: {
   canControl: boolean
   rightEnabled: boolean
   onLeft: (x: number, y: number) => void
   onRight: (x: number) => void
   height?: number
+  /** When true the surface fills its flex parent instead of using a fixed
+      height — the touch area adapts to whatever room the window gives it. */
+  fill?: boolean
 }) {
   const [geo, setGeo] = useState<{ w: number; h: number } | null>(null)
   const touchesRef = useRef(new Map<string, { stick: 'L' | 'R'; ox: number; oy: number }>())
@@ -483,7 +504,7 @@ function DualJoystick({
       onTouchMove={(e) => handleMove(mapTouches(e.nativeEvent.touches))}
       onTouchEnd={(e) => handleRelease(mapTouches(e.nativeEvent.changedTouches))}
       onTouchCancel={(e) => handleRelease(mapTouches(e.nativeEvent.changedTouches))}
-      style={{ height }}
+      style={fill ? { flex: 1 } : { height }}
       className="relative overflow-hidden rounded-2xl border border-line bg-surface"
     >
       {geo && radius > 0 && (
@@ -528,7 +549,7 @@ export function DriveControls({
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
   onSignedDrive, steerLimit, onEStop,
-  safetyLimits,
+  safetyLimits, compact = false,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   const limits = safetyLimits ?? DEFAULT_SAFETY_LIMITS
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
@@ -601,38 +622,43 @@ export function DriveControls({
 
   if (isDrone) return null
 
-  return (
-    <View className={canControl ? '' : 'opacity-40'}>
+return (
+    <View className={canControl ? (compact ? 'flex-1' : '') : (compact ? 'flex-1 opacity-40' : 'opacity-40')}>
       {/* ── Input mode: Joystick or D-pad ── */}
       {useJoystick ? (
         /* Dual joysticks — ONE multi-touch surface so both work together */
-        <View>
-          <View className="mb-2 flex-row items-center justify-center gap-12">
-<Text className="text-sm font-bold uppercase tracking-wide text-border">
-               Drive {is2wd1m ? '(Motor)' : '(Left)'}
-             </Text>
-             <Text className="text-sm font-bold uppercase tracking-wide text-border">
-               Steer {is2wd1m ? '(Servo)' : '(Unused)'}
-             </Text>
-          </View>
+        <View className={compact ? 'flex-1 min-h-0' : ''}>
+          {!compact && (
+            <View className="mb-2 flex-row items-center justify-center gap-12">
+              <Text className="text-sm font-bold uppercase tracking-wide text-border">
+                Drive {is2wd1m ? '(Motor)' : '(Left)'}
+              </Text>
+              <Text className="text-sm font-bold uppercase tracking-wide text-border">
+                Steer {is2wd1m ? '(Servo)' : '(Unused)'}
+              </Text>
+            </View>
+          )}
           <DualJoystick
             canControl={canControl}
             rightEnabled={is2wd1m}
             onLeft={handleLeftJoy}
             onRight={handleRightJoy}
+            fill={compact}
           />
-<Text className="mt-3 text-center text-sm text-muted">
-             {is2wd1m && onSignedDrive
-               ? 'Both sticks work together · release a stick to stop it'
-               : is2wd1m
-                 ? 'Left drives · Right steers (2WD1M)'
-                 : 'Left drives · Right is unused in this mode'}
-           </Text>
+          {!compact && (
+            <Text className="mt-3 text-center text-sm text-muted">
+              {is2wd1m && onSignedDrive
+                ? 'Both sticks work together · release a stick to stop it'
+                : is2wd1m
+                  ? 'Left drives · Right steers (2WD1M)'
+                  : 'Left drives · Right is unused in this mode'}
+            </Text>
+          )}
         </View>
       ) : (
         /* Dual complete d-pads for EVERY robocar mode (one multi-touch
            surface — non-functional buttons stay visible but dimmed) */
-        <View>
+        <View className={compact ? 'flex-1 min-h-0' : ''}>
           <DualDpad
             canControl={canControl}
             speed={clampSpeed(speed, limits)}
@@ -643,10 +669,11 @@ export function DriveControls({
             onServo={onServo}
             limits={limits}
             onHaptic={hapticTap}
+            compact={compact}
           />
 
-          <View className="mt-3 flex-row items-center justify-center">
-            <Pressable onPress={stopAll2wd1m} disabled={!canControl} className="flex-row items-center gap-2 rounded-full bg-slate-200 px-6 py-3 disabled:opacity-40">
+          <View className={`flex-row items-center justify-center ${compact ? 'mt-1.5' : 'mt-3'}`}>
+            <Pressable onPress={stopAll2wd1m} disabled={!canControl} className={`flex-row items-center gap-2 rounded-full bg-slate-200 disabled:opacity-40 ${compact ? 'px-4 py-1.5' : 'px-6 py-3'}`}>
               <Feather name="stop-circle" size={16} color="#1e3a8a" />
               <Text className="text-sm font-black text-navy">Stop</Text>
             </Pressable>
@@ -657,10 +684,10 @@ export function DriveControls({
       {/* Speed (clamped to the ESP-remote safe PWM/speed ceiling) with a
           slider AND −/+ steppers, in a compact row */}
       {showSpeed && (
-        <View className="mt-4 rounded-xl border border-line bg-surface p-3">
+        <View className={`rounded-xl border border-line bg-surface ${compact ? 'mt-1.5 p-2' : 'mt-4 p-3'}`}>
           <View className="flex-row items-center justify-between">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">Speed</Text>
-            <Text className="font-mono text-sm font-bold text-navy">{clampSpeed(speed, limits)}</Text>
+            <Text className={`font-bold uppercase tracking-wide text-border ${compact ? 'text-[10px]' : 'text-sm'}`}>Speed</Text>
+            <Text className={`font-mono font-bold text-navy ${compact ? 'text-xs' : 'text-sm'}`}>{clampSpeed(speed, limits)}</Text>
           </View>
           <Slider
             value={clampSpeed(speed, limits)}
@@ -672,17 +699,19 @@ export function DriveControls({
             minimumTrackTintColor="#1e3a8a"
             maximumTrackTintColor="#cbd5e1"
             thumbTintColor="#1e3a8a"
-            className="mt-1"
+            className={compact ? 'mt-0.5 -mb-1' : 'mt-1'}
           />
-          <View className="mt-1 flex-row items-center justify-center gap-4">
-            <MiniStepperBtn onPress={() => onSpeed(clampSpeed(speed - 5, limits))} disabled={!canControl} icon="minus" />
-            <MiniStepperBtn onPress={() => onSpeed(clampSpeed(speed + 5, limits))} disabled={!canControl} icon="plus" />
-          </View>
+          {!compact && (
+            <View className="mt-1 flex-row items-center justify-center gap-4">
+              <MiniStepperBtn onPress={() => onSpeed(clampSpeed(speed - 5, limits))} disabled={!canControl} icon="minus" />
+              <MiniStepperBtn onPress={() => onSpeed(clampSpeed(speed + 5, limits))} disabled={!canControl} icon="plus" />
+            </View>
+          )}
         </View>
       )}
 
       {/* PID */}
-      {showPid && (
+      {showPid && !compact && (
         <View className="mt-4 flex-row flex-wrap gap-3">
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
 <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
@@ -709,7 +738,7 @@ export function DriveControls({
       )}
 
       {/* Start/Stop */}
-      {showStartStop && (
+      {showStartStop && !compact && (
         <View className="mt-4 flex-row flex-wrap gap-3">
           <Pressable onPress={() => { hapticTap(); onRun?.() }} disabled={!canControl} className="rounded-full bg-navy px-6 py-3">
             <Text className="text-sm font-black text-white">Run</Text>
@@ -721,7 +750,7 @@ export function DriveControls({
       )}
 
       {/* Emergency stop (relocated from TwoWd1mExtras) */}
-      {onEStop && (
+      {onEStop && !compact && (
         <View className="mt-4">
           <Pressable onPress={() => { hapticTap(); onEStop() }} disabled={!canControl} className="flex-row items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 disabled:opacity-60">
             <Feather name="octagon" size={14} color="#fff" />

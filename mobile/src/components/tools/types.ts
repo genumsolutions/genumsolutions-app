@@ -146,6 +146,9 @@ export type OledDisplayProps = {
   isNonRobocar: boolean
   /** Link label for the status chip; defaults to 'SPP LINK' / 'WiFi WS'. */
   linkKind?: 'spp' | 'wifi'
+  /** Renders at the physical 1.3" OLED's 2:1 shape for the game remote:
+      tighter padding/fonts and only the essential lines (no PID/Angle/echo). */
+  compact?: boolean
 }
 
 export type BalanceControlsProps = {
@@ -227,6 +230,10 @@ export type DriveControlsProps = {
   onStop?: () => void
   /** Emergency stop (ESTOP + SPD0). Rendered when provided. */
   onEStop?: () => void
+  /** Compact game-remote deck: board fills the available space (joystick
+      flex-fill), slim speed strip, and the PID / start-stop / emergency
+      rows are hidden (the remote screen shows those elsewhere). */
+  compact?: boolean
 }
 
 export type DroneControlsProps = {

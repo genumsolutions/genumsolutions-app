@@ -2,14 +2,20 @@
 // RemoteControlScreen — the immersive "gaming remote" window opened from
 // the Control Panel's header joystick icon.
 //
-// A compact single-screen remote that keeps the whole game-style control
-// board on one organized screen: top HUD + link status, compact OLED-style
-// telemetry card, mode + joystick/d-pad controls, and the drive board.
-// Settings opens as an in-window panel so nothing overflows beyond the
-// Remote window.
+// A single-screened game-style remote board (landscape) for robocars:
+//
+//   top chrome   Exit · REMOTE          [joystick↔d-pad] [⚙]
+//   middle top   compact Mode dropdown + cycle · actual-size 2:1 OLED
+//   bottom deck  dual joystick / dual d-pad fills the window (two-thumb),
+//                slim speed strip at the bottom edge, E-stop FAB
+//
+// Settings opens as a small anchored dropdown (steer limit + trim). The
+// whole deck is measured / flex-sized so nothing ever overflows the Remote
+// window, whether a dropdown or panel is open or closed. The camera
+// placeholder is gone and Simulation is only shown once (bottom bar).
 //
 // Fully usable WITHOUT a connected device: when nothing is linked a
-// "Simulation" banner is shown, knobs/buttons still move and update the
+// "Simulation" status is shown, knobs/buttons still move and update the
 // HUD, and commands simply no-op (so the layout can be tested/debugged
 // in a browser with no hardware). All real transport logic is shared with
 // ToolsScreen via useControlHub / sppService.
@@ -20,8 +26,7 @@
 //   drones               → altitude stick + gimbal pan/tilt + flight buttons.
 // =====================================================================
 import React, { useEffect, useRef, useState } from 'react'
-import { Platform, Pressable, ScrollView, Text, Vibration, View } from 'react-native'
-import { useWindowDimensions } from 'react-native'
+import { Platform, Pressable, ScrollView, Text, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -31,12 +36,29 @@ import { useControlHub } from '../components/tools/useControlHub'
 import { DriveControls } from '../components/tools/DriveControls'
 import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
-import { TwoWd1mExtras } from '../components/tools/TwoWd1mExtras'
 import { SensorGrid } from '../components/tools/SensorGrid'
 import { DroneControls } from '../components/tools/DroneControls'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
 type Route = RouteProp<RootStackParamList, 'RemoteControl'>
+
+/** Small −/+ stepper pill for the settings dropdown (dark deck styling). */
+function StepperPill({ onPress, disabled, icon }: {
+  onPress: () => void
+  disabled: boolean
+  icon: 'minus' | 'plus'
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      className="h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 disabled:opacity-40"
+    >
+      <Feather name={icon} size={16} color="#fff" />
+    </Pressable>
+  )
+}
 
 export function RemoteControlScreen({ navigation }: Props) {
   const route = useRoute<Route>()
@@ -78,13 +100,14 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   const linked = connected || wifiConnected
 
-  // Compact in-window settings panel state for the Remote screen's own
-  // Settings toggle. This keeps Settings inside the same remote board
-  // instead of pushing everything around.
+  // Anchored settings dropdown state (robocar only).
   const [showSettings, setShowSettings] = useState(false)
 
   // Back button pressed state for visual feedback
   const [backPressed, setBackPressed] = useState(false)
+
+  // Actual-size 2:1 OLED for the game remote (128×64 physical shape).
+  const oledWidth = Math.min(width * (isLandscape ? 0.26 : 0.68), 168)
 
   // Remote-window orientation: always lock landscape for the game-style
   // remote layout. Restore the phone's previous lock on back. Uses the SDK
@@ -112,18 +135,29 @@ export function RemoteControlScreen({ navigation }: Props) {
     }
   }, [])
 
+  const oledCommonProps = {
+    connected,
+    wifiConnected,
+    deviceName,
+    activeMode,
+    speed,
+    servo,
+    driveStatus,
+    targetAltitude,
+    gimbalPan,
+    gimbalTilt,
+    sensorData,
+    telemetry,
+    isDrone,
+    isNonRobocar,
+    linkKind: connected ? ('spp' as const) : wifiConnected ? ('wifi' as const) : undefined,
+  }
+
   return (
     <View className="flex-1 bg-slate-950">
-      {/* Single compact remote board — no scroll. Everything stays on one
-          organized game-style screen so the joystick area never slips away.
-          The board is bounded so Settings and controls never overflow the
-          remote window or fall below the visible area. */}
+      {/* Single compact remote board — no scroll. The board is flex-sized so
+          Settings / dropdowns / the OLED never push anything off-window. */}
       <View className="flex-1 overflow-hidden px-3 pt-8 pb-2">
-        {/* Camera placeholder — reserved for future modes */}
-        <View className="mb-1.5 self-start rounded-lg border border-dashed border-slate-600 bg-slate-900/50 px-3 py-2">
-          <Text className="text-sm font-bold uppercase tracking-wide text-slate-500">📷 Camera — Future Mode</Text>
-        </View>
-
         {/* Top chrome */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
@@ -138,177 +172,170 @@ export function RemoteControlScreen({ navigation }: Props) {
             </Pressable>
             <Text className="text-sm font-black uppercase tracking-[0.22em] text-slate-400">Remote</Text>
           </View>
-          <Pressable
-            onPress={() => setShowSettings((v) => !v)}
-            className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
-            accessibilityRole="button"
-          >
-            <Feather name="settings" size={14} color="#fff" />
-            <Text className="text-sm font-bold text-white">Settings</Text>
-          </Pressable>
+          <View className="flex-row items-center gap-2">
+            {!isDrone && !isNonRobocar && (
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); setUseJoystick(!useJoystick) }}
+                accessibilityRole="button"
+                accessibilityLabel={useJoystick ? 'Switch to D-pad' : 'Switch to Joystick'}
+                className={`h-10 w-10 items-center justify-center rounded-full border ${useJoystick ? 'border-white/10 bg-navy' : 'border-white/15 bg-white/5'}`}
+              >
+                <Feather name={useJoystick ? 'move' : 'grid'} size={16} color="#fff" />
+              </Pressable>
+            )}
+            {!isDrone && !isNonRobocar && (
+              <Pressable
+                onPress={() => setShowSettings((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+                className={`h-10 w-10 items-center justify-center rounded-full border bg-white/5 ${showSettings ? 'border-navy bg-navy/50' : 'border-white/15'}`}
+              >
+                <Feather name="settings" size={16} color="#fff" />
+              </Pressable>
+            )}
+          </View>
         </View>
 
-        {/* Simulation banner — compact inline chip */}
-        {!linked && (
-          <View className="mb-1.5 self-start rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1">
-            <Text className="text-sm font-bold uppercase tracking-wide text-amber-300">
-              Simulation
-            </Text>
+        {isDrone || isNonRobocar ? (
+          /* Drones / smart-farm / city: telephone-card on the left + themed
+             control tiles on the right (scroll safe, never overflows). */
+          <View className="flex-1 min-h-0 pt-2">
+            <View className="flex-row items-start gap-3">
+              <View className="min-w-0 flex-[0.3] max-h-[55%]">
+                <OledDisplay {...oledCommonProps} />
+              </View>
+              <View className="min-w-0 flex-[0.7]">
+                <View className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 6 }}>
+                    {isDrone ? (
+                      <DroneControls
+                        canControl={canControl}
+                        targetAltitude={targetAltitude}
+                        gimbalPan={gimbalPan}
+                        gimbalTilt={gimbalTilt}
+                        onAltitude={handleAltitude}
+                        onGimbalPan={handleGimbalPan}
+                        onGimbalTilt={handleGimbalTilt}
+                        onCommand={(c) => hub.sendCommand(c)}
+                        onSetAltitude={(v) => handleAltitude(v)}
+                      />
+                    ) : (
+                      <SensorGrid
+                        canControl={canControl}
+                        isDrone={false}
+                        isNonRobocar
+                        activeCategory={activeCategory}
+                        sensorData={sensorData}
+                        relays={relays}
+                        telemetry={telemetry}
+                        onToggleRelay={toggleRelay}
+                      />
+                    )}
+                  </ScrollView>
+                </View>
+              </View>
+            </View>
           </View>
-        )}
+        ) : (
+          <>
+            {/* Middle-top: compact mode dropdown + cycle, then the actual-size
+                2:1 OLED just below it (like the physical ESP remote). */}
+            <View className="flex-shrink-0 items-center pt-1.5">
+              <ModeChooser
+                activeMode={activeMode}
+                canControl={canControl}
+                onSelect={selectMode}
+                onCycle={cycleMode}
+                modes={carModes}
+              />
+              <View style={{ width: oledWidth, aspectRatio: 2 }} className="mt-1.5 overflow-hidden rounded-2xl">
+                <OledDisplay {...oledCommonProps} compact />
+              </View>
+            </View>
 
-        {/* Compact single-screen remote layout */}
-        <View className="flex-1">
-          {/* Left column: compact device/telemetry card */}
-          <View className="flex-row items-start gap-3 flex-shrink-0">
-            <View className={`min-w-0 ${isLandscape ? 'flex-[0.3]' : 'flex-1'} ${isLandscape ? 'max-h-[55%]' : 'max-h-[40%]'}`}>
-              <OledDisplay
-                connected={connected}
-                wifiConnected={wifiConnected}
-                deviceName={deviceName}
+            {/* Drive deck — fills whatever room is left. Two-thumb reach:
+                left stick/d-pad bottom-left, right stick/d-pad bottom-right,
+                slim speed strip at the bottom edge. */}
+            <View className="relative mt-1.5 min-h-0 flex-1">
+              <DriveControls
+                canControl={canControl}
+                isDrone={isDrone}
                 activeMode={activeMode}
                 speed={speed}
                 servo={servo}
-                driveStatus={driveStatus}
-                targetAltitude={targetAltitude}
-                gimbalPan={gimbalPan}
-                gimbalTilt={gimbalTilt}
-                sensorData={sensorData}
-                telemetry={telemetry}
-                isDrone={isDrone}
-                isNonRobocar={isNonRobocar}
-                linkKind={connected ? 'spp' : wifiConnected ? 'wifi' : undefined}
+                pidKp={pidKp}
+                pidKi={pidKi}
+                pidKd={pidKd}
+                pidOut={pidOut}
+                pidOff={pidOff}
+                useJoystick={useJoystick}
+                onDirection={handleDirection}
+                onSpeed={handleSpeed}
+                onServo={handleServo}
+                onPid={applyPid}
+                onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
+                steerLimit={is2wd1mActive ? steerLimit : undefined}
+                safetyLimits={hub.safetyLimits}
+                compact
               />
+              {/* Floating E-stop FAB — easy thumb reach in landscape */}
+              <Pressable
+                onPress={() => { Vibration.vibrate(50); handleEStop() }}
+                className="absolute bottom-2 right-2 h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg active:scale-95 active:bg-red-700"
+                accessibilityRole="button"
+                accessibilityLabel="Emergency stop"
+              >
+                <Feather name="octagon" size={22} color="#fff" />
+              </Pressable>
             </View>
+          </>
+        )}
 
-            {/* Right column: mode + controls — gets more space so the control
-                board stays reachable in landscape without scrolling. */}
-            <View className={`min-w-0 flex flex-col ${isLandscape ? 'flex-[0.7]' : 'flex-1'}`}>
-              {isDrone ? (
-                <View className="flex-1 min-h-0 bg-black/20 rounded-2xl border border-white/10 p-3">
-                  <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 6 }}>
-                    <DroneControls
-                      canControl={canControl}
-                      targetAltitude={targetAltitude}
-                      gimbalPan={gimbalPan}
-                      gimbalTilt={gimbalTilt}
-                      onAltitude={handleAltitude}
-                      onGimbalPan={handleGimbalPan}
-                      onGimbalTilt={handleGimbalTilt}
-                      onCommand={(c) => hub.sendCommand(c)}
-                      onSetAltitude={(v) => handleAltitude(v)}
-                    />
-                  </ScrollView>
+        {/* Settings — small anchored dropdown (steer limit + trim for 2WD1M),
+            dimmed with a note for other modes. Backdrop closes on outside
+            tap so the deck never lingers in a half-open state. */}
+        {showSettings && (
+          <>
+            <Pressable
+              className="absolute inset-0 z-30 bg-black/40"
+              onPress={() => setShowSettings(false)}
+              accessibilityLabel="Close settings"
+            />
+            <View
+              className="absolute right-3 z-40 w-72 rounded-2xl border border-white/10 bg-slate-900 p-3 shadow-xl"
+              style={{ top: 70, maxHeight: height - 90 }}
+            >
+              <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">
+                Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
+              </Text>
+              <View className={is2wd1mActive ? '' : 'opacity-40'} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Max steering limit</Text>
+                  <Text className="font-mono text-sm font-bold text-white">{steerLimit}°</Text>
                 </View>
-              ) : isNonRobocar ? (
-                <View className="flex-1 min-h-0 bg-black/20 rounded-2xl border border-white/10 p-3">
-                  <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 6 }}>
-                    <SensorGrid
-                      canControl={canControl}
-                      isDrone={false}
-                      isNonRobocar
-                      activeCategory={activeCategory}
-                      sensorData={sensorData}
-                      relays={relays}
-                      telemetry={telemetry}
-                      onToggleRelay={toggleRelay}
-                    />
-                  </ScrollView>
+                <View className="mt-1.5 flex-row items-center justify-center gap-3">
+                  <StepperPill onPress={() => adjustSteerLimit(-5)} disabled={!canControl} icon="minus" />
+                  <Text className="w-12 text-center font-mono text-lg font-bold text-white">{steerLimit}°</Text>
+                  <StepperPill onPress={() => adjustSteerLimit(5)} disabled={!canControl} icon="plus" />
                 </View>
-              ) : (
-                <>
-                  {/* Mode + control-style toggle — compact so the drive board
-                      stays on the same screen. */}
-                  <View className="flex-row items-center justify-between gap-2 flex-shrink-0">
-                    <View className="min-w-0 flex-1">
-                      <ModeChooser
-                        activeMode={activeMode}
-                        canControl={canControl}
-                        onSelect={selectMode}
-                        onCycle={cycleMode}
-                        modes={carModes}
-                      />
-                    </View>
-                    <View className="flex-row items-center gap-2 flex-shrink-0">
-                      <Pressable
-                        onPress={() => setUseJoystick(false)}
-                        onPressIn={() => Vibration.vibrate(10)}
-                        className={`rounded-full px-4 py-2 ${!useJoystick ? 'bg-navy' : 'border border-white/15 bg-black/20'}`}
-                      >
-                        <Text className={`text-sm font-bold ${!useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setUseJoystick(true)}
-                        onPressIn={() => Vibration.vibrate(10)}
-                        className={`rounded-full px-4 py-2 ${useJoystick ? 'bg-navy' : 'border border-white/15 bg-black/20'}`}
-                      >
-                        <Text className={`text-sm font-bold ${useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  {/* Drive board — compact so it stays on the same screen
-                      as the OLED card and mode chooser. */}
-                  <View className="mt-2 flex-shrink-0">
-                    <DriveControls
-                      canControl={canControl}
-                      isDrone={isDrone}
-                      activeMode={activeMode}
-                      speed={speed}
-                      servo={servo}
-                      pidKp={pidKp}
-                      pidKi={pidKi}
-                      pidKd={pidKd}
-                      pidOut={pidOut}
-                      pidOff={pidOff}
-                      useJoystick={useJoystick}
-                      onDirection={handleDirection}
-                      onSpeed={handleSpeed}
-                      onServo={handleServo}
-                      onPid={applyPid}
-                      onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
-                      steerLimit={is2wd1mActive ? steerLimit : undefined}
-                      safetyLimits={hub.safetyLimits}
-                    />
-                    {/* Floating E-stop FAB — easy thumb reach in landscape */}
-                    <Pressable
-                      onPress={() => { Vibration.vibrate(50); handleEStop() }}
-                      className="absolute bottom-3 right-3 h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg active:scale-95 active:bg-red-700"
-                      accessibilityRole="button"
-                    >
-                      <Feather name="octagon" size={22} color="#fff" />
-                    </Pressable>
-                  </View>
-
-                  {/* In-window settings panel — settings for ALL modes live
-                      here; controls that the active mode does not use stay
-                      visible but dimmed (never hidden). Never overflows. */}
-                  {showSettings && (
-                    <View className="mt-2 rounded-2xl border border-white/10 bg-black/40 p-3">
-                      <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">
-                        Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
-                      </Text>
-                      <View className={is2wd1mActive ? '' : 'opacity-40'} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
-                        <TwoWd1mExtras
-                          canControl={canControl}
-                          steerLimit={steerLimit}
-                          trim={trim}
-                          onAdjustSteerLimit={adjustSteerLimit}
-                          onAdjustTrim={adjustTrim}
-                        />
-                      </View>
-                      {!is2wd1mActive && (
-                        <Text className="mt-2 text-[11px] leading-4 text-slate-500">
-                          Steering limit &amp; trim apply to 2WD1M. This mode's own settings will appear here when added.
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </>
+                <View className="mt-2.5 flex-row items-center justify-between border-t border-white/10 pt-2">
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Trim</Text>
+                  <Text className="font-mono text-sm font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
+                </View>
+                <View className="mt-1.5 flex-row items-center justify-center gap-3">
+                  <StepperPill onPress={() => adjustTrim(-1)} disabled={!canControl} icon="minus" />
+                  <Text className="w-12 text-center font-mono text-lg font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
+                  <StepperPill onPress={() => adjustTrim(1)} disabled={!canControl} icon="plus" />
+                </View>
+              </View>
+              {!is2wd1mActive && (
+                <Text className="mt-2 text-[11px] leading-4 text-slate-500">
+                  Steering limit &amp; trim apply to 2WD1M. This mode's own settings will appear here when added.
+                </Text>
               )}
             </View>
-          </View>
-        </View>
+          </>
+        )}
       </View>
 
       {/* Persistent bottom bar: disconnect + status line */}
