@@ -1,9 +1,28 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.4** (versionCode 47) · Android APK (`genum-solutions-2.0.4.apk`, 41.3 MB) — snag list round 3: **PASSED 2026-09-09 (18/18)**
+> Target: **v2.0.4** (versionCode 47) · Android APK (`genum-solutions-2.0.4.apk`, 41.3 MB) — round 3: **PASSED 2026-09-09 (18/18)** · round 4 (remote rectification): **requested, code not started**
 > Older targets below: v1.5.14 (Car Remote Phase A), v1.5.13/12/11 polish.
 > Scope: the **robot-car per-package remote (Phase A)** — Car Remote screen (Classic BT SPP + BLE + WiFi), ESP-remote 2WD1M joystick parity (signed SPD / steer limit / trim / e-stop), self-balancing PID deck, autonomous Run/Stop decks (token semantics), weblink (wireless-car WS JSON) deck, Tools-hub + website parity — on top of the v1.5.13 native UX polish and the v1.5.12/v1.5.11 fixes.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
+
+---
+
+## v2.0.4 remote rectification — snag round 4 (REQUESTED — not implemented yet)
+
+> Fixes the remote window after the round-3 pass. JS-only → ships via OTA (Track 2, no version bump). Owner requests recorded in GUIDE.md Session Log 2026-09-09 (round 4).
+
+- [ ] **R4-1 — Stop button removed** from the remote screen (E-stop FAB + pad center cells remain).
+- [ ] **R4-2 — Speed slider compact + relocated** to the top row, beside the mode changer and OLED.
+- [ ] **R4-3 — Single chrome row:** Exit · REMOTE · mode · OLED · speed · toggle · settings all on ONE top row; drive deck gains the freed row.
+- [ ] **R4-4 — Uniform d-pad cells:** up/down = left/center/right size on BOTH pads (fixed cell grid, aspect-ratio-locked).
+- [ ] **R4-5 — Joystick fit:** deck uses the freed space; stick radius cap raised (112 → ~124) so sticks fill their zone.
+- [ ] **R4-6 — Touch offset FIXED (critical):** d-pad cells and chrome icons respond exactly where they render — zone mapping from `locationX/Y` relative to the responder surface + re-measure/re-mount after the landscape lock.
+- [ ] **R4-7 — Chrome buttons bigger + responsive:** Exit/Settings/toggle enlarged with hitSlop + pressed feedback.
+
+**Pass criteria:** all boxes tick on device; drive/steer/E-stop behaviour unchanged from round 3.
+
+---
+> **Historical note:** the v1.5.14-era status line below is outdated; current state lives in GUIDE.md.
 > Status: **v1.5.14 code complete + committed + pushed to `main`** (both repos; version bumped 1.5.14/22; typecheck + lint + 33/33 tests + production build + expo-doctor 18/18 all green). Physical-device pass pending; APK not yet built.
 
 ---
