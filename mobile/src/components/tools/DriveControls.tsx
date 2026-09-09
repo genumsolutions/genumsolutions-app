@@ -373,7 +373,7 @@ function DpadCell({ icon, active, enabled, compact }: {
 }) {
   return (
     <View
-      className={`flex-1 items-center rounded-xl ${compact ? 'px-2 py-1.5' : 'px-3 py-3.5'} ${
+      className={`flex-1 items-center rounded-xl ${compact ? 'px-2 py-2' : 'px-3 py-3.5'} ${
         active ? 'bg-navy'
           : enabled ? (compact ? 'border border-emerald-400/60' : 'border border-navy')
             : 'border border-white/10 opacity-50'
@@ -381,7 +381,7 @@ function DpadCell({ icon, active, enabled, compact }: {
     >
       <Feather
         name={icon}
-        size={compact ? 22 : 28}
+        size={compact ? 26 : 28}
         color={active ? '#fff' : enabled ? (compact ? '#34d399' : '#1e3a8a') : 'rgba(255,255,255,0.5)'}
       />
     </View>
@@ -424,7 +424,9 @@ function DualJoystick({
   const onRightRef = useRef(onRight)
   onRightRef.current = onRight
 
-  const radius = geo ? Math.min(geo.w * 0.28, geo.h * 0.42, 100) : 0
+  // Cap the stick radius so a knob never leaves its ring, but let it grow
+  // up to 112 so the freed top-row space makes the sticks visibly bigger.
+  const radius = geo ? Math.min(geo.w * 0.28, geo.h * 0.42, 112) : 0
   const centerOf = (stick: 'L' | 'R') =>
     geo ? { cx: geo.w * (stick === 'L' ? 0.25 : 0.75), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
 
@@ -492,7 +494,7 @@ function DualJoystick({
   }
 
   const base = radius + 24
-  const knobSize = 48
+  const knobSize = 56
 
   return (
     <View
@@ -512,29 +514,102 @@ function DualJoystick({
           {(['L', 'R'] as const).map((stick) => {
             const c = centerOf(stick)
             const enabled = stick === 'L' || rightEnabled
+            const dim = !enabled
             const knob = stick === 'L' ? knobL : knobR
+            const tag = stick === 'L' ? 'DRIVE' : rightEnabled ? 'STEER' : 'UNUSED'
+            const guide = radius * 0.46
             return (
               <View key={stick}>
+                {/* Pad tag — floats above each stick zone */}
                 <View
-                  className={`absolute rounded-full border-2 ${enabled ? 'border-white/10 bg-white/5' : 'border-white/10 bg-white/5 opacity-40'}`}
+                  pointerEvents="none"
+                  className={dim ? 'opacity-50' : 'opacity-80'}
+                  style={{ position: 'absolute', left: c.cx - 30, width: 60, alignItems: 'center', top: Math.max(4, c.cy - radius - 26) }}
+                >
+                  <Text className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">{tag}</Text>
+                </View>
+                {/* Outer base ring */}
+                <View
+                  className="absolute items-center justify-center rounded-full border-2"
                   style={{
                     left: c.cx - base,
                     top: c.cy - base,
                     width: base * 2,
                     height: base * 2,
+                    borderColor: dim ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.15)',
+                    backgroundColor: dim ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)',
+                    opacity: dim ? 0.45 : 1,
                   }}
                 >
-                  <View className="absolute left-1/2 top-1/2 h-1 w-1 -ml-0.5 -mt-0.5 rounded-full bg-white/20" />
+                  {/* Travel guide ring */}
+                  <View
+                    className="absolute rounded-full border"
+                    style={{
+                      width: radius * 0.92,
+                      height: radius * 0.92,
+                      borderRadius: radius * 0.46,
+                      top: base - guide,
+                      left: base - guide,
+                      borderColor: 'rgba(255,255,255,0.14)',
+                    }}
+                  />
+                  {/* Crosshair */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: base * 0.15,
+                      top: base - 1,
+                      width: base * 1.7,
+                      height: 1,
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                    }}
+                  />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: base - 1,
+                      top: base * 0.15,
+                      width: 1,
+                      height: base * 1.7,
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                    }}
+                  />
+                  {/* Center reticule */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: base - 7,
+                      top: base - 7,
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      borderWidth: 1,
+                      borderColor: 'rgba(30,58,138,0.85)',
+                      backgroundColor: 'rgba(30,58,138,0.22)',
+                    }}
+                  />
                 </View>
+                {/* Knob */}
                 <View
-                  className={`absolute rounded-full border-2 bg-white shadow-sm ${enabled ? 'border-navy' : 'border-white/10'}`}
+                  className="absolute rounded-full bg-white"
                   style={{
                     left: c.cx + knob.x - knobSize / 2,
                     top: c.cy + knob.y - knobSize / 2,
                     width: knobSize,
                     height: knobSize,
+                    borderWidth: 2,
+                    borderColor: enabled ? '#1e3a8a' : 'rgba(100,116,139,0.9)',
+                    opacity: dim ? 0.55 : 1,
+                    shadowColor: '#0f172a',
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 6,
+                    elevation: 6,
                   }}
-                />
+                >
+                  {/* Grip dot */}
+                  <View className="absolute left-1/2 top-1/2 h-3 w-3 -ml-1.5 -mt-1.5 rounded-full bg-navy shadow-sm" />
+                </View>
               </View>
             )
           })}
@@ -684,7 +759,7 @@ return (
       {/* Speed (clamped to the ESP-remote safe PWM/speed ceiling) with a
           slider AND −/+ steppers, in a compact row */}
       {showSpeed && (
-        <View className={`rounded-xl border border-line bg-surface ${compact ? 'mt-1.5 p-2' : 'mt-4 p-3'}`}>
+        <View className={`rounded-xl border border-line bg-surface ${compact ? 'mt-1 px-3 py-1' : 'mt-4 p-3'}`} style={compact ? { paddingRight: 64 } : undefined}>
           <View className="flex-row items-center justify-between">
             <Text className={`font-bold uppercase tracking-wide text-border ${compact ? 'text-[10px]' : 'text-sm'}`}>Speed</Text>
             <Text className={`font-mono font-bold text-navy ${compact ? 'text-xs' : 'text-sm'}`}>{clampSpeed(speed, limits)}</Text>

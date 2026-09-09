@@ -8,6 +8,7 @@
 import React from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,7 +20,18 @@ type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
 export function BrandHeader() {
   const insets = useSafeAreaInsets();
-  const { cartCount, user, isSignedIn, setAuthSheetOpen, accountSheetOpen, setAccountSheetOpen } = useApp();
+  const {
+    cartCount,
+    user,
+    isSignedIn,
+    setAuthSheetOpen,
+    accountSheetOpen,
+    setAccountSheetOpen,
+    updatePill,
+    setUpdatePill,
+    appUpdated,
+    setAppUpdated,
+  } = useApp();
   const nav = useNavigation<RootNav>();
 
   const initials = (user?.name || 'U')
@@ -55,6 +67,18 @@ export function BrandHeader() {
         </Pressable>
 
         <View className="flex-row items-center gap-2">
+          {/* Update pill — a NEWER APK is published; tap to install. */}
+          {updatePill && (
+            <Pressable
+              onPress={() => nav.navigate('Update')}
+              accessibilityRole="button"
+              accessibilityLabel={`Update available, version ${updatePill.version}`}
+              className="h-10 flex-row items-center gap-1.5 rounded-full border border-gold/70 bg-gold/20 px-3"
+            >
+              <Feather name="download-cloud" size={14} color="#fbbf24" />
+              <Text className="text-xs font-black text-gold">v{updatePill.version}</Text>
+            </Pressable>
+          )}
           {/* Account - mirrors the website header: signed-in opens the
               Account screen, signed-out opens the sign-in sheet. */}
 <Pressable
@@ -93,6 +117,29 @@ export function BrandHeader() {
           </Pressable>
         </View>
       </View>
+
+      {/* OTA was fetched on launch — offer to reload instead of waiting. */}
+      {appUpdated && (
+        <View className="flex-row items-center gap-2 border-t border-white/10 bg-gold/10 px-3 py-2">
+          <Feather name="check-circle" size={15} color="#fbbf24" />
+          <Text className="flex-1 text-xs font-bold text-white">
+            Update applied — reload to see the new version.
+          </Text>
+          <Pressable
+            onPress={() => {
+              setAppUpdated(false);
+              void Updates.reloadAsync();
+            }}
+            accessibilityRole="button"
+            className="rounded-full bg-gold px-3 py-1.5"
+          >
+            <Text className="text-xs font-black text-ink">Reload</Text>
+          </Pressable>
+          <Pressable onPress={() => setAppUpdated(false)} accessibilityLabel="Dismiss update banner">
+            <Feather name="x" size={16} color="#ffffff" />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }

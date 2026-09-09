@@ -131,6 +131,17 @@ export function AppUpdateCard({ compact = false }: Props) {
         </Text>
       )}
 
+      {updateState.status === 'up-to-date' && updateState.updatedAt && (
+        <Text className="mt-1 text-[11px] text-muted">
+          Last published:{' '}
+          {new Date(updateState.updatedAt).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </Text>
+      )}
+
       {hasUpdate && (
         <View className="mt-3">
           <Text className="text-xs font-bold text-navy">
