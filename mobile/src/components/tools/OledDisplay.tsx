@@ -8,7 +8,7 @@ import type { OledDisplayProps } from './types'
 export function OledDisplay({
   connected, wifiConnected, deviceName, activeMode,
   speed, servo, driveStatus, targetAltitude, gimbalPan, gimbalTilt,
-  sensorData, telemetry, isDrone, isNonRobocar, linkKind,
+  sensorData, telemetry, isDrone, isNonRobocar, linkKind, compact = false,
 }: OledDisplayProps) {
   // Link label matches what the car OLED shows (SPP LINK / WiFi WS / NO LINK)
   const linkLabel =
@@ -21,64 +21,68 @@ export function OledDisplay({
   // 2WD1M shows steering instead of speed (matches ESP remote)
   const is2wd1m = activeMode.controls.includes('drive-2wd1m')
 
+  // Compact mode renders the tiny physical 1.3" OLED (128x64, 2:1) shape for
+  // the game remote: only the essential lines, one per row, so nothing wraps
+  // or overflows the narrow screen.
+  const mono = (extra = '') => `font-mono ${extra}`
+
   return (
-    <View className="rounded-2xl bg-slate-900 p-2 shadow-inner">
+    <View className={compact ? 'rounded-xl bg-slate-900 px-1.5 pb-1.5 pt-1 shadow-inner' : 'rounded-2xl bg-slate-900 p-2 shadow-inner'}>
       {/* Header line - car project name */}
-      <View className="flex-row items-center justify-between border-b border-slate-700 px-2 pb-2">
-        <Text className="font-mono text-xs font-bold text-emerald-400">
+      <View className={`flex-row items-center justify-between border-b border-slate-700 ${compact ? 'px-1 pb-1' : 'px-2 pb-2'}`}>
+        <Text numberOfLines={1} className={mono(`font-bold text-emerald-400 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
           {connected ? deviceName : wifiConnected ? 'WiFi' : '---'}
         </Text>
-        <Text className="font-mono text-xs text-slate-500">
+        <Text className={mono(`text-slate-500 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
           {linkLabel}
         </Text>
       </View>
 
       {/* Body - mirrors car OLED dashboard */}
-      <View className="mt-2 px-2">
+      <View className={compact ? 'mt-1 px-1' : 'mt-2 px-2'}>
         {/* Mode line - matches car OLED "Mode : <mode>" */}
-        <Text className="font-mono text-sm text-emerald-300">
+        <Text numberOfLines={1} className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-sm'}`)}>
           Mode : {is2wd1m ? '2WD1M' : activeMode.name.split('·')[0].trim()}
         </Text>
 
         {/* Status line - matches car OLED "Status : <status>" */}
-        <Text className="font-mono text-sm text-emerald-300">
+        <Text numberOfLines={1} className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-sm'}`)}>
           {connected ? `Status : ${driveStatus}` : wifiConnected ? 'CONNECTED' : 'NO LINK'}
         </Text>
 
         {/* Speed or Steering line (2WD1M shows STEER, others show SPD) */}
-        <Text className="font-mono text-sm text-emerald-300">
+        <Text numberOfLines={1} className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-sm'}`)}>
           {is2wd1m ? `Steer : ${servo}°` : `Speed : ${speed}`}
         </Text>
 
         {/* Telemetry extras for specific modes */}
         {isDrone && (
-          <Text className="font-mono text-sm text-emerald-400">
+          <Text numberOfLines={1} className={mono(`text-emerald-400 ${compact ? 'text-[11px]' : 'text-sm'}`)}>
             ALT {targetAltitude}m · GIMBAL P:{gimbalPan}° T:{gimbalTilt}°
           </Text>
         )}
 
         {isNonRobocar && !isDrone && (
-          <Text className="font-mono text-sm text-emerald-400">
+          <Text numberOfLines={1} className={mono(`text-emerald-400 ${compact ? 'text-[11px]' : 'text-sm'}`)}>
             T:{sensorData.temperature}°C H:{sensorData.humidity}%
           </Text>
         )}
 
-        {/* Self-balancing live angle (from TEL telemetry) */}
-        {telemetry.angle != null && (
+        {/* Compact keeps only the essentials; the full card also shows the
+            live self-balancing angle/PID/mode echo. */}
+        {!compact && telemetry.angle != null && (
           <Text className="font-mono text-sm text-emerald-400">
             ANGLE {telemetry.angle.toFixed(1)}°
           </Text>
         )}
 
-        {/* Live PID values for self-balancing */}
-        {telemetry.kp != null && (
+        {!compact && telemetry.kp != null && (
           <Text className="font-mono text-xs text-emerald-500">
             P:{telemetry.kp.toFixed(2)} I:{telemetry.ki?.toFixed(3)} D:{telemetry.kd?.toFixed(3)}
           </Text>
         )}
 
-        {/* Mode echo from car STATE */}
-        {telemetry.mode && !is2wd1m && (
+        {!compact && telemetry.mode && !is2wd1m && (
           <Text className="font-mono text-xs text-emerald-500">
             M:{telemetry.mode}
           </Text>

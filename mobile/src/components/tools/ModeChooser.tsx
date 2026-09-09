@@ -1,7 +1,8 @@
-// ModeChooser — car mode selector: a compact dropdown (current mode summary
-// expands into the full mode picker) plus a cycle toggle button that walks
-// the firmware mode order like the physical remote's mode select.
-import React, { useState } from 'react'
+// ModeChooser — car mode selector for the game remote: a compact anchored
+// dropdown (the trigger is measured and the list opens just below it, capped
+// so it always fits the window) plus a small cycle button that walks the
+// firmware mode order like the physical remote's mode select.
+import React, { useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, Vibration, useWindowDimensions } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
@@ -9,44 +10,67 @@ import type { ModeChooserProps } from './types'
 
 export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }: ModeChooserProps) {
   const [open, setOpen] = useState(false)
-  const { width, height } = useWindowDimensions()
-  const isLandscape = width > height
+  const { height } = useWindowDimensions()
   // Catalogue is passed in DB-first (carModeService); the bundled modes are
   // the offline fallback until the fetch resolves.
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
   const shortName = MODE_NAMES[activeMode.token] ?? activeMode.name.split('·')[0].trim()
 
+  // Trigger measured in window coords so the dropdown anchors right under it.
+  const triggerRef = useRef<View | null>(null)
+  const [anchor, setAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+
+  const openDropdown = () => {
+    triggerRef.current?.measureInWindow((x, y, w, h) => {
+      setAnchor({ x, y, w: Math.max(w, 236), h })
+      setOpen(true)
+    })
+  }
+
+  // Cap the list so it never overflows the window below the trigger.
+  const listMaxHeight = anchor ? Math.max(140, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.42)) : height * 0.42
+
   return (
-    <View className="rounded-2xl border border-line bg-card p-3 shadow-card">
-      <Text className="text-sm font-bold uppercase tracking-wide text-muted">Mode</Text>
-      <View className="mt-2 flex-row items-center gap-2">
+    <View className="rounded-2xl border border-white/10 bg-black/25 px-2.5 py-1.5">
+      <Text className="px-1 text-[10px] font-black uppercase tracking-widest text-slate-500">Mode</Text>
+      <View className="mt-0.5 flex-row items-center gap-1.5">
         <Pressable
-          onPress={() => setOpen(true)}
+          ref={triggerRef}
+          onPress={openDropdown}
           accessibilityRole="button"
-          className="min-w-0 flex-1 flex-row items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"
+          accessibilityLabel="Choose car mode"
+          className="min-w-0 max-w-[180px] flex-row items-center justify-between gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2"
         >
-          <Text className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{shortName}</Text>
-          <Feather name="chevron-down" size={18} color="#64748b" />
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-bold text-white">{shortName}</Text>
+          <Feather name="chevron-down" size={15} color="#cbd5e1" />
         </Pressable>
         <Pressable
           onPress={() => { Vibration.vibrate(10); onCycle() }}
           disabled={!canControl}
           accessibilityRole="button"
-          className="flex-row items-center gap-1.5 rounded-xl bg-navy px-4 py-3 disabled:opacity-40"
+          accessibilityLabel="Cycle mode"
+          className="h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy disabled:opacity-40"
         >
-          <Feather name="rotate-ccw" size={16} color="#fff" />
-          <Text className="text-sm font-black text-white">Cycle</Text>
+          <Feather name="rotate-ccw" size={15} color="#fff" />
         </Pressable>
       </View>
 
-      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View className="flex-1 justify-end bg-black/40">
-          <Pressable className="absolute inset-0" onPress={() => setOpen(false)} />
-          <View className="rounded-2xl bg-card px-4 pb-5 pt-4 shadow-card">
-<Text className="text-sm font-black uppercase tracking-[0.2em] text-navy">
-               Select a mode
-             </Text>
-            <ScrollView className={`mt-2 ${isLandscape ? 'max-h-[40vh]' : 'max-h-[60vh]'}`}>
+      {open && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)}>
+          <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)} accessibilityLabel="Close mode list" />
+          <View
+            style={{
+              position: 'absolute',
+              left: anchor?.x ?? 16,
+              top: (anchor?.y ?? 96) + (anchor?.h ?? 0) + 4,
+              width: anchor?.w ?? 236,
+            }}
+          >
+            <ScrollView
+              className="rounded-xl border border-white/10 bg-slate-900 shadow-xl"
+              contentContainerStyle={{ padding: 4 }}
+              style={{ maxHeight: listMaxHeight }}
+            >
               {catalogue.map((m: CarMode) => {
                 const isActive = activeMode.id === m.id
                 return (
@@ -54,13 +78,13 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
                     key={m.id}
                     onPress={() => { Vibration.vibrate(10); onSelect(m); setOpen(false) }}
                     accessibilityRole="button"
-                    className={`mt-1 flex-row items-center justify-between rounded-xl px-4 py-3 ${isActive ? 'bg-navy' : 'border border-line bg-surface'}`}
+                    className={`mt-1 flex-row items-center justify-between rounded-lg px-3 py-2.5 ${isActive ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
                   >
                     <View className="min-w-0 flex-1 pr-2">
-                      <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-ink'}`}>
+                      <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-white'}`} numberOfLines={1}>
                         {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
                       </Text>
-                      <Text className={`text-sm ${isActive ? 'text-white/70' : 'text-muted'}`} numberOfLines={1}>
+                      <Text className={`text-xs ${isActive ? 'text-white/70' : 'text-slate-400'}`} numberOfLines={1}>
                         {m.token} · {m.transport.join(' / ')}
                       </Text>
                     </View>
@@ -70,8 +94,8 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
               })}
             </ScrollView>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </View>
   )
 }
