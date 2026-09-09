@@ -2,10 +2,11 @@
 # OTA Only - publish a SAME-VERSION hot-patch (JS/asset only) without
 # rebuilding the APK - the fast channel for emergency fixes between releases.
 #
-# Triggers on push to main when ONLY mobile/src or mobile/assets files
-# changed (app.json / package.json / plugins / keystores / workflow edits
-# take the full release.yml build instead).
-# Skips the APK build entirely (~15 min saved).
+# Triggers on push to main when mobile/src or mobile/assets files changed
+# (app.json / package.json / plugins / keystores take the full release.yml
+# build instead). A release commit (version bump) ALSO touches mobile/src, so
+# the "release-guard" step below skips this whole run whenever app.json
+# versionCode is newer than the published manifest - release.yml owns those.
 #
 # VERSION SEMANTICS: this channel NEVER bumps the version. It publishes a
 # bundle that keeps the CURRENT app version, so devices just reload with the
@@ -52,19 +53,48 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
+      # Guard: a release commit (version bump in app.json) ALSO touches
+      # mobile/src (e.g. APP_VERSION in site.ts), which triggers this workflow
+      # on the same push. Publishing an OTA bundle for that commit would
+      # deliver the NEW APP_VERSION to devices still on the OLD native APK,
+      # making them self-report the new version and suppress the "new APK
+      # available" pill. Skip the whole run whenever app.json versionCode is
+      # newer than the currently-published manifest — release.yml owns those.
+      - name: Skip OTA on release (version bump) pushes
+        id: release-guard
+        run: |
+          APP_CODE=$(node -p "require('./app.json').android.versionCode")
+          if ! MANIFEST=$(curl -sS --fail --max-time 15 "https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json"); then
+            echo "No published manifest yet — nothing to hot-patch; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MF_CODE=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).version_code ?? 0))" "$MANIFEST")
+          if [ "$APP_CODE" -gt "$MF_CODE" ]; then
+            echo "app.json versionCode $APP_CODE is newer than published manifest $MF_CODE — this push is a RELEASE, OTA channel skips (release.yml publishes it)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app.json versionCode $APP_CODE matches published $MF_CODE — same-version OTA hot-patch proceeds."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
+        if: steps.release-guard.outputs.skip != 'true'
         run: npm ci
 
       - name: Typecheck
+        if: steps.release-guard.outputs.skip != 'true'
         run: npm run typecheck
 
       - name: Expo doctor
+        if: steps.release-guard.outputs.skip != 'true'
         run: npm run doctor
 
       # ── Publish OTA bundle (JS/asset only) ──────────────
       # OTA bundles are delivered by Expo's servers and apply on next app
       # load. They keep the SAME app version - no APK is rebuilt.
       - name: Publish OTA update
+        if: steps.release-guard.outputs.skip != 'true'
         run: npx eas-cli update --branch main --message "OTA-only push (${{ github.sha }})" --non-interactive
 
       # ── Sync release.json metadata (notes + updated_at) ──
@@ -72,6 +102,6 @@ jobs:
       # flicks the human-facing note + timestamp so the website /app page
       # and the in-app "Last published" line reflect the short update.
       - name: Sync OTA manifest metadata
-        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
+        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' && steps.release-guard.outputs.skip != 'true'
         run: node scripts/sync-ota-manifest.mjs --message "Short update (${{ github.sha }})"
         continue-on-error: true
