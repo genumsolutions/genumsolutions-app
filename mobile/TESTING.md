@@ -1,15 +1,15 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.4** (versionCode 47) · Android APK (`genum-solutions-2.0.4.apk`, 41.3 MB) — round 3: **PASSED 2026-09-09 (18/18)** · round 4 (remote rectification): **requested, code not started**
+> Target: **v2.0.4** (versionCode 47) · Android APK (`genum-solutions-2.0.4.apk`, 41.3 MB) — round 3: **PASSED 2026-09-09 (18/18)** · round 4 (remote rectification): **CODE DONE (local `d8111a2`), awaiting device verify**
 > Older targets below: v1.5.14 (Car Remote Phase A), v1.5.13/12/11 polish.
 > Scope: the **robot-car per-package remote (Phase A)** — Car Remote screen (Classic BT SPP + BLE + WiFi), ESP-remote 2WD1M joystick parity (signed SPD / steer limit / trim / e-stop), self-balancing PID deck, autonomous Run/Stop decks (token semantics), weblink (wireless-car WS JSON) deck, Tools-hub + website parity — on top of the v1.5.13 native UX polish and the v1.5.12/v1.5.11 fixes.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
 
 ---
 
-## v2.0.4 remote rectification — snag round 4 (REQUESTED — not implemented yet)
+## v2.0.4 remote rectification — snag round 4 (CODE DONE — device verify pending)
 
-> Fixes the remote window after the round-3 pass. JS-only → ships via OTA (Track 2, no version bump). Owner requests recorded in GUIDE.md Session Log 2026-09-09 (round 4).
+> Fixes the remote window after the round-3 pass. JS-only → ships via OTA (Track 2, no version bump). Implemented in local commit `d8111a2` (RemoteControlScreen, DriveControls, ModeChooser, OledDisplay).
 
 - [ ] **R4-1 — Stop button removed** from the remote screen (E-stop FAB + pad center cells remain).
 - [ ] **R4-2 — Speed slider compact + relocated** to the top row, beside the mode changer and OLED.
