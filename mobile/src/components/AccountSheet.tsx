@@ -107,7 +107,7 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
           <Text className="text-xs font-bold uppercase tracking-wider text-slate-400">Menu</Text>
           <View className="mt-2 flex-row items-center gap-3">
             <Pressable
-              onPress={() => onRequestClose()}
+              onPress={() => { onRequestClose(); nav.push('Account') }}
               accessibilityRole="button"
             >
               <Text className="text-sm text-slate-500">My Profile</Text>

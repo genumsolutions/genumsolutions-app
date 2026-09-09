@@ -55,6 +55,22 @@ export async function getMyOrders(): Promise<Order[]> {
   return (data as Order[]) ?? []
 }
 
+/** List the signed-in user's support messages (newest first). */
+export async function getMyMessages(): Promise<{ id: string; message: string; status: string; createdAt: string }[]> {
+  const { data, error } = await supabase
+    .from('customer_messages')
+    .select('id, message, status, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((m) => ({
+    id: (m as any).id,
+    message: (m as any).message,
+    status: (m as any).status,
+    createdAt: (m as any).created_at,
+  }))
+}
+
 /** Initiate eSewa payment for the given order.
  *  Returns a `renderUrl` served by the shared `payment-esewa` edge function:
  *  a small auto-submitting HTML form page (no website dependency). eSewa then
