@@ -32,7 +32,7 @@
 //   home/smart-farm/city → themed relay + live-sensor tiles.
 //   drones               → altitude stick + gimbal pan/tilt + flight buttons.
 // =====================================================================
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, ScrollView, Text, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
@@ -47,10 +47,18 @@ import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { SensorGrid } from '../components/tools/SensorGrid'
 import { DroneControls } from '../components/tools/DroneControls'
+import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog'
+import { SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../services/carProtocol'
 import type { SafetyLimits } from '../components/tools/types'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
 type Route = RouteProp<RootStackParamList, 'RemoteControl'>
+
+/** NAV repeat gate — mirrors the .ino's NAV_DEBOUNCE (120 ms). */
+const NAV_DEBOUNCE_MS = 120
+
+/** Firmware modes the physical remote treats as available (isModeAvailable). */
+const REMOTE_AVAILABLE_TOKENS = ['BT', 'AUTO', '2WD1M']
 
 /** Default safety limits when the hub does not expose a custom set. */
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
@@ -61,10 +69,10 @@ const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxTrim: 90,
 }
 
-/** Clamp a motor/speed value to the remote's safe PWM/speed ceiling. */
-function clampSpeed(value: number, limits: SafetyLimits): number {
-  const v = Math.round(value)
-  return Math.max(0, Math.min(limits.maxSpeed, v))
+/** Snap a value to `step` grid and clamp to [min,max] (speed/steer fields). */
+function clampStep(value: number, min: number, max: number, step: number): number {
+  const v = Math.round(value / step) * step
+  return Math.max(min, Math.min(max, v))
 }
 
 /**
@@ -97,32 +105,48 @@ function StepperPill({ onPress, disabled, icon }: {
   )
 }
 
-/** Inline speed strip for the chrome row (R4-2, widened R6): a slider
-    with its numeric value. The row has room — the slider now takes all
-    the free width (min 120, up to 200) instead of a fixed 68px stub.
-    Values are clamped to the safe speed ceiling. */
-function SpeedStrip({ speed, maxSpeed, canControl, onSpeed }: {
-  speed: number
-  maxSpeed: number
+/** Inline value strip for the chrome row (R4-2, widened R6). ESP-remote
+    parity: shows Speed (100..255, step 5) in most modes — and the STEER
+    LIMIT (0..180, step 5) in 2WD1M, where the physical remote's top bar
+    shows the steering limit instead of speed. While NAV owns the field
+    (`locked`) the slider is display-only (the pads/joystick step it), and
+    the strip draws the ESP-style inverted highlight when selected. */
+function ValueStrip({ label, value, min, max, canControl, locked, highlight, onChange, onCommit }: {
+  label: string
+  value: number
+  min: number
+  max: number
   canControl: boolean
-  onSpeed: (v: number) => void
+  locked: boolean
+  highlight: boolean
+  onChange: (v: number) => void
+  onCommit: () => void
 }) {
   return (
-    <View className="h-9 min-w-[130px] max-w-[220px] flex-1 flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5">
-      <Text className="text-[9px] font-black uppercase tracking-widest text-slate-500">Spd</Text>
+    <View
+      className={`h-9 min-w-[110px] max-w-[220px] flex-1 flex-row items-center gap-1.5 rounded-full px-2.5 ${
+        highlight ? 'bg-slate-200' : 'border border-white/10 bg-white/5'
+      }`}
+    >
+      <Text className={`text-[9px] font-black uppercase tracking-widest ${highlight ? 'text-slate-600' : 'text-slate-500'}`}>
+        {label}
+      </Text>
       <Slider
-        value={clampSpeed(speed, { maxSpeed } as SafetyLimits)}
-        minimumValue={0}
-        maximumValue={maxSpeed}
+        value={value}
+        minimumValue={min}
+        maximumValue={max}
         step={5}
-        onValueChange={(v: number) => onSpeed(clampSpeed(v, { maxSpeed } as SafetyLimits))}
-        disabled={!canControl}
-        minimumTrackTintColor="#60a5fa"
-        maximumTrackTintColor="rgba(255,255,255,0.15)"
-        thumbTintColor="#3b82f6"
+        onValueChange={onChange}
+        onSlidingComplete={onCommit}
+        disabled={!canControl || locked}
+        minimumTrackTintColor={highlight ? '#1e3a8a' : '#60a5fa'}
+        maximumTrackTintColor={highlight ? 'rgba(30,58,138,0.3)' : 'rgba(255,255,255,0.15)'}
+        thumbTintColor={highlight ? '#1e3a8a' : '#3b82f6'}
         style={{ flex: 1, height: 28 }}
       />
-      <Text className="w-7 shrink-0 text-right font-mono text-[11px] font-bold text-white">{clampSpeed(speed, { maxSpeed } as SafetyLimits)}</Text>
+      <Text className={`w-7 shrink-0 text-right font-mono text-[11px] font-bold ${highlight ? 'text-slate-900' : 'text-white'}`}>
+        {Math.round(value)}
+      </Text>
     </View>
   )
 }
@@ -142,9 +166,11 @@ export function RemoteControlScreen({ navigation }: Props) {
     // mode/category
     activeCategory, activeMode, carModes, selectMode, cycleMode,
     // drive
-    speed, servo, steerLimit, trim, driveStatus, telemetry,
+    speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
-    adjustSteerLimit, adjustTrim, handleEStop,
+    adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop,
+    // NAV (ESP INPUT_NAV parity)
+    navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
     // pid
     pidKp, pidKi, pidKd, pidOut, pidOff,
     // drone
@@ -170,6 +196,109 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // Anchored settings dropdown state (robocar only).
   const [showSettings, setShowSettings] = useState(false)
+
+  // ── NAV state machine (exact port of the .ino dashboard Select/Back
+  // handling) ────────────────────────────────────────────────────────
+  // DRIVE: sticks/pads drive. Select → INPUT_NAV (Mode field highlighted,
+  // nothing drives). NAV: pads/sticks move the cursor + edit values;
+  // Select confirms (mode switch / SPD<n> / steer-limit record); Back
+  // cancels back to DRIVE. Back in DRIVE → disconnect confirmation.
+  const modeList = carModes.length > 0 ? carModes : LOCAL_CAR_MODES
+
+  // NAV repeat gate (NAV_DEBOUNCE 120ms) — the same debounce the .ino uses
+  // so a held joystick doesn't fly through modes/values.
+  const lastNavAtRef = useRef(0)
+  const navInput = useCallback((axis: 'x' | 'y', value: -1 | 0 | 1) => {
+    if (value === 0) return
+    const now = Date.now()
+    if (now - lastNavAtRef.current < NAV_DEBOUNCE_MS) return
+    lastNavAtRef.current = now
+
+    if (navField === 'mode') {
+      if (axis === 'y') {
+        // Up/Down on Mode: cycle the PREVIEW (previewModeIndex parity).
+        const current = previewMode ?? activeMode
+        const idx = modeList.findIndex((m) => m.id === current.id)
+        const next = modeList[(((idx === -1 ? 0 : idx) + (value === -1 ? -1 : 1)) % modeList.length + modeList.length) % modeList.length]
+        if (next) setPreviewMode(next)
+      }
+      // Left/Right on Mode: nothing (single-field wrap like the remote).
+      return
+    }
+    if (navField === 'speed') {
+      if (axis === 'y') {
+        const next = clampStep(speed + (value === -1 ? -SPEED_STEP : SPEED_STEP), SPEED_MIN, SPEED_MAX, SPEED_STEP)
+        handleSpeed(next)
+      } else if (value === -1) {
+        setNavField('mode') // Left: back to Mode field
+      }
+      return
+    }
+    if (navField === 'steer') {
+      if (axis === 'y') {
+        // Up/Down on Steer: adjust the limit in 5° steps (STEER_STEP).
+        // NEVER sends a servo command (ui.md 6b).
+        adjustSteerLimit(value === -1 ? -5 : 5)
+      } else if (value === -1) {
+        setNavField('mode')
+      }
+      return
+    }
+    // navField === 'none' (just entered NAV): Left returns to Mode field.
+    if (axis === 'x' && value === -1) setNavField('mode')
+  }, [navField, previewMode, activeMode, modeList, speed, handleSpeed, adjustSteerLimit, setPreviewMode, setNavField])
+
+  // Select button: DRIVE → NAV; NAV → confirm the highlighted field.
+  const handleSelect = useCallback(() => {
+    Vibration.vibrate(10)
+    if (!navActive) {
+      // Enter NAV: Mode field highlighted, preview starts at current mode.
+      setNavActive(true)
+      setPreviewMode(activeMode)
+      setNavField('mode')
+      return
+    }
+    // Confirm the highlighted field (the .ino TOP_* branches).
+    if (navField === 'mode') {
+      const target = previewMode ?? activeMode
+      setPreviewMode(null)
+      setNavActive(false)
+      setNavField('none')
+      if (target.id !== activeMode.id) selectMode(target)
+      return
+    }
+    if (navField === 'speed') {
+      commitSpeed()
+      setNavActive(false)
+      setNavField('none')
+      return
+    }
+    if (navField === 'steer') {
+      commitSteerLimit()
+      setNavActive(false)
+      setNavField('none')
+      return
+    }
+    setNavActive(false)
+    setNavField('none')
+  }, [navActive, navField, previewMode, activeMode, selectMode, commitSpeed, commitSteerLimit, setNavActive, setNavField, setPreviewMode])
+
+  // Back button: NAV → cancel to DRIVE; DRIVE → disconnect confirmation.
+  const handleBack = useCallback(() => {
+    Vibration.vibrate(10)
+    if (navActive) {
+      // Cancel: drop the preview, nothing is sent (uiHandleBackPressed).
+      setPreviewMode(null)
+      setNavActive(false)
+      setNavField('none')
+      return
+    }
+    if (linked) setShowExitConfirm(true)
+    else navigation.goBack()
+  }, [navActive, linked, navigation, setNavActive, setNavField, setPreviewMode])
+
+  // Disconnect confirmation (the .ino's Return-Confirmation dialog).
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
 
   // Actual-size 2:1 OLED for the game remote (128×64 physical shape).
   // Restored to the approved round-3 size (cap 148, 22% landscape) — the
@@ -213,6 +342,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     }
   }, [])
 
+  const isRobocar = !isDrone && !isNonRobocar
+
   const oledCommonProps = {
     connected,
     wifiConnected,
@@ -221,6 +352,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     speed,
     servo,
     driveStatus,
+    driveDir,
     targetAltitude,
     gimbalPan,
     gimbalTilt,
@@ -231,7 +363,15 @@ export function RemoteControlScreen({ navigation }: Props) {
     linkKind: connected ? ('spp' as const) : wifiConnected ? ('wifi' as const) : undefined,
   }
 
-  const isRobocar = !isDrone && !isNonRobocar
+  // ESP-remote parity pieces for the chrome row + deck:
+  const navActiveBool = navActive && isRobocar
+  const shownMode = previewMode ?? activeMode
+  const isShown2wd1m = shownMode.controls.includes('drive-2wd1m')
+  // Which field NAV owns right now (drives the OLED + strip highlights).
+  const topField = !navActiveBool ? 'none' as const
+    : navField === 'speed' ? 'speed' as const
+      : navField === 'steer' ? 'steer' as const
+        : 'mode' as const
 
   return (
     <View className="flex-1 bg-slate-950">
@@ -240,15 +380,31 @@ export function RemoteControlScreen({ navigation }: Props) {
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
         {/* ONE chrome row (R4-3): Exit · REMOTE · mode · OLED · speed · toggle · settings */}
         <View className="flex-shrink-0 flex-row items-center gap-2">
+          {/* Back button (ESP BTN_BACK parity): NAV cancel / disconnect
+              confirm — same two-tier semantics as the physical remote. */}
           <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={handleBack}
             accessibilityRole="button"
-            accessibilityLabel="Exit remote"
+            accessibilityLabel="Back — cancel NAV or exit remote"
             hitSlop={10}
             android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 40 }}
           >
             <View className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5">
-              <Text className="text-sm font-bold text-white">Exit</Text>
+              <Text className="text-sm font-bold text-white">Back</Text>
+            </View>
+          </Pressable>
+          {/* Select button (ESP BTN_SELECT parity): enter/confirm NAV. */}
+          <Pressable
+            onPress={handleSelect}
+            disabled={!isRobocar}
+            accessibilityRole="button"
+            accessibilityLabel="Select — enter or confirm mode/speed edit"
+            hitSlop={10}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 40 }}
+            className={isRobocar ? '' : 'opacity-40'}
+          >
+            <View className={`rounded-full px-4 py-2.5 ${navActive ? 'bg-slate-200' : 'border border-white/10 bg-white/5'}`}>
+              <Text className={`text-sm font-bold ${navActive ? 'text-slate-900' : 'text-white'}`}>Select</Text>
             </View>
           </Pressable>
           <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
@@ -261,11 +417,34 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onSelect={selectMode}
                 onCycle={cycleMode}
                 modes={carModes}
+                highlighted={topField === 'mode'}
+                previewMode={previewMode}
+                locked={navActiveBool}
               />
-              {/* R4-2: small inline speed strip, same row as mode + OLED */}
-              <SpeedStrip speed={speed} maxSpeed={limits.maxSpeed} canControl={canControl} onSpeed={handleSpeed} />
+              {/* R4-2 + ESP parity: inline value strip — Speed in most modes,
+                  Steer LIMIT in 2WD1M (the physical remote swaps the top-bar
+                  right field exactly like this). NAV-locked while the pads
+                  step the value. */}
+              <ValueStrip
+                label={isShown2wd1m ? 'Steer' : 'Spd'}
+                value={isShown2wd1m ? steerLimit : clampStep(speed, SPEED_MIN, SPEED_MAX, SPEED_STEP)}
+                min={isShown2wd1m ? 0 : SPEED_MIN}
+                max={isShown2wd1m ? 180 : SPEED_MAX}
+                canControl={canControl}
+                locked={navActiveBool}
+                highlight={isShown2wd1m ? topField === 'steer' : topField === 'speed'}
+                onChange={(v) => { if (isShown2wd1m) { adjustSteerLimit(v - steerLimit) } else handleSpeed(v) }}
+                onCommit={() => { if (!isShown2wd1m) commitSpeed() }}
+              />
               <View style={{ width: oledWidth, aspectRatio: 2 }} className="flex-shrink overflow-hidden rounded-xl">
-                <OledDisplay {...oledCommonProps} compact />
+                <OledDisplay
+                  {...oledCommonProps}
+                  compact
+                  topField={topField}
+                  previewMode={previewMode}
+                  previewComingSoon={!REMOTE_AVAILABLE_TOKENS.includes(previewMode?.token ?? '')}
+                  steerLimit={steerLimit}
+                />
               </View>
             </>
           )}
@@ -363,6 +542,8 @@ export function RemoteControlScreen({ navigation }: Props) {
               steerLimit={is2wd1mActive ? steerLimit : undefined}
               safetyLimits={hub.safetyLimits}
               compact
+              navActiveRef={navActiveRef}
+              onNavInput={navInput}
             />
             {/* Floating E-stop FAB — easy thumb reach in landscape */}
             <Pressable
@@ -378,6 +559,57 @@ export function RemoteControlScreen({ navigation }: Props) {
               </View>
             </Pressable>
           </View>
+        )}
+
+        {/* Disconnect confirmation — the ESP remote's Return-Confirmation
+            dialog: [Cancel] [Disconnect]. Cancel keeps driving; Disconnect
+            safe-stops, closes the link and leaves the remote. */}
+        {showExitConfirm && (
+          <>
+            <Pressable
+              className="absolute inset-0 z-30 bg-black/50"
+              onPress={() => setShowExitConfirm(false)}
+              accessibilityLabel="Cancel disconnect"
+            />
+            <View className="absolute inset-0 z-40 items-center justify-center px-8">
+              <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-xl">
+                <Text className="text-center text-base font-black text-white">Disconnected. Exit remote?</Text>
+                <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
+                  The car receives a safe stop (SPD0 · SERVO90) before the link closes.
+                </Text>
+                <View className="mt-4 flex-row justify-center gap-3">
+                  <Pressable
+                    onPress={() => setShowExitConfirm(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Keep connection"
+                    hitSlop={8}
+                    android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
+                  >
+                    <View className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5">
+                      <Text className="text-sm font-bold text-white">Cancel</Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setShowExitConfirm(false)
+                      void (async () => {
+                        await handleDisconnect()
+                        navigation.goBack()
+                      })()
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Disconnect and exit"
+                    hitSlop={8}
+                    android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
+                  >
+                    <View className="rounded-full bg-red-600 px-6 py-2.5">
+                      <Text className="text-sm font-black text-white">Disconnect</Text>
+                    </View>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </>
         )}
 
         {/* Settings — small anchored dropdown (steer limit + trim for 2WD1M),

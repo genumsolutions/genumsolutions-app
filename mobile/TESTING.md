@@ -1,7 +1,25 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.5/48 + OTA bundle `6db2db8`** — round 6 SHIPPED via OTA 12:07Z, device verify pending. Rounds 3 passed 18/18; rounds 4+5 shipped (their items are re-listed below — test them together).
-> Companion doc: `GUIDE.md` (project root) — session log + release state.
+> Target: **v2.0.5/48 + round-7 OTA** — ESP32-remote replica parity SHIPPED via OTA (device verify pending). Rounds 3 passed 18/18; rounds 4–6 shipped (carry-overs re-listed below — test together).
+> Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
+
+---
+
+## snag round 7 — ESP32-remote replica parity (SHIPPED — device verify pending)
+
+> The app remote is now a faithful mirror of `Genum_ESP32_Remote_v1.0.0` (ui.md storyboard + state.cpp/comms.cpp behaviour). Reload first: fully close the app → reopen → tap Reload.
+
+- [ ] **R7-1 — Select/Back buttons:** chrome row now has Back (where Exit was) and Select. Select in DRIVE highlights the mode field (inverted box on mode + OLED top bar) and NOTHING drives while editing. Select again confirms. Back cancels NAV; Back in DRIVE asks "Disconnect / Cancel" (the ESP Return-Confirmation dialog) instead of exiting instantly.
+- [ ] **R7-2 — NAV mode editing:** with NAV active, pads/joystick up/down cycle modes (preview shows in the mode trigger AND the OLED body, unavailable modes show COMING SOON); Left/Right move the cursor Mode → Speed (or Steer in 2WD1M). Up/down on Speed steps ±5 within 100..255; on Steer steps the limit 0..180. Nothing is sent until Select confirms.
+- [ ] **R7-3 — Speed/steer never live while driving:** moving the slider or holding a stick does NOT change the confirmed speed grid value — speed only changes via NAV confirm (or slider release commit), exactly like the physical remote's v1.1.2 fix.
+- [ ] **R7-4 — 2WD1M top bar shows Steer limit:** in 2WD1M the chrome strip + OLED right field show the STEER LIMIT (0..180) instead of speed — matching ui.md screen 6b. Limit edits never move the servo.
+- [ ] **R7-5 — OLED mirrors the ESP dashboard:** top bar `Mode | Spd/Steer` with vertical separator; body shows big direction word (Forward/Backward/…) for BT/2WD1M, AUTO PID rows (inverted Angle, P/D, OUT/I/OFF) for self-balancing, centered title for other modes; bottom inverted status bar.
+- [ ] **R7-6 — Car→app sync:** switch mode using the CAR's own button (or physical remote) → the app's mode, OLED and controls follow (STATE;MODE mirror). Drive the car with the physical remote → the app's d-pad direction display and status line follow (STATUS whitelist mirror).
+- [ ] **R7-7 — 30ms hold-resend:** holding a d-pad direction keeps commanding the car (self-heals dropped lines, matches DRIVE_RESEND_MS). No more single-shot taps needed.
+- [ ] **R7-8 — Steering direction:** right stick LEFT increases servo angle (turn left = larger angle), right decreases — matching comms.cpp.
+- [ ] **R7-9 — Carry-overs still pass:** R6-1 touch accuracy, R6-2 chrome responsiveness, R6-3 joysticks, R4-3 single row, R4-4 uniform cells, R5-3 single updates row, R5-4 no overflow.
+
+**Pass criteria:** all boxes tick. If R7-6 fails, note which direction (car→app or app→car) — they use different paths (STATE telemetry vs mode token send).
 
 ---
 
