@@ -11,7 +11,6 @@ export const DRIVE_CMD_MIN_INTERVAL_MS = 30
 export const WIFI_RECONNECT_DELAY_MS = 3000
 export const WIFI_MAX_RECONNECT_ATTEMPTS = 5
 
-// SPP auto-reconnect mirrors the ESP32 remote's UI_RECONNECT_PROMPT flow:
-// silent retries first, then a prompt. Matches config.h constants.
-export const SPP_RECONNECT_MAX_ATTEMPTS = 4
-export const SPP_RECONNECT_INTERVAL_MS = 800
+// SPP auto-reconnect — industry-standard silent exponential backoff.
+// Delays: 1s → 2s → 4s → 8s → give up (no prompt, fully silent).
+export const SPP_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000]

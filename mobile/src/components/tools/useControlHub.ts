@@ -23,7 +23,7 @@ import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from './types'
 import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
-import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_MAX_ATTEMPTS, SPP_RECONNECT_INTERVAL_MS } from './controlConstants'
+import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
 import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
@@ -145,7 +145,6 @@ export function useControlHub(routeCategory?: string) {
   const sppReconnectAttemptsRef = useRef(0)
   const sppReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sppLastAddressRef = useRef<string | null>(null)
-  const [showReconnectPrompt, setShowReconnectPrompt] = useState(false)
 
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES)
@@ -311,19 +310,18 @@ export function useControlHub(routeCategory?: string) {
       switch (kind) {
         case 'connecting':
           setSppStatus('connecting')
-          setSppStatusMsg(message ?? 'Connecting…')
+          setSppStatusMsg('')
           setShowSppsRetry(false)
           break
         case 'connected':
           setSppStatus('connected')
           setSppStatusMsg(message ?? 'Connected')
           setShowSppsRetry(false)
-          setShowReconnectPrompt(false)
           sppReconnectAttemptsRef.current = 0
           break
         case 'disconnected':
           setSppStatus('disconnected')
-          setSppStatusMsg('Disconnected')
+          setSppStatusMsg('')
           // Auto-reconnect on unexpected disconnect (ESP remote parity):
           // 4 silent attempts at 800ms, then prompt.
           if (!manualCloseRef.current && sppLastAddressRef.current) {
@@ -694,8 +692,8 @@ export function useControlHub(routeCategory?: string) {
     persistPrefs({ joystickLayout: id, useJoystick: id === 'dual' })
   }, [persistPrefs])
 
-  // ---- SPP auto-reconnect (ESP remote parity) ----
-  // 4 silent attempts at 800ms, then show reconnect prompt.
+  // ---- SPP auto-reconnect — silent exponential backoff ----
+  // Delays: 1s → 2s → 4s → 8s → give up silently (no prompt).
   const startSppReconnect = useCallback(() => {
     if (sppReconnectTimerRef.current) {
       clearTimeout(sppReconnectTimerRef.current)
@@ -703,32 +701,24 @@ export function useControlHub(routeCategory?: string) {
     }
     const attempt = () => {
       if (!mountedRef.current || manualCloseRef.current || !sppLastAddressRef.current) return
-      sppReconnectAttemptsRef.current += 1
       const n = sppReconnectAttemptsRef.current
-      if (n > SPP_RECONNECT_MAX_ATTEMPTS) {
-        // All silent attempts exhausted — show the prompt.
-        setShowReconnectPrompt(true)
-        setSppStatusMsg('Connection lost')
+      if (n >= SPP_RECONNECT_DELAYS_MS.length) {
+        // All attempts exhausted — give up silently.
+        sppReconnectAttemptsRef.current = 0
         return
       }
-      setSppStatusMsg(`Reconnecting (${n}/${SPP_RECONNECT_MAX_ATTEMPTS})…`)
+      sppReconnectAttemptsRef.current += 1
       sppService.retryConnect().catch(() => {
         if (mountedRef.current) {
-          sppReconnectTimerRef.current = setTimeout(attempt, SPP_RECONNECT_INTERVAL_MS)
+          const delay = SPP_RECONNECT_DELAYS_MS[sppReconnectAttemptsRef.current] ?? SPP_RECONNECT_DELAYS_MS[SPP_RECONNECT_DELAYS_MS.length - 1]
+          sppReconnectTimerRef.current = setTimeout(attempt, delay)
         }
       })
     }
-    sppReconnectTimerRef.current = setTimeout(attempt, SPP_RECONNECT_INTERVAL_MS)
+    sppReconnectTimerRef.current = setTimeout(attempt, SPP_RECONNECT_DELAYS_MS[0])
   }, [])
 
-  const handleReconnectPromptRetry = useCallback(() => {
-    setShowReconnectPrompt(false)
-    sppReconnectAttemptsRef.current = 0
-    startSppReconnect()
-  }, [startSppReconnect])
-
   const handleReconnectPromptCancel = useCallback(() => {
-    setShowReconnectPrompt(false)
     manualCloseRef.current = true
     void handleDisconnect()
   }, [handleDisconnect])
@@ -756,7 +746,7 @@ export function useControlHub(routeCategory?: string) {
     setWifiUrl, handleScan, handleConnect, handleSppsRetry, handleWifiConnect,
     handleWifiDisconnect, handleDisconnect, showConnectionMessage,
     // SPP auto-reconnect
-    showReconnectPrompt, handleReconnectPromptRetry, handleReconnectPromptCancel,
+    handleReconnectPromptCancel,
     // mode + category
     activeCategory, setActiveCategory, activeMode, carModes, carModeId,
     selectMode, cycleMode, handleCategoryPress,
