@@ -3,7 +3,7 @@
     "name": "GENUM Solutions",
     "slug": "genum-solutions",
     "scheme": "genumsolutions",
-    "version": "2.0.4",
+    "version": "2.0.5",
     "orientation": "default",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.genumsolutions.app",
-      "versionCode": 47,
+      "versionCode": 48,
       "permissions": [
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
@@ -136,7 +136,10 @@
     "updates": {
       "url": "https://u.expo.dev/f09b820e-9318-4267-9651-447ee6ffcd3d",
       "fallbackToCacheTimeout": 300,
-      "checkAutomatically": "ON_LOAD"
+      "checkAutomatically": "ON_LOAD",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "runtimeVersion": "1.0.0"
   }
