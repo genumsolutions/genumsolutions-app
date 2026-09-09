@@ -1,5 +1,6 @@
 // Shared types for IoT controller sub-components.
 // ToolsScreen holds all state and passes subsets down as props.
+import React from 'react';
 import { Platform } from 'react-native';
 import type { CarTelemetry } from '../../services/carProtocol';
 import type { CarMode } from '../../config/roboCarCatalog';
@@ -263,6 +264,8 @@ export type DriveControlsProps = {
   /** NAV input from the pads/joysticks (left stick / d-pad nav: -1 left,
       +1 right, 0 up, 1 down on the Y axis). Optional. */
   onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
+  /** OLED display rendered centered between the joysticks (always visible). */
+  oledSlot?: React.ReactNode
 }
 
 export type DroneControlsProps = {
