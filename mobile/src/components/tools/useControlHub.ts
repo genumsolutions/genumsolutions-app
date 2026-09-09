@@ -24,6 +24,11 @@ import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS } from './controlConstants'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
+
+/** Token → short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
+const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES
 import { deviceMemory } from './types'
 import type { CarTelemetry } from '../../services/carProtocol'
 import type { SensorData } from './types'
@@ -55,14 +60,38 @@ export function useControlHub(routeCategory?: string) {
   const [showSppsRetry, setShowSppsRetry] = useState(false)
 
   // ---- Active mode + state (mirrors ESP remote) ----
+  // speed starts at the ESP remote's default speedValue = 170.
   const [activeCategory, setActiveCategory] = useState('robocar')
   const [activeMode, setActiveMode] = useState<CarMode>(LOCAL_CAR_MODES[0])
   const [speed, setSpeed] = useState(170)
   const [servo, setServo] = useState(90)
   const [steerLimit, setSteerLimit] = useState(90)
   const [trim, setTrim] = useState(0)
+  // driveStatus = the remote's bottom-bar status line (ESP statusMessage):
+  // local action messages ("Speed:170", "Steer limit:90", "Mode:2WD1M")
+  // merged with whitelisted car statuses ("Forward", "EMERGENCY STOP").
   const [driveStatus, setDriveStatus] = useState('Stop')
+  // driveDir = the dashboard BODY direction (ESP currentDir): mirrored from
+  // the car's own status (so driving the car by its own buttons updates the
+  // app) and from local input. The OLED body + HUD read this.
+  const [driveDir, setDriveDir] = useState<'F' | 'B' | 'L' | 'R' | 'S'>('S')
   const [telemetry, setTelemetry] = useState<CarTelemetry>({})
+
+  // NAV state (ESP INPUT_NAV parity): while true the pads/joysticks navigate
+  // the top-bar fields and NOTHING drives; the hub also stops mirroring the
+  // car's speed echo so an in-progress edit never snaps back (state.cpp:
+  // "Skip the mirror during NAV editing").
+  const [navActive, setNavState] = useState(false)
+  const navActiveRef = useRef(false)
+  const setNavActive = useCallback((v: boolean) => {
+    navActiveRef.current = v
+    setNavState(v)
+  }, [])
+  // Which top-bar field NAV is editing right now.
+  const [navField, setNavField] = useState<'mode' | 'speed' | 'steer' | 'none'>('none')
+  // NAV mode preview (ESP previewModeIndex): the browsed-to mode shown
+  // before Select confirms.
+  const [previewMode, setPreviewMode] = useState<CarMode | null>(null)
 
   // ---- PID state (self-balancing) ----
   const [pidKp, setPidKp] = useState(12.0)
@@ -114,6 +143,12 @@ export function useControlHub(routeCategory?: string) {
 
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES)
+
+  // Always-fresh mirrors for the telemetry pipeline (no stale closures).
+  const carModesRef = useRef(carModes)
+  carModesRef.current = carModes
+  const activeModeRef = useRef(activeMode)
+  activeModeRef.current = activeMode
 
   useEffect(() => {
     let active = true
@@ -181,6 +216,11 @@ export function useControlHub(routeCategory?: string) {
     [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, joystickLayoutId],
   )
 
+  // Ref mirror so NAV commit callbacks can persist without re-creating
+  // (and without stale captures) when called from deep in the input chain.
+  const persistPrefsRef = useRef(persistPrefs)
+  persistPrefsRef.current = persistPrefs
+
   // Set category from route params
   useEffect(() => {
     if (resolvedCategory && PROJECT_CATEGORIES.some(c => c.slug === resolvedCategory)) {
@@ -226,14 +266,38 @@ export function useControlHub(routeCategory?: string) {
   }, [])
 
   // Telemetry + status wiring (SPP service)
+  // Parity with the ESP remote's parseTelemetryLine() + applyRemoteState()
+  // (state.cpp / comms.cpp):
+  //   • MODE: ALWAYS mirror the car's authoritative mode (the car's own mode
+  //     button must switch the app too).
+  //   • SPD: mirror the magnitude quantized to the 5-step grid inside
+  //     SPEED_MIN..SPEED_MAX; skipped while NAV is editing; SPD0 = stop echo
+  //     keeps the displayed speed.
+  //   • STATUS: only whitelisted short statuses are displayed.
+  //   • TRIM: mirrored.
   useEffect(() => {
     if (!activeMode) return
     const applyTelemetry = (t: CarTelemetry) => {
       if (!mountedRef.current) return
       setTelemetry((prev) => ({ ...prev, ...t }))
-      if (t.status) setDriveStatus(t.status)
-      if (t.speed != null) setSpeed(t.speed)
+      // Mode: always mirror (applyRemoteState parity).
+      if (t.mode) {
+        setCarModeId(t.mode)
+        const matched = carModesRef.current.find((m) => m.id === t.mode || m.token === t.mode)
+        if (matched) setActiveMode(matched)
+      }
+      // Speed: quantized mirror, NAV-edit-aware (see above).
+      if (!navActiveRef.current && t.speed != null) {
+        const mag = Math.abs(t.speed)
+        if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
+      }
       if (t.trim != null) setTrim(t.trim)
+      // Status: whitelist only — verbose/unknown statuses never shown.
+      if (t.status && isAllowedDriveStatus(t.status)) {
+        setDriveStatus(t.status)
+        const d = statusToDirection(t.status)
+        if (d) setDriveDir(d)
+      }
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
     const offStatus = sppService.onStatus((kind, message) => {
@@ -269,24 +333,10 @@ export function useControlHub(routeCategory?: string) {
   // Check if SPP is supported on this device
   const sppSupported = sppService.supported
 
-  // Mode changed on the car: keep the app in sync with live telemetry.
-  useFocusEffect(
-    React.useCallback(
-      () => {
-        return sppService.onTelemetry((t) => {
-          if (!mountedRef.current) return
-          if (t.mode) {
-            setCarModeId(t.mode)
-            const matched = carModes.find((m) => m.id === t.mode || m.token === t.mode)
-            if (matched && matched.id !== activeMode.id) {
-              setActiveMode(matched)
-            }
-          }
-        })
-      },
-      [carModes],
-    ),
-  )
+  // (Mode sync from the car is handled by the main applyTelemetry pipeline
+  // above — the old duplicate onTelemetry subscription that also mirrored
+  // mode was removed because it double-fired and held a stale activeMode
+  // closure.)
 
   // Scan for SPP devices (Classic Bluetooth)
   const handleScan = useCallback(async () => {
@@ -428,6 +478,21 @@ export function useControlHub(routeCategory?: string) {
     setError(null)
   }, [])
 
+  // Safe stop on link loss (comms.cpp safeStopAndClearQueue parity): the
+  // neutral commands are sent by the transport layer on disconnect; here we
+  // reset the on-screen drive state so the app never shows a stale
+  // "Forward" after the car already stopped.
+  useFocusEffect(
+    React.useCallback(() => {
+      return sppService.onStatus((kind) => {
+        if (!mountedRef.current) return
+        if (kind === 'disconnected' || kind === 'error') {
+          setDriveDir('S')
+        }
+      })
+    }, []),
+  )
+
   const handleDisconnect = useCallback(async () => {
     manualCloseRef.current = true
     if (reconnectTimerRef.current) {
@@ -443,6 +508,10 @@ export function useControlHub(routeCategory?: string) {
     setDeviceName('')
     setSppDevices([])
     setDriveStatus('Stop')
+    setDriveDir('S')
+    setNavActive(false)
+    setNavField('none')
+    setPreviewMode(null)
     setSpeed(170)
     setServo(90)
     setSteerLimit(90)
@@ -470,6 +539,7 @@ export function useControlHub(routeCategory?: string) {
   }, [connected, wifiConnected])
 
   const handleDirection = useCallback((d: 'F' | 'B' | 'L' | 'R' | 'S') => {
+    setDriveDir(d)
     if (d === 'S') { setDriveStatus('Stop'); sendCommand('S'); return }
     setDriveStatus(d === 'F' ? 'Forward' : d === 'B' ? 'Backward' : d === 'L' ? 'Left' : 'Right')
     sendCommand(d)
@@ -488,9 +558,23 @@ export function useControlHub(routeCategory?: string) {
     sendCommand(cmd)
   }, [sendCommand])
 
+  // ESP-remote parity: speed is NEVER sent live while driving. handleSpeed
+  // only edits the PREVIEW (NAV highlight field); commitSpeed — called on
+  // Select — sends SPD<n> once, sets the local "Speed:<n>" status and
+  // persists (the .ino TOP_SPEED branch).
   const handleSpeed = useCallback((value: number) => {
-    setSpeed(value)
-    sendThrottled('spd', `SPD${Math.round(value)}`)
+    // Slider input is 0..255; snap into the ESP grid for display.
+    const q = quantizeSpeedToStep(Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(value))))
+    setSpeed(q)
+  }, [])
+
+  const commitSpeed = useCallback(() => {
+    setSpeed((s) => {
+      sendThrottled('spd', `SPD${Math.round(s)}`)
+      setDriveStatus(`Speed:${Math.round(s)}`)
+      persistPrefsRef.current?.({ speed: s })
+      return s
+    })
   }, [sendThrottled])
 
   const handleServo = useCallback((value: number) => {
@@ -510,17 +594,31 @@ export function useControlHub(routeCategory?: string) {
   }, [pidKp, pidKi, pidKd, pidOut, pidOff, sendCommand])
 
   const handleStickDrive = useCallback((signed: number) => {
+    setDriveDir(signed > 0 ? 'F' : signed < 0 ? 'B' : 'S')
     setDriveStatus(signed > 0 ? 'Forward' : signed < 0 ? 'Backward' : 'Stop')
     sendThrottled('spd', `SPD${Math.round(signed)}`)
   }, [sendThrottled])
 
+  // Steer limit edits mirror the ESP NAV behaviour: up/down steps 5°, and
+  // NOTHING is sent to the car — the limit is applied app-side when driving
+  // (clamp) and only "recorded" on Select (commitSteerLimit).
   const adjustSteerLimit = useCallback((delta: number) => {
     setSteerLimit((prev) => {
-      const next = Math.max(0, Math.min(safetyLimits.maxSteerDeviation, prev + delta))
-      persistPrefs({ steerLimit: next })
+      const next = Math.max(0, Math.min(180, prev + delta))
       return next
     })
-  }, [safetyLimits.maxSteerDeviation, persistPrefs])
+  }, [])
+
+  // Select on the Steer field: record the limit (status + persist), never
+  // send a servo command (the .ino TOP_STEER branch: "Just record the
+  // maximum allowable steering limit - never move the servo here").
+  const commitSteerLimit = useCallback(() => {
+    setSteerLimit((s) => {
+      setDriveStatus(`Steer limit:${s}`)
+      persistPrefsRef.current?.({ steerLimit: s })
+      return s
+    })
+  }, [])
 
   const adjustTrim = useCallback((delta: number) => {
     setTrim((prev) => {
@@ -532,17 +630,21 @@ export function useControlHub(routeCategory?: string) {
   }, [safetyLimits.maxTrim, sendCommand, persistPrefs])
 
   const handleEStop = useCallback(() => {
+    setDriveDir('S')
     setDriveStatus('EMERGENCY STOP')
     sendCommand('ESTOP')
     sendCommand('SPD0')
     sendCommand('SERVO90')
   }, [sendCommand])
 
+  // Mode select = the ESP confirm path: clear the queue, send the token
+  // immediately, mirror the mode, status "Mode:<name>", stop driving.
   const selectMode = useCallback((m: CarMode) => {
     setActiveMode(m)
-    setDriveStatus('Stop')
-    sendCommand(m.token)
+    setDriveDir('S')
+    setDriveStatus(`Mode:${MODE_NAME_FOR_TOKEN[m.token] ?? m.token}`)
     sendCommand('S')
+    sendCommand(m.token)
   }, [sendCommand])
 
   const cycleMode = useCallback(() => {
@@ -588,9 +690,11 @@ export function useControlHub(routeCategory?: string) {
     activeCategory, setActiveCategory, activeMode, carModes, carModeId,
     selectMode, cycleMode, handleCategoryPress,
     // drive state
-    speed, setSpeed, servo, steerLimit, trim, driveStatus, telemetry, safetyLimits,
+    speed, setSpeed, servo, steerLimit, trim, driveStatus, driveDir, telemetry, safetyLimits,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
-    adjustSteerLimit, adjustTrim, handleEStop, sendCommand,
+    adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop, sendCommand,
+    // NAV (ESP INPUT_NAV parity)
+    navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
     // pid
     pidKp, pidKi, pidKd, pidOut, pidOff,
     // drone

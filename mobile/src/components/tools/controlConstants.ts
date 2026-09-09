@@ -4,8 +4,9 @@
 // on drive cadence / reconnect behaviour.
 // =====================================================================
 
-// Continuous drive sends mirror the physical remote's ~30ms resend cadence.
-export const DRIVE_CMD_MIN_INTERVAL_MS = 50
+// Continuous drive sends mirror the physical remote's DRIVE_RESEND_MS = 30
+// (config.h) — the hold-resend cadence for direction/SPD/SERVO streams.
+export const DRIVE_CMD_MIN_INTERVAL_MS = 30
 
 export const WIFI_RECONNECT_DELAY_MS = 3000
 export const WIFI_MAX_RECONNECT_ATTEMPTS = 5

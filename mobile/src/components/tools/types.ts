@@ -125,6 +125,15 @@ export type ModeChooserProps = {
   canControl: boolean
   onSelect: (mode: CarMode) => void
   onCycle: () => void
+  /** NAV highlight: draw the ESP-style inverted box around the trigger
+      while the Mode top-bar field is selected. */
+  highlighted?: boolean
+  /** NAV preview: show the browsed-to mode (before Select confirms). */
+  previewMode?: CarMode | null
+  /** Disable direct selection (NAV up/down owns mode changes; the dropdown
+      still opens so the user can see the list, matching the physical
+      remote where the list is display-only while browsing). */
+  locked?: boolean
   /** Display catalogue (DB-first). Defaults to the bundled modes when omitted. */
   modes?: CarMode[]
 }
@@ -149,6 +158,18 @@ export type OledDisplayProps = {
   /** Renders at the physical 1.3" OLED's 2:1 shape for the game remote:
       tighter padding/fonts and only the essential lines (no PID/Angle/echo). */
   compact?: boolean
+  /** ESP-remote dashboard parity (ui.md): which top-bar field is highlighted
+      in NAV mode ('none' = DRIVE). Inverted-box highlight mirrors u8g2. */
+  topField?: 'mode' | 'speed' | 'steer' | 'none'
+  /** While browsing modes in NAV, the PREVIEWED mode is shown (top bar +
+      body title / dashboard preview) before Select confirms — exactly like
+      previewModeIndex on the physical remote. */
+  previewMode?: CarMode | null
+  /** Unavailable firmware modes preview as COMING SOON (ui.md screen 9). */
+  previewComingSoon?: boolean
+  /** 2WD1M: the user-set MAX steer limit for the top bar — the ESP remote
+      top bar shows the LIMIT, never the live servo angle. */
+  steerLimit?: number
 }
 
 export type BalanceControlsProps = {
@@ -234,6 +255,14 @@ export type DriveControlsProps = {
       flex-fill), slim speed strip, and the PID / start-stop / emergency
       rows are hidden (the remote screen shows those elsewhere). */
   compact?: boolean
+  /** NAV routing (ESP-remote parity): the deck reads this ref's CURRENT
+      value on every touch (never stale) and routes input to the NAV
+      handler instead of driving while NAV is active. Optional — decks
+      without it always drive. */
+  navActiveRef?: { current: boolean }
+  /** NAV input from the pads/joysticks (left stick / d-pad nav: -1 left,
+      +1 right, 0 up, 1 down on the Y axis). Optional. */
+  onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
 }
 
 export type DroneControlsProps = {

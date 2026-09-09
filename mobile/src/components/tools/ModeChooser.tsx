@@ -8,13 +8,17 @@ import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
 import type { ModeChooserProps } from './types'
 
-export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }: ModeChooserProps) {
+export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, highlighted = false, previewMode = null, locked = false }: ModeChooserProps) {
   const [open, setOpen] = useState(false)
   const { height } = useWindowDimensions()
   // Catalogue is passed in DB-first (carModeService); the bundled modes are
   // the offline fallback until the fetch resolves.
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
-  const shortName = MODE_NAMES[activeMode.token] ?? activeMode.name.split('·')[0].trim()
+  // NAV preview wins over the active mode (previewModeIndex parity): the
+  // trigger shows the browsed-to mode before Select confirms it.
+  const shown = previewMode ?? activeMode
+  const shortName = MODE_NAMES[shown.token] ?? shown.name.split('·')[0].trim()
+  const shortToken = shown.token
 
   // Trigger measured in window coords so the dropdown anchors right under it.
   const triggerRef = useRef<View | null>(null)
@@ -35,19 +39,35 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
     // kept inline (approved look) and the trigger keeps its approved 180px
     // cap so long mode names never truncate.
     <View className="flex-row items-center gap-1.5">
+      {/* Trigger: ESP-style INVERTED box while NAV-highlighted (u8g2 drawBox
+          parity), showing the previewed mode while browsing. */}
       <Pressable
         ref={triggerRef}
         onPress={openDropdown}
+        disabled={locked}
         accessibilityRole="button"
         accessibilityLabel="Choose car mode"
-        className="min-w-0 max-w-[180px] flex-row items-center justify-between gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2"
+        className={`min-w-0 max-w-[180px] flex-row items-center justify-between gap-1.5 rounded-xl px-3 py-2 ${
+          highlighted ? 'bg-slate-200' : 'border border-white/15 bg-white/5'
+        }`}
       >
-        <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-bold text-white">{shortName}</Text>
-        <Feather name="chevron-down" size={15} color="#cbd5e1" />
+        <Text
+          numberOfLines={1}
+          className={`min-w-0 flex-1 text-sm font-bold ${highlighted ? 'text-slate-900' : 'text-white'}`}
+        >
+          {shortName}
+        </Text>
+        <Text
+          numberOfLines={1}
+          className={`text-[10px] font-mono ${highlighted ? 'text-slate-600' : 'text-slate-400'}`}
+        >
+          {shortToken}
+        </Text>
+        <Feather name="chevron-down" size={15} color={highlighted ? '#334155' : '#cbd5e1'} />
       </Pressable>
       <Pressable
         onPress={() => { Vibration.vibrate(10); onCycle() }}
-        disabled={!canControl}
+        disabled={!canControl || locked}
         accessibilityRole="button"
         accessibilityLabel="Cycle mode"
         className="h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy disabled:opacity-40"
@@ -72,11 +92,20 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
               style={{ maxHeight: listMaxHeight }}
             >
               {catalogue.map((m: CarMode) => {
-                const isActive = activeMode.id === m.id
+                const isActive = shown.id === m.id
+                // Unavailable firmware modes (isModeAvailable parity):
+                // preview in the list as COMING SOON.
+                const coming = !['BT', 'AUTO', '2WD1M'].includes(m.token)
                 return (
                   <Pressable
                     key={m.id}
-                    onPress={() => { Vibration.vibrate(10); onSelect(m); setOpen(false) }}
+                    onPress={() => {
+                      if (locked) return
+                      Vibration.vibrate(10)
+                      onSelect(m)
+                      setOpen(false)
+                    }}
+                    disabled={locked}
                     accessibilityRole="button"
                     className={`mt-1 flex-row items-center justify-between rounded-lg px-3 py-2.5 ${isActive ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
                   >
@@ -85,7 +114,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes }
                         {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
                       </Text>
                       <Text className={`text-xs ${isActive ? 'text-white/70' : 'text-slate-400'}`} numberOfLines={1}>
-                        {m.token} · {m.transport.join(' / ')}
+                        {m.token} · {coming ? 'coming soon' : m.transport.join(' / ')}
                       </Text>
                     </View>
                     {isActive && <Feather name="check" size={16} color="#fff" />}

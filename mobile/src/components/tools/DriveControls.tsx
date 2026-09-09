@@ -30,6 +30,7 @@ import { Feather } from '@expo/vector-icons'
 import type { ComponentProps } from 'react'
 import Slider from '@react-native-community/slider'
 import type { DriveControlsProps, SafetyLimits } from './types'
+import { DRIVE_CMD_MIN_INTERVAL_MS } from './controlConstants'
 
 type IconName = ComponentProps<typeof Feather>['name']
 
@@ -121,6 +122,7 @@ function enabledZones(is2wd1m: boolean): { L: PadZone[]; R: PadZone[] } {
 // =====================================================================
 function DualDpad({
   canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits, onHaptic, compact = false,
+  navActiveRef, onNavInput,
 }: {
   canControl: boolean
   speed: number
@@ -132,6 +134,8 @@ function DualDpad({
   limits: SafetyLimits
   onHaptic?: () => void
   compact?: boolean
+  navActiveRef?: { current: boolean }
+  onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
 }) {
   // Surface size in ITS OWN space (onLayout) — the same space locationX/Y
   // are reported in. No window/page coordinates anywhere.
@@ -150,6 +154,8 @@ function DualDpad({
   onServoRef.current = onServo
   const limitsRef = useRef(limits)
   limitsRef.current = limits
+  const onNavInputRef = useRef(onNavInput)
+  onNavInputRef.current = onNavInput
 
   // Track touches by identifier; the pad+zone each finger is currently in.
   const touchesRef = useRef(new Map<string, { pad: PadId; zone: PadZone }>())
@@ -189,16 +195,36 @@ function DualDpad({
     }
     const has = (arr: PadZone[], z: PadZone) => arr.includes(z)
 
+    // NAV routing (ESP-remote parity): while NAV is active the pads drive
+    // the top-bar cursor / values and NOTHING is sent to the car — the
+    // physical remote forbids driving and editing at the same time. Both
+    // pads emit nav directions (F=up B=down L=left R=right); the NAV state
+    // machine debounces (NAV_DEBOUNCE 120ms) and repeats while held.
+    if (navActiveRef?.current && onNavInputRef.current) {
+      const nav = (z: PadZone) => {
+        if (z === 'F') onNavInputRef.current!('y', -1)
+        else if (z === 'B') onNavInputRef.current!('y', 1)
+        else if (z === 'L') onNavInputRef.current!('x', -1)
+        else if (z === 'R') onNavInputRef.current!('x', 1)
+      }
+      if (lZones.length) nav(lZones[lZones.length - 1]!)
+      if (rZones.length) nav(rZones[rZones.length - 1]!)
+      return
+    }
+
     if (s.is2wd1m) {
       // Left pad → motor (signed SPD), right pad → servo steer.
+      // Steering parity with the physical remote: LEFT → servo angle
+      // INCREASES around center 90 (turn left = larger angle), right stick
+      // inverted mapping from comms.cpp processDriveForCurrentMode().
       const fwd = has(lZones, 'F')
       const back = has(lZones, 'B')
       const spd = has(lZones, 'C') ? 0 : fwd && back ? 0 : fwd ? s.speed : back ? -s.speed : 0
       const l = has(rZones, 'L')
       const r = has(rZones, 'R')
       const servo = l === r ? limitsRef.current.servoCenter
-        : l ? limitsRef.current.servoCenter - s.steerLimit
-          : limitsRef.current.servoCenter + s.steerLimit
+        : l ? limitsRef.current.servoCenter + s.steerLimit
+          : limitsRef.current.servoCenter - s.steerLimit
       // Stream through the same clamped path the joysticks use.
       const sd = clampSignedDrive(spd, limitsRef.current)
       if (onSignedDriveRef.current) onSignedDriveRef.current(sd)
@@ -214,7 +240,7 @@ function DualDpad({
                   : 'S'
       sendDirRef.current(d)
     }
-  }, [])
+  }, [navActiveRef])
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -280,12 +306,13 @@ function DualDpad({
   const onHapticRef = useRef(onHaptic)
   onHapticRef.current = onHaptic
 
-  // Hold-resend cadence (ESP-remote parity): while any functional cell is
-  // held, keep re-emitting so a dropped BT/WiFi line self-heals.
+  // Hold-resend cadence (ESP-remote parity, DRIVE_RESEND_MS = 30): while any
+  // functional cell is held, keep re-emitting the CURRENT command so a dropped
+  // BT/WiFi line self-heals — exactly like the physical remote's loop.
   const anyActive = Object.keys(activeCells).length > 0
   useEffect(() => {
     if (!canControl || !anyActive) return
-    const id = setInterval(() => emit(touchesRef.current), 80)
+    const id = setInterval(() => emit(touchesRef.current), DRIVE_CMD_MIN_INTERVAL_MS)
     return () => clearInterval(id)
   }, [canControl, anyActive, emit])
 
@@ -380,6 +407,7 @@ function DpadCell({ icon, active, enabled, compact }: {
 // =====================================================================
 function DualJoystick({
   canControl, rightEnabled, onLeft, onRight, height = 220, fill = false,
+  navActiveRef, onNavInput,
 }: {
   canControl: boolean
   rightEnabled: boolean
@@ -388,6 +416,8 @@ function DualJoystick({
   height?: number
   /** When true the surface fills its flex parent instead of a fixed height. */
   fill?: boolean
+  navActiveRef?: { current: boolean }
+  onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
 }) {
   const [geo, setGeo] = useState<{ w: number; h: number } | null>(null)
   const touchesRef = useRef(new Map<string, { stick: 'L' | 'R' }>())
@@ -402,6 +432,13 @@ function DualJoystick({
   onLeftRef.current = onLeft
   const onRightRef = useRef(onRight)
   onRightRef.current = onRight
+  const onNavInputRef = useRef(onNavInput)
+  onNavInputRef.current = onNavInput
+
+  // Last reported normalized positions — re-sent by the hold-resend interval
+  // so a held stick keeps streaming (DRIVE_RESEND_MS parity, self-heals).
+  const lastLRef = useRef({ x: 0, y: 0 })
+  const lastRRef = useRef(0)
 
   const radius = geo ? Math.min(geo.w * 0.28, geo.h * 0.42, 124) : 0
   const centerOf = (stick: 'L' | 'R') =>
@@ -425,10 +462,34 @@ function DualJoystick({
     }
     if (stick === 'L') {
       setKnobL({ x: nx, y: ny })
-      if (report) onLeftRef.current(nx / cap, ny / cap)
+      if (report) {
+        const nX = nx / cap
+        const nY = ny / cap
+        lastLRef.current = { x: nX, y: nY }
+        // NAV routing (ESP-remote parity): the stick navigates the top-bar
+        // fields (up/down = value adjust, left/right = field switch) and
+        // never drives while NAV is active.
+        if (navActiveRef?.current && onNavInputRef.current) {
+          if (Math.abs(nX) >= Math.abs(nY)) {
+            if (Math.abs(nX) > 0.35) onNavInputRef.current('x', nX < 0 ? -1 : 1)
+          } else if (Math.abs(nY) > 0.35) {
+            onNavInputRef.current('y', nY < 0 ? -1 : 1)
+          }
+          return
+        }
+        onLeftRef.current(nX, nY)
+      }
     } else {
       setKnobR({ x: nx, y: ny })
-      if (report) onRightRef.current(nx / cap)
+      if (report) {
+        const nX = nx / cap
+        lastRRef.current = nX
+        if (navActiveRef?.current && onNavInputRef.current) {
+          if (Math.abs(nX) >= 0.35) onNavInputRef.current('x', nX < 0 ? -1 : 1)
+          return
+        }
+        onRightRef.current(nX)
+      }
     }
   }
 
@@ -474,6 +535,20 @@ function DualJoystick({
       if (!still) applyKnob(stick, 0, 0)
     }
   }
+
+  // Hold-resend (DRIVE_RESEND_MS parity): while any stick is grabbed, keep
+  // re-reporting the last position every 30ms so a dropped line self-heals
+  // and the car's safe-stop never fires on a held stick.
+  useEffect(() => {
+    if (!canControl) return
+    const id = setInterval(() => {
+      if (touchesRef.current.size === 0) return
+      if (navActiveRef?.current) return
+      onLeftRef.current(lastLRef.current.x, lastLRef.current.y)
+      if (rightEnabledRef.current) onRightRef.current(lastRRef.current)
+    }, DRIVE_CMD_MIN_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [canControl, navActiveRef])
 
   const base = radius + 24
   const knobSize = 56
@@ -607,7 +682,7 @@ export function DriveControls({
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
   onSignedDrive, steerLimit, onEStop,
-  safetyLimits, compact = false,
+  safetyLimits, compact = false, navActiveRef, onNavInput,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   const limits = safetyLimits ?? DEFAULT_SAFETY_LIMITS
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
@@ -662,13 +737,15 @@ export function DriveControls({
   }, [canControl, is2wd1m, onSignedDrive, sendDir, limits])
 
   // Right joystick X axis: steers servo in 2WD1M, clamped to ±steerLimit.
+  // Parity with the physical remote (comms.cpp): LEFT → servo angle INCREASES
+  // (turn left = larger angle), right → decreases.
   const handleRightJoy = useCallback((x: number) => {
     if (!canControl || !is2wd1m) return
     let dev = Math.round(x * 90)
     if (onSignedDrive && steerLimit != null) {
       dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
     }
-    const rawServo = limits.servoCenter + dev
+    const rawServo = limits.servoCenter - dev
     const safeServo = clampServo(rawServo, limits)
     onServo(safeServo)
   }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo, limits])
@@ -696,6 +773,8 @@ export function DriveControls({
             onLeft={handleLeftJoy}
             onRight={handleRightJoy}
             fill={compact}
+            navActiveRef={navActiveRef}
+            onNavInput={onNavInput}
           />
           {!compact && (
             <Text className="mt-3 text-center text-sm text-muted">
@@ -720,6 +799,8 @@ export function DriveControls({
             limits={limits}
             onHaptic={hapticTap}
             compact={compact}
+            navActiveRef={navActiveRef}
+            onNavInput={onNavInput}
           />
 
           {!compact && (
