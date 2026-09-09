@@ -55,4 +55,4 @@ jobs:
       # The manifest (Supabase) is only updated by release.yml
       # after a full APK upload, so OTA-only pushes skip it.
       - name: Publish OTA update
-        run: npx eas update --branch main --non-interactive
+        run: npx eas-cli update --branch main --non-interactive
