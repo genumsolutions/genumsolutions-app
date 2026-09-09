@@ -248,5 +248,5 @@ jobs:
         if: steps.check-supabase.outputs.configured == 'true'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas-cli update --branch main --non-interactive
+        run: npx eas-cli update --branch main --message "Release build OTA" --non-interactive
         continue-on-error: true
