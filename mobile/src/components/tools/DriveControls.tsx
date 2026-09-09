@@ -407,7 +407,7 @@ function DpadCell({ icon, active, enabled, compact }: {
 // =====================================================================
 function DualJoystick({
   canControl, rightEnabled, onLeft, onRight, height = 220, fill = false,
-  navActiveRef, onNavInput,
+  navActiveRef, onNavInput, oledSlot,
 }: {
   canControl: boolean
   rightEnabled: boolean
@@ -418,6 +418,8 @@ function DualJoystick({
   fill?: boolean
   navActiveRef?: { current: boolean }
   onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
+  /** OLED display rendered centered between the two sticks (always visible). */
+  oledSlot?: React.ReactNode
 }) {
   const [geo, setGeo] = useState<{ w: number; h: number } | null>(null)
   const touchesRef = useRef(new Map<string, { stick: 'L' | 'R' }>())
@@ -440,9 +442,9 @@ function DualJoystick({
   const lastLRef = useRef({ x: 0, y: 0 })
   const lastRRef = useRef(0)
 
-  const radius = geo ? Math.min(geo.w * 0.28, geo.h * 0.42, 124) : 0
+  const radius = geo ? Math.min(geo.w * 0.22, geo.h * 0.35, 100) : 0
   const centerOf = (stick: 'L' | 'R') =>
-    geo ? { cx: geo.w * (stick === 'L' ? 0.25 : 0.75), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
+    geo ? { cx: geo.w * (stick === 'L' ? 0.23 : 0.77), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
 
   const resolveStick = (x: number, y: number): 'L' | 'R' => {
     if (!geo) return 'L'
@@ -550,8 +552,8 @@ function DualJoystick({
     return () => clearInterval(id)
   }, [canControl, navActiveRef])
 
-  const base = radius + 24
-  const knobSize = 56
+  const base = radius + 10
+  const knobSize = 46
 
   return (
     <View
@@ -668,6 +670,24 @@ function DualJoystick({
               </View>
             )
           })}
+          {/* OLED center-mounted between joysticks — always visible.
+              pointer-events="none" so it never interferes with the
+              joystick PanResponder surface. Position is recalculated
+              in the final orientation (F-11: boardKey bump handles this). */}
+          {oledSlot && geo && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: geo.w * 0.5 - 48,
+                top: geo.h * 0.5 - 24,
+                width: 96,
+                height: 48,
+              }}
+            >
+              {oledSlot}
+            </View>
+          )}
         </>
       )}
     </View>
@@ -682,7 +702,7 @@ export function DriveControls({
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
   onSignedDrive, steerLimit, onEStop,
-  safetyLimits, compact = false, navActiveRef, onNavInput,
+  safetyLimits, compact = false, navActiveRef, onNavInput, oledSlot,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   const limits = safetyLimits ?? DEFAULT_SAFETY_LIMITS
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
@@ -775,6 +795,7 @@ export function DriveControls({
             fill={compact}
             navActiveRef={navActiveRef}
             onNavInput={onNavInput}
+            oledSlot={oledSlot}
           />
           {!compact && (
             <Text className="mt-3 text-center text-sm text-muted">

@@ -163,6 +163,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     // connection
     connected, wifiConnected, sppStatus, deviceName,
     canControl, handleDisconnect, wifiUrl,
+    // SPP auto-reconnect
+    showReconnectPrompt, handleReconnectPromptRetry, handleReconnectPromptCancel,
     // mode/category
     activeCategory, activeMode, carModes, selectMode, cycleMode,
     // drive
@@ -373,6 +375,22 @@ export function RemoteControlScreen({ navigation }: Props) {
       : navField === 'steer' ? 'steer' as const
         : 'mode' as const
 
+  // OLED slot — rendered centered between joysticks in the DriveControls
+  // surface (always visible, pointer-events="none"). Size matches the
+  // physical 1.3" OLED (96×48 at 2:1 aspect ratio).
+  const oledSlot = isRobocar ? (
+    <View style={{ width: 96, height: 48 }} className="overflow-hidden rounded-lg">
+      <OledDisplay
+        {...oledCommonProps}
+        compact
+        topField={topField}
+        previewMode={previewMode}
+        previewComingSoon={!REMOTE_AVAILABLE_TOKENS.includes(previewMode?.token ?? '')}
+        steerLimit={steerLimit}
+      />
+    </View>
+  ) : null
+
   return (
     <View className="flex-1 bg-slate-950">
       {/* Single compact remote board — no scroll. The board is flex-sized so
@@ -436,16 +454,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onChange={(v) => { if (isShown2wd1m) { adjustSteerLimit(v - steerLimit) } else handleSpeed(v) }}
                 onCommit={() => { if (!isShown2wd1m) commitSpeed() }}
               />
-              <View style={{ width: oledWidth, aspectRatio: 2 }} className="flex-shrink overflow-hidden rounded-xl">
-                <OledDisplay
-                  {...oledCommonProps}
-                  compact
-                  topField={topField}
-                  previewMode={previewMode}
-                  previewComingSoon={!REMOTE_AVAILABLE_TOKENS.includes(previewMode?.token ?? '')}
-                  steerLimit={steerLimit}
-                />
-              </View>
             </>
           )}
 
@@ -473,6 +481,19 @@ export function RemoteControlScreen({ navigation }: Props) {
                   <Feather name="settings" size={20} color="#fff" />
                 </View>
               </Pressable>
+              {linked && (
+                <Pressable
+                  onPress={() => { Vibration.vibrate(10); handleDisconnect() }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect"
+                  hitSlop={10}
+                  android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 28 }}
+                >
+                  <View className="h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5">
+                    <Feather name="link-2" size={20} color="#fff" />
+                  </View>
+                </Pressable>
+              )}
             </View>
           )}
         </View>
@@ -544,6 +565,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               compact
               navActiveRef={navActiveRef}
               onNavInput={navInput}
+              oledSlot={oledSlot}
             />
             {/* Floating E-stop FAB — easy thumb reach in landscape */}
             <Pressable
@@ -612,6 +634,50 @@ export function RemoteControlScreen({ navigation }: Props) {
           </>
         )}
 
+        {/* Reconnect prompt — ESP remote parity: after 4 silent attempts
+            fail, show "Connection lost. Retry?" with [Retry] [Cancel]. */}
+        {showReconnectPrompt && (
+          <>
+            <Pressable
+              className="absolute inset-0 z-30 bg-black/50"
+              onPress={handleReconnectPromptCancel}
+              accessibilityLabel="Cancel reconnect"
+            />
+            <View className="absolute inset-0 z-40 items-center justify-center px-8">
+              <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-xl">
+                <Text className="text-center text-base font-black text-white">Connection lost</Text>
+                <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
+                  Reconnect to continue driving?
+                </Text>
+                <View className="mt-4 flex-row justify-center gap-3">
+                  <Pressable
+                    onPress={handleReconnectPromptCancel}
+                    accessibilityRole="button"
+                    accessibilityLabel="Exit remote"
+                    hitSlop={8}
+                    android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
+                  >
+                    <View className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5">
+                      <Text className="text-sm font-bold text-white">Cancel</Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleReconnectPromptRetry}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry connection"
+                    hitSlop={8}
+                    android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
+                  >
+                    <View className="rounded-full bg-navy px-6 py-2.5">
+                      <Text className="text-sm font-black text-white">Retry</Text>
+                    </View>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
+
         {/* Settings — small anchored dropdown (steer limit + trim for 2WD1M),
             dimmed with a note for other modes. Backdrop closes on outside
             tap so the deck never lingers in a half-open state. */}
@@ -657,28 +723,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </>
         )}
-      </View>
-
-      {/* Persistent bottom bar: disconnect + status line */}
-      <View className="border-t border-white/10 bg-black/40 px-3 py-2">
-        <View className="flex-row items-center gap-3">
-          {linked && (
-            <Pressable
-              onPress={() => { Vibration.vibrate(10); handleDisconnect() }}
-              accessibilityRole="button"
-              accessibilityLabel="Disconnect"
-              hitSlop={10}
-              android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 40 }}
-            >
-              <View className="rounded-full border border-white/15 bg-white/5 px-4 py-2.5">
-                <Feather name="wifi-off" size={16} color="#fff" />
-              </View>
-            </Pressable>
-          )}
-        </View>
-        <Text className="mt-0.5 text-center text-sm text-slate-500">
-          {wifiConnected ? `WiFi · ${wifiUrl}` : sppStatus === 'connected' ? `SPP · ${deviceName}` : 'Simulation'}
-        </Text>
       </View>
     </View>
   )
