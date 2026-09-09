@@ -214,7 +214,7 @@ jobs:
       # current versionCode catches that drift and forces a regeneration.
       - name: Regenerate android/ (expo prebuild)
         run: |
-          APP_CODE=$(node -p "require('./app.json').android.versionCode")
+          APP_CODE=$(node -p "require('./app.json').expo.android.versionCode")
           if [ -f android/app/build.gradle ] && grep -q "versionCode $APP_CODE " android/app/build.gradle; then
             echo "android/ restored from cache, versionCode matches ($APP_CODE) — skipping prebuild"
           else
