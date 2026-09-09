@@ -249,6 +249,11 @@ function DualDpad({
   }, [])
 
   // Apply a freshly computed set of active cells and stream commands.
+  // PERF (round 5): only re-render when the cell set ACTUALLY changes —
+  // the old code setState'd on every touch-move (new array identity each
+  // time), re-rendering the whole pad tree ~60x/s while a finger drifted
+  // inside one cell. That was the remote freeze/lag.
+  const lastCellsSigRef = useRef('')
   const handleCells = useCallback((cells: ActiveCell[]) => {
     if (!stRef.current.canControl) return
     const s = stRef.current
@@ -258,6 +263,9 @@ function DualDpad({
     )
     if (functional.length > prevFuncCountRef.current) onHapticRef.current?.()
     prevFuncCountRef.current = functional.length
+    const sig = cells.map((c) => c.pad + c.zone).sort().join(',')
+    if (sig === lastCellsSigRef.current) return
+    lastCellsSigRef.current = sig
     setActiveCells(cells)
 
     if (s.is2wd1m) {

@@ -1,9 +1,22 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.4** (versionCode 47) · Android APK (`genum-solutions-2.0.4.apk`, 41.3 MB) — round 3: **PASSED 2026-09-09 (18/18)** · round 4 (remote rectification): **CODE DONE (local `d8111a2`), awaiting device verify**
+> Target: **v2.0.4 → v2.0.5/48 + OTA** — round 3: **PASSED 2026-09-09 (18/18)** · round 4: SHIPPED (OTA, pending device verify) · round 5: CODE DONE (below), device verify pending
 > Older targets below: v1.5.14 (Car Remote Phase A), v1.5.13/12/11 polish.
 > Scope: the **robot-car per-package remote (Phase A)** — Car Remote screen (Classic BT SPP + BLE + WiFi), ESP-remote 2WD1M joystick parity (signed SPD / steer limit / trim / e-stop), self-balancing PID deck, autonomous Run/Stop decks (token semantics), weblink (wireless-car WS JSON) deck, Tools-hub + website parity — on top of the v1.5.13 native UX polish and the v1.5.12/v1.5.11 fixes.
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
+
+---
+
+## snag round 5 — perf + Control Panel + duplicates + text overflow (CODE DONE — device verify pending)
+
+> JS-only → ships via OTA. Devices: fully close the app → reopen → "App updated — reload".
+
+- [ ] **R5-1 — Remote is responsive (no lag/freeze):** d-pad + joysticks track fingers smoothly; chrome buttons (Exit/Settings/toggle/E-stop/disconnect) respond instantly where they render. (Perf fix: no per-touch async measuring; d-pad re-renders only when the pressed cell set changes.)
+- [ ] **R5-2 — Control Panel drives:** connect via SPP on the Control Panel → the full drive deck (D-pad/Joystick toggle, drive/steer, speed, E-stop for 2WD1M) appears below the connected card and drives the car.
+- [ ] **R5-3 — Menu duplicate gone:** Downloads & Software Updates shows ONE App Updates row (the bordered version card is removed).
+- [ ] **R5-4 — No text overflow:** check Menu rows, cart product names, shop cards, product-detail info grid, About cards, Contact rows, account dropdown rows — no letters cross any card's right edge.
+
+**Pass criteria:** all boxes tick; remote performance is lag-free during continuous d-pad/joystick holds.
 
 ---
 

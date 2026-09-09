@@ -291,7 +291,8 @@ function Info({ label, value }: { label: string; value: string }) {
       <Text className="text-xs font-bold uppercase tracking-wide text-border">
         {label}
       </Text>
-      <Text className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
+      {/* R5 overflow fix: values ellipsize within the wrapped row. */}
+      <Text numberOfLines={1} className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
     </View>
   );
 }

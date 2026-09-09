@@ -117,8 +117,10 @@ export function CartScreen() {
                 <Feather name="box" size={22} color="#94a3b8" />
               )}
             </View>
-            <View className="ml-3 flex-1">
-              <Text className="text-sm font-bold leading-tight text-ink">
+            <View className="ml-3 min-w-0 flex-1">
+              {/* R5 overflow fix: min-w-0 so long product names ellipsize
+                  instead of pushing the qty controls past the card edge. */}
+              <Text numberOfLines={2} className="text-sm font-bold leading-tight text-ink">
                 {item.product.name}
               </Text>
               <Text className="mt-0.5 text-xs font-black text-navy">

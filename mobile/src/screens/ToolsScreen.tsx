@@ -15,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons'
 import type { RootStackParamList } from '../navigation/types';
 import { useControlHub } from '../components/tools/useControlHub';
+import { DriveControls } from '../components/tools/DriveControls';
 import { ModeInfo } from '../components/tools/ModeInfo';
 
 type Route = RouteProp<RootStackParamList, 'Tools'>
@@ -35,9 +36,15 @@ export function ToolsScreen() {
     wifiConnected, wifiUrl, setWifiUrl, handleWifiConnect, handleWifiDisconnect,
     error, connectionMessage, connectionMsgType, sppStatusMsg,
     // mode/category
-    activeCategory, activeMode,
+    activeCategory, activeMode, carModes, selectMode, cycleMode,
+    // drive (R5: the Control Panel drives again — the deck lives here too)
+    speed, servo, steerLimit, trim, driveStatus, telemetry,
+    handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
+    adjustSteerLimit, adjustTrim, handleEStop,
+    pidKp, pidKi, pidKd, pidOut, pidOff,
+    useJoystick, setUseJoystick,
     // derived
-    isDrone,
+    isDrone, isNonRobocar, is2wd1mActive, safetyLimits,
   } = hub
 
   return (
@@ -223,6 +230,61 @@ export function ToolsScreen() {
           </View>
         )}
       </View>
+
+      {/* Drive deck (R5): the connected card promises "controls below to
+          drive" — restore the full deck here so the Control Panel drives
+          exactly like the Remote window (same hub, same handlers). Robocar
+          categories only; drones/smart-farm/city keep their own decks. */}
+      {!isDrone && !isNonRobocar && (
+        <View className="mt-4">
+          <View className="mb-3 flex-row items-center justify-between rounded-xl border border-line bg-card px-4 py-3">
+            <Text className="min-w-0 flex-1 text-xs font-bold text-muted" numberOfLines={1}>
+              Control mode · {driveStatus}
+            </Text>
+            <View className="flex-row shrink-0 gap-2">
+              <Pressable
+                onPress={() => setUseJoystick(false)}
+                className={`rounded-full px-3 py-1.5 ${!useJoystick ? 'bg-navy' : 'border border-line bg-surface'}`}
+                accessibilityRole="button"
+                accessibilityLabel="Use D-pad"
+              >
+                <Text className={`text-xs font-bold ${!useJoystick ? 'text-white' : 'text-muted'}`}>D-pad</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setUseJoystick(true)}
+                className={`rounded-full px-3 py-1.5 ${useJoystick ? 'bg-navy' : 'border border-line bg-surface'}`}
+                accessibilityRole="button"
+                accessibilityLabel="Use Joystick"
+              >
+                <Text className={`text-xs font-bold ${useJoystick ? 'text-white' : 'text-muted'}`}>Joystick</Text>
+              </Pressable>
+            </View>
+          </View>
+          <DriveControls
+            canControl={connected || wifiConnected}
+            isDrone={false}
+            activeMode={activeMode}
+            speed={speed}
+            servo={servo}
+            pidKp={pidKp}
+            pidKi={pidKi}
+            pidKd={pidKd}
+            pidOut={pidOut}
+            pidOff={pidOff}
+            useJoystick={useJoystick}
+            onDirection={handleDirection}
+            onSpeed={handleSpeed}
+            onServo={handleServo}
+            onPid={applyPid}
+            onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
+            steerLimit={is2wd1mActive ? steerLimit : undefined}
+            onRun={() => handleDirection('F')}
+            onStop={() => handleDirection('S')}
+            onEStop={is2wd1mActive ? handleEStop : undefined}
+            safetyLimits={safetyLimits}
+          />
+        </View>
+      )}
 
       {/* About this mode */}
       <View className="mt-4">

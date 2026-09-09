@@ -47,8 +47,8 @@ export function AboutScreen() {
             <View className="h-10 w-10 items-center justify-center rounded-full bg-navy-light">
               <Feather name={p.icon} size={18} color="#1e3a8a" />
             </View>
-            <View className="ml-3 flex-1">
-              <Text className="text-base font-bold text-ink">{p.title}</Text>
+            <View className="ml-3 min-w-0 flex-1">
+              <Text numberOfLines={1} className="text-base font-bold text-ink">{p.title}</Text>
               <Text className="mt-1 text-sm leading-5 text-muted">{p.body}</Text>
             </View>
           </View>
