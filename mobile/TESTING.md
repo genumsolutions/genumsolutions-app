@@ -1,22 +1,26 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.4 → v2.0.5/48 + OTA** — round 3: **PASSED 2026-09-09 (18/18)** · round 4: SHIPPED (OTA, pending device verify) · round 5: CODE DONE (below), device verify pending
-> Older targets below: v1.5.14 (Car Remote Phase A), v1.5.13/12/11 polish.
-> Scope: the **robot-car per-package remote (Phase A)** — Car Remote screen (Classic BT SPP + BLE + WiFi), ESP-remote 2WD1M joystick parity (signed SPD / steer limit / trim / e-stop), self-balancing PID deck, autonomous Run/Stop decks (token semantics), weblink (wireless-car WS JSON) deck, Tools-hub + website parity — on top of the v1.5.13 native UX polish and the v1.5.12/v1.5.11 fixes.
+> Target: **v2.0.5/48 + OTA bundle `6db2db8`** — round 6 SHIPPED via OTA 12:07Z, device verify pending. Rounds 3 passed 18/18; rounds 4+5 shipped (their items are re-listed below — test them together).
 > Companion doc: `GUIDE.md` (project root) — session log + release state.
 
 ---
 
-## snag round 5 — perf + Control Panel + duplicates + text overflow (CODE DONE — device verify pending)
+## snag round 6 — touch rebuild + Control Panel category organizer (SHIPPED 12:07Z — device verify pending)
 
-> JS-only → ships via OTA. Devices: fully close the app → reopen → "App updated — reload".
+> Reload first: fully close the app → reopen → tap Reload in the banner.
 
-- [ ] **R5-1 — Remote is responsive (no lag/freeze):** d-pad + joysticks track fingers smoothly; chrome buttons (Exit/Settings/toggle/E-stop/disconnect) respond instantly where they render. (Perf fix: no per-touch async measuring; d-pad re-renders only when the pressed cell set changes.)
-- [ ] **R5-2 — Control Panel drives:** connect via SPP on the Control Panel → the full drive deck (D-pad/Joystick toggle, drive/steer, speed, E-stop for 2WD1M) appears below the connected card and drives the car.
-- [ ] **R5-3 — Menu duplicate gone:** Downloads & Software Updates shows ONE App Updates row (the bordered version card is removed).
-- [ ] **R5-4 — No text overflow:** check Menu rows, cart product names, shop cards, product-detail info grid, About cards, Contact rows, account dropdown rows — no letters cross any card's right edge.
+- [ ] **R6-1 — Touch lands where cells render (THE decisive one):** in the Remote d-pad, every cell responds exactly where it is drawn — tap the CENTER of each of the 6 functional cells on both pads, then tap near the EDGES. No shift in any direction, no cell reacting when you touch its neighbor.
+- [ ] **R6-2 — Chrome buttons instant:** Exit, joystick↔d-pad toggle, ⚙ Settings, E-stop FAB, Disconnect respond immediately (no lag, no mis-registered taps).
+- [ ] **R6-3 — Joysticks clean:** sticks track fingers 1:1, re-grab anywhere re-centers the knob, both sticks work together on 2WD1M, release snaps back and stops.
+- [ ] **R6-4 — Speed slider longer:** the chrome-row slider now fills the free space (≈2-3× wider than before) and is easy to drag.
+- [ ] **R6-5 — Control Panel is a category organizer:** NO joysticks/d-pad/speed/E-stop on the page; category tabs (Robo Car · Home Automation · Smart Farm · Smart City · Drones) switch per-category detail cards; each category has its own "Open … deck" button that opens the Remote window for THAT category (robocar → drive deck, drones → flight deck, others → relay/sensor tiles).
+- [ ] **R6-6 — About this project:** the Control Panel card is titled "About this project" (project/build info per category) — not "About this mode".
 
-**Pass criteria:** all boxes tick; remote performance is lag-free during continuous d-pad/joystick holds.
+### Carry-overs to re-check in the same pass (rounds 4+5)
+- [ ] R4-3 single chrome row · R4-4 uniform d-pad cells · R4-7 bigger Exit/⚙/toggle
+- [ ] R5-3 single App Updates row (no bordered duplicate) · R5-4 no text overflow on card edges
+
+**Pass criteria:** all boxes tick. If R6-1 or R6-2 still fails, capture WHICH button/cell and the direction of the shift — but the root cause is now removed at the coordinate-system level.
 
 ---
 
