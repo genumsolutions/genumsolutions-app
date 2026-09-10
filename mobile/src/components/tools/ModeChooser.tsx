@@ -25,6 +25,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
   const [anchor, setAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
 
   const openDropdown = () => {
+    if (open) { setOpen(false); return }
     triggerRef.current?.measureInWindow((x, y, w, h) => {
       setAnchor({ x, y, w: Math.max(w, 236), h })
       setOpen(true)
@@ -76,8 +77,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
       </Pressable>
 
       {open && (
-        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)}>
-          <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)} accessibilityLabel="Close mode list" />
+        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)} pointerEvents="box-none">
           <View
             style={{
               position: 'absolute',

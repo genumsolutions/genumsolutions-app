@@ -15,8 +15,8 @@
 //     live ONLY in that window, never on this page.
 //   • "About this project" replaces the old "About this mode" card.
 // =====================================================================
-import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, Vibration, View } from 'react-native';
 import { useRoute, type RouteProp, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons'
@@ -86,6 +86,14 @@ export function ToolsScreen() {
 
   // Connection tab: iOS-style segmented toggle between Bluetooth and WiFi
   const [connTab, setConnTab] = useState<'bluetooth' | 'wifi'>('bluetooth')
+
+  // Disconnect confirmation — matches Remote's dialog pattern
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const confirmDisconnect = useCallback(() => {
+    Vibration.vibrate(10)
+    setShowDisconnectConfirm(false)
+    handleDisconnect()
+  }, [handleDisconnect])
 
   return (
     <ScrollView
@@ -198,7 +206,7 @@ export function ToolsScreen() {
             </Text>
           </View>
           {(sppStatus === 'connected' || wifiConnected) && (
-            <Pressable onPress={handleDisconnect} className="shrink-0" hitSlop={8}>
+            <Pressable onPress={() => { Vibration.vibrate(10); setShowDisconnectConfirm(true) }} className="shrink-0" hitSlop={8}>
               <Text className="text-sm font-bold text-gold underline">Disconnect</Text>
             </Pressable>
           )}
@@ -372,6 +380,47 @@ export function ToolsScreen() {
       <View className="mt-4">
         <ProjectInfo mode={activeMode} categorySlug={category.slug} />
       </View>
+
+      {/* Disconnect confirmation — matches Remote's dialog pattern */}
+      {showDisconnectConfirm && (
+        <>
+          <Pressable
+            className="absolute inset-0 z-30 bg-black/30"
+            onPress={() => setShowDisconnectConfirm(false)}
+            accessibilityLabel="Cancel disconnect"
+          />
+          <View className="absolute inset-0 z-40 items-center justify-center px-8">
+            <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5 shadow-xl">
+              <Text className="text-center text-base font-black text-ink">Disconnect now?</Text>
+              <Text className="mt-1 text-center text-xs leading-4 text-muted">
+                The car receives a safe stop (SPD0 · SERVO90) before the link closes.
+              </Text>
+              <View className="mt-4 flex-row justify-center gap-3">
+                <Pressable
+                  onPress={() => setShowDisconnectConfirm(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Keep connection"
+                  hitSlop={8}
+                >
+                  <View className="rounded-full border border-line bg-surface px-6 py-2.5">
+                    <Text className="text-sm font-bold text-ink">Cancel</Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={confirmDisconnect}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect"
+                  hitSlop={8}
+                >
+                  <View className="rounded-full bg-red-600 px-6 py-2.5">
+                    <Text className="text-sm font-black text-white">Disconnect</Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </>
+      )}
     </ScrollView>
   )
 }
