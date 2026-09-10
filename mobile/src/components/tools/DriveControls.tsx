@@ -58,14 +58,14 @@ function DpadCell({ icon, active, enabled }: {
       pointerEvents="none"
       className={`items-center justify-center rounded-xl ${
         active ? 'bg-blue-600 border-2 border-blue-300'
-          : enabled ? 'border-2 border-white/25 bg-white/8'
-            : 'border border-white/10 bg-white/3 opacity-40'
+          : enabled ? 'border-2 border-slate-300 bg-slate-100 dark:border-white/25 dark:bg-white/8'
+            : 'border border-slate-200 bg-slate-50 opacity-40 dark:border-white/10 dark:bg-white/3'
       }`}
       style={{ aspectRatio: 1 }}
     >
       <Feather
         name={icon} size={22}
-        color={active ? '#fff' : enabled ? '#93c5fd' : 'rgba(255,255,255,0.35)'}
+        color={active ? '#fff' : enabled ? '#1e3a8a' : 'rgba(100,116,139,0.6)'}
       />
     </View>
   )
@@ -325,8 +325,9 @@ function DualDpad({
 
 // =====================================================================
 // DualJoystick — two sticks on ONE PanResponder surface.
-// locationX/Y surface-local. Each touch assigned to nearest stick
-// center. Both sticks work together via touch identifiers.
+// locationX/Y surface-local. Touch model: every touch in every move
+// event is resolved to a stick by nearest-center. When a touch leaves
+// a stick's zone, that stick resets. When all touches leave, center.
 // =====================================================================
 function DualJoystick({
   canControl, rightEnabled, onLeft, onRight, fill = false,
@@ -349,9 +350,6 @@ function DualJoystick({
   const onRightRef = useRef(onRight); onRightRef.current = onRight
   const onNavInputRef = useRef(onNavInput); onNavInputRef.current = onNavInput
 
-  const lastLRef = useRef({ x: 0, y: 0 })
-  const lastRRef = useRef(0)
-
   const radius = geo ? Math.min(geo.w * 0.18, geo.h * 0.30, 85) : 0
   const centerOf = (stick: 'L' | 'R') =>
     geo ? { cx: geo.w * (stick === 'L' ? 0.25 : 0.75), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
@@ -371,7 +369,6 @@ function DualJoystick({
       setKnobL({ x: nx, y: ny })
       if (report) {
         const nX = nx / cap, nY = ny / cap
-        lastLRef.current = { x: nX, y: nY }
         if (navActiveRef?.current && onNavInputRef.current) {
           if (Math.abs(nX) >= Math.abs(nY)) { if (Math.abs(nX) > 0.35) onNavInputRef.current('x', nX < 0 ? -1 : 1) }
           else if (Math.abs(nY) > 0.35) onNavInputRef.current('y', nY < 0 ? -1 : 1)
@@ -383,7 +380,6 @@ function DualJoystick({
       setKnobR({ x: nx, y: ny })
       if (report) {
         const nX = nx / cap
-        lastRRef.current = nX
         if (navActiveRef?.current && onNavInputRef.current) {
           if (Math.abs(nX) > 0.35) onNavInputRef.current('x', nX < 0 ? -1 : 1)
           return
@@ -393,46 +389,80 @@ function DualJoystick({
     }
   }, [radius, navActiveRef])
 
-  const grab = useCallback((id: string, x: number, y: number) => {
-    if (!canControlRef.current) return
-    if (touchesRef.current.has(id)) return
-    const stick = resolveStick(x, y)
-    if (stick === 'R' && !rightEnabledRef.current) return
-    touchesRef.current.set(id, { stick })
-  }, [resolveStick])
-
-  const release = useCallback((changed: readonly { identifier: number | string }[]) => {
-    const dropped = new Set<'L' | 'R'>()
-    for (const t of changed) {
-      const ent = touchesRef.current.get(String(t.identifier))
-      if (!ent) continue
-      touchesRef.current.delete(String(t.identifier))
-      dropped.add(ent.stick)
-    }
-    for (const stick of dropped) {
-      let still = false
-      for (const [, v] of touchesRef.current) if (v.stick === stick) { still = true; break }
-      if (!still) applyKnob(stick, 0, 0)
-    }
-  }, [applyKnob])
-
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (evt) => {
-      for (const t of evt.nativeEvent.touches) grab(String(t.identifier), t.locationX, t.locationY)
-    },
-    onPanResponderMove: (evt) => {
       for (const t of evt.nativeEvent.touches) {
-        const ent = touchesRef.current.get(String(t.identifier))
-        if (!ent) continue
-        const center = centerOf(ent.stick)
-        applyKnob(ent.stick, t.locationX - center.cx, t.locationY - center.cy)
+        const id = String(t.identifier)
+        if (touchesRef.current.has(id)) continue
+        const stick = resolveStick(t.locationX, t.locationY)
+        if (stick === 'R' && !rightEnabledRef.current) continue
+        touchesRef.current.set(id, { stick })
       }
     },
-    onPanResponderRelease: (evt) => release(evt.nativeEvent.changedTouches),
-    onPanResponderTerminate: (evt) => release(evt.nativeEvent.changedTouches),
-  }), [geo, radius, grab, applyKnob, release])
+    onPanResponderMove: (evt) => {
+      const prev = new Map(touchesRef.current)
+      const nowActive = new Set<string>()
+
+      for (const t of evt.nativeEvent.touches) {
+        if (!canControlRef.current) continue
+        const id = String(t.identifier)
+        nowActive.add(id)
+        const stick = resolveStick(t.locationX, t.locationY)
+        if (stick === 'R' && !rightEnabledRef.current) continue
+
+        const was = prev.get(id)
+        if (was && was.stick !== stick) {
+          // Touch crossed into the other stick's zone — reset the old stick.
+          if (was.stick === 'L') applyKnob('L', 0, 0, true)
+          else applyKnob('R', 0, 0, true)
+        }
+        touchesRef.current.set(id, { stick })
+
+        const center = centerOf(stick)
+        applyKnob(stick, t.locationX - center.cx, t.locationY - center.cy)
+      }
+
+      // Any touch that disappeared between grant/move — clean up.
+      for (const [id, ent] of prev) {
+        if (!nowActive.has(id)) touchesRef.current.delete(id)
+      }
+
+      // Reset sticks with zero remaining touches.
+      let hasL = false, hasR = false
+      for (const [, v] of touchesRef.current) {
+        if (v.stick === 'L') hasL = true
+        if (v.stick === 'R') hasR = true
+      }
+      if (!hasL) applyKnob('L', 0, 0, true)
+      if (!hasR) applyKnob('R', 0, 0, true)
+    },
+    onPanResponderRelease: (evt) => {
+      for (const t of evt.nativeEvent.changedTouches) {
+        touchesRef.current.delete(String(t.identifier))
+      }
+      let hasL = false, hasR = false
+      for (const [, v] of touchesRef.current) {
+        if (v.stick === 'L') hasL = true
+        if (v.stick === 'R') hasR = true
+      }
+      if (!hasL) applyKnob('L', 0, 0, true)
+      if (!hasR) applyKnob('R', 0, 0, true)
+    },
+    onPanResponderTerminate: (evt) => {
+      for (const t of evt.nativeEvent.changedTouches) {
+        touchesRef.current.delete(String(t.identifier))
+      }
+      let hasL = false, hasR = false
+      for (const [, v] of touchesRef.current) {
+        if (v.stick === 'L') hasL = true
+        if (v.stick === 'R') hasR = true
+      }
+      if (!hasL) applyKnob('L', 0, 0, true)
+      if (!hasR) applyKnob('R', 0, 0, true)
+    },
+  }), [geo, radius, applyKnob, resolveStick, centerOf])
 
   // Hold-resend at 30ms
   useEffect(() => {
@@ -445,11 +475,19 @@ function DualJoystick({
         if (v.stick === 'L') hasL = true
         if (v.stick === 'R') hasR = true
       }
-      if (hasL) onLeftRef.current(lastLRef.current.x, lastLRef.current.y)
-      if (hasR && rightEnabledRef.current) onRightRef.current(lastRRef.current)
+      if (hasL) {
+        const knob = knobL
+        const cap = radius || 1
+        onLeftRef.current(knob.x / cap, knob.y / cap)
+      }
+      if (hasR && rightEnabledRef.current) {
+        const knob = knobR
+        const cap = radius || 1
+        onRightRef.current(knob.x / cap)
+      }
     }, DRIVE_CMD_MIN_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [canControl, navActiveRef])
+  }, [canControl, navActiveRef, radius, knobL, knobR])
 
   const base = radius + 8
   const knobSize = 40
@@ -477,20 +515,20 @@ function DualJoystick({
               <View key={stick}>
                 <View pointerEvents="none" className={dim ? 'opacity-50' : 'opacity-90'}
                   style={{ position: 'absolute', left: c.cx - 30, width: 60, alignItems: 'center', top: Math.max(4, c.cy - radius - 26) }}>
-                  <Text className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-300">{tag}</Text>
+                  <Text className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400 dark:text-slate-300">{tag}</Text>
                 </View>
                 <View pointerEvents="none" className="absolute items-center justify-center rounded-full border-2"
                   style={{
                     left: c.cx - base, top: c.cy - base, width: base * 2, height: base * 2,
-                    borderColor: dim ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.28)',
-                    backgroundColor: dim ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)',
+                    borderColor: dim ? 'rgba(148,163,184,0.25)' : 'rgba(148,163,184,0.45)',
+                    backgroundColor: dim ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.12)',
                     opacity: dim ? 0.45 : 1,
                   }}>
                   <View className="absolute rounded-full border"
-                    style={{ width: radius * 0.92, height: radius * 0.92, borderRadius: radius * 0.46, top: base - guide, left: base - guide, borderColor: 'rgba(255,255,255,0.22)' }} />
-                  <View style={{ position: 'absolute', left: base * 0.15, top: base - 1, width: base * 1.7, height: 1, backgroundColor: 'rgba(255,255,255,0.18)' }} />
-                  <View style={{ position: 'absolute', left: base - 1, top: base * 0.15, width: 1, height: base * 1.7, backgroundColor: 'rgba(255,255,255,0.18)' }} />
-                  <View style={{ position: 'absolute', left: base - 6, top: base - 6, width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(147,197,253,0.9)', backgroundColor: 'rgba(30,58,138,0.35)' }} />
+                    style={{ width: radius * 0.92, height: radius * 0.92, borderRadius: radius * 0.46, top: base - guide, left: base - guide, borderColor: 'rgba(148,163,184,0.35)' }} />
+                  <View style={{ position: 'absolute', left: base * 0.15, top: base - 1, width: base * 1.7, height: 1, backgroundColor: 'rgba(148,163,184,0.30)' }} />
+                  <View style={{ position: 'absolute', left: base - 1, top: base * 0.15, width: 1, height: base * 1.7, backgroundColor: 'rgba(148,163,184,0.30)' }} />
+                  <View style={{ position: 'absolute', left: base - 6, top: base - 6, width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(59,130,246,0.9)', backgroundColor: 'rgba(30,58,138,0.35)' }} />
                 </View>
                 <View pointerEvents="none" className="absolute rounded-full bg-white"
                   style={{
