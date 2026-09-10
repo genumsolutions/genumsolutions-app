@@ -33,7 +33,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
   }
 
   // Cap the list so it never overflows the window below the trigger.
-  const listMaxHeight = anchor ? Math.max(140, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.42)) : height * 0.42
+  const listMaxHeight = anchor ? Math.max(120, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.50)) : height * 0.50
 
   return (
     // R4-3: compact one-row control on the chrome row. The "Mode" label is
@@ -88,7 +88,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
           >
             <ScrollView
               className="rounded-xl border border-white/10 bg-slate-900 shadow-xl"
-              contentContainerStyle={{ padding: 4 }}
+              contentContainerStyle={{ padding: 2 }}
               style={{ maxHeight: listMaxHeight }}
             >
               {catalogue.map((m: CarMode) => {
@@ -107,17 +107,17 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
                     }}
                     disabled={locked}
                     accessibilityRole="button"
-                    className={`mt-1 flex-row items-center justify-between rounded-lg px-3 py-2.5 ${isActive ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+                    className={`mt-0.5 flex-row items-center justify-between rounded-lg px-2 py-1 ${isActive ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
                   >
-                    <View className="min-w-0 flex-1 pr-2">
-                      <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-slate-300'}`} numberOfLines={1}>
+                    <View className="min-w-0 flex-1 pr-1.5">
+                      <Text className={`text-[11px] font-bold ${isActive ? 'text-white' : 'text-slate-300'}`} numberOfLines={1}>
                         {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
                       </Text>
-                      <Text className={`text-xs ${isActive ? 'text-white/70' : 'text-slate-400'}`} numberOfLines={1}>
+                      <Text className={`text-[9px] ${isActive ? 'text-white/70' : 'text-slate-400'}`} numberOfLines={1}>
                         {m.token} · {coming ? 'coming soon' : m.transport.join(' / ')}
                       </Text>
                     </View>
-                    {isActive && <Feather name="check" size={16} color="#fff" />}
+                    {isActive && <Feather name="check" size={12} color="#fff" />}
                   </Pressable>
                 )
               })}
