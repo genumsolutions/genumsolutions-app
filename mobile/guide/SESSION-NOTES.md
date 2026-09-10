@@ -1,55 +1,67 @@
-# Session Notes — Critical UI Fixes (C1–C5)
+# Session Notes — UI Audit Fixes (H1–H7, M1–M10)
 
 ## Date: 2026-09-10
 
 ### What was done
 
-Five critical UI/UX fixes across 3 files, addressing overflow, clarity, and consistency issues in the Control Panel and Remote screens.
+16 visual/UX fixes across 6 files, addressing contrast, readability, consistency, and polish issues found in the full Control Panel + Remote audit.
 
-### C1 — Chrome row horizontal scroll
-**File:** `RemoteControlScreen.tsx`
-- Replaced the chrome row `View` with a `ScrollView horizontal` so narrow landscape devices scroll instead of clipping
-- Removed `ml-auto` from the right-side button group (meaningless in a ScrollView)
-- Buttons flow naturally; on wide screens the layout is unchanged
+### High priority fixes
 
-### C2 — Back button dynamic label
-**File:** `RemoteControlScreen.tsx`
-- Added `backLabel` computed value: `navActive → 'Cancel'`, `linked → 'Exit'`, else `'Back'`
-- Updated button text and `accessibilityLabel` to match
-- User now sees what the button will actually do before pressing it
+| Fix | File | Change |
+|-----|------|--------|
+| **H1** | DriveControls.tsx | D-pad active cell: `bg-navy border-blue-400` → `bg-blue-600 border-blue-300` |
+| **H2** | OledDisplay.tsx | Compact text bumped: `9px→10px`, `10px→11px` for all OLED labels |
+| **H3** | OledDisplay.tsx | Bottom bar: `(driveStatus \|\| '').toUpperCase()` → `(driveStatus \|\| 'READY').toUpperCase()` |
+| **H4** | DriveControls.tsx | PID card headers: all "PID Tuning" → unique "Kp" / "Ki" / "Kd" / "OUT" / "OFF" |
+| **H5** | ToolsScreen.tsx | SPP "Not supported": muted text → amber banner with border |
+| **H6** | ModeChooser.tsx | Cycle button: `bg-navy` → `border-white/15 bg-white/10` (matches trigger weight) |
+| **H7** | ModeChooser.tsx | Dropdown inactive text: `text-white` → `text-slate-300` (active stays white) |
 
-### C3 — Remote connection status indicator
-**File:** `RemoteControlScreen.tsx`
-- Added green dot + device name after the "Remote" label in the chrome row
-- Only shows when `linked` (BT or WiFi connected)
-- Uses `max-w-[80px]` to prevent long device names from pushing other elements
+### Medium priority fixes
 
-### C4 — ToolsScreen disconnect confirmation
-**File:** `ToolsScreen.tsx`
-- Added `showDisconnectConfirm` state and `confirmDisconnect` callback
-- Disconnect button now opens a confirmation dialog (Cancel / Disconnect) matching Remote's pattern
-- Dialog adapted for light theme (`bg-card`, `text-ink` instead of dark theme colors)
-- Prevents accidental disconnects from the Control Panel
+| Fix | File | Change |
+|-----|------|--------|
+| **M1** | ToolsScreen.tsx | WiFi URL TextInput hidden when `wifiConnected` (saves vertical space) |
+| **M2** | ModeChooser.tsx | Trigger max-width: `180px` → `220px` (less truncation on long mode names) |
+| **M3** | RemoteControlScreen.tsx | Settings dropdown `top: 76` → `Math.max(insets.top, 8) + 48` (safe-area aware) |
+| **M4** | RemoteControlScreen.tsx | E-stop FAB: `bottom: 8` → `bottom: 16`, added `zIndex: 10` |
+| **M5** | RemoteControlScreen.tsx | Disconnect modal: "Disconnected. Exit remote?" → "Disconnect and exit?" |
+| **M7** | ProjectInfo.tsx | Default expanded: `useState(true)` → `useState(false)` (connection card above fold) |
+| **M9** | DroneControls.tsx | Added `Vibration.vibrate()` to Take Off (10ms), Land (10ms), Emergency (50ms) |
+| **M10** | DroneControls.tsx | Added "90° center" text below gimbal Pan and Tilt sliders |
 
-### C5 — ModeChooser dropdown overlay fix
-**File:** `ModeChooser.tsx`
-- Removed the full-screen backdrop `Pressable` that blocked all touches
-- Added `pointerEvents="box-none"` to the Modal so touches pass through to elements behind it
-- Trigger now toggles (tap again to close) instead of only opening
-- Dropdown still closes on mode selection and Android back button
+### Skipped
+- **M6** (scroll-to-active in ModeChooser): Only 9 items, always visible
+- **M8** (CAPABILITY_LABELS duplication): Small map, low change frequency
 
 ### Files changed
-- `mobile/src/screens/ToolsScreen.tsx` — C4
-- `mobile/src/screens/RemoteControlScreen.tsx` — C1, C2, C3
-- `mobile/src/components/tools/ModeChooser.tsx` — C5
+- `mobile/src/components/tools/DriveControls.tsx` — H1, H4
+- `mobile/src/components/tools/OledDisplay.tsx` — H2, H3
+- `mobile/src/components/tools/ModeChooser.tsx` — H6, H7, M2
+- `mobile/src/components/tools/ProjectInfo.tsx` — M7
+- `mobile/src/components/tools/DroneControls.tsx` — M9, M10
+- `mobile/src/screens/ToolsScreen.tsx` — H5, M1
+- `mobile/src/screens/RemoteControlScreen.tsx` — M3, M4, M5
+- `mobile/guide/SESSION-NOTES.md` — this file
 
 ### Verification
 - `npx tsc --noEmit` — passed clean
 - `npx expo-doctor` — 18/18 checks passed
 
 ### Device test checklist (owner)
-- [ ] C1: Chrome row scrolls on narrow landscape (test on small phone)
-- [ ] C2: Back button shows "Cancel" in NAV mode, "Exit" when connected, "Back" when unlinked
-- [ ] C3: Green dot + car name visible in chrome row after connecting
-- [ ] C4: Control Panel disconnect shows confirmation dialog before disconnecting
-- [ ] C5: ModeChooser dropdown doesn't block touches on other chrome row elements
+- [ ] H1: D-pad active cell clearly visible (bright blue on dark)
+- [ ] H2: OLED text readable in compact mode (especially AUTO dashboard)
+- [ ] H3: OLED bottom bar shows "READY" when no drive status
+- [ ] H4: PID cards show Kp/Ki/Kd/OUT/OFF as headers
+- [ ] H5: iOS users see amber "Bluetooth SPP not supported" banner
+- [ ] H6: ModeChooser cycle button same visual weight as trigger
+- [ ] H7: Inactive mode names dimmer than active in dropdown
+- [ ] M1: WiFi URL field hides when connected
+- [ ] M2: Long mode names less truncated in trigger
+- [ ] M3: Settings dropdown not overlapping chrome row on notch devices
+- [ ] M4: E-stop FAB not overlapping d-pad cells
+- [ ] M5: Disconnect modal says "Disconnect and exit?" (not "Disconnected")
+- [ ] M7: "About this project" collapsed by default on first load
+- [ ] M9: Drone buttons vibrate on press
+- [ ] M10: Gimbal sliders show "90° center" reference

@@ -93,7 +93,7 @@ export function OledDisplay({
         >
           <Text
             numberOfLines={1}
-            className={mono(`font-bold ${compact ? 'text-[10px]' : 'text-xs'} ${hl('mode') ? 'text-slate-900' : 'text-emerald-300'}`)}
+            className={mono(`font-bold ${compact ? 'text-[11px]' : 'text-xs'} ${hl('mode') ? 'text-slate-900' : 'text-emerald-300'}`)}
           >
             {shownName}
           </Text>
@@ -105,10 +105,10 @@ export function OledDisplay({
           className="flex-row items-center"
           style={hl('speed') || hl('steer') ? { backgroundColor: '#e2e8f0', borderRadius: 2, paddingHorizontal: 3 } : undefined}
         >
-          <Text className={mono(`text-[9px] uppercase ${compact ? '' : 'text-[10px]'} ${hl('speed') || hl('steer') ? 'text-slate-900' : 'text-slate-400'}`)}>
+          <Text className={mono(`text-[10px] uppercase ${compact ? '' : 'text-[10px]'} ${hl('speed') || hl('steer') ? 'text-slate-900' : 'text-slate-400'}`)}>
             {rightLabel}
           </Text>
-          <Text className={mono(`${compact ? 'text-[10px]' : 'text-xs'} font-bold ${hl('speed') || hl('steer') ? 'text-slate-900' : 'text-emerald-300'}`)}>
+          <Text className={mono(`${compact ? 'text-[11px]' : 'text-xs'} font-bold ${hl('speed') || hl('steer') ? 'text-slate-900' : 'text-emerald-300'}`)}>
             {' '}{rightFieldValue}
           </Text>
         </View>
@@ -144,22 +144,22 @@ export function OledDisplay({
             </View>
             {/* Row 2: P & D evenly spaced */}
             <View className={`w-full flex-row justify-between ${compact ? 'px-1' : 'px-2'}`}>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[9px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
                 P:{telemetry.kp != null ? telemetry.kp.toFixed(2) : pidKpLocal()}
               </Text>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[9px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
                 D:{telemetry.kd != null ? telemetry.kd.toFixed(3) : pidKdLocal()}
               </Text>
             </View>
             {/* Row 3: OUT, I, OFF evenly spaced */}
             <View className={`w-full flex-row justify-between ${compact ? 'px-1' : 'px-2'}`}>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[9px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
                 OUT:{telemetry.out != null ? telemetry.out.toFixed(0) : pidOutLocal()}
               </Text>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[9px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
                 I:{telemetry.ki != null ? telemetry.ki.toFixed(3) : pidKiLocal()}
               </Text>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[9px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
                 OFF:{telemetry.off != null ? telemetry.off.toFixed(1) : pidOffLocal()}
               </Text>
             </View>
@@ -171,9 +171,9 @@ export function OledDisplay({
       <View className={`items-center rounded-sm bg-slate-200 ${compact ? 'py-0.5' : 'py-1'}`}>
         <Text
           numberOfLines={1}
-          className={mono(`font-bold text-slate-900 ${compact ? 'text-[9px]' : 'text-xs'}`)}
+          className={mono(`font-bold text-slate-900 ${compact ? 'text-[10px]' : 'text-xs'}`)}
         >
-          {compact ? (driveStatus || '').toUpperCase() : `${linkLabel} · ${bottomStatus}`}
+          {compact ? (driveStatus || 'READY').toUpperCase() : `${linkLabel} · ${bottomStatus}`}
         </Text>
       </View>
     </View>

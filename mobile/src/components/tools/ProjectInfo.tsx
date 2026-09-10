@@ -33,7 +33,7 @@ const CAPABILITY_LABELS: Record<string, string> = {
 }
 
 export function ProjectInfo({ mode, categorySlug }: { mode: CarMode; categorySlug: string }) {
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const category = getProjectCategory(categorySlug)
   const isRobocar = categorySlug === 'robocar'
 

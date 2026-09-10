@@ -262,7 +262,9 @@ export function ToolsScreen() {
                 Scan and connect to your {category.name.toLowerCase()} hardware. Pairs like the hand-held remote. PIN: 1234.
               </Text>
               {!sppSupported && (
-                <Text className="mt-2 text-[11px] font-bold italic text-muted">Not supported on this platform.</Text>
+                <View className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                  <Text className="text-xs font-bold text-amber-700">Bluetooth SPP not supported on this platform.</Text>
+                </View>
               )}
               <View className={sppSupported ? '' : 'opacity-40'} pointerEvents={sppSupported ? 'auto' : 'none'}>
                 {!connected && !wifiConnected && (
@@ -331,14 +333,16 @@ export function ToolsScreen() {
               <Text className="text-xs leading-5 text-muted">
                 Connect to a WiFi-enabled car via WebSocket. Enter the car's URL.
               </Text>
-              <TextInput
-                value={wifiUrl}
-                onChangeText={setWifiUrl}
-                editable={!connected && !wifiConnected}
-                placeholder="ws://192.168.4.1:81"
-                autoCapitalize="none"
-                className="mt-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-              />
+              {!wifiConnected && (
+                <TextInput
+                  value={wifiUrl}
+                  onChangeText={setWifiUrl}
+                  editable={!connected && !wifiConnected}
+                  placeholder="ws://192.168.4.1:81"
+                  autoCapitalize="none"
+                  className="mt-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+              )}
               <Pressable
                 onPress={wifiConnected ? handleWifiDisconnect : handleWifiConnect}
                 disabled={connecting}

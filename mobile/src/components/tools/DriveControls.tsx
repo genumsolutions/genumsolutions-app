@@ -461,7 +461,7 @@ function DpadCell({ icon, active, enabled, compact, position }: {
     <View
       pointerEvents="none"
       className={`h-full items-center justify-center ${radiusClass} ${
-        active ? 'bg-navy border-2 border-blue-400'
+        active ? 'bg-blue-600 border-2 border-blue-300'
           : enabled ? 'border-2 border-white/25 bg-white/8'
             : 'border border-white/10 bg-white/3 opacity-40'
       }`}
@@ -961,29 +961,29 @@ export function DriveControls({
       {showPid && !compact && (
         <View className="mt-4 flex-row flex-wrap gap-3">
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">Kp</Text>
             <Slider value={pidKp} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-sm text-navy">Kp {pidKp.toFixed(1)}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">{pidKp.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">Ki</Text>
             <Slider value={pidKi} minimumValue={0} maximumValue={20} step={0.1} onValueChange={(v: number) => onPid('ki', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-sm text-navy">Ki {pidKi.toFixed(1)}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">{pidKi.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">Kd</Text>
             <Slider value={pidKd} minimumValue={0} maximumValue={20} step={0.1} onValueChange={(v: number) => onPid('kd', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-sm text-navy">Kd {pidKd.toFixed(1)}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">{pidKd.toFixed(1)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">OUT</Text>
             <Slider value={pidOut} minimumValue={0} maximumValue={255} step={1} onValueChange={(v: number) => onPid('out', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-sm text-navy">OUT {pidOut}</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">{pidOut}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">PID Tuning</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-border">OFF</Text>
             <Slider value={pidOff} minimumValue={-5} maximumValue={5} step={0.05} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-sm text-navy">OFF {pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°</Text>
+            <Text className="mt-1 text-right font-mono text-sm text-navy">{pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°</Text>
           </View>
         </View>
       )}
