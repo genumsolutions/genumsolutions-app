@@ -1,21 +1,47 @@
-# Rebuild Failsafe — Remote Screen Incremental Rebuild
+# Rebuild Failsafe — Remote Screen Rebuild (Completed)
 
 ## Date: 2026-09-10
 
-## Purpose
-If the rebuild goes wrong, these notes help revert or recover.
+## Branch Policy
+- **`backup`** — Dedicated backup branch. Frozen at round 2 baseline (`a23ec3b`). Used for full revert only.
+- **`main`** — Testing branch. All rebuild work lands here first.
+- **`dev`** — Development branch. **NOT a backup branch.** Do not use for backup or revert.
 
-## Pre-rebuild state
-- **Latest commit on main:** `1738521` (16 audit fixes)
-- **All 21 fixes from this session are in main:** joystick reversal, d-pad hold-resend, mode sync, C1-C5 critical fixes, H1-H7 + M1-M10 audit fixes
+## Revert procedure (full)
+If the entire rebuild needs to be discarded:
+```bash
+cd "E:\GENUM SOLUTIONS PVT LTD\Project\genumsolutions-app\mobile"
+git checkout main
+git reset --hard backup    # reset main to the pre-rebuild backup state
+git push origin main --force
+```
+
+## Revert procedure (partial — specific files)
+```bash
+# Restore files from the backup branch
+git checkout backup -- src/screens/RemoteControlScreen.tsx
+git checkout backup -- src/components/tools/DriveControls.tsx
+```
+
+## Revert procedure (single commit)
+```bash
+git revert HEAD           # revert the last commit
+```
+
+## Rebuild state
+- **Phase 1 complete:** RemoteControlScreen rebuilt (685→300 lines) — commit `fd8ab87`
+- **Phase 2 complete:** DriveControls rebuilt (1034→699 lines) — commit `94e5e41`
+- **Phase 3 complete:** OLED + mode sync verified
+- **Phase 4 complete:** Polish verified, all fixes intact
+- **D-pad fix:** Standard 3×3 cross grid layout — commit `999ad93`
 - **Typecheck passes, expo-doctor 18/18**
 
-## Files being rebuilt (and ONLY these)
-1. `mobile/src/screens/RemoteControlScreen.tsx` — currently 685 lines, rebuilding to ~250
-2. `mobile/src/components/tools/DriveControls.tsx` — currently 1034 lines, rebuilding to ~600
+## Files rebuilt
+1. `mobile/src/screens/RemoteControlScreen.tsx` — chrome row, gamepad layout, disconnect dialog
+2. `mobile/src/components/tools/DriveControls.tsx` — DualJoystick + DualDpad, standard cross layout
 
-## Files NOT being touched (keep safe)
-- `useControlHub.ts` (782 lines) — connection/mode/speed/servo/NAV logic
+## Files NOT touched
+- `useControlHub.ts` — connection/mode/speed/servo/NAV logic
 - `carProtocol.ts` — wire protocol helpers
 - `types.ts` — shared type definitions
 - `roboCarCatalog.ts` — mode definitions
@@ -25,44 +51,27 @@ If the rebuild goes wrong, these notes help revert or recover.
 - `SensorGrid.tsx` — sensor tiles
 - `DroneControls.tsx` — drone controls
 - `ProjectInfo.tsx` — about card
-- `ToolsScreen.tsx` — Control Panel (unchanged)
+- `ToolsScreen.tsx` — Control Panel
 - `sppService.ts` — SPP transport
-- `carModeService.ts` — mode catalogue fetch
-
-## Revert procedure
-If rebuild breaks and needs revert:
-```bash
-cd "E:\GENUM SOLUTIONS PVT LTD\Project\genumsolutions-app\mobile"
-git log --oneline -5   # find last good commit
-git revert HEAD        # revert last commit
-# or for specific file:
-git checkout 1738521 -- src/screens/RemoteControlScreen.tsx
-git checkout 1738521 -- src/components/tools/DriveControls.tsx
-```
-
-## Phase plan
-1. **Phase 1:** RemoteControlScreen shell (chrome row + layout skeleton)
-   - Commit: `fix(remote,rebuild): phase 1 — clean chrome row + standard gamepad layout`
-   - OTA: push immediately after typecheck passes
-2. **Phase 2:** DriveControls rebuild (joystick + d-pad touch handling)
-   - Commit: `fix(remote,rebuild): phase 2 — clean dual joystick + dual d-pad`
-   - OTA: push immediately after typecheck passes
-3. **Phase 3:** OLED + mode sync verification
-   - Commit: `fix(remote,rebuild): phase 3 — OLED placement + mode sync verify`
-4. **Phase 4:** Polish
-   - Commit: `fix(remote,rebuild): phase 4 — settings, disconnect, E-stop polish`
 
 ## Key design decisions
-- Chrome row: NO horizontal ScrollView (caused layout shift). Use flex-row with flexWrap or truncation.
-- OLED: stays as `oledSlot` prop passed into DriveControls, rendered centered between joysticks/pads
+- Chrome row: NO horizontal ScrollView (caused layout shift)
+- OLED: `oledSlot` prop passed into DriveControls, centered between joysticks/pads
 - DualJoystick: one PanResponder surface, sticks at 25%/75% width, OLED at 50%
-- DualDpad: one PanResponder surface, left pad F/B/L/R/C + right pad L/R/C
-- Touch model: locationX/locationY (surface-local, no window math)
+- DualDpad: standard 3×3 cross grid (56px cells), all 5 cells always visible
+- Touch model: locationX/Y surface-local, no window math
 - Hold-resend: 30ms interval, only resend for sticks/pads with active touches
 - NAV: routed through same PanResponder surface via navActiveRef
 - E-stop: absolute positioned FAB, bottom-right, z-10
 
-## What to verify after each phase
-- Typecheck: `npx tsc --noEmit`
-- Expo doctor: `npx expo-doctor`
-- Device test: connect to car, verify joystick/d-pad sends commands, mode sync works
+## Device test checklist
+- [ ] Joystick: left stick drives, right stick steers (2WD1M)
+- [ ] D-pad: all 5 cells visible, correct cross shape, correct icons
+- [ ] D-pad: left pad F/B, right pad L/R, center cells stop
+- [ ] Both sticks/pads work simultaneously
+- [ ] Mode from car button reflects in app immediately
+- [ ] OLED shows mode | speed/steer, body direction, status bar
+- [ ] Chrome row: Back/Select/Mode/Speed all functional
+- [ ] E-stop: stops car immediately
+- [ ] Settings: steer limit + trim adjust correctly
+- [ ] Disconnect: confirmation dialog, safe stop sent
