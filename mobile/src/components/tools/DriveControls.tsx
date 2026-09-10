@@ -123,7 +123,7 @@ function enabledZones(is2wd1m: boolean): { L: PadZone[]; R: PadZone[] } {
 // =====================================================================
 function DualDpad({
   canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits, onHaptic, compact = false,
-  navActiveRef, onNavInput,
+  navActiveRef, onNavInput, oledSlot,
 }: {
   canControl: boolean
   speed: number
@@ -137,6 +137,7 @@ function DualDpad({
   compact?: boolean
   navActiveRef?: { current: boolean }
   onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
+  oledSlot?: React.ReactNode
 }) {
   // Surface size in ITS OWN space (onLayout) — the same space locationX/Y
   // are reported in. No window/page coordinates anywhere.
@@ -157,6 +158,11 @@ function DualDpad({
   limitsRef.current = limits
   const onNavInputRef = useRef(onNavInput)
   onNavInputRef.current = onNavInput
+
+  // Cached drive/servo values for hold-resend: when only one pad is held,
+  // the other pad's last command is preserved instead of being zeroed.
+  const lastDriveRef = useRef(0)
+  const lastServoRef = useRef(limits.servoCenter)
 
   // Track touches by identifier; the pad+zone each finger is currently in.
   const touchesRef = useRef(new Map<string, { pad: PadId; zone: PadZone }>())
@@ -228,9 +234,12 @@ function DualDpad({
           : limitsRef.current.servoCenter - s.steerLimit
       // Stream through the same clamped path the joysticks use.
       const sd = clampSignedDrive(spd, limitsRef.current)
+      // Cache both values — hold-resend uses these when only one pad is active.
+      lastDriveRef.current = sd
+      lastServoRef.current = clampServo(servo, limitsRef.current)
       if (onSignedDriveRef.current) onSignedDriveRef.current(sd)
       else sendDirRef.current(sd > 0 ? 'F' : sd < 0 ? 'B' : 'S')
-      onServoRef.current(clampServo(servo, limitsRef.current))
+      onServoRef.current(lastServoRef.current)
     } else {
       const d: 'F' | 'B' | 'L' | 'R' | 'S' =
         has(lZones, 'C') ? 'S'
@@ -310,10 +319,35 @@ function DualDpad({
   // Hold-resend cadence (ESP-remote parity, DRIVE_RESEND_MS = 30): while any
   // functional cell is held, keep re-emitting the CURRENT command so a dropped
   // BT/WiFi line self-heals — exactly like the physical remote's loop.
+  // In 2WD1M, when only one pad is held the OTHER pad's last command is
+  // preserved (cached) instead of being zeroed — so holding the steer pad
+  // alone doesn't kill the drive motor.
   const anyActive = Object.keys(activeCells).length > 0
   useEffect(() => {
     if (!canControl || !anyActive) return
-    const id = setInterval(() => emit(touchesRef.current), DRIVE_CMD_MIN_INTERVAL_MS)
+    const id = setInterval(() => {
+      if (stRef.current.is2wd1m) {
+        // Check which pads have active touches — only resend for active
+        // pads; the cached value for the other pad is preserved.
+        let hasLeft = false
+        let hasRight = false
+        for (const [, cell] of touchesRef.current) {
+          if (cell.pad === 'L') hasLeft = true
+          if (cell.pad === 'R') hasRight = true
+        }
+        if (hasLeft) {
+          // Re-emit drive from cached value (already correct from last emit)
+          if (onSignedDriveRef.current) onSignedDriveRef.current(lastDriveRef.current)
+          else sendDirRef.current(lastDriveRef.current > 0 ? 'F' : lastDriveRef.current < 0 ? 'B' : 'S')
+        }
+        if (hasRight) {
+          // Re-emit servo from cached value
+          onServoRef.current(lastServoRef.current)
+        }
+      } else {
+        emit(touchesRef.current)
+      }
+    }, DRIVE_CMD_MIN_INTERVAL_MS)
     return () => clearInterval(id)
   }, [canControl, anyActive, emit])
 
@@ -330,20 +364,35 @@ function DualDpad({
   const en = enabledZones(is2wd1m)
 
   const padView = (pad: PadId) => (
-    <View className="min-h-0 flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-1 py-2">
-      <View className="flex h-full w-full max-w-[180px] flex-col gap-1.5">
-        <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} compact={compact} />
-        <View className="min-h-0 flex-1 flex-row gap-1.5">
-          <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} compact={compact} />
-          <DpadCell
-            icon={pad === 'L' ? 'stop-circle' : 'circle'}
-            active={cellActive(pad, 'C')}
-            enabled={en[pad].includes('C')}
-            compact={compact}
-          />
-          <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} compact={compact} />
+    <View className="min-h-0 flex-1 items-center justify-center">
+      {/* Standard cross d-pad: Up · [Left · Center · Right] · Down */}
+      <View className="h-full w-full max-w-[180px] items-center justify-center">
+        {/* Up */}
+        <View className="w-[55%]">
+          <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} compact={compact} position="top" />
         </View>
-        <DpadCell icon={PAD_ICONS.B} active={cellActive(pad, 'B')} enabled={en[pad].includes('B')} compact={compact} />
+        {/* Middle row: Left · Center · Right */}
+        <View className="flex w-full flex-row">
+          <View className="flex-1">
+            <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} compact={compact} position="left" />
+          </View>
+          <View className="flex-1">
+            <DpadCell
+              icon={pad === 'L' ? 'stop-circle' : 'circle'}
+              active={cellActive(pad, 'C')}
+              enabled={en[pad].includes('C')}
+              compact={compact}
+              position="center"
+            />
+          </View>
+          <View className="flex-1">
+            <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} compact={compact} position="right" />
+          </View>
+        </View>
+        {/* Down */}
+        <View className="w-[55%]">
+          <DpadCell icon={PAD_ICONS.B} active={cellActive(pad, 'B')} enabled={en[pad].includes('B')} compact={compact} position="bottom" />
+        </View>
       </View>
     </View>
   )
@@ -359,38 +408,63 @@ function DualDpad({
           setSurf((s) => (s && s.w === width && s.h === height ? s : { w: width || 1, h: height || 1 }))
         }}
         {...panResponder.panHandlers}
-        className="min-h-0 flex-1 flex-row items-stretch gap-1"
+        className="relative min-h-0 flex-1 flex-row items-stretch gap-1"
       >
         {padView('L')}
+        {/* OLED centered between the two pads — always visible. */}
+        {oledSlot && (
+          <View
+            pointerEvents="none"
+            className="absolute items-center justify-center"
+            style={{
+              left: '50%',
+              top: '50%',
+              transform: [{ translateX: -64 }, { translateY: -32 }],
+              width: 128,
+              height: 64,
+            }}
+          >
+            {oledSlot}
+          </View>
+        )}
         {padView('R')}
       </View>
     </View>
   )
 }
 
-/** One cell of a complete d-pad. All cells share the SAME styling and the
-    SAME flex growth (uniform size); the center is stop-ish and
-    non-functional buttons stay visible but dimmed. Cells are VISUAL ONLY —
-    touches are zone-mapped by the parent surface. */
-function DpadCell({ icon, active, enabled, compact }: {
+/** One cell of a standard cross d-pad. Each cell has different corner
+    radius to form the cross shape: corners are rounded, inner edges are
+    flat. Touches are zone-mapped by the parent surface (pointer-events="none"). */
+function DpadCell({ icon, active, enabled, compact, position }: {
   icon: IconName
   active: boolean
   enabled: boolean
   compact?: boolean
+  position: 'top' | 'left' | 'center' | 'right' | 'bottom'
 }) {
+  // Standard cross: inner corners flat, outer corners rounded
+  const radiusClass = position === 'top' ? 'rounded-t-xl'
+    : position === 'bottom' ? 'rounded-b-xl'
+    : position === 'left' ? 'rounded-l-xl'
+    : position === 'right' ? 'rounded-r-xl'
+    : position === 'center' ? 'rounded-xl'
+    : 'rounded-xl'
+
   return (
     <View
       pointerEvents="none"
-      className={`min-h-0 flex-1 items-center justify-center rounded-xl ${
-        active ? 'bg-navy'
-          : enabled ? (compact ? 'border border-emerald-400/60' : 'border border-navy')
-            : 'border border-white/10 opacity-50'
+      className={`${compact ? 'h-14' : 'h-16'} items-center justify-center ${radiusClass} ${
+        active ? 'bg-navy border-2 border-navy-light'
+          : enabled ? 'border-2 border-white/25 bg-white/8'
+            : 'border border-white/10 bg-white/3 opacity-40'
       }`}
+      style={{ aspectRatio: position === 'center' ? 1 : undefined, flex: position === 'center' ? 1 : undefined }}
     >
       <Feather
         name={icon}
-        size={compact ? 24 : 28}
-        color={active ? '#fff' : enabled ? (compact ? '#34d399' : '#1e3a8a') : 'rgba(255,255,255,0.5)'}
+        size={compact ? 22 : 26}
+        color={active ? '#fff' : enabled ? (compact ? '#34d399' : '#93c5fd') : 'rgba(255,255,255,0.35)'}
       />
     </View>
   )
@@ -443,7 +517,7 @@ function DualJoystick({
   const lastLRef = useRef({ x: 0, y: 0 })
   const lastRRef = useRef(0)
 
-  const radius = geo ? Math.min(geo.w * 0.22, geo.h * 0.35, 100) : 0
+  const radius = geo ? Math.min(geo.w * 0.18, geo.h * 0.30, 85) : 0
   const centerOf = (stick: 'L' | 'R') =>
     geo ? { cx: geo.w * (stick === 'L' ? 0.23 : 0.77), cy: geo.h * 0.5 } : { cx: 0, cy: 0 }
 
@@ -553,8 +627,8 @@ function DualJoystick({
     return () => clearInterval(id)
   }, [canControl, navActiveRef])
 
-  const base = radius + 10
-  const knobSize = 46
+  const base = radius + 8
+  const knobSize = 40
 
   return (
     <View
@@ -580,10 +654,10 @@ function DualJoystick({
                 {/* Pad tag — floats above each stick zone */}
                 <View
                   pointerEvents="none"
-                  className={dim ? 'opacity-50' : 'opacity-80'}
+                  className={dim ? 'opacity-50' : 'opacity-90'}
                   style={{ position: 'absolute', left: c.cx - 30, width: 60, alignItems: 'center', top: Math.max(4, c.cy - radius - 26) }}
                 >
-                  <Text className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">{tag}</Text>
+                  <Text className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-300">{tag}</Text>
                 </View>
                 {/* Outer base ring */}
                 <View
@@ -594,8 +668,8 @@ function DualJoystick({
                     top: c.cy - base,
                     width: base * 2,
                     height: base * 2,
-                    borderColor: dim ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.15)',
-                    backgroundColor: dim ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)',
+                    borderColor: dim ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.28)',
+                    backgroundColor: dim ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)',
                     opacity: dim ? 0.45 : 1,
                   }}
                 >
@@ -608,7 +682,7 @@ function DualJoystick({
                       borderRadius: radius * 0.46,
                       top: base - guide,
                       left: base - guide,
-                      borderColor: 'rgba(255,255,255,0.14)',
+                      borderColor: 'rgba(255,255,255,0.22)',
                     }}
                   />
                   {/* Crosshair */}
@@ -619,7 +693,7 @@ function DualJoystick({
                       top: base - 1,
                       width: base * 1.7,
                       height: 1,
-                      backgroundColor: 'rgba(255,255,255,0.12)',
+                      backgroundColor: 'rgba(255,255,255,0.18)',
                     }}
                   />
                   <View
@@ -629,21 +703,21 @@ function DualJoystick({
                       top: base * 0.15,
                       width: 1,
                       height: base * 1.7,
-                      backgroundColor: 'rgba(255,255,255,0.12)',
+                      backgroundColor: 'rgba(255,255,255,0.18)',
                     }}
                   />
                   {/* Center reticule */}
                   <View
                     style={{
                       position: 'absolute',
-                      left: base - 7,
-                      top: base - 7,
-                      width: 14,
-                      height: 14,
-                      borderRadius: 7,
+                      left: base - 6,
+                      top: base - 6,
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
                       borderWidth: 1,
-                      borderColor: 'rgba(30,58,138,0.85)',
-                      backgroundColor: 'rgba(30,58,138,0.22)',
+                      borderColor: 'rgba(147,197,253,0.9)',
+                      backgroundColor: 'rgba(30,58,138,0.35)',
                     }}
                   />
                 </View>
@@ -657,16 +731,16 @@ function DualJoystick({
                     width: knobSize,
                     height: knobSize,
                     borderWidth: 2,
-                    borderColor: enabled ? '#1e3a8a' : 'rgba(100,116,139,0.9)',
+                    borderColor: enabled ? '#3b82f6' : 'rgba(100,116,139,0.9)',
                     opacity: dim ? 0.55 : 1,
                     shadowColor: '#0f172a',
                     shadowOffset: { width: 0, height: 3 },
-                    shadowOpacity: 0.35,
-                    shadowRadius: 6,
-                    elevation: 6,
+                    shadowOpacity: 0.4,
+                    shadowRadius: 8,
+                    elevation: 8,
                   }}
                 >
-                  <View className="absolute left-1/2 top-1/2 h-3 w-3 -ml-1.5 -mt-1.5 rounded-full bg-navy shadow-sm" />
+                  <View className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -ml-1.25 -mt-1.25 rounded-full bg-navy shadow-sm" />
                 </View>
               </View>
             )
@@ -827,6 +901,7 @@ export function DriveControls({
             compact={compact}
             navActiveRef={navActiveRef}
             onNavInput={onNavInput}
+            oledSlot={oledSlot}
           />
 
           {!compact && (
