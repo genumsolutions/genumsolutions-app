@@ -50,7 +50,8 @@
     "@types/react": "~19.1.10",
     "autoprefixer": "^10.5.4",
     "postcss": "^8.5.26",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.11"
   },
   "scripts": {
     "start": "expo start",
@@ -59,7 +60,9 @@
     "doctor": "npx expo-doctor",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive"
+    "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "private": true,
   "expo": {

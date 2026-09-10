@@ -13,7 +13,6 @@
 // enabled so the in-memory session refreshes while the app is running.
 // =====================================================================
 import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // EXPO_PUBLIC_* vars are inlined by Metro at build time (add them to
 // mobile/.env.local). SUPABASE_URL is kept as a fallback for existing setups.
@@ -40,8 +39,11 @@ export const supabase = createClient(
   anonKey || 'placeholder-key',
   {
     auth: {
-      persistSession: true,
-      storage: AsyncStorage,
+      // Tokens are NEVER written to AsyncStorage (unencrypted). The only
+      // persistence is SecureStore via authService.persistSession(), and
+      // AppContext restores from it on launch — so sign-in still survives
+      // an OS restart without a plaintext copy of the tokens on disk.
+      persistSession: false,
       autoRefreshToken: true,
       detectSessionInUrl: false,
       flowType: 'pkce',
