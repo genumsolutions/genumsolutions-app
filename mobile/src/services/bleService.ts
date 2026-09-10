@@ -71,6 +71,7 @@ class BleService {
   private telemetryCallbacks: Set<TelemetryCallback> = new Set()
   private statusCallbacks: Set<StatusCallback> = new Set()
   private monitoring: boolean = false
+  private lineBuffer: string = ''
 
   /** Lazily initialize BleManager on first use (prevents crash on import). */
   private getManager(): BleManager {
@@ -231,10 +232,13 @@ class BleService {
             return
           }
           if (characteristic?.value) {
-            const text = characteristic.value
-            const lines = text.split('\n').filter(Boolean)
-            for (const line of lines) {
-              const telemetry = this.parseTelemetryLine(line)
+            this.lineBuffer += characteristic.value
+            const parts = this.lineBuffer.split('\n')
+            this.lineBuffer = parts.pop() ?? ''
+            for (const line of parts) {
+              const trimmed = line.replace(/\r/g, '').trim()
+              if (!trimmed) continue
+              const telemetry = this.parseTelemetryLine(trimmed)
               if (Object.keys(telemetry).length > 0) {
                 this.emitTelemetry(telemetry)
               }
@@ -262,6 +266,7 @@ class BleService {
     this.txCharacteristic = null
     this.rxCharacteristic = null
     this.monitoring = false
+    this.lineBuffer = ''
     this.emitStatus('disconnected')
   }
 

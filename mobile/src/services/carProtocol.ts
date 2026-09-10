@@ -146,9 +146,9 @@ export function buildCalibration(p: { kp: number; ki: number; kd: number; out: n
  * Parse one GENUM telemetry line into a partial CarTelemetry. Returns an
  * empty object when the line carries no telemetry (so callers can skip it).
  * Handles:
- *   STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
+ *   STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward  (keys use '=' or ':')
  *   TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
- *   SPD<value> / SPD:<value>
+ *   SPD<value> / SPD:<value> / SPD=<value>
  */
 export function parseTelemetryLine(line: string): CarTelemetry {
   const l = line.trim()
@@ -157,18 +157,22 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   const telemetry: CarTelemetry = {}
 
   // STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
+  // Car firmware uses '=' as key-value separator (e.g. MODE=2WD1M),
+  // while older remote firmware uses ':'.  Split on ';' only and find
+  // the first '=' or ':' within each token — mirrors the ESP32 remote's
+  // C parser (comms.cpp: strtok_r + strchr('=' / ':')).
   if (up.startsWith('STATE')) {
-    const body = l.split(/[;:]/)
-    let i = 1
-    while (i < body.length) {
-      const key = body[i]?.toUpperCase()
-      const val = body[i + 1]
-      if (!key || val === undefined) { i += 1; continue }
+    const body = l.split(';')
+    for (let i = 1; i < body.length; i++) {
+      const eqIdx = body[i].indexOf('=')
+      const sep = eqIdx >= 0 ? eqIdx : body[i].indexOf(':')
+      if (sep < 0) continue
+      const key = body[i].slice(0, sep).toUpperCase()
+      const val = body[i].slice(sep + 1).trim()
       if (key === 'MODE') telemetry.mode = val
       else if (key === 'SPD') telemetry.speed = Number(val) || 0
       else if (key === 'TRIM') telemetry.trim = Number(val) || 0
       else if (key === 'STATUS') telemetry.status = val
-      i += 2
     }
     return telemetry
   }
@@ -177,7 +181,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   if (up.startsWith('TEL')) {
     const body = l.replace(/^TEL[:;]/i, '')
     for (const part of body.split(';')) {
-      const m = /^([A-Za-z]+):(.+)$/.exec(part.trim())
+      const m = /^([A-Za-z]+)[:=](.+)$/.exec(part.trim())
       if (!m) continue
       const key = m[1]!.toUpperCase()
       const num = Number(m[2]) || 0
@@ -191,9 +195,9 @@ export function parseTelemetryLine(line: string): CarTelemetry {
     return telemetry
   }
 
-  // SPD<value> or SPD:<value> — positive echo only (SPD0 = stop echo)
-  if (/^SPD[:]?-?[\d]+$/i.test(l)) {
-    const num = Number(l.replace(/^SPD[:]?/i, '')) || 0
+  // SPD<value> or SPD:<value> or SPD=<value> — positive echo only (SPD0 = stop echo)
+  if (/^SPD[:=]?-?[\d]+$/i.test(l)) {
+    const num = Number(l.replace(/^SPD[:=]?/i, '')) || 0
     if (num > 0) telemetry.speed = num
   }
 

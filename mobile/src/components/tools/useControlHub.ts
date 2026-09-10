@@ -357,7 +357,25 @@ export function useControlHub(routeCategory?: string) {
           break
       }
     })
-    return () => { offSpp(); offBle(); offStatus() }
+    // BLE status — mirrors SPP connected/disconnected handling so BLE-only
+    // links trigger REQ_STATE and set connected=true.
+    const offBleStatus = bleService.onStatus((kind, message) => {
+      if (!mountedRef.current) return
+      if (kind === 'connected') {
+        setConnected(true)
+        setDeviceName(bleService.deviceName ?? 'Car')
+        setTimeout(() => {
+          bleService.requestState().catch(() => {})
+        }, 200)
+      } else if (kind === 'disconnected') {
+        // Only clear connected if SPP is also not linked.
+        if (!sppService.isConnected) {
+          setConnected(false)
+          setDeviceName('')
+        }
+      }
+    })
+    return () => { offSpp(); offBle(); offStatus(); offBleStatus() }
     // NOTE: deps are intentionally empty — activeMode is read via
     // carModesRef (fresh on every telemetry frame) and setActiveMode is a
     // stable setState.  The old [activeMode] dependency tore down and
@@ -484,27 +502,38 @@ export function useControlHub(routeCategory?: string) {
     }
     socket.onmessage = (event) => {
       try {
-        // Try JSON first (WiFi car status broadcast).
+        // Try JSON first (WiFi car e.g. WebServerComm broadcasts a JSON object).
         const json = JSON.parse(event.data)
-        if (json.mode || json.status || json.speed != null) {
-          const t = parseTelemetryLine(event.data)
-          if (Object.keys(t).length > 0) {
-            setTelemetry((prev) => ({ ...prev, ...t }))
-            if (t.mode) {
-              const modeUp = t.mode.toUpperCase()
-              const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
-              if (matched) setActiveMode(matched)
-            }
-            if (!navActiveRef.current && t.speed != null) {
-              const mag = Math.abs(t.speed)
-              if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
-            }
-            if (t.trim != null) setTrim(t.trim)
-            if (t.status && isAllowedDriveStatus(t.status)) {
-              setDriveStatus(t.status)
-              const d = statusToDirection(t.status)
-              if (d) setDriveDir(d)
-            }
+        // Build telemetry directly from the JSON fields — parseTelemetryLine
+        // expects STATE;key=val lines and would fail on a JSON string.
+        const t: CarTelemetry = {}
+        if (typeof json.mode === 'string') t.mode = json.mode
+        if (typeof json.speed === 'number') t.speed = json.speed
+        if (typeof json.trim === 'number') t.trim = json.trim
+        if (typeof json.status === 'string') t.status = json.status
+        if (typeof json.kp === 'number') t.kp = json.kp
+        if (typeof json.ki === 'number') t.ki = json.ki
+        if (typeof json.kd === 'number') t.kd = json.kd
+        if (typeof json.out === 'number') t.out = json.out
+        if (typeof json.off === 'number') t.off = json.off
+        if (typeof json.angle === 'number') t.angle = json.angle
+        if (Object.keys(t).length > 0) {
+          setTelemetry((prev) => ({ ...prev, ...t }))
+          if (t.mode) {
+            setCarModeId(t.mode)
+            const modeUp = t.mode.toUpperCase()
+            const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
+            if (matched) setActiveMode(matched)
+          }
+          if (!navActiveRef.current && t.speed != null) {
+            const mag = Math.abs(t.speed)
+            if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
+          }
+          if (t.trim != null) setTrim(t.trim)
+          if (t.status && isAllowedDriveStatus(t.status)) {
+            setDriveStatus(t.status)
+            const d = statusToDirection(t.status)
+            if (d) setDriveDir(d)
           }
         }
         if (json.sensors) setSensorData(prev => ({ ...prev, ...json.sensors }))
@@ -515,6 +544,7 @@ export function useControlHub(routeCategory?: string) {
           if (Object.keys(t).length > 0) {
             setTelemetry((prev) => ({ ...prev, ...t }))
             if (t.mode) {
+              setCarModeId(t.mode)
               const modeUp = t.mode.toUpperCase()
               const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
               if (matched) setActiveMode(matched)
@@ -601,6 +631,11 @@ export function useControlHub(routeCategory?: string) {
     try { await sppService.sendLine('SPD0') } catch { /* ignore */ }
     try { await sppService.sendLine('SERVO90') } catch { /* ignore */ }
     await sppService.disconnect()
+    if (bleService.isConnected) {
+      try { await bleService.sendLine('SPD0') } catch { /* ignore */ }
+      try { await bleService.sendLine('SERVO90') } catch { /* ignore */ }
+      await bleService.disconnect()
+    }
     wsRef.current?.close()
     setConnected(false)
     setWifiConnected(false)
