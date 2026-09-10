@@ -49,31 +49,31 @@ function enabledZones(is2wd1m: boolean): { L: PadZone[]; R: PadZone[] } {
   return { L: ['F', 'B', 'L', 'R', 'C'], R: [] }
 }
 
-// ── DpadCell ──
-function DpadCell({ icon, active, enabled, position }: {
+// ── D-pad cell: one square tile in the 3×3 cross ──
+function DpadCell({ icon, active, enabled }: {
   icon: IconName; active: boolean; enabled: boolean
-  position: 'top' | 'left' | 'center' | 'right' | 'bottom'
 }) {
-  const radius = position === 'top' ? 'rounded-t-2xl'
-    : position === 'bottom' ? 'rounded-b-2xl'
-      : position === 'left' ? 'rounded-l-2xl'
-        : position === 'right' ? 'rounded-r-2xl'
-          : 'rounded-2xl'
   return (
     <View
       pointerEvents="none"
-      className={`h-full items-center justify-center ${radius} ${
+      className={`items-center justify-center rounded-xl ${
         active ? 'bg-blue-600 border-2 border-blue-300'
           : enabled ? 'border-2 border-white/25 bg-white/8'
             : 'border border-white/10 bg-white/3 opacity-40'
       }`}
+      style={{ aspectRatio: 1 }}
     >
       <Feather
-        name={icon} size={24}
+        name={icon} size={22}
         color={active ? '#fff' : enabled ? '#93c5fd' : 'rgba(255,255,255,0.35)'}
       />
     </View>
   )
+}
+
+// ── Empty cell (corner gap in the cross) ──
+function DpadGap() {
+  return <View style={{ aspectRatio: 1 }} />
 }
 
 // =====================================================================
@@ -262,25 +262,39 @@ function DualDpad({
 
   const en = enabledZones(is2wd1m)
 
+  const cellSize = 56
+  const gap = 4
+
   const padView = (pad: PadId) => (
-    <View className="min-h-0 flex-1 items-center justify-center">
-      <View className="h-full w-full max-w-[180px] items-center justify-center gap-1">
-        <View className="w-1/3">
-          <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} position="top" />
+    <View className="flex-1 items-center justify-center">
+      <View style={{ width: cellSize * 3 + gap * 2 }}>
+        {/* Row 0: empty · F · empty */}
+        <View style={{ flexDirection: 'row', gap, marginBottom: gap }}>
+          <DpadGap />
+          <View style={{ width: cellSize, height: cellSize }}>
+            <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} />
+          </View>
+          <DpadGap />
         </View>
-        <View className="flex w-full flex-1 flex-row gap-1">
-          <View className="flex-1">
-            <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} position="left" />
+        {/* Row 1: L · C · R */}
+        <View style={{ flexDirection: 'row', gap, marginBottom: gap }}>
+          <View style={{ width: cellSize, height: cellSize }}>
+            <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} />
           </View>
-          <View className="flex-1">
-            <DpadCell icon={pad === 'L' ? 'stop-circle' : 'circle'} active={cellActive(pad, 'C')} enabled={en[pad].includes('C')} position="center" />
+          <View style={{ width: cellSize, height: cellSize }}>
+            <DpadCell icon={pad === 'L' ? 'stop-circle' : 'circle'} active={cellActive(pad, 'C')} enabled={en[pad].includes('C')} />
           </View>
-          <View className="flex-1">
-            <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} position="right" />
+          <View style={{ width: cellSize, height: cellSize }}>
+            <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} />
           </View>
         </View>
-        <View className="w-1/3">
-          <DpadCell icon={PAD_ICONS.B} active={cellActive(pad, 'B')} enabled={en[pad].includes('B')} position="bottom" />
+        {/* Row 2: empty · B · empty */}
+        <View style={{ flexDirection: 'row', gap }}>
+          <DpadGap />
+          <View style={{ width: cellSize, height: cellSize }}>
+            <DpadCell icon={PAD_ICONS.B} active={cellActive(pad, 'B')} enabled={en[pad].includes('B')} />
+          </View>
+          <DpadGap />
         </View>
       </View>
     </View>
@@ -294,7 +308,7 @@ function DualDpad({
           setSurf((s) => (s && s.w === width && s.h === height ? s : { w: width || 1, h: height || 1 }))
         }}
         {...panResponder.panHandlers}
-        className="relative min-h-0 flex-1 flex-row items-stretch gap-1"
+        className="relative min-h-0 flex-1 flex-row items-center justify-center gap-2"
       >
         {padView('L')}
         {oledSlot && (
