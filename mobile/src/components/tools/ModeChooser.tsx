@@ -77,7 +77,13 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
       </Pressable>
 
       {open && (
-        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)} pointerEvents="box-none">
+        <Modal transparent visible animationType="fade" onRequestClose={() => setOpen(false)}>
+          {/* Full-screen overlay: tap to close */}
+          <Pressable
+            style={{ position: 'absolute', inset: 0 }}
+            onPress={() => setOpen(false)}
+            accessibilityLabel="Close mode list"
+          />
           <View
             style={{
               position: 'absolute',
@@ -93,8 +99,6 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
             >
               {catalogue.map((m: CarMode) => {
                 const isActive = shown.id === m.id
-                // Unavailable firmware modes (isModeAvailable parity):
-                // preview in the list as COMING SOON.
                 const coming = !['BT', 'AUTO', '2WD1M'].includes(m.token)
                 return (
                   <Pressable

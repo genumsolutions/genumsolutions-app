@@ -200,16 +200,16 @@ export const TOKEN_TO_MODE_ID: Record<string, CarModeId> = {
   '2WD1M': '2wd1m',
 }
 
-// Map from mode token to human-readable name (for offline display)
+// Map from mode token to car OLED display name (ModeManager.cpp modeToString)
 export const MODE_NAMES: Record<string, string> = {
-  BT: 'Bluetooth',
-  ESP_SER: 'EspWebServer',
-  PATH: 'PathFollowing',
-  OBS_US: 'Obstacle_US',
-  OBS_IR: 'ObstacleIR',
-  MAN: 'Manual',
-  AUTO: 'Autonomous',
-  ESP_CLI: 'EspWebClient',
+  BT: '4WD4M',
+  ESP_SER: 'SERVER',
+  PATH: 'PATH',
+  OBS_US: 'OBSTACLE(US)',
+  OBS_IR: 'OBSTACLE(IR)',
+  MAN: 'MANUAL',
+  AUTO: 'AUTO',
+  ESP_CLI: 'CLIENT',
   '2WD1M': '2WD1M',
 }
 
