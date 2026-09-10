@@ -181,8 +181,11 @@ function DualDpad({
     // zone is a middle rect. Dominant axis decides L/R vs F/B.
     const dx = lx - pw / 2
     const dy = y - surf.h / 2
+    // Use the smaller dimension for a symmetric center zone — prevents
+    // the landscape-stretched horizontal deadzone from being huge.
+    const threshold = Math.min(pw, surf.h) * 0.20
     const zone: PadZone =
-      Math.abs(dx) < pw * 0.18 && Math.abs(dy) < surf.h * 0.18 ? 'C'
+      Math.abs(dx) < threshold && Math.abs(dy) < threshold ? 'C'
         : Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'F' : 'B')
           : (dx < 0 ? 'L' : 'R')
     return { pad, zone }
@@ -221,17 +224,19 @@ function DualDpad({
 
     if (s.is2wd1m) {
       // Left pad → motor (signed SPD), right pad → servo steer.
-      // Steering parity with the physical remote: LEFT → servo angle
-      // INCREASES around center 90 (turn left = larger angle), right stick
-      // inverted mapping from comms.cpp processDriveForCurrentMode().
+      // When a pad has no active touches, PRESERVE its last value (don't
+      // zero it) — so holding only the steer pad doesn't kill the motor,
+      // and holding only the drive pad doesn't snap steering to center.
       const fwd = has(lZones, 'F')
       const back = has(lZones, 'B')
-      const spd = has(lZones, 'C') ? 0 : fwd && back ? 0 : fwd ? s.speed : back ? -s.speed : 0
+      const spd = lZones.length === 0 ? lastDriveRef.current
+        : has(lZones, 'C') ? 0 : fwd && back ? 0 : fwd ? s.speed : back ? -s.speed : 0
       const l = has(rZones, 'L')
       const r = has(rZones, 'R')
-      const servo = l === r ? limitsRef.current.servoCenter
-        : l ? limitsRef.current.servoCenter + s.steerLimit
-          : limitsRef.current.servoCenter - s.steerLimit
+      const servo = rZones.length === 0 ? lastServoRef.current
+        : l === r ? limitsRef.current.servoCenter
+          : l ? limitsRef.current.servoCenter + s.steerLimit
+            : limitsRef.current.servoCenter - s.steerLimit
       // Stream through the same clamped path the joysticks use.
       const sd = clampSignedDrive(spd, limitsRef.current)
       // Cache both values — hold-resend uses these when only one pad is active.
@@ -359,20 +364,21 @@ function DualDpad({
   }, [canControl])
 
   const cellActive = (pad: PadId, zone: PadZone) =>
-    Object.values(activeCells).some((z, i) => z === zone && Object.keys(activeCells)[i]?.startsWith(pad))
+    Object.entries(activeCells).some(([k, z]) => k.startsWith(pad) && z === zone)
 
   const en = enabledZones(is2wd1m)
 
   const padView = (pad: PadId) => (
     <View className="min-h-0 flex-1 items-center justify-center">
-      {/* Standard cross d-pad: Up · [Left · Center · Right] · Down */}
-      <View className="h-full w-full max-w-[180px] items-center justify-center">
-        {/* Up */}
-        <View className="w-[55%]">
+      {/* Standard cross d-pad: Up · [Left · Center · Right] · Down.
+          All arms same width as Center for a proper cross silhouette. */}
+      <View className="h-full w-full max-w-[180px] items-center justify-center gap-1">
+        {/* Up — same width as Center */}
+        <View className="w-1/3">
           <DpadCell icon={PAD_ICONS.F} active={cellActive(pad, 'F')} enabled={en[pad].includes('F')} compact={compact} position="top" />
         </View>
-        {/* Middle row: Left · Center · Right */}
-        <View className="flex w-full flex-row">
+        {/* Middle row: Left · Center · Right — each flex-1 */}
+        <View className="flex w-full flex-1 flex-row gap-1">
           <View className="flex-1">
             <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} compact={compact} position="left" />
           </View>
@@ -389,8 +395,8 @@ function DualDpad({
             <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} compact={compact} position="right" />
           </View>
         </View>
-        {/* Down */}
-        <View className="w-[55%]">
+        {/* Down — same width as Center */}
+        <View className="w-1/3">
           <DpadCell icon={PAD_ICONS.B} active={cellActive(pad, 'B')} enabled={en[pad].includes('B')} compact={compact} position="bottom" />
         </View>
       </View>
@@ -433,9 +439,10 @@ function DualDpad({
   )
 }
 
-/** One cell of a standard cross d-pad. Each cell has different corner
-    radius to form the cross shape: corners are rounded, inner edges are
-    flat. Touches are zone-mapped by the parent surface (pointer-events="none"). */
+/** One cell of a standard cross d-pad. All cells flex to fill their
+    parent. Inner corners flat, outer corners rounded. Larger touch
+    targets for proper gaming feel. Touches are zone-mapped by the
+    parent surface (pointer-events="none"). */
 function DpadCell({ icon, active, enabled, compact, position }: {
   icon: IconName
   active: boolean
@@ -443,23 +450,21 @@ function DpadCell({ icon, active, enabled, compact, position }: {
   compact?: boolean
   position: 'top' | 'left' | 'center' | 'right' | 'bottom'
 }) {
-  // Standard cross: inner corners flat, outer corners rounded
-  const radiusClass = position === 'top' ? 'rounded-t-xl'
-    : position === 'bottom' ? 'rounded-b-xl'
-    : position === 'left' ? 'rounded-l-xl'
-    : position === 'right' ? 'rounded-r-xl'
-    : position === 'center' ? 'rounded-xl'
-    : 'rounded-xl'
+  // Cross shape: inner corners flat, outer corners rounded.
+  const radiusClass = position === 'top' ? 'rounded-t-2xl'
+    : position === 'bottom' ? 'rounded-b-2xl'
+    : position === 'left' ? 'rounded-l-2xl'
+    : position === 'right' ? 'rounded-r-2xl'
+    : 'rounded-2xl'
 
   return (
     <View
       pointerEvents="none"
-      className={`${compact ? 'h-14' : 'h-16'} items-center justify-center ${radiusClass} ${
-        active ? 'bg-navy border-2 border-navy-light'
+      className={`h-full items-center justify-center ${radiusClass} ${
+        active ? 'bg-navy border-2 border-blue-400'
           : enabled ? 'border-2 border-white/25 bg-white/8'
             : 'border border-white/10 bg-white/3 opacity-40'
       }`}
-      style={{ aspectRatio: position === 'center' ? 1 : undefined, flex: position === 'center' ? 1 : undefined }}
     >
       <Feather
         name={icon}
@@ -615,14 +620,22 @@ function DualJoystick({
 
   // Hold-resend (DRIVE_RESEND_MS parity): while any stick is grabbed, keep
   // re-reporting the last position every 30ms so a dropped line self-heals
-  // and the car's safe-stop never fires on a held stick.
+  // and the car's safe-stop never fires on a held stick. Only resend for
+  // sticks that actually have touches — the other stick's last command is
+  // preserved (not zeroed).
   useEffect(() => {
     if (!canControl) return
     const id = setInterval(() => {
       if (touchesRef.current.size === 0) return
       if (navActiveRef?.current) return
-      onLeftRef.current(lastLRef.current.x, lastLRef.current.y)
-      if (rightEnabledRef.current) onRightRef.current(lastRRef.current)
+      let hasL = false
+      let hasR = false
+      for (const [, v] of touchesRef.current) {
+        if (v.stick === 'L') hasL = true
+        if (v.stick === 'R') hasR = true
+      }
+      if (hasL) onLeftRef.current(lastLRef.current.x, lastLRef.current.y)
+      if (hasR && rightEnabledRef.current) onRightRef.current(lastRRef.current)
     }, DRIVE_CMD_MIN_INTERVAL_MS)
     return () => clearInterval(id)
   }, [canControl, navActiveRef])
@@ -836,15 +849,16 @@ export function DriveControls({
   }, [canControl, is2wd1m, onSignedDrive, sendDir, limits])
 
   // Right joystick X axis: steers servo in 2WD1M, clamped to ±steerLimit.
-  // Parity with the physical remote (comms.cpp): LEFT → servo angle INCREASES
-  // (turn left = larger angle), right → decreases.
+  // Firmware parity: SERVO0 = full left, SERVO180 = full right, SERVO90 =
+  // center. Left stick (x<0) must produce a SMALLER servo value (toward 0),
+  // right stick (x>0) a LARGER one (toward 180). So dev is added to center.
   const handleRightJoy = useCallback((x: number) => {
     if (!canControl || !is2wd1m) return
     let dev = Math.round(x * 90)
     if (onSignedDrive && steerLimit != null) {
       dev = Math.max(-steerLimit, Math.min(steerLimit, dev))
     }
-    const rawServo = limits.servoCenter - dev
+    const rawServo = limits.servoCenter + dev
     const safeServo = clampServo(rawServo, limits)
     onServo(safeServo)
   }, [canControl, is2wd1m, onSignedDrive, steerLimit, onServo, limits])

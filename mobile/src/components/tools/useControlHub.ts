@@ -317,6 +317,12 @@ export function useControlHub(routeCategory?: string) {
           setSppStatusMsg(message ?? 'Connected')
           setShowSppsRetry(false)
           sppReconnectAttemptsRef.current = 0
+          // Force the car to broadcast its current STATE so the app
+          // immediately picks up the active mode, speed, trim, etc.
+          // without waiting for the car's next自发 telemetry cycle.
+          setTimeout(() => {
+            sppService.requestState().catch(() => {})
+          }, 200)
           break
         case 'disconnected':
           setSppStatus('disconnected')
