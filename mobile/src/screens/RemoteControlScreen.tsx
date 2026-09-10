@@ -574,7 +574,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Emergency stop"
               hitSlop={10}
               android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true, radius: 34 }}
-              style={{ position: 'absolute', bottom: 8, right: 8 }}
+              style={{ position: 'absolute', bottom: 16, right: 8, zIndex: 10 }}
             >
               <View className="h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg">
                 <Feather name="octagon" size={22} color="#fff" />
@@ -595,7 +595,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             />
             <View className="absolute inset-0 z-40 items-center justify-center px-8">
               <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-xl">
-                <Text className="text-center text-base font-black text-white">Disconnected. Exit remote?</Text>
+                <Text className="text-center text-base font-black text-white">Disconnect and exit?</Text>
                 <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
                   The car receives a safe stop (SPD0 · SERVO90) before the link closes.
                 </Text>
@@ -646,7 +646,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             />
             <View
               className="absolute right-3 z-40 w-72 rounded-2xl border border-white/10 bg-slate-900 p-3 shadow-xl"
-              style={{ top: 76, maxHeight: height - 96 }}
+              style={{ top: Math.max(insets.top, 8) + 48, maxHeight: height - 96 }}
             >
               <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">
                 Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}

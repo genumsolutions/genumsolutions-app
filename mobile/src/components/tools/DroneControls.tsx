@@ -1,6 +1,6 @@
 // DroneControls — altitude slider, gimbal pan/tilt, takeoff/land/emergency.
 import React from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, Vibration, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import Slider from '@react-native-community/slider'
 import type { DroneControlsProps } from './types'
@@ -33,21 +33,21 @@ export function DroneControls({
         />
         <View className="mt-2 flex-row gap-2">
           <Pressable
-            onPress={() => onCommand('TAKEOFF')}
+            onPress={() => { Vibration.vibrate(10); onCommand('TAKEOFF') }}
             disabled={!canControl}
             className="flex-1 items-center rounded-full bg-emerald-600 py-2.5"
           >
             <Text className="text-xs font-black text-white">Take Off</Text>
           </Pressable>
           <Pressable
-            onPress={() => onCommand('LAND')}
+            onPress={() => { Vibration.vibrate(10); onCommand('LAND') }}
             disabled={!canControl}
             className="flex-1 items-center rounded-full bg-amber-600 py-2.5"
           >
             <Text className="text-xs font-black text-white">Land</Text>
           </Pressable>
           <Pressable
-            onPress={() => { onSetAltitude(0); onCommand('EMERGENCY') }}
+            onPress={() => { Vibration.vibrate(50); onSetAltitude(0); onCommand('EMERGENCY') }}
             disabled={!canControl}
             className="flex-1 items-center rounded-full bg-red-600 py-2.5"
           >
@@ -76,6 +76,7 @@ export function DroneControls({
               maximumTrackTintColor="#cbd5e1"
               thumbTintColor="#1e3a8a"
             />
+            <Text className="text-center text-[9px] text-slate-400">90° center</Text>
           </View>
           <View className="flex-1">
             <Text className="text-xs font-bold text-muted">Tilt: {gimbalTilt}°</Text>
@@ -90,6 +91,7 @@ export function DroneControls({
               maximumTrackTintColor="#cbd5e1"
               thumbTintColor="#1e3a8a"
             />
+            <Text className="text-center text-[9px] text-slate-400">90° center</Text>
           </View>
         </View>
       </View>

@@ -48,7 +48,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         disabled={locked}
         accessibilityRole="button"
         accessibilityLabel="Choose car mode"
-        className={`min-w-0 max-w-[180px] flex-row items-center justify-between gap-1.5 rounded-xl px-3 py-2 ${
+        className={`min-w-0 max-w-[220px] flex-row items-center justify-between gap-1.5 rounded-xl px-3 py-2 ${
           highlighted ? 'bg-slate-200' : 'border border-white/15 bg-white/5'
         }`}
       >
@@ -71,7 +71,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         disabled={!canControl || locked}
         accessibilityRole="button"
         accessibilityLabel="Cycle mode"
-        className="h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-navy disabled:opacity-40"
+        className="h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 disabled:opacity-40"
       >
         <Feather name="rotate-ccw" size={15} color="#fff" />
       </Pressable>
@@ -110,7 +110,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
                     className={`mt-1 flex-row items-center justify-between rounded-lg px-3 py-2.5 ${isActive ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
                   >
                     <View className="min-w-0 flex-1 pr-2">
-                      <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-white'}`} numberOfLines={1}>
+                      <Text className={`text-sm font-bold ${isActive ? 'text-white' : 'text-slate-300'}`} numberOfLines={1}>
                         {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
                       </Text>
                       <Text className={`text-xs ${isActive ? 'text-white/70' : 'text-slate-400'}`} numberOfLines={1}>
