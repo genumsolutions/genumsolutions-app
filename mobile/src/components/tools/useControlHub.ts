@@ -281,7 +281,6 @@ export function useControlHub(routeCategory?: string) {
   //   • STATUS: only whitelisted short statuses are displayed.
   //   • TRIM: mirrored.
   useEffect(() => {
-    if (!activeMode) return
     const applyTelemetry = (t: CarTelemetry) => {
       if (!mountedRef.current) return
       setTelemetry((prev) => ({ ...prev, ...t }))
@@ -344,7 +343,12 @@ export function useControlHub(routeCategory?: string) {
       }
     })
     return () => { offSpp(); offStatus() }
-  }, [activeMode])
+    // NOTE: deps are intentionally empty — activeMode is read via
+    // carModesRef (fresh on every telemetry frame) and setActiveMode is a
+    // stable setState.  The old [activeMode] dependency tore down and
+    // re-created the subscription on every mode change, which caused the
+    // app to miss STATE;MODE=… frames from the car during the gap.
+  }, [])
 
   // Check if SPP is supported on this device
   const sppSupported = sppService.supported
