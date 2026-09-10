@@ -24,7 +24,7 @@ import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token → short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
@@ -363,13 +363,19 @@ export function useControlHub(routeCategory?: string) {
   // Periodic REQ_STATE — keeps the app synced with the car's current mode,
   // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
   // the physical mode button is pressed, so we poll every 2 s.
+  // Works for both SPP and WiFi transports.
   useEffect(() => {
     if (!connected) return
     const id = setInterval(() => {
-      sppService.requestState().catch(() => {})
+      if (sppService.isConnected) {
+        sppService.requestState().catch(() => {})
+      }
+      if (wifiConnected && wsRef.current) {
+        try { wsRef.current.send('REQ_STATE\n') } catch { /* ignore */ }
+      }
     }, 2000)
     return () => clearInterval(id)
-  }, [connected])
+  }, [connected, wifiConnected])
 
   // Scan for SPP devices (Classic Bluetooth)
   const handleScan = useCallback(async () => {
@@ -467,10 +473,44 @@ export function useControlHub(routeCategory?: string) {
     }
     socket.onmessage = (event) => {
       try {
+        // Try JSON first (WiFi car status broadcast).
         const json = JSON.parse(event.data)
-        if (json.telemetry) setTelemetry(json.telemetry)
+        if (json.mode || json.status || json.speed != null) {
+          const t = parseTelemetryLine(event.data)
+          if (Object.keys(t).length > 0) {
+            setTelemetry((prev) => ({ ...prev, ...t }))
+            if (t.mode) {
+              const modeUp = t.mode.toUpperCase()
+              const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
+              if (matched) setActiveMode(matched)
+            }
+            if (!navActiveRef.current && t.speed != null) {
+              const mag = Math.abs(t.speed)
+              if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
+            }
+            if (t.trim != null) setTrim(t.trim)
+          }
+        }
         if (json.sensors) setSensorData(prev => ({ ...prev, ...json.sensors }))
-      } catch { /* Ignore non-JSON */ }
+      } catch {
+        // Non-JSON: try STATE/SPD lines (same parser as SPP).
+        try {
+          const t = parseTelemetryLine(event.data)
+          if (Object.keys(t).length > 0) {
+            setTelemetry((prev) => ({ ...prev, ...t }))
+            if (t.mode) {
+              const modeUp = t.mode.toUpperCase()
+              const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
+              if (matched) setActiveMode(matched)
+            }
+            if (!navActiveRef.current && t.speed != null) {
+              const mag = Math.abs(t.speed)
+              if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
+            }
+            if (t.trim != null) setTrim(t.trim)
+          }
+        } catch { /* ignore */ }
+      }
     }
     socket.onclose = () => {
       setWifiConnected(false)
