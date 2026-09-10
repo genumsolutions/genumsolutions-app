@@ -297,6 +297,9 @@ export function RemoteControlScreen({ navigation }: Props) {
     else navigation.goBack()
   }, [navActive, linked, navigation, setNavActive, setNavField, setPreviewMode])
 
+  // Dynamic back-label: tells the user what the button will actually do.
+  const backLabel = navActive ? 'Cancel' : linked ? 'Exit' : 'Back'
+
   // Disconnect confirmation (the .ino's Return-Confirmation dialog).
   const [showExitConfirm, setShowExitConfirm] = useState(false)
 
@@ -394,19 +397,21 @@ export function RemoteControlScreen({ navigation }: Props) {
       {/* Single compact remote board — no scroll. The board is flex-sized so
           Settings / dropdowns / the OLED never push anything off-window. */}
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
-        {/* ONE chrome row (R4-3): Exit · REMOTE · mode · OLED · speed · toggle · settings */}
-        <View className="flex-shrink-0 flex-row items-center gap-2">
+        {/* ONE chrome row (R4-3): Back · REMOTE · status · mode · speed · toggle · settings
+            Wrapped in a horizontal ScrollView so narrow landscape devices clip
+            gracefully instead of pushing items off-screen. */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-shrink-0" contentContainerStyle={{ alignItems: 'center', gap: 8 }}>
           {/* Back button (ESP BTN_BACK parity): NAV cancel / disconnect
               confirm — same two-tier semantics as the physical remote. */}
           <Pressable
             onPress={handleBack}
             accessibilityRole="button"
-            accessibilityLabel="Back — cancel NAV or exit remote"
+            accessibilityLabel={`${backLabel} — ${navActive ? 'cancel NAV' : linked ? 'disconnect and exit' : 'go back'}`}
             hitSlop={10}
             android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 40 }}
           >
             <View className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5">
-              <Text className="text-sm font-bold text-white">Back</Text>
+              <Text className="text-sm font-bold text-white">{backLabel}</Text>
             </View>
           </Pressable>
           {/* Select button (ESP BTN_SELECT parity): enter/confirm NAV. */}
@@ -424,6 +429,16 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </Pressable>
           <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
+
+          {/* Connection status dot — shows which car we're linked to */}
+          {linked && (
+            <>
+              <View className="h-2 w-2 shrink-0 rounded-full bg-green-400" />
+              <Text numberOfLines={1} className="max-w-[80px] shrink-0 text-[10px] font-bold text-slate-400">
+                {deviceName || 'Connected'}
+              </Text>
+            </>
+          )}
 
           {isRobocar && (
             <>
@@ -456,7 +471,7 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
 
           {isRobocar && (
-            <View className="ml-auto flex-row items-center gap-2">
+            <View className="flex-row items-center gap-2">
               <Pressable
                 onPress={() => { Vibration.vibrate(10); setUseJoystick(!useJoystick) }}
                 accessibilityRole="button"
@@ -481,7 +496,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               </Pressable>
             </View>
           )}
-        </View>
+        </ScrollView>
 
         {isDrone || isNonRobocar ? (
           /* Drones / smart-farm / city: telephone-card on the left + themed
