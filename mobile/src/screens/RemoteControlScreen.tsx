@@ -38,7 +38,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
 type Route = RouteProp<RootStackParamList, 'RemoteControl'>
 
 const NAV_DEBOUNCE_MS = 120
-const REMOTE_AVAILABLE_TOKENS = ['BT', 'AUTO', '2WD1M']
+const REMOTE_AVAILABLE_TOKENS = ['BT', 'AUTO', '2WD1M', 'ESP_CLI']
 
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxSpeed: 255,
