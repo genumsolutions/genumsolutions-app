@@ -118,6 +118,8 @@ async function main() {
 
   // Verify what was actually stored matches the bytes we sent — catches any
   // proxy/CDN rewriting so the manifest never advertises a wrong size.
+  const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${LATEST_FILE}`;
+  const versionedUrl = `${url}/storage/v1/object/public/${BUCKET}/${VERSIONED_FILE}`;
   try {
     const head = await fetch(versionedUrl, { method: 'HEAD' });
     const servedLength = Number(head.headers.get('content-length') ?? '0');
@@ -131,8 +133,6 @@ async function main() {
     // the local file, so fail only when we can reach the object, not otherwise.
   }
 
-  const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${LATEST_FILE}`;
-  const versionedUrl = `${url}/storage/v1/object/public/${BUCKET}/${VERSIONED_FILE}`;
   console.log('Uploaded. Public download URLs:');
   console.log('  Latest:', publicUrl);
   console.log('  Versioned:', versionedUrl);

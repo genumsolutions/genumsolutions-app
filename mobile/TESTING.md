@@ -5,6 +5,19 @@
 
 ---
 
+## snag round 8 — industrial-hardening pass (SHIPPED as OTA after push — device verify pending)
+
+> JS-only hardening. After the push lands: fully close the app → reopen (OTA applies silently).
+
+- [ ] **R8-1 — sign-in survives restart WITHOUT plaintext tokens:** sign in (email or Google) → fully close the app → reopen → still signed in (restore now comes exclusively from SecureStore; the AsyncStorage session cache is disabled).
+- [ ] **R8-2 — sign-out is complete:** sign out → reopen app → signed-out state, and signing back in works.
+- [ ] **R8-3 — no regressions from the hardening pass:** cart badge, shop, orders, remote connect (BT + 2WD1M) all behave as in the last verified round.
+- [ ] **R8-4 — website admin dashboard counts:** with data present, `/admin` totals (orders/products/messages/transactions) match reality — the dashboard switched to SQL-side counting.
+
+**Pass criteria:** all boxes tick. If R8-1 fails, note the sign-in method (email vs Google) — they use different persist paths.
+
+---
+
 ## v2.0.6 device test — full remote rebuild + car mode sync (PENDING)
 
 > Install v2.0.6 APK (41.4 MB) from `/app` or the OTA. The remote screen was rebuilt from scratch.
