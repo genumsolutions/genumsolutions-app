@@ -1,29 +1,29 @@
-// ModeChooser — car mode selector: compact trigger + dropdown list.
-// Mode order, names, and available/coming-soon status match the car
-// firmware (ModeManager.h enum order, modeToString() names).
+// ModeChooser — car mode selector matching the ESP32 remote's mode UI.
+// Mode order, names, and available status match the remote firmware
+// (state.cpp MODE_CMDS[] / MODE_NAMES[], ui_core.cpp isModeAvailable()).
 import React, { useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, Vibration, useWindowDimensions } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
 import type { ModeChooserProps } from './types'
 
-// Car firmware Mode enum order (ModeManager.h) with wire tokens.
-// The dropdown list and cycle button both use this order.
-const CAR_MODE_ORDER = [
-  { token: 'BT', oled: '4WD4M', available: true },
-  { token: 'ESP_SER', oled: 'SERVER', available: false },
-  { token: 'ESP_CLI', oled: 'CLIENT', available: true },
-  { token: 'PATH', oled: 'PATH', available: false },
-  { token: 'OBS_US', oled: 'OBSTACLE(US)', available: false },
-  { token: 'OBS_IR', oled: 'OBSTACLE(IR)', available: false },
-  { token: 'MAN', oled: 'MANUAL', available: false },
-  { token: '2WD1M', oled: '2WD1M', available: true },
-  { token: 'AUTO', oled: 'AUTO', available: true },
+// ESP32 remote mode order (state.cpp MODE_CMDS[] / MODE_NAMES[]).
+// Scroll order, display names, and available status match the remote.
+const REMOTE_MODES = [
+  { token: 'BT', available: true },
+  { token: 'ESP_SER', available: false },
+  { token: 'PATH', available: false },
+  { token: 'OBS_US', available: false },
+  { token: 'OBS_IR', available: false },
+  { token: 'MAN', available: false },
+  { token: 'AUTO', available: true },
+  { token: 'ESP_CLI', available: false },
+  { token: '2WD1M', available: true },
 ]
 
-function sortModesByCarOrder(modes: CarMode[]): CarMode[] {
+function sortModesByRemoteOrder(modes: CarMode[]): CarMode[] {
   return [...modes].sort(
-    (a, b) => CAR_MODE_ORDER.findIndex(c => c.token === a.token) - CAR_MODE_ORDER.findIndex(c => c.token === b.token)
+    (a, b) => REMOTE_MODES.findIndex(r => r.token === a.token) - REMOTE_MODES.findIndex(r => r.token === b.token)
   )
 }
 
@@ -48,9 +48,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
 
   const closeDropdown = () => setOpen(false)
 
-  // Sorted list for display — matches car firmware cycle order.
-  const sortedCatalogue = sortModesByCarOrder(catalogue)
-  // Max height: cap so the list never overflows the screen.
+  const sortedCatalogue = sortModesByRemoteOrder(catalogue)
   const listMaxHeight = anchor
     ? Math.max(120, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.55))
     : height * 0.55
@@ -83,7 +81,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         <Feather name="chevron-down" size={15} color={highlighted ? '#334155' : '#cbd5e1'} />
       </Pressable>
 
-      {/* Cycle button */}
+      {/* Cycle button — walks the remote's mode order like the physical remote */}
       <Pressable
         onPress={() => { Vibration.vibrate(10); onCycle() }}
         disabled={!canControl || locked}
@@ -115,7 +113,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
             >
               {sortedCatalogue.map((m: CarMode) => {
                 const isActive = shown.id === m.id
-                const meta = CAR_MODE_ORDER.find(c => c.token === m.token)
+                const meta = REMOTE_MODES.find(r => r.token === m.token)
                 const coming = meta ? !meta.available : true
                 return (
                   <Pressable
