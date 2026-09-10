@@ -127,6 +127,7 @@ export function useControlHub(routeCategory?: string) {
 
   // Mode from car (mode sync)
   const [carModeId, setCarModeId] = useState<string | null>(null)
+  const carModeIdRef = useRef<string | null>(null)
 
   // Joystick layout style id persisted per device.
   const [joystickLayoutId, setJoystickLayoutId] = useState<string>('dual')
@@ -162,8 +163,13 @@ export function useControlHub(routeCategory?: string) {
       .then((modes) => {
         if (!active || modes.length === 0) return
         setCarModes(modes)
-        const target = modes.find((m) => m.id === '2wd1m') || modes[0]
-        setActiveMode(target)
+        // Only set a default mode if the car hasn't already reported one via
+        // telemetry (carModeIdRef is set in applyTelemetry).  The car's
+        // STATE;MODE=... is the authoritative source — don't overwrite it.
+        if (!carModeIdRef.current) {
+          const target = modes.find((m) => m.id === '2wd1m') || modes[0]
+          setActiveMode(target)
+        }
       })
       .catch(() => { /* keep bundled fallback */ })
     return () => { active = false }
@@ -288,6 +294,7 @@ export function useControlHub(routeCategory?: string) {
       // Mode: always mirror (applyRemoteState parity).
       if (t.mode) {
         setCarModeId(t.mode)
+        carModeIdRef.current = t.mode
         const modeUp = t.mode.toUpperCase()
         const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
         if (matched) setActiveMode(matched)
@@ -785,7 +792,12 @@ export function useControlHub(routeCategory?: string) {
   }, [sendCommand])
 
   const cycleMode = useCallback(() => {
-    const list = carModes.length > 0 ? carModes : LOCAL_CAR_MODES
+    // Sort by deviceIndex to match the firmware's mode cycle order
+    // (BT=0 → ESP_SER=1 → PATH=2 → OBS_US=3 → OBS_IR=4 → MAN=5 →
+    //  AUTO=6 → ESP_CLI=7 → 2WD1M=8).
+    const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
+      .slice()
+      .sort((a, b) => a.deviceIndex - b.deviceIndex)
     const idx = list.findIndex((m) => m.id === activeMode.id)
     selectMode(idx === -1 ? list[0] : list[(idx + 1) % list.length])
   }, [activeMode, selectMode, carModes])
