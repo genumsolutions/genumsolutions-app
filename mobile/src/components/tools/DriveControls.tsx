@@ -122,7 +122,7 @@ function DualDpad({
     const zone: PadZone =
       Math.abs(dx) < threshold && Math.abs(dy) < threshold ? 'C'
         : Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'F' : 'B')
-          : (dx < 0 ? 'L' : 'R')
+          : (dx < 0 ? 'R' : 'L')
     return { pad, zone }
   }, [surf])
 
