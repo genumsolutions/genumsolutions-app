@@ -792,12 +792,13 @@ export function useControlHub(routeCategory?: string) {
   }, [sendCommand])
 
   const cycleMode = useCallback(() => {
-    // Sort by deviceIndex to match the firmware's mode cycle order
-    // (BT=0 → ESP_SER=1 → PATH=2 → OBS_US=3 → OBS_IR=4 → MAN=5 →
-    //  AUTO=6 → ESP_CLI=7 → 2WD1M=8).
+    // Car firmware Mode enum order (ModeManager.h):
+    // BT(0) → ESP_SER(1) → ESP_CLI(2) → PATH(3) → OBS_US(4) →
+    // OBS_IR(5) → MAN(6) → 2WD1M(7) → AUTO(8)
+    const CAR_CYCLE_ORDER = ['BT', 'ESP_SER', 'ESP_CLI', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', '2WD1M', 'AUTO']
     const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
       .slice()
-      .sort((a, b) => a.deviceIndex - b.deviceIndex)
+      .sort((a, b) => CAR_CYCLE_ORDER.indexOf(a.token) - CAR_CYCLE_ORDER.indexOf(b.token))
     const idx = list.findIndex((m) => m.id === activeMode.id)
     selectMode(idx === -1 ? list[0] : list[(idx + 1) % list.length])
   }, [activeMode, selectMode, carModes])
