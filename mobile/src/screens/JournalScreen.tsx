@@ -46,9 +46,9 @@ export function JournalScreen() {
       ) : (
         <View className="px-5 py-8 gap-4">
           {posts.map((post) => (
-            <View key={post.id} className="border-t-2 border-ink bg-card p-5">
+             <View key={post.id} className="overflow-hidden border-t-2 border-ink bg-card p-5">
               <Text className="text-xs font-black uppercase tracking-widest text-navy">{post.tag}</Text>
-              <Text className="mt-3 font-display text-xl font-bold text-ink">{post.title}</Text>
+              <Text numberOfLines={2} className="mt-3 font-display text-xl font-bold text-ink">{post.title}</Text>
               <Text className="mt-2 text-sm leading-6 text-muted">{post.text}</Text>
               <Pressable onPress={() => {}} className="mt-5 flex-row items-center gap-1.5">
                 <Text className="text-sm font-bold text-navy underline">Get in touch about this</Text>

@@ -256,7 +256,9 @@ export function useControlHub(routeCategory?: string) {
     setActiveCategory(slug)
   }, [])
 
-  // Cleanup on unmount
+  // Cleanup on unmount — do NOT disconnect the singleton services; the
+  // BLE/SPP connection must survive navigation between screens. Only
+  // explicit user action (handleDisconnect) should tear down the transport.
   useEffect(() => {
     return () => {
       mountedRef.current = false
@@ -273,7 +275,6 @@ export function useControlHub(routeCategory?: string) {
         try { wsRef.current.close() } catch { /* ignore */ }
         wsRef.current = null
       }
-      void sppService.disconnect().catch(() => {})
     }
   }, [])
 

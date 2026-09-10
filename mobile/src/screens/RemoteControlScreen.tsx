@@ -313,6 +313,16 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Text numberOfLines={1} className="max-w-[80px] shrink-0 text-[10px] font-bold text-slate-400">
                 {deviceName || 'Connected'}
               </Text>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); void handleDisconnect() }}
+                accessibilityRole="button"
+                accessibilityLabel="Disconnect"
+                hitSlop={6}
+                android_ripple={{ color: 'rgba(239,68,68,0.3)', borderless: true, radius: 24 }}
+                className="ml-0.5"
+              >
+                <Feather name="power" size={14} color="#ef4444" />
+              </Pressable>
             </View>
           )}
 
