@@ -360,10 +360,16 @@ export function useControlHub(routeCategory?: string) {
   // Check if SPP is supported on this device
   const sppSupported = sppService.supported
 
-  // (Mode sync from the car is handled by the main applyTelemetry pipeline
-  // above — the old duplicate onTelemetry subscription that also mirrored
-  // mode was removed because it double-fired and held a stale activeMode
-  // closure.)
+  // Periodic REQ_STATE — keeps the app synced with the car's current mode,
+  // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
+  // the physical mode button is pressed, so we poll every 2 s.
+  useEffect(() => {
+    if (!connected) return
+    const id = setInterval(() => {
+      sppService.requestState().catch(() => {})
+    }, 2000)
+    return () => clearInterval(id)
+  }, [connected])
 
   // Scan for SPP devices (Classic Bluetooth)
   const handleScan = useCallback(async () => {
