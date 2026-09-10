@@ -896,9 +896,9 @@ function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; anal
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <View className="w-[47%] rounded-xl border border-line bg-card p-4">
+    <View className="w-[47%] overflow-hidden rounded-xl border border-line bg-card p-4">
       <Text className="text-xs font-black uppercase tracking-widest text-muted">{label}</Text>
-      <Text className="mt-2 font-display text-xl font-bold text-ink">{value}</Text>
+      <Text numberOfLines={1} className="mt-2 font-display text-xl font-bold text-ink">{value}</Text>
       {sub && <Text className="mt-1 text-xs text-muted">{sub}</Text>}
     </View>
   )
@@ -950,10 +950,10 @@ function OrdersTab({ orders, total, page, totalPages, onPage, onStatusChange, qu
         <>
           {orders.map((o) => (
             <View key={o.id} className="mb-3 rounded-xl border border-line bg-card p-4">
-              <View className="flex-row items-center justify-between">
+               <View className="flex-row items-center justify-between">
                 <View className="min-w-0 flex-1 pr-2">
-                  <Text className="text-sm font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()} · NPR {o.totalNpr.toLocaleString('en-IN')}</Text>
-                  <Text className="text-xs text-muted">{o.customerName} · {o.email}</Text>
+                  <Text numberOfLines={1} className="text-sm font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()} · NPR {o.totalNpr.toLocaleString('en-IN')}</Text>
+                  <Text numberOfLines={1} className="text-xs text-muted">{o.customerName} · {o.email}</Text>
                   {o.address ? <Text className="text-xs text-muted" numberOfLines={1}>{o.address}</Text> : null}
                   <Text className="text-xs text-muted">{o.provider ? `${o.provider} · ` : ''}{new Date(o.createdAt).toLocaleString()}</Text>
                 </View>
@@ -2386,10 +2386,10 @@ function CatalogPreviewModal({ typeLabel, title, body, priceLabel, image, active
               <Text className="shrink-1 text-xs font-black uppercase tracking-widest text-navy" numberOfLines={1}>{typeLabel}</Text>
               <Text className={`ml-2 shrink-0 text-[10px] font-black uppercase ${active ? 'text-emerald-600' : 'text-red-500'}`}>{active ? 'Published' : 'Hidden'}</Text>
             </View>
-            <Text className="mt-2 font-display text-xl font-bold leading-snug text-ink">{title}</Text>
-            {body ? <Text className="mt-2 text-sm leading-6 text-muted">{body}</Text> : null}
-            <View className="mt-4 flex-row items-center justify-between gap-3">
-              {priceLabel ? <Text className="font-display text-lg font-bold text-ink">{priceLabel}</Text> : <View />}
+             <Text numberOfLines={2} className="mt-2 font-display text-xl font-bold leading-snug text-ink">{title}</Text>
+             {body ? <Text numberOfLines={3} className="mt-2 text-sm leading-6 text-muted">{body}</Text> : null}
+             <View className="mt-4 flex-row items-center justify-between gap-3">
+               {priceLabel ? <Text numberOfLines={1} className="min-w-0 flex-1 font-display text-lg font-bold text-ink">{priceLabel}</Text> : <View />}
               <Pressable onPress={onClose} className="rounded-full border border-line px-4 py-2">
                 <Text className="text-xs font-black text-ink">Close</Text>
               </Pressable>

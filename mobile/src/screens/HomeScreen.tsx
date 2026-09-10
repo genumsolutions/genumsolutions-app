@@ -90,9 +90,9 @@ export function HomeScreen() {
               </View>
               <View className="mt-3">
                 {services.map((s) => (
-                  <Pressable key={s.id} onPress={() => navigation.push('Services')} className="mb-2 rounded-2xl border border-line bg-card p-4">
-                    <Text className="font-display text-lg font-bold leading-snug text-ink">{s.name}</Text>
-                    <Text className="mt-1 text-sm leading-5 text-muted">{s.description}</Text>
+                   <Pressable key={s.id} onPress={() => navigation.push('Services')} className="mb-2 overflow-hidden rounded-2xl border border-line bg-card p-4">
+                    <Text numberOfLines={1} className="font-display text-lg font-bold leading-snug text-ink">{s.name}</Text>
+                    <Text numberOfLines={2} className="mt-1 text-sm leading-5 text-muted">{s.description}</Text>
                     <Text className="mt-2 text-sm font-black text-navy">{s.priceLabel}</Text>
                   </Pressable>
                 ))}
@@ -128,8 +128,8 @@ export function HomeScreen() {
             <View className="mt-4 space-y-3">
               {trainingPrograms.map((prog) => (
                 <View key={prog.title} className="rounded-2xl border border-line bg-card p-4">
-                  <View className="flex-row items-center justify-between gap-2">
-                    <Text className="font-display text-lg font-bold text-ink">{prog.title}</Text>
+                   <View className="flex-row items-center justify-between gap-2">
+                    <Text numberOfLines={1} className="min-w-0 flex-1 font-display text-lg font-bold text-ink">{prog.title}</Text>
                     <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">{prog.duration}</Text>
                   </View>
                   <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">{prog.audience}</Text>
@@ -146,9 +146,9 @@ export function HomeScreen() {
             <Text className="mt-2 font-display text-2xl font-bold text-navy">NPR 8,40,000 <Text className="font-sans text-sm font-normal text-muted">illustrative total</Text></Text>
             <View className="mt-4">
               {pilotCosts.map(([item, cost, note]) => (
-                <View key={item} className="flex-row items-center justify-between border-b border-line py-2">
-                  <Text className="flex-1 text-sm font-semibold text-ink">{item}<Text className="text-xs font-normal text-muted"> — {note}</Text></Text>
-                  <Text className="font-display text-base font-bold text-navy">{cost}</Text>
+                 <View key={item} className="flex-row items-center justify-between border-b border-line py-2">
+                  <Text numberOfLines={1} className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink">{item}<Text className="text-xs font-normal text-muted"> — {note}</Text></Text>
+                  <Text className="shrink-0 font-display text-base font-bold text-navy">{cost}</Text>
                 </View>
               ))}
             </View>
@@ -165,7 +165,7 @@ export function HomeScreen() {
               </View>
               <View className="mt-3 flex-row flex-wrap justify-between">
                 {featured.map((p) => (
-                  <Pressable key={p.id} onPress={() => navigation.push('ProductDetail', { productId: p.id })} className="mb-3 w-[48%] rounded-2xl border border-line bg-card p-3">
+                   <Pressable key={p.id} onPress={() => navigation.push('ProductDetail', { productId: p.id })} className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-line bg-card p-3">
                     <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
                       {p.image ? (
                         <Image source={{ uri: p.image }} className="h-full w-full" resizeMode="cover" />
@@ -173,7 +173,7 @@ export function HomeScreen() {
                         <Feather name="box" size={28} color="#94a3b8" />
                       )}
                     </View>
-                    <Text className="mt-2 text-[13px] font-bold leading-tight text-ink">{p.name}</Text>
+                    <Text numberOfLines={2} className="mt-2 text-[13px] font-bold leading-tight text-ink">{p.name}</Text>
                     <Text className="mt-1 text-xs font-black text-navy">{p.priceLabel}</Text>
                   </Pressable>
                 ))}

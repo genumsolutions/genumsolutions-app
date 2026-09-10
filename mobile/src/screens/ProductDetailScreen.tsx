@@ -125,6 +125,9 @@ export function ProductDetailScreen() {
         <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
           {product.category} · {product.badge || product.productType}
         </Text>
+        {product.note ? (
+          <Text className="mt-1 text-xs font-bold leading-4 text-gold">{product.note}</Text>
+        ) : null}
         <Text className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-ink">
           {product.name}
         </Text>
@@ -142,6 +145,8 @@ export function ProductDetailScreen() {
           <Info label="SKU" value={product.sku || '—'} />
           <Info label="Category" value={product.category} />
           <Info label="Stock" value={product.stock > 0 ? `${product.stock} in stock` : 'Made to order'} />
+          {product.supplier ? <Info label="Supplier" value={product.supplier} /> : null}
+          {product.inventoryType ? <Info label="Type" value={product.inventoryType} /> : null}
         </View>
 
         {/* Audience / warranty */}
@@ -193,6 +198,12 @@ export function ProductDetailScreen() {
               <Text className="mt-3 text-sm font-bold text-ink">
                 Estimated duration:{' '}
                 <Text className="font-normal text-muted">{product.estimatedDuration}</Text>
+              </Text>
+            ) : null}
+            {product.sourceFolder ? (
+              <Text className="mt-2 text-sm font-bold text-ink">
+                Source folder:{' '}
+                <Text className="font-normal text-muted">{product.sourceFolder}</Text>
               </Text>
             ) : null}
 

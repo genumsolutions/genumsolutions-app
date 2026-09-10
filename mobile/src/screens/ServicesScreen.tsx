@@ -121,11 +121,11 @@ export function ServicesScreen() {
         </View>
       }
       renderItem={({ item }) => (
-        <View className="mb-3 rounded-2xl border border-line bg-card p-5">
+           <View className="mb-3 overflow-hidden rounded-2xl border border-line bg-card p-5">
           <View className="flex-row items-center justify-between">
-            <Text className="flex-1 font-display text-lg font-bold leading-snug text-ink">{item.name}</Text>
+            <Text numberOfLines={1} className="min-w-0 flex-1 font-display text-lg font-bold leading-snug text-ink">{item.name}</Text>
             {item.tag ? (
-              <View className="ml-2 rounded-full bg-sky px-2.5 py-0.5">
+              <View className="ml-2 shrink-0 rounded-full bg-sky px-2.5 py-0.5">
                 <Text className="text-xs font-black uppercase text-navy">{item.tag}</Text>
               </View>
             ) : null}
