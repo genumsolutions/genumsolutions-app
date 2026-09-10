@@ -1,7 +1,37 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.5/48 + round-7 OTA** — ESP32-remote replica parity SHIPPED via OTA (device verify pending). Rounds 3 passed 18/18; rounds 4–6 shipped (carry-overs re-listed below — test together).
+> Target: **v2.0.6/49** — Full remote rebuild + car mode sync via REQ_STATE (APK built & live). Device test pending.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
+
+---
+
+## v2.0.6 device test — full remote rebuild + car mode sync (PENDING)
+
+> Install v2.0.6 APK (41.4 MB) from `/app` or the OTA. The remote screen was rebuilt from scratch.
+
+### A. Remote screen — basic controls
+- [ ] **Joystick:** left stick drives (up = forward, down = reverse), right stick steers in 2WD1M mode. Both sticks track fingers 1:1, re-grab re-centers, release snaps back and stops.
+- [ ] **D-pad:** all 5 cells visible in standard 3x3 cross shape on both pads. Left pad: F/B + center stop. Right pad: L/R + center stop.
+- [ ] **Both controls work simultaneously:** joystick and d-pad can be used interchangeably without conflict.
+- [ ] **E-stop:** red floating FAB stops car immediately with haptic feedback.
+
+### B. Chrome row
+- [ ] **Back/Select/Mode/Speed all functional:** Back exits, Select enters NAV, mode cycles, speed slider works.
+- [ ] **Settings:** steer limit + trim adjust correctly for 2WD1M; opens as in-window panel.
+- [ ] **Disconnect:** confirmation dialog appears, safe stop sent before dropping link.
+
+### C. OLED + mode sync
+- [ ] **OLED:** shows mode | speed/steer, body direction word, status bar. Size matches compact 160×80 layout.
+- [ ] **Mode from car button reflects in app immediately** (REQ_STATE polling for SPP + WiFi).
+- [ ] **Mode change from app reaches car** and car confirms via STATE telemetry.
+
+### D. Carry-overs from rounds 3-7
+- [ ] **R3-B1:** landscape lock works, restores on exit.
+- [ ] **R3-B2:** single screen, no scroll in remote.
+- [ ] **R3-C1-C4:** account dropdown, latest orders, My Profile, sign out.
+- [ ] **R3-D1-D4:** cold start, shop+cart, admin, menu tab.
+
+**Pass criteria:** all boxes tick. If mode sync fails, note which direction (car→app vs app→car) and which transport (SPP vs WiFi).
 
 ---
 

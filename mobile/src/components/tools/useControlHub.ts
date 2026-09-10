@@ -19,6 +19,7 @@ import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { RootStackParamList } from '../../navigation/types'
 import { APP_VERSION } from '../../config/site'
 import { sppService, type SppDevice } from '../../services/sppService'
+import { bleService } from '../../services/bleService'
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from './types'
 import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
@@ -297,6 +298,12 @@ export function useControlHub(routeCategory?: string) {
         if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
       }
       if (t.trim != null) setTrim(t.trim)
+      // PID telemetry from TEL; frames (self-balancing live values).
+      if (t.kp != null) setPidKp(t.kp)
+      if (t.ki != null) setPidKi(t.ki)
+      if (t.kd != null) setPidKd(t.kd)
+      if (t.out != null) setPidOut(t.out)
+      if (t.off != null) setPidOff(t.off)
       // Status: whitelist only — verbose/unknown statuses never shown.
       if (t.status && isAllowedDriveStatus(t.status)) {
         setDriveStatus(t.status)
@@ -305,6 +312,7 @@ export function useControlHub(routeCategory?: string) {
       }
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
+    const offBle = bleService.onTelemetry(applyTelemetry)
     const offStatus = sppService.onStatus((kind, message) => {
       if (!mountedRef.current) return
       switch (kind) {
@@ -349,7 +357,7 @@ export function useControlHub(routeCategory?: string) {
           break
       }
     })
-    return () => { offSpp(); offStatus() }
+    return () => { offSpp(); offBle(); offStatus() }
     // NOTE: deps are intentionally empty — activeMode is read via
     // carModesRef (fresh on every telemetry frame) and setActiveMode is a
     // stable setState.  The old [activeMode] dependency tore down and
@@ -363,12 +371,15 @@ export function useControlHub(routeCategory?: string) {
   // Periodic REQ_STATE — keeps the app synced with the car's current mode,
   // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
   // the physical mode button is pressed, so we poll every 2 s.
-  // Works for both SPP and WiFi transports.
+  // Works for SPP, BLE, and WiFi transports.
   useEffect(() => {
     if (!connected) return
     const id = setInterval(() => {
       if (sppService.isConnected) {
         sppService.requestState().catch(() => {})
+      }
+      if (bleService.isConnected) {
+        bleService.requestState().catch(() => {})
       }
       if (wifiConnected && wsRef.current) {
         try { wsRef.current.send('REQ_STATE\n') } catch { /* ignore */ }
@@ -489,6 +500,11 @@ export function useControlHub(routeCategory?: string) {
               if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
             }
             if (t.trim != null) setTrim(t.trim)
+            if (t.status && isAllowedDriveStatus(t.status)) {
+              setDriveStatus(t.status)
+              const d = statusToDirection(t.status)
+              if (d) setDriveDir(d)
+            }
           }
         }
         if (json.sensors) setSensorData(prev => ({ ...prev, ...json.sensors }))
@@ -508,6 +524,11 @@ export function useControlHub(routeCategory?: string) {
               if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
             }
             if (t.trim != null) setTrim(t.trim)
+            if (t.status && isAllowedDriveStatus(t.status)) {
+              setDriveStatus(t.status)
+              const d = statusToDirection(t.status)
+              if (d) setDriveDir(d)
+            }
           }
         } catch { /* ignore */ }
       }
@@ -606,10 +627,13 @@ export function useControlHub(routeCategory?: string) {
     setSensorData({ temperature: 0, humidity: 0, soilMoisture: 0, lightLevel: 0, airQuality: 0, distance: 0 })
   }, [])
 
-  // Send command via SPP (primary) or WiFi; no-ops when nothing is linked
+  // Send command via SPP (primary), BLE, or WiFi; no-ops when nothing is linked
   const sendCommand = useCallback((cmd: string) => {
     if (connected && sppService.isConnected) {
       void sppService.sendLine(cmd).catch(() => {})
+    }
+    if (connected && bleService.isConnected) {
+      void bleService.sendLine(cmd).catch(() => {})
     }
     if (wifiConnected && wsRef.current) {
       try { wsRef.current.send(cmd + '\n') } catch { /* ignore */ }
