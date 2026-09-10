@@ -33,7 +33,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
   }
 
   // Cap the list so it never overflows the window below the trigger.
-  const listMaxHeight = anchor ? Math.max(120, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.50)) : height * 0.50
+  const listMaxHeight = anchor ? Math.max(120, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.55)) : height * 0.55
 
   return (
     // R4-3: compact one-row control on the chrome row. The "Mode" label is
@@ -82,7 +82,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
             style={{
               position: 'absolute',
               left: anchor?.x ?? 16,
-              top: (anchor?.y ?? 96) + (anchor?.h ?? 0) + 4,
+              top: (anchor?.y ?? 96) + (anchor?.h ?? 0) + 8,
               width: anchor?.w ?? 236,
             }}
           >
