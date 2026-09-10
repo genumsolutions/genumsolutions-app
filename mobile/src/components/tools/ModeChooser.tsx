@@ -12,7 +12,7 @@ import type { ModeChooserProps } from './types'
 const CAR_MODE_ORDER = [
   { token: 'BT', oled: '4WD4M', available: true },
   { token: 'ESP_SER', oled: 'SERVER', available: false },
-  { token: 'ESP_CLI', oled: 'CLIENT', available: false },
+  { token: 'ESP_CLI', oled: 'CLIENT', available: true },
   { token: 'PATH', oled: 'PATH', available: false },
   { token: 'OBS_US', oled: 'OBSTACLE(US)', available: false },
   { token: 'OBS_IR', oled: 'OBSTACLE(IR)', available: false },
