@@ -271,11 +271,9 @@ export class SppService {
           const telemetry = parseTelemetryLine(event.data)
           if (Object.keys(telemetry).length > 0) {
             this.emitTelemetry(telemetry)
-            // Update last known mode from STATE telemetry for sync (immediate status update)
+            // Track last known mode for reconnect sync.
             if (telemetry.mode) {
               this.lastKnownMode = telemetry.mode
-              // Emit an immediate status update for mode changes detected from the car
-              this.emitStatus('connected', address)
             }
           }
         } catch (e) {

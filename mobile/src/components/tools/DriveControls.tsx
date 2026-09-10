@@ -297,16 +297,16 @@ function DualDpad({
           </View>
           <DpadGap />
         </View>
-        {/* Row 1: L · C · R */}
+        {/* Row 1: R · C · L (swapped for ESP remote parity) */}
         <View style={{ flexDirection: 'row', gap, marginBottom: gap }}>
           <View style={{ width: cellSize, height: cellSize }}>
-            <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} />
+            <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} />
           </View>
           <View style={{ width: cellSize, height: cellSize }}>
             <DpadCell icon={pad === 'L' ? 'stop-circle' : 'circle'} active={cellActive(pad, 'C')} enabled={en[pad].includes('C')} />
           </View>
           <View style={{ width: cellSize, height: cellSize }}>
-            <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} />
+            <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} />
           </View>
         </View>
         {/* Row 2: empty · B · empty */}
