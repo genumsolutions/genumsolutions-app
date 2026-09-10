@@ -287,7 +287,8 @@ export function useControlHub(routeCategory?: string) {
       // Mode: always mirror (applyRemoteState parity).
       if (t.mode) {
         setCarModeId(t.mode)
-        const matched = carModesRef.current.find((m) => m.id === t.mode || m.token === t.mode)
+        const modeUp = t.mode.toUpperCase()
+        const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
         if (matched) setActiveMode(matched)
       }
       // Speed: quantized mirror, NAV-edit-aware (see above).

@@ -84,12 +84,12 @@ function DpadGap() {
 // =====================================================================
 function DualDpad({
   canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits,
-  onHaptic, compact, navActiveRef, onNavInput, oledSlot,
+  compact, navActiveRef, onNavInput, oledSlot,
 }: {
   canControl: boolean; speed: number; steerLimit: number; is2wd1m: boolean
   onSignedDrive?: (s: number) => void; sendDir: (d: 'F' | 'B' | 'L' | 'R' | 'S') => void
   onServo: (v: number) => void; limits: SafetyLimits
-  onHaptic?: () => void; compact?: boolean
+  compact?: boolean
   navActiveRef?: { current: boolean }; onNavInput?: (a: 'x' | 'y', v: -1 | 0 | 1) => void
   oledSlot?: React.ReactNode
 }) {
@@ -98,19 +98,18 @@ function DualDpad({
 
   const stRef = useRef({ canControl, speed, steerLimit, is2wd1m })
   stRef.current = { canControl, speed, steerLimit, is2wd1m }
+  const canControlRef = useRef(canControl); canControlRef.current = canControl
   const onSignedDriveRef = useRef(onSignedDrive); onSignedDriveRef.current = onSignedDrive
   const sendDirRef = useRef(sendDir); sendDirRef.current = sendDir
   const onServoRef = useRef(onServo); onServoRef.current = onServo
   const limitsRef = useRef(limits); limitsRef.current = limits
   const onNavInputRef = useRef(onNavInput); onNavInputRef.current = onNavInput
-  const onHapticRef = useRef(onHaptic); onHapticRef.current = onHaptic
 
   // Cache for hold-resend: preserve the other pad's last command.
   const lastDriveRef = useRef(0)
   const lastServoRef = useRef(limits.servoCenter)
 
   const touchesRef = useRef(new Map<string, { pad: PadId; zone: PadZone }>())
-  const firedHapticRef = useRef(false)
 
   const resolvePoint = useCallback((x: number, y: number): { pad: PadId; zone: PadZone } | null => {
     if (!surf || surf.w <= 0) return null
@@ -153,11 +152,20 @@ function DualDpad({
     }
 
     if (s.is2wd1m) {
+      if (lZones.length === 0 && rZones.length === 0) {
+        // Both pads released — send explicit stop.
+        lastDriveRef.current = 0
+        lastServoRef.current = limitsRef.current.servoCenter
+        if (onSignedDriveRef.current) onSignedDriveRef.current(0)
+        else sendDirRef.current('S')
+        onServoRef.current(limitsRef.current.servoCenter)
+        return
+      }
       const fwd = has(lZones, 'F'), back = has(lZones, 'B')
-      const spd = lZones.length === 0 ? lastDriveRef.current
+      const spd = lZones.length === 0 ? 0
         : has(lZones, 'C') ? 0 : fwd && back ? 0 : fwd ? s.speed : back ? -s.speed : 0
       const l = has(rZones, 'L'), r = has(rZones, 'R')
-      const servo = rZones.length === 0 ? lastServoRef.current
+      const servo = rZones.length === 0 ? limitsRef.current.servoCenter
         : l === r ? limitsRef.current.servoCenter
           : l ? limitsRef.current.servoCenter + s.steerLimit
             : limitsRef.current.servoCenter - s.steerLimit
@@ -191,42 +199,55 @@ function DualDpad({
     })
   }, [])
 
-  const syncTouches = useCallback((nativeTouches: readonly { identifier: number | string; locationX: number; locationY: number }[], isGrant: boolean) => {
-    let hapticNeeded = false
-    for (const t of nativeTouches) {
-      const hit = resolvePoint(t.locationX, t.locationY)
-      if (!hit) continue
-      const id = String(t.identifier)
-      const prev = touchesRef.current.get(id)
-      if (prev && prev.pad === hit.pad && prev.zone === hit.zone) continue
-      touchesRef.current.set(id, hit)
-      const en = enabledZones(stRef.current.is2wd1m)
-      const functional = hit.pad === 'L' ? en.L.includes(hit.zone) : en.R.includes(hit.zone)
-      if (functional) hapticNeeded = true
-    }
-    if (hapticNeeded && isGrant && !firedHapticRef.current) {
-      firedHapticRef.current = true
-      onHapticRef.current?.()
-      setTimeout(() => { firedHapticRef.current = false }, 60)
-    }
-    publishState()
-    emit(touchesRef.current)
-  }, [resolvePoint, publishState, emit])
-
-  const dropTouches = useCallback((changed: readonly { identifier: number | string }[]) => {
-    for (const t of changed) touchesRef.current.delete(String(t.identifier))
-    publishState()
-    emit(touchesRef.current)
-  }, [publishState, emit])
-
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => { syncTouches(evt.nativeEvent.touches, true) },
-    onPanResponderMove: (evt) => { syncTouches(evt.nativeEvent.touches, false) },
-    onPanResponderRelease: (evt) => { dropTouches(evt.nativeEvent.changedTouches) },
-    onPanResponderTerminate: (evt) => { dropTouches(evt.nativeEvent.changedTouches) },
-  }), [syncTouches, dropTouches])
+    onPanResponderGrant: (evt) => {
+      for (const t of evt.nativeEvent.touches) {
+        const id = String(t.identifier)
+        if (touchesRef.current.has(id)) continue
+        const hit = resolvePoint(t.locationX, t.locationY)
+        if (hit) touchesRef.current.set(id, hit)
+      }
+      publishState()
+      emit(touchesRef.current)
+    },
+    onPanResponderMove: (evt) => {
+      if (!canControlRef.current) return
+      const prev = new Map(touchesRef.current)
+      const nowActive = new Set<string>()
+
+      for (const t of evt.nativeEvent.touches) {
+        const id = String(t.identifier)
+        nowActive.add(id)
+        const hit = resolvePoint(t.locationX, t.locationY)
+        if (!hit) continue
+        touchesRef.current.set(id, hit)
+      }
+
+      // Clean up stale touches that disappeared between frames.
+      for (const [id] of prev) {
+        if (!nowActive.has(id)) touchesRef.current.delete(id)
+      }
+
+      publishState()
+      emit(touchesRef.current)
+    },
+    onPanResponderRelease: (evt) => {
+      for (const t of evt.nativeEvent.changedTouches) {
+        touchesRef.current.delete(String(t.identifier))
+      }
+      publishState()
+      emit(touchesRef.current)
+    },
+    onPanResponderTerminate: (evt) => {
+      for (const t of evt.nativeEvent.changedTouches) {
+        touchesRef.current.delete(String(t.identifier))
+      }
+      publishState()
+      emit(touchesRef.current)
+    },
+  }), [resolvePoint, publishState, emit])
 
   // Hold-resend at 30ms
   const anyActive = Object.keys(activeCells).length > 0
@@ -262,8 +283,8 @@ function DualDpad({
 
   const en = enabledZones(is2wd1m)
 
-  const cellSize = 56
-  const gap = 4
+  const cellSize = 68
+  const gap = 5
 
   const padView = (pad: PadId) => (
     <View className="flex-1 items-center justify-center">
@@ -313,7 +334,7 @@ function DualDpad({
         {padView('L')}
         {oledSlot && (
           <View pointerEvents="none" className="absolute items-center justify-center"
-            style={{ left: '50%', top: '50%', transform: [{ translateX: -64 }, { translateY: -32 }], width: 128, height: 64 }}>
+            style={{ left: '50%', top: '50%', transform: [{ translateX: -80 }, { translateY: -40 }], width: 160, height: 80 }}>
             {oledSlot}
           </View>
         )}
@@ -544,7 +565,7 @@ function DualJoystick({
             )
           })}
           {oledSlot && geo && (
-            <View pointerEvents="none" style={{ position: 'absolute', left: geo.w * 0.5 - 64, top: geo.h * 0.5 - 32, width: 128, height: 64 }}>
+            <View pointerEvents="none" style={{ position: 'absolute', left: geo.w * 0.5 - 80, top: geo.h * 0.5 - 40, width: 160, height: 80 }}>
               {oledSlot}
             </View>
           )}
@@ -651,7 +672,7 @@ export function DriveControls({
           <DualDpad
             canControl={canControl} speed={clampSpeed(speed, limits)} steerLimit={maxSteer}
             is2wd1m={is2wd1m} onSignedDrive={onSignedDrive} sendDir={sendDir}
-            onServo={onServo} limits={limits} onHaptic={hapticTap}
+            onServo={onServo} limits={limits}
             compact={compact} navActiveRef={navActiveRef} onNavInput={onNavInput}
             oledSlot={oledSlot}
           />

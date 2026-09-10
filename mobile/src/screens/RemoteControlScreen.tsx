@@ -261,7 +261,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   }
 
   const oledSlot = isRobocar ? (
-    <View style={{ width: 128, height: 64 }} className="overflow-hidden rounded-lg">
+    <View style={{ width: 160, height: 80 }} className="overflow-hidden rounded-lg">
       <OledDisplay
         {...oledCommonProps}
         compact
@@ -278,7 +278,7 @@ export function RemoteControlScreen({ navigation }: Props) {
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
 
         {/* ── Chrome row ── */}
-        <View className="flex-shrink-0 flex-row items-center gap-2">
+        <View className="flex-shrink-0 flex-row items-center justify-between">
           <Pressable
             onPress={handleBack}
             accessibilityRole="button"
@@ -308,16 +308,16 @@ export function RemoteControlScreen({ navigation }: Props) {
           <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
 
           {linked && (
-            <>
+            <View className="flex-row items-center gap-1.5">
               <View className="h-2 w-2 shrink-0 rounded-full bg-green-400" />
               <Text numberOfLines={1} className="max-w-[80px] shrink-0 text-[10px] font-bold text-slate-400">
                 {deviceName || 'Connected'}
               </Text>
-            </>
+            </View>
           )}
 
           {isRobocar && (
-            <>
+            <View className="flex-row items-center gap-2">
               <ModeChooser
                 activeMode={activeMode}
                 canControl={canControl}
@@ -339,7 +339,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onChange={(v) => { if (isShown2wd1m) { adjustSteerLimit(v - steerLimit) } else handleSpeed(v) }}
                 onCommit={() => { if (!isShown2wd1m) commitSpeed() }}
               />
-            </>
+            </View>
           )}
 
           {isRobocar && (
