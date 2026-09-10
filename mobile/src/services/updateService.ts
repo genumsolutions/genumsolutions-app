@@ -16,6 +16,7 @@ import { File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { APP_VERSION } from '../config/site';
 import {
   APK_URL,
@@ -100,6 +101,9 @@ export async function checkForOtaUpdate(): Promise<{
 // ── APK Update Check ─────────────────────────────────────────────
 // Fetches the latest published release info from Supabase. Pure-ish:
 // accepts an injected fetch so it can be unit tested offline.
+// Compares BOTH the display version string AND the native versionCode
+// (from expo-constants) so that an OTA-injected APP_VERSION can never
+// suppress a real APK update.
 export async function checkForUpdate(
   fetchImpl: typeof fetch = fetch,
   manifestUrl: string = RELEASE_MANIFEST_URL,
@@ -116,7 +120,19 @@ export async function checkForUpdate(
     }
     const apkUrl = data.apkUrl || APK_URL;
     const size = data.sizeLabel || data.size;
-    if (isVersionNewer(APP_VERSION, latest)) {
+
+    // Primary check: display version string comparison.
+    const versionNewer = isVersionNewer(APP_VERSION, latest);
+
+    // Fallback check: native versionCode (the Android integer). This catches
+    // the case where an OTA injects a newer APP_VERSION into the JS bundle
+    // but the native build is still the old versionCode — the device
+    // self-reports the new version and the version-string check returns false.
+    const nativeCode = Constants.expoConfig?.android?.versionCode ?? 0;
+    const manifestCode = data.version_code ?? 0;
+    const codeNewer = nativeCode > 0 && manifestCode > 0 && nativeCode < manifestCode;
+
+    if (versionNewer || codeNewer) {
       return {
         status: 'update-available',
         latestVersion: latest,

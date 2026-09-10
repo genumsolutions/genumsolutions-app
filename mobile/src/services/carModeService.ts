@@ -99,7 +99,24 @@ export async function getCarModes(): Promise<CarMode[]> {
     const modes = data
       .map((row) => mapRow(row as CarModeRow))
       .filter((m): m is CarMode => m !== null);
-    return modes.length > 0 ? modes : LOCAL_CAR_MODES;
+    if (modes.length === 0) return LOCAL_CAR_MODES;
+
+    // Ensure the 3 firmware-available modes (BT, AUTO, 2WD1M) are always
+    // present even if the DB row has null id/name/token and was dropped.
+    const FIRMWARE_TOKENS = ['BT', 'AUTO', '2WD1M'] as const;
+    for (const token of FIRMWARE_TOKENS) {
+      const hasToken = modes.some(
+        (m) => m.token.toUpperCase() === token
+      );
+      if (!hasToken) {
+        const fallback = LOCAL_CAR_MODES.find(
+          (m) => m.token.toUpperCase() === token
+        );
+        if (fallback) modes.push(fallback);
+      }
+    }
+
+    return modes;
   } catch {
     return LOCAL_CAR_MODES;
   }

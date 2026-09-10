@@ -78,11 +78,16 @@ jobs:
             exit 0
           fi
           MF_CODE=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).version_code ?? 0))" "$MANIFEST")
+          MF_VERSION=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).version ?? ''))" "$MANIFEST")
+          APP_VERSION=$(node -p "require('./src/config/site').APP_VERSION")
           if [ "$APP_CODE" -gt "$MF_CODE" ]; then
             echo "app.json versionCode $APP_CODE is newer than published manifest $MF_CODE — this push is a RELEASE, OTA channel skips (release.yml publishes it)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ "$APP_VERSION" != "$MF_VERSION" ]; then
+            echo "APP_VERSION ($APP_VERSION) differs from manifest version ($MF_VERSION) — version bump in site.ts, OTA channel skips."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "app.json versionCode $APP_CODE matches published $MF_CODE — same-version OTA hot-patch proceeds."
+            echo "app.json versionCode $APP_CODE matches published $MF_CODE, APP_VERSION matches — same-version OTA hot-patch proceeds."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
