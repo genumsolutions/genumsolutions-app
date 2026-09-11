@@ -296,7 +296,10 @@ export class SppService {
   async retryConnect(): Promise<void> {
     const addr = this.lastAddress || this.connectingAddress || this.connectedAddress
     if (!addr) throw new Error('No device to retry. Scan and pick a car again.')
-    // Clear previous state before retry to avoid stale UI
+    // Clean up old connection first to avoid stale native socket
+    if (this.connectedAddress || this.connectingAddress) {
+      await this.disconnect()
+    }
     this.connectingAddress = addr
     this.connectedAddress = null
     this.connectedName = null

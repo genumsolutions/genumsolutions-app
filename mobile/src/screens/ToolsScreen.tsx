@@ -70,6 +70,7 @@ export function ToolsScreen() {
     wifiConnected, wifiUrl, setWifiUrl, handleWifiConnect, handleWifiDisconnect,
     error, sppStatusMsg,
     activeMode,
+    showSppsRetry, handleSppsRetry, handleReconnectPromptCancel,
   } = hub
 
   // Category organizer
@@ -218,6 +219,30 @@ export function ToolsScreen() {
             <Text numberOfLines={2} className={`text-sm font-bold ${sppStatus === 'error' || sppStatus === 'disconnected' ? 'text-red-600' : 'text-navy'}`}>
               {sppStatusMsg}
             </Text>
+          </View>
+        )}
+
+        {/* Reconnect banner — shown when connection drops and auto-reconnect exhausted */}
+        {showSppsRetry && (
+          <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <Text className="text-sm font-bold text-amber-800">Connection lost</Text>
+            <Text className="mt-0.5 text-xs text-amber-600">Reconnect to your car?</Text>
+            <View className="mt-2 flex-row gap-2">
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); void handleSppsRetry() }}
+                className="rounded-full bg-gold px-4 py-1.5"
+                hitSlop={6}
+              >
+                <Text className="text-xs font-bold text-white">Reconnect</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); handleReconnectPromptCancel() }}
+                className="rounded-full border border-slate-300 bg-white px-4 py-1.5"
+                hitSlop={6}
+              >
+                <Text className="text-xs font-bold text-slate-500">Cancel</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 

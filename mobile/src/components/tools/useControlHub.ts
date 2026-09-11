@@ -344,6 +344,9 @@ export function useControlHub(routeCategory?: string) {
         case 'disconnected':
           setSppStatus('disconnected')
           setSppStatusMsg('')
+          setConnected(false)
+          setDeviceName('')
+          setDriveStatus('Stop')
           // Auto-reconnect on unexpected disconnect (ESP remote parity):
           // 4 silent attempts at 800ms, then prompt.
           if (!manualCloseRef.current && sppLastAddressRef.current) {
@@ -355,6 +358,9 @@ export function useControlHub(routeCategory?: string) {
         case 'error':
           setSppStatus('error')
           setSppStatusMsg(message ?? 'Connection error')
+          setConnected(false)
+          setDeviceName('')
+          setDriveStatus('Stop')
           if (!manualCloseRef.current && sppLastAddressRef.current) {
             startSppReconnect()
           } else {
@@ -377,6 +383,12 @@ export function useControlHub(routeCategory?: string) {
         }, 200)
       } else if (kind === 'disconnected') {
         // Only clear connected if SPP is also not linked.
+        if (!sppService.isConnected) {
+          setConnected(false)
+          setDeviceName('')
+        }
+      } else if (kind === 'error') {
+        // BLE monitoring error — treat like disconnect if SPP is also down
         if (!sppService.isConnected) {
           setConnected(false)
           setDeviceName('')

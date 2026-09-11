@@ -124,6 +124,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     sensorData, relays, toggleRelay,
     useJoystick, setUseJoystick,
     isDrone, isNonRobocar, is2wd1mActive,
+    showSppsRetry, handleSppsRetry, handleReconnectPromptCancel,
   } = hub
 
   const linked = connected || wifiConnected
@@ -208,7 +209,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     setNavField('none')
   }, [navActive, navField, previewMode, activeMode, selectMode, commitSpeed, commitSteerLimit, setNavActive, setNavField, setPreviewMode])
 
-  const [showExitConfirm, setShowExitConfirm] = useState(false)
   const handleBack = useCallback(() => {
     Vibration.vibrate(10)
     if (navActive) {
@@ -217,11 +217,11 @@ export function RemoteControlScreen({ navigation }: Props) {
       setNavField('none')
       return
     }
-    if (linked) setShowExitConfirm(true)
-    else navigation.goBack()
-  }, [navActive, linked, navigation, setNavActive, setNavField, setPreviewMode])
+    // Navigate back WITHOUT disconnecting — connection survives navigation
+    navigation.goBack()
+  }, [navActive, navigation, setNavActive, setNavField, setPreviewMode])
 
-  const backLabel = navActive ? 'Cancel' : linked ? 'Exit' : 'Back'
+  const backLabel = navActive ? 'Cancel' : 'Back'
 
   // ── Weblink handlers ──
   const handleOpenWebPage = useCallback(() => {
@@ -290,6 +290,34 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   return (
     <View className="flex-1 bg-slate-950">
+      {/* Reconnect banner — non-intrusive, shows when connection drops */}
+      {showSppsRetry && (
+        <View className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-amber-800">Connection lost</Text>
+              <Text className="text-[10px] text-amber-600">Reconnect to your car?</Text>
+            </View>
+            <View className="flex-row gap-2">
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); void handleSppsRetry() }}
+                className="rounded-full bg-gold px-3 py-1"
+                hitSlop={6}
+              >
+                <Text className="text-[10px] font-bold text-white">Reconnect</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); handleReconnectPromptCancel() }}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1"
+                hitSlop={6}
+              >
+                <Text className="text-[10px] font-bold text-slate-500">Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
 
         {/* ── Chrome row ── */}
@@ -516,55 +544,6 @@ export function RemoteControlScreen({ navigation }: Props) {
           </View>
         )}
       </View>
-
-      {/* ── Disconnect confirmation ── */}
-      {showExitConfirm && (
-        <>
-          <Pressable
-            className="absolute inset-0 z-30 bg-black/50"
-            onPress={() => setShowExitConfirm(false)}
-            accessibilityLabel="Cancel disconnect"
-          />
-          <View className="absolute inset-0 z-40 items-center justify-center px-8">
-            <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-xl">
-              <Text className="text-center text-base font-black text-white">Disconnect and exit?</Text>
-              <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
-                The car receives a safe stop (SPD0 · SERVO90) before the link closes.
-              </Text>
-              <View className="mt-4 flex-row justify-center gap-3">
-                <Pressable
-                  onPress={() => setShowExitConfirm(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Keep connection"
-                  hitSlop={8}
-                  android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
-                >
-                  <View className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5">
-                    <Text className="text-sm font-bold text-white">Cancel</Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setShowExitConfirm(false)
-                    void (async () => {
-                      await handleDisconnect()
-                      navigation.goBack()
-                    })()
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Disconnect and exit"
-                  hitSlop={8}
-                  android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
-                >
-                  <View className="rounded-full bg-red-600 px-6 py-2.5">
-                    <Text className="text-sm font-black text-white">Disconnect</Text>
-                  </View>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </>
-      )}
 
       {/* ── Settings dropdown ── */}
       {showSettings && (
