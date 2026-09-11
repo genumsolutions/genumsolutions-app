@@ -29,7 +29,7 @@ import { ModeInfo } from '../components/tools/ModeInfo';
 import { getProductByIdWithSource } from '../services/productService';
 import { resolveModeForProduct, type CarMode } from '../config/roboCarCatalog';
 import { APP_VERSION } from '../config/site';
-import { PROJECT_CATEGORIES, type ProjectCategory } from '../config/project-catalog';
+import { PROJECT_CATEGORIES, PRODUCT_CATEGORY_TO_SLUG, type ProjectCategory } from '../config/project-catalog';
 
 type Route = RouteProp<RootStackParamList, 'Tools'>
 
@@ -59,7 +59,13 @@ const CAPABILITY_LABELS: Record<string, string> = {
 export function ToolsScreen() {
   const route = useRoute<Route>()
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
-  const routeCategory = route.params?.category
+  const routeCategory = (() => {
+    const raw = route.params?.category
+    if (!raw) return undefined
+    if (PRODUCT_CATEGORY_TO_SLUG[raw]) return PRODUCT_CATEGORY_TO_SLUG[raw]
+    if (PROJECT_CATEGORIES.some((c) => c.slug === raw)) return raw
+    return undefined
+  })()
   const productId = route.params?.productId
 
   // Shared hook — connection state + everything the Remote window handoff

@@ -75,3 +75,15 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
 export function getProjectCategory(slug: string): ProjectCategory | undefined {
   return PROJECT_CATEGORIES.find((c) => c.slug === slug)
 }
+
+// Maps the product.category values from Supabase (e.g. 'Robot Cars')
+// to the PROJECT_CATEGORIES slugs used by the Control Panel.
+export const PRODUCT_CATEGORY_TO_SLUG: Record<string, string> = {
+  'Robot Cars':       'robocar',
+  'Home Automation':  'home-automation',
+  'Smart Farm':       'smart-farm',
+  'Smart City':       'smart-city',
+  'Drones & Aerial':  'drones',
+  'Drones':           'drones',
+  'Pre-packaged Kits': 'robocar',
+}
