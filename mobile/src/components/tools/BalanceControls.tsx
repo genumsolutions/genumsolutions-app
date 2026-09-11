@@ -3,12 +3,11 @@
 // Remote.
 //
 // Compact layout (immersive remote):
-//   Top:  [ANG +12.3° ●BAL OUT 50]  [OLED 160×80]
-//   Grid: [Kp −/+] [Ki −/+]  [Kd −/+] [OUT −/+]
-//   Bot:  [ Enter AUTO ]
+//   Left:  [ANGLE +12.3° ●BAL]  [OUT 50]   (big display cards)
+//   Right: [OLED 160×80]
+//   Grid:  Kp/Ki/Kd/OUT/OFF with fine + coarse ± buttons
 //
 // Step sizes match the firmware's significant bits.
-// OFF lives in RemoteControlScreen Settings.
 // =====================================================================
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -36,8 +35,8 @@ export const PID_DEFS = {
 
 export type PidKey = keyof typeof PID_DEFS
 
-/** Compact PID card for the 2×2 grid: [label] [−] [value] [+] */
-function PidCard({
+/** PID row with fine + coarse ± buttons: [label] [−−] [−] [value] [+] [++] */
+function PidRow({
   pidKey, value, canControl, onPid, onOpenModal,
 }: {
   pidKey: PidKey
@@ -47,7 +46,9 @@ function PidCard({
   onOpenModal: (key: PidKey) => void
 }) {
   const def = PID_DEFS[pidKey]
-  const display = value.toFixed(def.decimals)
+  const display = pidKey === 'off'
+    ? `${value >= 0 ? '+' : ''}${value.toFixed(def.decimals)}`
+    : value.toFixed(def.decimals)
 
   const adjust = (delta: number) => {
     const next = Math.round((value + delta) / def.step) * def.step
@@ -56,7 +57,7 @@ function PidCard({
   }
 
   return (
-    <View className="flex-[1_1_45%] flex-row items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
+    <View className="flex-[1_1_45%] flex-row items-center gap-0.5 rounded-lg border border-white/10 bg-white/5 px-1.5 py-1">
       {/* Label */}
       <Text className="w-7 text-[9px] font-black uppercase text-slate-400">{def.label}</Text>
 
@@ -64,36 +65,56 @@ function PidCard({
       <Pressable
         onPress={() => adjust(-def.bigStep)}
         disabled={!canControl}
-        hitSlop={6}
-        className="h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        hitSlop={4}
+        className="h-7 w-7 items-center justify-center rounded-md bg-white/5 active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="minus" size={13} color="#94a3b8" />
+        <Feather name="minus" size={12} color="#64748b" />
+      </Pressable>
+
+      {/* Fine − */}
+      <Pressable
+        onPress={() => adjust(-def.step)}
+        disabled={!canControl}
+        hitSlop={4}
+        className="h-6 w-6 items-center justify-center rounded-md active:bg-white/15 disabled:opacity-30"
+      >
+        <Feather name="minus" size={11} color="#94a3b8" />
       </Pressable>
 
       {/* Value (tap to type) */}
       <Pressable
         onPress={() => onOpenModal(pidKey)}
-        hitSlop={6}
-        className="min-h-8 min-w-[44px] flex-1 items-center justify-center rounded-md border border-white/10 bg-slate-800 px-1.5 py-0.5 active:bg-slate-700"
+        hitSlop={4}
+        className="min-h-7 min-w-[40px] flex-1 items-center justify-center rounded-md border border-white/10 bg-slate-800 px-1 py-0.5 active:bg-slate-700"
       >
-        <Text className="font-mono text-[12px] font-bold text-emerald-300">{display}</Text>
+        <Text className="font-mono text-[11px] font-bold text-emerald-300">{display}</Text>
+      </Pressable>
+
+      {/* Fine + */}
+      <Pressable
+        onPress={() => adjust(def.step)}
+        disabled={!canControl}
+        hitSlop={4}
+        className="h-6 w-6 items-center justify-center rounded-md active:bg-white/15 disabled:opacity-30"
+      >
+        <Feather name="plus" size={11} color="#94a3b8" />
       </Pressable>
 
       {/* Coarse + */}
       <Pressable
         onPress={() => adjust(def.bigStep)}
         disabled={!canControl}
-        hitSlop={6}
-        className="h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        hitSlop={4}
+        className="h-7 w-7 items-center justify-center rounded-md bg-white/5 active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="plus" size={13} color="#94a3b8" />
+        <Feather name="plus" size={12} color="#64748b" />
       </Pressable>
     </View>
   )
 }
 
 export function BalanceControls({
-  canControl, angle, kp, ki, kd, out, off, onPid, onEnterMode, compact, oledSlot,
+  canControl, angle, kp, ki, kd, out, off, onPid, compact, oledSlot,
 }: BalanceControlsProps) {
   const st = pidStatus(angle)
   const angleText = angle == null ? '—' : `${angle >= 0 ? '+' : ''}${angle.toFixed(1)}°`
@@ -105,62 +126,42 @@ export function BalanceControls({
   const modalDef = modalKey ? PID_DEFS[modalKey] : null
 
   return (
-    <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'px-3 pt-3 pb-4' : 'mt-4 p-5'}`}>
-      {/* ── Top section: telemetry bar + OLED ── */}
-      <View className="flex-row items-start gap-2">
-        {/* Telemetry bar */}
-        <View className="flex-1 flex-row items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5">
-          <View className="flex-row items-center gap-1.5">
-            <Text className="font-mono text-[9px] font-bold text-slate-500">ANG</Text>
-            <Text className="font-mono text-[13px] font-bold text-emerald-300">{angleText}</Text>
+    <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'px-2 pt-2 pb-3' : 'mt-4 p-5'}`}>
+      {/* ── Top section: angle/OUT cards + OLED ── */}
+      <View className="flex-row gap-2">
+        {/* Left: angle + OUT stacked */}
+        <View className="flex-1 gap-2">
+          {/* Angle card */}
+          <View className="rounded-xl bg-slate-900 px-3 py-2.5">
+            <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
+            <Text className="mt-0.5 font-mono text-2xl font-bold text-emerald-300">{angleText}</Text>
+            <View className="mt-1 flex-row items-center gap-1.5">
+              <View className={`rounded-full ${st.dot} h-2 w-2`} />
+              <Text className={`text-[10px] font-black ${st.text}`}>{st.label}</Text>
+            </View>
           </View>
-          <View className="flex-row items-center gap-1">
-            <View className={`rounded-full ${st.dot} h-1.5 w-1.5`} />
-            <Text className={`font-black text-[8px] ${st.text}`}>{st.label}</Text>
-          </View>
-          <View className="flex-row items-center gap-1.5">
-            <Text className="font-mono text-[9px] font-bold text-slate-500">OUT</Text>
-            <Text className="font-mono text-[11px] font-bold text-white">{out}</Text>
+
+          {/* OUT card */}
+          <View className="rounded-xl bg-slate-900 px-3 py-2">
+            <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">OUT</Text>
+            <Text className="mt-0.5 font-mono text-xl font-bold text-white">{out}</Text>
           </View>
         </View>
 
-        {/* OLED slot (optional) */}
+        {/* Right: OLED slot */}
         {oledSlot && (
           <View className="shrink-0">{oledSlot}</View>
         )}
       </View>
 
-      {/* ── Header + Enter AUTO ── */}
-      <View className="mt-2 flex-row items-center justify-between gap-2">
-        <Text className={`font-black uppercase tracking-widest text-navy ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
-          PID
-        </Text>
-        <Pressable
-          onPress={onEnterMode}
-          disabled={!canControl}
-          className="shrink-0 items-center rounded-full bg-navy px-3 py-1.5 disabled:opacity-60"
-        >
-          <Text className="text-[10px] font-black text-white">Enter AUTO</Text>
-        </Pressable>
+      {/* ── PID grid: 2 columns, fine + coarse ── */}
+      <View className="mt-2 flex-row flex-wrap gap-1.5">
+        <PidRow pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidRow pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidRow pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidRow pidKey="out" value={out} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidRow pidKey="off" value={off} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
       </View>
-
-      {/* ── 2×2 PID grid ── */}
-      <View className="mt-2 flex-row flex-wrap gap-2">
-        <PidCard pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidCard pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidCard pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidCard pidKey="out" value={out} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-      </View>
-
-      {/* ── Full mode hint ── */}
-      {!compact && (
-        <View className="mt-3 flex-row items-start gap-2">
-          <Feather name="activity" size={13} color="#1e3a8a" />
-          <Text className="flex-1 text-[11px] leading-4 text-muted">
-            Fine = 1 significant bit, coarse = 10× fine. Tap a value to type precisely.
-          </Text>
-        </View>
-      )}
 
       {/* ── Direct-input modal ── */}
       {modalKey && modalDef && (
