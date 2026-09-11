@@ -444,6 +444,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onPid={applyPid}
                 onEnterMode={() => selectMode(activeMode)}
                 compact
+                oledSlot={oledSlot}
               />
             ) : showJoystick ? (
               <DriveControls

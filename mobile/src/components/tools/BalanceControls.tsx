@@ -2,17 +2,13 @@
 // BalanceControls — self-balancing (AUTO) deck for the per-package Car
 // Remote.
 //
-// Shows the live tilt angle from the car's TEL;…ANGLE telemetry next to
-// compact PID tuning (Kp/Ki/Kd/OUT), mirroring the ESP remote's AUTO
-// dashboard. Step sizes match the firmware's significant bits:
-//   Kp: fine=0.01, coarse=0.1   (2 dp)
-//   Ki: fine=0.001, coarse=0.01 (3 dp)
-//   Kd: fine=0.001, coarse=0.01 (3 dp)
-//   OUT: fine=1, coarse=10      (integer)
-//   OFF: fine=0.01, coarse=0.1  (2 dp) — lives in RemoteControlScreen Settings
+// Compact layout (immersive remote):
+//   Top:  [ANG +12.3° ●BAL OUT 50]  [OLED 160×80]
+//   Grid: [Kp −/+] [Ki −/+]  [Kd −/+] [OUT −/+]
+//   Bot:  [ Enter AUTO ]
 //
-// Compact mode (immersive remote):
-// Inline label + [−] [value] [+]. Tapping value opens PidInputModal.
+// Step sizes match the firmware's significant bits.
+// OFF lives in RemoteControlScreen Settings.
 // =====================================================================
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -40,8 +36,8 @@ export const PID_DEFS = {
 
 export type PidKey = keyof typeof PID_DEFS
 
-/** Compact PID row: [label] [−] [value] [+] inline on one line. */
-export function PidRow({
+/** Compact PID card for the 2×2 grid: [label] [−] [value] [+] */
+function PidCard({
   pidKey, value, canControl, onPid, onOpenModal,
 }: {
   pidKey: PidKey
@@ -51,9 +47,7 @@ export function PidRow({
   onOpenModal: (key: PidKey) => void
 }) {
   const def = PID_DEFS[pidKey]
-  const display = pidKey === 'off'
-    ? `${value >= 0 ? '+' : ''}${value.toFixed(def.decimals)}`
-    : value.toFixed(def.decimals)
+  const display = value.toFixed(def.decimals)
 
   const adjust = (delta: number) => {
     const next = Math.round((value + delta) / def.step) * def.step
@@ -62,27 +56,27 @@ export function PidRow({
   }
 
   return (
-    <View className="flex-row items-center gap-1.5">
-      {/* Inline label */}
-      <Text className="w-8 text-[10px] font-black uppercase tracking-wide text-slate-400">{def.label}</Text>
+    <View className="flex-[1_1_45%] flex-row items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
+      {/* Label */}
+      <Text className="w-7 text-[9px] font-black uppercase text-slate-400">{def.label}</Text>
 
       {/* Coarse − */}
       <Pressable
         onPress={() => adjust(-def.bigStep)}
         disabled={!canControl}
         hitSlop={6}
-        className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        className="h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="minus" size={14} color="#94a3b8" />
+        <Feather name="minus" size={13} color="#94a3b8" />
       </Pressable>
 
-      {/* Value field (tap to type) */}
+      {/* Value (tap to type) */}
       <Pressable
         onPress={() => onOpenModal(pidKey)}
         hitSlop={6}
-        className="min-h-9 min-w-[52px] flex-1 items-center justify-center rounded-lg border border-white/10 bg-slate-800 px-2 py-1 active:bg-slate-700"
+        className="min-h-8 min-w-[44px] flex-1 items-center justify-center rounded-md border border-white/10 bg-slate-800 px-1.5 py-0.5 active:bg-slate-700"
       >
-        <Text className="text-center font-mono text-[13px] font-bold text-emerald-300">{display}</Text>
+        <Text className="font-mono text-[12px] font-bold text-emerald-300">{display}</Text>
       </Pressable>
 
       {/* Coarse + */}
@@ -90,16 +84,16 @@ export function PidRow({
         onPress={() => adjust(def.bigStep)}
         disabled={!canControl}
         hitSlop={6}
-        className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        className="h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="plus" size={14} color="#94a3b8" />
+        <Feather name="plus" size={13} color="#94a3b8" />
       </Pressable>
     </View>
   )
 }
 
 export function BalanceControls({
-  canControl, angle, kp, ki, kd, out, off, onPid, onEnterMode, compact,
+  canControl, angle, kp, ki, kd, out, off, onPid, onEnterMode, compact, oledSlot,
 }: BalanceControlsProps) {
   const st = pidStatus(angle)
   const angleText = angle == null ? '—' : `${angle >= 0 ? '+' : ''}${angle.toFixed(1)}°`
@@ -112,57 +106,53 @@ export function BalanceControls({
 
   return (
     <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'px-3 pt-3 pb-4' : 'mt-4 p-5'}`}>
-      {/* Header + AUTO mode entry */}
-      <View className="flex-row items-center justify-between gap-2">
-        <View className="min-w-0 flex-1">
-          <Text className={`font-black uppercase tracking-widest text-navy ${compact ? 'text-[11px]' : 'text-xs'}`}>
-            Self-balancing · PID
-          </Text>
-          {!compact && (
-            <Text className="mt-1 text-[11px] leading-4 text-muted">
-              MPU6050 + PID keeps the bot upright. Step sizes match firmware precision.
-            </Text>
-          )}
+      {/* ── Top section: telemetry bar + OLED ── */}
+      <View className="flex-row items-start gap-2">
+        {/* Telemetry bar */}
+        <View className="flex-1 flex-row items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5">
+          <View className="flex-row items-center gap-1.5">
+            <Text className="font-mono text-[9px] font-bold text-slate-500">ANG</Text>
+            <Text className="font-mono text-[13px] font-bold text-emerald-300">{angleText}</Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            <View className={`rounded-full ${st.dot} h-1.5 w-1.5`} />
+            <Text className={`font-black text-[8px] ${st.text}`}>{st.label}</Text>
+          </View>
+          <View className="flex-row items-center gap-1.5">
+            <Text className="font-mono text-[9px] font-bold text-slate-500">OUT</Text>
+            <Text className="font-mono text-[11px] font-bold text-white">{out}</Text>
+          </View>
         </View>
+
+        {/* OLED slot (optional) */}
+        {oledSlot && (
+          <View className="shrink-0">{oledSlot}</View>
+        )}
+      </View>
+
+      {/* ── Header + Enter AUTO ── */}
+      <View className="mt-2 flex-row items-center justify-between gap-2">
+        <Text className={`font-black uppercase tracking-widest text-navy ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
+          PID
+        </Text>
         <Pressable
           onPress={onEnterMode}
           disabled={!canControl}
-          className="shrink-0 items-center rounded-full bg-navy px-4 py-2 disabled:opacity-60"
+          className="shrink-0 items-center rounded-full bg-navy px-3 py-1.5 disabled:opacity-60"
         >
-          <Text className="text-[11px] font-black text-white">Enter AUTO</Text>
+          <Text className="text-[10px] font-black text-white">Enter AUTO</Text>
         </Pressable>
       </View>
 
-      {/* Compact telemetry bar: angle + status + OUT — single line */}
-      <View className={`mt-2 flex-row items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5 ${compact ? '' : 'mt-4'}`}>
-        <View className="flex-row items-center gap-2">
-          <Text className="font-mono text-[10px] font-bold text-slate-500">ANG</Text>
-          <Text className="font-mono text-sm font-bold text-emerald-300">{angleText}</Text>
-        </View>
-        <View className="flex-row items-center gap-1.5">
-          <View className={`rounded-full ${st.dot} h-1.5 w-1.5`} />
-          <Text className={`font-black text-[9px] ${st.text}`}>{st.label}</Text>
-        </View>
-        <View className="flex-row items-center gap-2">
-          <Text className="font-mono text-[10px] font-bold text-slate-500">OUT</Text>
-          <Text className="font-mono text-[11px] font-bold text-white">{out}</Text>
-        </View>
+      {/* ── 2×2 PID grid ── */}
+      <View className="mt-2 flex-row flex-wrap gap-2">
+        <PidCard pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidCard pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidCard pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        <PidCard pidKey="out" value={out} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
       </View>
 
-      {/* PID tuning — Kp/Ki/Kd/OUT rows */}
-      <View className={`gap-2 ${compact ? 'mt-2' : 'mt-3'}`}>
-        {(['kp', 'ki', 'kd', 'out'] as PidKey[]).map((k) => (
-          <PidRow
-            key={k}
-            pidKey={k}
-            value={values[k]}
-            canControl={canControl}
-            onPid={onPid}
-            onOpenModal={setModalKey}
-          />
-        ))}
-      </View>
-
+      {/* ── Full mode hint ── */}
       {!compact && (
         <View className="mt-3 flex-row items-start gap-2">
           <Feather name="activity" size={13} color="#1e3a8a" />
@@ -172,7 +162,7 @@ export function BalanceControls({
         </View>
       )}
 
-      {/* Direct-input modal */}
+      {/* ── Direct-input modal ── */}
       {modalKey && modalDef && (
         <PidInputModal
           visible
