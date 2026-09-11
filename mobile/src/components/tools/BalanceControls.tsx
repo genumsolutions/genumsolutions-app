@@ -58,57 +58,57 @@ function PidRow({
   }
 
   return (
-    <View className="flex-[1_1_45%] flex-row items-center gap-0.5 rounded-lg border border-white/10 bg-white/5 px-1.5 py-1">
+    <View className="self-start flex-row items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
       {/* Label */}
-      <Text className="w-7 text-[9px] font-black uppercase text-slate-400">{def.label}</Text>
+      <Text className="w-8 text-[10px] font-black uppercase text-slate-400">{def.label}</Text>
 
       {/* Coarse − */}
       <Pressable
         onPress={() => adjust(-def.bigStep)}
         disabled={!canControl}
-        hitSlop={4}
-        className="h-7 w-7 items-center justify-center rounded-md bg-white/5 active:bg-white/15 disabled:opacity-30"
+        hitSlop={6}
+        className="h-9 w-9 items-center justify-center rounded-lg bg-white/5 active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="minus" size={12} color="#64748b" />
+        <Feather name="minus" size={14} color="#64748b" />
       </Pressable>
 
       {/* Fine − */}
       <Pressable
         onPress={() => adjust(-def.step)}
         disabled={!canControl}
-        hitSlop={4}
-        className="h-6 w-6 items-center justify-center rounded-md active:bg-white/15 disabled:opacity-30"
+        hitSlop={6}
+        className="h-8 w-8 items-center justify-center rounded-lg active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="minus" size={11} color="#94a3b8" />
+        <Feather name="minus" size={12} color="#94a3b8" />
       </Pressable>
 
       {/* Value (tap to type) */}
       <Pressable
         onPress={() => onOpenModal(pidKey)}
-        hitSlop={4}
-        className="min-h-7 min-w-[40px] flex-1 items-center justify-center rounded-md border border-white/10 bg-slate-800 px-1 py-0.5 active:bg-slate-700"
+        hitSlop={6}
+        className="min-h-9 min-w-[48px] items-center justify-center rounded-lg border border-white/10 bg-slate-800 px-2 py-1 active:bg-slate-700"
       >
-        <Text className="font-mono text-[11px] font-bold text-emerald-300">{display}</Text>
+        <Text className="font-mono text-[13px] font-bold text-emerald-300">{display}</Text>
       </Pressable>
 
       {/* Fine + */}
       <Pressable
         onPress={() => adjust(def.step)}
         disabled={!canControl}
-        hitSlop={4}
-        className="h-6 w-6 items-center justify-center rounded-md active:bg-white/15 disabled:opacity-30"
+        hitSlop={6}
+        className="h-8 w-8 items-center justify-center rounded-lg active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="plus" size={11} color="#94a3b8" />
+        <Feather name="plus" size={12} color="#94a3b8" />
       </Pressable>
 
       {/* Coarse + */}
       <Pressable
         onPress={() => adjust(def.bigStep)}
         disabled={!canControl}
-        hitSlop={4}
-        className="h-7 w-7 items-center justify-center rounded-md bg-white/5 active:bg-white/15 disabled:opacity-30"
+        hitSlop={6}
+        className="h-9 w-9 items-center justify-center rounded-lg bg-white/5 active:bg-white/15 disabled:opacity-30"
       >
-        <Feather name="plus" size={12} color="#64748b" />
+        <Feather name="plus" size={14} color="#64748b" />
       </Pressable>
     </View>
   )
@@ -150,7 +150,7 @@ export function BalanceControls({
       </View>
 
       {/* ── PID grid: 2 columns, fine + coarse ── */}
-      <View className="mt-2 flex-row flex-wrap gap-1.5">
+      <View className="mt-2 flex-row flex-wrap gap-2">
         <PidRow pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
         <PidRow pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
         <PidRow pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
