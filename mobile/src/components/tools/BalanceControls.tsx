@@ -3,16 +3,16 @@
 // Remote.
 //
 // Shows the live tilt angle from the car's TEL;…ANGLE telemetry next to
-// full PID tuning (Kp/Ki/Kd/OUT/OFF), mirroring the ESP remote's AUTO
-// dashboard (Genum_ESP32_Remote ui.md — Auto Dashboard). Each value
-// change goes through onPid -> the screen's applyPid, which sends the
-// same `CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:..` line the remote sends when
-// calibration is saved.
+// compact PID tuning (Kp/Ki/Kd/OUT), mirroring the ESP remote's AUTO
+// dashboard. Step sizes match the firmware's significant bits:
+//   Kp: fine=0.01, coarse=0.1   (2 dp)
+//   Ki: fine=0.001, coarse=0.01 (3 dp)
+//   Kd: fine=0.001, coarse=0.01 (3 dp)
+//   OUT: fine=1, coarse=10      (integer)
+//   OFF: fine=0.01, coarse=0.1  (2 dp) — lives in RemoteControlScreen Settings
 //
-// COMPACT MODE (immersive game remote):
-// Value field with fine/coarse +/- buttons on each side.
-// Tapping the value opens a direct-input modal for precise entry.
-// No sliders — just buttons and typed values for precise PID tuning.
+// Compact mode (immersive remote):
+// Inline label + [−] [value] [+]. Tapping value opens PidInputModal.
 // =====================================================================
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -21,26 +21,27 @@ import type { BalanceControlsProps } from './types'
 import { PidInputModal } from './PidInputModal'
 
 function pidStatus(angle: number | null): { label: string; dot: string; text: string } {
-  if (angle == null) return { label: 'NO TELEMETRY', dot: 'bg-border', text: 'text-slate-500' }
+  if (angle == null) return { label: 'NO TEL', dot: 'bg-border', text: 'text-slate-500' }
   const a = Math.abs(angle)
-  if (a < 2.5) return { label: 'BALANCING', dot: 'bg-emerald-500', text: 'text-emerald-600' }
-  if (a < 10) return { label: 'CORRECTING', dot: 'bg-amber-500', text: 'text-amber-600' }
+  if (a < 2.5) return { label: 'BAL', dot: 'bg-emerald-500', text: 'text-emerald-600' }
+  if (a < 10) return { label: 'ADJ', dot: 'bg-amber-500', text: 'text-amber-600' }
   return { label: 'TILT!', dot: 'bg-red-500', text: 'text-red-600' }
 }
 
-/** PID parameter definitions — range, step sizes, formatting. */
-const PID_DEFS = {
-  kp:  { min: 0,   max: 200, step: 0.1,  bigStep: 5,   decimals: 1, label: 'Kp' },
-  ki:  { min: 0,   max: 50,  step: 0.1,  bigStep: 2,   decimals: 1, label: 'Ki' },
-  kd:  { min: 0,   max: 50,  step: 0.1,  bigStep: 2,   decimals: 1, label: 'Kd' },
+/** PID parameter definitions — range, step sizes, formatting.
+ *  Fine step = 1 significant bit, coarse = 10× fine (one significant bit apart). */
+export const PID_DEFS = {
+  kp:  { min: 0,   max: 200, step: 0.01, bigStep: 0.1, decimals: 2, label: 'Kp' },
+  ki:  { min: 0,   max: 50,  step: 0.001,bigStep: 0.01,decimals: 3, label: 'Ki' },
+  kd:  { min: 0,   max: 50,  step: 0.001,bigStep: 0.01,decimals: 3, label: 'Kd' },
   out: { min: 0,   max: 255, step: 1,    bigStep: 10,  decimals: 0, label: 'OUT' },
-  off: { min: -90, max: 90,  step: 0.05, bigStep: 1,   decimals: 2, label: 'OFF' },
+  off: { min: -90, max: 90,  step: 0.01, bigStep: 0.1, decimals: 2, label: 'OFF' },
 } as const
 
-type PidKey = keyof typeof PID_DEFS
+export type PidKey = keyof typeof PID_DEFS
 
-/** Compact PID row: label on top, then [−fine] [−coarse] [value] [+coarse] [+fine]. */
-function PidRow({
+/** Compact PID row: [label] [−] [value] [+] inline on one line. */
+export function PidRow({
   pidKey, value, canControl, onPid, onOpenModal,
 }: {
   pidKey: PidKey
@@ -61,63 +62,38 @@ function PidRow({
   }
 
   return (
-    <View className="gap-1.5">
-      {/* Label */}
-      <Text className="ml-1 text-[11px] font-black uppercase tracking-wide text-navy">{def.label}</Text>
+    <View className="flex-row items-center gap-1.5">
+      {/* Inline label */}
+      <Text className="w-8 text-[10px] font-black uppercase tracking-wide text-slate-400">{def.label}</Text>
 
-      {/* Buttons row: [−fine] [−coarse] [value] [+coarse] [+fine] */}
-      <View className="flex-row items-center gap-2">
-        {/* Fine − */}
-        <Pressable
-          onPress={() => adjust(-def.step)}
-          disabled={!canControl}
-          hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
-        >
-          <Feather name="minus" size={16} color="#94a3b8" />
-        </Pressable>
+      {/* Coarse − */}
+      <Pressable
+        onPress={() => adjust(-def.bigStep)}
+        disabled={!canControl}
+        hitSlop={6}
+        className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+      >
+        <Feather name="minus" size={14} color="#94a3b8" />
+      </Pressable>
 
-        {/* Coarse − */}
-        <Pressable
-          onPress={() => adjust(-def.bigStep)}
-          disabled={!canControl}
-          hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
-        >
-          <Feather name="minus" size={16} color="#1e3a8a" />
-          <Feather name="minus" size={16} color="#1e3a8a" style={{ position: 'absolute', left: 4 }} />
-        </Pressable>
+      {/* Value field (tap to type) */}
+      <Pressable
+        onPress={() => onOpenModal(pidKey)}
+        hitSlop={6}
+        className="min-h-9 min-w-[52px] flex-1 items-center justify-center rounded-lg border border-white/10 bg-slate-800 px-2 py-1 active:bg-slate-700"
+      >
+        <Text className="text-center font-mono text-[13px] font-bold text-emerald-300">{display}</Text>
+      </Pressable>
 
-        {/* Value field (tap to type) */}
-        <Pressable
-          onPress={() => onOpenModal(pidKey)}
-          hitSlop={6}
-          className="min-h-11 min-w-[72px] flex-1 items-center justify-center rounded-xl border border-white/10 bg-slate-800 px-3 py-2 active:bg-slate-700"
-        >
-          <Text className="text-center font-mono text-[15px] font-bold text-emerald-300">{display}</Text>
-        </Pressable>
-
-        {/* Coarse + */}
-        <Pressable
-          onPress={() => adjust(def.bigStep)}
-          disabled={!canControl}
-          hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
-        >
-          <Feather name="plus" size={16} color="#1e3a8a" />
-          <Feather name="plus" size={16} color="#1e3a8a" style={{ position: 'absolute', left: 4 }} />
-        </Pressable>
-
-        {/* Fine + */}
-        <Pressable
-          onPress={() => adjust(def.step)}
-          disabled={!canControl}
-          hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
-        >
-          <Feather name="plus" size={16} color="#94a3b8" />
-        </Pressable>
-      </View>
+      {/* Coarse + */}
+      <Pressable
+        onPress={() => adjust(def.bigStep)}
+        disabled={!canControl}
+        hitSlop={6}
+        className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+      >
+        <Feather name="plus" size={14} color="#94a3b8" />
+      </Pressable>
     </View>
   )
 }
@@ -144,8 +120,7 @@ export function BalanceControls({
           </Text>
           {!compact && (
             <Text className="mt-1 text-[11px] leading-4 text-muted">
-              MPU6050 + PID keeps the bot upright. Angle streams from the car's
-              TEL;… telemetry; tuning below mirrors the ESP remote's AUTO dashboard.
+              MPU6050 + PID keeps the bot upright. Step sizes match firmware precision.
             </Text>
           )}
         </View>
@@ -158,60 +133,41 @@ export function BalanceControls({
         </Pressable>
       </View>
 
-      {/* Live tilt readout */}
-      <View className={`rounded-xl bg-slate-900 shadow-inner ${compact ? 'mt-2 px-3 py-2' : 'mt-4 px-4 py-3'}`}>
-        <View className="flex-row items-center justify-between">
-          <Text className="font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
-          <View className="flex-row items-center gap-1.5">
-            <View className={`rounded-full ${st.dot} ${compact ? 'h-2 w-2' : 'h-2 w-2'}`} />
-            <Text className={`font-black uppercase tracking-wide ${st.text} ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{st.label}</Text>
-          </View>
+      {/* Compact telemetry bar: angle + status + OUT — single line */}
+      <View className={`mt-2 flex-row items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5 ${compact ? '' : 'mt-4'}`}>
+        <View className="flex-row items-center gap-2">
+          <Text className="font-mono text-[10px] font-bold text-slate-500">ANG</Text>
+          <Text className="font-mono text-sm font-bold text-emerald-300">{angleText}</Text>
         </View>
-        <View className="mt-1 flex-row items-end justify-between">
-          <Text className={`font-mono font-bold text-emerald-300 ${compact ? 'text-2xl' : 'text-4xl'}`}>{angleText}</Text>
-          <Text className="mb-1 font-mono text-[10px] text-slate-400">
-            OUT {out} · OFF {off >= 0 ? '+' : ''}{off.toFixed(2)}°
-          </Text>
+        <View className="flex-row items-center gap-1.5">
+          <View className={`rounded-full ${st.dot} h-1.5 w-1.5`} />
+          <Text className={`font-black text-[9px] ${st.text}`}>{st.label}</Text>
+        </View>
+        <View className="flex-row items-center gap-2">
+          <Text className="font-mono text-[10px] font-bold text-slate-500">OUT</Text>
+          <Text className="font-mono text-[11px] font-bold text-white">{out}</Text>
         </View>
       </View>
 
-      {/* PID tuning */}
-      {compact ? (
-        /* Compact: value fields with fine/coarse +/- buttons (no sliders) */
-        <View className="mt-3 gap-3">
-          {(['kp', 'ki', 'kd', 'out', 'off'] as PidKey[]).map((k) => (
-            <PidRow
-              key={k}
-              pidKey={k}
-              value={values[k]}
-              canControl={canControl}
-              onPid={onPid}
-              onOpenModal={setModalKey}
-            />
-          ))}
-        </View>
-      ) : (
-        /* Full: same PidRow buttons as compact, with more breathing room */
-        <View className="mt-4 gap-3">
-          {(['kp', 'ki', 'kd', 'out', 'off'] as PidKey[]).map((k) => (
-            <PidRow
-              key={k}
-              pidKey={k}
-              value={values[k]}
-              canControl={canControl}
-              onPid={onPid}
-              onOpenModal={setModalKey}
-            />
-          ))}
-        </View>
-      )}
+      {/* PID tuning — Kp/Ki/Kd/OUT rows */}
+      <View className={`gap-2 ${compact ? 'mt-2' : 'mt-3'}`}>
+        {(['kp', 'ki', 'kd', 'out'] as PidKey[]).map((k) => (
+          <PidRow
+            key={k}
+            pidKey={k}
+            value={values[k]}
+            canControl={canControl}
+            onPid={onPid}
+            onOpenModal={setModalKey}
+          />
+        ))}
+      </View>
 
       {!compact && (
         <View className="mt-3 flex-row items-start gap-2">
           <Feather name="activity" size={13} color="#1e3a8a" />
           <Text className="flex-1 text-[11px] leading-4 text-muted">
-            Changes send the same CFG;… line the ESP remote uses when calibration is
-            saved — start with the car flat, then nudge Kp/OUT until it stands still.
+            Fine = 1 significant bit, coarse = 10× fine. Tap a value to type precisely.
           </Text>
         </View>
       )}
