@@ -187,6 +187,8 @@ export type BalanceControlsProps = {
   onPid: (key: 'kp' | 'ki' | 'kd' | 'out' | 'off', v: number) => void
   /** Switches the car into AUTO (self-balancing) mode. */
   onEnterMode: () => void
+  /** Compact layout for the immersive game-remote (less padding, tighter spacing). */
+  compact?: boolean
 }
 
 export type AutonomousControlsProps = {

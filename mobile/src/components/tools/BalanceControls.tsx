@@ -24,23 +24,25 @@ function pidStatus(angle: number | null): { label: string; dot: string; text: st
 }
 
 export function BalanceControls({
-  canControl, angle, kp, ki, kd, out, off, onPid, onEnterMode,
+  canControl, angle, kp, ki, kd, out, off, onPid, onEnterMode, compact,
 }: BalanceControlsProps) {
   const st = pidStatus(angle)
   const angleText = angle == null ? '—' : `${angle >= 0 ? '+' : ''}${angle.toFixed(1)}°`
 
   return (
-    <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
+    <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'p-3' : 'mt-4 p-5'}`}>
       {/* Header + AUTO mode entry */}
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
-          <Text className="text-xs font-black uppercase tracking-widest text-navy">
+          <Text className={`font-black uppercase tracking-widest text-navy ${compact ? 'text-[10px]' : 'text-xs'}`}>
             Self-balancing · PID
           </Text>
-          <Text className="mt-1 text-[11px] leading-4 text-muted">
-            MPU6050 + PID keeps the bot upright. Angle streams from the car's
-            TEL;… telemetry; tuning below mirrors the ESP remote's AUTO dashboard.
-          </Text>
+          {!compact && (
+            <Text className="mt-1 text-[11px] leading-4 text-muted">
+              MPU6050 + PID keeps the bot upright. Angle streams from the car's
+              TEL;… telemetry; tuning below mirrors the ESP remote's AUTO dashboard.
+            </Text>
+          )}
         </View>
         <Pressable
           onPress={onEnterMode}
@@ -52,7 +54,7 @@ export function BalanceControls({
       </View>
 
       {/* Live tilt readout */}
-      <View className="mt-4 rounded-xl bg-slate-900 px-4 py-3 shadow-inner">
+      <View className={`rounded-xl bg-slate-900 shadow-inner ${compact ? 'mt-2 px-3 py-2' : 'mt-4 px-4 py-3'}`}>
         <View className="flex-row items-center justify-between">
           <Text className="font-mono text-xs font-bold uppercase tracking-wide text-slate-500">Angle</Text>
           <View className="flex-row items-center gap-1.5">
@@ -61,7 +63,7 @@ export function BalanceControls({
           </View>
         </View>
         <View className="mt-1 flex-row items-end justify-between">
-          <Text className="font-mono text-4xl font-bold text-emerald-300">{angleText}</Text>
+          <Text className={`font-mono font-bold text-emerald-300 ${compact ? 'text-2xl' : 'text-4xl'}`}>{angleText}</Text>
           <Text className="mb-1 font-mono text-xs text-slate-400">
             OUT {out} · OFF {off >= 0 ? '+' : ''}{off.toFixed(2)}°
           </Text>
@@ -69,7 +71,7 @@ export function BalanceControls({
       </View>
 
       {/* PID tuning sliders (full set — Kp/Ki/Kd/OUT/OFF, like the remote) */}
-      <View className="mt-4 flex-row flex-wrap gap-3">
+      <View className={`flex-row flex-wrap gap-3 ${compact ? 'mt-2' : 'mt-4'}`}>
         <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
           <Slider value={kp} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
           <Text className="mt-1 text-right font-mono text-xs text-navy">Kp {kp.toFixed(1)}</Text>
@@ -92,13 +94,15 @@ export function BalanceControls({
         </View>
       </View>
 
-      <View className="mt-3 flex-row items-start gap-2">
-        <Feather name="activity" size={13} color="#1e3a8a" />
-        <Text className="flex-1 text-[11px] leading-4 text-muted">
-          Changes send the same CFG;… line the ESP remote uses when calibration is
-          saved — start with the car flat, then nudge Kp/OUT until it stands still.
-        </Text>
-      </View>
+      {!compact && (
+        <View className="mt-3 flex-row items-start gap-2">
+          <Feather name="activity" size={13} color="#1e3a8a" />
+          <Text className="flex-1 text-[11px] leading-4 text-muted">
+            Changes send the same CFG;… line the ESP remote uses when calibration is
+            saved — start with the car flat, then nudge Kp/OUT until it stands still.
+          </Text>
+        </View>
+      )}
     </View>
   )
 }

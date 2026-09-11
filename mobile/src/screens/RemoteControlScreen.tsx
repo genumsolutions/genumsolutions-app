@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { RootStackParamList } from '../navigation/types'
 import { useControlHub } from '../components/tools/useControlHub'
 import { DriveControls } from '../components/tools/DriveControls'
+import { BalanceControls } from '../components/tools/BalanceControls'
 import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { SensorGrid } from '../components/tools/SensorGrid'
@@ -420,30 +421,47 @@ export function RemoteControlScreen({ navigation }: Props) {
         ) : (
           /* ── Robocar drive deck ── */
           <View key={boardKey} className="relative mt-2 min-h-0 flex-1">
-            <DriveControls
-              canControl={canControl}
-              isDrone={isDrone}
-              activeMode={activeMode}
-              speed={speed}
-              servo={servo}
-              pidKp={pidKp}
-              pidKi={pidKi}
-              pidKd={pidKd}
-              pidOut={pidOut}
-              pidOff={pidOff}
-              useJoystick={useJoystick}
-              onDirection={handleDirection}
-              onSpeed={handleSpeed}
-              onServo={handleServo}
-              onPid={applyPid}
-              onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
-              steerLimit={is2wd1mActive ? steerLimit : undefined}
-              safetyLimits={hub.safetyLimits}
-              compact
-              navActiveRef={navActiveRef}
-              onNavInput={navInput}
-              oledSlot={oledSlot}
-            />
+            {activeMode.controls.includes('pid-auto') ? (
+              /* AUTO mode: replace useless joysticks with PID tuning */
+              <BalanceControls
+                canControl={canControl}
+                angle={telemetry.angle ?? null}
+                telemetry={telemetry}
+                kp={pidKp}
+                ki={pidKi}
+                kd={pidKd}
+                out={pidOut}
+                off={pidOff}
+                onPid={applyPid}
+                onEnterMode={() => selectMode(activeMode)}
+                compact
+              />
+            ) : (
+              <DriveControls
+                canControl={canControl}
+                isDrone={isDrone}
+                activeMode={activeMode}
+                speed={speed}
+                servo={servo}
+                pidKp={pidKp}
+                pidKi={pidKi}
+                pidKd={pidKd}
+                pidOut={pidOut}
+                pidOff={pidOff}
+                useJoystick={useJoystick}
+                onDirection={handleDirection}
+                onSpeed={handleSpeed}
+                onServo={handleServo}
+                onPid={applyPid}
+                onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
+                steerLimit={is2wd1mActive ? steerLimit : undefined}
+                safetyLimits={hub.safetyLimits}
+                compact
+                navActiveRef={navActiveRef}
+                onNavInput={navInput}
+                oledSlot={oledSlot}
+              />
+            )}
             {/* E-stop FAB */}
             <Pressable
               onPress={() => { Vibration.vibrate(50); handleEStop() }}
