@@ -13,8 +13,25 @@
 - [ ] **R8-2 — sign-out is complete:** sign out → reopen app → signed-out state, and signing back in works.
 - [ ] **R8-3 — no regressions from the hardening pass:** cart badge, shop, orders, remote connect (BT + 2WD1M) all behave as in the last verified round.
 - [ ] **R8-4 — website admin dashboard counts:** with data present, `/admin` totals (orders/products/messages/transactions) match reality — the dashboard switched to SQL-side counting.
+- [ ] **R8-5 — wireless car snag round R9:** (new in this pass) BT connect as "WIRELESS CAR", all F/B/L/R/S commands work, push button cycles modes, push-button lag fixed, mode change reflects on app immediately, disconnect/reconnect dialog appears on ToolsScreen and RemoteControlScreen, back navigation preserves connection.
 
 **Pass criteria:** all boxes tick. If R8-1 fails, note the sign-in method (email vs Google) — they use different persist paths.
+
+---
+
+## snag round 9 — wireless car major fix snag round (PENDING DEVICE VERIFY)
+
+> Physical device test after OTA. After the push lands + OTA applies: fully close app → reopen → verify OTA applied.
+
+- [ ] **R9-1 — BT connect as "WIRELESS CAR":** device detects the car by BT name, not "ESP32_Car"
+- [ ] **R9-2 — push button cycles modes:** no lag; each mode change is instantaneous on OLED + app
+- [ ] **R9-3 — mode change from app reaches car immediately:** STATE broadcast on setMode — app shows new mode within 1s, not waiting for 2s periodic broadcast
+- [ ] **R9-4 — disconnect/reconnect dialog:** power car off during connection → reconnect dialog appears on ToolsScreen AND RemoteControlScreen; Reconnect button works, Cancel dismisses
+- [ ] **R9-5 — back navigation preserves connection:** navigate from RemoteControlScreen → Back → connection stays alive; re-enter Remote → still shows connected
+- [ ] **R9-6 — ESP_SER mode — WiFi connects:** non-blocking connect; button responsive during WiFi connect; WeblinkControls shows status
+- [ ] **R9-7 — no double-execution:** WiFi commands sent once only (not doubled from handleCommand + queue)
+
+**Pass criteria:** all boxes tick. If any fail, note which scenario and which transport (SPP vs WiFi).
 
 ---
 
