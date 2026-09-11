@@ -373,7 +373,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         </View>
 
         {/* ── Joystick / D-pad toggle — below top bar ── */}
-        {isRobocar && !activeMode.controls.includes('pid-auto') && (
+        {isRobocar && (
           <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
             <Pressable
               onPress={() => { Vibration.vibrate(10); setUseJoystick(false) }}
@@ -430,22 +430,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         ) : (
           /* ── Robocar drive deck ── */
           <View key={boardKey} className="relative mt-2 min-h-0 flex-1">
-            {activeMode.controls.includes('pid-auto') ? (
-              /* AUTO mode: replace useless joysticks with PID tuning */
-              <BalanceControls
-                canControl={canControl}
-                angle={telemetry.angle ?? null}
-                telemetry={telemetry}
-                kp={pidKp}
-                ki={pidKi}
-                kd={pidKd}
-                out={pidOut}
-                off={pidOff}
-                onPid={applyPid}
-                compact
-                oledSlot={oledSlot}
-              />
-            ) : showJoystick ? (
+            {showJoystick ? (
               <DriveControls
                 canControl={canControl}
                 isDrone={isDrone}
@@ -468,6 +453,20 @@ export function RemoteControlScreen({ navigation }: Props) {
                 compact
                 navActiveRef={navActiveRef}
                 onNavInput={navInput}
+                oledSlot={oledSlot}
+              />
+            ) : activeMode.controls.includes('pid-auto') ? (
+              <BalanceControls
+                canControl={canControl}
+                angle={telemetry.angle ?? null}
+                telemetry={telemetry}
+                kp={pidKp}
+                ki={pidKi}
+                kd={pidKd}
+                out={pidOut}
+                off={pidOff}
+                onPid={applyPid}
+                compact
                 oledSlot={oledSlot}
               />
             ) : (
@@ -561,8 +560,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             </Text>
 
             {/* Hide joystick pad */}
-            {!activeMode.controls.includes('pid-auto') && (
-              <View className="flex-row items-center justify-between border-b border-white/10 pb-1.5">
+            <View className="flex-row items-center justify-between border-b border-white/10 pb-1.5">
                 <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Joystick pad</Text>
                 <View className="flex-row gap-1">
                   <Pressable
@@ -579,7 +577,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                   </Pressable>
                 </View>
               </View>
-            )}
 
             {/* Steering limit + Trim (2WD1M only) */}
             <View className={`${is2wd1mActive ? '' : 'opacity-40'}`} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
