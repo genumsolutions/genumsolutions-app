@@ -271,7 +271,7 @@ export function ProductDetailScreen() {
             preconfigured for the car's firmware mode - like the ESP remote. */}
         {isQuote && resolveModeForProduct(product) && (
           <Pressable
-            onPress={() => navigation.push('CarRemote', { productId: product.id })}
+            onPress={() => navigation.push('Tools', { productId: product.id })}
             className="flex-1 flex-row items-center justify-center gap-2 rounded-full border-2 border-gold bg-gold/10 py-3"
           >
             <Feather name="activity" size={15} color="#1e3a8a" />

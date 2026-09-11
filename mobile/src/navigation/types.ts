@@ -26,14 +26,11 @@ export type RootStackParamList = {
   Projects: undefined;
   Contact: undefined;
   About: undefined;
-  Tools: { category?: string } | undefined;
+  Tools: { category?: string; productId?: string } | undefined;
   /** Immersive game-style joystick remote window (opened from the Control
    *  Panel's header joystick icon). Same hub state as Tools; own full-screen,
    *  landscape-by-default UI. */
   RemoteControl: { category?: string } | undefined;
-  /** Per-package remote: opens a robot-car product's own control screen,
-   *  preconfigured for that car's firmware mode(s). */
-  CarRemote: { productId: string };
   Admin: undefined;
   Journal: undefined;
   Printing: undefined;
