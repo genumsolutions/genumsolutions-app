@@ -26,7 +26,7 @@ export type RootStackParamList = {
   Projects: undefined;
   Contact: undefined;
   About: undefined;
-  Tools: { category?: string; productId?: string } | undefined;
+  Tools: { category?: string } | undefined;
   /** Immersive game-style joystick remote window (opened from the Control
    *  Panel's header joystick icon). Same hub state as Tools; own full-screen,
    *  landscape-by-default UI. */
