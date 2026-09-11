@@ -11,7 +11,7 @@ import type { ModeChooserProps } from './types'
 // Scroll order, display names, and available status match the remote.
 const REMOTE_MODES = [
   { token: 'BT', available: true },
-  { token: 'ESP_SER', available: false },
+  { token: 'ESP_SER', available: true },
   { token: 'PATH', available: false },
   { token: 'OBS_US', available: false },
   { token: 'OBS_IR', available: false },

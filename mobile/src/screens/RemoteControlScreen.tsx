@@ -32,6 +32,7 @@ import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { SensorGrid } from '../components/tools/SensorGrid'
 import { DroneControls } from '../components/tools/DroneControls'
+import { WeblinkControls } from '../components/tools/WeblinkControls'
 import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog'
 import { SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../services/carProtocol'
 import type { SafetyLimits } from '../components/tools/types'
@@ -40,7 +41,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
 type Route = RouteProp<RootStackParamList, 'RemoteControl'>
 
 const NAV_DEBOUNCE_MS = 120
-const REMOTE_AVAILABLE_TOKENS = ['BT', 'AUTO', '2WD1M']
+const REMOTE_AVAILABLE_TOKENS = ['BT', 'AUTO', '2WD1M', 'ESP_SER']
 
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxSpeed: 255,
@@ -221,6 +222,17 @@ export function RemoteControlScreen({ navigation }: Props) {
   }, [navActive, linked, navigation, setNavActive, setNavField, setPreviewMode])
 
   const backLabel = navActive ? 'Cancel' : linked ? 'Exit' : 'Back'
+
+  // ── Weblink handlers ──
+  const handleOpenWebPage = useCallback(() => {
+    if (!wifiConnected || !telemetry.ip) return
+    const url = `http://${telemetry.ip}`
+    import('react-native').then(({ Linking }) => { Linking.openURL(url) })
+  }, [wifiConnected, telemetry.ip])
+
+  const handleEnterWeblinkMode = useCallback(() => {
+    hub.sendCommand(activeMode.token)
+  }, [hub, activeMode.token])
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false)
@@ -469,6 +481,17 @@ export function RemoteControlScreen({ navigation }: Props) {
                 compact
                 oledSlot={oledSlot}
               />
+            ) : activeMode.controls.includes('weblink') ? (
+              <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 p-2">
+                <WeblinkControls
+                  canControl={canControl}
+                  wifiConnected={wifiConnected}
+                  activeMode={activeMode}
+                  telemetry={telemetry}
+                  onOpenWebPage={handleOpenWebPage}
+                  onEnterMode={handleEnterWeblinkMode}
+                />
+              </View>
             ) : (
               <View className="flex-1 items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4">
                 <Feather name="eye-off" size={20} color="#64748b" />
