@@ -17,7 +17,6 @@
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import Slider from '@react-native-community/slider'
 import type { BalanceControlsProps } from './types'
 import { PidInputModal } from './PidInputModal'
 
@@ -192,28 +191,18 @@ export function BalanceControls({
           ))}
         </View>
       ) : (
-        /* Full: 2-column card grid with sliders (unchanged) */
-        <View className="mt-4 flex-row flex-wrap gap-3">
-          <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={kp} minimumValue={0} maximumValue={200} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Kp {kp.toFixed(1)}</Text>
-          </View>
-          <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={ki} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('ki', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Ki {ki.toFixed(1)}</Text>
-          </View>
-          <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={kd} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('kd', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Kd {kd.toFixed(1)}</Text>
-          </View>
-          <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={out} minimumValue={0} maximumValue={255} step={1} onValueChange={(v: number) => onPid('out', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">OUT {out}</Text>
-          </View>
-          <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={off} minimumValue={-90} maximumValue={90} step={0.05} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">OFF {off >= 0 ? '+' : ''}{off.toFixed(2)}°</Text>
-          </View>
+        /* Full: same PidRow buttons as compact, with more breathing room */
+        <View className="mt-4 gap-3">
+          {(['kp', 'ki', 'kd', 'out', 'off'] as PidKey[]).map((k) => (
+            <PidRow
+              key={k}
+              pidKey={k}
+              value={values[k]}
+              canControl={canControl}
+              onPid={onPid}
+              onOpenModal={setModalKey}
+            />
+          ))}
         </View>
       )}
 
