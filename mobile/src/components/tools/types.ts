@@ -189,6 +189,8 @@ export type BalanceControlsProps = {
   onEnterMode: () => void
   /** Compact layout for the immersive game-remote (less padding, tighter spacing). */
   compact?: boolean
+  /** Optional OLED display slot (160×80) rendered next to the telemetry bar. */
+  oledSlot?: React.ReactNode
 }
 
 export type AutonomousControlsProps = {
