@@ -122,7 +122,9 @@ function DualDpad({
     const zone: PadZone =
       Math.abs(dx) < threshold && Math.abs(dy) < threshold ? 'C'
         : Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'F' : 'B')
-          : (dx < 0 ? 'R' : 'L')
+          : pad === 'L'
+            ? (dx < 0 ? 'L' : 'R')   // Left pad: left=L, right=R (natural)
+            : (dx < 0 ? 'R' : 'L')   // Right pad: swapped for ESP remote parity
     return { pad, zone }
   }, [surf])
 
@@ -297,16 +299,24 @@ function DualDpad({
           </View>
           <DpadGap />
         </View>
-        {/* Row 1: R · C · L (swapped for ESP remote parity) */}
+        {/* Row 1: L · C · R (left pad natural, right pad swapped for ESP remote parity) */}
         <View style={{ flexDirection: 'row', gap, marginBottom: gap }}>
           <View style={{ width: cellSize, height: cellSize }}>
-            <DpadCell icon={PAD_ICONS.R} active={cellActive(pad, 'R')} enabled={en[pad].includes('R')} />
+            <DpadCell
+              icon={pad === 'L' ? PAD_ICONS.L : PAD_ICONS.R}
+              active={cellActive(pad, pad === 'L' ? 'L' : 'R')}
+              enabled={en[pad].includes(pad === 'L' ? 'L' : 'R')}
+            />
           </View>
           <View style={{ width: cellSize, height: cellSize }}>
             <DpadCell icon={pad === 'L' ? 'stop-circle' : 'circle'} active={cellActive(pad, 'C')} enabled={en[pad].includes('C')} />
           </View>
           <View style={{ width: cellSize, height: cellSize }}>
-            <DpadCell icon={PAD_ICONS.L} active={cellActive(pad, 'L')} enabled={en[pad].includes('L')} />
+            <DpadCell
+              icon={pad === 'L' ? PAD_ICONS.R : PAD_ICONS.L}
+              active={cellActive(pad, pad === 'L' ? 'R' : 'L')}
+              enabled={en[pad].includes(pad === 'L' ? 'R' : 'L')}
+            />
           </View>
         </View>
         {/* Row 2: empty · B · empty */}
