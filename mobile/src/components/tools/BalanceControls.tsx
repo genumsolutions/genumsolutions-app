@@ -3,16 +3,20 @@
 // Remote.
 //
 // Shows the live tilt angle from the car's TEL;…ANGLE telemetry next to
-// full PID tuning (Kp/Ki/Kd/OUT/OFF), mirroring the ESP remote's AUTO
-// dashboard (Genum_ESP32_Remote ui.md — Auto Dashboard). Each value
-// change goes through onPid -> the screen's applyPid, which sends the
-// same `CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:..` line the remote sends when
-// calibration is saved.
+// PID tuning (Kp/Ki/Kd), mirroring the ESP remote's AUTO dashboard.
+// OUT is shown alongside the angle readout; OFF is in a compact settings
+// row below the angle card. Each value change goes through onPid ->
+// the screen's applyPid, which sends the same `CFG;Kp:..;Ki:..;Kd:..;
+// OUT:..;OFF:..` line the remote sends when calibration is saved.
 //
-// COMPACT MODE (immersive game remote):
+// COMPACT MODE (immersive / control panel):
 // Value field with fine/coarse +/- buttons on each side.
 // Tapping the value opens a direct-input modal for precise entry.
 // No sliders — just buttons and typed values for precise PID tuning.
+// Step sizes match the ESP32 remote firmware:
+//   Kp: fine=0.01, coarse=0.1
+//   Ki: fine=0.001, coarse=0.01
+//   Kd: fine=0.001, coarse=0.01
 // =====================================================================
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -29,13 +33,14 @@ function pidStatus(angle: number | null): { label: string; dot: string; text: st
   return { label: 'TILT!', dot: 'bg-red-500', text: 'text-red-600' }
 }
 
-/** PID parameter definitions — range, step sizes, formatting. */
+/** PID parameter definitions — range, step sizes, formatting.
+ *  Step sizes match ESP32 remote firmware (ui_core.cpp). */
 const PID_DEFS = {
-  kp:  { min: 0,   max: 200, step: 0.1,  bigStep: 5,   decimals: 1, label: 'Kp' },
-  ki:  { min: 0,   max: 50,  step: 0.1,  bigStep: 2,   decimals: 1, label: 'Ki' },
-  kd:  { min: 0,   max: 50,  step: 0.1,  bigStep: 2,   decimals: 1, label: 'Kd' },
+  kp:  { min: 0,   max: 200, step: 0.01, bigStep: 0.1, decimals: 2, label: 'Kp' },
+  ki:  { min: 0,   max: 50,  step: 0.001, bigStep: 0.01, decimals: 3, label: 'Ki' },
+  kd:  { min: 0,   max: 50,  step: 0.001, bigStep: 0.01, decimals: 3, label: 'Kd' },
   out: { min: 0,   max: 255, step: 1,    bigStep: 10,  decimals: 0, label: 'OUT' },
-  off: { min: -90, max: 90,  step: 0.05, bigStep: 1,   decimals: 2, label: 'OFF' },
+  off: { min: -90, max: 90,  step: 0.01, bigStep: 0.1, decimals: 2, label: 'OFF' },
 } as const
 
 type PidKey = keyof typeof PID_DEFS
@@ -62,20 +67,20 @@ function PidRow({
   }
 
   return (
-    <View className="gap-1.5">
+    <View className="gap-1">
       {/* Label */}
-      <Text className="ml-1 text-[11px] font-black uppercase tracking-wide text-navy">{def.label}</Text>
+      <Text className="ml-1 text-[10px] font-black uppercase tracking-wide text-navy">{def.label}</Text>
 
       {/* Buttons row: [−fine] [−coarse] [value] [+coarse] [+fine] */}
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-center gap-1.5">
         {/* Fine − */}
         <Pressable
           onPress={() => adjust(-def.step)}
           disabled={!canControl}
           hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+          className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
         >
-          <Feather name="minus" size={16} color="#94a3b8" />
+          <Feather name="minus" size={14} color="#94a3b8" />
         </Pressable>
 
         {/* Coarse − */}
@@ -83,19 +88,19 @@ function PidRow({
           onPress={() => adjust(-def.bigStep)}
           disabled={!canControl}
           hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+          className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
         >
-          <Feather name="minus" size={16} color="#1e3a8a" />
-          <Feather name="minus" size={16} color="#1e3a8a" style={{ position: 'absolute', left: 4 }} />
+          <Feather name="minus" size={14} color="#1e3a8a" />
+          <Feather name="minus" size={14} color="#1e3a8a" style={{ position: 'absolute', left: 3 }} />
         </Pressable>
 
         {/* Value field (tap to type) */}
         <Pressable
           onPress={() => onOpenModal(pidKey)}
           hitSlop={6}
-          className="min-h-11 min-w-[72px] flex-1 items-center justify-center rounded-xl border border-white/10 bg-slate-800 px-3 py-2 active:bg-slate-700"
+          className="min-h-9 min-w-[64px] flex-1 items-center justify-center rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 active:bg-slate-700"
         >
-          <Text className="text-center font-mono text-[15px] font-bold text-emerald-300">{display}</Text>
+          <Text className="text-center font-mono text-[13px] font-bold text-emerald-300">{display}</Text>
         </Pressable>
 
         {/* Coarse + */}
@@ -103,10 +108,10 @@ function PidRow({
           onPress={() => adjust(def.bigStep)}
           disabled={!canControl}
           hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+          className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
         >
-          <Feather name="plus" size={16} color="#1e3a8a" />
-          <Feather name="plus" size={16} color="#1e3a8a" style={{ position: 'absolute', left: 4 }} />
+          <Feather name="plus" size={14} color="#1e3a8a" />
+          <Feather name="plus" size={14} color="#1e3a8a" style={{ position: 'absolute', left: 3 }} />
         </Pressable>
 
         {/* Fine + */}
@@ -114,9 +119,9 @@ function PidRow({
           onPress={() => adjust(def.step)}
           disabled={!canControl}
           hitSlop={6}
-          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+          className="h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
         >
-          <Feather name="plus" size={16} color="#94a3b8" />
+          <Feather name="plus" size={14} color="#94a3b8" />
         </Pressable>
       </View>
     </View>
@@ -159,7 +164,7 @@ export function BalanceControls({
         </Pressable>
       </View>
 
-      {/* Live tilt readout */}
+      {/* Live tilt readout + OUT */}
       <View className={`rounded-xl bg-slate-900 shadow-inner ${compact ? 'mt-2 px-3 py-2' : 'mt-4 px-4 py-3'}`}>
         <View className="flex-row items-center justify-between">
           <Text className="font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
@@ -171,16 +176,48 @@ export function BalanceControls({
         <View className="mt-1 flex-row items-end justify-between">
           <Text className={`font-mono font-bold text-emerald-300 ${compact ? 'text-2xl' : 'text-4xl'}`}>{angleText}</Text>
           <Text className="mb-1 font-mono text-[10px] text-slate-400">
-            OUT {out} · OFF {off >= 0 ? '+' : ''}{off.toFixed(2)}°
+            OUT {out}
           </Text>
         </View>
       </View>
 
-      {/* PID tuning */}
+      {/* OFF settings row */}
+      <View className={`mt-2 flex-row items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 ${compact ? '' : 'mt-3'}`}>
+        <Text className="text-[10px] font-black uppercase tracking-wide text-navy">OFF</Text>
+        <View className="flex-row items-center gap-1.5">
+          <Pressable
+            onPress={() => { const next = Math.round((off - 0.1) * 100) / 100; onPid('off', Math.max(-90, next)) }}
+            disabled={!canControl}
+            hitSlop={4}
+            className="h-7 w-7 items-center justify-center rounded border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+          >
+            <Feather name="minus" size={12} color="#1e3a8a" />
+          </Pressable>
+          <Pressable
+            onPress={() => setModalKey('off')}
+            hitSlop={4}
+            className="min-w-[60px] items-center justify-center rounded border border-white/10 bg-slate-800 px-2 py-1"
+          >
+            <Text className="font-mono text-[11px] font-bold text-emerald-300">
+              {off >= 0 ? '+' : ''}{off.toFixed(2)}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { const next = Math.round((off + 0.1) * 100) / 100; onPid('off', Math.min(90, next)) }}
+            disabled={!canControl}
+            hitSlop={4}
+            className="h-7 w-7 items-center justify-center rounded border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+          >
+            <Feather name="plus" size={12} color="#1e3a8a" />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* PID tuning — Kp, Ki, Kd only */}
       {compact ? (
         /* Compact: value fields with fine/coarse +/- buttons (no sliders) */
-        <View className="mt-3 gap-3">
-          {(['kp', 'ki', 'kd', 'out', 'off'] as PidKey[]).map((k) => (
+        <View className="mt-3 gap-2">
+          {(['kp', 'ki', 'kd'] as PidKey[]).map((k) => (
             <PidRow
               key={k}
               pidKey={k}
@@ -195,23 +232,23 @@ export function BalanceControls({
         /* Full: 2-column card grid with sliders (unchanged) */
         <View className="mt-4 flex-row flex-wrap gap-3">
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={kp} minimumValue={0} maximumValue={200} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Kp {kp.toFixed(1)}</Text>
+            <Slider value={kp} minimumValue={0} maximumValue={200} step={0.01} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
+            <Text className="mt-1 text-right font-mono text-xs text-navy">Kp {kp.toFixed(2)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={ki} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('ki', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Ki {ki.toFixed(1)}</Text>
+            <Slider value={ki} minimumValue={0} maximumValue={50} step={0.001} onValueChange={(v: number) => onPid('ki', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
+            <Text className="mt-1 text-right font-mono text-xs text-navy">Ki {ki.toFixed(3)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={kd} minimumValue={0} maximumValue={50} step={0.1} onValueChange={(v: number) => onPid('kd', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
-            <Text className="mt-1 text-right font-mono text-xs text-navy">Kd {kd.toFixed(1)}</Text>
+            <Slider value={kd} minimumValue={0} maximumValue={50} step={0.001} onValueChange={(v: number) => onPid('kd', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
+            <Text className="mt-1 text-right font-mono text-xs text-navy">Kd {kd.toFixed(3)}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={out} minimumValue={0} maximumValue={255} step={1} onValueChange={(v: number) => onPid('out', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-xs text-navy">OUT {out}</Text>
           </View>
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
-            <Slider value={off} minimumValue={-90} maximumValue={90} step={0.05} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
+            <Slider value={off} minimumValue={-90} maximumValue={90} step={0.01} onValueChange={(v: number) => onPid('off', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />
             <Text className="mt-1 text-right font-mono text-xs text-navy">OFF {off >= 0 ? '+' : ''}{off.toFixed(2)}°</Text>
           </View>
         </View>
