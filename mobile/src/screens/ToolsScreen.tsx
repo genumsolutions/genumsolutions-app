@@ -3,9 +3,10 @@
 //
 // Two modes:
 //   1. CATEGORY ORGANIZER (no productId): project organizer with category
-//      selector, detail card, connection card, and inline controls.
+//      selector, detail card, connection card, and Remote window handoff.
 //   2. CAR REMOTE (productId present): per-product robot-car remote with
-//      ModeChooser, PID/drive/balance controls, and mode info.
+//      OLED, PID/drive/balance controls, and mode info — replaces the
+//      old CarRemoteScreen.
 //
 // Both modes share useControlHub for connection state.
 // =====================================================================
@@ -18,15 +19,13 @@ import type { ComponentProps } from 'react';
 import type { RootStackParamList } from '../navigation/types';
 import { useControlHub } from '../components/tools/useControlHub';
 import { ProjectInfo } from '../components/tools/ProjectInfo';
+import { OledDisplay } from '../components/tools/OledDisplay';
 import { BalanceControls } from '../components/tools/BalanceControls';
 import { AutonomousControls } from '../components/tools/AutonomousControls';
 import { DriveControls } from '../components/tools/DriveControls';
 import { WeblinkControls } from '../components/tools/WeblinkControls';
 import { TwoWd1mExtras } from '../components/tools/TwoWd1mExtras';
-import { ModeChooser } from '../components/tools/ModeChooser';
 import { ModeInfo } from '../components/tools/ModeInfo';
-import { DroneControls } from '../components/tools/DroneControls';
-import { SensorGrid } from '../components/tools/SensorGrid';
 import { getProductByIdWithSource } from '../services/productService';
 import { resolveModeForProduct, type CarMode } from '../config/roboCarCatalog';
 import { APP_VERSION } from '../config/site';
@@ -80,12 +79,6 @@ export function ToolsScreen() {
     pidKp, pidKi, pidKd, pidOut, pidOff,
     useJoystick, setUseJoystick,
     is2wd1mActive,
-    // Drone / non-robocar props
-    sensorData, relays, toggleRelay,
-    gimbalPan, gimbalTilt, targetAltitude,
-    handleGimbalPan, handleGimbalTilt, handleAltitude,
-    isDrone, isNonRobocar,
-    activeCategory,
   } = hub
 
   // ── Car remote mode (productId present) ──
@@ -123,6 +116,11 @@ export function ToolsScreen() {
     PROJECT_CATEGORIES.find((c) => c.slug === selectedSlug) ?? PROJECT_CATEGORIES[0]!
 
   const isRobocarCat = category.slug === 'robocar'
+  const remoteLabel = isRobocarCat
+    ? 'Drive deck'
+    : category.slug === 'drones'
+      ? 'Flight deck'
+      : 'Relay & sensor deck'
 
   // Connection tab: iOS-style segmented toggle
   const [connTab, setConnTab] = useState<'bluetooth' | 'wifi'>('bluetooth')
@@ -141,6 +139,9 @@ export function ToolsScreen() {
   const isWeblink = carMode?.controls.includes('weblink') ?? false
   const is2wd1m = carMode?.controls.includes('drive-2wd1m') ?? false
   const isRf = carMode?.transport.includes('rf') ?? false
+
+  const linkKind: 'spp' | 'wifi' | undefined =
+    wifiConnected ? 'wifi' : connected ? 'spp' : undefined
 
   // ── Loading state ──
   if (carLoading) {
@@ -339,14 +340,24 @@ export function ToolsScreen() {
               </View>
             </View>
 
-            {/* Mode switcher */}
+            {/* OLED status */}
             <View className={`mt-4 ${!canControl ? 'opacity-40' : ''}`}>
-              <ModeChooser
+              <OledDisplay
+                connected={connected}
+                wifiConnected={wifiConnected}
+                deviceName={deviceName || 'CAR'}
                 activeMode={carMode}
-                canControl={canControl}
-                onSelect={selectMode}
-                onCycle={cycleMode}
-                modes={carModes}
+                speed={speed}
+                servo={servo}
+                driveStatus={driveStatus}
+                targetAltitude={0}
+                gimbalPan={0}
+                gimbalTilt={0}
+                sensorData={{ temperature: 0, humidity: 0, soilMoisture: 0, lightLevel: 0, airQuality: 0, distance: 0 }}
+                telemetry={telemetry}
+                isDrone={false}
+                isNonRobocar={false}
+                linkKind={linkKind}
               />
               {!canControl && (
                 <View className="mt-3 rounded-xl bg-sky px-4 py-3">
@@ -488,21 +499,6 @@ export function ToolsScreen() {
           </Text>
         </View>
 
-        {/* E-stop FAB */}
-        {canControl && (
-          <Pressable
-            onPress={() => { Vibration.vibrate(50); handleEStop() }}
-            accessibilityRole="button"
-            accessibilityLabel="Emergency stop"
-            hitSlop={10}
-            style={{ position: 'absolute', bottom: 24, right: 16, zIndex: 10 }}
-          >
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg">
-              <Feather name="octagon" size={22} color="#fff" />
-            </View>
-          </Pressable>
-        )}
-
         {/* Disconnect confirmation */}
         {showDisconnectConfirm && (
           <>
@@ -551,6 +547,14 @@ export function ToolsScreen() {
             Test &amp; control your projects
           </Text>
         </View>
+        <Pressable
+          onPress={() => navigation.navigate('RemoteControl', { category: category.slug })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${category.name} remote`}
+          className="ml-3 shrink-0 rounded-full bg-navy p-3.5 shadow-card"
+        >
+          <Feather name="target" size={22} color="#fff" />
+        </Pressable>
       </View>
 
       {/* Category selector */}
@@ -606,6 +610,20 @@ export function ToolsScreen() {
             </View>
           ))}
         </View>
+
+        <Pressable
+          onPress={() => navigation.navigate('RemoteControl', { category: category.slug })}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${category.name} remote window`}
+          className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-3"
+        >
+          <Feather name="target" size={15} color="#fff" />
+          <Text className="text-sm font-black text-white">Open {remoteLabel} · {category.name}</Text>
+          <Feather name="arrow-right" size={15} color="#fff" />
+        </Pressable>
+        <Text className="mt-1.5 text-center text-[11px] text-muted">
+          Drive controls, speed and E-stop live in the Remote window — this page stays a clean organizer.
+        </Text>
       </View>
 
       {/* Connection card */}
@@ -751,74 +769,6 @@ export function ToolsScreen() {
           )}
         </View>
       </View>
-
-      {/* Inline controls — shown when connected */}
-      {(connected || wifiConnected) && (
-        <View className="mt-4">
-          {isRobocarCat ? (
-            <DriveControls
-              canControl={canControl}
-              isDrone={false}
-              activeMode={activeMode}
-              speed={speed}
-              servo={servo}
-              pidKp={pidKp}
-              pidKi={pidKi}
-              pidKd={pidKd}
-              pidOut={pidOut}
-              pidOff={pidOff}
-              useJoystick={useJoystick}
-              onDirection={handleDirection}
-              onSpeed={handleSpeed}
-              onServo={handleServo}
-              onPid={applyPid}
-              onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
-              steerLimit={is2wd1mActive ? steerLimit : undefined}
-              onRun={() => { sendCommand('F'); }}
-              onStop={() => { sendCommand('S'); }}
-              onEStop={is2wd1mActive ? handleEStop : undefined}
-            />
-          ) : isDrone ? (
-            <DroneControls
-              canControl={canControl}
-              targetAltitude={targetAltitude}
-              gimbalPan={gimbalPan}
-              gimbalTilt={gimbalTilt}
-              onAltitude={handleAltitude}
-              onGimbalPan={handleGimbalPan}
-              onGimbalTilt={handleGimbalTilt}
-              onCommand={(c) => sendCommand(c)}
-              onSetAltitude={(v) => handleAltitude(v)}
-            />
-          ) : (
-            <SensorGrid
-              canControl={canControl}
-              isDrone={false}
-              isNonRobocar
-              activeCategory={activeCategory}
-              sensorData={sensorData}
-              relays={relays}
-              telemetry={telemetry}
-              onToggleRelay={toggleRelay}
-            />
-          )}
-        </View>
-      )}
-
-      {/* E-stop FAB for robocar category */}
-      {isRobocarCat && (connected || wifiConnected) && canControl && (
-        <Pressable
-          onPress={() => { Vibration.vibrate(50); handleEStop() }}
-          accessibilityRole="button"
-          accessibilityLabel="Emergency stop"
-          hitSlop={10}
-          style={{ position: 'absolute', bottom: 24, right: 16, zIndex: 10 }}
-        >
-          <View className="h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg">
-            <Feather name="octagon" size={22} color="#fff" />
-          </View>
-        </Pressable>
-      )}
 
       {/* About this project */}
       <View className="mt-4">

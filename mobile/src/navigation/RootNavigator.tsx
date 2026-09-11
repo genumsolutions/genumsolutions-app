@@ -23,6 +23,7 @@ import { ProjectsScreen } from '../screens/ProjectsScreen';
 import { ContactScreen } from '../screens/ContactScreen';
 import { AboutScreen } from '../screens/AboutScreen';
 import { ToolsScreen } from '../screens/ToolsScreen';
+import { RemoteControlScreen } from '../screens/RemoteControlScreen';
 import { UpdateScreen } from '../screens/UpdateScreen';
 import { JournalScreen } from '../screens/JournalScreen';
 import { PrintingScreen } from '../screens/PrintingScreen';
@@ -50,6 +51,7 @@ const ProjectsScreenSafe = withErrorBoundary(ProjectsScreen, 'Projects');
 const ContactScreenSafe = withErrorBoundary(ContactScreen, 'Contact');
 const AboutScreenSafe = withErrorBoundary(AboutScreen, 'About');
 const ToolsScreenSafe = withErrorBoundary(ToolsScreen, 'Tools');
+const RemoteControlScreenSafe = withErrorBoundary(RemoteControlScreen, 'RemoteControl');
 const AdminScreenSafe = withErrorBoundary(AdminScreen, 'Admin');
 const JournalScreenSafe = withErrorBoundary(JournalScreen, 'Journal');
 const PrintingScreenSafe = withErrorBoundary(PrintingScreen, 'Printing');
@@ -131,6 +133,11 @@ export function RootNavigator() {
         name="Tools"
         component={ToolsScreenSafe}
         options={{ headerShown: true, title: 'Control Panel', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+      />
+      <Stack.Screen
+        name="RemoteControl"
+        component={RemoteControlScreenSafe}
+        options={{ headerShown: false, title: 'Remote', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
       />
       <Stack.Screen
         name="Admin"
