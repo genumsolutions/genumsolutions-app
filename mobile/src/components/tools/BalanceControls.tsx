@@ -3,11 +3,12 @@
 // Remote.
 //
 // Compact layout (immersive remote):
-//   Left:  [ANGLE +12.3° ●BAL]  [OUT 50]   (big display cards)
+//   Left:  [ANGLE +12.3° / ●BAL / OUT:50]   (single hero card)
 //   Right: [OLED 160×80]
-//   Grid:  Kp/Ki/Kd/OUT/OFF with fine + coarse ± buttons
+//   Grid:  Kp/Ki/Kd/OFF with fine + coarse ± buttons
 //
 // Step sizes match the firmware's significant bits.
+// OUT is display-only (computed by firmware, not user-adjustable).
 // =====================================================================
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -129,22 +130,16 @@ export function BalanceControls({
     <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'px-2 pt-2 pb-3' : 'mt-4 p-5'}`}>
       {/* ── Top section: angle/OUT cards + OLED ── */}
       <View className="flex-row gap-2">
-        {/* Left: angle + OUT stacked */}
-        <View className="flex-1 gap-2">
-          {/* Angle card */}
-          <View className="rounded-xl bg-slate-900 px-3 py-2.5">
-            <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
-            <Text className="mt-0.5 font-mono text-2xl font-bold text-emerald-300">{angleText}</Text>
-            <View className="mt-1 flex-row items-center gap-1.5">
-              <View className={`rounded-full ${st.dot} h-2 w-2`} />
-              <Text className={`text-[10px] font-black ${st.text}`}>{st.label}</Text>
-            </View>
+        {/* Left: angle + OUT single hero card */}
+        <View className="flex-1 rounded-xl bg-slate-900 px-4 py-3">
+          <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
+          <Text className="mt-1 font-mono text-[42px] font-black leading-none text-emerald-300">{angleText}</Text>
+          <View className="mt-2 flex-row items-center gap-1.5">
+            <View className={`rounded-full ${st.dot} h-2 w-2`} />
+            <Text className={`text-[11px] font-black ${st.text}`}>{st.label}</Text>
           </View>
-
-          {/* OUT card */}
-          <View className="rounded-xl bg-slate-900 px-3 py-2">
-            <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">OUT</Text>
-            <Text className="mt-0.5 font-mono text-xl font-bold text-white">{out}</Text>
+          <View className="mt-2 border-t border-white/10 pt-2">
+            <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">OUT : {out}</Text>
           </View>
         </View>
 
@@ -159,7 +154,6 @@ export function BalanceControls({
         <PidRow pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
         <PidRow pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
         <PidRow pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidRow pidKey="out" value={out} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
         <PidRow pidKey="off" value={off} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
       </View>
 
