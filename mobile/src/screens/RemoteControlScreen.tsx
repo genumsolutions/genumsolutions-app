@@ -224,7 +224,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false)
-  const [showJoystick, setShowJoystick] = useState(true)
+  const [showJoystick, setShowJoystick] = useState(false)
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null)
