@@ -5,7 +5,7 @@
 // card, and Remote window handoff. This is the single entry point
 // from Menu → Control Panel and Projects → Control.
 // =====================================================================
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, Vibration, View } from 'react-native';
 import { useRoute, type RouteProp, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,6 +15,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useControlHub } from '../components/tools/useControlHub';
 import { ProjectInfo } from '../components/tools/ProjectInfo';
 import { PROJECT_CATEGORIES, PRODUCT_CATEGORY_TO_SLUG, type ProjectCategory } from '../config/project-catalog';
+import { getProjectCategories } from '../services/projectCategoryService';
 
 type Route = RouteProp<RootStackParamList, 'Tools'>
 
@@ -44,11 +45,18 @@ const CAPABILITY_LABELS: Record<string, string> = {
 export function ToolsScreen() {
   const route = useRoute<Route>()
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
+
+  // DB-driven categories with hardcoded fallback
+  const [categories, setCategories] = useState<ProjectCategory[]>(PROJECT_CATEGORIES)
+  useEffect(() => {
+    getProjectCategories().then(setCategories)
+  }, [])
+
   const routeCategory = (() => {
     const raw = route.params?.category
     if (!raw) return undefined
     if (PRODUCT_CATEGORY_TO_SLUG[raw]) return PRODUCT_CATEGORY_TO_SLUG[raw]
-    if (PROJECT_CATEGORIES.some((c) => c.slug === raw)) return raw
+    if (categories.some((c) => c.slug === raw)) return raw
     return undefined
   })()
 
@@ -66,12 +74,12 @@ export function ToolsScreen() {
 
   // Category organizer
   const [selectedSlug, setSelectedSlug] = useState<string>(
-    routeCategory && PROJECT_CATEGORIES.some((c) => c.slug === routeCategory)
+    routeCategory && categories.some((c) => c.slug === routeCategory)
       ? routeCategory
-      : PROJECT_CATEGORIES[0]!.slug,
+      : categories[0]!.slug,
   )
   const category: ProjectCategory =
-    PROJECT_CATEGORIES.find((c) => c.slug === selectedSlug) ?? PROJECT_CATEGORIES[0]!
+    categories.find((c) => c.slug === selectedSlug) ?? categories[0]!
 
   const isRobocarCat = category.slug === 'robocar'
   const remoteLabel = isRobocarCat
@@ -118,7 +126,7 @@ export function ToolsScreen() {
 
       {/* Category selector */}
       <View className="mt-5 flex-row flex-wrap gap-2">
-        {PROJECT_CATEGORIES.map((c) => {
+        {categories.map((c) => {
           const active = c.slug === selectedSlug
           return (
             <Pressable
