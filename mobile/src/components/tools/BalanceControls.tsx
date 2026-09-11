@@ -4,14 +4,15 @@
 //
 // Shows the live tilt angle from the car's TEL;…ANGLE telemetry next to
 // full PID tuning (Kp/Ki/Kd/OUT/OFF), mirroring the ESP remote's AUTO
-// dashboard (Genum_ESP32_Remote ui.md — Auto Dashboard). Each slider
+// dashboard (Genum_ESP32_Remote ui.md — Auto Dashboard). Each value
 // change goes through onPid -> the screen's applyPid, which sends the
 // same `CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:..` line the remote sends when
 // calibration is saved.
 //
 // COMPACT MODE (immersive game remote):
-// Single-column rows with slider + value + fine/coarse +/- buttons.
+// Value field with fine/coarse +/- buttons on each side.
 // Tapping the value opens a direct-input modal for precise entry.
+// No sliders — just buttons and typed values for precise PID tuning.
 // =====================================================================
 import React, { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -39,7 +40,7 @@ const PID_DEFS = {
 
 type PidKey = keyof typeof PID_DEFS
 
-/** Compact single-row PID control: label | slider | value | -/+ buttons. */
+/** Compact PID row: label on top, then [−fine] [−coarse] [value] [+coarse] [+fine]. */
 function PidRow({
   pidKey, value, canControl, onPid, onOpenModal,
 }: {
@@ -61,52 +62,63 @@ function PidRow({
   }
 
   return (
-    <View className="flex-row items-center gap-1.5">
+    <View className="gap-1.5">
       {/* Label */}
-      <Text className="w-8 text-[10px] font-black uppercase tracking-wide text-navy">{def.label}</Text>
+      <Text className="ml-1 text-[11px] font-black uppercase tracking-wide text-navy">{def.label}</Text>
 
-      {/* Fine - */}
-      <Pressable
-        onPress={() => adjust(-def.step)}
-        disabled={!canControl}
-        hitSlop={4}
-        className="h-6 w-6 items-center justify-center rounded border border-white/10 bg-white/5 disabled:opacity-30"
-      >
-        <Feather name="minus" size={10} color="#94a3b8" />
-      </Pressable>
+      {/* Buttons row: [−fine] [−coarse] [value] [+coarse] [+fine] */}
+      <View className="flex-row items-center gap-2">
+        {/* Fine − */}
+        <Pressable
+          onPress={() => adjust(-def.step)}
+          disabled={!canControl}
+          hitSlop={6}
+          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        >
+          <Feather name="minus" size={16} color="#94a3b8" />
+        </Pressable>
 
-      {/* Slider */}
-      <Slider
-        value={value}
-        minimumValue={def.min}
-        maximumValue={def.max}
-        step={def.step}
-        onValueChange={(v: number) => onPid(pidKey, v)}
-        disabled={!canControl}
-        minimumTrackTintColor="#1e3a8a"
-        maximumTrackTintColor="rgba(255,255,255,0.1)"
-        thumbTintColor="#3b82f6"
-        style={{ flex: 1, height: 24 }}
-      />
+        {/* Coarse − */}
+        <Pressable
+          onPress={() => adjust(-def.bigStep)}
+          disabled={!canControl}
+          hitSlop={6}
+          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        >
+          <Feather name="minus" size={16} color="#1e3a8a" />
+          <Feather name="minus" size={16} color="#1e3a8a" style={{ position: 'absolute', left: 4 }} />
+        </Pressable>
 
-      {/* Coarse + */}
-      <Pressable
-        onPress={() => adjust(def.bigStep)}
-        disabled={!canControl}
-        hitSlop={4}
-        className="h-6 w-6 items-center justify-center rounded border border-white/10 bg-white/5 disabled:opacity-30"
-      >
-        <Feather name="plus" size={10} color="#94a3b8" />
-      </Pressable>
+        {/* Value field (tap to type) */}
+        <Pressable
+          onPress={() => onOpenModal(pidKey)}
+          hitSlop={6}
+          className="min-h-11 min-w-[72px] flex-1 items-center justify-center rounded-xl border border-white/10 bg-slate-800 px-3 py-2 active:bg-slate-700"
+        >
+          <Text className="text-center font-mono text-[15px] font-bold text-emerald-300">{display}</Text>
+        </Pressable>
 
-      {/* Value (tap to type) */}
-      <Pressable
-        onPress={() => onOpenModal(pidKey)}
-        hitSlop={4}
-        className="min-w-[48px] rounded border border-white/10 bg-slate-800 px-1.5 py-1"
-      >
-        <Text className="text-center font-mono text-[11px] font-bold text-emerald-300">{display}</Text>
-      </Pressable>
+        {/* Coarse + */}
+        <Pressable
+          onPress={() => adjust(def.bigStep)}
+          disabled={!canControl}
+          hitSlop={6}
+          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        >
+          <Feather name="plus" size={16} color="#1e3a8a" />
+          <Feather name="plus" size={16} color="#1e3a8a" style={{ position: 'absolute', left: 4 }} />
+        </Pressable>
+
+        {/* Fine + */}
+        <Pressable
+          onPress={() => adjust(def.step)}
+          disabled={!canControl}
+          hitSlop={6}
+          className="h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 active:bg-white/15 disabled:opacity-30"
+        >
+          <Feather name="plus" size={16} color="#94a3b8" />
+        </Pressable>
+      </View>
     </View>
   )
 }
@@ -124,11 +136,11 @@ export function BalanceControls({
   const modalDef = modalKey ? PID_DEFS[modalKey] : null
 
   return (
-    <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'p-2' : 'mt-4 p-5'}`}>
+    <View className={`rounded-2xl border border-line bg-card shadow-card ${compact ? 'px-3 pt-3 pb-4' : 'mt-4 p-5'}`}>
       {/* Header + AUTO mode entry */}
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1">
-          <Text className={`font-black uppercase tracking-widest text-navy ${compact ? 'text-[10px]' : 'text-xs'}`}>
+          <Text className={`font-black uppercase tracking-widest text-navy ${compact ? 'text-[11px]' : 'text-xs'}`}>
             Self-balancing · PID
           </Text>
           {!compact && (
@@ -141,24 +153,24 @@ export function BalanceControls({
         <Pressable
           onPress={onEnterMode}
           disabled={!canControl}
-          className="shrink-0 items-center rounded-full bg-navy px-3 py-1.5 disabled:opacity-60"
+          className="shrink-0 items-center rounded-full bg-navy px-4 py-2 disabled:opacity-60"
         >
-          <Text className="text-[10px] font-black text-white">Enter AUTO</Text>
+          <Text className="text-[11px] font-black text-white">Enter AUTO</Text>
         </Pressable>
       </View>
 
       {/* Live tilt readout */}
-      <View className={`rounded-xl bg-slate-900 shadow-inner ${compact ? 'mt-1.5 px-2.5 py-1.5' : 'mt-4 px-4 py-3'}`}>
+      <View className={`rounded-xl bg-slate-900 shadow-inner ${compact ? 'mt-2 px-3 py-2' : 'mt-4 px-4 py-3'}`}>
         <View className="flex-row items-center justify-between">
           <Text className="font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
-          <View className="flex-row items-center gap-1">
-            <View className={`rounded-full ${st.dot} ${compact ? 'h-1.5 w-1.5' : 'h-2 w-2'}`} />
-            <Text className={`font-black uppercase tracking-wide ${st.text} ${compact ? 'text-[8px]' : 'text-[10px]'}`}>{st.label}</Text>
+          <View className="flex-row items-center gap-1.5">
+            <View className={`rounded-full ${st.dot} ${compact ? 'h-2 w-2' : 'h-2 w-2'}`} />
+            <Text className={`font-black uppercase tracking-wide ${st.text} ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{st.label}</Text>
           </View>
         </View>
-        <View className="mt-0.5 flex-row items-end justify-between">
-          <Text className={`font-mono font-bold text-emerald-300 ${compact ? 'text-lg' : 'text-4xl'}`}>{angleText}</Text>
-          <Text className="mb-0.5 font-mono text-[10px] text-slate-400">
+        <View className="mt-1 flex-row items-end justify-between">
+          <Text className={`font-mono font-bold text-emerald-300 ${compact ? 'text-2xl' : 'text-4xl'}`}>{angleText}</Text>
+          <Text className="mb-1 font-mono text-[10px] text-slate-400">
             OUT {out} · OFF {off >= 0 ? '+' : ''}{off.toFixed(2)}°
           </Text>
         </View>
@@ -166,8 +178,8 @@ export function BalanceControls({
 
       {/* PID tuning */}
       {compact ? (
-        /* Compact: single-column rows with slider + buttons */
-        <View className="mt-2 gap-1">
+        /* Compact: value fields with fine/coarse +/- buttons (no sliders) */
+        <View className="mt-3 gap-3">
           {(['kp', 'ki', 'kd', 'out', 'off'] as PidKey[]).map((k) => (
             <PidRow
               key={k}
@@ -180,7 +192,7 @@ export function BalanceControls({
           ))}
         </View>
       ) : (
-        /* Full: 2-column card grid (unchanged) */
+        /* Full: 2-column card grid with sliders (unchanged) */
         <View className="mt-4 flex-row flex-wrap gap-3">
           <View className="w-[48%] rounded-xl border border-line bg-surface p-4">
             <Slider value={kp} minimumValue={0} maximumValue={200} step={0.1} onValueChange={(v: number) => onPid('kp', v)} disabled={!canControl} minimumTrackTintColor="#1e3a8a" maximumTrackTintColor="#cbd5e1" thumbTintColor="#1e3a8a" />

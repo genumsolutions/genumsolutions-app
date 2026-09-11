@@ -356,17 +356,6 @@ export function RemoteControlScreen({ navigation }: Props) {
           {isRobocar && (
             <View className="flex-row items-center gap-2">
               <Pressable
-                onPress={() => { Vibration.vibrate(10); setUseJoystick(!useJoystick) }}
-                accessibilityRole="button"
-                accessibilityLabel={useJoystick ? 'Switch to D-pad' : 'Switch to Joystick'}
-                hitSlop={10}
-                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 28 }}
-              >
-                <View className={`h-12 w-12 items-center justify-center rounded-full border ${useJoystick ? 'border-white/10 bg-navy' : 'border-white/15 bg-white/5'}`}>
-                  <Feather name={useJoystick ? 'move' : 'grid'} size={20} color="#fff" />
-                </View>
-              </Pressable>
-              <Pressable
                 onPress={() => setShowSettings((v) => !v)}
                 accessibilityRole="button"
                 accessibilityLabel="Settings"
@@ -540,31 +529,51 @@ export function RemoteControlScreen({ navigation }: Props) {
             className="absolute right-3 z-40 w-72 rounded-2xl border border-white/10 bg-slate-900 p-3 shadow-xl"
             style={{ top: Math.max(insets.top, 8) + 48, maxHeight: height - 96 }}
           >
-            <Text className="mb-2 text-sm font-black uppercase tracking-wide text-slate-400">
+            <Text className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
               Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
             </Text>
-            <View className={is2wd1mActive ? '' : 'opacity-40'} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
+
+            {/* Joystick / D-pad toggle */}
+            <View className="flex-row items-center justify-between border-b border-white/10 pb-2.5">
+              <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Control mode</Text>
+              <View className="flex-row gap-1.5">
+                <Pressable
+                  onPress={() => { Vibration.vibrate(10); setUseJoystick(false) }}
+                  className={`rounded-full px-3 py-1.5 ${!useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+                >
+                  <Text className={`text-[10px] font-bold ${!useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => { Vibration.vibrate(10); setUseJoystick(true) }}
+                  className={`rounded-full px-3 py-1.5 ${useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+                >
+                  <Text className={`text-[10px] font-bold ${useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View className={`mt-2.5 ${is2wd1mActive ? '' : 'opacity-40'}`} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
               <View className="flex-row items-center justify-between">
-                <Text className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Max steering limit</Text>
-                <Text className="font-mono text-sm font-bold text-white">{steerLimit}°</Text>
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Max steering limit</Text>
+                <Text className="font-mono text-[11px] font-bold text-white">{steerLimit}°</Text>
               </View>
               <View className="mt-1.5 flex-row items-center justify-center gap-3">
                 <StepperPill onPress={() => adjustSteerLimit(-5)} disabled={!canControl} icon="minus" />
-                <Text className="w-12 text-center font-mono text-lg font-bold text-white">{steerLimit}°</Text>
+                <Text className="w-12 text-center font-mono text-sm font-bold text-white">{steerLimit}°</Text>
                 <StepperPill onPress={() => adjustSteerLimit(5)} disabled={!canControl} icon="plus" />
               </View>
-              <View className="mt-2.5 flex-row items-center justify-between border-t border-white/10 pt-2">
-                <Text className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Trim</Text>
-                <Text className="font-mono text-sm font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
+              <View className="mt-2 flex-row items-center justify-between border-t border-white/10 pt-2">
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Trim</Text>
+                <Text className="font-mono text-[11px] font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
               </View>
               <View className="mt-1.5 flex-row items-center justify-center gap-3">
                 <StepperPill onPress={() => adjustTrim(-1)} disabled={!canControl} icon="minus" />
-                <Text className="w-12 text-center font-mono text-lg font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
+                <Text className="w-12 text-center font-mono text-sm font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
                 <StepperPill onPress={() => adjustTrim(1)} disabled={!canControl} icon="plus" />
               </View>
             </View>
             {!is2wd1mActive && (
-              <Text className="mt-2 text-[11px] leading-4 text-slate-500">
+              <Text className="mt-2 text-[9px] leading-3 text-slate-500">
                 Steering limit &amp; trim apply to 2WD1M.
               </Text>
             )}

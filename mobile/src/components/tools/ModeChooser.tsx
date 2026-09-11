@@ -62,13 +62,13 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         disabled={locked}
         accessibilityRole="button"
         accessibilityLabel="Choose car mode"
-        className={`min-w-0 max-w-[220px] flex-row items-center justify-between gap-1.5 rounded-xl px-3 py-2 ${
+        className={`min-w-0 max-w-[240px] flex-row items-center justify-between gap-1.5 rounded-xl px-4 py-3 ${
           highlighted ? 'bg-slate-200' : 'border border-white/15 bg-white/5'
         }`}
       >
         <Text
           numberOfLines={1}
-          className={`min-w-0 flex-1 text-sm font-bold ${highlighted ? 'text-slate-900' : 'text-white'}`}
+          className={`min-w-0 flex-1 text-[13px] font-bold ${highlighted ? 'text-slate-900' : 'text-white'}`}
         >
           {shortName}
         </Text>
@@ -87,9 +87,9 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         disabled={!canControl || locked}
         accessibilityRole="button"
         accessibilityLabel="Cycle mode"
-        className="h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 disabled:opacity-40"
+        className="h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 disabled:opacity-40"
       >
-        <Feather name="rotate-ccw" size={15} color="#fff" />
+        <Feather name="rotate-ccw" size={16} color="#fff" />
       </Pressable>
 
       {/* Dropdown — Modal with flex:1 root so the overlay covers the screen */}
