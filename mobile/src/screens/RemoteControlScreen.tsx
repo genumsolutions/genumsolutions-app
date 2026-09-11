@@ -442,7 +442,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                 out={pidOut}
                 off={pidOff}
                 onPid={applyPid}
-                onEnterMode={() => selectMode(activeMode)}
                 compact
                 oledSlot={oledSlot}
               />
@@ -560,22 +559,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             <Text className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
               Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
             </Text>
-
-            {/* Offset (OFF) */}
-            {activeMode.controls.includes('pid-auto') && (
-              <View className="flex-row items-center justify-between border-b border-white/10 pb-1.5">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Offset</Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[11px] font-bold text-white">
-                    {pidOff >= 0 ? '+' : ''}{pidOff.toFixed(2)}°
-                  </Text>
-                  <View className="flex-row gap-1">
-                    <StepperPill onPress={() => applyPid('off', Math.max(-90, pidOff - 0.1))} disabled={!canControl} icon="minus" />
-                    <StepperPill onPress={() => applyPid('off', Math.min(90, pidOff + 0.1))} disabled={!canControl} icon="plus" />
-                  </View>
-                </View>
-              </View>
-            )}
 
             {/* Hide joystick pad */}
             {!activeMode.controls.includes('pid-auto') && (
