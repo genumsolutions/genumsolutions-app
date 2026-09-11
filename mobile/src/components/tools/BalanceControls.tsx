@@ -58,7 +58,7 @@ function PidRow({
   }
 
   return (
-    <View className="self-start flex-row items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
+    <View className="self-start flex-1 flex-row items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
       {/* Label */}
       <Text className="w-8 text-[10px] font-black uppercase text-slate-400">{def.label}</Text>
 
@@ -131,7 +131,7 @@ export function BalanceControls({
       {/* ── Top section: angle/OUT cards + OLED ── */}
       <View className="flex-row gap-2">
         {/* Left: angle + OUT single hero card */}
-        <View className="flex-1 rounded-xl bg-slate-900 px-4 py-3">
+        <View className="shrink-0 rounded-xl bg-slate-900 px-4 py-3">
           <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Angle</Text>
           <Text className="mt-1 font-mono text-[42px] font-black leading-none text-emerald-300">{angleText}</Text>
           <View className="mt-2 flex-row items-center gap-1.5">
@@ -143,18 +143,22 @@ export function BalanceControls({
           </View>
         </View>
 
-        {/* Right: OLED slot */}
+        {/* Right: OLED slot (flex-1 to take remaining space) */}
         {oledSlot && (
-          <View className="shrink-0">{oledSlot}</View>
+          <View className="flex-1 items-center justify-center">{oledSlot}</View>
         )}
       </View>
 
-      {/* ── PID grid: 2 columns, fine + coarse ── */}
-      <View className="mt-2 flex-row flex-wrap gap-2">
-        <PidRow pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidRow pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidRow pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
-        <PidRow pidKey="off" value={off} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+      {/* ── PID grid: explicit 2×2 columns ── */}
+      <View className="mt-2 gap-2">
+        <View className="flex-row gap-2">
+          <PidRow pidKey="kp" value={kp} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+          <PidRow pidKey="ki" value={ki} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        </View>
+        <View className="flex-row gap-2">
+          <PidRow pidKey="kd" value={kd} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+          <PidRow pidKey="off" value={off} canControl={canControl} onPid={onPid} onOpenModal={setModalKey} />
+        </View>
       </View>
 
       {/* ── Direct-input modal ── */}
