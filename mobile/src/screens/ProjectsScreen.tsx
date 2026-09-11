@@ -286,7 +286,7 @@ export function ProjectsScreen() {
                         </Pressable>
                         {carMode ? (
                           <Pressable
-                            onPress={() => navigation.push('CarRemote', { productId: item.id })}
+                            onPress={() => navigation.push('Tools', { productId: item.id })}
                             accessibilityLabel={`Control ${item.name}`}
                             className="rounded-full bg-gold px-2.5 py-1.5"
                           >
