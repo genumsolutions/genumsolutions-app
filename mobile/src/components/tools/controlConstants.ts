@@ -1,7 +1,7 @@
 // =====================================================================
 // controlConstants — shared tunable constants for the IoT Control hub.
-// Kept together so ToolsScreen drive cadence / reconnect behaviour
-// stays consistent.
+// Kept together so ToolsScreen and the RemoteControl window never drift
+// on drive cadence / reconnect behaviour.
 // =====================================================================
 
 // Continuous drive sends mirror the physical remote's DRIVE_RESEND_MS = 30

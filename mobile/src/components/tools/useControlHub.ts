@@ -2,10 +2,12 @@
 // useControlHub — shared connection/control/telemetry state + command
 // logic for the IoT Control Panel.
 //
-// ToolsScreen (the Control Panel) uses this hook for all connection
-// state, mode selection, speed/servo/steer/trim/PID/gimbal/sensors/
-// relays, ESP-remote safety clamps and instant-stop-on-release,
-// and per-device memory persistence.
+// Both the lean Control Panel page (ToolsScreen) and the immersive
+// game-style remote window (RemoteControlScreen) share this ONE hook so
+// they drive the same car state and never drift: same SPP/WiFi connect,
+// same mode / speed / servo / steer / trim / PID / gimbal / sensors /
+// relays, same ESP-remote safety clamps and instant-stop-on-release,
+// same per-device memory persistence.
 //
 // Every sender is safe when no device is linked (linkKind === 'none'):
 // commands no-op, but UI state (knobs, sliders) still updates so the
@@ -39,9 +41,10 @@ export function useControlHub(routeCategory?: string) {
   const resolvedCategory = routeCategory ?? route.params?.category
 
   // ---- Connection state (SPP primary, WiFi secondary).
-  // Initialised from the current sppService snapshot so the screen
-  // starts out showing an existing live link instead of "no device",
-  // and keeps working when nothing is linked (simulation). ----
+  // Initialised from the current sppService snapshot so a second consumer
+  // (e.g. the RemoteControl window opened while ToolsScreen is already
+  // connected) starts out showing an existing live link instead of "no
+  // device", and keeps working when nothing is linked (simulation). ----
   const [sppDevices, setSppDevices] = useState<SppDevice[]>([])
   const [connected, setConnected] = useState(sppService.isConnected)
   const [deviceName, setDeviceName] = useState(sppService.deviceName ?? '')
