@@ -590,7 +590,7 @@ export function useControlHub(routeCategory?: string) {
 
   const handleWifiConnect = useCallback(() => {
     setError(null)
-    if (!wifiUrl || wifiUrl === 'ws://192.168.4.1:81') {
+    if (!wifiUrl) {
       setError('Enter the car WiFi address (e.g. ws://192.168.4.1:81)')
       return
     }
@@ -610,6 +610,13 @@ export function useControlHub(routeCategory?: string) {
       clearTimeout(reconnectTimerRef.current)
       reconnectTimerRef.current = null
     }
+    // Safe-stop: send stop commands before closing
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send('S\n')
+        wsRef.current.send('SPD0\n')
+      }
+    } catch { /* ignore — connection may already be dead */ }
     wsRef.current?.close()
     setWifiConnected(false)
     setError(null)
