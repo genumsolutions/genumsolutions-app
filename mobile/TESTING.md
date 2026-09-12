@@ -30,6 +30,8 @@
 - [ ] **R9-5 — back navigation preserves connection:** navigate from RemoteControlScreen → Back → connection stays alive; re-enter Remote → still shows connected
 - [ ] **R9-6 — ESP_SER mode — WiFi connects:** non-blocking connect; button responsive during WiFi connect; WeblinkControls shows status
 - [ ] **R9-7 — no double-execution:** WiFi commands sent once only (not doubled from handleCommand + queue)
+- [ ] **R9-8 — car web-page mode dropdown works:** open the car's own page (`http://<car-ip>`), pick a mode in the dropdown → Set Mode → car OLED + app both reflect it (ESP_SERVER/ESP_CLIENT/MANUAL aliases accepted)
+- [ ] **R9-9 — WiFi retry backoff:** with car in ESP_SER out of WiFi range ≥10s, no reconnect hammering (BT button stays responsive); when WiFi becomes reachable, car connects; if STA fails 8s, AP `WIRELESS_CAR_<mac>` appears
 
 **Pass criteria:** all boxes tick. If any fail, note which scenario and which transport (SPP vs WiFi).
 
