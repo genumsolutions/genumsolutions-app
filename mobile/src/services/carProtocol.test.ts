@@ -198,6 +198,33 @@ describe('parseTelemetryLine', () => {
     expect(t.stub).toBe(true);
     expect(t.status).toBe('Stopped');
   });
+
+  // ---- R-4 (app half): fleet NACK line from the car ----
+
+  it('parses the fleet NACK with ; separators', () => {
+    expect(parseTelemetryLine('NACK;E=UNKNOWN_MODE;ARG=2WD1M')).toEqual({
+      nackError: 'UNKNOWN_MODE',
+      nackArg: '2WD1M',
+    });
+  });
+
+  it('parses the fleet NACK tolerating : separators (older remote shape)', () => {
+    expect(parseTelemetryLine('NACK:E=UNKNOWN_MODE:ARG=PATH')).toEqual({
+      nackError: 'UNKNOWN_MODE',
+      nackArg: 'PATH',
+    });
+  });
+
+  it('is case-insensitive and uppercases the error code (raw arg kept)', () => {
+    expect(parseTelemetryLine('nack;e=unknown_mode;arg=auto')).toEqual({
+      nackError: 'UNKNOWN_MODE',
+      nackArg: 'auto',
+    });
+  });
+
+  it('returns nothing when NACK has no ARG token', () => {
+    expect(parseTelemetryLine('NACK;E=UNKNOWN_MODE')).toEqual({});
+  });
 });
 
 describe('A-7 car-truth coming-soon resolution', () => {

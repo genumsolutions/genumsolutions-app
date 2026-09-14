@@ -258,6 +258,8 @@ export function useControlHub(routeCategory?: string) {
 
   // Provisioning-reply handler mirror (defined below with useState deps).
   const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(null)
+  // R-4 NACK handler mirror (defined below; applyTelemetry has empty deps).
+  const handleNackRef = useRef<((arg: string) => void) | null>(null)
 
   // Set category from route params
   useEffect(() => {
@@ -357,6 +359,10 @@ export function useControlHub(routeCategory?: string) {
         const tok = canonicalCarToken(t.mode)
         if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
       }
+      // R-4 (app half): the car rejected a sent mode token — park it as
+      // car-truth stub and surface "Not supported by car" (remote
+      // comms.cpp:505-508 parity).
+      if (t.nackError === 'UNKNOWN_MODE' && t.nackArg) handleNackRef.current?.(t.nackArg)
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
     const offBle = bleService.onTelemetry(applyTelemetry)
@@ -634,6 +640,8 @@ export function useControlHub(routeCategory?: string) {
               const tok = canonicalCarToken(t.mode)
               if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
             }
+            // R-4: same NACK handling as the SPP/BLE path.
+            if (t.nackError === 'UNKNOWN_MODE' && t.nackArg) handleNackRef.current?.(t.nackArg)
             if (!navActiveRef.current && t.speed != null) {
               const mag = Math.abs(t.speed)
               if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
@@ -749,6 +757,20 @@ export function useControlHub(routeCategory?: string) {
     lastProvisionReplyRef.current = reply
   }, [showConnectionMessage, persistPrefs])
   handleWifiProvisionReplyRef.current = handleWifiProvisionReply
+
+  // R-4 (app half, fleet parity): the car replied NACK;E=UNKNOWN_MODE;ARG=<token>
+  // to a mode token it doesn't recognize (mixed-pair case). Surface "Not
+  // supported by car" and park the token as car-truth stub so selectMode() /
+  // cycleMode() refuse it from here on — exactly what the hand-held remote
+  // does (comms.cpp:505-508: setCarStub(arg,true) + setStatus(...)).
+  const handleNack = useCallback((arg: string) => {
+    const tok = canonicalCarToken(arg)
+    if (!tok) return
+    setCarStubMap((prev) => (prev[tok] === true ? prev : { ...prev, [tok]: true }))
+    setDriveStatus('Not supported by car')
+    showConnectionMessage(`${MODE_NAME_FOR_TOKEN[tok] ?? tok} is not supported by this car.`, 'error')
+  }, [showConnectionMessage])
+  handleNackRef.current = handleNack
 
   // Safe stop on link loss (comms.cpp safeStopAndClearQueue parity): the
   // neutral commands are sent by the transport layer on disconnect; here we
