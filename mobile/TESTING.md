@@ -1,6 +1,6 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.6/49** — Full remote rebuild + car mode sync via REQ_STATE (APK built & live). Device test pending.
+> Target: **v2.0.6/49 + OTA R11** — Full remote rebuild + car mode sync via REQ_STATE; OTA updates live through R11 (`d5b95b2`: car-truth coming soon + WiFi card fit). Device verification pending: rounds R10 + R11.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
 
 ---
