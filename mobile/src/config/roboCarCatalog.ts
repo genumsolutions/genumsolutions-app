@@ -52,8 +52,8 @@ export interface CarMode {
 export const LOCAL_CAR_MODES: CarMode[] = [
   {
     id: '4wd4m',
-    name: 'Bluetooth · 4WD (4M)',
-    token: 'BT',
+    name: '4WD4M · 4WD (4M)',
+    token: '4WD4M',
     deviceIndex: 0,
     car: '4-wheel-drive',
     wheel: '4 × BO/brushed motors',
@@ -201,8 +201,11 @@ export const TOKEN_TO_MODE_ID: Record<string, CarModeId> = {
 }
 
 // Map from mode token to remote OLED display name (state.cpp MODE_NAMES[])
+// X-8: the drive mode's token is `4WD4M`; legacy key `BT` kept for display
+// lookups of cached old-token data.
 export const MODE_NAMES: Record<string, string> = {
-  BT: 'Bluetooth',
+  '4WD4M': '4WD4M',
+  BT: '4WD4M',
   ESP_SER: 'EspWebServer',
   PATH: 'PathFollowing',
   OBS_US: 'Obstacle_US',

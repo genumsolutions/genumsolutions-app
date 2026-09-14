@@ -25,7 +25,7 @@ import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, isTokenComingSoon, normalizeModeToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, isTokenComingSoon, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token → short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
@@ -318,12 +318,13 @@ export function useControlHub(routeCategory?: string) {
     const applyTelemetry = (t: CarTelemetry) => {
       if (!mountedRef.current) return
       setTelemetry((prev) => ({ ...prev, ...t }))
-      // Mode: always mirror (applyRemoteState parity).
+      // Mode: always mirror (applyRemoteState parity). X-8: incoming tokens
+      // are canonicalized so old cars' MODE=BT still mirrors the 4WD4M row.
       if (t.mode) {
-        setCarModeId(t.mode)
-        carModeIdRef.current = t.mode
-        const modeUp = t.mode.toUpperCase()
-        const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
+        const canonical = canonicalCarToken(t.mode)
+        setCarModeId(canonical)
+        carModeIdRef.current = canonical
+        const matched = carModesRef.current.find((m) => m.id === canonical.toLowerCase() || m.token === canonical)
         if (matched) setActiveMode(matched)
       }
       // Speed: quantized mirror, NAV-edit-aware (see above).
@@ -350,9 +351,10 @@ export function useControlHub(routeCategory?: string) {
       if (t.ssid !== undefined) setCarSsid(t.ssid || null)
       // A-7: car truth — CAP=STUB (STATE lines) / `stub` (WS JSON) describe
       // the car's CURRENT mode; record it per token so the mode chooser and
-      // selectMode() gate on car reality, not a hardcoded app list.
+      // selectMode() gate on car reality, not a hardcoded app list
+      // (X-8: keys canonical — legacy BT → 4WD4M).
       if (t.stub !== undefined && t.mode) {
-        const tok = normalizeModeToken(t.mode)
+        const tok = canonicalCarToken(t.mode)
         if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
       }
     }
@@ -588,9 +590,10 @@ export function useControlHub(routeCategory?: string) {
         // SSID (never the password) + AP fallback broadcast id.
         if (typeof json.ssid === 'string') setCarSsid(json.ssid || null)
         if (typeof json.ap === 'string') setCarApName(json.ap || null)
-        // A-7: JSON `stub` describes the car's CURRENT mode — record per token.
+        // A-7: JSON `stub` describes the car's CURRENT mode — record per token
+        // (X-8: keys are canonical — legacy BT → 4WD4M).
         if (typeof json.stub === 'boolean' && typeof json.mode === 'string') {
-          const tok = normalizeModeToken(json.mode)
+          const tok = canonicalCarToken(json.mode)
           if (tok) setCarStubMap((prev) => (prev[tok] === json.stub ? prev : { ...prev, [tok]: json.stub as boolean }))
         }
         if (Object.keys(t).length > 0) {
@@ -620,14 +623,15 @@ export function useControlHub(routeCategory?: string) {
           if (Object.keys(t).length > 0) {
             setTelemetry((prev) => ({ ...prev, ...t }))
             if (t.mode) {
-              setCarModeId(t.mode)
-              const modeUp = t.mode.toUpperCase()
-              const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
+              const canonical = canonicalCarToken(t.mode)
+              setCarModeId(canonical)
+              const matched = carModesRef.current.find((m) => m.id === canonical.toLowerCase() || m.token === canonical)
               if (matched) setActiveMode(matched)
             }
-            // A-7: WS STATE lines carry CAP=STUB too (same car truth as SPP).
+            // A-7: WS STATE lines carry CAP=STUB too (same car truth as SPP;
+            // keys canonical — legacy BT → 4WD4M).
             if (t.stub !== undefined && t.mode) {
-              const tok = normalizeModeToken(t.mode)
+              const tok = canonicalCarToken(t.mode)
               if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
             }
             if (!navActiveRef.current && t.speed != null) {
@@ -936,7 +940,7 @@ export function useControlHub(routeCategory?: string) {
     // ESP32 remote mode scroll order (state.cpp MODE_CMDS[]), restricted to
     // the LIVE tokens per car truth (A-7) — cycle never lands on a
     // coming-soon mode, matching the car's own gating.
-    const REMOTE_CYCLE_ORDER = ['BT', 'ESP_SER', 'AUTO', '2WD1M', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'ESP_CLI']
+    const REMOTE_CYCLE_ORDER = ['4WD4M', 'ESP_SER', 'AUTO', '2WD1M', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'ESP_CLI']
     const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
       .slice()
       .sort((a, b) => REMOTE_CYCLE_ORDER.indexOf(a.token) - REMOTE_CYCLE_ORDER.indexOf(b.token))
