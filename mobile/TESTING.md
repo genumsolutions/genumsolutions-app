@@ -1,24 +1,28 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.6/49 + OTA R11** — Full remote rebuild + car mode sync via REQ_STATE; OTA updates live through R11 (`d5b95b2`: car-truth coming soon + WiFi card fit). Device verification pending: rounds R10 + R11.
+> Target: **v2.0.6/49 + OTA R12** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; device verification pending: rounds R10 + R11 + R12.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
 
 ---
 
-## snag round 12 — 4WD4M rename, COMING SOON-only frame, BT transport scoping, metadata (2026-09-14, PLANNED — NOT IMPLEMENTED)
+## snag round 12 — 4WD4M rename, COMING SOON-only frame, BT transport scoping, metadata (2026-09-14, IMPLEMENTED — PENDING DEVICE VERIFY)
 
-> Plan-only per owner request. Design: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md`
-> §2d (X-6 rename, X-7 metadata, W-7 site parity). Car side = T-27..T-31, remote =
-> R-12..R-14. Implementation session starts after R3 results are in.
+> Implemented in the same session as the fleet X-8 rename (wire token `BT` → `4WD4M`,
+> permanent legacy alias). App side: `carProtocol.ts` (catalog token + `canonicalizeModeToken`
+> — `MODE=BT` → `4wd4m` — and `4WD4M` in the fallback live set), `useControlHub.ts`
+> (mirror paths + stub-map keys canonicalized), `roboCarCatalog.ts` (wireToken "4WD4M",
+> label "4WD4M (Bluetooth)" kept for discoverability). 32/32 tests (incl. new legacy-alias
+> cases), tsc clean. Car = v1.5.0 (T-27..T-32), remote = v1.2.0. Design:
+> `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2d (X-6/X-7/X-8).
 
-- [ ] **R12-1 — 4WD4M naming (three-way):** the mode formerly labelled "Bluetooth"/"BLUETOOTH" displays as **4WD4M** on the car OLED, the remote dashboard, and the app catalog; wire token `BT` unchanged (controllers still send/expect `BT`).
+- [ ] **R12-1 — 4WD4M naming (three-way):** the mode formerly labelled "Bluetooth"/"BLUETOOTH" displays as **4WD4M** on the car OLED, the remote dashboard, and the app catalog; wire token renamed too (X-8): new firmware sends/emits `MODE=4WD4M`, and a pre-v1.5.0 car's `MODE=BT` still mirrors via the legacy alias.
 - [ ] **R12-2 — COMING SOON-only body:** on the car, parked modes show a clean centered `COMING SOON` in the body — no mode-name repeat, no `(stub)` suffix (top bar already carries mode + link info).
 - [ ] **R12-3 — status dedupe:** during steady driving, the status line does not re-announce the unchanged state; it updates on changes only.
 - [ ] **R12-4 — BT transport scoping:** over BT, drive commands work in 4WD4M/2WD1M/AUTO only; MAN (RF-only), PATH, OBS_US, OBS_IR, ESP_CLI, ESP_SER refuse BT drive without OLED spam; mode tokens + `REQ_STATE` + `WIFICFG` still work in every mode.
 - [ ] **R12-5 — site ↔ OLED mode parity:** the car-hosted page and website `/robocar` list exactly the car's modes with matching names + coming-soon marks.
 - [ ] **R12-6 — remote ESP_SER WiFi display:** in ESP_SER the remote dashboard shows configured SSID, fallback AP broadcast id (`ESP32_Car_<mac>`), and current WiFi connection state.
 - [ ] **R12-7 — metadata visible:** boot splash shows project name + version + "GENUM SOLUTIONS PVT. LTD." on car and remote.
-- [ ] **R12-8 — wire token `4WD4M` (X-8, only when that batch lands):** new car's STATE reads `MODE=4WD4M`; the app mirrors it; an OLD car's `MODE=BT` still mirrors (legacy alias). See `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2d X-8.
+- [ ] **R12-8 — wire token `4WD4M` (X-8, IMPLEMENTED with this round):** new car's STATE reads `MODE=4WD4M`; the app mirrors it; an OLD car's `MODE=BT` still mirrors (legacy alias in `carProtocol.ts` + remote `mapTokenToModeIndex()`). Mixed-pair matrix: new app/remote ↔ old car (v1.4.0) and old app ↔ new car must both behave.
 
 ---
 
@@ -68,6 +72,14 @@
 - [ ] **R10-5 — banner on exhaustion:** let the 4 silent reconnect attempts lapse (~15 s) → banner appears (it used to give up silently).
 - [ ] **R10-6 — Cancel keeps device list:** tap Cancel on the banner → banner closes; Scan + device list still shows the car; Connect still works (no app restart).
 - [ ] **R10-7 — coming-soon modes blocked:** Mode dropdown lists PATH/OBS/MAN/AUTO/2WD1M marked "coming soon"; picking one shows "Coming soon" and the car mode never changes; the car's own OLED would refuse too. Cycle button only walks BT ↔ ESP_SER.
+
+> **Owner partial run 2026-09-14:** R10/R11 were NOT fully executed — owner
+> observation: "not all the modes are accessible to both the remote and the car".
+> Assessment: expected — v1.4.0+ lockdown makes only 4WD4M + ESP_SER live by design
+> (car truth via `CAP=STUB`); parked modes show COMING SOON on car, remote, and app
+> alike. No PASS boxes ticked from the partial run; the full round re-runs against
+> car v1.5.0 + remote v1.2.0 (R12 checklist above folds in — R12-1's three-way check
+> covers the rename on hardware).
 - [ ] **R10-8 — WiFi provisioning over BT (ESP_SER deck):** connect BT → open ESP_SER deck → enter SSID/password → "Send WiFi to car" → car OLED shows mode change to ESP32(WEBSERVER) → car joins the router (IP on OLED) → app "Car WiFi: <ssid>" appears in the deck.
 - [ ] **R10-9 — AP fallback broadcast id:** provision a wrong SSID on purpose → car falls back to AP mode → deck shows "Fallback AP: ESP32_Car_<mac>"; connect the phone to that AP → ws://192.168.4.1:81 still connects.
 - [ ] **R10-10 — no drive from stub modes on the car:** switch the car into a coming-soon mode by its own button → F/B/L/R and SPD<n> show "Coming soon" on the car OLED; motors never spin; S always stops.
