@@ -169,14 +169,33 @@ export const FALLBACK_STUB_TOKENS: ReadonlySet<string> = new Set([
   'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M',
 ])
 
-/** Fleet tokens shipped LIVE in v1.4.0 — the fallback's available side. */
-const FALLBACK_LIVE_TOKENS: ReadonlySet<string> = new Set(['BT', 'ESP_SER'])
+/**
+ * Fleet tokens shipped LIVE in v1.4.0 — the fallback's available side.
+ * X-8: `4WD4M` is the canonical token; `BT` kept so legacy lookups resolve.
+ */
+const FALLBACK_LIVE_TOKENS: ReadonlySet<string> = new Set(['BT', '4WD4M', 'ESP_SER'])
 
 /**
  * Normalize a mode token for stub-map lookups (uppercase, trimmed).
  */
 export function normalizeModeToken(token: string | null | undefined): string {
   return (token ?? '').trim().toUpperCase()
+}
+
+/**
+ * X-8 legacy aliases: pre-v1.5.0 cars emit `MODE=BT` for the 4WD4M mode.
+ * Receivers (this app) accept both forever; map the incoming token to the
+ * new canonical one so mode mirroring and the stub map keep working against
+ * old and new cars alike.
+ */
+export const LEGACY_TOKEN_ALIASES: Readonly<Record<string, string>> = {
+  BT: '4WD4M',
+}
+
+/** Canonicalize an incoming car token (applies legacy aliases). */
+export function canonicalCarToken(token: string | null | undefined): string {
+  const t = normalizeModeToken(token)
+  return LEGACY_TOKEN_ALIASES[t] ?? t
 }
 
 /**

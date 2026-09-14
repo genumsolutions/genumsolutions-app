@@ -13,6 +13,7 @@ import {
   ESTOP_LINE,
   isAllowedDriveStatus,
   isCompleteJsonObject,
+  canonicalCarToken,
   isTokenComingSoon,
   parseTelemetryLine,
   quantizeSpeedToStep,
@@ -228,6 +229,26 @@ describe('A-7 car-truth coming-soon resolution', () => {
     expect(isTokenComingSoon('MYSTERY_MODE', {})).toBe(true);
     expect(isTokenComingSoon(null, {})).toBe(true);
     expect(isTokenComingSoon('', {})).toBe(true);
+  });
+
+  // ---- X-8: legacy token canonicalization ----
+
+  it('canonicalizes legacy BT to 4WD4M', () => {
+    expect(canonicalCarToken('BT')).toBe('4WD4M');
+    expect(canonicalCarToken('bt')).toBe('4WD4M');
+    expect(canonicalCarToken(' 4wd4m ')).toBe('4WD4M');
+    expect(canonicalCarToken('ESP_SER')).toBe('ESP_SER');
+  });
+
+  it('mirrors old-car STATE MODE=BT onto the 4WD4M row (legacy alias)', () => {
+    const t = parseTelemetryLine('STATE;MODE=BT;SPD=170;STATUS=Forward');
+    expect(t.mode).toBe('BT'); // parser preserves the wire truth
+    // …and the canonical form resolves against the new-token catalog:
+    expect(isTokenComingSoon(canonicalCarToken(t.mode), {})).toBe(false);
+  });
+
+  it('resolves the new 4WD4M token as live via the fallback table', () => {
+    expect(isTokenComingSoon('4WD4M', {})).toBe(false);
   });
 });
 
