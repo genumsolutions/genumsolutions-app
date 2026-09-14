@@ -23,6 +23,7 @@
 //     STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
 //     TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
 //     SPD<value> / SPD:<value>   simple speed feedback
+//     NACK;E=UNKNOWN_MODE;ARG=<token>   mode-token rejection (R-4 fleet)
 //
 // Transport services (bleService, sppService, the WiFi socket in the
 // screens) import the builders + parser from here so one bugfix fixes
@@ -51,6 +52,15 @@ export type CarTelemetry = {
   ap?: string
   ssid?: string
   stub?: boolean
+  /**
+   * R-4 fleet parity: the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>` (or
+   * `:` separators) when it does not recognize a sent mode token. The app
+   * surfaces the rejection like the remote (comms.cpp:482-513) and parks the
+   * token as car-truth stub. `nackArg` is the rejected token as sent (not yet
+   * canonicalized); consumers canonicalize via canonicalCarToken().
+   */
+  nackError?: string
+  nackArg?: string
 }
 
 /** Neutral commands sent on disconnect / stale telemetry (safe stop). */
@@ -245,6 +255,29 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   if (!l) return {}
   const up = l.toUpperCase()
   const telemetry: CarTelemetry = {}
+
+  // R-4 (app half, fleet parity): the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>`
+  // (tolerating `:` separators — comms.cpp:482) when it does not recognize a
+  // mode token it was sent. The remote marks the token a permanent stub and
+  // surfaces "Not supported by car"; we parse the same line here and let the
+  // consumer (useControlHub) apply the same policy.
+  if (/^NACK[:;]/i.test(up)) {
+    const body = l.split(/[;:]/)
+    let err = ''
+    let arg = ''
+    for (let i = 1; i < body.length; i++) {
+      const m = /^([A-Za-z]+)[:=](.*)$/.exec(body[i].trim())
+      if (!m) continue
+      const key = m[1].toUpperCase()
+      if (key === 'E') err = m[2].trim()
+      else if (key === 'ARG') arg = m[2].trim()
+    }
+    if (arg) {
+      telemetry.nackArg = arg
+      if (err) telemetry.nackError = err.toUpperCase()
+    }
+    return telemetry
+  }
 
   // STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
   // Car firmware uses '=' as key-value separator (e.g. MODE=2WD1M),
