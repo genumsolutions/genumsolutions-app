@@ -236,7 +236,9 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false)
-  const [showJoystick, setShowJoystick] = useState(false)
+  // Pads are the primary drive surface — show them by default for every mode;
+  // users can still hide via Settings (choice lives for the session only).
+  const [showJoystick, setShowJoystick] = useState(true)
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null)
@@ -290,34 +292,6 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   return (
     <View className="flex-1 bg-slate-950">
-      {/* Reconnect banner — non-intrusive, shows when connection drops */}
-      {showSppsRetry && (
-        <View className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-xs font-bold text-amber-800">Connection lost</Text>
-              <Text className="text-[10px] text-amber-600">Reconnect to your car?</Text>
-            </View>
-            <View className="flex-row gap-2">
-              <Pressable
-                onPress={() => { Vibration.vibrate(10); void handleSppsRetry() }}
-                className="rounded-full bg-gold px-3 py-1"
-                hitSlop={6}
-              >
-                <Text className="text-[10px] font-bold text-white">Reconnect</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => { Vibration.vibrate(10); handleReconnectPromptCancel() }}
-                className="rounded-full border border-slate-300 bg-white px-3 py-1"
-                hitSlop={6}
-              >
-                <Text className="text-[10px] font-bold text-slate-500">Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
-
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
 
         {/* ── Chrome row ── */}
@@ -610,6 +584,39 @@ export function RemoteControlScreen({ navigation }: Props) {
             )}
           </View>
         </>
+      )}
+
+      {/* Reconnect banner — anchored to the bottom so it never collides with
+          the phone status bar/notch in landscape. Shows when connection
+          drops and auto-reconnect is exhausted. */}
+      {showSppsRetry && (
+        <View
+          className="mx-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5"
+          style={{ marginBottom: Math.max(insets.bottom, 8) }}
+        >
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-amber-800">Connection lost</Text>
+              <Text className="text-[10px] text-amber-600">Reconnect to your car?</Text>
+            </View>
+            <View className="flex-row gap-2">
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); void handleSppsRetry() }}
+                className="rounded-full bg-gold px-3 py-1"
+                hitSlop={6}
+              >
+                <Text className="text-[10px] font-bold text-white">Reconnect</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); handleReconnectPromptCancel() }}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1"
+                hitSlop={6}
+              >
+                <Text className="text-[10px] font-bold text-slate-500">Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       )}
     </View>
   )
