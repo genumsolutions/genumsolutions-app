@@ -5,6 +5,22 @@
 
 ---
 
+## snag round 12 — 4WD4M rename, COMING SOON-only frame, BT transport scoping, metadata (2026-09-14, PLANNED — NOT IMPLEMENTED)
+
+> Plan-only per owner request. Design: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md`
+> §2d (X-6 rename, X-7 metadata, W-7 site parity). Car side = T-27..T-31, remote =
+> R-12..R-14. Implementation session starts after R3 results are in.
+
+- [ ] **R12-1 — 4WD4M naming (three-way):** the mode formerly labelled "Bluetooth"/"BLUETOOTH" displays as **4WD4M** on the car OLED, the remote dashboard, and the app catalog; wire token `BT` unchanged (controllers still send/expect `BT`).
+- [ ] **R12-2 — COMING SOON-only body:** on the car, parked modes show a clean centered `COMING SOON` in the body — no mode-name repeat, no `(stub)` suffix (top bar already carries mode + link info).
+- [ ] **R12-3 — status dedupe:** during steady driving, the status line does not re-announce the unchanged state; it updates on changes only.
+- [ ] **R12-4 — BT transport scoping:** over BT, drive commands work in 4WD4M/2WD1M/AUTO only; MAN (RF-only), PATH, OBS_US, OBS_IR, ESP_CLI, ESP_SER refuse BT drive without OLED spam; mode tokens + `REQ_STATE` + `WIFICFG` still work in every mode.
+- [ ] **R12-5 — site ↔ OLED mode parity:** the car-hosted page and website `/robocar` list exactly the car's modes with matching names + coming-soon marks.
+- [ ] **R12-6 — remote ESP_SER WiFi display:** in ESP_SER the remote dashboard shows configured SSID, fallback AP broadcast id (`ESP32_Car_<mac>`), and current WiFi connection state.
+- [ ] **R12-7 — metadata visible:** boot splash shows project name + version + "GENUM SOLUTIONS PVT. LTD." on car and remote.
+
+---
+
 ## snag round 11 — car-truth coming soon + WiFi-card layout fit (2026-09-14, IMPLEMENTED — PENDING DEVICE VERIFY)
 
 > Code complete: `carProtocol.ts` (per-token stub parse + `isTokenComingSoon`),
