@@ -5,10 +5,29 @@
 
 ---
 
-## snag round 11 — car-truth coming soon + WiFi-card layout fit (2026-09-14, PLANNED — NOT IMPLEMENTED)
+## snag round 11 — car-truth coming soon + WiFi-card layout fit (2026-09-14, IMPLEMENTED — PENDING DEVICE VERIFY)
 
-> Plan-only per owner request; implementation is the next session's app-side batch.
-> Full design: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2c (A-7, A-8).
+> Code complete: `carProtocol.ts` (per-token stub parse + `isTokenComingSoon`),
+> `useControlHub.ts` (`carStubMap` + car-sourced selectMode/cycleMode + SSID
+> pre-fill), `ModeChooser.tsx` (Coming soon badge), `WeblinkControls.tsx`
+> (collapsible compact card + `__DEV__` layout log). 29/29 tests, tsc clean.
+> Design record: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2c (A-7, A-8).
+
+**If something goes wrong (recovery):**
+- **Revert path:** `git checkout main && git reset --hard backup` is the fleet
+  full-revert (see `guide/REBUILD-FAILSAFE.md`); for a surgical revert use
+  `git revert <commit>` — the batch is one commit on `main`.
+- **Mode list looks wrong / everything says coming soon:** check the car actually
+  emits `CAP=STUB` (`STATE;MODE=BT;…;CAP=STUB` on the serial monitor); the app falls
+  back to the v1.4.0 table when the car reports nothing. Unknown tokens are gated
+  OFF conservatively by design (`isTokenComingSoon` returns true for tokens outside
+  the fallback table until the car reports them).
+- **WiFi card overlaps the deck again:** the card logs its measured size in dev
+  builds (`[A-8] WiFi card measured: WxH`) — compare against the deck budget noted
+  in R11-4 before changing styles.
+- **SSID pre-fill leaks across cars:** pre-fill is keyed per BT address via
+  `DevicePrefs.lastWifiSsid`; verify `addressForMemory` is non-null when the card
+  opens.
 
 - [ ] **R11-1 — mode toggle lists ALL 9 modes:** dropdown shows every token; parked ones render muted with a "Coming soon" badge but stay tappable.
 - [ ] **R11-2 — coming-soon is CAR truth:** refusal set comes from `CAP=STUB` on the car's `STATE;` lines (not a hardcoded list); picking a parked mode → "Coming soon" toast, car mode unchanged. Flip one `isStub` in the car registry → the app updates with zero app changes.

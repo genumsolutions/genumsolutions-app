@@ -13,6 +13,7 @@ import {
   ESTOP_LINE,
   isAllowedDriveStatus,
   isCompleteJsonObject,
+  isTokenComingSoon,
   parseTelemetryLine,
   quantizeSpeedToStep,
   REQ_STATE_LINE,
@@ -173,6 +174,60 @@ describe('parseTelemetryLine', () => {
       ap: 'ESP32_Car_1',
       ssid: 'HomeNet',
     });
+  });
+
+  // ---- A-7: per-token car-truth stub map ----
+
+  it('parses CAP=STUB on STATE lines (bare token shape)', () => {
+    expect(parseTelemetryLine('STATE;MODE=PATH;SPD=170;STATUS=Stopped;CAP=STUB')).toEqual({
+      mode: 'PATH',
+      speed: 170,
+      status: 'Stopped',
+      stub: true,
+    });
+  });
+
+  it('ignores CAP values other than STUB', () => {
+    expect(parseTelemetryLine('STATE;MODE=BT;CAP=LIVE')).toEqual({ mode: 'BT', stub: false });
+  });
+
+  it('parses CAP=STUB in the key=value shape with other trailing keys', () => {
+    const t = parseTelemetryLine('STATE;MODE=2WD1M;SPD=0;CAP:STUB;STATUS=Stopped');
+    expect(t.mode).toBe('2WD1M');
+    expect(t.stub).toBe(true);
+    expect(t.status).toBe('Stopped');
+  });
+});
+
+describe('A-7 car-truth coming-soon resolution', () => {
+  it('falls back to the fleet table when the car reports nothing', () => {
+    expect(isTokenComingSoon('PATH', {})).toBe(true);
+    expect(isTokenComingSoon('BT', {})).toBe(false);
+    expect(isTokenComingSoon('ESP_SER', {})).toBe(false);
+  });
+
+  it('car truth overrides the fallback per token', () => {
+    // A car whose registry made 2WD1M live again:
+    const map = { '2WD1M': false };
+    expect(isTokenComingSoon('2WD1M', map)).toBe(false);
+    // …while still-parked tokens stay parked via fallback:
+    expect(isTokenComingSoon('PATH', map)).toBe(true);
+  });
+
+  it('car truth can PARK a fallback-live token', () => {
+    const map = { BT: true };
+    expect(isTokenComingSoon('BT', map)).toBe(true);
+  });
+
+  it('is case-insensitive and trims whitespace', () => {
+    expect(isTokenComingSoon('  bt ', { BT: false })).toBe(false);
+    expect(isTokenComingSoon('path', {})).toBe(true);
+  });
+
+  it('treats an unknown token as coming soon', () => {
+    expect(isTokenComingSoon('MYSTERY_MODE', {})).toBe(true);
+    expect(isTokenComingSoon(null, {})).toBe(true);
+    expect(isTokenComingSoon('', {})).toBe(true);
   });
 });
 

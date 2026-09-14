@@ -153,6 +153,61 @@ export function buildWifiConfigLine(ssid: string, password: string): string {
   return `WIFICFG;${ssid};${password}`
 }
 
+// -------------------------------------------------------------------
+// A-7: car-truth coming-soon (per-token CAP=STUB map)
+// -------------------------------------------------------------------
+
+/**
+ * Fallback stub table for cars that do NOT (yet) emit CAP=STUB on their
+ * STATE lines — the same live set the car fleet shipped with v1.4.0
+ * (wireless car: BT + ESP_SER live; owner lockdown 2026-09-14). Cars that
+ * DO report per-token truth override this map token by token, so flipping
+ * one `isStub` in a car's registry updates every controller with zero
+ * controller changes (the R-10 property).
+ */
+export const FALLBACK_STUB_TOKENS: ReadonlySet<string> = new Set([
+  'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M',
+])
+
+/** Fleet tokens shipped LIVE in v1.4.0 — the fallback's available side. */
+const FALLBACK_LIVE_TOKENS: ReadonlySet<string> = new Set(['BT', 'ESP_SER'])
+
+/**
+ * Normalize a mode token for stub-map lookups (uppercase, trimmed).
+ */
+export function normalizeModeToken(token: string | null | undefined): string {
+  return (token ?? '').trim().toUpperCase()
+}
+
+/**
+ * Pure helper (A-7): resolve whether a mode is coming-soon for the paired
+ * car. Car truth wins token by token (the map is fed from CAP=STUB on the
+ * car's STATE lines / `stub` in its WS JSON — both describe the CURRENT
+ * mode, so the map fills as modes are visited); tokens the car has not
+ * reported yet fall back to the fleet fallback table.
+ *
+ * Convergence note (same as the remote's R-10): parking a mode updates
+ * controllers instantly (the car announces CAP=STUB the moment it sits in
+ * that mode); UN-parking is reflected after the car visits the mode once
+ * (its own mode button) — a full-table announcement is a possible future
+ * car feature (X-5), not needed for the current fleet.
+ */
+export function isTokenComingSoon(
+  token: string | null | undefined,
+  carStubMap: Record<string, boolean>,
+): boolean {
+  const t = normalizeModeToken(token)
+  if (!t) return true
+  const reported = carStubMap[t]
+  if (typeof reported === 'boolean') return reported
+  // Fallback for tokens the car has not reported yet: the v1.4.0 fleet
+  // table. Anything UNKNOWN (future/foreign tokens not in the table) is
+  // gated conservatively until the car reports truth for it.
+  if (FALLBACK_STUB_TOKENS.has(t)) return true
+  if (FALLBACK_LIVE_TOKENS.has(t)) return false
+  return true
+}
+
 /** Build the AUTO calibration line: CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:.. */
 export function buildCalibration(p: { kp: number; ki: number; kd: number; out: number; off: number }): string {
   return `CFG;Kp:${p.kp.toFixed(2)};Ki:${p.ki.toFixed(3)};Kd:${p.kd.toFixed(3)};OUT:${p.out.toFixed(0)};OFF:${p.off.toFixed(2)}`
@@ -189,7 +244,12 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       else if (key === 'SPD') telemetry.speed = Number(val) || 0
       else if (key === 'TRIM') telemetry.trim = Number(val) || 0
       else if (key === 'STATUS') telemetry.status = val
-      else if (key === 'REPLY') {
+      else if (key === 'CAP') {
+        // A-7 (fleet parity with the remote's R-10): the car announces the
+        // CURRENT mode as a stub via CAP=STUB on its STATE lines. Bare token
+        // and key=value shapes both accepted (comms.cpp emits `;CAP=STUB`).
+        telemetry.stub = val.trim().toUpperCase() === 'STUB'
+      } else if (key === 'REPLY') {
         // The reply payload itself contains semicolons (WIFICFG;STORED;<ssid>)
         // — rejoin everything after 'REPLY=' so it survives the split.
         const rest = body.slice(i + 1).join(';')

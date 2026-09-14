@@ -60,6 +60,10 @@ export type DevicePrefs = {
   fullscreen: boolean
   /** Last selected joystick layout id. */
   joystickLayout: string
+  /** A-8: last WiFi SSID successfully sent to THIS car (pre-fill hint).
+      The password is deliberately NOT persisted — it lives only in flight
+      and in the car's NVS. */
+  lastWifiSsid: string | null
 }
 
 /** Per-device storage key prefix. */
@@ -137,6 +141,9 @@ export type ModeChooserProps = {
   locked?: boolean
   /** Display catalogue (DB-first). Defaults to the bundled modes when omitted. */
   modes?: CarMode[]
+  /** A-7 car truth: token -> stub flag from the car's CAP=STUB reports.
+      Tokens not in the map fall back to the fleet fallback table. */
+  carStubMap?: Record<string, boolean>
 }
 
 export type OledDisplayProps = {
