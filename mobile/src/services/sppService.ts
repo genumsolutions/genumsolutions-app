@@ -68,6 +68,8 @@ export class SppService {
   private lastAddress: string | null = null
   private lastKnownMode: string | null = null
   private readSubscription: { remove: () => void } | null = null
+  /** Native DEVICE_DISCONNECTED subscription (car power-off / walk-away). */
+  private disconnectSubscription: { remove: () => void } | null = null
   private telemetryCallbacks: Set<TelemetryCallback> = new Set()
   private statusCallbacks: Set<StatusCallback> = new Set()
 
@@ -240,6 +242,21 @@ export class SppService {
 
     const mod = await this.getModule()
 
+    // Bugfix (connect-button dead until restart): a previous failed attempt
+    // could leave connectingAddress pointing at this same device, which made
+    // the guard above silently swallow every future connect() call. Clear the
+    // stale marker (and any dead socket) before dialing.
+    if (this.connectingAddress && this.connectingAddress !== address) {
+      // A different connect is somehow in flight — neutralise it the same way
+      // the timeout path would, instead of queuing behind a zombie.
+      this.connectingAddress = null
+    }
+    if (this.connectedAddress && this.connectedAddress !== address) {
+      try { await mod.disconnectFromDevice(this.connectedAddress) } catch { /* ignore */ }
+      this.connectedAddress = null
+      this.connectedName = null
+    }
+
     // Immediate: show connecting status
     this.connectingAddress = address
     this.lastAddress = address
@@ -281,9 +298,16 @@ export class SppService {
         }
       })
 
+      // Native disconnect events keep the "Connection lost" banner truthful
+      // (car power-off fires this instantly instead of on next write).
+      this.watchNativeDisconnects()
+
       this.emitStatus('connected', address)
     } catch (e) {
       this.connectingAddress = null
+      // The socket may have half-opened natively even though the promise
+      // rejected — drop it so the next attempt starts clean.
+      try { await mod.disconnectFromDevice(address) } catch { /* ignore */ }
       this.emitStatus('error', e instanceof Error ? e.message : 'Classic BT connection failed')
       throw e
     }
@@ -296,13 +320,14 @@ export class SppService {
   async retryConnect(): Promise<void> {
     const addr = this.lastAddress || this.connectingAddress || this.connectedAddress
     if (!addr) throw new Error('No device to retry. Scan and pick a car again.')
-    // Clean up old connection first to avoid stale native socket
-    if (this.connectedAddress || this.connectingAddress) {
-      await this.disconnect()
-    }
-    this.connectingAddress = addr
+    // Bugfix: retryConnect used to pre-set connectingAddress and then call
+    // connect(), whose re-entry guard `connectingAddress === address` saw the
+    // pre-set marker and silently returned — leaving the app believing a
+    // connect was in flight forever (the "must restart the app" bug).
+    this.connectingAddress = null
     this.connectedAddress = null
     this.connectedName = null
+    await this.disconnect()
     await this.connect(addr)
   }
 
@@ -335,6 +360,32 @@ export class SppService {
     this.emitStatus('disconnected')
   }
 
+  /**
+   * Subscribe to the native DEVICE_DISCONNECTED event so the UI learns
+   * immediately when the car powers off / walks out of range — previously the
+   * socket state was only discovered on the next failed write, so the app
+   * kept claiming "Connected" with a dead link.
+   * Must be called after the module has loaded (i.e. from a successful connect).
+   */
+  private watchNativeDisconnects(): void {
+    if (this.disconnectSubscription) return
+    this.getModule()
+      .then((mod) => {
+        this.disconnectSubscription = mod.onDeviceDisconnected((event: { deviceAddress?: string }) => {
+          const addr = event?.deviceAddress
+          if (addr && this.connectedAddress && addr !== this.connectedAddress) return
+          if (!this.connectedAddress && !this.connectingAddress) return
+          this.connectedAddress = null
+          this.connectedName = null
+          this.connectingAddress = null
+          this.readSubscription?.remove()
+          this.readSubscription = null
+          this.emitStatus('disconnected')
+        })
+      })
+      .catch(() => { /* module unavailable — polling path still applies */ })
+  }
+
   /** Low-level write to the connected device. */
   private async writeToDevice(address: string, data: string, charset: string): Promise<void> {
     const mod = await this.getModule()
@@ -344,7 +395,19 @@ export class SppService {
   /** Send one GENUM command line to the car (newline terminated). */
   async sendLine(line: string): Promise<void> {
     if (!this.connectedAddress) throw new Error('Not connected')
-    await this.writeToDevice(this.connectedAddress, `${line}\n`, 'utf-8')
+    try {
+      await this.writeToDevice(this.connectedAddress, `${line}\n`, 'utf-8')
+    } catch (e) {
+      // A failed write IS the disconnect signal when the native event did not
+      // fire (BT stack variance): mark the link dead so the UI shows
+      // "Connection lost" instead of silently dropping commands.
+      this.connectedAddress = null
+      this.connectedName = null
+      this.readSubscription?.remove()
+      this.readSubscription = null
+      this.emitStatus('disconnected')
+      throw e
+    }
   }
 
   /** Ask the car to re-broadcast STATE (mode/speed/trim/status). */

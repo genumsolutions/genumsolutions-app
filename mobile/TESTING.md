@@ -5,6 +5,25 @@
 
 ---
 
+## snag round 10 — reconnect UX + WiFi provisioning (2026-09-14, PENDING DEVICE VERIFY)
+
+> JS-only OTA after push: fully close the app → reopen. Car needs a re-flash (arduino-cli 54%, huge_app).
+
+- [ ] **R10-1 — reconnect banner position (Remote window, landscape):** power the car off mid-drive → amber "Connection lost" banner appears at the BOTTOM of the remote screen (clear of the status bar/notch); Reconnect + Cancel both reachable.
+- [ ] **R10-2 — pads show by default:** open the Remote window in every live mode (BT, ESP_SER) → drive pads visible immediately, no "Joystick pad hidden" placeholder; Settings → Hide still works.
+- [ ] **R10-3 — connect button survives disconnect (THE restart bug):** connect BT → power car off → wait for the banner → power car back on → tap Reconnect → reconnects WITHOUT restarting the app. Then scan + Connect from the device list again → also works first tap.
+- [ ] **R10-4 — native disconnect detection:** power the car off mid-drive → within ~2 s the app flips to "Connection lost"/banner (no more phantom "Connected" with a dead link).
+- [ ] **R10-5 — banner on exhaustion:** let the 4 silent reconnect attempts lapse (~15 s) → banner appears (it used to give up silently).
+- [ ] **R10-6 — Cancel keeps device list:** tap Cancel on the banner → banner closes; Scan + device list still shows the car; Connect still works (no app restart).
+- [ ] **R10-7 — coming-soon modes blocked:** Mode dropdown lists PATH/OBS/MAN/AUTO/2WD1M marked "coming soon"; picking one shows "Coming soon" and the car mode never changes; the car's own OLED would refuse too. Cycle button only walks BT ↔ ESP_SER.
+- [ ] **R10-8 — WiFi provisioning over BT (ESP_SER deck):** connect BT → open ESP_SER deck → enter SSID/password → "Send WiFi to car" → car OLED shows mode change to ESP32(WEBSERVER) → car joins the router (IP on OLED) → app "Car WiFi: <ssid>" appears in the deck.
+- [ ] **R10-9 — AP fallback broadcast id:** provision a wrong SSID on purpose → car falls back to AP mode → deck shows "Fallback AP: ESP32_Car_<mac>"; connect the phone to that AP → ws://192.168.4.1:81 still connects.
+- [ ] **R10-10 — no drive from stub modes on the car:** switch the car into a coming-soon mode by its own button → F/B/L/R and SPD<n> show "Coming soon" on the car OLED; motors never spin; S always stops.
+
+**Pass criteria:** all boxes tick. R10-3 is the headline regression (old builds needed an app restart to reconnect).
+
+---
+
 ## snag round 8 — industrial-hardening pass (SHIPPED as OTA after push — device verify pending)
 
 > JS-only hardening. After the push lands: fully close the app → reopen (OTA applies silently).

@@ -45,6 +45,12 @@ export type CarTelemetry = {
   ip?: string
   rssi?: number
   connected?: boolean
+  /** v1.4.0 provisioning reply from the car (REPLY=WIFICFG;… on STATE lines). */
+  reply?: string
+  /** v1.4.0: car truth flags — AP broadcast id, configured SSID, stub mode. */
+  ap?: string
+  ssid?: string
+  stub?: boolean
 }
 
 /** Neutral commands sent on disconnect / stale telemetry (safe stop). */
@@ -137,6 +143,16 @@ export function buildTrim(value: number): string {
 export const ESTOP_LINE = 'ESTOP'
 export const REQ_STATE_LINE = 'REQ_STATE'
 
+/**
+ * Build the v1.4.0 WiFi provisioning line: WIFICFG;<ssid>;<password>.
+ * Sent over the Bluetooth SPP link; the car stores the pair in Preferences
+ * and switches itself to ESP_SER (router join + web page). An empty password
+ * provisions an open network. The password must never be logged.
+ */
+export function buildWifiConfigLine(ssid: string, password: string): string {
+  return `WIFICFG;${ssid};${password}`
+}
+
 /** Build the AUTO calibration line: CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:.. */
 export function buildCalibration(p: { kp: number; ki: number; kd: number; out: number; off: number }): string {
   return `CFG;Kp:${p.kp.toFixed(2)};Ki:${p.ki.toFixed(3)};Kd:${p.kd.toFixed(3)};OUT:${p.out.toFixed(0)};OFF:${p.off.toFixed(2)}`
@@ -173,6 +189,14 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       else if (key === 'SPD') telemetry.speed = Number(val) || 0
       else if (key === 'TRIM') telemetry.trim = Number(val) || 0
       else if (key === 'STATUS') telemetry.status = val
+      else if (key === 'REPLY') {
+        // The reply payload itself contains semicolons (WIFICFG;STORED;<ssid>)
+        // — rejoin everything after 'REPLY=' so it survives the split.
+        const rest = body.slice(i + 1).join(';')
+        telemetry.reply = rest ? `${val};${rest}` : val
+        break
+      } else if (key === 'AP') telemetry.ap = val
+      else if (key === 'SSID') telemetry.ssid = val
     }
     return telemetry
   }
@@ -214,6 +238,9 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.ip === 'string') telemetry.ip = j.ip
       if (typeof j.rssi === 'number') telemetry.rssi = j.rssi
       if (typeof j.connected === 'boolean') telemetry.connected = j.connected
+      if (typeof j.ssid === 'string') telemetry.ssid = j.ssid
+      if (typeof j.ap === 'string') telemetry.ap = j.ap
+      if (typeof j.stub === 'boolean') telemetry.stub = j.stub
     } catch { /* not JSON — ignore */ }
   }
 
