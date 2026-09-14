@@ -18,6 +18,7 @@
 - [ ] **R12-5 — site ↔ OLED mode parity:** the car-hosted page and website `/robocar` list exactly the car's modes with matching names + coming-soon marks.
 - [ ] **R12-6 — remote ESP_SER WiFi display:** in ESP_SER the remote dashboard shows configured SSID, fallback AP broadcast id (`ESP32_Car_<mac>`), and current WiFi connection state.
 - [ ] **R12-7 — metadata visible:** boot splash shows project name + version + "GENUM SOLUTIONS PVT. LTD." on car and remote.
+- [ ] **R12-8 — wire token `4WD4M` (X-8, only when that batch lands):** new car's STATE reads `MODE=4WD4M`; the app mirrors it; an OLD car's `MODE=BT` still mirrors (legacy alias). See `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2d X-8.
 
 ---
 
