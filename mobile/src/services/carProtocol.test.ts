@@ -9,6 +9,7 @@ import {
   buildSteer,
   buildServo,
   buildTrim,
+  buildWifiConfigLine,
   ESTOP_LINE,
   isAllowedDriveStatus,
   isCompleteJsonObject,
@@ -142,6 +143,46 @@ describe('parseTelemetryLine', () => {
     expect(parseTelemetryLine('   ')).toEqual({});
     expect(parseTelemetryLine('OK')).toEqual({});
     expect(parseTelemetryLine('{not json')).toEqual({});
+  });
+
+  it('parses the v1.4.0 provisioning reply (REPLY=WIFICFG;…)', () => {
+    expect(
+      parseTelemetryLine('STATE;MODE=ESP_SER;SPD=170;STATUS=Stopped;REPLY=WIFICFG;STORED;HomeNet'),
+    ).toEqual({
+      mode: 'ESP_SER',
+      speed: 170,
+      status: 'Stopped',
+      reply: 'WIFICFG;STORED;HomeNet',
+    });
+  });
+
+  it('parses the v1.4.0 WiFi truth flags in JSON status (ssid/ap/stub)', () => {
+    const line = '{"status":"OK","mode":"ESP_SER","stub":false,"ssid":"HomeNet","ap":"ESP32_Car_abc123"}';
+    expect(parseTelemetryLine(line)).toEqual({
+      status: 'OK',
+      mode: 'ESP_SER',
+      stub: false,
+      ssid: 'HomeNet',
+      ap: 'ESP32_Car_abc123',
+    });
+  });
+
+  it('parses AP= / SSID= keys on STATE lines', () => {
+    expect(parseTelemetryLine('STATE;MODE=ESP_SER;AP=ESP32_Car_1;SSID=HomeNet')).toEqual({
+      mode: 'ESP_SER',
+      ap: 'ESP32_Car_1',
+      ssid: 'HomeNet',
+    });
+  });
+});
+
+describe('buildWifiConfigLine (v1.4.0 provisioning)', () => {
+  it('builds the WIFICFG;ssid;pass line', () => {
+    expect(buildWifiConfigLine('HomeNet', 'secret123')).toBe('WIFICFG;HomeNet;secret123');
+  });
+
+  it('allows an empty password (open network)', () => {
+    expect(buildWifiConfigLine('OpenNet', '')).toBe('WIFICFG;OpenNet;');
   });
 });
 

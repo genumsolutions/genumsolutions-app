@@ -492,6 +492,15 @@ export function RemoteControlScreen({ navigation }: Props) {
                   telemetry={telemetry}
                   onOpenWebPage={handleOpenWebPage}
                   onEnterMode={handleEnterWeblinkMode}
+                  btConnected={connected}
+                  wifiSsid={hub.wifiSsid}
+                  setWifiSsid={hub.setWifiSsid}
+                  wifiPassword={hub.wifiPassword}
+                  setWifiPassword={hub.setWifiPassword}
+                  wifiProvisioning={hub.wifiProvisioning}
+                  onProvisionWifi={() => { void hub.handleWifiProvision() }}
+                  carSsid={hub.carSsid}
+                  carApName={hub.carApName}
                 />
               </View>
             ) : (

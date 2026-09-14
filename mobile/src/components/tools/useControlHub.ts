@@ -25,7 +25,7 @@ import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token → short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
@@ -53,6 +53,18 @@ export function useControlHub(routeCategory?: string) {
   const [connectingAddress, setConnectingAddress] = useState<string | null>(null)
   const [wifiConnected, setWifiConnected] = useState(false)
   const [wifiUrl, setWifiUrl] = useState('ws://192.168.4.1:81')
+  // v1.4.0 provisioning: the WiFi network the CAR should join (its own AP
+  // broadcast id + IP ride the car's status JSON for display).
+  const [wifiSsid, setWifiSsid] = useState('')
+  const [wifiPassword, setWifiPassword] = useState('')
+  const [wifiProvisioning, setWifiProvisioning] = useState(false)
+  // Broadcast id of the car's AP fallback + its configured SSID (car truth,
+  // from the status JSON `ap` / `ssid` fields). Shown in the ESP_SER deck.
+  const [carApName, setCarApName] = useState<string | null>(null)
+  const [carSsid, setCarSsid] = useState<string | null>(null)
+  // true when the paired car reports the current mode as a stub ("stub":true
+  // in its WS JSON / CAP=STUB semantics) — drives COMING SOON gating.
+  const [carStubModes, setCarStubModes] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
   const [connectionMsgType, setConnectionMsgType] = useState<'success' | 'error' | null>(null)
@@ -233,6 +245,9 @@ export function useControlHub(routeCategory?: string) {
   const persistPrefsRef = useRef(persistPrefs)
   persistPrefsRef.current = persistPrefs
 
+  // Provisioning-reply handler mirror (defined below with useState deps).
+  const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(null)
+
   // Set category from route params
   useEffect(() => {
     if (resolvedCategory && PROJECT_CATEGORIES.some(c => c.slug === resolvedCategory)) {
@@ -318,6 +333,11 @@ export function useControlHub(routeCategory?: string) {
         const d = statusToDirection(t.status)
         if (d) setDriveDir(d)
       }
+      // v1.4.0: provisioning replies ride STATE as REPLY=… (car → app).
+      if (t.reply) handleWifiProvisionReplyRef.current?.(t.reply)
+      if (t.ap !== undefined) setCarApName(t.ap || null)
+      if (t.ssid !== undefined) setCarSsid(t.ssid || null)
+      if (t.stub !== undefined) setCarStubModes(t.stub)
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
     const offBle = bleService.onTelemetry(applyTelemetry)
@@ -334,9 +354,12 @@ export function useControlHub(routeCategory?: string) {
           setSppStatusMsg(message ?? 'Connected')
           setShowSppsRetry(false)
           sppReconnectAttemptsRef.current = 0
+          // Bugfix: only the manual handleConnect() used to set connected=true;
+          // a silent auto-reconnect or retry that reached 'connected' left the
+          // UI believing the link was down (dead Connect button on return).
+          setConnected(true)
           // Force the car to broadcast its current STATE so the app
           // immediately picks up the active mode, speed, trim, etc.
-          // without waiting for the car's next自发 telemetry cycle.
           setTimeout(() => {
             sppService.requestState().catch(() => {})
           }, 200)
@@ -347,12 +370,13 @@ export function useControlHub(routeCategory?: string) {
           setConnected(false)
           setDeviceName('')
           setDriveStatus('Stop')
+          setDriveDir('S')
           // Auto-reconnect on unexpected disconnect (ESP remote parity):
-          // 4 silent attempts at 800ms, then prompt.
+          // silent exponential backoff; the banner appears when exhausted.
           if (!manualCloseRef.current && sppLastAddressRef.current) {
             startSppReconnect()
           } else {
-            setShowSppsRetry(true)
+            setShowSppsRetry(false)
           }
           break
         case 'error':
@@ -361,10 +385,11 @@ export function useControlHub(routeCategory?: string) {
           setConnected(false)
           setDeviceName('')
           setDriveStatus('Stop')
+          setDriveDir('S')
           if (!manualCloseRef.current && sppLastAddressRef.current) {
             startSppReconnect()
           } else {
-            setShowSppsRetry(true)
+            setShowSppsRetry(false)
           }
           break
         default:
@@ -518,6 +543,7 @@ export function useControlHub(routeCategory?: string) {
       setConnected(true)
       setConnecting(false)
       setError(null)
+      setShowSppsRetry(false)
       showConnectionMessage('WiFi connected', 'success')
     }
     socket.onmessage = (event) => {
@@ -537,6 +563,11 @@ export function useControlHub(routeCategory?: string) {
         if (typeof json.out === 'number') t.out = json.out
         if (typeof json.off === 'number') t.off = json.off
         if (typeof json.angle === 'number') t.angle = json.angle
+        // v1.4.0 provisioning truth from the car's status JSON: configured
+        // SSID (never the password) + AP fallback broadcast id.
+        if (typeof json.ssid === 'string') setCarSsid(json.ssid || null)
+        if (typeof json.ap === 'string') setCarApName(json.ap || null)
+        if (typeof json.stub === 'boolean') setCarStubModes(json.stub)
         if (Object.keys(t).length > 0) {
           setTelemetry((prev) => ({ ...prev, ...t }))
           if (t.mode) {
@@ -633,6 +664,54 @@ export function useControlHub(routeCategory?: string) {
     setWifiConnected(false)
     setError(null)
   }, [])
+
+  // ---- v1.4.0 WiFi provisioning (app → BT → car) ----
+  // Sends WIFICFG;<ssid>;<password> over the Bluetooth link; the car stores
+  // the pair in Preferences and switches itself to ESP_SER (joins the router
+  // and hosts its web page). The car's STATE echo carries REPLY=WIFICFG;…
+  const handleWifiProvision = useCallback(async () => {
+    const ssid = wifiSsid.trim()
+    if (!ssid) {
+      setError('Enter the WiFi network name (SSID) first.')
+      return
+    }
+    if (!connected || !sppService.isConnected) {
+      setError('Connect the car over Bluetooth first — credentials travel the BT link.')
+      return
+    }
+    setWifiProvisioning(true)
+    setError(null)
+    try {
+      await sppService.sendLine(buildWifiConfigLine(ssid, wifiPassword))
+      showConnectionMessage(`Sent WiFi "${ssid}" to the car — it is switching to Webserver mode.`, 'success')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send WiFi credentials')
+    } finally {
+      setWifiProvisioning(false)
+    }
+  }, [wifiSsid, wifiPassword, connected, showConnectionMessage])
+
+  // REPLY=… lines from the car (WIFICFG;STORED;<ssid>) confirm provisioning
+  // and pre-fill the WS URL for the deck.
+  const lastProvisionReplyRef = useRef<string | null>(null)
+  const handleWifiProvisionReply = useCallback((reply: string) => {
+    if (reply.startsWith('WIFICFG;STORED;')) {
+      const ssid = reply.slice('WIFICFG;STORED;'.length).trim()
+      setCarSsid(ssid)
+      setWifiSsid('')
+      setWifiPassword('')
+      // The car joins the router and gets a DHCP IP; default to its AP
+      // address until the user reads the real IP off the OLED/deck.
+      setWifiUrl('ws://192.168.4.1:81')
+      showConnectionMessage(`Car stored WiFi "${ssid}" — switched to Webserver mode.`, 'success')
+    } else if (reply.startsWith('WIFICFG;ERROR')) {
+      setError(`Car rejected WiFi settings: ${reply}`)
+    } else if (reply.startsWith('WIFICFG;SSID;')) {
+      setCarSsid(reply.slice('WIFICFG;SSID;'.length).trim() || null)
+    }
+    lastProvisionReplyRef.current = reply
+  }, [showConnectionMessage])
+  handleWifiProvisionReplyRef.current = handleWifiProvisionReply
 
   // Safe stop on link loss (comms.cpp safeStopAndClearQueue parity): the
   // neutral commands are sent by the transport layer on disconnect; here we
@@ -803,25 +882,35 @@ export function useControlHub(routeCategory?: string) {
 
   // Mode select = the ESP confirm path: clear the queue, send the token
   // immediately, mirror the mode, status "Mode:<name>", stop driving.
+  // v1.4.0 (owner decision 2026-09-14): only BT + ESP_SER are live on this
+  // car — coming-soon tokens are refused app-side (the car refuses them too,
+  // but never sending them avoids "Unknown mode" flashes on the car OLED).
+  const COMING_SOON_TOKENS = ['PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
   const selectMode = useCallback((m: CarMode) => {
+    if (COMING_SOON_TOKENS.includes(m.token)) {
+      setDriveStatus('Coming soon')
+      showConnectionMessage(`${MODE_NAME_FOR_TOKEN[m.token] ?? m.token} is coming soon — not available on this car yet.`, 'error')
+      return
+    }
     setActiveMode(m)
     setDriveDir('S')
     setDriveStatus(`Mode:${MODE_NAME_FOR_TOKEN[m.token] ?? m.token}`)
     sendCommand('S')
     sendCommand(m.token)
-  }, [sendCommand])
+  }, [sendCommand, showConnectionMessage])
 
   const cycleMode = useCallback(() => {
-    // ESP32 remote mode scroll order (state.cpp MODE_CMDS[]):
-    // UP: (idx-1+9)%9, DOWN: (idx+1)%9
-    // BT(0) → ESP_SER(1) → PATH(2) → OBS_US(3) → OBS_IR(4) →
-    // MAN(5) → AUTO(6) → ESP_CLI(7) → 2WD1M(8)
-    const REMOTE_CYCLE_ORDER = ['BT', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
+    // ESP32 remote mode scroll order (state.cpp MODE_CMDS[]), restricted to
+    // the LIVE tokens (v1.4.0: BT + ESP_SER only — cycle never lands on a
+    // coming-soon mode, matching the car's own gating).
+    const REMOTE_CYCLE_ORDER = ['BT', 'ESP_SER']
     const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
       .slice()
       .sort((a, b) => REMOTE_CYCLE_ORDER.indexOf(a.token) - REMOTE_CYCLE_ORDER.indexOf(b.token))
-    const idx = list.findIndex((m) => m.id === activeMode.id)
-    selectMode(idx === -1 ? list[0] : list[(idx + 1) % list.length])
+    const live = list.filter((m) => REMOTE_CYCLE_ORDER.includes(m.token))
+    const pool = live.length > 0 ? live : list
+    const idx = pool.findIndex((m) => m.id === activeMode.id)
+    selectMode(idx === -1 ? pool[0] : pool[(idx + 1) % pool.length])
   }, [activeMode, selectMode, carModes])
 
   const toggleRelay = useCallback((i: number) => {
@@ -843,7 +932,7 @@ export function useControlHub(routeCategory?: string) {
   }, [persistPrefs])
 
   // ---- SPP auto-reconnect — silent exponential backoff ----
-  // Delays: 1s → 2s → 4s → 8s → give up silently (no prompt).
+  // Delays: 1s → 2s → 4s → 8s → give up → show the reconnect banner.
   const startSppReconnect = useCallback(() => {
     if (sppReconnectTimerRef.current) {
       clearTimeout(sppReconnectTimerRef.current)
@@ -853,8 +942,11 @@ export function useControlHub(routeCategory?: string) {
       if (!mountedRef.current || manualCloseRef.current || !sppLastAddressRef.current) return
       const n = sppReconnectAttemptsRef.current
       if (n >= SPP_RECONNECT_DELAYS_MS.length) {
-        // All attempts exhausted — give up silently.
+        // All attempts exhausted — surface the banner so the user can decide.
+        // (Previously this path gave up silently: the “connection lost” UI
+        // never appeared and only a manual reconnect could recover.)
         sppReconnectAttemptsRef.current = 0
+        setShowSppsRetry(true)
         return
       }
       sppReconnectAttemptsRef.current += 1
@@ -869,9 +961,17 @@ export function useControlHub(routeCategory?: string) {
   }, [])
 
   const handleReconnectPromptCancel = useCallback(() => {
+    // Dismiss the banner WITHOUT tearing the remembered device down — the
+    // user may just want to keep browsing; a fresh connect from the device
+    // list (or Retry) must stay possible (old behavior killed the address,
+    // which contributed to the dead Connect button).
+    setShowSppsRetry(false)
     manualCloseRef.current = true
-    void handleDisconnect()
-  }, [handleDisconnect])
+    if (sppReconnectTimerRef.current) {
+      clearTimeout(sppReconnectTimerRef.current)
+      sppReconnectTimerRef.current = null
+    }
+  }, [])
 
   // Cleanup reconnect timer on unmount.
   useEffect(() => {
@@ -895,6 +995,9 @@ export function useControlHub(routeCategory?: string) {
     sppSupported, canControl,
     setWifiUrl, handleScan, handleConnect, handleSppsRetry, handleWifiConnect,
     handleWifiDisconnect, handleDisconnect, showConnectionMessage,
+    // v1.4.0 WiFi provisioning (app → BT → car) + car WiFi truth
+    wifiSsid, setWifiSsid, wifiPassword, setWifiPassword, wifiProvisioning,
+    handleWifiProvision, carApName, carSsid, carStubModes,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
     // mode + category
