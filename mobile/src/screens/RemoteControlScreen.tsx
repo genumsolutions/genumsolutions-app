@@ -114,7 +114,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const {
     connected, wifiConnected, sppStatus, deviceName,
     canControl, handleDisconnect, wifiUrl,
-    activeCategory, activeMode, carModes, selectMode, cycleMode,
+    activeCategory, activeMode, carModes, carStubMap, selectMode, cycleMode,
     speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
     adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop,
@@ -351,6 +351,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onSelect={selectMode}
                 onCycle={cycleMode}
                 modes={carModes}
+                carStubMap={carStubMap}
                 highlighted={topField === 'mode'}
                 previewMode={previewMode}
                 locked={navActiveBool}

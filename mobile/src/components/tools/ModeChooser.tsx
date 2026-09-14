@@ -5,29 +5,22 @@ import React, { useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, Vibration, useWindowDimensions } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
+import { isTokenComingSoon } from '../../services/carProtocol'
 import type { ModeChooserProps } from './types'
 
-// ESP32 remote mode order (state.cpp MODE_CMDS[] / MODE_NAMES[]).
-// Scroll order, display names, and available status match the remote.
-const REMOTE_MODES = [
-  { token: 'BT', available: true },
-  { token: 'ESP_SER', available: true },
-  { token: 'PATH', available: false },
-  { token: 'OBS_US', available: false },
-  { token: 'OBS_IR', available: false },
-  { token: 'MAN', available: false },
-  { token: 'AUTO', available: true },
-  { token: 'ESP_CLI', available: false },
-  { token: '2WD1M', available: true },
-]
+// ESP32 remote mode order (state.cpp MODE_CMDS[]) — scroll/display order
+// only. Availability is CAR truth (carStubMap + fleet fallback via
+// isTokenComingSoon), NOT a static table (A-7: the old REMOTE_MODES
+// `available` flags lied whenever a car's registry differed).
+const REMOTE_MODE_ORDER = ['BT', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
 
 function sortModesByRemoteOrder(modes: CarMode[]): CarMode[] {
   return [...modes].sort(
-    (a, b) => REMOTE_MODES.findIndex(r => r.token === a.token) - REMOTE_MODES.findIndex(r => r.token === b.token)
+    (a, b) => REMOTE_MODE_ORDER.indexOf(a.token) - REMOTE_MODE_ORDER.indexOf(b.token)
   )
 }
 
-export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, highlighted = false, previewMode = null, locked = false }: ModeChooserProps) {
+export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, highlighted = false, previewMode = null, locked = false, carStubMap }: ModeChooserProps) {
   const [open, setOpen] = useState(false)
   const { height } = useWindowDimensions()
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
@@ -113,8 +106,9 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
             >
               {sortedCatalogue.map((m: CarMode) => {
                 const isActive = shown.id === m.id
-                const meta = REMOTE_MODES.find(r => r.token === m.token)
-                const coming = meta ? !meta.available : true
+                // A-7: coming-soon is CAR truth (carStubMap + fleet fallback),
+                // replacing the old static REMOTE_MODES availability table.
+                const coming = isTokenComingSoon(m.token, carStubMap ?? {})
                 return (
                   <Pressable
                     key={m.id}
@@ -126,14 +120,23 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
                     }}
                     disabled={locked}
                     accessibilityRole="button"
-                    className={`mt-0.5 flex-row items-center justify-between rounded-lg px-2 py-1 ${isActive ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+                    className={`mt-0.5 flex-row items-center justify-between rounded-lg px-2 py-1 ${
+                      isActive ? 'bg-navy' : coming ? 'border border-white/5 bg-white/[0.02] opacity-60' : 'border border-white/10 bg-white/5'
+                    }`}
                   >
                     <View className="min-w-0 flex-1 pr-1.5">
-                      <Text className={`text-[11px] font-bold ${isActive ? 'text-white' : 'text-slate-300'}`} numberOfLines={1}>
-                        {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
-                      </Text>
+                      <View className="flex-row items-center gap-1.5">
+                        <Text className={`text-[11px] font-bold ${isActive ? 'text-white' : coming ? 'text-slate-500' : 'text-slate-300'}`} numberOfLines={1}>
+                          {MODE_NAMES[m.token] ?? m.name.split('·')[0].trim()}
+                        </Text>
+                        {coming && !isActive && (
+                          <View className="rounded-full bg-amber-500/15 px-1.5 py-0.5">
+                            <Text className="text-[8px] font-black uppercase tracking-wide text-amber-400">Coming soon</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text className={`text-[9px] ${isActive ? 'text-white/70' : 'text-slate-400'}`} numberOfLines={1}>
-                        {m.token}{coming ? ' · coming soon' : ` · ${m.transport.join(' / ')}`}
+                        {m.token}{coming ? ' · not available on this car yet' : ` · ${m.transport.join(' / ')}`}
                       </Text>
                     </View>
                     {isActive && <Feather name="check" size={12} color="#fff" />}

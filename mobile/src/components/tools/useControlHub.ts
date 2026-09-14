@@ -25,7 +25,7 @@ import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, isTokenComingSoon, normalizeModeToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token → short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
@@ -62,9 +62,16 @@ export function useControlHub(routeCategory?: string) {
   // from the status JSON `ap` / `ssid` fields). Shown in the ESP_SER deck.
   const [carApName, setCarApName] = useState<string | null>(null)
   const [carSsid, setCarSsid] = useState<string | null>(null)
-  // true when the paired car reports the current mode as a stub ("stub":true
-  // in its WS JSON / CAP=STUB semantics) — drives COMING SOON gating.
-  const [carStubModes, setCarStubModes] = useState<boolean>(false)
+  // A-7 car-truth coming-soon map: token -> stub flag, fed by CAP=STUB on
+  // the car's STATE lines and `stub` in its WS JSON (both describe the
+  // car's CURRENT mode — the map fills as the car visits modes). Tokens
+  // absent from the map fall back to FALLBACK_STUB_TOKENS (see
+  // isTokenComingSoon in carProtocol.ts).
+  const [carStubMap, setCarStubMap] = useState<Record<string, boolean>>({})
+  // Ref mirror so selectMode/cycleMode callbacks read current car truth
+  // without re-creating on every STATE line.
+  const carStubMapRef = useRef<Record<string, boolean>>({})
+  useEffect(() => { carStubMapRef.current = carStubMap }, [carStubMap])
   const [error, setError] = useState<string | null>(null)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
   const [connectionMsgType, setConnectionMsgType] = useState<'success' | 'error' | null>(null)
@@ -210,6 +217,9 @@ export function useControlHub(routeCategory?: string) {
             if (prefs.steerLimit != null) setSteerLimit(prefs.steerLimit)
             if (prefs.trim != null) setTrim(prefs.trim)
             if (prefs.useJoystick != null) setUseJoystick(prefs.useJoystick)
+            // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
+            // (never the password — that lives only in flight + the car's NVS).
+            if (prefs.lastWifiSsid) setWifiSsid((cur) => cur || prefs.lastWifiSsid!)
           }
         })
         return () => { active = false }
@@ -232,12 +242,13 @@ export function useControlHub(routeCategory?: string) {
         trim,
         useJoystick,
         joystickLayout: joystickLayoutId,
+        lastWifiSsid: savedPrefs?.lastWifiSsid ?? null,
         ...patch,
       } as DevicePrefs
       void deviceMemory.write(addressForMemory, next)
       setSavedPrefs(next)
     },
-    [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, joystickLayoutId],
+    [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, joystickLayoutId, savedPrefs?.lastWifiSsid],
   )
 
   // Ref mirror so NAV commit callbacks can persist without re-creating
@@ -337,7 +348,13 @@ export function useControlHub(routeCategory?: string) {
       if (t.reply) handleWifiProvisionReplyRef.current?.(t.reply)
       if (t.ap !== undefined) setCarApName(t.ap || null)
       if (t.ssid !== undefined) setCarSsid(t.ssid || null)
-      if (t.stub !== undefined) setCarStubModes(t.stub)
+      // A-7: car truth — CAP=STUB (STATE lines) / `stub` (WS JSON) describe
+      // the car's CURRENT mode; record it per token so the mode chooser and
+      // selectMode() gate on car reality, not a hardcoded app list.
+      if (t.stub !== undefined && t.mode) {
+        const tok = normalizeModeToken(t.mode)
+        if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
+      }
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
     const offBle = bleService.onTelemetry(applyTelemetry)
@@ -354,6 +371,10 @@ export function useControlHub(routeCategory?: string) {
           setSppStatusMsg(message ?? 'Connected')
           setShowSppsRetry(false)
           sppReconnectAttemptsRef.current = 0
+          // A-7: fresh link — drop any stub truth from the previous session
+          // so the next car (or a re-flashed car) starts from the fallback
+          // table until it reports per-token truth again (remote R-10 parity).
+          setCarStubMap({})
           // Bugfix: only the manual handleConnect() used to set connected=true;
           // a silent auto-reconnect or retry that reached 'connected' left the
           // UI believing the link was down (dead Connect button on return).
@@ -567,7 +588,11 @@ export function useControlHub(routeCategory?: string) {
         // SSID (never the password) + AP fallback broadcast id.
         if (typeof json.ssid === 'string') setCarSsid(json.ssid || null)
         if (typeof json.ap === 'string') setCarApName(json.ap || null)
-        if (typeof json.stub === 'boolean') setCarStubModes(json.stub)
+        // A-7: JSON `stub` describes the car's CURRENT mode — record per token.
+        if (typeof json.stub === 'boolean' && typeof json.mode === 'string') {
+          const tok = normalizeModeToken(json.mode)
+          if (tok) setCarStubMap((prev) => (prev[tok] === json.stub ? prev : { ...prev, [tok]: json.stub as boolean }))
+        }
         if (Object.keys(t).length > 0) {
           setTelemetry((prev) => ({ ...prev, ...t }))
           if (t.mode) {
@@ -599,6 +624,11 @@ export function useControlHub(routeCategory?: string) {
               const modeUp = t.mode.toUpperCase()
               const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
               if (matched) setActiveMode(matched)
+            }
+            // A-7: WS STATE lines carry CAP=STUB too (same car truth as SPP).
+            if (t.stub !== undefined && t.mode) {
+              const tok = normalizeModeToken(t.mode)
+              if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
             }
             if (!navActiveRef.current && t.speed != null) {
               const mag = Math.abs(t.speed)
@@ -698,8 +728,11 @@ export function useControlHub(routeCategory?: string) {
     if (reply.startsWith('WIFICFG;STORED;')) {
       const ssid = reply.slice('WIFICFG;STORED;'.length).trim()
       setCarSsid(ssid)
-      setWifiSsid('')
       setWifiPassword('')
+      // A-8: keep the SSID in the field (it doubles as confirmation of what
+      // the car stored) and remember it per car so the card pre-fills next
+      // session. The password is cleared — it must never linger in the UI.
+      persistPrefs({ lastWifiSsid: ssid })
       // The car joins the router and gets a DHCP IP; default to its AP
       // address until the user reads the real IP off the OLED/deck.
       setWifiUrl('ws://192.168.4.1:81')
@@ -710,7 +743,7 @@ export function useControlHub(routeCategory?: string) {
       setCarSsid(reply.slice('WIFICFG;SSID;'.length).trim() || null)
     }
     lastProvisionReplyRef.current = reply
-  }, [showConnectionMessage])
+  }, [showConnectionMessage, persistPrefs])
   handleWifiProvisionReplyRef.current = handleWifiProvisionReply
 
   // Safe stop on link loss (comms.cpp safeStopAndClearQueue parity): the
@@ -882,12 +915,12 @@ export function useControlHub(routeCategory?: string) {
 
   // Mode select = the ESP confirm path: clear the queue, send the token
   // immediately, mirror the mode, status "Mode:<name>", stop driving.
-  // v1.4.0 (owner decision 2026-09-14): only BT + ESP_SER are live on this
-  // car — coming-soon tokens are refused app-side (the car refuses them too,
-  // but never sending them avoids "Unknown mode" flashes on the car OLED).
-  const COMING_SOON_TOKENS = ['PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
+  // A-7 (owner decision 2026-09-14): coming-soon is CAR TRUTH — tokens the
+  // paired car reports as stubs (or fleet-fallback tokens for cars that
+  // don't report) are refused app-side (the car refuses them too, but never
+  // sending them avoids a mode-flip flash on the car's OLED).
   const selectMode = useCallback((m: CarMode) => {
-    if (COMING_SOON_TOKENS.includes(m.token)) {
+    if (isTokenComingSoon(m.token, carStubMapRef.current)) {
       setDriveStatus('Coming soon')
       showConnectionMessage(`${MODE_NAME_FOR_TOKEN[m.token] ?? m.token} is coming soon — not available on this car yet.`, 'error')
       return
@@ -901,13 +934,13 @@ export function useControlHub(routeCategory?: string) {
 
   const cycleMode = useCallback(() => {
     // ESP32 remote mode scroll order (state.cpp MODE_CMDS[]), restricted to
-    // the LIVE tokens (v1.4.0: BT + ESP_SER only — cycle never lands on a
-    // coming-soon mode, matching the car's own gating).
-    const REMOTE_CYCLE_ORDER = ['BT', 'ESP_SER']
+    // the LIVE tokens per car truth (A-7) — cycle never lands on a
+    // coming-soon mode, matching the car's own gating.
+    const REMOTE_CYCLE_ORDER = ['BT', 'ESP_SER', 'AUTO', '2WD1M', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'ESP_CLI']
     const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
       .slice()
       .sort((a, b) => REMOTE_CYCLE_ORDER.indexOf(a.token) - REMOTE_CYCLE_ORDER.indexOf(b.token))
-    const live = list.filter((m) => REMOTE_CYCLE_ORDER.includes(m.token))
+    const live = list.filter((m) => !isTokenComingSoon(m.token, carStubMapRef.current))
     const pool = live.length > 0 ? live : list
     const idx = pool.findIndex((m) => m.id === activeMode.id)
     selectMode(idx === -1 ? pool[0] : pool[(idx + 1) % pool.length])
@@ -997,10 +1030,10 @@ export function useControlHub(routeCategory?: string) {
     handleWifiDisconnect, handleDisconnect, showConnectionMessage,
     // v1.4.0 WiFi provisioning (app → BT → car) + car WiFi truth
     wifiSsid, setWifiSsid, wifiPassword, setWifiPassword, wifiProvisioning,
-    handleWifiProvision, carApName, carSsid, carStubModes,
+    handleWifiProvision, carApName, carSsid, carStubMap,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
-    // mode + category
+    // mode + category (carStubMap is returned with the WiFi-truth group above)
     activeCategory, setActiveCategory, activeMode, carModes, carModeId,
     selectMode, cycleMode, handleCategoryPress,
     // drive state
