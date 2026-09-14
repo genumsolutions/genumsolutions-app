@@ -5,6 +5,22 @@
 
 ---
 
+## snag round 11 — car-truth coming soon + WiFi-card layout fit (2026-09-14, PLANNED — NOT IMPLEMENTED)
+
+> Plan-only per owner request; implementation is the next session's app-side batch.
+> Full design: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2c (A-7, A-8).
+
+- [ ] **R11-1 — mode toggle lists ALL 9 modes:** dropdown shows every token; parked ones render muted with a "Coming soon" badge but stay tappable.
+- [ ] **R11-2 — coming-soon is CAR truth:** refusal set comes from `CAP=STUB` on the car's `STATE;` lines (not a hardcoded list); picking a parked mode → "Coming soon" toast, car mode unchanged. Flip one `isStub` in the car registry → the app updates with zero app changes.
+- [ ] **R11-3 — cycle never lands on parked modes:** cycle button walks live tokens only (BT ↔ ESP_SER).
+- [ ] **R11-4 — WiFi card fits the deck (measured):** SSID + password fields, show/hide, send button and status chips all visible without scrolling on the target phone; explainer condensed to one line; measured deck budget recorded in this round's notes.
+- [ ] **R11-5 — keyboard doesn't cover inputs:** with the keyboard open, both TextInputs stay reachable (KeyboardAvoidingView/scroll).
+- [ ] **R11-6 — SSID pre-fill after restart:** send WiFi to car → kill + reopen the app → card pre-filled with the last-sent SSID for that car; password never stored on the phone.
+- [ ] **R11-7 — car keeps network after power cycle:** provision → power-cycle car → rejoins router with no re-provision (pairs with car T-26 / R3 V-11).
+- [ ] **R11-8 — password never displayed back:** app UI, `WIFICFG?` reply and car OLED show SSID only, never the password.
+
+---
+
 ## snag round 10 — reconnect UX + WiFi provisioning (2026-09-14, PENDING DEVICE VERIFY)
 
 > JS-only OTA after push: fully close the app → reopen. Car needs a re-flash (arduino-cli 54%, huge_app).
