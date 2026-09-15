@@ -5,6 +5,41 @@
 
 ---
 
+## snag round 14 — device-round-2 fixes (2026-09-15, IMPLEMENTED — A-11..A-16; JS OTA after push — DEVICE VERIFY PENDING)
+
+> Owner field report from the R13 flash round (2026-09-15): app connection part still
+> flickers sometimes; the web-server screen still **overflows** the remote screen;
+> the "Enter ESP_SER" button does nothing; the app doesn't show the broadcast IP in
+> ESP_SER; the WiFi card keeps showing the DEFAULT network after provisioning; the
+> car only joined the new network after toggling back to webserver mode the next
+> cycle and reverted to default WiFi after a power cycle. Firmware root causes are
+> car T-33/T-34/T-35 (see wireless TRACKS) + remote R-17..R-21; app side is A-11..A-16
+> below. Owner directive: keep ALL cars/bots consistent in UI/UX (fleet pass).
+
+- [x] **R14-1 — broadcast IP always shown in ESP_SER (A-11):** the IP row renders in
+  `isServer` mode even before the WebSocket connects; value = `telemetry.ip` else
+  `192.168.4.1 (AP fallback)` (fixes the hidden-IP-just-when-you-need-it gate at
+  `WeblinkControls.tsx`).
+- [x] **R14-2 — dead "Enter ESP_SER" button removed (A-12):** no control claims to
+  "enter" an already-active mode; show a passive hint instead (it sent the active
+  token and was no-op — the owner reported it "does nothing").
+  New: `Mode active · drive below` chip in the Weblink card header.
+- [x] **R14-3 — webserver screen fits the Remote window (A-13):** the Weblink overlay
+  wrapper gets `min-h-0` and the duplicated border/padding is stripped — one chrome
+  level, no horizontal overflow.
+- [x] **R14-4 — no connection flicker (A-14):** steady drive → no live-updating
+  indicator/state churn; the chrome link indicator stays mounted and only swaps
+  text/colour; REQ_STATE interval deps are stable (focus-only via ref).
+- [x] **R14-5 — SSID shows the just-sent network instantly (A-15):** `handleWifiProvision`
+  optimistically updates the deck's SSID (car T-35 now confirms anyway).
+- [x] **R14-6 — status line dedupes (A-16):** `setDriveStatus` only fires on actual
+  change (kills the 4WD4M flooding).
+- [ ] **R14-7 — fleet UI consistency:** all control panels share the same
+  header/label/card/connected-dot/status-dot/badge tokens (no `bg-surface` vs
+  `bg-card`, label size, corner-radius, or "Soon"-badge drift).
+
+---
+
 ## snag round 13 — singleton WiFi link, token cycling, disconnect/remember-state, IP deck (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
 
 > Fixes from device round R1 (owner: remote window stuck on 4WD4M, flickering over
