@@ -4,21 +4,15 @@
 import React, { useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, Vibration, useWindowDimensions } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import { LOCAL_CAR_MODES, MODE_NAMES, type CarMode } from '../../config/roboCarCatalog'
+import { LOCAL_CAR_MODES, MODE_NAMES, sortRemoteModes, type CarMode } from '../../config/roboCarCatalog'
 import { modeAvailStatus } from '../../services/carProtocol'
 import type { ModeChooserProps } from './types'
 
-// ESP32 remote mode order (state.cpp MODE_CMDS[]) — scroll/display order
-// only. Availability is CAR truth (carAvailMap / carStubMap + fleet fallback
-// via modeAvailStatus), NOT a static table: every row stays SELECTABLE, the
-// state only changes the badge (R-10 / owner decision 2026-09-15).
-const REMOTE_MODE_ORDER = ['4WD4M', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
-
-function sortModesByRemoteOrder(modes: CarMode[]): CarMode[] {
-  return [...modes].sort(
-    (a, b) => REMOTE_MODE_ORDER.indexOf(a.token) - REMOTE_MODE_ORDER.indexOf(b.token)
-  )
-}
+// Scroll/display order = the SINGLE shared fleet order (roboCarCatalog
+// REMOTE_MODE_ORDER, mirrors state.cpp MODE_CMDS[]). Availability is CAR
+// truth (carAvailMap / carStubMap + fleet fallback via modeAvailStatus),
+// NOT a static table: every row stays SELECTABLE, the state only changes
+// the badge (R-10 / owner decision 2026-09-15).
 
 export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, highlighted = false, previewMode = null, locked = false, carStubMap, carAvailMap }: ModeChooserProps) {
   const [open, setOpen] = useState(false)
@@ -41,7 +35,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
 
   const closeDropdown = () => setOpen(false)
 
-  const sortedCatalogue = sortModesByRemoteOrder(catalogue)
+  const sortedCatalogue = sortRemoteModes(catalogue)
   const listMaxHeight = anchor
     ? Math.max(120, Math.min(height - (anchor.y + anchor.h) - 20, height * 0.55))
     : height * 0.55

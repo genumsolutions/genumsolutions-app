@@ -379,7 +379,7 @@ export function ToolsScreen() {
             <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5 shadow-xl">
               <Text className="text-center text-base font-black text-ink">Disconnect now?</Text>
               <Text className="mt-1 text-center text-xs leading-4 text-muted">
-                The car receives a safe stop (SPD0 · SERVO90) before the link closes.
+                The car will stop safely before the link closes. Your saved settings stay remembered for next time.
               </Text>
               <View className="mt-4 flex-row justify-center gap-3">
                 <Pressable
