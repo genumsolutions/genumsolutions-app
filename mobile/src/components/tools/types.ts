@@ -2,7 +2,7 @@
 // ToolsScreen holds all state and passes subsets down as props.
 import React from 'react';
 import { Platform } from 'react-native';
-import type { CarTelemetry } from '../../services/carProtocol';
+import type { CarTelemetry, ModeAvailReport } from '../../services/carProtocol';
 import type { CarMode } from '../../config/roboCarCatalog';
 
 export type SensorData = {
@@ -144,6 +144,13 @@ export type ModeChooserProps = {
   /** A-7 car truth: token -> stub flag from the car's CAP=STUB reports.
       Tokens not in the map fall back to the fleet fallback table. */
   carStubMap?: Record<string, boolean>
+  /**
+   * R-10 car truth: token -> LIVE / WIP / CS from the car's full CAPS
+   * broadcast. Authoritative per token; when absent the stub map + fleet
+   * fallback apply (modeAvailStatus in carProtocol). All rows stay selectable
+   * either way — the states only change the badge style.
+   */
+  carAvailMap?: Record<string, string>
 }
 
 export type OledDisplayProps = {
@@ -175,6 +182,13 @@ export type OledDisplayProps = {
   previewMode?: CarMode | null
   /** Unavailable firmware modes preview as COMING SOON (ui.md screen 9). */
   previewComingSoon?: boolean
+  /**
+   * R-10 (replaces relying on the boolean alone): the previewed mode's car
+   * truth availability — LIVE draws the real dashboard, WIP draws
+   * "IN PROGRESS...", CS draws "COMING SOON..." (remote drawAvailMarkBody
+   * parity). Falls back to previewComingSoon when undef.
+   */
+  previewModeAvail?: ModeAvailReport
   /** 2WD1M: the user-set MAX steer limit for the top bar — the ESP remote
       top bar shows the LIMIT, never the live servo angle. */
   steerLimit?: number

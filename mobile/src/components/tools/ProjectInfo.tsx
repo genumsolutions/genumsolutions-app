@@ -16,8 +16,11 @@ import { LOCAL_CAR_MODES } from '../../config/roboCarCatalog'
 import type { ProjectCategory } from '../../config/project-catalog'
 import { getProjectCategory } from '../../config/project-catalog'
 
-// Tokens available on the physical ESP32 remote (ESP_REMOTE_SPEC.md §2).
-const AVAILABLE_TOKENS = new Set(['BT', 'AUTO', '2WD1M'])
+// Tokens the physical ESP32 remote + GENUM fleet drive today. All 9 firmware
+// modes are SELECTABLE in the 2026-09-15 fleet; the only default "coming
+// soon" mark is MAN (RF-manual — needs the RF handset, which no car carries).
+// X-8: `4WD4M` is the canonical drive token (legacy `BT` retired).
+const AVAILABLE_TOKENS = new Set(['4WD4M', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'AUTO', 'ESP_CLI', '2WD1M'])
 
 const CAPABILITY_LABELS: Record<string, string> = {
   directional: 'Directional drive',
@@ -105,7 +108,9 @@ export function ProjectInfo({ mode, categorySlug }: { mode: CarMode; categorySlu
             {!AVAILABLE_TOKENS.has(selectedMode.token) && (
               <View className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
                 <Text className="text-[11px] font-bold text-amber-700">
-                  Not yet available on the physical ESP32 remote. Coming soon with future firmware updates.
+                  {selectedMode.token === 'MAN'
+                    ? 'RF-manual needs the RF handset (not bundled with any GENUM car). Selectable from the remote — the handset makes it drive.'
+                    : 'Not yet available on this car. Selectable from the remote — the car shows its own COMING SOON frame.'}
                 </Text>
               </View>
             )}

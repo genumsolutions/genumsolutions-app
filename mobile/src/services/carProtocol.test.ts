@@ -15,6 +15,7 @@ import {
   isCompleteJsonObject,
   canonicalCarToken,
   isTokenComingSoon,
+  modeAvailStatus,
   parseTelemetryLine,
   quantizeSpeedToStep,
   REQ_STATE_LINE,
@@ -199,6 +200,54 @@ describe('parseTelemetryLine', () => {
     expect(t.status).toBe('Stopped');
   });
 
+  // ---- R-10: full per-token availability table (CAPS broadcast) ----
+
+  it('parses the CAPS table (colon separators, device order)', () => {
+    expect(
+      parseTelemetryLine('CAPS;4WD4M:LIVE;ESP_SER:LIVE;PATH:CS;OBS_US:CS;OBS_IR:CS;MAN:CS;AUTO:CS;ESP_CLI:WIP;2WD1M:CS'),
+    ).toEqual({
+      caps: {
+        '4WD4M': 'LIVE',
+        ESP_SER: 'LIVE',
+        PATH: 'CS',
+        OBS_US: 'CS',
+        OBS_IR: 'CS',
+        MAN: 'CS',
+        AUTO: 'CS',
+        ESP_CLI: 'WIP',
+        '2WD1M': 'CS',
+      },
+    });
+  });
+
+  it('parses the CAPS table tolerating = separators + trailing semicolon', () => {
+    expect(parseTelemetryLine('CAPS;4WD4M=LIVE;ESP_CLI=WIP;2WD1M=CS;')).toEqual({
+      caps: { '4WD4M': 'LIVE', ESP_CLI: 'WIP', '2WD1M': 'CS' },
+    });
+  });
+
+  it('canonicalizes legacy CAPS keys (BT → 4WD4M)', () => {
+    expect(parseTelemetryLine('CAPS;BT:LIVE;MAN=CS')).toEqual({
+      caps: { '4WD4M': 'LIVE', MAN: 'CS' },
+    });
+  });
+
+  it('ignores malformed CAPS lanes', () => {
+    expect(parseTelemetryLine('CAPS;4WD4M:LIVE;JUNK;')).toEqual({
+      caps: { '4WD4M': 'LIVE' },
+    });
+    expect(parseTelemetryLine('CAPS;')).toEqual({});
+  });
+
+  it('parses the caps table inside the WS JSON status', () => {
+    const line = '{"status":"OK","mode":"ESP_SER","caps":{"4WD4M":"LIVE","MAN":"CS"}}';
+    expect(parseTelemetryLine(line)).toEqual({
+      status: 'OK',
+      mode: 'ESP_SER',
+      caps: { '4WD4M': 'LIVE', MAN: 'CS' },
+    });
+  });
+
   // ---- R-4 (app half): fleet NACK line from the car ----
 
   it('parses the fleet NACK with ; separators', () => {
@@ -227,35 +276,62 @@ describe('parseTelemetryLine', () => {
   });
 });
 
-describe('A-7 car-truth coming-soon resolution', () => {
-  it('falls back to the fleet table when the car reports nothing', () => {
-    expect(isTokenComingSoon('PATH', {})).toBe(true);
+describe('A-7 / R-10 car-truth availability resolution', () => {
+  it('defaults unreported tokens to AVAILABLE except MAN (owner 2026-09-15)', () => {
+    expect(isTokenComingSoon('PATH', {})).toBe(false);
+    expect(isTokenComingSoon('MYSTERY_MODE', {})).toBe(false);
     expect(isTokenComingSoon('BT', {})).toBe(false);
     expect(isTokenComingSoon('ESP_SER', {})).toBe(false);
+    // MAN is the only hard CS default (needs the RF handset).
+    expect(isTokenComingSoon('MAN', {})).toBe(true);
+    expect(modeAvailStatus('MAN', {})).toBe('CS');
   });
 
-  it('car truth overrides the fallback per token', () => {
-    // A car whose registry made 2WD1M live again:
-    const map = { '2WD1M': false };
-    expect(isTokenComingSoon('2WD1M', map)).toBe(false);
-    // …while still-parked tokens stay parked via fallback:
+  it('car truth overrides the default per token (stub map)', () => {
+    // A car whose registry parked PATH: CS.
+    const map = { PATH: true };
     expect(isTokenComingSoon('PATH', map)).toBe(true);
+    // Unreported tokens still default live.
+    expect(isTokenComingSoon('OBS_US', map)).toBe(false);
   });
 
-  it('car truth can PARK a fallback-live token', () => {
-    const map = { BT: true };
-    expect(isTokenComingSoon('BT', map)).toBe(true);
+  it('car truth can PARK a default-live token', () => {
+    const map = { '4WD4M': true };
+    expect(isTokenComingSoon('4WD4M', map)).toBe(true);
+    expect(isTokenComingSoon('BT', map)).toBe(true); // legacy alias resolves
   });
 
   it('is case-insensitive and trims whitespace', () => {
     expect(isTokenComingSoon('  bt ', { BT: false })).toBe(false);
-    expect(isTokenComingSoon('path', {})).toBe(true);
+    expect(isTokenComingSoon('path', {})).toBe(false);
   });
 
-  it('treats an unknown token as coming soon', () => {
-    expect(isTokenComingSoon('MYSTERY_MODE', {})).toBe(true);
+  it('treats a missing/empty token as coming soon', () => {
     expect(isTokenComingSoon(null, {})).toBe(true);
     expect(isTokenComingSoon('', {})).toBe(true);
+    expect(modeAvailStatus(null, {})).toBe('CS');
+  });
+
+  it('modeAvailStatus maps the CAPS table 3 states (LIVE/WIP/CS)', () => {
+    const caps = { '4WD4M': 'LIVE', ESP_CLI: 'WIP', PATH: 'CS' };
+    expect(modeAvailStatus('4WD4M', {}, caps)).toBe('LIVE');
+    expect(modeAvailStatus('ESP_CLI', {}, caps)).toBe('WIP');
+    expect(modeAvailStatus('PATH', {}, caps)).toBe('CS');
+    // WIP/CS are both "not live" for isTokenComingSoon.
+    expect(isTokenComingSoon('ESP_CLI', {}, caps)).toBe(true);
+    expect(isTokenComingSoon('PATH', {}, caps)).toBe(true);
+    expect(isTokenComingSoon('4WD4M', {}, caps)).toBe(false);
+  });
+
+  it('the CAPS table wins over the per-current-stub map', () => {
+    const caps = { '2WD1M': 'LIVE' };
+    const stub = { '2WD1M': true };
+    expect(modeAvailStatus('2WD1M', stub, caps)).toBe('LIVE');
+  });
+
+  it('legacy BT resolves onto the canonical 4WD4M row in every source', () => {
+    expect(modeAvailStatus('BT', {}, { '4WD4M': 'LIVE' })).toBe('LIVE');
+    expect(modeAvailStatus('BT', { '4WD4M': true }, {})).toBe('CS');
   });
 
   // ---- X-8: legacy token canonicalization ----
@@ -271,10 +347,10 @@ describe('A-7 car-truth coming-soon resolution', () => {
     const t = parseTelemetryLine('STATE;MODE=BT;SPD=170;STATUS=Forward');
     expect(t.mode).toBe('BT'); // parser preserves the wire truth
     // …and the canonical form resolves against the new-token catalog:
-    expect(isTokenComingSoon(canonicalCarToken(t.mode), {})).toBe(false);
+    expect(modeAvailStatus(canonicalCarToken(t.mode), {})).toBe('LIVE');
   });
 
-  it('resolves the new 4WD4M token as live via the fallback table', () => {
+  it('resolves the new 4WD4M token as live via the default', () => {
     expect(isTokenComingSoon('4WD4M', {})).toBe(false);
   });
 });

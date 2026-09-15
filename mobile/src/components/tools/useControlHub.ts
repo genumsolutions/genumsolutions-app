@@ -25,11 +25,25 @@ import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, isTokenComingSoon, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token → short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
 const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES
+
+/**
+ * Commands that must reach the car over EVERY live link, regardless of the
+ * active mode's transport. Mode tokens (any live link can switch the car
+ * into that mode — the car renders its own frame), plus the neutral /
+ * emergency safety lines (ESTOP / SPD0 / SERVO90 / 'S' / REQ_STATE). Every
+ * other command follows the ACTIVE mode's own transports (R-4 fleet parity:
+ * WiFi modes drive over the WS, BT modes over SPP/BLE — never blast a
+ * WiFi-mode drive letter at a Bluetooth car).
+ */
+const EVERY_LINK_COMMANDS = new Set([
+  '4WD4M', 'BT', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M',
+  'ESTOP', 'SPD0', 'SERVO90', 'REQ_STATE', 'S',
+])
 import { deviceMemory } from './types'
 import type { CarTelemetry } from '../../services/carProtocol'
 import type { SensorData } from './types'
@@ -62,16 +76,18 @@ export function useControlHub(routeCategory?: string) {
   // from the status JSON `ap` / `ssid` fields). Shown in the ESP_SER deck.
   const [carApName, setCarApName] = useState<string | null>(null)
   const [carSsid, setCarSsid] = useState<string | null>(null)
-  // A-7 car-truth coming-soon map: token -> stub flag, fed by CAP=STUB on
+  // A-7 legacy car-truth map: token -> stub flag, fed by CAP=STUB on
   // the car's STATE lines and `stub` in its WS JSON (both describe the
-  // car's CURRENT mode — the map fills as the car visits modes). Tokens
-  // absent from the map fall back to FALLBACK_STUB_TOKENS (see
-  // isTokenComingSoon in carProtocol.ts).
+  // car's CURRENT mode — the map fills as the car visits modes, and stays
+  // for v1.4.0 cars that don't broadcast the full CAPS table). Tokens
+  // absent from the map fall back to the fleet default (modeAvailStatus in
+  // carProtocol.ts).
   const [carStubMap, setCarStubMap] = useState<Record<string, boolean>>({})
-  // Ref mirror so selectMode/cycleMode callbacks read current car truth
-  // without re-creating on every STATE line.
-  const carStubMapRef = useRef<Record<string, boolean>>({})
-  useEffect(() => { carStubMapRef.current = carStubMap }, [carStubMap])
+  // R-10: full per-token availability table from the car's CAPS broadcast
+  // (`caps` on STATE-style lines / WS JSON). Authoritative 3-state truth
+  // (LIVE / WIP / CS) for the mode badges; supersedes the per-current-mode
+  // stub flag for cars that announce the whole table (v1.5.0 fleet).
+  const [carAvailMap, setCarAvailMap] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
   const [connectionMsgType, setConnectionMsgType] = useState<'success' | 'error' | null>(null)
@@ -359,6 +375,18 @@ export function useControlHub(routeCategory?: string) {
         const tok = canonicalCarToken(t.mode)
         if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
       }
+      // R-10: full availability table (CAPS;… broadcast) — authoritative
+      // per-token 3-state truth. Canonical keys (legacy BT → 4WD4M).
+      if (t.caps && Object.keys(t.caps).length > 0) {
+        setCarAvailMap((prev) => {
+          let next = prev
+          for (const [tok, val] of Object.entries(t.caps!)) {
+            if (!tok) continue
+            next = next[tok] === val ? next : { ...next, [tok]: val }
+          }
+          return next
+        })
+      }
       // R-4 (app half): the car rejected a sent mode token — park it as
       // car-truth stub and surface "Not supported by car" (remote
       // comms.cpp:505-508 parity).
@@ -383,6 +411,7 @@ export function useControlHub(routeCategory?: string) {
           // so the next car (or a re-flashed car) starts from the fallback
           // table until it reports per-token truth again (remote R-10 parity).
           setCarStubMap({})
+          setCarAvailMap({})
           // Bugfix: only the manual handleConnect() used to set connected=true;
           // a silent auto-reconnect or retry that reached 'connected' left the
           // UI believing the link was down (dead Connect button on return).
@@ -602,6 +631,19 @@ export function useControlHub(routeCategory?: string) {
           const tok = canonicalCarToken(json.mode)
           if (tok) setCarStubMap((prev) => (prev[tok] === json.stub ? prev : { ...prev, [tok]: json.stub as boolean }))
         }
+        // R-10: WS JSON `caps` object — full per-token availability table.
+        if (json.caps && typeof json.caps === 'object') {
+          setCarAvailMap((prev) => {
+            let next = prev
+            for (const [k, v] of Object.entries(json.caps as Record<string, unknown>)) {
+              const tok = canonicalCarToken(k)
+              const val = String(v).trim().toUpperCase()
+              if (!tok || !val) continue
+              next = next[tok] === val ? next : { ...next, [tok]: val }
+            }
+            return next
+          })
+        }
         if (Object.keys(t).length > 0) {
           setTelemetry((prev) => ({ ...prev, ...t }))
           if (t.mode) {
@@ -639,6 +681,17 @@ export function useControlHub(routeCategory?: string) {
             if (t.stub !== undefined && t.mode) {
               const tok = canonicalCarToken(t.mode)
               if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
+            }
+            // R-10: WS STATE/CAPS lines may carry the full availability table.
+            if (t.caps && Object.keys(t.caps).length > 0) {
+              setCarAvailMap((prev) => {
+                let next = prev
+                for (const [tok, val] of Object.entries(t.caps!)) {
+                  if (!tok) continue
+                  next = next[tok] === val ? next : { ...next, [tok]: val }
+                }
+                return next
+              })
             }
             // R-4: same NACK handling as the SPP/BLE path.
             if (t.nackError === 'UNKNOWN_MODE' && t.nackArg) handleNackRef.current?.(t.nackArg)
@@ -827,18 +880,37 @@ export function useControlHub(routeCategory?: string) {
     setSensorData({ temperature: 0, humidity: 0, soilMoisture: 0, lightLevel: 0, airQuality: 0, distance: 0 })
   }, [])
 
-  // Send command via SPP (primary), BLE, or WiFi; no-ops when nothing is linked
+  // Send a command over the right transport(s) for the ACTIVE mode; no-ops
+  // when nothing is linked.
+  //   • Every-link commands (mode tokens + neutral/emergency lines) go over
+  //     all live links.
+  //   • Everything else follows the active mode's own transports: WiFi modes
+  //     (ESP_SER / ESP_CLI) drive over the WebSocket only, BT modes over
+  //     SPP/BLE only (R-4 parity — a Bluetooth car must never hear a
+  //     WiFi-mode drive letter).
+  //   • When only ONE link is live it is used regardless of mode, so a 4WD4M
+  //     car connected purely over the wireless car's WS still drives (that
+  //     path accepts drive in any mode).
   const sendCommand = useCallback((cmd: string) => {
-    if (connected && sppService.isConnected) {
+    const btLive = sppService.isConnected || bleService.isConnected
+    const wsLive = Boolean(wifiConnected && wsRef.current)
+    const onlyBt = btLive && !wsLive
+    const onlyWs = wsLive && !btLive
+    const modeUsesBt = activeMode.transport.includes('classic-bt') || activeMode.transport.includes('ble')
+    const modeUsesWifi = activeMode.transport.includes('wifi')
+    const broadcast = EVERY_LINK_COMMANDS.has(cmd.trim().toUpperCase().split(';')[0])
+    const goBt = broadcast ? btLive : onlyBt ? true : modeUsesBt && btLive
+    const goWs = broadcast ? wsLive : onlyWs ? true : modeUsesWifi && wsLive
+    if (goBt && connected && sppService.isConnected) {
       void sppService.sendLine(cmd).catch(() => {})
     }
-    if (connected && bleService.isConnected) {
+    if (goBt && connected && bleService.isConnected) {
       void bleService.sendLine(cmd).catch(() => {})
     }
-    if (wifiConnected && wsRef.current) {
+    if (goWs && wsRef.current) {
       try { wsRef.current.send(cmd + '\n') } catch { /* ignore */ }
     }
-  }, [connected, wifiConnected])
+  }, [connected, wifiConnected, activeMode])
 
   const handleDirection = useCallback((d: 'F' | 'B' | 'L' | 'R' | 'S') => {
     setDriveDir(d)
@@ -941,33 +1013,28 @@ export function useControlHub(routeCategory?: string) {
 
   // Mode select = the ESP confirm path: clear the queue, send the token
   // immediately, mirror the mode, status "Mode:<name>", stop driving.
-  // A-7 (owner decision 2026-09-14): coming-soon is CAR TRUTH — tokens the
-  // paired car reports as stubs (or fleet-fallback tokens for cars that
-  // don't report) are refused app-side (the car refuses them too, but never
-  // sending them avoids a mode-flip flash on the car's OLED).
+  // Owner decision 2026-09-15: ALL 9 firmware modes are selectable — a
+  // WIP/CS mode still receives its token (the car renders its own frame /
+  // COMING SOON, IN PROGRESS states) and the controller shows the badge.
+  // The old A-7 app-side refuse gate is gone (the car says no itself via its
+  // frame or a NACK;E=UNKNOWN_MODE if it truly rejects a token).
   const selectMode = useCallback((m: CarMode) => {
-    if (isTokenComingSoon(m.token, carStubMapRef.current)) {
-      setDriveStatus('Coming soon')
-      showConnectionMessage(`${MODE_NAME_FOR_TOKEN[m.token] ?? m.token} is coming soon — not available on this car yet.`, 'error')
-      return
-    }
     setActiveMode(m)
     setDriveDir('S')
     setDriveStatus(`Mode:${MODE_NAME_FOR_TOKEN[m.token] ?? m.token}`)
     sendCommand('S')
     sendCommand(m.token)
-  }, [sendCommand, showConnectionMessage])
+  }, [sendCommand])
 
   const cycleMode = useCallback(() => {
-    // ESP32 remote mode scroll order (state.cpp MODE_CMDS[]), restricted to
-    // the LIVE tokens per car truth (A-7) — cycle never lands on a
-    // coming-soon mode, matching the car's own gating.
-    const REMOTE_CYCLE_ORDER = ['4WD4M', 'ESP_SER', 'AUTO', '2WD1M', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'ESP_CLI']
+    // ESP32 remote mode scroll order (state.cpp MODE_CMDS[] — extended fleet
+    // order) — cycle walks ALL 9 modes and always advances/wraps (owner
+    // decision 2026-09-15: every mode is selectable; remote parity).
+    const REMOTE_CYCLE_ORDER = ['4WD4M', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
     const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
       .slice()
       .sort((a, b) => REMOTE_CYCLE_ORDER.indexOf(a.token) - REMOTE_CYCLE_ORDER.indexOf(b.token))
-    const live = list.filter((m) => !isTokenComingSoon(m.token, carStubMapRef.current))
-    const pool = live.length > 0 ? live : list
+    const pool = list.length > 0 ? list : LOCAL_CAR_MODES
     const idx = pool.findIndex((m) => m.id === activeMode.id)
     selectMode(idx === -1 ? pool[0] : pool[(idx + 1) % pool.length])
   }, [activeMode, selectMode, carModes])
@@ -1056,7 +1123,7 @@ export function useControlHub(routeCategory?: string) {
     handleWifiDisconnect, handleDisconnect, showConnectionMessage,
     // v1.4.0 WiFi provisioning (app → BT → car) + car WiFi truth
     wifiSsid, setWifiSsid, wifiPassword, setWifiPassword, wifiProvisioning,
-    handleWifiProvision, carApName, carSsid, carStubMap,
+    handleWifiProvision, carApName, carSsid, carStubMap, carAvailMap,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
     // mode + category (carStubMap is returned with the WiFi-truth group above)
