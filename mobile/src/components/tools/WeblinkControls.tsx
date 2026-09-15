@@ -16,7 +16,7 @@
 //     which carProtocol now parses into telemetry.
 // =====================================================================
 import React, { useEffect, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, Vibration } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, Vibration } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { ActivityIndicator } from 'react-native'
 import type { WeblinkControlsProps } from './types'
@@ -45,8 +45,16 @@ export function WeblinkControls({
   const [cardSize, setCardSize] = useState<{ w: number; h: number } | null>(null)
   const passRef = useRef<TextInput | null>(null)
 
+  // Root is a bounded ScrollView (flex-1) so the card NEVER overflows the
+  // remote deck in landscape when the provisioning card auto-expands (btConnected)
+  // — the deck scrolls instead (owner "measure the space and fit them" fix).
   return (
-    <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
+    <ScrollView
+      className="mt-4 flex-1 rounded-2xl border border-line bg-card p-5 shadow-card"
+      contentContainerStyle={{ paddingBottom: 8 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header + mode entry */}
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
@@ -244,6 +252,6 @@ export function WeblinkControls({
         Driving below works over the same link — direction letters and SPD go to the car’s
         WebSocket, exactly like the web page’s own buttons.
       </Text>
-    </View>
+    </ScrollView>
   )
 }

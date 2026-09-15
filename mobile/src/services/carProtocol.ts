@@ -61,6 +61,15 @@ export type CarTelemetry = {
    */
   nackError?: string
   nackArg?: string
+  /**
+   * R-10 (2026-09-15 fleet): the car broadcasts its complete per-token
+   * availability table on every STATE send — `CAPS;4WD4M:LIVE;ESP_SER:LIVE;
+   * PATH:CS;…;2WD1M:CS` (device order, no trailing `;`), also carried in the
+   * WS JSON as `"caps": {"4WD4M":"LIVE", …}`. Values are LIVE / WIP / CS.
+   * CAPS is authoritative per token; it replaces the old single-current-mode
+   * stub flag (kept for back-compat with v1.4.0 cars).
+   */
+  caps?: Record<string, string>
 }
 
 /** Neutral commands sent on disconnect / stale telemetry (safe stop). */
@@ -164,26 +173,32 @@ export function buildWifiConfigLine(ssid: string, password: string): string {
 }
 
 // -------------------------------------------------------------------
-// A-7: car-truth coming-soon (per-token CAP=STUB map)
+// A-7 / R-10: car-truth mode availability (3-state per token)
 // -------------------------------------------------------------------
 
 /**
- * Fallback stub table for cars that do NOT (yet) emit CAP=STUB on their
- * STATE lines — the same live set the car fleet shipped with v1.4.0
- * (wireless car: BT + ESP_SER live; owner lockdown 2026-09-14). Cars that
- * DO report per-token truth override this map token by token, so flipping
- * one `isStub` in a car's registry updates every controller with zero
- * controller changes (the R-10 property).
+ * Per-token availability a car may announce (CAPS wire / `caps` JSON).
+ *   LIVE  – drives today
+ *   WIP   – IN PROGRESS (works in progress / partially wired) — NOT live yet
+ *   CS    – COMING SOON (parked) — NOT live yet
+ * Controllers render the state as a mark (drawAvailMarkBody parity) and the
+ * car renders its own frame; every token stays selectable so app and device
+ * can toggle across all 9 modes.
  */
-export const FALLBACK_STUB_TOKENS: ReadonlySet<string> = new Set([
-  'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M',
-])
+export type ModeAvailReport = 'LIVE' | 'WIP' | 'CS'
 
 /**
- * Fleet tokens shipped LIVE in v1.4.0 — the fallback's available side.
- * X-8: `4WD4M` is the canonical token; `BT` kept so legacy lookups resolve.
+ * Fallback stub table for tokens the paired car has NOT reported yet.
+ *
+ * Owner decision 2026-09-15: unreported tokens default AVAILABLE (the fleet
+ * wire lets every car drive every mode it recognizes, and a mode wait all of
+ * a car's tokens announced up-front). The only hard exception is MAN —
+ * RF-manual needs the RF handset, which no GENUM car carries, so it stays
+ * COMING SOON fleet-wide until a handset ships.
  */
-const FALLBACK_LIVE_TOKENS: ReadonlySet<string> = new Set(['BT', '4WD4M', 'ESP_SER'])
+export const FALLBACK_STUB_TOKENS: ReadonlySet<string> = new Set([
+  'MAN',
+])
 
 /**
  * Normalize a mode token for stub-map lookups (uppercase, trimmed).
@@ -209,32 +224,43 @@ export function canonicalCarToken(token: string | null | undefined): string {
 }
 
 /**
- * Pure helper (A-7): resolve whether a mode is coming-soon for the paired
- * car. Car truth wins token by token (the map is fed from CAP=STUB on the
- * car's STATE lines / `stub` in its WS JSON — both describe the CURRENT
- * mode, so the map fills as modes are visited); tokens the car has not
- * reported yet fall back to the fleet fallback table.
+ * Pure helper (A-7 / R-10): resolve a mode's availability for the paired
+ * car. Resolution order:
+ *  1. `carAvailMap` (from the car's CAPS broadcast) when it mentions the
+ *     token — authoritative per token (LIVE / WIP / CS).
+ *  2. the legacy per-token stub flag (CAP=STUB for the CURRENT mode) — for
+ *     v1.4.0 cars that don't broadcast the full table yet.
+ *  3. the fleet fallback: everything defaults LIVE except MAN (hard CS).
  *
- * Convergence note (same as the remote's R-10): parking a mode updates
- * controllers instantly (the car announces CAP=STUB the moment it sits in
- * that mode); UN-parking is reflected after the car visits the mode once
- * (its own mode button) — a full-table announcement is a possible future
- * car feature (X-5), not needed for the current fleet.
+ * The legacy stub map keeps filling as the car visits modes, so mixed
+ * old/new fleets converge without extra controller work.
+ */
+export function modeAvailStatus(
+  token: string | null | undefined,
+  carStubMap: Record<string, boolean>,
+  carAvailMap?: Record<string, string>,
+): ModeAvailReport {
+  const t = canonicalCarToken(token)
+  if (!t) return 'CS'
+  const report = carAvailMap?.[t]
+  if (report === 'LIVE' || report === 'WIP' || report === 'CS') return report
+  const reported = carStubMap[t]
+  if (typeof reported === 'boolean') return reported ? 'CS' : 'LIVE'
+  return FALLBACK_STUB_TOKENS.has(t) ? 'CS' : 'LIVE'
+}
+
+/**
+ * Pure helper (A-7): whether a mode is NOT functional for the paired car
+ * (either IN PROGRESS or COMING SOON). Car truth wins token by token; the
+ * car's CAPS table (or legacy stub map) overrides the default. Selectable
+ * in every controller regardless — it only changes the mark/badge.
  */
 export function isTokenComingSoon(
   token: string | null | undefined,
   carStubMap: Record<string, boolean>,
+  carAvailMap?: Record<string, string>,
 ): boolean {
-  const t = normalizeModeToken(token)
-  if (!t) return true
-  const reported = carStubMap[t]
-  if (typeof reported === 'boolean') return reported
-  // Fallback for tokens the car has not reported yet: the v1.4.0 fleet
-  // table. Anything UNKNOWN (future/foreign tokens not in the table) is
-  // gated conservatively until the car reports truth for it.
-  if (FALLBACK_STUB_TOKENS.has(t)) return true
-  if (FALLBACK_LIVE_TOKENS.has(t)) return false
-  return true
+  return modeAvailStatus(token, carStubMap, carAvailMap) !== 'LIVE'
 }
 
 /** Build the AUTO calibration line: CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:.. */
@@ -313,6 +339,28 @@ export function parseTelemetryLine(line: string): CarTelemetry {
     return telemetry
   }
 
+  // R-10 (2026-09-15 fleet): the car broadcasts its COMPLETE per-token
+  // availability table on every STATE send — `CAPS;4WD4M:LIVE;ESP_SER:LIVE;
+  // PATH:CS;…;2WD1M:CS` (device order, no trailing ';'). Tolerates ':' or
+  // '=' separators (remote comms.cpp applyCapsMap). Keyed canonical so a
+  // legacy `CAPS;BT:LIVE` resolves onto the 4WD4M row.
+  if (up.startsWith('CAPS')) {
+    const body = l.split(';')
+    const caps: Record<string, string> = {}
+    for (let i = 1; i < body.length; i++) {
+      const part = body[i].trim()
+      if (!part) continue
+      const eqIdx = part.indexOf('=')
+      const sep = eqIdx >= 0 ? eqIdx : part.indexOf(':')
+      if (sep <= 0) continue
+      const tok = canonicalCarToken(part.slice(0, sep))
+      const val = part.slice(sep + 1).trim().toUpperCase()
+      if (tok && val) caps[tok] = val
+    }
+    if (Object.keys(caps).length > 0) telemetry.caps = caps
+    return telemetry
+  }
+
   // TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
   if (up.startsWith('TEL')) {
     const body = l.replace(/^TEL[:;]/i, '')
@@ -353,6 +401,17 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.ssid === 'string') telemetry.ssid = j.ssid
       if (typeof j.ap === 'string') telemetry.ap = j.ap
       if (typeof j.stub === 'boolean') telemetry.stub = j.stub
+      // R-10: WS JSON carries the full availability table as `"caps":
+      // {"4WD4M":"LIVE", "ESP_SER":"LIVE", …, "2WD1M":"CS"}`.
+      if (j.caps && typeof j.caps === 'object') {
+        const caps: Record<string, string> = {}
+        for (const [k, v] of Object.entries(j.caps as Record<string, unknown>)) {
+          const tok = canonicalCarToken(k)
+          const val = String(v).trim().toUpperCase()
+          if (tok && val) caps[tok] = val
+        }
+        if (Object.keys(caps).length > 0) telemetry.caps = caps
+      }
     } catch { /* not JSON — ignore */ }
   }
 

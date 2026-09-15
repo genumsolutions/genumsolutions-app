@@ -34,7 +34,7 @@ export function OledDisplay({
   connected, wifiConnected, deviceName, activeMode,
   speed, servo, driveStatus, targetAltitude, gimbalPan, gimbalTilt,
   sensorData, telemetry, isDrone, isNonRobocar, linkKind, compact = false,
-  topField = 'none', previewMode = null, previewComingSoon = false, steerLimit,
+  topField = 'none', previewMode = null, previewComingSoon = false, previewModeAvail, steerLimit,
 }: OledDisplayProps) {
   const is2wd1m = activeMode.controls.includes('drive-2wd1m')
   const isAuto = activeMode.token === 'AUTO'
@@ -62,11 +62,17 @@ export function OledDisplay({
   // NAV highlight (u8g2 drawBox + setDrawColor(0) parity).
   const hl = (f: 'mode' | 'speed' | 'steer') => topField === f
 
-  // Body content per drawDashboard dispatch.
+  // Body content per drawDashboard dispatch. R-10: a CS/WIP PREVIEWED mode
+  // draws its availability mark first (drawAvailMarkBody parity —
+  // "COMING SOON..." / "IN PROGRESS..."), then the live dashboard.
   const body = (() => {
+    if (previewMode && previewModeAvail) {
+      if (previewModeAvail === 'CS') return { kind: 'coming' as const, text: 'COMING SOON...' }
+      if (previewModeAvail === 'WIP') return { kind: 'coming' as const, text: 'IN PROGRESS...' }
+    }
     if (previewComingSoon) return { kind: 'coming' as const, text: 'COMING SOON...' }
     if (previewMode) {
-      if (previewMode.token === 'BT' || previewMode.controls.includes('drive-2wd1m')) {
+      if (previewMode.token === 'BT' || previewMode.token === '4WD4M' || previewMode.controls.includes('drive-2wd1m')) {
         return { kind: 'dir' as const, text: driveStatus || 'Stop' }
       }
       if (previewMode.token === 'AUTO') return { kind: 'auto' as const }

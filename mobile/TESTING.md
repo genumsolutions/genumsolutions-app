@@ -1,24 +1,30 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.6/49 + OTA R12** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; device verification pending: rounds R10 + R11 + R12.
+> Target: **v2.0.6/49 + OTA R12** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; tsc clean + 44/44 tests; device verification pending: rounds R10 + R11 + R12.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
 
 ---
 
-## snag round 12 — 4WD4M rename, COMING SOON-only frame, BT transport scoping, metadata (2026-09-14, IMPLEMENTED — PENDING DEVICE VERIFY)
+## snag round 12 — 4WD4M rename, allow-all/mark, CAPS availability, metadata (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
 
-> Implemented in the same session as the fleet X-8 rename (wire token `BT` → `4WD4M`,
-> permanent legacy alias). App side: `carProtocol.ts` (catalog token + `canonicalizeModeToken`
-> — `MODE=BT` → `4wd4m` — and `4WD4M` in the fallback live set), `useControlHub.ts`
-> (mirror paths + stub-map keys canonicalized), `roboCarCatalog.ts` (wireToken "4WD4M",
-> label "4WD4M (Bluetooth)" kept for discoverability). 32/32 tests (incl. new legacy-alias
-> cases), tsc clean. Car = v1.5.0 (T-27..T-32), remote = v1.2.0. Design:
+> Implemented with the fleet allow-all/mark session (owner decision 2026-09-15): every
+> mode is selectable from the app; selects toggle the mode token (no refusal gate); the
+> car renders its own frame. App side: `carProtocol.ts` (`ModeAvailReport`,
+> `modeAvailStatus()` = CAPS table → stub map → default-available, MAN hard-CS,
+> `isTokenComingSoon`, `caps` on CarTelemetry + `CAPS;` line + JSON `caps` parsing;
+> catalog token + `canonicalizeModeToken`), `useControlHub.ts` (`carAvailMap` fed from
+> all 3 telemetry paths + cleared on fresh link; `selectMode` allow-all; `cycleMode`
+> walks all 9 in MODE_CMDS order; `EVERY_LINK_COMMANDS` broadcast = mode tokens +
+> `ESTOP`/`SPD0`/`SERVO90`/`S`/`REQ_STATE`; transport scoping = wifi modes WS-only),
+> `ModeChooser.tsx` (3-state badges In progress/Coming soon, all rows tappable),
+> `OledDisplay.tsx` (preview marks), `WeblinkControls.tsx` (root→ScrollView fix).
+> 44/44 tests, tsc clean. Car = v1.5.0, remote = v1.2.0. Design:
 > `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2d (X-6/X-7/X-8).
 
 - [ ] **R12-1 — 4WD4M naming (three-way):** the mode formerly labelled "Bluetooth"/"BLUETOOTH" displays as **4WD4M** on the car OLED, the remote dashboard, and the app catalog; wire token renamed too (X-8): new firmware sends/emits `MODE=4WD4M`, and a pre-v1.5.0 car's `MODE=BT` still mirrors via the legacy alias.
 - [ ] **R12-2 — COMING SOON-only body:** on the car, parked modes show a clean centered `COMING SOON` in the body — no mode-name repeat, no `(stub)` suffix (top bar already carries mode + link info).
 - [ ] **R12-3 — status dedupe:** during steady driving, the status line does not re-announce the unchanged state; it updates on changes only.
-- [ ] **R12-4 — BT transport scoping:** over BT, drive commands work in 4WD4M/2WD1M/AUTO only; MAN (RF-only), PATH, OBS_US, OBS_IR, ESP_CLI, ESP_SER refuse BT drive without OLED spam; mode tokens + `REQ_STATE` + `WIFICFG` still work in every mode.
+- [ ] **R12-4 — allow-all + transport scoping:** every mode is selectable in the app and the toggle follows the car (no refusal gate); app BT drive works in every mode the car reports LIVE via `CAPS;`; the car's own BT transport gate refuses drive in CS modes without OLED spam; mode tokens + `REQ_STATE` + `WIFICFG` work in every mode.
 - [ ] **R12-5 — site ↔ OLED mode parity:** the car-hosted page and website `/robocar` list exactly the car's modes with matching names + coming-soon marks.
 - [ ] **R12-6 — remote ESP_SER WiFi display:** in ESP_SER the remote dashboard shows configured SSID, fallback AP broadcast id (`ESP32_Car_<mac>`), and current WiFi connection state.
 - [ ] **R12-7 — metadata visible:** boot splash shows project name + version + "GENUM SOLUTIONS PVT. LTD." on car and remote.
@@ -26,23 +32,25 @@
 
 ---
 
-## snag round 11 — car-truth coming soon + WiFi-card layout fit (2026-09-14, IMPLEMENTED — PENDING DEVICE VERIFY)
+## snag round 11 — car-truth availability marks + WiFi-card layout fit (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
 
-> Code complete: `carProtocol.ts` (per-token stub parse + `isTokenComingSoon`),
-> `useControlHub.ts` (`carStubMap` + car-sourced selectMode/cycleMode + SSID
-> pre-fill), `ModeChooser.tsx` (Coming soon badge), `WeblinkControls.tsx`
-> (collapsible compact card + `__DEV__` layout log). 29/29 tests, tsc clean.
+> Code complete (allow-all/mark rework): `carProtocol.ts` (per-token CAPS parse +
+> `modeAvailStatus()` 3-state + `isTokenComingSoon`), `useControlHub.ts`
+> (`carAvailMap` + car-sourced selectMode/cycleMode + SSID pre-fill),
+> `ModeChooser.tsx` (In progress / Coming soon badges), `OledDisplay.tsx`
+> (preview marks), `WeblinkControls.tsx` (collapsible compact card in a bounded
+> ScrollView + `__DEV__` layout log). 44/44 tests, tsc clean.
 > Design record: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2c (A-7, A-8).
 
 **If something goes wrong (recovery):**
 - **Revert path:** `git checkout main && git reset --hard backup` is the fleet
   full-revert (see `guide/REBUILD-FAILSAFE.md`); for a surgical revert use
-  `git revert <commit>` — the batch is one commit on `main`.
+  `git revert <commit>` — the allow-all batch is one commit on `main`.
 - **Mode list looks wrong / everything says coming soon:** check the car actually
-  emits `CAP=STUB` (`STATE;MODE=BT;…;CAP=STUB` on the serial monitor); the app falls
-  back to the v1.4.0 table when the car reports nothing. Unknown tokens are gated
-  OFF conservatively by design (`isTokenComingSoon` returns true for tokens outside
-  the fallback table until the car reports them).
+  emits `CAPS;4WD4M:LIVE;…` on the serial monitor (start + on mode change); the app
+  falls back to default-available (only MAN stays hard-COMING-SOON) when the car
+  reports nothing. Unknown tokens are tagged by `modeAvailStatus()` (CAPS → stub map
+  → default-available).
 - **WiFi card overlaps the deck again:** the card logs its measured size in dev
   builds (`[A-8] WiFi card measured: WxH`) — compare against the deck budget noted
   in R11-4 before changing styles.
@@ -50,9 +58,9 @@
   `DevicePrefs.lastWifiSsid`; verify `addressForMemory` is non-null when the card
   opens.
 
-- [ ] **R11-1 — mode toggle lists ALL 9 modes:** dropdown shows every token; parked ones render muted with a "Coming soon" badge but stay tappable.
-- [ ] **R11-2 — coming-soon is CAR truth:** refusal set comes from `CAP=STUB` on the car's `STATE;` lines (not a hardcoded list); picking a parked mode → "Coming soon" toast, car mode unchanged. Flip one `isStub` in the car registry → the app updates with zero app changes.
-- [ ] **R11-3 — cycle never lands on parked modes:** cycle button walks live tokens only (BT ↔ ESP_SER).
+- [ ] **R11-1 — mode toggle lists ALL 9 modes:** dropdown shows every token; parked ones render muted with an "In progress"/"Coming soon" badge but stay tappable.
+- [ ] **R11-2 — marks are CAR truth:** availability comes from the `CAPS;` broadcast (per-token 3-state cache fed from WS + SPP + BLE telemetry, cleared on fresh link); picking any mode toggles the token and the car accepts it (no refusal gate — parked modes just can't drive). Flip a car's CAPS state → the app update with zero app changes.
+- [ ] **R11-3 — cycle walks ALL 9:** cycle goes through 4WD4M, ESP_SER, PATH, OBS_US, OBS_IR, MAN, AUTO, ESP_CLI, 2WD1M (MODE_CMDS order).
 - [ ] **R11-4 — WiFi card fits the deck (measured):** SSID + password fields, show/hide, send button and status chips all visible without scrolling on the target phone; explainer condensed to one line; measured deck budget recorded in this round's notes.
 - [ ] **R11-5 — keyboard doesn't cover inputs:** with the keyboard open, both TextInputs stay reachable (KeyboardAvoidingView/scroll).
 - [ ] **R11-6 — SSID pre-fill after restart:** send WiFi to car → kill + reopen the app → card pre-filled with the last-sent SSID for that car; password never stored on the phone.
@@ -71,7 +79,7 @@
 - [ ] **R10-4 — native disconnect detection:** power the car off mid-drive → within ~2 s the app flips to "Connection lost"/banner (no more phantom "Connected" with a dead link).
 - [ ] **R10-5 — banner on exhaustion:** let the 4 silent reconnect attempts lapse (~15 s) → banner appears (it used to give up silently).
 - [ ] **R10-6 — Cancel keeps device list:** tap Cancel on the banner → banner closes; Scan + device list still shows the car; Connect still works (no app restart).
-- [ ] **R10-7 — coming-soon modes blocked:** Mode dropdown lists PATH/OBS/MAN/AUTO/2WD1M marked "coming soon"; picking one shows "Coming soon" and the car mode never changes; the car's own OLED would refuse too. Cycle button only walks BT ↔ ESP_SER.
+- [ ] **R10-7 — allow-all mode select:** Mode dropdown lists all 9 with LIVE/In progress/Coming soon marks; picking any mode toggles it (covers old coming-soon-blocked behaviour — the app no longer refuses, the car marks and refuses only drive). Cycle button walks all 9.
 
 > **Owner partial run 2026-09-14:** R10/R11 were NOT fully executed — owner
 > observation: "not all the modes are accessible to both the remote and the car".

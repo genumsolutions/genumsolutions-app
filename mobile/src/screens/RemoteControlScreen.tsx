@@ -34,14 +34,13 @@ import { SensorGrid } from '../components/tools/SensorGrid'
 import { DroneControls } from '../components/tools/DroneControls'
 import { WeblinkControls } from '../components/tools/WeblinkControls'
 import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog'
-import { SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../services/carProtocol'
+import { SPEED_MIN, SPEED_MAX, SPEED_STEP, modeAvailStatus } from '../services/carProtocol'
 import type { SafetyLimits } from '../components/tools/types'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
 type Route = RouteProp<RootStackParamList, 'RemoteControl'>
 
 const NAV_DEBOUNCE_MS = 120
-const REMOTE_AVAILABLE_TOKENS = ['BT', 'AUTO', '2WD1M', 'ESP_SER']
 
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxSpeed: 255,
@@ -114,7 +113,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const {
     connected, wifiConnected, sppStatus, deviceName,
     canControl, handleDisconnect, wifiUrl,
-    activeCategory, activeMode, carModes, carStubMap, selectMode, cycleMode,
+    activeCategory, activeMode, carModes, carStubMap, carAvailMap, selectMode, cycleMode,
     speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
     adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop,
@@ -284,7 +283,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         compact
         topField={topField}
         previewMode={previewMode}
-        previewComingSoon={!REMOTE_AVAILABLE_TOKENS.includes(previewMode?.token ?? '')}
+        previewModeAvail={previewMode ? modeAvailStatus(previewMode.token, carStubMap, carAvailMap) : undefined}
         steerLimit={steerLimit}
       />
     </View>
@@ -352,6 +351,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onCycle={cycleMode}
                 modes={carModes}
                 carStubMap={carStubMap}
+                carAvailMap={carAvailMap}
                 highlighted={topField === 'mode'}
                 previewMode={previewMode}
                 locked={navActiveBool}
