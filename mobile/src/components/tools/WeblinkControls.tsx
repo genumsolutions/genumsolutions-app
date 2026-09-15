@@ -34,8 +34,8 @@ function formatUptime(ms?: number): string {
 }
 
 export function WeblinkControls({
-  canControl, wifiConnected, activeMode, telemetry,
-  onOpenWebPage, onEnterMode,
+  wifiConnected, activeMode, telemetry,
+  onOpenWebPage,
   // v1.4.0 WiFi provisioning (optional \u2014 only the Remote window passes these)
   btConnected = false, wifiSsid, setWifiSsid, wifiPassword, setWifiPassword,
   wifiProvisioning = false, onProvisionWifi, carApName, carSsid,
@@ -62,7 +62,7 @@ export function WeblinkControls({
   // \u2014 the deck scrolls instead (owner "measure the space and fit them" fix).
   return (
     <ScrollView
-      className="mt-4 flex-1 rounded-2xl border border-line bg-card p-5 shadow-card"
+      className="mt-4 min-h-0 flex-1 rounded-2xl border border-line bg-card p-5 shadow-card"
       contentContainerStyle={{ paddingBottom: 8 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -82,13 +82,12 @@ export function WeblinkControls({
               : 'The car is the WiFi client \u2014 a browser / the website /tools deck acts as the control server. The app connects directly only in ESP_SER (AP) mode.'}
           </Text>
         </View>
-        <Pressable
-          onPress={onEnterMode}
-          disabled={!canControl}
-          className="shrink-0 items-center rounded-full bg-navy px-4 py-2 disabled:opacity-60"
-        >
-          <Text className="text-xs font-black text-white">Enter {activeMode.token}</Text>
-        </Pressable>
+        {/* A-12 (device-round-2): this deck only renders for the ALREADY-ACTIVE
+            weblink mode, so an "Enter ESP_SER" claim was a dead no-op (owner
+            report: "the button does nothing"). Passive hint instead. */}
+        <View className="shrink-0 items-center rounded-full border border-navy/20 bg-navy/5 px-4 py-2">
+          <Text className="text-xs font-black text-navy">Mode active · drive below</Text>
+        </View>
       </View>
 
       {/* Open the car's own web UI (ESP_SER hosts PAGE_HTML on port 80) */}
@@ -160,27 +159,30 @@ export function WeblinkControls({
               </View>
             )}
 
-            {/* Row 4: IP \u2014 tappable to open the car's hosted page (ESP_SER) */}
-            {(telemetry.ip || (wifiConnected && isServer)) && (
-              <Pressable
-                onPress={() => { if (wifiConnected && isServer) onOpenWebPage() }}
-                disabled={!wifiConnected || !isServer}
-                className="flex-row items-center gap-1.5"
-              >
-                <Feather
-                  name={wifiConnected && isServer ? 'external-link' : 'wifi'}
-                  size={11}
-                  color={wifiConnected && isServer ? '#93c5fd' : '#64748b'}
-                />
-                <Text
-                  className={`font-mono text-[11px] ${wifiConnected && isServer ? 'text-sky-300 underline' : 'text-slate-500'}`}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  http://{telemetry.ip || '192.168.4.1'}
-                </Text>
-              </Pressable>
-            )}
+            {/* A-11 (device-round-2): the ESP_SER IP row renders ALWAYS when this
+            deck shows the website-server package — even before the WebSocket
+            connects — so the broadcast IP is never hidden just when you need
+            it. Value = live `telemetry.ip` else the AP fallback 192.168.4.1. */}
+        {isServer && (
+          <Pressable
+            onPress={() => { if (wifiConnected && isServer) onOpenWebPage() }}
+            disabled={!wifiConnected || !isServer}
+            className="flex-row items-center gap-1.5"
+          >
+            <Feather
+              name={wifiConnected && isServer ? 'external-link' : 'wifi'}
+              size={11}
+              color={wifiConnected && isServer ? '#93c5fd' : '#64748b'}
+            />
+            <Text
+              className={`font-mono text-[11px] ${wifiConnected && isServer ? 'text-sky-300 underline' : 'text-slate-500'}`}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              http://{telemetry.ip || '192.168.4.1'}{!telemetry.ip ? ' (AP fallback)' : ''}
+            </Text>
+          </Pressable>
+        )}
 
             {/* Row 5: Uptime + Free heap */}
             {(telemetry.uptimeMs != null || telemetry.freeHeap != null) && (

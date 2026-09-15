@@ -331,12 +331,15 @@ export function RemoteControlScreen({ navigation }: Props) {
 
           <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
 
-          {linked && (
-            <View className="flex-row items-center gap-1.5">
-              <View className="h-2 w-2 shrink-0 rounded-full bg-green-400" />
-              <Text numberOfLines={1} className="max-w-[80px] shrink-0 text-[10px] font-bold text-slate-400">
-                {deviceName || 'Connected'}
-              </Text>
+          {/* A-14: the link indicator STAYS MOUNTED and only swaps text/colour —
+            no mount/unmount churn while the link recovers (was a flicker
+            source when `linked` flapped during reconnect). */}
+          <View className="flex-row items-center gap-1.5">
+            <View className={`h-2 w-2 shrink-0 rounded-full ${linked ? 'bg-green-400' : 'bg-slate-600'}`} />
+            <Text numberOfLines={1} className={`max-w-[80px] shrink-0 text-[10px] font-bold ${linked ? 'text-slate-300' : 'text-slate-500'}`}>
+              {linked ? (deviceName || 'Connected') : 'No link'}
+            </Text>
+            {linked && (
               <Pressable
                 onPress={() => { Vibration.vibrate(10); setShowDisconnectConfirm(true) }}
                 accessibilityRole="button"
@@ -347,8 +350,8 @@ export function RemoteControlScreen({ navigation }: Props) {
               >
                 <Feather name="power" size={14} color="#ef4444" />
               </Pressable>
-            </View>
-          )}
+            )}
+          </View>
 
           {isRobocar && (
             <View className="flex-row items-center gap-2">
@@ -493,25 +496,27 @@ export function RemoteControlScreen({ navigation }: Props) {
                 oledSlot={oledSlot}
               />
             ) : activeMode.controls.includes('weblink') ? (
-              <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 p-2">
-                <WeblinkControls
-                  canControl={canControl}
-                  wifiConnected={wifiConnected}
-                  activeMode={activeMode}
-                  telemetry={telemetry}
-                  onOpenWebPage={handleOpenWebPage}
-                  onEnterMode={handleEnterWeblinkMode}
-                  btConnected={connected}
-                  wifiSsid={hub.wifiSsid}
-                  setWifiSsid={hub.setWifiSsid}
-                  wifiPassword={hub.wifiPassword}
-                  setWifiPassword={hub.setWifiPassword}
-                  wifiProvisioning={hub.wifiProvisioning}
-                  onProvisionWifi={() => { void hub.handleWifiProvision() }}
-                  carSsid={hub.carSsid}
-                  carApName={hub.carApName}
-                />
-              </View>
+              /* A-13: the Weblink card IS the chrome — the old double
+                  border/bg/p-2 wrapper is gone (one chrome level, no
+                  horizontal overflow); the card can no longer spill past
+                  the drive-deck bounds. */
+              <WeblinkControls
+                canControl={canControl}
+                wifiConnected={wifiConnected}
+                activeMode={activeMode}
+                telemetry={telemetry}
+                onOpenWebPage={handleOpenWebPage}
+                onEnterMode={handleEnterWeblinkMode}
+                btConnected={connected}
+                wifiSsid={hub.wifiSsid}
+                setWifiSsid={hub.setWifiSsid}
+                wifiPassword={hub.wifiPassword}
+                setWifiPassword={hub.setWifiPassword}
+                wifiProvisioning={hub.wifiProvisioning}
+                onProvisionWifi={() => { void hub.handleWifiProvision() }}
+                carSsid={hub.carSsid}
+                carApName={hub.carApName}
+              />
             ) : (
               <View className="flex-1 items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4">
                 <Feather name="eye-off" size={20} color="#64748b" />
