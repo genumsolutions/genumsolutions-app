@@ -33,8 +33,8 @@ import { OledDisplay } from '../components/tools/OledDisplay'
 import { SensorGrid } from '../components/tools/SensorGrid'
 import { DroneControls } from '../components/tools/DroneControls'
 import { WeblinkControls } from '../components/tools/WeblinkControls'
-import { LOCAL_CAR_MODES, type CarMode } from '../config/roboCarCatalog'
-import { SPEED_MIN, SPEED_MAX, SPEED_STEP, modeAvailStatus } from '../services/carProtocol'
+import { LOCAL_CAR_MODES, type CarMode, sortRemoteModes } from '../config/roboCarCatalog'
+import { SPEED_MIN, SPEED_MAX, SPEED_STEP, canonicalCarToken, modeAvailStatus } from '../services/carProtocol'
 import type { SafetyLimits } from '../components/tools/types'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RemoteControl'>
@@ -128,6 +128,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   const linked = connected || wifiConnected
   const isRobocar = !isDrone && !isNonRobocar
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
 
   // Restore joystick layout choice per device.
   useEffect(() => {
@@ -149,9 +150,16 @@ export function RemoteControlScreen({ navigation }: Props) {
 
     if (navField === 'mode') {
       if (axis === 'y') {
+        // Browse by CANONICAL TOKEN over the fleet order (never by local
+        // array index — a DB row set missing the active mode used to jump
+        // to pool[0], the 4WD4M "stuck" symptom).
+        const pool = modeList.length > 0 ? sortRemoteModes(modeList) : [...LOCAL_CAR_MODES]
+        if (pool.length === 0) return
         const current = previewMode ?? activeMode
-        const idx = modeList.findIndex((m) => m.id === current.id)
-        const next = modeList[(((idx === -1 ? 0 : idx) + (value === -1 ? -1 : 1)) % modeList.length + modeList.length) % modeList.length]
+        const curToken = canonicalCarToken(current.token)
+        let idx = pool.findIndex((m) => canonicalCarToken(m.token) === curToken || m.id === current.id)
+        if (idx === -1) idx = 0
+        const next = pool[(((idx + (value === -1 ? -1 : 1)) % pool.length) + pool.length) % pool.length]
         if (next) setPreviewMode(next)
       }
       return
@@ -330,7 +338,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 {deviceName || 'Connected'}
               </Text>
               <Pressable
-                onPress={() => { Vibration.vibrate(10); void handleDisconnect() }}
+                onPress={() => { Vibration.vibrate(10); setShowDisconnectConfirm(true) }}
                 accessibilityRole="button"
                 accessibilityLabel="Disconnect"
                 hitSlop={6}
@@ -627,6 +635,48 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
+      )}
+
+      {/* Disconnect confirmation — standard copy, matches the Control Panel
+          dialog (owner 2026-09-15: no technical SPD0/SERVO90 jargon). */}
+      {showDisconnectConfirm && (
+        <>
+          <Pressable
+            className="absolute inset-0 z-30 bg-black/50"
+            onPress={() => setShowDisconnectConfirm(false)}
+            accessibilityLabel="Cancel disconnect"
+          />
+          <View className="absolute inset-0 z-40 items-center justify-center px-8">
+            <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+              <Text className="text-center text-base font-black text-white">Disconnect now?</Text>
+              <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
+                The car will stop safely before the link closes. Your saved settings stay remembered for next time.
+              </Text>
+              <View className="mt-4 flex-row justify-center gap-3">
+                <Pressable
+                  onPress={() => setShowDisconnectConfirm(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Keep connection"
+                  hitSlop={8}
+                >
+                  <View className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5">
+                    <Text className="text-sm font-bold text-white">Cancel</Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => { setShowDisconnectConfirm(false); void handleDisconnect() }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect"
+                  hitSlop={8}
+                >
+                  <View className="rounded-full bg-red-600 px-6 py-2.5">
+                    <Text className="text-sm font-black text-white">Disconnect</Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </>
       )}
     </View>
   )

@@ -46,6 +46,12 @@ export type CarTelemetry = {
   ip?: string
   rssi?: number
   connected?: boolean
+  /** WiFi link signal strength % (ESP32 WiFi.getRssi() → 0..100). */
+  signal?: number
+  /** Uptime ms since the car booted (JSON `uptime_ms`). */
+  uptimeMs?: number
+  /** Free heap bytes (JSON `free_heap`) — low heap = car running tight. */
+  freeHeap?: number
   /** v1.4.0 provisioning reply from the car (REPLY=WIFICFG;… on STATE lines). */
   reply?: string
   /** v1.4.0: car truth flags — AP broadcast id, configured SSID, stub mode. */
@@ -335,6 +341,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
         break
       } else if (key === 'AP') telemetry.ap = val
       else if (key === 'SSID') telemetry.ssid = val
+      else if (key === 'IP') telemetry.ip = val
     }
     return telemetry
   }
@@ -387,8 +394,8 @@ export function parseTelemetryLine(line: string): CarTelemetry {
 
   // JSON status from the wireless-car WebServerComm (broadcast WITHOUT a
   // trailing newline): {"status":"OK","mode":"ESP_SER","connected":true,
-  // "ip":"192.168.4.1","rssi":-45,"speed":170,...}. Maps the fields we
-  // display; the rest (signal/uptime/heap) are ignored.
+  // "ip":"192.168.4.1","rssi":-45,"signal":62,"uptime_ms":120000,"free_heap":1048576,
+  // "speed":170,...}. Maps the display + telemetry-deck fields.
   if (l.startsWith('{') && l.endsWith('}')) {
     try {
       const j = JSON.parse(l) as Record<string, unknown>
@@ -397,6 +404,9 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.speed === 'number') telemetry.speed = j.speed
       if (typeof j.ip === 'string') telemetry.ip = j.ip
       if (typeof j.rssi === 'number') telemetry.rssi = j.rssi
+      if (typeof j.signal === 'number') telemetry.signal = j.signal
+      if (typeof j.uptime_ms === 'number') telemetry.uptimeMs = j.uptime_ms
+      if (typeof j.free_heap === 'number') telemetry.freeHeap = j.free_heap
       if (typeof j.connected === 'boolean') telemetry.connected = j.connected
       if (typeof j.ssid === 'string') telemetry.ssid = j.ssid
       if (typeof j.ap === 'string') telemetry.ap = j.ap

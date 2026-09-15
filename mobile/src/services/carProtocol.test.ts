@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { nextRemoteModeToken, sortRemoteModes } from '../config/roboCarCatalog';
 import {
   SPEED_MAX,
   SPEED_MIN,
@@ -175,6 +176,30 @@ describe('parseTelemetryLine', () => {
       mode: 'ESP_SER',
       ap: 'ESP32_Car_1',
       ssid: 'HomeNet',
+    });
+  });
+
+  // ---- R-13: the car announces its live reachable IP ----
+
+  it('parses the IP= key on STATE lines (v1.5.0 webserver mode)', () => {
+    expect(parseTelemetryLine('STATE;MODE=ESP_SER;IP=192.168.1.42;SSID=HomeNet')).toEqual({
+      mode: 'ESP_SER',
+      ip: '192.168.1.42',
+      ssid: 'HomeNet',
+    });
+  });
+
+  it('parses signal / uptime_ms / free_heap from the WS JSON deck fields', () => {
+    const line = '{"status":"OK","mode":"ESP_SER","ip":"192.168.4.1","rssi":-60,"signal":55,"uptime_ms":152000,"free_heap":1203456,"speed":170}';
+    expect(parseTelemetryLine(line)).toEqual({
+      status: 'OK',
+      mode: 'ESP_SER',
+      ip: '192.168.4.1',
+      rssi: -60,
+      signal: 55,
+      uptimeMs: 152000,
+      freeHeap: 1203456,
+      speed: 170,
     });
   });
 
@@ -371,5 +396,40 @@ describe('isCompleteJsonObject', () => {
     expect(isCompleteJsonObject('  {"a":1}  ')).toBe(true);
     expect(isCompleteJsonObject('{"a":1')).toBe(false);
     expect(isCompleteJsonObject('STATE;MODE=BT')).toBe(false);
+  });
+});
+
+describe('fleet mode-cycle order (roboCarCatalog REMOTE_MODE_ORDER)', () => {
+  it('advances through the 9 firmware modes in remote scroll order and wraps', () => {
+    expect(nextRemoteModeToken('4WD4M')).toBe('ESP_SER');
+    expect(nextRemoteModeToken('ESP_SER')).toBe('PATH');
+    expect(nextRemoteModeToken('PATH')).toBe('OBS_US');
+    expect(nextRemoteModeToken('OBS_US')).toBe('OBS_IR');
+    expect(nextRemoteModeToken('OBS_IR')).toBe('MAN');
+    expect(nextRemoteModeToken('MAN')).toBe('AUTO');
+    expect(nextRemoteModeToken('AUTO')).toBe('ESP_CLI');
+    expect(nextRemoteModeToken('ESP_CLI')).toBe('2WD1M');
+    expect(nextRemoteModeToken('2WD1M')).toBe('4WD4M');
+  });
+
+  it('is canonical-token based: unknown tokens roll forward from the head', () => {
+    expect(nextRemoteModeToken('BT')).toBe('ESP_SER');
+    expect(nextRemoteModeToken('bogus-token')).toBe('ESP_SER');
+    expect(nextRemoteModeToken('')).toBe('ESP_SER');
+  });
+
+  it('sorts DB/bundled mode lists into the fleet cycle order', () => {
+    const shuffled = [
+      { token: '2WD1M' },
+      { token: '4WD4M' },
+      { token: 'AUTO' },
+      { token: 'ESP_SER' },
+    ];
+    expect(sortRemoteModes(shuffled).map((m) => m.token)).toEqual(['4WD4M', 'ESP_SER', 'AUTO', '2WD1M']);
+  });
+
+  it('drops unknown tokens to the tail and never reorders the head', () => {
+    const list = [{ token: 'ESP_CLI' }, { token: 'MYSTERY' }, { token: 'MAN' }];
+    expect(sortRemoteModes(list).map((m) => m.token)).toEqual(['MAN', 'ESP_CLI', 'MYSTERY']);
   });
 });

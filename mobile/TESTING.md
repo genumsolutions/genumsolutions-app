@@ -1,7 +1,38 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.6/49 + OTA R12** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; tsc clean + 44/44 tests; device verification pending: rounds R10 + R11 + R12.
+> Target: **v2.0.6/49 + OTA R12 + R13** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; **R13 (2026-09-15)** — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; tsc clean + **50/50 tests**; device verification pending: rounds R10 + R11 + R12 + R13.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
+
+---
+
+## snag round 13 — singleton WiFi link, token cycling, disconnect/remember-state, IP deck (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
+
+> Fixes from device round R1 (owner: remote window stuck on 4WD4M, flickering over
+> WiFi-only links): the WebSocket/state was per-hub-instance, so the Remote window
+> had NO socket. Fix = **singleton `wifiService.ts`** (one socket per car, `onTelemetry`/
+> `onStatus` subscription API mirroring `sppService`/`bleService`, same-URL reuse,
+> silent 5×3 s reconnect then error, only explicit `disconnect()` tears the link down —
+> screen unmount never kills it). Mode cycle is now canonical-token based
+> (`roboCarCatalog.ts`: shared `REMOTE_MODE_ORDER` 4WD4M→ESP_SER→PATH→OBS_US→OBS_IR→
+> MAN→AUTO→ESP_CLI→2WD1M + `nextRemoteModeToken` + `sortRemoteModes`; cycle NEVER falls
+> back to the first available pool model — the "stuck on 4WD4M" bug). Disconnect UX is
+> standardized (both screens show the same confirm and stop-safe copy) and
+> disconnect **no longer forgets** speed/servo/steer-limit/trim/PID/gimbal/telemetry/
+> sensor values or the saved mode (persists `modeId` first; WiFi-only links use the
+> `wifi:<ssid|ap|url>` memory key). ESP_SER deck grew an IP row + RSSI/signal +
+> UP/HEAP health (car v1.5.0 broadcasts `;IP=` on STATE + JSON `ip`/`signal`/
+> `uptime_ms`/`free_heap`; remote v1.2.0 shows `IP:` on its ESP_SER dashboard line 3).
+> App is JS-only (OTA after push — car + remote need a re-flash for the IP fields).
+
+- [ ] **R13-1 — Remote window drives over WiFi (THE flicker/stuck bug):** open Remote → connect WiFi (Router) or fallback AP → Remote window drives BOTH axes with live telemetry, no flicker; returning from Chrome/fullscreen or switching tabs keeps the link alive (unmount no longer kills the socket).
+- [ ] **R13-2 — cycle never lands on pool[0]:** cycle from any mode walks 4WD4M→ESP_SER→PATH→OBS_US→OBS_IR→MAN→AUTO→ESP_CLI→2WD1M, wrapping in order — including with only a subset LIVE on the car (previous builds jumped to the first live mode).
+- [ ] **R13-3 — mode list ordering:** every mode-picker (Tools dropdown + Remote NAV preview) lists modes in the shared fleet order with parked modes last-ish by their fixed rank — stable across sessions, no random pool order.
+- [ ] **R13-4 — standardized disconnect + stop:** the power/disconnect control on Tools AND the remote's red button both open the same confirm ("The car will stop safely before the link closes…"); confirming stops (S + SPD0) then drops the link; on WiFi the link actually closes (was: WS left dangling in one window).
+- [ ] **R13-5 — state remembered across power cycles:** set speed/servo/trim/PID + a mode → disconnect → power-cycle the app and the car → values and mode are restored from memory on the same car; nothing resets on disconnect.
+- [ ] **R13-6 — WiFi-only memory key:** with no BT MAC in range, tuning values still persist per car via the SSID/AP/URL key.
+- [ ] **R13-7 — ESP_SER IP + health deck:** Weblink card shows an IP row under mode/status (tappable → opens browser), RSSI/signal %, and UP/HEAP rows against car v1.5.0; pre-v1.5.0 car → request-state + signals still work, IP/health simply absent.
+- [ ] **R13-8 — remote ESP_SER IP line:** hand-held remote's ESP_SER dashboard line 3 reads `IP: <station|192.168.4.1>` with car v1.5.0 (old constancy: shows the WiFi summary).
+- [ ] **R13-9 — focus-only polling:** REQ_STATE is only sent while the Remote window is focused; recording/leading comes back instantly when re-focusing.
 
 ---
 

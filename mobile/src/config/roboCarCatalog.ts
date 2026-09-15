@@ -238,6 +238,57 @@ export function nextMode(from: CarMode): CarMode {
 }
 
 // -------------------------------------------------------------------
+// Fleet mode-cycling order (owner matrix 2026-09-15) — the ONE source of
+// truth for how the remote / app walk the 9 firmware modes. Mirrors the
+// ESP remote's state.cpp MODE_CMDS[] scroll order. Every consumer (Mode
+// Chooser browse, Remote nav preview, hub cycleMode) must use these
+// helpers so no screen invents its own order or falls back to pool[0].
+// -------------------------------------------------------------------
+export const REMOTE_MODE_ORDER = [
+  '4WD4M',
+  'ESP_SER',
+  'PATH',
+  'OBS_US',
+  'OBS_IR',
+  'MAN',
+  'AUTO',
+  'ESP_CLI',
+  '2WD1M',
+] as const
+
+function remoteOrderIndex(token: string): number {
+  const t = token.trim().toUpperCase()
+  const idx = REMOTE_MODE_ORDER.indexOf(t as (typeof REMOTE_MODE_ORDER)[number])
+  return idx
+}
+
+/**
+ * The mode token that follows `token` in the fleet order — ALWAYS advances
+ * and wraps, never falls back to a "default" mode (the old cycleMode could
+ * bounce to pool[0] when its id-lookup missed). Unknown / legacy tokens
+ * (BT) start from the head of the order (4WD4M) and move to its successor.
+ */
+export function nextRemoteModeToken(token: string): string {
+  const t = token.trim().toUpperCase()
+  const idx = remoteOrderIndex(t)
+  const base = idx === -1 ? 0 : idx
+  return REMOTE_MODE_ORDER[(base + 1) % REMOTE_MODE_ORDER.length]
+}
+
+/**
+ * Stable-sort a mode list (DB rows or bundled) into the fleet cycle order.
+ * Unknown/unmapped tokens drop to the tail. Used by the chooser, the
+ * remote nav preview and cycleMode so the on-screen order ALWAYS matches
+ * the car's physical scroll order.
+ */
+export function sortRemoteModes<T extends Pick<CarMode, 'token'>>(modes: Array<T>): Array<T> {
+  return [...modes].sort(
+    (a, b) => (remoteOrderIndex(a.token) === -1 ? 999 : remoteOrderIndex(a.token))
+      - (remoteOrderIndex(b.token) === -1 ? 999 : remoteOrderIndex(b.token)),
+  )
+}
+
+// -------------------------------------------------------------------
 // Product → car-mode resolution (per-package remotes)
 // -------------------------------------------------------------------
 

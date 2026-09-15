@@ -21,10 +21,22 @@ import { Feather } from '@expo/vector-icons'
 import { ActivityIndicator } from 'react-native'
 import type { WeblinkControlsProps } from './types'
 
+/** Format a `uptime_ms` value into a compact hh:mm:ss or mm:ss string. */
+function formatUptime(ms?: number): string {
+  if (ms == null || ms < 0) return '\u2014'
+  const secs = Math.floor(ms / 1000)
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 export function WeblinkControls({
   canControl, wifiConnected, activeMode, telemetry,
   onOpenWebPage, onEnterMode,
-  // v1.4.0 WiFi provisioning (optional — only the Remote window passes these)
+  // v1.4.0 WiFi provisioning (optional \u2014 only the Remote window passes these)
   btConnected = false, wifiSsid, setWifiSsid, wifiPassword, setWifiPassword,
   wifiProvisioning = false, onProvisionWifi, carApName, carSsid,
 }: WeblinkControlsProps) {
@@ -34,7 +46,7 @@ export function WeblinkControls({
   const provisionable = isServer && onProvisionWifi != null
   // A-8: the provisioning card defaults OPEN only when it can be used right
   // now (BT connected in ESP_SER); otherwise it stays collapsed to its header
-  // row so the deck fits — the owner's "measure the space and fit them"
+  // row so the deck fits \u2014 the owner's "measure the space and fit them"
   // requirement. Auto-expands the moment the BT link comes up.
   const [cardOpen, setCardOpen] = useState<boolean>(() => Boolean(btConnected && provisionable))
   useEffect(() => {
@@ -47,7 +59,7 @@ export function WeblinkControls({
 
   // Root is a bounded ScrollView (flex-1) so the card NEVER overflows the
   // remote deck in landscape when the provisioning card auto-expands (btConnected)
-  // — the deck scrolls instead (owner "measure the space and fit them" fix).
+  // \u2014 the deck scrolls instead (owner "measure the space and fit them" fix).
   return (
     <ScrollView
       className="mt-4 flex-1 rounded-2xl border border-line bg-card p-5 shadow-card"
@@ -67,7 +79,7 @@ export function WeblinkControls({
           <Text className="mt-1 text-[11px] leading-4 text-muted">
             {isServer
               ? 'The car hosts its own page (HTTP :80) and a WebSocket (:81). It joins the configured WiFi, or makes its own AP at 192.168.4.1 when that fails.'
-              : 'The car is the WiFi client — a browser / the website /tools deck acts as the control server. The app connects directly only in ESP_SER (AP) mode.'}
+              : 'The car is the WiFi client \u2014 a browser / the website /tools deck acts as the control server. The app connects directly only in ESP_SER (AP) mode.'}
           </Text>
         </View>
         <Pressable
@@ -91,11 +103,13 @@ export function WeblinkControls({
         </Text>
       </Pressable>
 
-      {/* Live JSON status from the WS link */}
+      {/* Live telemetry deck \u2014 structured rows from the car's WS JSON
+          (ip, rssi, signal, uptime_ms, free_heap).  IP is tappable to
+          open the car's hosted page (ESP_SER only). */}
       <View className="mt-4 rounded-xl bg-slate-900 px-4 py-3 shadow-inner">
         <View className="flex-row items-center justify-between">
           <Text className="font-mono text-xs font-bold uppercase tracking-wide text-slate-500">
-            Car status (WS)
+            Live telemetry · {activeMode.token}
           </Text>
           <View className="flex-row items-center gap-1.5">
             <View className={`h-2 w-2 rounded-full ${wifiConnected ? 'bg-emerald-500' : 'bg-border'}`} />
@@ -104,34 +118,96 @@ export function WeblinkControls({
             </Text>
           </View>
         </View>
+
         {hasStatus ? (
-          <View className="mt-1.5 flex-row flex-wrap items-end gap-x-4">
-            {telemetry.mode != null && (
-              <Text className="font-mono text-sm font-bold text-emerald-300">M:{telemetry.mode}</Text>
-            )}
-            {telemetry.status != null && (
-              <Text className="font-mono text-sm text-emerald-300">{telemetry.status}</Text>
-            )}
+          <View className="mt-2 gap-1.5">
+            {/* Row 1: Mode + Status */}
+            <View className="flex-row items-center gap-3">
+              {telemetry.mode != null && (
+                <Text className="font-mono text-xs font-bold text-emerald-300">
+                  MODE:{telemetry.mode}
+                </Text>
+              )}
+              {telemetry.status != null && (
+                <Text className="font-mono text-xs text-emerald-300">
+                  {telemetry.status}
+                </Text>
+              )}
+            </View>
+
+            {/* Row 2: Speed */}
             {telemetry.speed != null && (
-              <Text className="font-mono text-sm text-emerald-300">SPD {telemetry.speed}</Text>
+              <View className="flex-row items-center gap-3">
+                <Text className="font-mono text-xs text-emerald-300">
+                  SPD:{telemetry.speed}
+                </Text>
+              </View>
             )}
-            {telemetry.rssi != null && (
-              <Text className="font-mono text-sm text-slate-400">RSSI {telemetry.rssi} dBm</Text>
+
+            {/* Row 3: RSSI + Signal */}
+            {(telemetry.rssi != null || telemetry.signal != null) && (
+              <View className="flex-row items-center gap-3">
+                {telemetry.rssi != null && (
+                  <Text className="font-mono text-[11px] text-slate-400">
+                    RSSI:{telemetry.rssi}dBm
+                  </Text>
+                )}
+                {telemetry.signal != null && (
+                  <Text className="font-mono text-[11px] text-slate-400">
+                    SIG:{telemetry.signal}%
+                  </Text>
+                )}
+              </View>
             )}
-            {telemetry.ip != null && (
-              <Text className="font-mono text-sm text-slate-400">{telemetry.ip}</Text>
+
+            {/* Row 4: IP \u2014 tappable to open the car's hosted page (ESP_SER) */}
+            {(telemetry.ip || (wifiConnected && isServer)) && (
+              <Pressable
+                onPress={() => { if (wifiConnected && isServer) onOpenWebPage() }}
+                disabled={!wifiConnected || !isServer}
+                className="flex-row items-center gap-1.5"
+              >
+                <Feather
+                  name={wifiConnected && isServer ? 'external-link' : 'wifi'}
+                  size={11}
+                  color={wifiConnected && isServer ? '#93c5fd' : '#64748b'}
+                />
+                <Text
+                  className={`font-mono text-[11px] ${wifiConnected && isServer ? 'text-sky-300 underline' : 'text-slate-500'}`}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
+                  http://{telemetry.ip || '192.168.4.1'}
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Row 5: Uptime + Free heap */}
+            {(telemetry.uptimeMs != null || telemetry.freeHeap != null) && (
+              <View className="flex-row items-center gap-3">
+                {telemetry.uptimeMs != null && (
+                  <Text className="font-mono text-[10px] text-slate-500">
+                    UP:{formatUptime(telemetry.uptimeMs)}
+                  </Text>
+                )}
+                {telemetry.freeHeap != null && (
+                  <Text className="font-mono text-[10px] text-slate-500">
+                    HEAP:{Math.round(telemetry.freeHeap / 1024)}KB
+                  </Text>
+                )}
+              </View>
             )}
           </View>
         ) : (
-          <Text className="mt-1.5 font-mono text-sm text-slate-500">
-            {wifiConnected ? 'Waiting for the car’s status…' : '—'}
+          <Text className="mt-2 font-mono text-sm text-slate-500">
+            {wifiConnected ? "Waiting for the car\u2019s status\u2026" : '\u2014'}
           </Text>
         )}
       </View>
 
-      {/* ── v1.4.0 / A-8 WiFi provisioning (ESP_SER only): send SSID/password over BT.
+      {/* \u2500\u2500 v1.4.0 / A-8 WiFi provisioning (ESP_SER only): send SSID/password over BT.
           Collapsible + compact so the card fits the deck without scrolling
-          (owner: "measure the available space and fit them properly"). ── */}
+          (owner: "measure the available space and fit them properly"). \u2500\u2500 */}
       {provisionable && (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -224,7 +300,7 @@ export function WeblinkControls({
                   <Text className="text-xs font-black text-white">
                     {!btConnected
                       ? 'Connect car over Bluetooth first'
-                      : wifiProvisioning ? 'Sending to car…'
+                      : wifiProvisioning ? 'Sending to car\u2026'
                       : 'Send WiFi to car'}
                   </Text>
                 </Pressable>
@@ -249,8 +325,8 @@ export function WeblinkControls({
       )}
 
       <Text className="mt-3 text-[11px] leading-4 text-muted">
-        Driving below works over the same link — direction letters and SPD go to the car’s
-        WebSocket, exactly like the web page’s own buttons.
+        Driving below works over the same link — direction letters and SPD go to the car&apos;s
+        WebSocket, exactly like the web page&apos;s own buttons.
       </Text>
     </ScrollView>
   )

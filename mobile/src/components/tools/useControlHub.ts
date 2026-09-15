@@ -14,14 +14,15 @@
 // remote can be tested/debugged in a browser without hardware.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useFocusEffect } from '@react-navigation/native'
+import { useFocusEffect, useIsFocused } from '@react-navigation/native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { RootStackParamList } from '../../navigation/types'
 import { APP_VERSION } from '../../config/site'
 import { sppService, type SppDevice } from '../../services/sppService'
 import { bleService } from '../../services/bleService'
+import { wifiService } from '../../services/wifiService'
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from './types'
-import { LOCAL_CAR_MODES, type CarMode } from '../../config/roboCarCatalog'
+import { LOCAL_CAR_MODES, type CarMode, nextRemoteModeToken, sortRemoteModes } from '../../config/roboCarCatalog'
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
@@ -171,9 +172,6 @@ export function useControlHub(routeCategory?: string) {
   const [showSettings, setShowSettings] = useState(false)
 
   const mountedRef = useRef(true)
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const reconnectAttemptsRef = useRef(0)
   const manualCloseRef = useRef(false)
   const lastDriveCmdAtRef = useRef<Record<string, number>>({})
   const connectionMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -211,7 +209,16 @@ export function useControlHub(routeCategory?: string) {
   }, [])
 
   // Restore remembered device prefs when a device address becomes available.
-  const addressForMemory = sppService.currentAddress ?? sppService.getConnectionInfo().address ?? null
+  // WiFi-only links have no BT MAC, so the remembered-key falls back to the
+  // car's wifi identity (`wifi:<ssid|ap|url>`): a WiFi car keeps its mode /
+  // speed / settings across sessions AND across power cycles (bug report
+  // 2026-09-15: "remember state"). BT links keep using the MAC (primary).
+  const wifiIdentity = wifiConnected && wifiUrl.trim()
+    ? (carSsid || carApName || wifiUrl.trim())
+    : null
+  const addressForMemory = sppService.currentAddress
+    ?? sppService.getConnectionInfo().address
+    ?? (wifiIdentity ? `wifi:${wifiIdentity}` : null)
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null)
   useFocusEffect(
     React.useCallback(
@@ -301,8 +308,10 @@ export function useControlHub(routeCategory?: string) {
   }, [])
 
   // Cleanup on unmount — do NOT disconnect the singleton services; the
-  // BLE/SPP connection must survive navigation between screens. Only
-  // explicit user action (handleDisconnect) should tear down the transport.
+  // BLE/SPP/WiFi connection must survive navigation between screens (and
+  // between ToolsScreen and the Remote window). Only explicit user action
+  // (handleDisconnect) should tear down a transport. wifiService owns its
+  // socket + reconnect timer, so there is nothing to tear down here.
   useEffect(() => {
     return () => {
       mountedRef.current = false
@@ -310,14 +319,6 @@ export function useControlHub(routeCategory?: string) {
       if (connectionMsgTimerRef.current) {
         clearTimeout(connectionMsgTimerRef.current)
         connectionMsgTimerRef.current = null
-      }
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current)
-        reconnectTimerRef.current = null
-      }
-      if (wsRef.current) {
-        try { wsRef.current.close() } catch { /* ignore */ }
-        wsRef.current = null
       }
     }
   }, [])
@@ -394,6 +395,7 @@ export function useControlHub(routeCategory?: string) {
     }
     const offSpp = sppService.onTelemetry(applyTelemetry)
     const offBle = bleService.onTelemetry(applyTelemetry)
+    const offWifi = wifiService.onTelemetry(applyTelemetry)
     const offStatus = sppService.onStatus((kind, message) => {
       if (!mountedRef.current) return
       switch (kind) {
@@ -478,7 +480,53 @@ export function useControlHub(routeCategory?: string) {
         }
       }
     })
-    return () => { offSpp(); offBle(); offStatus(); offBleStatus() }
+    // WiFi status — mirrors SPP/BLE handling so a shared link updates every
+    // hub instance (Remote window + Control Panel) from the ONE socket.
+    const offWifiStatus = wifiService.onStatus((kind, message) => {
+      if (!mountedRef.current) return
+      switch (kind) {
+        case 'connecting':
+          setConnecting(true)
+          setError(null)
+          break
+        case 'connected':
+          setConnected(true)
+          setWifiConnected(true)
+          setConnecting(false)
+          setError(null)
+          setShowSppsRetry(false)
+          // A-7/R-10: fresh link — drop stale stub/avail truth from the old
+          // session (same reset the SPP handler does on its own reconnect).
+          setCarStubMap({})
+          setCarAvailMap({})
+          showConnectionMessage('WiFi connected', 'success')
+          setTimeout(() => {
+            wifiService.requestState().catch(() => {})
+          }, 200)
+          break
+        case 'disconnected':
+          setWifiConnected(false)
+          setConnecting(false)
+          // Only clear the global "connected" if SPP/BLE are also down.
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setConnected(false)
+            setDeviceName('')
+          }
+          break
+        case 'error':
+          setWifiConnected(false)
+          setConnecting(false)
+          setError(message ?? 'WiFi connection lost')
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setConnected(false)
+            setDeviceName('')
+          }
+          break
+        default:
+          break
+      }
+    })
+    return () => { offSpp(); offBle(); offStatus(); offBleStatus(); offWifi(); offWifiStatus() }
     // NOTE: deps are intentionally empty — activeMode is read via
     // carModesRef (fresh on every telemetry frame) and setActiveMode is a
     // stable setState.  The old [activeMode] dependency tore down and
@@ -492,9 +540,12 @@ export function useControlHub(routeCategory?: string) {
   // Periodic REQ_STATE — keeps the app synced with the car's current mode,
   // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
   // the physical mode button is pressed, so we poll every 2 s.
-  // Works for SPP, BLE, and WiFi transports.
+  // Works for SPP, BLE, and WiFi transports. Polling only runs while THIS
+  // hub is the focused screen, so the Tools+Remote pair never sends
+  // duplicate REQ_STATEs to the same car (bug: two wsRefs polled before).
+  const isFocused = useIsFocused()
   useEffect(() => {
-    if (!connected) return
+    if (!isFocused || !connected) return
     const id = setInterval(() => {
       if (sppService.isConnected) {
         sppService.requestState().catch(() => {})
@@ -502,12 +553,12 @@ export function useControlHub(routeCategory?: string) {
       if (bleService.isConnected) {
         bleService.requestState().catch(() => {})
       }
-      if (wifiConnected && wsRef.current) {
-        try { wsRef.current.send('REQ_STATE\n') } catch { /* ignore */ }
+      if (wifiService.isConnected) {
+        wifiService.requestState().catch(() => {})
       }
     }, 2000)
     return () => clearInterval(id)
-  }, [connected, wifiConnected])
+  }, [isFocused, connected, wifiConnected])
 
   // Scan for SPP devices (Classic Bluetooth)
   const handleScan = useCallback(async () => {
@@ -583,179 +634,31 @@ export function useControlHub(routeCategory?: string) {
     }
   }, [])
 
-  // WiFi WebSocket
-  const openSocket = useCallback((url: string) => {
-    setConnecting(true)
-    let socket: WebSocket
-    try {
-      socket = new WebSocket(url)
-    } catch (e) {
-      setConnecting(false)
-      setError(e instanceof Error ? e.message : 'WiFi connect failed')
-      return
-    }
-    wsRef.current = socket
-    socket.onopen = () => {
-      reconnectAttemptsRef.current = 0
-      setWifiConnected(true)
-      setConnected(true)
-      setConnecting(false)
-      setError(null)
-      setShowSppsRetry(false)
-      showConnectionMessage('WiFi connected', 'success')
-    }
-    socket.onmessage = (event) => {
-      try {
-        // Try JSON first (WiFi car e.g. WebServerComm broadcasts a JSON object).
-        const json = JSON.parse(event.data)
-        // Build telemetry directly from the JSON fields — parseTelemetryLine
-        // expects STATE;key=val lines and would fail on a JSON string.
-        const t: CarTelemetry = {}
-        if (typeof json.mode === 'string') t.mode = json.mode
-        if (typeof json.speed === 'number') t.speed = json.speed
-        if (typeof json.trim === 'number') t.trim = json.trim
-        if (typeof json.status === 'string') t.status = json.status
-        if (typeof json.kp === 'number') t.kp = json.kp
-        if (typeof json.ki === 'number') t.ki = json.ki
-        if (typeof json.kd === 'number') t.kd = json.kd
-        if (typeof json.out === 'number') t.out = json.out
-        if (typeof json.off === 'number') t.off = json.off
-        if (typeof json.angle === 'number') t.angle = json.angle
-        // v1.4.0 provisioning truth from the car's status JSON: configured
-        // SSID (never the password) + AP fallback broadcast id.
-        if (typeof json.ssid === 'string') setCarSsid(json.ssid || null)
-        if (typeof json.ap === 'string') setCarApName(json.ap || null)
-        // A-7: JSON `stub` describes the car's CURRENT mode — record per token
-        // (X-8: keys are canonical — legacy BT → 4WD4M).
-        if (typeof json.stub === 'boolean' && typeof json.mode === 'string') {
-          const tok = canonicalCarToken(json.mode)
-          if (tok) setCarStubMap((prev) => (prev[tok] === json.stub ? prev : { ...prev, [tok]: json.stub as boolean }))
-        }
-        // R-10: WS JSON `caps` object — full per-token availability table.
-        if (json.caps && typeof json.caps === 'object') {
-          setCarAvailMap((prev) => {
-            let next = prev
-            for (const [k, v] of Object.entries(json.caps as Record<string, unknown>)) {
-              const tok = canonicalCarToken(k)
-              const val = String(v).trim().toUpperCase()
-              if (!tok || !val) continue
-              next = next[tok] === val ? next : { ...next, [tok]: val }
-            }
-            return next
-          })
-        }
-        if (Object.keys(t).length > 0) {
-          setTelemetry((prev) => ({ ...prev, ...t }))
-          if (t.mode) {
-            setCarModeId(t.mode)
-            const modeUp = t.mode.toUpperCase()
-            const matched = carModesRef.current.find((m) => m.id === t.mode || m.token.toUpperCase() === modeUp)
-            if (matched) setActiveMode(matched)
-          }
-          if (!navActiveRef.current && t.speed != null) {
-            const mag = Math.abs(t.speed)
-            if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
-          }
-          if (t.trim != null) setTrim(t.trim)
-          if (t.status && isAllowedDriveStatus(t.status)) {
-            setDriveStatus(t.status)
-            const d = statusToDirection(t.status)
-            if (d) setDriveDir(d)
-          }
-        }
-        if (json.sensors) setSensorData(prev => ({ ...prev, ...json.sensors }))
-      } catch {
-        // Non-JSON: try STATE/SPD lines (same parser as SPP).
-        try {
-          const t = parseTelemetryLine(event.data)
-          if (Object.keys(t).length > 0) {
-            setTelemetry((prev) => ({ ...prev, ...t }))
-            if (t.mode) {
-              const canonical = canonicalCarToken(t.mode)
-              setCarModeId(canonical)
-              const matched = carModesRef.current.find((m) => m.id === canonical.toLowerCase() || m.token === canonical)
-              if (matched) setActiveMode(matched)
-            }
-            // A-7: WS STATE lines carry CAP=STUB too (same car truth as SPP;
-            // keys canonical — legacy BT → 4WD4M).
-            if (t.stub !== undefined && t.mode) {
-              const tok = canonicalCarToken(t.mode)
-              if (tok) setCarStubMap((prev) => (prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! }))
-            }
-            // R-10: WS STATE/CAPS lines may carry the full availability table.
-            if (t.caps && Object.keys(t.caps).length > 0) {
-              setCarAvailMap((prev) => {
-                let next = prev
-                for (const [tok, val] of Object.entries(t.caps!)) {
-                  if (!tok) continue
-                  next = next[tok] === val ? next : { ...next, [tok]: val }
-                }
-                return next
-              })
-            }
-            // R-4: same NACK handling as the SPP/BLE path.
-            if (t.nackError === 'UNKNOWN_MODE' && t.nackArg) handleNackRef.current?.(t.nackArg)
-            if (!navActiveRef.current && t.speed != null) {
-              const mag = Math.abs(t.speed)
-              if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
-            }
-            if (t.trim != null) setTrim(t.trim)
-            if (t.status && isAllowedDriveStatus(t.status)) {
-              setDriveStatus(t.status)
-              const d = statusToDirection(t.status)
-              if (d) setDriveDir(d)
-            }
-          }
-        } catch { /* ignore */ }
-      }
-    }
-    socket.onclose = () => {
-      setWifiConnected(false)
-      setConnecting(false)
-      if (wsRef.current === socket) {
-        wsRef.current = null
-      }
-      if (manualCloseRef.current) return
-      if (reconnectAttemptsRef.current >= 5) {
-        setError('WiFi connection lost — reconnection failed.')
-        return
-      }
-      reconnectAttemptsRef.current += 1
-      reconnectTimerRef.current = setTimeout(() => openSocket(url), 3000)
-    }
-    socket.onerror = () => { /* onclose owns cleanup */ }
-  }, [showConnectionMessage])
-
   const handleWifiConnect = useCallback(() => {
     setError(null)
     if (!wifiUrl) {
       setError('Enter the car WiFi address (e.g. ws://192.168.4.1:81)')
       return
     }
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current)
-      reconnectTimerRef.current = null
-    }
     const wsUrl = wifiUrl.startsWith('ws://') || wifiUrl.startsWith('wss://') ? wifiUrl : `ws://${wifiUrl}`
     manualCloseRef.current = false
-    reconnectAttemptsRef.current = 0
-    openSocket(wsUrl)
-  }, [wifiUrl, openSocket, showConnectionMessage])
-
-  const handleWifiDisconnect = useCallback(() => {
-    manualCloseRef.current = true
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current)
-      reconnectTimerRef.current = null
-    }
-    // Safe-stop: send stop commands before closing
-    try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send('S\n')
-        wsRef.current.send('SPD0\n')
+    // Delegated to the shared singleton (the ONE socket every hub reads);
+    // status events (connecting/connected/disconnected) drive the UI.
+    wifiService.connect(wsUrl).catch((e) => {
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : 'WiFi connect failed')
       }
-    } catch { /* ignore — connection may already be dead */ }
-    wsRef.current?.close()
+    })
+  }, [wifiUrl])
+
+  const handleWifiDisconnect = useCallback(async () => {
+    manualCloseRef.current = true
+    // Safe-stop: send stop commands before closing (only over the live socket).
+    if (wifiService.isConnected) {
+      try { await wifiService.sendLine('S') } catch { /* ignore — link may already be dead */ }
+      try { await wifiService.sendLine('SPD0') } catch { /* ignore */ }
+    }
+    await wifiService.disconnect()
     setWifiConnected(false)
     setError(null)
   }, [])
@@ -841,20 +744,27 @@ export function useControlHub(routeCategory?: string) {
   )
 
   const handleDisconnect = useCallback(async () => {
+    // Persist everything before tearing down so the car remembers for next
+    // power cycle (owner: "remember state after restart").
+    persistPrefsRef.current?.({ modeId: activeMode.id })
     manualCloseRef.current = true
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current)
-      reconnectTimerRef.current = null
-    }
+    // Safe-stop: send neutral commands over every live transport.
     try { await sppService.sendLine('SPD0') } catch { /* ignore */ }
     try { await sppService.sendLine('SERVO90') } catch { /* ignore */ }
-    await sppService.disconnect()
     if (bleService.isConnected) {
       try { await bleService.sendLine('SPD0') } catch { /* ignore */ }
       try { await bleService.sendLine('SERVO90') } catch { /* ignore */ }
       await bleService.disconnect()
     }
-    wsRef.current?.close()
+    if (wifiService.isConnected) {
+      try { await wifiService.sendLine('SPD0') } catch { /* ignore */ }
+      try { await wifiService.sendLine('SERVO90') } catch { /* ignore */ }
+      await wifiService.disconnect()
+    }
+    await sppService.disconnect()
+    // Drive UI reset: only the live drive state — speed / servo / PID /
+    // gimbal / telemetry stay at their current values so they restore on
+    // reconnect (bug fix 2026-09-15: "remember after power cycle").
     setConnected(false)
     setWifiConnected(false)
     setDeviceName('')
@@ -864,21 +774,7 @@ export function useControlHub(routeCategory?: string) {
     setNavActive(false)
     setNavField('none')
     setPreviewMode(null)
-    setSpeed(170)
-    setServo(90)
-    setSteerLimit(90)
-    setTrim(0)
-    setPidKp(12.0)
-    setPidKi(3.0)
-    setPidKd(1.0)
-    setPidOut(0)
-    setPidOff(0)
-    setGimbalPan(90)
-    setGimbalTilt(90)
-    setTargetAltitude(0)
-    setTelemetry({})
-    setSensorData({ temperature: 0, humidity: 0, soilMoisture: 0, lightLevel: 0, airQuality: 0, distance: 0 })
-  }, [])
+  }, [activeMode])
 
   // Send a command over the right transport(s) for the ACTIVE mode; no-ops
   // when nothing is linked.
@@ -893,7 +789,7 @@ export function useControlHub(routeCategory?: string) {
   //     path accepts drive in any mode).
   const sendCommand = useCallback((cmd: string) => {
     const btLive = sppService.isConnected || bleService.isConnected
-    const wsLive = Boolean(wifiConnected && wsRef.current)
+    const wsLive = wifiService.isConnected
     const onlyBt = btLive && !wsLive
     const onlyWs = wsLive && !btLive
     const modeUsesBt = activeMode.transport.includes('classic-bt') || activeMode.transport.includes('ble')
@@ -907,8 +803,8 @@ export function useControlHub(routeCategory?: string) {
     if (goBt && connected && bleService.isConnected) {
       void bleService.sendLine(cmd).catch(() => {})
     }
-    if (goWs && wsRef.current) {
-      try { wsRef.current.send(cmd + '\n') } catch { /* ignore */ }
+    if (goWs && wifiService.isConnected) {
+      void wifiService.sendLine(cmd).catch(() => {})
     }
   }, [connected, wifiConnected, activeMode])
 
@@ -1024,19 +920,18 @@ export function useControlHub(routeCategory?: string) {
     setDriveStatus(`Mode:${MODE_NAME_FOR_TOKEN[m.token] ?? m.token}`)
     sendCommand('S')
     sendCommand(m.token)
+    // Persist the selected mode so it restores on reconnect / next power cycle.
+    persistPrefsRef.current?.({ modeId: m.id })
   }, [sendCommand])
 
   const cycleMode = useCallback(() => {
-    // ESP32 remote mode scroll order (state.cpp MODE_CMDS[] — extended fleet
-    // order) — cycle walks ALL 9 modes and always advances/wraps (owner
-    // decision 2026-09-15: every mode is selectable; remote parity).
-    const REMOTE_CYCLE_ORDER = ['4WD4M', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M']
-    const list = (carModes.length > 0 ? carModes : LOCAL_CAR_MODES)
-      .slice()
-      .sort((a, b) => REMOTE_CYCLE_ORDER.indexOf(a.token) - REMOTE_CYCLE_ORDER.indexOf(b.token))
-    const pool = list.length > 0 ? list : LOCAL_CAR_MODES
-    const idx = pool.findIndex((m) => m.id === activeMode.id)
-    selectMode(idx === -1 ? pool[0] : pool[(idx + 1) % pool.length])
+    // Remote fleet cycle order — always advances and wraps. Unknown tokens
+    // roll forward from the head of the order, never land on pool[0].
+    const pool = (carModes.length > 0 ? sortRemoteModes(carModes) : [...LOCAL_CAR_MODES])
+    const nextToken = nextRemoteModeToken(activeMode.token)
+    const next = pool.find((m) => canonicalCarToken(m.token) === nextToken)
+      ?? [...LOCAL_CAR_MODES].find((m) => canonicalCarToken(m.token) === nextToken)
+    if (next) selectMode(next)
   }, [activeMode, selectMode, carModes])
 
   const toggleRelay = useCallback((i: number) => {
