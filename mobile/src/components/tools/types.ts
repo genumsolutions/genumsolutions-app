@@ -64,6 +64,11 @@ export type DevicePrefs = {
       The password is deliberately NOT persisted — it lives only in flight
       and in the car's NVS. */
   lastWifiSsid: string | null
+  /** A-27 (device-round-5): per-device mirror of the saved-router list
+      (names only, from the car's `networks` JSON / optimistic edits) so the
+      WiFi & Router panel restores instantly while the car is unpaired.
+      The car remains the source of truth; passwords are never stored here. */
+  savedRouters: string[] | null
 }
 
 /** Per-device storage key prefix. */
@@ -236,6 +241,36 @@ export type WeblinkControlsProps = {
   onOpenWebPage: () => void
   /** Switches the car into this package's mode (token ESP_SER / ESP_CLI). */
   onEnterMode: () => void
+}
+
+/**
+ * A-26/A-27/A-28 (device-round-5): the ONE "WiFi & Router" panel shown when
+ * the drive pads are hidden — saved-router list (car truth names, with
+ * switch + delete), an Add form (SSID + password) and the active SSID/IP.
+ * Replaces the retired Settings WiFi card + WeblinkControls card + the
+ * "Pad hidden" placeholder. Keyboard-safe (keyboardShouldPersistTaps).
+ */
+export type RouterPanelProps = {
+  canControl: boolean
+  /** True when any transport is live (BT or WS) — gates the send buttons. */
+  linked: boolean
+  /** Car's active SSID (JSON `ssid` / optimistic provisioning) — null when
+      the car is on its compile-time default / AP fallback. */
+  carSsid: string | null
+  /** Car's AP-fallback broadcast id (JSON `ap`). */
+  carApName: string | null
+  /** Car's reachable IP (tappable → opens the hosted web page). */
+  ip: string | null
+  /** Saved-router names mirror (car `networks` JSON, optimistic edits,
+      per-device savedRouters). Names only — never passwords. */
+  networks: string[]
+  /** Fires when the car switches its ACTIVE router (ROUTERS;USE;<ssid>). */
+  onUse: (ssid: string) => void
+  /** Fires on Add — ROUTERS;ADD;<ssid>;<pass> reaches the car over any link. */
+  onAdd: (ssid: string, pass: string) => void
+  /** Fires on Delete — ROUTERS;DEL;<ssid>. */
+  onDelete: (ssid: string) => void
+  onOpenWebPage: () => void
 }
 
 export type TwoWd1mExtrasProps = {

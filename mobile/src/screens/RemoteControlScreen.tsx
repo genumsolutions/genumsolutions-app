@@ -16,7 +16,7 @@
 // Drive controls (joystick/d-pad) are delegated to DriveControls.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from 'react-native'
+import { Platform, Pressable, ScrollView, Text, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -32,7 +32,7 @@ import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { SensorGrid } from '../components/tools/SensorGrid'
 import { DroneControls } from '../components/tools/DroneControls'
-import { WeblinkControls } from '../components/tools/WeblinkControls'
+import { RouterPanel } from '../components/tools/RouterPanel'
 import { LOCAL_CAR_MODES, type CarMode, sortRemoteModes } from '../config/roboCarCatalog'
 import { SPEED_MIN, SPEED_MAX, SPEED_STEP, canonicalCarToken, modeAvailStatus } from '../services/carProtocol'
 import type { SafetyLimits } from '../components/tools/types'
@@ -53,6 +53,21 @@ const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
 function clampStep(value: number, min: number, max: number, step: number): number {
   const v = Math.round(value / step) * step
   return Math.max(min, Math.min(max, v))
+}
+
+/**
+ * A-25 (device-round-5): the BT device name shown in the header must be
+ * FRIENDLY — never a raw hex address. SPP scans can resolve to the MAC
+ * fallback (sppService `device.name ?? device.address`); here a MAC-shaped
+ * string becomes a neutral label and underscores are prettified into spaces
+ * (`WIRELESS_CAR` → `WIRELESS CAR`).
+ */
+function friendlyBtName(name: string): string {
+  const n = (name || '').trim()
+  if (!n) return ''
+  const hexMac = /^([0-9A-Fa-f]{2}([:-])){5}[0-9A-Fa-f]{2}$/.test(n)
+  if (hexMac || n.length <= 2) return 'ESP32 Car'
+  return n.replace(/_/g, ' ')
 }
 
 /** Small −/+ stepper pill for the settings dropdown. */
@@ -237,10 +252,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     import('react-native').then(({ Linking }) => { Linking.openURL(url) })
   }, [wifiConnected, telemetry.ip])
 
-  const handleEnterWeblinkMode = useCallback(() => {
-    hub.sendCommand(activeMode.token)
-  }, [hub, activeMode.token])
-
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false)
   // Pads are the primary drive surface — show them by default for every mode;
@@ -331,39 +342,13 @@ export function RemoteControlScreen({ navigation }: Props) {
 
           <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
 
-          {/* A-14: the link indicator STAYS MOUNTED and only swaps text/colour —
-            no mount/unmount churn while the link recovers (was a flicker
-            source when `linked` flapped during reconnect). */}
-          <View className="flex-row items-center gap-1.5">
-            <View className={`h-2 w-2 shrink-0 rounded-full ${linked ? 'bg-green-400' : 'bg-slate-600'}`} />
-            <Text numberOfLines={1} className={`max-w-[80px] shrink-0 text-[10px] font-bold ${linked ? 'text-slate-300' : 'text-slate-500'}`}>
-              {linked ? (deviceName || 'Connected') : 'No link'}
-            </Text>
-            {/* A-21: persistent IP chip for ESP_SER — always visible regardless of
-                pad Show/Hide so the user can reach the car's hosted web page even
-                when the drive deck is hidden. Shows live telemetry.ip or the
-                AP fallback 192.168.4.1 when the car is in its own AP mode. */}
-            {activeMode.id === 'website-server' && (
-              <Pressable
-                onPress={handleOpenWebPage}
-                disabled={!wifiConnected}
-                accessibilityRole="button"
-                accessibilityLabel={`Open car web page at ${telemetry.ip || '192.168.4.1'}`}
-                hitSlop={4}
-                className="ml-1 shrink-0 flex-row items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1"
-              >
-                <Feather name={wifiConnected ? 'external-link' : 'wifi'} size={10} color={wifiConnected ? '#93c5fd' : '#64748b'} />
-                <Text
-                  className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-300' : 'text-slate-500'}`}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  {telemetry.ip || '192.168.4.1 (AP)'}
-                </Text>
-              </Pressable>
-            )}
-
-          </View>
+          {/* A-25: friendly BT name right of "Remote" — NEVER a raw hex
+              address (sppService falls back to the MAC when a scan reports
+              no name). Underscores prettify to spaces: WIRELESS_CAR →
+              WIRELESS CAR. */}
+          <Text numberOfLines={1} className="max-w-[120px] shrink-0 text-[11px] font-bold text-sky-300">
+            {linked ? (friendlyBtName(deviceName) || 'Connected') : 'No link'}
+          </Text>
 
           {isRobocar && (
             <View className="flex-row items-center gap-2">
@@ -409,6 +394,34 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           )}
         </View>
+
+        {/* ── A-25 sub-header: friendly name above the tappable broadcasting
+            IP. Only for the wireless car's ESP_SER mode (hosted page exists).
+            Replaces the old top-bar IP chip (A-21). ── */}
+        {isRobocar && activeMode.id === 'website-server' && (
+          <View className="mt-1 flex-shrink-0 flex-row items-center justify-between px-1">
+            <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+              <View className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? 'bg-green-400' : 'bg-slate-600'}`} />
+              <Text numberOfLines={1} ellipsizeMode="middle" className="min-w-0 flex-1 text-[9px] font-bold text-slate-300">
+                {linked ? (friendlyBtName(deviceName) || 'Connected') : 'No link'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={handleOpenWebPage}
+              disabled={!wifiConnected}
+              accessibilityRole="link"
+              accessibilityLabel={`Open car web page at ${telemetry.ip || '192.168.4.1'}`}
+              hitSlop={6}
+              className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
+            >
+              <Feather name={wifiConnected ? 'external-link' : 'wifi'} size={10} color={wifiConnected ? '#93c5fd' : '#64748b'} />
+              <Text className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-300' : 'text-slate-500'}`} numberOfLines={1}>
+                {telemetry.ip || '192.168.4.1'}
+                {!telemetry.ip && wifiConnected ? '' : !telemetry.ip ? ' (AP)' : ''}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ── D-pad / Joystick / Hide toggle — below top bar (A-19) ── */}
         {isRobocar && (
@@ -513,26 +526,23 @@ export function RemoteControlScreen({ navigation }: Props) {
                 compact
                 oledSlot={oledSlot}
               />
-            ) : activeMode.controls.includes('weblink') ? (
-              /* A-13: the Weblink card IS the chrome — the old double
-                  border/bg/p-2 wrapper is gone (one chrome level, no
-                  horizontal overflow); the card can no longer spill past
-                  the drive-deck bounds. */
-              <WeblinkControls
-                canControl={canControl}
-                wifiConnected={wifiConnected}
-                activeMode={activeMode}
-                telemetry={telemetry}
-                onOpenWebPage={handleOpenWebPage}
-                onEnterMode={handleEnterWeblinkMode}
-              />
             ) : (
-              <View className="flex-1 items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4">
-                <Feather name="eye-off" size={20} color="#64748b" />
-                <Text className="mt-2 text-center text-[11px] text-slate-400">
-                  Pad hidden.{'\n'}Use the toggle row above to re-enable.
-                </Text>
-              </View>
+              /* A-26: Hide now hides BOTH pads and shows the ONE organized
+                  WiFi & Router panel (saved list with Switch/Delete, Add form,
+                  active SSID + tappable IP). The retired WeblinkControls card
+                  and the "Pad hidden" placeholder are gone. */
+              <RouterPanel
+                canControl={canControl}
+                linked={linked}
+                carSsid={hub.carSsid}
+                carApName={hub.carApName}
+                ip={telemetry.ip ?? null}
+                networks={hub.carNetworks}
+                onUse={hub.routerUse}
+                onAdd={hub.routerAdd}
+                onDelete={hub.routerDelete}
+                onOpenWebPage={handleOpenWebPage}
+              />
             )}
             {/* E-stop FAB */}
             <Pressable
@@ -595,74 +605,6 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Text className="mt-1 text-[8px] leading-3 text-slate-500">
                 Steering &amp; trim: 2WD1M only.
               </Text>
-            )}
-
-            {/* A-20: WiFi provisioning (ESP_SER + BT-gated) — moved from
-                WeblinkControls to Settings so it doesn't consume deck space. */}
-            {activeMode.id === 'website-server' && connected && (
-              <View className="mt-2 border-t border-white/10 pt-2">
-                <View className="flex-row items-center gap-1.5">
-                  <Feather name="share" size={12} color="#93c5fd" />
-                  <Text className="text-[10px] font-black uppercase tracking-wide text-sky-300">
-                    WiFi setup
-                  </Text>
-                </View>
-                <Text className="mt-0.5 text-[9px] leading-3 text-slate-400" numberOfLines={2}>
-                  Send router credentials to the car over Bluetooth — saved on the car.
-                </Text>
-                <TextInput
-                  value={hub.wifiSsid}
-                  onChangeText={hub.setWifiSsid}
-                  editable={!hub.wifiProvisioning}
-                  placeholder="WiFi name (SSID)"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  className="mt-1.5 h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[11px] text-white"
-                  placeholderTextColor="#64748b"
-                />
-                <TextInput
-                  value={hub.wifiPassword}
-                  onChangeText={hub.setWifiPassword}
-                  editable={!hub.wifiProvisioning}
-                  placeholder="WiFi password"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                  returnKeyType="send"
-                  className="mt-1 h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[11px] text-white"
-                  placeholderTextColor="#64748b"
-                />
-                <Pressable
-                  onPress={() => { Vibration.vibrate(10); void hub.handleWifiProvision() }}
-                  disabled={hub.wifiProvisioning || !(hub.wifiSsid ?? '').trim()}
-                  className="mt-1.5 h-8 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 disabled:opacity-50"
-                >
-                  {hub.wifiProvisioning ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Feather name="upload" size={12} color="#fff" />
-                  )}
-                  <Text className="text-[10px] font-black text-white">
-                    {hub.wifiProvisioning ? 'Sending…' : 'Send WiFi to car'}
-                  </Text>
-                </Pressable>
-                {(hub.carSsid || hub.carApName) && (
-                  <View className="mt-1.5 flex-row items-center gap-3">
-                    {hub.carSsid ? (
-                      <Text className="min-w-0 flex-1 text-[9px] font-bold text-sky-300" numberOfLines={1} ellipsizeMode="middle">
-                        Car WiFi: {hub.carSsid}
-                      </Text>
-                    ) : null}
-                    {hub.carApName ? (
-                      <Text className="min-w-0 flex-1 text-[9px] font-bold text-sky-300" numberOfLines={1} ellipsizeMode="middle">
-                        AP: {hub.carApName}
-                      </Text>
-                    ) : null}
-                  </View>
-                )}
-              </View>
             )}
           </ScrollView>
         </>
