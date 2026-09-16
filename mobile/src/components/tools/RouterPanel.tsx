@@ -2,9 +2,9 @@
 // RouterPanel — the ONE "WiFi & Router" panel of the game-remote deck
 // (device-round-5, A-26/A-27/A-28).
 //
-// Shown when the drive pads are HIDDEN. Replaces the retired Settings
-// WiFi card, the WeblinkControls card and the "Pad hidden" placeholder.
-// It renders:
+// Shown when the drive pads are HIDDEN (ESP_SER / website-server modes
+// only — round-6: other hidden modes show the "Pad hidden" placeholder).
+// Renders:
 //   • the active connection (car SSID + reachable IP, IP tappable → the
 //     car's hosted web page),
 //   • the saved-router LIST (names mirror — car `networks` JSON +
@@ -20,6 +20,11 @@
 // A-28 keyboard safety: the Add form sits in a KeyboardAvoidingView +
 // ScrollView with keyboardShouldPersistTaps="handled" so the SSID /
 // password inputs always scroll above the keyboard on a phone.
+//
+// Round-6 skin: fully theme-token based (dark: exact replacements for the
+// previous hard-wired slate-900/white text), legible 10-12px type, and the
+// footer text now ships REAL characters (em dash / apostrophe) instead of
+// literal \u2014 / &apos; escapes that used to render verbatim.
 // =====================================================================
 import React from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
@@ -54,7 +59,7 @@ export function RouterPanel({
     >
       <ScrollView
         className="mt-2 min-h-0 flex-1 rounded-2xl border border-line bg-card p-3 shadow-card"
-        contentContainerStyle={{ paddingBottom: 8 }}
+        contentContainerStyle={{ paddingBottom: 10 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -64,20 +69,20 @@ export function RouterPanel({
           <Text className="text-xs font-black uppercase tracking-widest text-navy">WiFi &amp; Router</Text>
           <View className="ml-auto flex-row items-center gap-1">
             <View className={`h-2 w-2 rounded-full ${linked ? 'bg-emerald-500' : 'bg-border'}`} />
-            <Text className={`text-[10px] font-black uppercase tracking-wide ${linked ? 'text-emerald-400' : 'text-slate-500'}`}>
+            <Text className={`text-[10px] font-black uppercase tracking-wide ${linked ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted'}`}>
               {linked ? 'LINK' : 'NO LINK'}
             </Text>
           </View>
         </View>
 
         {/* Active connection + IP (tappable → web page) */}
-        <View className="mt-2 rounded-xl bg-slate-900 px-3 py-2.5 shadow-inner">
-          <Text className="font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500">Active</Text>
-          <Text className="mt-0.5 text-[13px] font-bold" numberOfLines={1} ellipsizeMode="middle">
+        <View className="mt-2 rounded-xl bg-mist px-3 py-2.5 shadow-inner dark:bg-slate-900">
+          <Text className="font-mono text-[10px] font-bold uppercase tracking-wide text-muted">Active</Text>
+          <Text className="mt-0.5 text-[13px] font-bold text-ink dark:text-white" numberOfLines={1} ellipsizeMode="middle">
             {activeName ?? (linked ? 'Default router' : '\u2014')}
           </Text>
           {activeName && carApName && (carApName !== carSsid) ? (
-            <Text className="text-[10px] text-slate-400" numberOfLines={1}>
+            <Text className="text-[10px] text-muted" numberOfLines={1}>
               AP: {carApName}
             </Text>
           ) : null}
@@ -90,8 +95,8 @@ export function RouterPanel({
               hitSlop={4}
               className="mt-1 flex-row items-center gap-1.5"
             >
-              <Feather name={linked ? 'external-link' : 'wifi'} size={11} color={linked ? '#93c5fd' : '#64748b'} />
-              <Text className={`font-mono text-[11px] ${linked ? 'text-sky-300 underline' : 'text-slate-500'}`} numberOfLines={1}>
+              <Feather name={linked ? 'external-link' : 'wifi'} size={11} color={linked ? '#0284c7' : '#64748b'} />
+              <Text className={`font-mono text-[11px] ${linked ? 'text-sky-700 underline dark:text-sky-300' : 'text-muted'}`} numberOfLines={1}>
                 {ipOut}{!ip ? ' (AP fallback)' : ''}
               </Text>
             </Pressable>
@@ -99,7 +104,7 @@ export function RouterPanel({
         </View>
 
         {/* Saved routers */}
-        <Text className="mt-3 text-[10px] font-black uppercase tracking-wide text-slate-500">
+        <Text className="mt-3 text-[10px] font-black uppercase tracking-wide text-muted">
           Saved on the car
           {networks.length > 0 ? ` \u00b7 ${networks.length}${networks.length >= 6 ? '/6' : ''}` : ''}
         </Text>
@@ -111,18 +116,18 @@ export function RouterPanel({
           networks.map((n) => (
             <View
               key={n}
-              className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2"
+              className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-line bg-mist px-2.5 py-2 dark:bg-slate-900"
             >
-              <Feather name="wifi" size={11} color={n === carSsid ? '#34d399' : '#64748b'} />
+              <Feather name="wifi" size={11} color={n === carSsid ? '#059669' : '#64748b'} />
               <Text
-                className="min-w-0 flex-1 text-[12px] font-bold"
+                className="min-w-0 flex-1 text-[12px] font-bold text-ink dark:text-white"
                 numberOfLines={1}
                 ellipsizeMode="middle"
               >
                 {n}
               </Text>
               {n === carSsid ? (
-                <Text className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Active</Text>
+                <Text className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Active</Text>
               ) : (
                 <Pressable
                   onPress={() => onUse(n)}
@@ -130,9 +135,9 @@ export function RouterPanel({
                   accessibilityRole="button"
                   accessibilityLabel={`Switch the car to ${n}`}
                   hitSlop={6}
-                  className="rounded-full border border-sky-500/40 bg-sky-700/20 px-2.5 py-1 disabled:opacity-40"
+                  className="rounded-full border border-sky-500/50 bg-sky-500/15 px-2.5 py-1 disabled:opacity-40"
                 >
-                  <Text className="text-[10px] font-black text-sky-300">Switch</Text>
+                  <Text className="text-[10px] font-black text-sky-700 dark:text-sky-300">Switch</Text>
                 </Pressable>
               )}
               <Pressable
@@ -141,16 +146,16 @@ export function RouterPanel({
                 accessibilityRole="button"
                 accessibilityLabel={`Delete ${n} from the car`}
                 hitSlop={6}
-                className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 disabled:opacity-40"
+                className="rounded-full border border-line bg-card px-2.5 py-1 disabled:opacity-40"
               >
-                <Text className="text-[10px] font-black text-slate-400">Delete</Text>
+                <Text className="text-[10px] font-black text-muted">Delete</Text>
               </Pressable>
             </View>
           ))
         )}
 
         {/* Add form */}
-        <Text className="mt-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Add a router</Text>
+        <Text className="mt-3 text-[10px] font-black uppercase tracking-wide text-muted">Add a router</Text>
         <TextInput
           value={ssid}
           onChangeText={setSsid}
@@ -160,7 +165,7 @@ export function RouterPanel({
           autoCorrect={false}
           returnKeyType="next"
           blurOnSubmit={false}
-          className="mt-1.5 h-9 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[12px] text-white"
+          className="mt-1.5 h-9 rounded-lg border border-line bg-mist px-2.5 text-[12px] text-ink dark:text-white"
           placeholderTextColor="#64748b"
         />
         <TextInput
@@ -173,7 +178,7 @@ export function RouterPanel({
           secureTextEntry
           returnKeyType="send"
           onSubmitEditing={handleAdd}
-          className="mt-1 h-9 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[12px] text-white"
+          className="mt-1 h-9 rounded-lg border border-line bg-mist px-2.5 text-[12px] text-ink dark:text-white"
           placeholderTextColor="#64748b"
         />
         <Pressable
@@ -188,14 +193,13 @@ export function RouterPanel({
           ) : (
             <Feather name="plus" size={12} color="#fff" />
           )}
-          <Text className="text-[10px] font-black text-white">{busy ? 'Saving…' : 'Add + switch'}</Text>
+          <Text className="text-[11px] font-black text-white">{busy ? 'Saving…' : 'Add + switch'}</Text>
         </Pressable>
-        <Text className="mt-2 text-[9px] leading-3 text-slate-500">
-          Sent to the car over the live link and saved on the car. Passwords never leave the car after
-          saving \u2014 they are the car&apos;s own secret (W-14).
+        <Text className="mt-2 text-[10px] leading-4 text-muted">
+          {'Sent to the car over the live link and saved on the car. Passwords never leave the car after saving — they are the car\u2019s own secret (W-14).'}
         </Text>
         {!canControl && (
-          <Text className="mt-2 text-[9px] leading-3 text-slate-500">Connect the car to manage routers.</Text>
+          <Text className="mt-2 text-[10px] leading-4 text-muted">Connect the car to manage routers.</Text>
         )}
       </ScrollView>
     </KeyboardAvoidingView>

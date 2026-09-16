@@ -14,6 +14,7 @@
 // remote can be tested/debugged in a browser without hardware.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect, useIsFocused } from '@react-navigation/native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { RootStackParamList } from '../../navigation/types'
@@ -31,6 +32,14 @@ import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token â†’ short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
 const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES
+
+// Round-6 (app): the app-wide "last touched car" spill. A per-device memory
+// entry is the primary store, but it is only REACHABLE once we know the
+// device address (a live link). Saving a small spill keyed globally here lets
+// a cold start with NO live link still show the last known saved-router names
+// in the Router panel ("options to use saved networks even after power cycle").
+// Names only — passwords never leave the car (W-14) and never touch the app.
+const LAST_DEVICE_KEY = 'genum.lastDevice'
 
 /**
  * Commands that must reach the car over EVERY live link, regardless of the
@@ -258,7 +267,22 @@ export function useControlHub(routeCategory?: string) {
       () => {
         if (!addressForMemory) {
           setSavedPrefs(null)
-          return
+          // Round-6: no live link — still recall the last device's saved
+          // router names from the global spill so the Router panel isn't
+          // empty after a power cycle (the car's `networks` echo re-syncs
+          // to car truth the moment a link opens).
+          let active = true
+          void AsyncStorage.getItem(LAST_DEVICE_KEY).then((raw) => {
+            if (!active || !raw) return
+            try {
+              const last = JSON.parse(raw) as { address?: string; name?: string; savedRouters?: string[] }
+              if (last?.savedRouters?.length) {
+                setCarNetworks((cur) => (cur.length > 0 ? cur : last.savedRouters!))
+              }
+              if (last?.name) setDeviceName((cur) => cur || last.name!)
+            } catch { /* ignore corrupt spill */ }
+          })
+          return () => { active = false }
         }
         let active = true
         void deviceMemory.read(addressForMemory).then((prefs) => {
@@ -291,6 +315,14 @@ export function useControlHub(routeCategory?: string) {
   )
 
   // Persist device prefs whenever the user changes a remembered value.
+  // Round-6 (bug): read the CURRENT saved-router names from a live ref, not
+  // from the `savedPrefs` closure — the old closure captured a stale copy of
+  // `savedRouters: []` at hook-scope, so any later speed/steer persist wiped
+  // the saved-router mirror back to empty (networks vanished after power
+  // cycle). The ref tracks the live `carNetworks` (car echo + optimistic
+  // adds/deletes), so every patch ships the latest names forward.
+  const savedNetworksRef = useRef<string[]>([])
+  useEffect(() => { savedNetworksRef.current = carNetworks }, [carNetworks])
   const persistPrefs = React.useCallback(
     (patch: Partial<DevicePrefs>) => {
       if (!addressForMemory) return
@@ -305,13 +337,22 @@ export function useControlHub(routeCategory?: string) {
         useJoystick,
         joystickLayout: joystickLayoutId,
         lastWifiSsid: savedPrefs?.lastWifiSsid ?? null,
-        // A-27: keep the saved-router mirror flowing through every patch
-        // (the focused-screen `.read` also feeds it back into the panel).
-        savedRouters: savedPrefs?.savedRouters ?? [],
+        // A-27 / round-6: ship the LIVE saved-router mirror with every patch
+        // (never a stale-captured base), so router additions survive later
+        // speed/steer persists AND a device power cycle.
+        savedRouters: savedNetworksRef.current.slice(),
         ...patch,
       } as DevicePrefs
       void deviceMemory.write(addressForMemory, next)
       setSavedPrefs(next)
+      // Round-6: spill the last-touched device globally so a cold start with
+      // no live link can still recall the saved-router names (see LAST_DEVICE_KEY).
+      const lastDevice = {
+        address: addressForMemory,
+        name: sppService.deviceName ?? deviceName,
+        savedRouters: next.savedRouters,
+      }
+      void AsyncStorage.setItem(LAST_DEVICE_KEY, JSON.stringify(lastDevice)).catch(() => {})
     },
     [addressForMemory, deviceName, activeMode.id, speed, servo, steerLimit, trim, useJoystick, joystickLayoutId, savedPrefs?.lastWifiSsid],
   )
