@@ -5,6 +5,50 @@
 
 ---
 
+## device-round-4 — remote window + floating icon (2026-09-16, IMPLEMENTED — A-19..A-24; JS OTA after push — DEVICE VERIFY PENDING)
+
+> App half of round-4. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-4-2026-09-16.md`.
+> Docs BEFORE code (owner rule). NO native bump — v2.0.6/49 stays, JS OTA. Assumptions:
+> joystick Show/Hide choice is session-only; the floating icon shows ONLY while a device
+> is linked; disconnect remains exclusively on the Control Panel (A-22 keeps safe-stop
+> on disconnect — `handleDisconnect` still sends `SPD0`/`SERVO90` first, A-23 transports
+> are singletons so nothing else tears the link).
+>
+> **Code status (2026-09-16): all A-19..A-24 implemented. `npx tsc --noEmit` clean;
+> vitest 50/50. Push to `main` pending (owner gate: flash + device verify).**
+
+- [x] **A-19 — joystick show/hide promoted to the toggle row** — the D-pad/Joystick
+      toggle becomes `D-pad | Joystick | Hide` in `RemoteControlScreen.tsx` (~413);
+      D-pad/Joystick also restore `showJoystick`; the "Joystick pad Show/Hide" card is
+      removed from Settings and its hidden-state text now points at the toggle row.
+      Hidden state is session-only. Verify A-19a.
+- [x] **A-20 — WiFi/webserver setup moved into settings** — the provisioning card
+      (SSID/password/Send + Car WiFi / Fallback AP truth) leaves the Weblink deck
+      (`WeblinkControls.tsx`) and now lives in the Settings dropdown (~600), shown
+      only when the active mode is ESP_SER and BT-gated (`connected`); WeblinkControls
+      is display-only now (provisioning props dropped from the component + type).
+      Verify A-20a.
+- [x] **A-21 — broadcast IP chip** — a persistent IP chip in the remote chrome row
+      whenever the active mode is ESP_SER (`telemetry.ip` else `192.168.4.1 (AP)`),
+      independent of `showJoystick`; tapping opens the car web page when linked.
+      Verify A-21a.
+- [x] **A-22 — remove the red power button + disconnect dialog** — the red power
+      button (chrome) and the `showDisconnectConfirm` dialog are deleted; the device-name
+      indicator is kept. Disconnect only via Control Panel. Verify A-22a.
+- [x] **A-23 — BT survives navigation (verify only)** — singleton transports +
+      non-tearing cleanup already implemented in `useControlHub.ts`; connect over BT →
+      navigate Home → back → link still live. No code change expected. Verify A-23a.
+- [x] **A-24 — floating draggable remote icon** — new `FloatingRemoteButton` overlay
+      (`src/components/FloatingRemoteButton.tsx`) rendered above the stack in
+      `RootNavigator.tsx`, hidden on the `RemoteControl` route, visible only while a
+      device is linked (global link hook over spp/ble/wifi singletons); PanResponder
+      drag repositions with the position remembered via AsyncStorage (`genum.remote.fabSlot`);
+      tap → `navigate('RemoteControl', { category: lastUsedCategory })`, where the last
+      category is captured from the RemoteControl route params and persisted under
+      `genum.remote.lastCategory`. Verify A-24a.
+
+---
+
 ## device-round-3 — fleet wording + project names (2026-09-16, IMPLEMENTED — A-17/A-18; JS OTA after push — DEVICE VERIFY PENDING)
 
 > Device-round-3 wording pass so app marks match the 2026-09-15 firmware fleet

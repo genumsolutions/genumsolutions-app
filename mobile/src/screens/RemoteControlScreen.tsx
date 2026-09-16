@@ -16,7 +16,7 @@
 // Drive controls (joystick/d-pad) are delegated to DriveControls.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, Pressable, Text, Vibration, View, useWindowDimensions } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -112,7 +112,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   const {
     connected, wifiConnected, sppStatus, deviceName,
-    canControl, handleDisconnect, wifiUrl,
+    canControl, wifiUrl,
     activeCategory, activeMode, carModes, carStubMap, carAvailMap, selectMode, cycleMode,
     speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
@@ -128,7 +128,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   const linked = connected || wifiConnected
   const isRobocar = !isDrone && !isNonRobocar
-  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+
 
   // Restore joystick layout choice per device.
   useEffect(() => {
@@ -339,18 +339,30 @@ export function RemoteControlScreen({ navigation }: Props) {
             <Text numberOfLines={1} className={`max-w-[80px] shrink-0 text-[10px] font-bold ${linked ? 'text-slate-300' : 'text-slate-500'}`}>
               {linked ? (deviceName || 'Connected') : 'No link'}
             </Text>
-            {linked && (
+            {/* A-21: persistent IP chip for ESP_SER — always visible regardless of
+                pad Show/Hide so the user can reach the car's hosted web page even
+                when the drive deck is hidden. Shows live telemetry.ip or the
+                AP fallback 192.168.4.1 when the car is in its own AP mode. */}
+            {activeMode.id === 'website-server' && (
               <Pressable
-                onPress={() => { Vibration.vibrate(10); setShowDisconnectConfirm(true) }}
+                onPress={handleOpenWebPage}
+                disabled={!wifiConnected}
                 accessibilityRole="button"
-                accessibilityLabel="Disconnect"
-                hitSlop={6}
-                android_ripple={{ color: 'rgba(239,68,68,0.3)', borderless: true, radius: 24 }}
-                className="ml-0.5"
+                accessibilityLabel={`Open car web page at ${telemetry.ip || '192.168.4.1'}`}
+                hitSlop={4}
+                className="ml-1 shrink-0 flex-row items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1"
               >
-                <Feather name="power" size={14} color="#ef4444" />
+                <Feather name={wifiConnected ? 'external-link' : 'wifi'} size={10} color={wifiConnected ? '#93c5fd' : '#64748b'} />
+                <Text
+                  className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-300' : 'text-slate-500'}`}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
+                  {telemetry.ip || '192.168.4.1 (AP)'}
+                </Text>
               </Pressable>
             )}
+
           </View>
 
           {isRobocar && (
@@ -398,20 +410,26 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ── Joystick / D-pad toggle — below top bar ── */}
+        {/* ── D-pad / Joystick / Hide toggle — below top bar (A-19) ── */}
         {isRobocar && (
           <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
             <Pressable
-              onPress={() => { Vibration.vibrate(10); setUseJoystick(false) }}
-              className={`rounded-full px-3 py-1 ${!useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+              onPress={() => { Vibration.vibrate(10); setShowJoystick(true); setUseJoystick(false) }}
+              className={`rounded-full px-3 py-1 ${showJoystick && !useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
             >
-              <Text className={`text-[10px] font-bold ${!useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
+              <Text className={`text-[10px] font-bold ${showJoystick && !useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
             </Pressable>
             <Pressable
-              onPress={() => { Vibration.vibrate(10); setUseJoystick(true) }}
-              className={`rounded-full px-3 py-1 ${useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+              onPress={() => { Vibration.vibrate(10); setShowJoystick(true); setUseJoystick(true) }}
+              className={`rounded-full px-3 py-1 ${showJoystick && useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
             >
-              <Text className={`text-[10px] font-bold ${useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
+              <Text className={`text-[10px] font-bold ${showJoystick && useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { Vibration.vibrate(10); setShowJoystick(false) }}
+              className={`rounded-full px-3 py-1 ${!showJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+            >
+              <Text className={`text-[10px] font-bold ${!showJoystick ? 'text-white' : 'text-slate-400'}`}>Hide</Text>
             </Pressable>
           </View>
         )}
@@ -507,21 +525,12 @@ export function RemoteControlScreen({ navigation }: Props) {
                 telemetry={telemetry}
                 onOpenWebPage={handleOpenWebPage}
                 onEnterMode={handleEnterWeblinkMode}
-                btConnected={connected}
-                wifiSsid={hub.wifiSsid}
-                setWifiSsid={hub.setWifiSsid}
-                wifiPassword={hub.wifiPassword}
-                setWifiPassword={hub.setWifiPassword}
-                wifiProvisioning={hub.wifiProvisioning}
-                onProvisionWifi={() => { void hub.handleWifiProvision() }}
-                carSsid={hub.carSsid}
-                carApName={hub.carApName}
               />
             ) : (
               <View className="flex-1 items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-4">
                 <Feather name="eye-off" size={20} color="#64748b" />
                 <Text className="mt-2 text-center text-[11px] text-slate-400">
-                  Joystick pad hidden.{'\n'}Open Settings to show.
+                  Pad hidden.{'\n'}Use the toggle row above to re-enable.
                 </Text>
               </View>
             )}
@@ -550,32 +559,14 @@ export function RemoteControlScreen({ navigation }: Props) {
             onPress={() => setShowSettings(false)}
             accessibilityLabel="Close settings"
           />
-          <View
+          <ScrollView
             className="absolute right-3 z-40 w-64 rounded-2xl border border-white/10 bg-slate-900 p-2.5 shadow-xl"
             style={{ top: Math.max(insets.top, 8) + 48, maxHeight: height - 96 }}
+            showsVerticalScrollIndicator={false}
           >
             <Text className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
               Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
             </Text>
-
-            {/* Hide joystick pad */}
-            <View className="flex-row items-center justify-between border-b border-white/10 pb-1.5">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Joystick pad</Text>
-                <View className="flex-row gap-1">
-                  <Pressable
-                    onPress={() => { Vibration.vibrate(10); setShowJoystick(true) }}
-                    className={`rounded-full px-2.5 py-1 ${showJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
-                  >
-                    <Text className={`text-[9px] font-bold ${showJoystick ? 'text-white' : 'text-slate-400'}`}>Show</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => { Vibration.vibrate(10); setShowJoystick(false) }}
-                    className={`rounded-full px-2.5 py-1 ${!showJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
-                  >
-                    <Text className={`text-[9px] font-bold ${!showJoystick ? 'text-white' : 'text-slate-400'}`}>Hide</Text>
-                  </Pressable>
-                </View>
-              </View>
 
             {/* Steering limit + Trim (2WD1M only) */}
             <View className={`${is2wd1mActive ? '' : 'opacity-40'}`} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
@@ -605,7 +596,75 @@ export function RemoteControlScreen({ navigation }: Props) {
                 Steering &amp; trim: 2WD1M only.
               </Text>
             )}
-          </View>
+
+            {/* A-20: WiFi provisioning (ESP_SER + BT-gated) — moved from
+                WeblinkControls to Settings so it doesn't consume deck space. */}
+            {activeMode.id === 'website-server' && connected && (
+              <View className="mt-2 border-t border-white/10 pt-2">
+                <View className="flex-row items-center gap-1.5">
+                  <Feather name="share" size={12} color="#93c5fd" />
+                  <Text className="text-[10px] font-black uppercase tracking-wide text-sky-300">
+                    WiFi setup
+                  </Text>
+                </View>
+                <Text className="mt-0.5 text-[9px] leading-3 text-slate-400" numberOfLines={2}>
+                  Send router credentials to the car over Bluetooth — saved on the car.
+                </Text>
+                <TextInput
+                  value={hub.wifiSsid}
+                  onChangeText={hub.setWifiSsid}
+                  editable={!hub.wifiProvisioning}
+                  placeholder="WiFi name (SSID)"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  className="mt-1.5 h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[11px] text-white"
+                  placeholderTextColor="#64748b"
+                />
+                <TextInput
+                  value={hub.wifiPassword}
+                  onChangeText={hub.setWifiPassword}
+                  editable={!hub.wifiProvisioning}
+                  placeholder="WiFi password"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  returnKeyType="send"
+                  className="mt-1 h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[11px] text-white"
+                  placeholderTextColor="#64748b"
+                />
+                <Pressable
+                  onPress={() => { Vibration.vibrate(10); void hub.handleWifiProvision() }}
+                  disabled={hub.wifiProvisioning || !(hub.wifiSsid ?? '').trim()}
+                  className="mt-1.5 h-8 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 disabled:opacity-50"
+                >
+                  {hub.wifiProvisioning ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Feather name="upload" size={12} color="#fff" />
+                  )}
+                  <Text className="text-[10px] font-black text-white">
+                    {hub.wifiProvisioning ? 'Sending…' : 'Send WiFi to car'}
+                  </Text>
+                </Pressable>
+                {(hub.carSsid || hub.carApName) && (
+                  <View className="mt-1.5 flex-row items-center gap-3">
+                    {hub.carSsid ? (
+                      <Text className="min-w-0 flex-1 text-[9px] font-bold text-sky-300" numberOfLines={1} ellipsizeMode="middle">
+                        Car WiFi: {hub.carSsid}
+                      </Text>
+                    ) : null}
+                    {hub.carApName ? (
+                      <Text className="min-w-0 flex-1 text-[9px] font-bold text-sky-300" numberOfLines={1} ellipsizeMode="middle">
+                        AP: {hub.carApName}
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
+              </View>
+            )}
+          </ScrollView>
         </>
       )}
 
@@ -642,47 +701,8 @@ export function RemoteControlScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* Disconnect confirmation — standard copy, matches the Control Panel
-          dialog (owner 2026-09-15: no technical SPD0/SERVO90 jargon). */}
-      {showDisconnectConfirm && (
-        <>
-          <Pressable
-            className="absolute inset-0 z-30 bg-black/50"
-            onPress={() => setShowDisconnectConfirm(false)}
-            accessibilityLabel="Cancel disconnect"
-          />
-          <View className="absolute inset-0 z-40 items-center justify-center px-8">
-            <View className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
-              <Text className="text-center text-base font-black text-white">Disconnect now?</Text>
-              <Text className="mt-1 text-center text-xs leading-4 text-slate-400">
-                The car will stop safely before the link closes. Your saved settings stay remembered for next time.
-              </Text>
-              <View className="mt-4 flex-row justify-center gap-3">
-                <Pressable
-                  onPress={() => setShowDisconnectConfirm(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Keep connection"
-                  hitSlop={8}
-                >
-                  <View className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5">
-                    <Text className="text-sm font-bold text-white">Cancel</Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  onPress={() => { setShowDisconnectConfirm(false); void handleDisconnect() }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Disconnect"
-                  hitSlop={8}
-                >
-                  <View className="rounded-full bg-red-600 px-6 py-2.5">
-                    <Text className="text-sm font-black text-white">Disconnect</Text>
-                  </View>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </>
-      )}
+      {/* Disconnect removed — owner rule: disconnect only via Control Panel. */}
+
     </View>
   )
 }

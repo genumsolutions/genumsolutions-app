@@ -15,10 +15,9 @@
 //     ({status, mode, ip, rssi, signal, uptime_ms, free_heap, speed}),
 //     which carProtocol now parses into telemetry.
 // =====================================================================
-import React, { useEffect, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, Vibration } from 'react-native'
+import React from 'react'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import { ActivityIndicator } from 'react-native'
 import type { WeblinkControlsProps } from './types'
 
 /** Format a `uptime_ms` value into a compact hh:mm:ss or mm:ss string. */
@@ -36,26 +35,9 @@ function formatUptime(ms?: number): string {
 export function WeblinkControls({
   wifiConnected, activeMode, telemetry,
   onOpenWebPage,
-  // v1.4.0 WiFi provisioning (optional \u2014 only the Remote window passes these)
-  btConnected = false, wifiSsid, setWifiSsid, wifiPassword, setWifiPassword,
-  wifiProvisioning = false, onProvisionWifi, carApName, carSsid,
 }: WeblinkControlsProps) {
   const isServer = activeMode.id === 'website-server'
   const hasStatus = wifiConnected && Boolean(telemetry.mode || telemetry.status)
-  const [showPass, setShowPass] = useState(false)
-  const provisionable = isServer && onProvisionWifi != null
-  // A-8: the provisioning card defaults OPEN only when it can be used right
-  // now (BT connected in ESP_SER); otherwise it stays collapsed to its header
-  // row so the deck fits \u2014 the owner's "measure the space and fit them"
-  // requirement. Auto-expands the moment the BT link comes up.
-  const [cardOpen, setCardOpen] = useState<boolean>(() => Boolean(btConnected && provisionable))
-  useEffect(() => {
-    if (btConnected) setCardOpen(true)
-  }, [btConnected])
-  // A-8 measurement: record the card's real laid-out size (dev log feeds the
-  // TESTING.md R11-4 "measured deck budget" note).
-  const [cardSize, setCardSize] = useState<{ w: number; h: number } | null>(null)
-  const passRef = useRef<TextInput | null>(null)
 
   // Root is a bounded ScrollView (flex-1) so the card NEVER overflows the
   // remote deck in landscape when the provisioning card auto-expands (btConnected)
@@ -207,124 +189,7 @@ export function WeblinkControls({
         )}
       </View>
 
-      {/* \u2500\u2500 v1.4.0 / A-8 WiFi provisioning (ESP_SER only): send SSID/password over BT.
-          Collapsible + compact so the card fits the deck without scrolling
-          (owner: "measure the available space and fit them properly"). \u2500\u2500 */}
-      {provisionable && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="mt-4"
-        >
-          <View
-            onLayout={(e) => {
-              const { width, height } = e.nativeEvent.layout
-              setCardSize((prev) => {
-                if (prev && Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1) return prev
-                if (__DEV__) {
-                  console.log(`[A-8] WiFi card measured: ${Math.round(width)}x${Math.round(height)} (deck ESP_SER, open=${cardOpen})`)
-                }
-                return { w: width, h: height }
-              })
-            }}
-            className="rounded-xl border border-navy/20 bg-navy/5 px-4 py-3"
-          >
-            {/* Header doubles as the collapse toggle */}
-            <Pressable
-              onPress={() => { Vibration.vibrate(10); setCardOpen((v) => !v) }}
-              accessibilityRole="button"
-              accessibilityLabel={cardOpen ? 'Collapse WiFi setup' : 'Expand WiFi setup'}
-              className="flex-row items-center gap-2"
-            >
-              <Feather name="share" size={13} color="#1e3a8a" />
-              <Text className="flex-1 text-xs font-black uppercase tracking-widest text-navy">
-                WiFi setup · send to car
-              </Text>
-              {!cardOpen && (carSsid || carApName) ? (
-                <Text className="max-w-[45%] flex-1 text-right text-[10px] font-bold text-navy/70" numberOfLines={1} ellipsizeMode="middle">
-                  {carSsid ? `Car WiFi: ${carSsid}` : `AP: ${carApName}`}
-                </Text>
-              ) : null}
-              <Feather name={cardOpen ? 'chevron-up' : 'chevron-down'} size={14} color="#1e3a8a" />
-            </Pressable>
-
-            {cardOpen && (
-              <>
-                <Text className="mt-1 text-[11px] leading-4 text-muted" numberOfLines={1}>
-                  Sends your router credentials to the car over Bluetooth — saved on the car, survives power cycles.
-                </Text>
-                <TextInput
-                  value={wifiSsid}
-                  onChangeText={setWifiSsid}
-                  editable={!wifiProvisioning}
-                  placeholder="WiFi name (SSID)"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  onSubmitEditing={() => passRef.current?.focus()}
-                  blurOnSubmit={false}
-                  className="mt-2 h-10 rounded-lg border border-line bg-surface px-3 text-sm text-ink"
-                />
-                <View className="mt-2 flex-row items-center gap-2">
-                  <TextInput
-                    ref={passRef}
-                    value={wifiPassword}
-                    onChangeText={setWifiPassword}
-                    editable={!wifiProvisioning}
-                    placeholder="WiFi password"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    secureTextEntry={!showPass}
-                    returnKeyType="send"
-                    onSubmitEditing={() => {
-                      if (btConnected && !wifiProvisioning && (wifiSsid ?? '').trim()) onProvisionWifi?.()
-                    }}
-                    className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-ink"
-                  />
-                  <Pressable
-                    onPress={() => setShowPass((v) => !v)}
-                    accessibilityRole="button"
-                    accessibilityLabel={showPass ? 'Hide password' : 'Show password'}
-                    className="h-10 justify-center rounded-lg border border-line bg-surface px-2.5"
-                  >
-                    <Feather name={showPass ? 'eye-off' : 'eye'} size={14} color="#1e3a8a" />
-                  </Pressable>
-                </View>
-                <Pressable
-                  onPress={() => { Vibration.vibrate(10); onProvisionWifi?.() }}
-                  disabled={!btConnected || wifiProvisioning || !(wifiSsid ?? '').trim()}
-                  className="mt-2.5 h-10 flex-row items-center justify-center gap-2 rounded-full bg-navy px-5 disabled:opacity-50"
-                >
-                  {wifiProvisioning ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Feather name="upload" size={14} color="#fff" />
-                  )}
-                  <Text className="text-xs font-black text-white">
-                    {!btConnected
-                      ? 'Connect car over Bluetooth first'
-                      : wifiProvisioning ? 'Sending to car\u2026'
-                      : 'Send WiFi to car'}
-                  </Text>
-                </Pressable>
-                {(carSsid || carApName) && (
-                  <View className="mt-2 flex-row items-center gap-3">
-                    {carSsid ? (
-                      <Text className="min-w-0 flex-1 text-[11px] font-bold text-navy" numberOfLines={1} ellipsizeMode="middle">
-                        Car WiFi: {carSsid}
-                      </Text>
-                    ) : null}
-                    {carApName ? (
-                      <Text className="min-w-0 flex-1 text-[11px] font-bold text-navy" numberOfLines={1} ellipsizeMode="middle">
-                        Fallback AP: {carApName}
-                      </Text>
-                    ) : null}
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      )}
+      {/* A-20: WiFi provisioning moved to RemoteControlScreen Settings dropdown */}
 
       <Text className="mt-3 text-[11px] leading-4 text-muted">
         Driving below works over the same link — direction letters and SPD go to the car&apos;s
