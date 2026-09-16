@@ -5,6 +5,18 @@
 
 ---
 
+## device-round-6 — remote chrome rectification (2026-09-17, IMPLEMENTED — A-29..A-34; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-6. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-6-2026-09-17.md`.
+> Checklist: `guide/SESSION-NOTES.md` → "Round-6 device tests". NO native bump — v2.0.6/49
+> stays, JS OTA (rounds 5+6 rolled into one same-version bundle). tsc clean + **50/50 tests**.
+> - **A-29** RouterPanel shown only in the ESP32 (Webserver) mode; other hidden-pad modes → "Pad hidden" placeholder.
+> - **A-30** Saved routers + device name persist across a forced app restart (global `genum.lastDevice` spill + `savedNetworksRef`).
+> - **A-31** Constant-height sub-header band for every robocar mode — the deck never shifts; IP chip only in webserver mode.
+> - **A-32** RouterPanel readable type + real em dash/apostrophe (no escape artifacts).
+> - **A-33** Dark-theme toggle in Remote Settings; chrome/sub-header/dropdown/RouterPanel token-skinned (drive deck stays dark).
+> - **A-34** Duplicate fixed Control-Panel header remote icon removed.
+
 ## device-round-4 — remote window + floating icon (2026-09-16, IMPLEMENTED + pushed `ec90656` — A-19..A-24; JS OTA — DEVICE VERIFY PENDING)
 
 > App half of round-4. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-4-2026-09-16.md`.

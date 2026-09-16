@@ -48,4 +48,35 @@ App changes delivered as a **v2.0.6 JS-only OTA** (no versionCode bump).
 - [ ] Add-form inputs sit above the soft keyboard (resize + KeyboardAvoidingView)
 - [ ] Focused input scrolls into view; no obscured TextInput
 
+## Round-6 device tests (A-29..A-34, 2026-09-17)
+
+Device round-6 run sheet: `guide/DEVICE-ROUND-6-2026-09-17.md` (repo root).
+App changes are part of the same **v2.0.6 JS-only OTA** (no versionCode bump).
+
+### A-29 — RouterPanel only in the ESP32 (Webserver) mode
+- [ ] Selecting ESP32 (Webserver) + Hide shows the WiFi & Router panel
+- [ ] Every other mode + Hide shows the "Pad hidden" placeholder (no router controls)
+- [ ] Switching modes while hidden swaps panel/placeholder correctly
+
+### A-30 — saved networks survive an app power cycle
+- [ ] Add routers, force-quit the app, reopen: the saved list + device name return
+- [ ] Cold start with the car NOT linked still pre-fills the last device + its routers
+- [ ] Switching devices loads that device's own saved list
+
+### A-31 — fixed-height layout band
+- [ ] Step through robocar modes: the joystick/deck never shifts vertically
+- [ ] The IP chip appears only in the webserver mode; lamp + name always present
+
+### A-32 — readability / literal characters
+- [ ] Router-panel footer shows a real em dash (—) and apostrophe (’) at legible size
+- [ ] No `\u2014` / `\u2019` artifacts anywhere in the panel
+
+### A-33 — Dark-theme toggle + skin
+- [ ] Remote Settings → "Dark theme" switch flips the chrome (screen/sub-header/
+      dropdown/RouterPanel); drive deck stays dark-tuned
+- [ ] Reopening the app preserves the chosen appearance
+
+### A-34 — no duplicate fixed header icon
+- [ ] Control-Panel header has no fixed remote icon; the big CTA is the only entry
+
 <!-- ag>tip: append per-round device checklists above this marker

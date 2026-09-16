@@ -115,14 +115,6 @@ export function ToolsScreen() {
             Test &amp; control your projects
           </Text>
         </View>
-        <Pressable
-          onPress={() => navigation.navigate('RemoteControl', { category: category.slug })}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${category.name} remote`}
-          className="ml-3 shrink-0 rounded-full bg-navy p-3.5 shadow-card"
-        >
-          <Feather name="target" size={22} color="#fff" />
-        </Pressable>
       </View>
 
       {/* Category selector */}

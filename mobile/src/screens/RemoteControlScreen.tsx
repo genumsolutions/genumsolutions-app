@@ -16,7 +16,7 @@
 // Drive controls (joystick/d-pad) are delegated to DriveControls.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, Pressable, ScrollView, Text, Vibration, View, useWindowDimensions } from 'react-native'
+import { Platform, Pressable, ScrollView, Switch, Text, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -24,6 +24,7 @@ import { Feather } from '@expo/vector-icons'
 import Slider from '@react-native-community/slider'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { RootStackParamList } from '../navigation/types'
+import { useApp } from '../context/AppContext'
 import { useControlHub } from '../components/tools/useControlHub'
 import { DriveControls } from '../components/tools/DriveControls'
 import { BalanceControls, PID_DEFS } from '../components/tools/BalanceControls'
@@ -79,7 +80,7 @@ function StepperPill({ onPress, disabled, icon }: {
       onPress={onPress} disabled={disabled} hitSlop={6}
       accessibilityRole="button"
       android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 20 }}
-      className="h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5 disabled:opacity-40"
+      className="h-8 w-8 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
     >
       <Feather name={icon} size={14} color="#fff" />
     </Pressable>
@@ -95,10 +96,10 @@ function ValueStrip({ label, value, min, max, canControl, locked, highlight, onC
   return (
     <View
       className={`h-9 min-w-[110px] max-w-[220px] flex-1 flex-row items-center gap-1.5 rounded-full px-2.5 ${
-        highlight ? 'bg-slate-200' : 'border border-white/10 bg-white/5'
+        highlight ? 'bg-navy-light' : 'border border-line bg-card'
       }`}
     >
-      <Text className={`text-[9px] font-black uppercase tracking-widest ${highlight ? 'text-slate-600' : 'text-slate-500'}`}>
+      <Text className={`text-[9px] font-black uppercase tracking-widest ${highlight ? 'text-navy-dark' : 'text-muted'}`}>
         {label}
       </Text>
       <Slider
@@ -110,7 +111,7 @@ function ValueStrip({ label, value, min, max, canControl, locked, highlight, onC
         thumbTintColor={highlight ? '#1e3a8a' : '#3b82f6'}
         style={{ flex: 1, height: 28 }}
       />
-      <Text className={`w-7 shrink-0 text-right font-mono text-[11px] font-bold ${highlight ? 'text-slate-900' : 'text-white'}`}>
+      <Text className={`w-7 shrink-0 text-right font-mono text-[11px] font-bold ${highlight ? 'text-navy-dark' : 'text-ink dark:text-white'}`}>
         {Math.round(value)}
       </Text>
     </View>
@@ -124,6 +125,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const { width, height } = useWindowDimensions()
   const isLandscape = width > height
   const insets = useSafeAreaInsets()
+  const { themeMode, setThemeMode } = useApp()
 
   const {
     connected, wifiConnected, sppStatus, deviceName,
@@ -309,7 +311,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   ) : null
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View className="flex-1 bg-surface">
       <View className="flex-1 overflow-hidden px-3 pb-2" style={{ paddingTop: Math.max(insets.top, 8) + 4 }}>
 
         {/* ── Chrome row ── */}
@@ -321,8 +323,8 @@ export function RemoteControlScreen({ navigation }: Props) {
             hitSlop={10}
             android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 40 }}
           >
-            <View className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5">
-              <Text className="text-sm font-bold text-white">{backLabel}</Text>
+            <View className="rounded-full border border-line bg-card px-4 py-2.5">
+              <Text className="text-sm font-bold text-ink dark:text-white">{backLabel}</Text>
             </View>
           </Pressable>
 
@@ -335,18 +337,18 @@ export function RemoteControlScreen({ navigation }: Props) {
             android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 40 }}
             className={isRobocar ? '' : 'opacity-40'}
           >
-            <View className={`rounded-full px-4 py-2.5 ${navActive ? 'bg-slate-200' : 'border border-white/10 bg-white/5'}`}>
-              <Text className={`text-sm font-bold ${navActive ? 'text-slate-900' : 'text-white'}`}>Select</Text>
+            <View className={`rounded-full px-4 py-2.5 ${navActive ? 'bg-navy-light' : 'border border-line bg-card'}`}>
+              <Text className={`text-sm font-bold ${navActive ? 'text-navy-dark' : 'text-ink dark:text-white'}`}>Select</Text>
             </View>
           </Pressable>
 
-          <Text className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">Remote</Text>
+          <Text className="text-sm font-black uppercase tracking-[0.2em] text-muted">Remote</Text>
 
           {/* A-25: friendly BT name right of "Remote" — NEVER a raw hex
               address (sppService falls back to the MAC when a scan reports
               no name). Underscores prettify to spaces: WIRELESS_CAR →
               WIRELESS CAR. */}
-          <Text numberOfLines={1} className="max-w-[120px] shrink-0 text-[11px] font-bold text-sky-300">
+          <Text numberOfLines={1} className="max-w-[120px] shrink-0 text-[11px] font-bold text-navy dark:text-sky-300">
             {linked ? (friendlyBtName(deviceName) || 'Connected') : 'No link'}
           </Text>
 
@@ -387,7 +389,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 hitSlop={10}
                 android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 28 }}
               >
-                <View className={`h-12 w-12 items-center justify-center rounded-full border bg-white/5 ${showSettings ? 'border-navy bg-navy/50' : 'border-white/15'}`}>
+                <View className={`h-12 w-12 items-center justify-center rounded-full bg-navy ${showSettings ? 'bg-navy-dark' : ''}`}>
                   <Feather name="settings" size={20} color="#fff" />
                 </View>
               </Pressable>
@@ -396,30 +398,34 @@ export function RemoteControlScreen({ navigation }: Props) {
         </View>
 
         {/* ── A-25 sub-header: friendly name above the tappable broadcasting
-            IP. Only for the wireless car's ESP_SER mode (hosted page exists).
-            Replaces the old top-bar IP chip (A-21). ── */}
-        {isRobocar && activeMode.id === 'website-server' && (
-          <View className="mt-1 flex-shrink-0 flex-row items-center justify-between px-1">
+            IP. Round-6: rendered for EVERY robocar mode at a CONSTANT height
+            (h-7) so the drive deck never shifts when the ESP_SER-only IP chip
+            mounts/unmounts — the old conditional band pushed the joystick
+            down as soon as the website-server mode appeared. ── */}
+        {isRobocar && (
+          <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center justify-between px-1">
             <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
               <View className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? 'bg-green-400' : 'bg-slate-600'}`} />
-              <Text numberOfLines={1} ellipsizeMode="middle" className="min-w-0 flex-1 text-[9px] font-bold text-slate-300">
+              <Text numberOfLines={1} ellipsizeMode="middle" className="min-w-0 flex-1 text-[10px] font-bold text-muted dark:text-slate-300">
                 {linked ? (friendlyBtName(deviceName) || 'Connected') : 'No link'}
               </Text>
             </View>
-            <Pressable
-              onPress={handleOpenWebPage}
-              disabled={!wifiConnected}
-              accessibilityRole="link"
-              accessibilityLabel={`Open car web page at ${telemetry.ip || '192.168.4.1'}`}
-              hitSlop={6}
-              className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5"
-            >
-              <Feather name={wifiConnected ? 'external-link' : 'wifi'} size={10} color={wifiConnected ? '#93c5fd' : '#64748b'} />
-              <Text className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-300' : 'text-slate-500'}`} numberOfLines={1}>
-                {telemetry.ip || '192.168.4.1'}
-                {!telemetry.ip && wifiConnected ? '' : !telemetry.ip ? ' (AP)' : ''}
-              </Text>
-            </Pressable>
+            {activeMode.id === 'website-server' ? (
+              <Pressable
+                onPress={handleOpenWebPage}
+                disabled={!wifiConnected}
+                accessibilityRole="link"
+                accessibilityLabel={`Open car web page at ${telemetry.ip || '192.168.4.1'}`}
+                hitSlop={6}
+                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+              >
+                <Feather name={wifiConnected ? 'external-link' : 'wifi'} size={10} color={wifiConnected ? '#0284c7' : '#64748b'} />
+                <Text className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-700 dark:text-sky-300' : 'text-muted'}`} numberOfLines={1}>
+                  {telemetry.ip || '192.168.4.1'}
+                  {!telemetry.ip && wifiConnected ? '' : !telemetry.ip ? ' (AP)' : ''}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
 
@@ -428,21 +434,21 @@ export function RemoteControlScreen({ navigation }: Props) {
           <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
             <Pressable
               onPress={() => { Vibration.vibrate(10); setShowJoystick(true); setUseJoystick(false) }}
-              className={`rounded-full px-3 py-1 ${showJoystick && !useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+              className={`rounded-full px-3 py-1 ${showJoystick && !useJoystick ? 'bg-navy' : 'border border-line bg-card'}`}
             >
-              <Text className={`text-[10px] font-bold ${showJoystick && !useJoystick ? 'text-white' : 'text-slate-400'}`}>D-pad</Text>
+              <Text className={`text-[10px] font-bold ${showJoystick && !useJoystick ? 'text-white' : 'text-muted'}`}>D-pad</Text>
             </Pressable>
             <Pressable
               onPress={() => { Vibration.vibrate(10); setShowJoystick(true); setUseJoystick(true) }}
-              className={`rounded-full px-3 py-1 ${showJoystick && useJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+              className={`rounded-full px-3 py-1 ${showJoystick && useJoystick ? 'bg-navy' : 'border border-line bg-card'}`}
             >
-              <Text className={`text-[10px] font-bold ${showJoystick && useJoystick ? 'text-white' : 'text-slate-400'}`}>Joystick</Text>
+              <Text className={`text-[10px] font-bold ${showJoystick && useJoystick ? 'text-white' : 'text-muted'}`}>Joystick</Text>
             </Pressable>
             <Pressable
               onPress={() => { Vibration.vibrate(10); setShowJoystick(false) }}
-              className={`rounded-full px-3 py-1 ${!showJoystick ? 'bg-navy' : 'border border-white/10 bg-white/5'}`}
+              className={`rounded-full px-3 py-1 ${!showJoystick ? 'bg-navy' : 'border border-line bg-card'}`}
             >
-              <Text className={`text-[10px] font-bold ${!showJoystick ? 'text-white' : 'text-slate-400'}`}>Hide</Text>
+              <Text className={`text-[10px] font-bold ${!showJoystick ? 'text-white' : 'text-muted'}`}>Hide</Text>
             </Pressable>
           </View>
         )}
@@ -455,7 +461,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 <OledDisplay {...oledCommonProps} />
               </View>
               <View className="min-w-0 flex-[0.7]">
-                <View className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/20 p-3">
+                <View className="flex-1 min-h-0 rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
                   {isDrone ? (
                     <DroneControls
                       canControl={canControl}
@@ -526,11 +532,11 @@ export function RemoteControlScreen({ navigation }: Props) {
                 compact
                 oledSlot={oledSlot}
               />
-            ) : (
-              /* A-26: Hide now hides BOTH pads and shows the ONE organized
-                  WiFi & Router panel (saved list with Switch/Delete, Add form,
-                  active SSID + tappable IP). The retired WeblinkControls card
-                  and the "Pad hidden" placeholder are gone. */
+            ) : activeMode.id === 'website-server' ? (
+              /* The ONE organized WiFi & Router panel — round-6: ONLY shown in
+                 the web-server mode (that's the mode whose page this manages).
+                 Hidden non-web modes get a tidy placeholder below instead of a
+                 Router panel that leaked into every mode. */
               <RouterPanel
                 canControl={canControl}
                 linked={linked}
@@ -543,6 +549,16 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onDelete={hub.routerDelete}
                 onOpenWebPage={handleOpenWebPage}
               />
+            ) : (
+              /* Round-6: non-web hidden modes — no router page to manage. */
+              <View className="mt-2 flex-1 items-center justify-center rounded-2xl border border-line bg-card px-6 py-6 shadow-card">
+                <Feather name="smartphone" size={26} color="#64748b" />
+                <Text className="mt-2 text-sm font-bold text-ink dark:text-white">Pad hidden</Text>
+                <Text className="mt-1 text-center text-xs leading-4 text-muted">
+                  This mode has no WiFi page. Switch the car to ESP32 (Webserver)
+                  to manage its saved networks here.
+                </Text>
+              </View>
             )}
             {/* E-stop FAB */}
             <Pressable
@@ -570,30 +586,47 @@ export function RemoteControlScreen({ navigation }: Props) {
             accessibilityLabel="Close settings"
           />
           <ScrollView
-            className="absolute right-3 z-40 w-64 rounded-2xl border border-white/10 bg-slate-900 p-2.5 shadow-xl"
+            className="absolute right-3 z-40 w-64 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
             style={{ top: Math.max(insets.top, 8) + 48, maxHeight: height - 96 }}
             showsVerticalScrollIndicator={false}
           >
-            <Text className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
+            <Text className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-muted">
               Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
             </Text>
 
+            {/* Round-6: dark-theme toggle mirrors the Account/Menu Appearance
+                switch — drives AppContext.setThemeMode, which flips the
+                semantic tokens (this screen + RouterPanel skin along with it). */}
+            <View className="mt-1 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Feather name={themeMode === 'dark' ? 'moon' : 'sun'} size={14} color="#64748b" />
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">Dark theme</Text>
+              </View>
+              <Switch
+                value={themeMode === 'dark'}
+                onValueChange={(on) => setThemeMode(on ? 'dark' : 'light')}
+                trackColor={{ false: '#cbd5e1', true: '#1e3a8a' }}
+                thumbColor="#ffffff"
+                accessibilityLabel="Toggle dark theme"
+              />
+            </View>
+
             {/* Steering limit + Trim (2WD1M only) */}
             <View className={`${is2wd1mActive ? '' : 'opacity-40'}`} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
-              <View className="mt-1 flex-row items-center justify-between">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Steering</Text>
+              <View className="mt-1.5 flex-row items-center justify-between">
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">Steering</Text>
                 <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[10px] font-bold text-white">{steerLimit}°</Text>
+                  <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">{steerLimit}°</Text>
                   <View className="flex-row gap-1">
                     <StepperPill onPress={() => adjustSteerLimit(-5)} disabled={!canControl} icon="minus" />
                     <StepperPill onPress={() => adjustSteerLimit(5)} disabled={!canControl} icon="plus" />
                   </View>
                 </View>
               </View>
-              <View className="mt-1 flex-row items-center justify-between border-t border-white/10 pt-1">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Trim</Text>
+              <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">Trim</Text>
                 <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[10px] font-bold text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
+                  <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">{trim > 0 ? `+${trim}` : trim}°</Text>
                   <View className="flex-row gap-1">
                     <StepperPill onPress={() => adjustTrim(-1)} disabled={!canControl} icon="minus" />
                     <StepperPill onPress={() => adjustTrim(1)} disabled={!canControl} icon="plus" />
@@ -602,7 +635,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               </View>
             </View>
             {!is2wd1mActive && (
-              <Text className="mt-1 text-[8px] leading-3 text-slate-500">
+              <Text className="mt-1 text-[9px] leading-3 text-muted">
                 Steering &amp; trim: 2WD1M only.
               </Text>
             )}
