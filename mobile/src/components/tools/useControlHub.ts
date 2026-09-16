@@ -944,7 +944,7 @@ setWifiProvisioning(true)
   // immediately, mirror the mode, status "Mode:<name>", stop driving.
   // Owner decision 2026-09-15: ALL 9 firmware modes are selectable â€” a
   // WIP/CS mode still receives its token (the car renders its own frame /
-  // COMING SOON, IN PROGRESS states) and the controller shows the badge.
+  // COMING SOON, WORK IN PROGRESS states) and the controller shows the badge.
   // The old A-7 app-side refuse gate is gone (the car says no itself via its
   // frame or a NACK;E=UNKNOWN_MODE if it truly rejects a token).
   const selectMode = useCallback((m: CarMode) => {

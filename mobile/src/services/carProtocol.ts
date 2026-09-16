@@ -185,7 +185,7 @@ export function buildWifiConfigLine(ssid: string, password: string): string {
 /**
  * Per-token availability a car may announce (CAPS wire / `caps` JSON).
  *   LIVE  – drives today
- *   WIP   – IN PROGRESS (works in progress / partially wired) — NOT live yet
+  *   WIP   – WORK IN PROGRESS (works in progress / partially wired) — NOT live yet
  *   CS    – COMING SOON (parked) — NOT live yet
  * Controllers render the state as a mark (drawAvailMarkBody parity) and the
  * car renders its own frame; every token stays selectable so app and device
@@ -257,7 +257,7 @@ export function modeAvailStatus(
 
 /**
  * Pure helper (A-7): whether a mode is NOT functional for the paired car
- * (either IN PROGRESS or COMING SOON). Car truth wins token by token; the
+ * (either WORK IN PROGRESS or COMING SOON). Car truth wins token by token; the
  * car's CAPS table (or legacy stub map) overrides the default. Selectable
  * in every controller regardless — it only changes the mark/badge.
  */

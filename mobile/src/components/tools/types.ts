@@ -185,7 +185,7 @@ export type OledDisplayProps = {
   /**
    * R-10 (replaces relying on the boolean alone): the previewed mode's car
    * truth availability — LIVE draws the real dashboard, WIP draws
-   * "IN PROGRESS...", CS draws "COMING SOON..." (remote drawAvailMarkBody
+   * "WORK IN PROGRESS", CS draws "COMING SOON" (remote drawAvailMarkBody
    * parity). Falls back to previewComingSoon when undef.
    */
   previewModeAvail?: ModeAvailReport

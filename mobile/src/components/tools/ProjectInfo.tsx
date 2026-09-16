@@ -15,6 +15,17 @@ import type { CarMode } from '../../config/roboCarCatalog'
 import { LOCAL_CAR_MODES } from '../../config/roboCarCatalog'
 import type { ProjectCategory } from '../../config/project-catalog'
 import { getProjectCategory } from '../../config/project-catalog'
+import { company } from '../../config/company'
+
+// Folder-derived human project names for the shipped fleet cars (DEVICE-ROUND-3 §2.7).
+// Tokens map 1:N — multiple modes share the same physical car.
+const CAR_PROJECT_NAME: Record<string, string> = {
+  '4WD4M':  'Wireless Car',
+  'ESP_SER':'Wireless Car',
+  'ESP_CLI':'Wireless Car',
+  '2WD1M':  '2WD1M Car',
+  'AUTO':   'Self Balance Car',
+}
 
 // Tokens the physical ESP32 remote + GENUM fleet drive today. All 9 firmware
 // modes are SELECTABLE in the 2026-09-15 fleet; the only default "coming
@@ -98,6 +109,9 @@ export function ProjectInfo({ mode, categorySlug }: { mode: CarMode; categorySlu
           {/* Selected mode detail card */}
           <View className="mt-4 rounded-xl border border-line bg-surface p-4">
             <InfoRow label="Project" value={selectedMode.name} strong />
+            {CAR_PROJECT_NAME[selectedMode.token] && (
+              <InfoRow label="Car" value={CAR_PROJECT_NAME[selectedMode.token]} />
+            )}
             <InfoRow label="Build" value={selectedMode.car} />
             <InfoRow label="Drive" value={selectedMode.wheel} />
             <InfoRow label="Steering" value={selectedMode.steering} />
@@ -114,6 +128,7 @@ export function ProjectInfo({ mode, categorySlug }: { mode: CarMode; categorySlu
                 </Text>
               </View>
             )}
+            <Text className="mt-3 text-[9px] text-muted">Asset of {company.name}</Text>
           </View>
         </View>
       )}
@@ -133,6 +148,7 @@ export function ProjectInfo({ mode, categorySlug }: { mode: CarMode; categorySlu
             </View>
           </View>
           <Text className="mt-3 text-xs leading-5 text-muted">{category.description}</Text>
+          <Text className="mt-3 text-[9px] text-muted">Asset of {company.name}</Text>
         </View>
       )}
     </View>
