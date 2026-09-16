@@ -5,7 +5,7 @@
 
 ---
 
-## device-round-4 — remote window + floating icon (2026-09-16, IMPLEMENTED — A-19..A-24; JS OTA after push — DEVICE VERIFY PENDING)
+## device-round-4 — remote window + floating icon (2026-09-16, IMPLEMENTED + pushed `ec90656` — A-19..A-24; JS OTA — DEVICE VERIFY PENDING)
 
 > App half of round-4. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-4-2026-09-16.md`.
 > Docs BEFORE code (owner rule). NO native bump — v2.0.6/49 stays, JS OTA. Assumptions:
@@ -15,7 +15,7 @@
 > are singletons so nothing else tears the link).
 >
 > **Code status (2026-09-16): all A-19..A-24 implemented. `npx tsc --noEmit` clean;
-> vitest 50/50. Push to `main` pending (owner gate: flash + device verify).**
+> vitest 50/50. Pushed to `main` (`ec90656`). Owner gate: flash + device verify.**
 
 - [x] **A-19 — joystick show/hide promoted to the toggle row** — the D-pad/Joystick
       toggle becomes `D-pad | Joystick | Hide` in `RemoteControlScreen.tsx` (~413);
