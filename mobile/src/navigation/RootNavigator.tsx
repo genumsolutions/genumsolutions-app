@@ -29,6 +29,7 @@ import { JournalScreen } from '../screens/JournalScreen';
 import { PrintingScreen } from '../screens/PrintingScreen';
 import { OpenToolsScreen } from '../screens/OpenToolsScreen';
 import { LegalScreen } from '../screens/LegalScreen';
+import { FloatingRemoteButton } from '../components/FloatingRemoteButton';
 import { useApp } from '../context/AppContext';
 import { withErrorBoundary } from '../components/withErrorBoundary';
 import { useNavigation } from '@react-navigation/native';
@@ -82,98 +83,101 @@ function MainTabs() {
 
 export function RootNavigator() {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: '#ffffff' },
-      }}
-    >
-      <Stack.Screen name="Main" component={MainTabsSafe} />
-      <Stack.Screen
-        name="Account"
-        component={AccountScreenSafe}
-        options={{ headerShown: true, title: 'My Account', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="ProductDetail"
-        component={ProductDetailScreenSafe}
-        options={{ headerShown: true, title: 'Product', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Checkout"
-        component={CheckoutScreenSafe}
-        options={{ headerShown: true, title: 'Checkout', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="OrderSuccess"
-        component={OrderSuccessScreenSafe}
-        options={{ headerShown: false, gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="Services"
-        component={ServicesScreenSafe}
-        options={{ headerShown: true, title: 'Services', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Projects"
-        component={ProjectsScreenSafe}
-        options={{ headerShown: true, title: 'Projects', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Contact"
-        component={ContactScreenSafe}
-        options={{ headerShown: true, title: 'Contact', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="About"
-        component={AboutScreenSafe}
-        options={{ headerShown: true, title: 'About', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Tools"
-        component={ToolsScreenSafe}
-        options={{ headerShown: true, title: 'Control Panel', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="RemoteControl"
-        component={RemoteControlScreenSafe}
-        options={{ headerShown: false, title: 'Remote', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Admin"
-        component={AdminScreenSafe}
-        options={{ headerShown: true, title: 'Admin', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Update"
-        component={UpdateScreenSafe}
-        options={{ headerShown: true, title: 'App Update', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Journal"
-        component={JournalScreenSafe}
-        options={{ headerShown: true, title: 'Journal', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Printing"
-        component={PrintingScreenSafe}
-        options={{ headerShown: true, title: '3D Printing', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="OpenTools"
-        component={OpenToolsScreenSafe}
-        options={{ headerShown: true, title: 'Open Tools', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Legal"
-        component={LegalScreenSafe}
-        options={({ route }) => ({
-          headerShown: true,
-          title: route.params.doc === 'privacy' ? 'Privacy Policy' : 'Terms of Service',
-          headerTintColor: '#1e3a8a',
-          headerBackTitle: 'Back',
-        })}
-      />
-    </Stack.Navigator>
+    <>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#ffffff' },
+        }}
+      >
+        <Stack.Screen name="Main" component={MainTabsSafe} />
+        <Stack.Screen
+          name="Account"
+          component={AccountScreenSafe}
+          options={{ headerShown: true, title: 'My Account', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="ProductDetail"
+          component={ProductDetailScreenSafe}
+          options={{ headerShown: true, title: 'Product', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Checkout"
+          component={CheckoutScreenSafe}
+          options={{ headerShown: true, title: 'Checkout', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="OrderSuccess"
+          component={OrderSuccessScreenSafe}
+          options={{ headerShown: false, gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="Services"
+          component={ServicesScreenSafe}
+          options={{ headerShown: true, title: 'Services', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Projects"
+          component={ProjectsScreenSafe}
+          options={{ headerShown: true, title: 'Projects', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Contact"
+          component={ContactScreenSafe}
+          options={{ headerShown: true, title: 'Contact', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="About"
+          component={AboutScreenSafe}
+          options={{ headerShown: true, title: 'About', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Tools"
+          component={ToolsScreenSafe}
+          options={{ headerShown: true, title: 'Control Panel', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="RemoteControl"
+          component={RemoteControlScreenSafe}
+          options={{ headerShown: false, title: 'Remote', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Admin"
+          component={AdminScreenSafe}
+          options={{ headerShown: true, title: 'Admin', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Update"
+          component={UpdateScreenSafe}
+          options={{ headerShown: true, title: 'App Update', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Journal"
+          component={JournalScreenSafe}
+          options={{ headerShown: true, title: 'Journal', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Printing"
+          component={PrintingScreenSafe}
+          options={{ headerShown: true, title: '3D Printing', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="OpenTools"
+          component={OpenToolsScreenSafe}
+          options={{ headerShown: true, title: 'Open Tools', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Legal"
+          component={LegalScreenSafe}
+          options={({ route }) => ({
+            headerShown: true,
+            title: route.params.doc === 'privacy' ? 'Privacy Policy' : 'Terms of Service',
+            headerTintColor: '#1e3a8a',
+            headerBackTitle: 'Back',
+          })}
+        />
+      </Stack.Navigator>
+      <FloatingRemoteButton />
+    </>
   );
 }

@@ -236,18 +236,6 @@ export type WeblinkControlsProps = {
   onOpenWebPage: () => void
   /** Switches the car into this package's mode (token ESP_SER / ESP_CLI). */
   onEnterMode: () => void
-  /** v1.4.0 WiFi provisioning (Remote window only): send SSID/password to
-      the car over the Bluetooth link; the car stores + joins + hosts. */
-  btConnected?: boolean
-  wifiSsid?: string
-  setWifiSsid?: (v: string) => void
-  wifiPassword?: string
-  setWifiPassword?: (v: string) => void
-  wifiProvisioning?: boolean
-  onProvisionWifi?: () => void
-  /** Car truth from its status JSON: configured SSID / AP fallback name. */
-  carSsid?: string | null
-  carApName?: string | null
 }
 
 export type TwoWd1mExtrasProps = {
