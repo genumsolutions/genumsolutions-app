@@ -654,10 +654,10 @@ export function DriveControls({
         <View className={compact ? 'min-h-0 flex-1' : ''}>
           {!compact && (
             <View className="mb-2 flex-row items-center justify-center gap-12">
-              <Text className="text-sm font-bold uppercase tracking-wide text-border">
+              <Text className="text-sm font-bold uppercase tracking-wide text-muted">
                 Drive {is2wd1m ? '(Motor)' : '(Left)'}
               </Text>
-              <Text className="text-sm font-bold uppercase tracking-wide text-border">
+              <Text className="text-sm font-bold uppercase tracking-wide text-muted">
                 Steer {is2wd1m ? '(Servo)' : '(Unused)'}
               </Text>
             </View>
@@ -702,7 +702,7 @@ export function DriveControls({
       {showSpeed && !compact && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-3">
           <View className="flex-row items-center justify-between">
-            <Text className="text-sm font-bold uppercase tracking-wide text-border">Speed</Text>
+            <Text className="text-sm font-bold uppercase tracking-wide text-muted">Speed</Text>
             <Text className="font-mono text-sm font-bold text-navy">{clampSpeed(speed, limits)}</Text>
           </View>
           <Slider
@@ -729,7 +729,7 @@ export function DriveControls({
             { label: 'OFF', val: pidOff, max: 5, step: 0.05, key: 'off' as const },
           ].map((p) => (
             <View key={p.key} className="w-[48%] rounded-xl border border-line bg-surface p-4">
-              <Text className="text-sm font-bold uppercase tracking-wide text-border">{p.label}</Text>
+              <Text className="text-sm font-bold uppercase tracking-wide text-muted">{p.label}</Text>
               <Slider
                 value={p.val} minimumValue={p.key === 'off' ? -5 : 0} maximumValue={p.max} step={p.step}
                 onValueChange={(v: number) => onPid(p.key, v)} disabled={!canControl}

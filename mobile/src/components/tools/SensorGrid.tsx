@@ -14,7 +14,7 @@ export function SensorGrid({
     <>
       {/* Relay toggles for home-automation / smart-farm / smart-city */}
       <View className="mt-4 rounded-xl border border-line bg-surface p-4">
-        <Text className="text-xs font-bold uppercase tracking-wide text-border">
+        <Text className="text-xs font-bold uppercase tracking-wide text-muted">
           {activeCategory === 'smart-farm' ? 'Pumps / solenoids' : 'Outputs'}
         </Text>
         <View className="mt-3 flex-row flex-wrap gap-3">
@@ -36,7 +36,7 @@ export function SensorGrid({
       <View className="mt-4 rounded-xl border border-line bg-surface p-4">
         <View className="flex-row items-center gap-1">
           <Feather name="activity" size={12} color="#94a3b8" />
-          <Text className="text-xs font-bold uppercase tracking-wide text-border">Live Sensors</Text>
+          <Text className="text-xs font-bold uppercase tracking-wide text-muted">Live Sensors</Text>
         </View>
         <View className="mt-3 flex-row flex-wrap gap-2">
           <SensorCard
@@ -89,7 +89,7 @@ export function SensorGrid({
       {/* Live telemetry (BLE-specific) */}
       {(telemetry.speed != null || telemetry.mode) && (
         <View className="mt-4 rounded-xl border border-line bg-surface p-4">
-          <Text className="text-xs font-bold uppercase tracking-wide text-border">Live telemetry</Text>
+          <Text className="text-xs font-bold uppercase tracking-wide text-muted">Live telemetry</Text>
           <View className="mt-2 flex-row flex-wrap gap-4">
             {telemetry.speed != null && (
               <Text className="text-xs text-muted">Speed: <Text className="font-mono font-bold text-navy">{telemetry.speed}</Text></Text>

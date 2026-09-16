@@ -98,7 +98,7 @@ export function ProjectInfo({ mode, categorySlug }: { mode: CarMode; categorySlu
                   </Text>
                   {!isAvailable && (
                     <View className="rounded-full bg-amber-100 px-1.5 py-0.5">
-                      <Text className="text-[8px] font-bold uppercase text-amber-700">Soon</Text>
+                      <Text className="text-[8px] font-black uppercase text-amber-700">Coming soon</Text>
                     </View>
                   )}
                 </Pressable>
