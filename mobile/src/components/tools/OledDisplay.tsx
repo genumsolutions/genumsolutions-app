@@ -20,7 +20,7 @@
 //   BT / 2WD1M  → big centered direction (Forward/Backward/Left/Right/Stop)
 //   AUTO        → Angle row (inverted), P/D row, OUT/I/OFF row
 //   other modes → centered mode title
-//   preview     → previewed mode's body; unavailable modes → COMING SOON...
+//   preview     → previewed mode's body; unavailable modes → COMING SOON / WORK IN PROGRESS
 //
 // Bottom bar: always inverted, centered, status message
 // (drawBottomStatus in ui_misc.cpp — drawBox + drawColor 0).
@@ -64,13 +64,14 @@ export function OledDisplay({
 
   // Body content per drawDashboard dispatch. R-10: a CS/WIP PREVIEWED mode
   // draws its availability mark first (drawAvailMarkBody parity —
-  // "COMING SOON..." / "IN PROGRESS..."), then the live dashboard.
+  // "COMING SOON" / "WORK IN PROGRESS" — A-17 round-3 wording), then the live
+  // dashboard.
   const body = (() => {
     if (previewMode && previewModeAvail) {
-      if (previewModeAvail === 'CS') return { kind: 'coming' as const, text: 'COMING SOON...' }
-      if (previewModeAvail === 'WIP') return { kind: 'coming' as const, text: 'IN PROGRESS...' }
+      if (previewModeAvail === 'CS') return { kind: 'coming' as const, text: 'COMING SOON' }
+      if (previewModeAvail === 'WIP') return { kind: 'coming' as const, text: 'WORK IN PROGRESS' }
     }
-    if (previewComingSoon) return { kind: 'coming' as const, text: 'COMING SOON...' }
+    if (previewComingSoon) return { kind: 'coming' as const, text: 'COMING SOON' }
     if (previewMode) {
       if (previewMode.token === 'BT' || previewMode.token === '4WD4M' || previewMode.controls.includes('drive-2wd1m')) {
         return { kind: 'dir' as const, text: driveStatus || 'Stop' }
@@ -137,7 +138,7 @@ export function OledDisplay({
         )}
         {body.kind === 'coming' && (
           <Text numberOfLines={1} className={mono(`font-bold text-emerald-300 ${compact ? 'text-[11px]' : 'text-base'}`)}>
-            COMING SOON...
+            {body.text}
           </Text>
         )}
         {body.kind === 'auto' && (

@@ -1,7 +1,25 @@
 # TESTING — Physical Device Test Checklist
 
-> Target: **v2.0.6/49 + OTA R12 + R13** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; **R13 (2026-09-15)** — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; tsc clean + **50/50 tests**; device verification pending: rounds R10 + R11 + R12 + R13.
+> Target: **v2.0.6/49 + OTA R12 + R13** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; **R13 (2026-09-15)** — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; **device-round-3 (2026-09-16)** — A-17 fleet wording + A-18 project names/asset line (JS OTA after push); tsc clean + **50/50 tests**; device verification pending: rounds R10 + R11 + R12 + R13 + A-17/A-18.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
+
+---
+
+## device-round-3 — fleet wording + project names (2026-09-16, IMPLEMENTED — A-17/A-18; JS OTA after push — DEVICE VERIFY PENDING)
+
+> Device-round-3 wording pass so app marks match the 2026-09-15 firmware fleet
+> (`COMING SOON` / `WORK IN PROGRESS`, no trailing dots). Project card now names the
+> physical car and states the Genum asset line.
+
+- [x] **A-17 — work-in-progress wording (badge + OLED preview):** `ModeChooser` badge →
+  `Work in progress` (renders `WORK IN PROGRESS`), row mark `· work in progress on
+  this car`; `OledDisplay` preview body now renders the mode's own mark (`COMING SOON`
+  or `WORK IN PROGRESS`) instead of hardcoding `COMING SOON...`; comments synced
+  (`carProtocol.ts`, `types.ts`, `useControlHub.ts`).
+- [x] **A-18 — project names + Genum asset line:** `ProjectInfo` shows the physical
+  car per mode (`Wireless Car` for 4WD4M/ESP_SER/ESP_CLI, `2WD1M Car`, `Self Balance
+  Car`) and a footer `Asset of GENUM SOLUTIONS PVT. LTD.` on both the robocar and
+  category cards.
 
 ---
 

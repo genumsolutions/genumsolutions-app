@@ -106,9 +106,9 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
                 const avail = modeAvailStatus(m.token, carStubMap ?? {}, carAvailMap)
                 const notLive = avail !== 'LIVE'
                 const badge = avail === 'WIP'
-                  ? { text: 'In progress', cls: 'bg-sky-500/15', txt: 'text-sky-400' }
+                  ? { text: 'Work in progress', cls: 'bg-sky-500/15', txt: 'text-sky-400' }
                   : { text: 'Coming soon', cls: 'bg-amber-500/15', txt: 'text-amber-400' }
-                const markLine = avail === 'WIP' ? ' · in progress on this car' : ' · coming soon on this car'
+                const markLine = avail === 'WIP' ? ' · work in progress on this car' : ' · coming soon on this car'
                 return (
                   <Pressable
                     key={m.id}
