@@ -26,7 +26,7 @@ import { LOCAL_CAR_MODES, type CarMode, nextRemoteModeToken, sortRemoteModes } f
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, buildRouterCommand, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token â†’ short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
@@ -44,6 +44,11 @@ const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES
 const EVERY_LINK_COMMANDS = new Set([
   '4WD4M', 'BT', 'ESP_SER', 'PATH', 'OBS_US', 'OBS_IR', 'MAN', 'AUTO', 'ESP_CLI', '2WD1M',
   'ESTOP', 'SPD0', 'SERVO90', 'REQ_STATE', 'S',
+  // A-27: router-registry commands are SYSTEM commands — they can switch the
+  // car's network but never drive; reaching the car over WHATEVER link is
+  // live (WS for wireless cars, BT for the hand-held remote path) rides the
+  // car's single system-command hook (W-14/F-21).
+  'ROUTERS',
 ])
 import { deviceMemory } from './types'
 import type { CarTelemetry } from '../../services/carProtocol'
@@ -73,6 +78,11 @@ export function useControlHub(routeCategory?: string) {
   const [wifiSsid, setWifiSsid] = useState('')
   const [wifiPassword, setWifiPassword] = useState('')
   const [wifiProvisioning, setWifiProvisioning] = useState(false)
+  // A-27 (device-round-5): saved-router names mirror — from the wireless
+  // car's `networks` JSON (every WS status broadcast), optimistic edits, and
+  // the per-device savedRouters prefs (restored before the car is linked).
+  // The car's NVS registry stays the source of truth; passwords never sync.
+  const [carNetworks, setCarNetworks] = useState<string[]>([])
   // Broadcast id of the car's AP fallback + its configured SSID (car truth,
   // from the status JSON `ap` / `ssid` fields). Shown in the ESP_SER deck.
   const [carApName, setCarApName] = useState<string | null>(null)
@@ -266,6 +276,12 @@ export function useControlHub(routeCategory?: string) {
             // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
             // (never the password â€” that lives only in flight + the car's NVS).
             if (prefs.lastWifiSsid) setWifiSsid((cur) => cur || prefs.lastWifiSsid!)
+            // A-27: restore the per-device saved-router mirror so the WiFi &
+            // Router panel renders before the car links (names only). The
+            // car's next `networks` echo re-syncs it to car truth.
+            if (prefs.savedRouters && prefs.savedRouters.length > 0) {
+              setCarNetworks((cur) => (cur.length > 0 ? cur : (prefs.savedRouters ?? [])))
+            }
           }
         })
         return () => { active = false }
@@ -289,6 +305,9 @@ export function useControlHub(routeCategory?: string) {
         useJoystick,
         joystickLayout: joystickLayoutId,
         lastWifiSsid: savedPrefs?.lastWifiSsid ?? null,
+        // A-27: keep the saved-router mirror flowing through every patch
+        // (the focused-screen `.read` also feeds it back into the panel).
+        savedRouters: savedPrefs?.savedRouters ?? [],
         ...patch,
       } as DevicePrefs
       void deviceMemory.write(addressForMemory, next)
@@ -391,6 +410,17 @@ export function useControlHub(routeCategory?: string) {
       if (t.reply) handleWifiProvisionReplyRef.current?.(t.reply)
       if (t.ap !== undefined) setCarApName(t.ap || null)
       if (t.ssid !== undefined) setCarSsid(t.ssid || null)
+      // A-27: sync the saved-router mirror from the car's `networks` JSON
+      // (broadcast on every WS status frame + REQ_STATE). Change-guarded to
+      // skip identical arrays (steady 1 s broadcasts don't thrash the panel).
+      if (t.networks && Array.isArray(t.networks)) {
+        const incoming: string[] = t.networks
+        setCarNetworks((prev) => (
+          prev.length === incoming.length && prev.every((n, i) => n === incoming[i])
+            ? prev
+            : incoming.slice()
+        ))
+      }
       // A-7: car truth â€” CAP=STUB (STATE lines) / `stub` (WS JSON) describe
       // the car's CURRENT mode; record it per token so the mode chooser and
       // selectMode() gate on car reality, not a hardcoded app list
@@ -841,6 +871,39 @@ setWifiProvisioning(true)
     }
   }, [connected, wifiConnected, activeMode])
 
+  // ---- A-27: saved-router registry (wireless car v1.7.1, ROUTERS;*) ----
+  // The car (NVS `botcfg`) is the source of truth; the app mirrors names in
+  // savedRouters so the panel restores instantly. Commands broadcast over
+  // EVERY link (W-14: system commands, never drive). Each edit persists the
+  // mirror optimistically; the car's `networks` echo re-syncs within ~1-2 s
+  // (1 s WS broadcast + 2 s REQ_STATE poll).
+  const routerUse = useCallback((ssid: string) => {
+    const s = ssid.trim()
+    if (!s) return
+    sendCommand(buildRouterCommand('USE', s))
+    setDriveStatusOnce(`Switching WiFi to ${s}`)
+    persistPrefsRef.current?.({ savedRouters: [...carNetworks] })
+  }, [sendCommand, carNetworks])
+
+  const routerAdd = useCallback((ssid: string, pass: string) => {
+    const s = ssid.trim()
+    if (!s) return
+    sendCommand(buildRouterCommand('ADD', s, pass))
+    // Optimistic list update (the car's next JSON echo is authoritative).
+    setCarNetworks((prev) => (prev.includes(s) ? prev : [...prev, s]))
+    persistPrefsRef.current?.({ savedRouters: carNetworks.includes(s) ? [...carNetworks] : [...carNetworks, s] })
+    setDriveStatusOnce(`Saved router ${s}`)
+  }, [sendCommand, carNetworks])
+
+  const routerDelete = useCallback((ssid: string) => {
+    const s = ssid.trim()
+    if (!s) return
+    sendCommand(buildRouterCommand('DEL', s))
+    const next = carNetworks.filter((n) => n !== s)
+    setCarNetworks(next)
+    persistPrefsRef.current?.({ savedRouters: next })
+  }, [sendCommand, carNetworks])
+
   const handleDirection = useCallback((d: 'F' | 'B' | 'L' | 'R' | 'S') => {
     setDriveDirOnce(d)
     if (d === 'S') { setDriveStatusOnce('Stop'); sendCommand('S'); return }
@@ -1052,6 +1115,8 @@ setWifiProvisioning(true)
     // v1.4.0 WiFi provisioning (app â†’ BT â†’ car) + car WiFi truth
     wifiSsid, setWifiSsid, wifiPassword, setWifiPassword, wifiProvisioning,
     handleWifiProvision, carApName, carSsid, carStubMap, carAvailMap,
+    // A-27: saved-router registry (car truth names + command helpers)
+    carNetworks, routerUse, routerAdd, routerDelete,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
     // mode + category (carStubMap is returned with the WiFi-truth group above)

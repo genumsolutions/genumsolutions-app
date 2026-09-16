@@ -76,6 +76,13 @@ export type CarTelemetry = {
    * stub flag (kept for back-compat with v1.4.0 cars).
    */
   caps?: Record<string, string>
+  /**
+   * T-49/A-27 (device-round-5): the wireless car's saved-router registry,
+   * names only — WS JSON `"networks":["a","b",…]`. The app mirrors it in
+   * DevicePrefs (per car) for the WiFi & Router panel. NEVER contains
+   * passwords (the car never sends them off-device — W-14).
+   */
+  networks?: string[]
 }
 
 /** Neutral commands sent on disconnect / stale telemetry (safe stop). */
@@ -167,6 +174,21 @@ export function buildTrim(value: number): string {
 
 export const ESTOP_LINE = 'ESTOP'
 export const REQ_STATE_LINE = 'REQ_STATE'
+
+/**
+ * Build a T-48 router-registry line for the wireless car (v1.7.1), sent over
+ * ANY live link (the car dispatches ROUTERS;* from its system-command hook in
+ * every mode). The car is the source of truth for the saved list; passwords
+ * never leave the car's NVS (W-14). `USE` switches the car's ACTIVE pair and
+ * rejoins the router — the server stays up, so a linked WS survives (T-34).
+ * Semicolons are stripped from SSID/password (the protocol splits on ';').
+ */
+export function buildRouterCommand(op: 'LIST' | 'ADD' | 'USE' | 'DEL', ssid: string, pass = ''): string {
+  const s = ssid.replace(/;/g, '').trim()
+  if (!s) return 'ROUTERS;LIST'
+  if (op === 'ADD') return `ROUTERS;ADD;${s};${pass.replace(/;/g, '')}`
+  return `ROUTERS;${op};${s}`
+}
 
 /**
  * Build the v1.4.0 WiFi provisioning line: WIFICFG;<ssid>;<password>.
@@ -421,6 +443,12 @@ export function parseTelemetryLine(line: string): CarTelemetry {
           if (tok && val) caps[tok] = val
         }
         if (Object.keys(caps).length > 0) telemetry.caps = caps
+      }
+      // T-49/A-27: saved-router registry (names only, from the car's NVS).
+      if (Array.isArray(j.networks)) {
+        telemetry.networks = (j.networks as unknown[])
+          .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+          .map((n) => n.trim())
       }
     } catch { /* not JSON — ignore */ }
   }
