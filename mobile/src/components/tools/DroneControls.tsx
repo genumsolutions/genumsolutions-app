@@ -16,7 +16,7 @@ export function DroneControls({
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-1">
             <Feather name="arrow-up" size={12} color="#94a3b8" />
-            <Text className="text-xs font-bold uppercase tracking-wide text-border">Altitude (m)</Text>
+            <Text className="text-xs font-bold uppercase tracking-wide text-muted">Altitude (m)</Text>
           </View>
           <Text className="font-mono text-sm font-bold text-navy">{targetAltitude}m</Text>
         </View>
@@ -60,7 +60,7 @@ export function DroneControls({
       <View className="mt-4 rounded-xl border border-line bg-surface p-4">
         <View className="flex-row items-center gap-1">
           <Feather name="video" size={12} color="#94a3b8" />
-          <Text className="text-xs font-bold uppercase tracking-wide text-border">Camera Gimbal</Text>
+          <Text className="text-xs font-bold uppercase tracking-wide text-muted">Camera Gimbal</Text>
         </View>
         <View className="mt-3 flex-row gap-4">
           <View className="flex-1">

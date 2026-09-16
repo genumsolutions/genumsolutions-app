@@ -52,9 +52,15 @@
   optimistically updates the deck's SSID (car T-35 now confirms anyway).
 - [x] **R14-6 — status line dedupes (A-16):** `setDriveStatus` only fires on actual
   change (kills the 4WD4M flooding).
-- [ ] **R14-7 — fleet UI consistency:** all control panels share the same
-  header/label/card/connected-dot/status-dot/badge tokens (no `bg-surface` vs
-  `bg-card`, label size, corner-radius, or "Soon"-badge drift).
+- [x] **R14-7 — fleet UI consistency (round-3, 2026-09-16):** label color token is
+  `text-muted` everywhere in the control panels (`text-border` misuse removed from
+  `DriveControls`, `DroneControls`, `SensorGrid` → they were rendering the border
+  slate-400/lighter instead of the muted label color); ProjectInfo tab badge now uses
+  the fleet badge family (`font-black`, wording `COMING SOON`-consistent) instead of
+  the "Soon" variant. Panel cards stay the canonical `rounded-2xl border-line bg-card
+  shadow-card` + `text-xs font-black uppercase tracking-widest text-navy` header;
+  detail cards `rounded-xl border-line bg-surface`. Dark Remote-deck tokens unchanged
+  (those are the immersive deck's own family).
 
 ---
 
