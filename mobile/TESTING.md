@@ -5,12 +5,15 @@
 
 ---
 
-## device-round-8 — real BT name + RouterPanel fixed card widths (2026-09-17, IMPLEMENTED — A-38/A-39; JS OTA — DEVICE VERIFY PENDING)
+## device-round-8 — real BT name + RouterPanel fixed card widths (2026-09-17, DONE — A-38/A-39; JS OTA pushed + published, owner device-verified)
 
 > App half of round-8. Full run sheet: `../../guide/DEVICE-ROUND-8-2026-09-17.md` (§3 fix
 > matrix, §5 checks). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7+8 roll into one
 > same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18** (2026-09-17).
-> Code status: A-38/A-39 implemented, pushed `23724ea` (JS OTA publishes on the `main` push).
+> Code status: A-38/A-39 implemented, pushed `23724ea`; **JS OTA bundle published** by the
+> round-8 push (`OTA Only` workflow run `35197115585` = success). **Owner device verify
+> 2026-09-17 (after app close+reopen): round "worked out all fine for most of the things"** —
+> A-38a/A-39a exercised OK; per-check result not itemized, any residual item logged next session.
 > - **A-38** `RemoteControlScreen.tsx` `friendlyBtName()` no longer invents a car name: a
 >   MAC-shaped scan result (or a 1–2 char fragment) now returns `''` instead of `'ESP32 Car'`.
 >   Callers already render `<name> || 'Connected'`, so the header shows the neutral state label
