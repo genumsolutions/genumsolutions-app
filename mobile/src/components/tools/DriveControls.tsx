@@ -592,7 +592,7 @@ export function DriveControls({
   canControl, isDrone, activeMode, speed, servo,
   pidKp, pidKi, pidKd, pidOut, pidOff, useJoystick,
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
-  onSignedDrive, steerLimit, onEStop,
+  onSignedDrive, steerLimit,
   safetyLimits, compact = false, navActiveRef, onNavInput, oledSlot,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   const limits = safetyLimits ?? DEFAULT_LIMITS
@@ -755,17 +755,7 @@ export function DriveControls({
         </View>
       )}
 
-      {/* E-stop (full mode only) */}
-      {onEStop && !compact && (
-        <View className="mt-4">
-          <Pressable onPress={() => { hapticTap(); onEStop() }} disabled={!canControl}
-            className="flex-row items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 disabled:opacity-60">
-            <Feather name="octagon" size={14} color="#fff" />
-            <Text className="text-sm font-black text-white">Emergency stop</Text>
-          </Pressable>
-        </View>
-      )}
-    </View>
+      </View>
   )
 }
 

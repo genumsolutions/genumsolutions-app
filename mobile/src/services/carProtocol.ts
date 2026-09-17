@@ -176,6 +176,14 @@ export const ESTOP_LINE = 'ESTOP'
 export const REQ_STATE_LINE = 'REQ_STATE'
 
 /**
+ * A-46 (round-9): the car's OWN network — its default + protected entry.
+ * In ESP_SER the car broadcasts this name first on every list (NETW; /
+ * `networks` JSON), and DEL/CLEAR/ADD refuse it (car T-66). The app pins it
+ * as a non-deletable "Default" row and never sends it to ROUTERS;DEL.
+ */
+export const OWN_AP_NAME = 'WirelessCar_Wifi'
+
+/**
  * Build a T-48 router-registry line for the wireless car (v1.7.1), sent over
  * ANY live link (the car dispatches ROUTERS;* from its system-command hook in
  * every mode). The car is the source of truth for the saved list; passwords
@@ -183,7 +191,10 @@ export const REQ_STATE_LINE = 'REQ_STATE'
  * rejoins the router — the server stays up, so a linked WS survives (T-34).
  * Semicolons are stripped from SSID/password (the protocol splits on ';').
  */
-export function buildRouterCommand(op: 'LIST' | 'ADD' | 'USE' | 'DEL', ssid: string, pass = ''): string {
+export function buildRouterCommand(op: 'LIST' | 'ADD' | 'USE' | 'DEL' | 'CLEAR', ssid: string, pass = ''): string {
+  // A-40 (round-9): CLEAR wipes every saved router + the active pair on the
+  // car and reverts it to its OWN network (ROUTERS;CLEAR, T-62). No ssid/pass.
+  if (op === 'CLEAR') return 'ROUTERS;CLEAR'
   const s = ssid.replace(/;/g, '').trim()
   if (!s) return 'ROUTERS;LIST'
   if (op === 'ADD') return `ROUTERS;ADD;${s};${pass.replace(/;/g, '')}`

@@ -6,6 +6,7 @@ import { Modal, Pressable, ScrollView, Text, View, Vibration, useWindowDimension
 import { Feather } from '@expo/vector-icons'
 import { LOCAL_CAR_MODES, MODE_NAMES, sortRemoteModes, type CarMode } from '../../config/roboCarCatalog'
 import { modeAvailStatus } from '../../services/carProtocol'
+import { useApp } from '../../context/AppContext'
 import type { ModeChooserProps } from './types'
 
 // Scroll/display order = the SINGLE shared fleet order (roboCarCatalog
@@ -17,6 +18,12 @@ import type { ModeChooserProps } from './types'
 export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, highlighted = false, previewMode = null, locked = false, carStubMap, carAvailMap }: ModeChooserProps) {
   const [open, setOpen] = useState(false)
   const { height } = useWindowDimensions()
+  // A-44: the trigger + cycle button skin via theme tokens so they stay
+  // visible in BOTH themes (the old bg-white/5 + text-white vanished on a
+  // light bg-surface). The dropdown stays a fixed dark fly-out (slate-900):
+  // its row text is tuned for that surface, so it reads the same in light
+  // mode — matching the ESP32 remote's hardware UI this component mirrors.
+  const { themeMode } = useApp()
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
   // A-37: while the dropdown is open we freeze the shown selection to the mode
   // captured at open time (previewMode still wins in NAV) — a stale car echo
@@ -55,22 +62,22 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         accessibilityRole="button"
         accessibilityLabel="Choose car mode"
         className={`min-w-0 max-w-[240px] flex-row items-center justify-between gap-1.5 rounded-xl px-4 py-3 ${
-          highlighted ? 'bg-slate-200' : 'border border-white/15 bg-white/5'
+          highlighted ? 'bg-slate-200' : 'border border-line bg-card'
         }`}
       >
         <Text
           numberOfLines={1}
-          className={`min-w-0 flex-1 text-[13px] font-bold ${highlighted ? 'text-slate-900' : 'text-white'}`}
+          className={`min-w-0 flex-1 text-[13px] font-bold ${highlighted ? 'text-slate-900' : 'text-ink'}`}
         >
           {shortName}
         </Text>
         <Text
           numberOfLines={1}
-          className={`text-[10px] font-mono ${highlighted ? 'text-slate-600' : 'text-slate-400'}`}
+          className={`text-[10px] font-mono ${highlighted ? 'text-slate-600' : 'text-muted'}`}
         >
           {shortToken}
         </Text>
-        <Feather name="chevron-down" size={15} color={highlighted ? '#334155' : '#cbd5e1'} />
+        <Feather name="chevron-down" size={15} color={highlighted ? '#334155' : themeMode === 'dark' ? '#cbd5e1' : '#475569'} />
       </Pressable>
 
       {/* Cycle button — walks the remote's mode order like the physical remote */}
@@ -79,9 +86,9 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
         disabled={!canControl || locked}
         accessibilityRole="button"
         accessibilityLabel="Cycle mode"
-        className="h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 disabled:opacity-40"
+        className="h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-card disabled:opacity-40"
       >
-        <Feather name="rotate-ccw" size={16} color="#fff" />
+        <Feather name="rotate-ccw" size={16} color={themeMode === 'dark' ? '#e2e8f0' : '#334155'} />
       </Pressable>
 
       {/* Dropdown — Modal with flex:1 root so the overlay covers the screen */}

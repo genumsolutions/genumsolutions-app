@@ -58,16 +58,16 @@ function PidRow({
   }
 
   return (
-    <View className="self-start flex-1 flex-row items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
+    <View className="self-start flex-1 flex-row items-center gap-1 rounded-lg border border-black/10 bg-mist px-2 py-1.5 dark:border-white/10">
       {/* Label */}
-      <Text className="w-8 text-[10px] font-black uppercase text-slate-400">{def.label}</Text>
+      <Text className="w-8 text-[10px] font-black uppercase text-muted">{def.label}</Text>
 
       {/* Coarse − */}
       <Pressable
         onPress={() => adjust(-def.bigStep)}
         disabled={!canControl}
         hitSlop={6}
-        className="h-9 w-9 items-center justify-center rounded-lg bg-white/5 active:bg-white/15 disabled:opacity-30"
+        className="h-9 w-9 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 active:bg-black/10 dark:active:bg-white/20 disabled:opacity-30"
       >
         <Feather name="minus" size={14} color="#64748b" />
       </Pressable>
@@ -86,7 +86,7 @@ function PidRow({
       <Pressable
         onPress={() => onOpenModal(pidKey)}
         hitSlop={6}
-        className="min-h-9 min-w-[48px] flex-1 items-center justify-center rounded-lg border border-white/10 bg-slate-800 px-2 py-1 active:bg-slate-700"
+        className="min-h-9 min-w-[48px] flex-1 items-center justify-center rounded-lg border border-black/10 bg-slate-800 px-2 py-1 dark:border-white/10 active:bg-slate-700"
       >
         <Text className="font-mono text-[13px] font-bold text-emerald-300">{display}</Text>
       </Pressable>
@@ -106,7 +106,7 @@ function PidRow({
         onPress={() => adjust(def.bigStep)}
         disabled={!canControl}
         hitSlop={6}
-        className="h-9 w-9 items-center justify-center rounded-lg bg-white/5 active:bg-white/15 disabled:opacity-30"
+        className="h-9 w-9 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 active:bg-black/10 dark:active:bg-white/20 disabled:opacity-30"
       >
         <Feather name="plus" size={14} color="#64748b" />
       </Pressable>

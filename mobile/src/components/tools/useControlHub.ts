@@ -961,6 +961,18 @@ setWifiProvisioning(true)
     persistPrefsRef.current?.({ savedRouters: next })
   }, [sendCommand, carNetworks])
 
+  const routerClearAll = useCallback(() => {
+    // A-41 (round-9): wipe EVERY saved router + the stored active pair on the
+    // car and remote (ROUTERS;CLEAR over every link, T-62). Optimistic reset
+    // to an empty list — the car's own network (WirelessCar_Wifi) is virtual;
+    // the car's next `networks` echo re-appends it as the leading, protected
+    // entry (T-66). Never touches the car's own AP.
+    sendCommand(buildRouterCommand('CLEAR', ''))
+    setCarNetworks([])
+    persistPrefsRef.current?.({ savedRouters: [] })
+    setDriveStatusOnce('All routers cleared')
+  }, [sendCommand])
+
   const handleDirection = useCallback((d: 'F' | 'B' | 'L' | 'R' | 'S') => {
     setDriveDirOnce(d)
     if (d === 'S') { setDriveStatusOnce('Stop'); sendCommand('S'); return }
@@ -1176,7 +1188,7 @@ setWifiProvisioning(true)
     wifiSsid, setWifiSsid, wifiPassword, setWifiPassword, wifiProvisioning,
     handleWifiProvision, carApName, carSsid, carStubMap, carAvailMap,
     // A-27: saved-router registry (car truth names + command helpers)
-    carNetworks, routerUse, routerAdd, routerDelete,
+    carNetworks, routerUse, routerAdd, routerDelete, routerClearAll,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
     // mode + category (carStubMap is returned with the WiFi-truth group above)

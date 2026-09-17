@@ -98,23 +98,42 @@ export function FloatingRemoteButton() {
 
   // Persisted position + last category; and track navigation so we know when
   // the Remote window is in front (hide) or which category to reopen.
+  //
+  // A-45 (round-9) reliability: the navigation 'state' listener below used to
+  // only attach when navigationRef was ALREADY ready at mount — but it rarely
+  // is that early, so remoteInFront never updated and the FAB floated over the
+  // Remote screen. Now we (a) retry attaching until the ref is ready, always
+  // calling refresh() on attach, and (b) run a 1 s poll that re-checks
+  // linked + remoteInFront as a safety net for any missed transport status
+  // or navigation event.
   useEffect(() => {
     let mounted = true
+    let unsub: (() => void) | undefined
+    const attachIfReady = () => {
+      if (!navigationRef.isReady() || unsub) return
+      unsub = navigationRef.addListener('state', refresh)
+      refresh()
+    }
+    const refresh = () => {
+      setRemoteInFront(isRemoteInFront())
+      const route = navigationRef.getCurrentRoute()
+      const cat = (route?.params as { category?: string } | undefined)?.category
+      if (route?.name === 'RemoteControl' && cat) {
+        lastCategoryRef.current = cat
+        void AsyncStorage.setItem(CATEGORY_KEY, cat)
+      }
+    }
     void loadSlot().then((s) => { if (mounted) setSlot(s) })
     void loadLastCategory().then((c) => { if (mounted && c) lastCategoryRef.current = c })
-    const unsub = navigationRef.isReady()
-      ? navigationRef.addListener('state', () => {
-          setRemoteInFront(isRemoteInFront())
-          const route = navigationRef.getCurrentRoute()
-          const cat = (route?.params as { category?: string } | undefined)?.category
-          if (route?.name === 'RemoteControl' && cat) {
-            lastCategoryRef.current = cat
-            void AsyncStorage.setItem(CATEGORY_KEY, cat)
-          }
-        })
-      : undefined
+    attachIfReady()
+    const poll = setInterval(() => {
+      setLinked(anyLinked())
+      if (!navigationRef.isReady()) attachIfReady()
+      else refresh()
+    }, 1000)
     return () => {
       mounted = false
+      clearInterval(poll)
       unsub?.()
     }
   }, [])

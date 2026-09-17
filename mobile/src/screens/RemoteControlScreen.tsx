@@ -16,7 +16,7 @@
 // Drive controls (joystick/d-pad) are delegated to DriveControls.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Linking, Platform, Pressable, ScrollView, Switch, Text, Vibration, View, useWindowDimensions } from 'react-native'
+import { Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -87,16 +87,16 @@ function StepperPill({ onPress, disabled, icon }: {
       android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true, radius: 20 }}
       className="h-8 w-8 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
     >
-      <Feather name={icon} size={14} color="#fff" />
+      <Feather name={icon} size={14} color="#64748b" />
     </Pressable>
   )
 }
 
 /** Inline value strip for the chrome row — Speed or Steer LIMIT. */
-function ValueStrip({ label, value, min, max, canControl, locked, highlight, onChange, onCommit }: {
+function ValueStrip({ label, value, min, max, canControl, locked, highlight, onChange, onCommit, dark }: {
   label: string; value: number; min: number; max: number
   canControl: boolean; locked: boolean; highlight: boolean
-  onChange: (v: number) => void; onCommit: () => void
+  onChange: (v: number) => void; onCommit: () => void; dark: boolean
 }) {
   return (
     <View
@@ -112,7 +112,7 @@ function ValueStrip({ label, value, min, max, canControl, locked, highlight, onC
         onValueChange={onChange} onSlidingComplete={onCommit}
         disabled={!canControl || locked}
         minimumTrackTintColor={highlight ? '#1e3a8a' : '#60a5fa'}
-        maximumTrackTintColor={highlight ? 'rgba(30,58,138,0.3)' : 'rgba(255,255,255,0.15)'}
+        maximumTrackTintColor={highlight ? 'rgba(30,58,138,0.3)' : dark ? 'rgba(255,255,255,0.15)' : 'rgba(100,116,139,0.3)'}
         thumbTintColor={highlight ? '#1e3a8a' : '#3b82f6'}
         style={{ flex: 1, height: 28 }}
       />
@@ -138,7 +138,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     activeCategory, activeMode, carModes, carStubMap, carAvailMap, selectMode, cycleMode,
     speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
-    adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop,
+    adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim,
+    handleDisconnect,
     navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
     pidKp, pidKi, pidKd, pidOut, pidOff,
     gimbalPan, gimbalTilt, targetAltitude, handleGimbalPan, handleGimbalTilt, handleAltitude,
@@ -150,6 +151,19 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   const linked = connected || wifiConnected
   const isRobocar = !isDrone && !isNonRobocar
+
+  // A-43b (round-9): the sub-header Disconnect pill — confirm, then tear down
+  // EVERY live link (BT + WS) via the hub, which safely stops the car first.
+  const confirmDisconnect = () => {
+    Alert.alert(
+      'Disconnect?',
+      'The car will stop safely and the link will close.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: () => { void handleDisconnect() } },
+      ],
+    )
+  }
 
 
   // Restore joystick layout choice per device.
@@ -383,6 +397,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 highlight={isShown2wd1m ? topField === 'steer' : topField === 'speed'}
                 onChange={(v) => { if (isShown2wd1m) { adjustSteerLimit(v - steerLimit) } else handleSpeed(v) }}
                 onCommit={() => { if (!isShown2wd1m) commitSpeed() }}
+                dark={themeMode === 'dark'}
               />
             </View>
           )}
@@ -429,6 +444,20 @@ export function RemoteControlScreen({ navigation }: Props) {
                 <Text className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-700 dark:text-sky-300' : 'text-muted'}`} numberOfLines={1}>
                   {telemetry.ip || '192.168.4.1'}
                   {!telemetry.ip ? ' (AP)' : ''}
+                </Text>
+              </Pressable>
+            ) : null}
+            {linked ? (
+              <Pressable
+                onPress={confirmDisconnect}
+                accessibilityRole="button"
+                accessibilityLabel="Disconnect from the car"
+                hitSlop={6}
+                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+              >
+                <Feather name="power" size={10} color={wifiConnected ? '#dc2626' : '#64748b'} />
+                <Text className={`text-[9px] font-black uppercase tracking-wide ${linked ? 'text-red-600 dark:text-red-400' : 'text-muted'}`} numberOfLines={1}>
+                  Disconnect
                 </Text>
               </Pressable>
             ) : null}
@@ -553,6 +582,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onUse={hub.routerUse}
                 onAdd={hub.routerAdd}
                 onDelete={hub.routerDelete}
+                onClear={hub.routerClearAll}
                 onOpenWebPage={handleOpenWebPage}
               />
             ) : (
@@ -566,19 +596,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </View>
             )}
-            {/* E-stop FAB */}
-            <Pressable
-              onPress={() => { Vibration.vibrate(50); handleEStop() }}
-              accessibilityRole="button"
-              accessibilityLabel="Emergency stop"
-              hitSlop={10}
-              android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true, radius: 34 }}
-              style={{ position: 'absolute', bottom: 16, right: 8, zIndex: 10 }}
-            >
-              <View className="h-14 w-14 items-center justify-center rounded-full bg-red-600 shadow-lg">
-                <Feather name="octagon" size={22} color="#fff" />
-              </View>
-            </Pressable>
           </View>
         )}
       </View>
@@ -596,7 +613,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             style={{ top: Math.max(insets.top, 8) + 48, maxHeight: height - 96 }}
             showsVerticalScrollIndicator={false}
           >
-            <Text className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-muted">
+            <Text numberOfLines={1} ellipsizeMode="middle" className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-muted">
               Settings · {is2wd1mActive ? '2WD1M' : activeMode.name.split('·')[0].trim()}
             </Text>
 
