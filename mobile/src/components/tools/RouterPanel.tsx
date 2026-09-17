@@ -82,7 +82,10 @@ export function RouterPanel({
   // stretched/overflowed the cards (last card unreachable). `shrink-0` keeps
   // them from compressing; narrow screens still scroll horizontally.
   const GAP = 12
-  const PANEL_PAD = 24 // ScrollView `p-3` (12px) on both sides
+  // A-51 (round-11): the outer vertical ScrollView pads 6px per side, so the
+  // card row measures (panel width − 12). Width stays per-card FIXED pixel
+  // (clamped 260–380) so the row scrolls horizontally on narrow screens.
+  const PANEL_PAD = 12
   const [availW, setAvailW] = React.useState(0)
   const cardWidth = React.useMemo(() => {
     const usable = Math.max(0, availW - PANEL_PAD)
@@ -108,16 +111,28 @@ export function RouterPanel({
         </View>
       </View>
 
-      <ScrollView
-        horizontal
-        onLayout={(e) => setAvailW(e.nativeEvent.layout.width)}
-        className="mt-2 min-h-0 rounded-2xl border border-line bg-card p-3 shadow-card"
-        contentContainerStyle={{ gap: GAP }}
-        keyboardShouldPersistTaps="handled"
-        showsHorizontalScrollIndicator={false}
-      >
+      {/* A-51 (round-11): the panel CLIPS to its rounded box (overflow-hidden)
+          so the tall Add card no longer spills past the rounded corners, and
+          the row scrolls VERTICALLY when the landscape deck is shorter than
+          the cards — the W-14 note used to render outside the box edge. */}
+      <View className="mt-2 min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card shadow-card">
+        <ScrollView
+          className="min-h-0 flex-1"
+          contentContainerStyle={{ padding: 6 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+        <ScrollView
+          horizontal
+          onLayout={(e) => setAvailW(e.nativeEvent.layout.width)}
+          contentContainerStyle={{ gap: GAP }}
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+        >
         {/* A-35b · Card: active connection + IP (tappable → web page) */}
-        <View style={cardWidth} className="shrink-0 rounded-xl bg-mist px-3 py-3 shadow-inner dark:bg-slate-900">
+        <View style={cardWidth} className="shrink-0 rounded-xl bg-mist px-3 py-3 shadow-inner dark:bg-mist">
           <Text className="font-mono text-[11px] font-bold uppercase tracking-wide text-muted">Active connection</Text>
           <Text className="mt-1 text-[15px] font-bold text-ink dark:text-white" numberOfLines={1} ellipsizeMode="middle">
             {activeName ?? (linked ? 'Default router' : '\u2014')}
@@ -147,7 +162,7 @@ export function RouterPanel({
         </View>
 
         {/* Card: saved routers — own network pinned as Default (A-46) */}
-        <View style={cardWidth} className="shrink-0 rounded-xl border border-line bg-mist p-3 dark:bg-slate-900">
+        <View style={cardWidth} className="shrink-0 rounded-xl border border-line bg-mist p-3 dark:bg-mist">
           <View className="flex-row items-center justify-between gap-2">
             <Text className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-wide text-muted" numberOfLines={1}>
               Saved on the car{userNetworks.length > 0 ? ` \u00b7 ${userNetworks.length}/6` : ''}
@@ -225,7 +240,7 @@ export function RouterPanel({
         </View>
 
         {/* Card: add form */}
-        <View style={cardWidth} className="shrink-0 rounded-xl border border-line bg-mist p-3 dark:bg-slate-900">
+        <View style={cardWidth} className="shrink-0 rounded-xl border border-line bg-mist p-3 dark:bg-mist">
           <Text className="text-[11px] font-black uppercase tracking-wide text-muted">Add a router</Text>
           <TextInput
             value={ssid}
@@ -274,6 +289,8 @@ export function RouterPanel({
           )}
         </View>
       </ScrollView>
+      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   )
 }

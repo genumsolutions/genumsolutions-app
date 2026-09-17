@@ -479,11 +479,14 @@ export function RemoteControlScreen({ navigation }: Props) {
             >
               <Text className={`text-[10px] font-bold ${showJoystick && useJoystick ? 'text-white' : 'text-muted'}`}>Joystick</Text>
             </Pressable>
+            {/* A-50 (round-11): the third pill is TELEMETRY, not "Hide" — it
+                opens the mode's readout panels (PID dashboard / router manager
+                / full OLED mirror) instead of a pointless "Pad hidden" card. */}
             <Pressable
               onPress={() => { Vibration.vibrate(10); setShowJoystick(false) }}
               className={`rounded-full px-3 py-1 ${!showJoystick ? 'bg-navy' : 'border border-line bg-card'}`}
             >
-              <Text className={`text-[10px] font-bold ${!showJoystick ? 'text-white' : 'text-muted'}`}>Hide</Text>
+              <Text className={`text-[10px] font-bold ${!showJoystick ? 'text-white' : 'text-muted'}`}>Telemetry</Text>
             </Pressable>
           </View>
         )}
@@ -586,13 +589,23 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onOpenWebPage={handleOpenWebPage}
               />
             ) : (
-              /* Round-6: non-web hidden modes — no router page to manage. */
-              <View className="mt-2 flex-1 items-center justify-center rounded-2xl border border-line bg-card px-6 py-6 shadow-card">
-                <Feather name="smartphone" size={26} color="#64748b" />
-                <Text className="mt-2 text-sm font-bold text-ink dark:text-white">Pad hidden</Text>
-                <Text className="mt-1 text-center text-xs leading-4 text-muted">
-                  This mode has no WiFi page. Switch the car to ESP32 (Webserver)
-                  to manage its saved networks here.
+              /* A-50 (round-11): hidden modes without a dedicated panel now
+                 mirror the FULL OLED readout (the same mirror the robotics
+                 screens show) — the "Pad hidden" placeholder is gone. The
+                 OLED keeps showing the active mode, drive direction and the
+                 NAV highlights while the pads are tucked away. */
+              <View className="min-h-0 flex-1 items-center justify-center px-4 py-2">
+                <View className="max-h-[85%] w-full max-w-[420px] flex-1">
+                  <OledDisplay
+                    {...oledCommonProps}
+                    topField={topField}
+                    previewMode={previewMode}
+                    previewModeAvail={previewMode ? modeAvailStatus(previewMode.token, carStubMap, carAvailMap) : undefined}
+                    steerLimit={steerLimit}
+                  />
+                </View>
+                <Text numberOfLines={1} className="mt-2 text-[10px] font-black uppercase tracking-widest text-muted">
+                  {shownMode.name.split('·')[0].trim()}
                 </Text>
               </View>
             )}
