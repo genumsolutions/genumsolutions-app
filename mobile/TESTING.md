@@ -5,6 +5,26 @@
 
 ---
 
+## device-round-8 — real BT name + RouterPanel fixed card widths (2026-09-17, IMPLEMENTED — A-38/A-39; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-8. Full run sheet: `../../guide/DEVICE-ROUND-8-2026-09-17.md` (§3 fix
+> matrix, §5 checks). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7+8 roll into one
+> same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18** (2026-09-17).
+> Code status: A-38/A-39 implemented, push pending.
+> - **A-38** `RemoteControlScreen.tsx` `friendlyBtName()` no longer invents a car name: a
+>   MAC-shaped scan result (or a 1–2 char fragment) now returns `''` instead of `'ESP32 Car'`.
+>   Callers already render `<name> || 'Connected'`, so the header shows the neutral state label
+>   when there is no real name. Owner rule (round-8): `WIRELESS CAR` (BT) and `WirelessCar_Wifi`
+>   (WiFi/SSID) are the only real names; no stray "ESP"/"esp car" wording. Verify A-38a: with a
+>   real SPP name the header shows `WIRELESS CAR`; with only a MAC it shows `Connected`, never
+>   "ESP32 Car".
+> - **A-39** `RouterPanel.tsx` card width is now a **fixed pixel** value measured on layout —
+>   `(available − 2×12 gap) / 3`, clamped **260–380 px**, `shrink-0` — replacing the previous
+>   `width:'46%'` percentage that mis-measured inside the horizontal `ScrollView` and made the
+>   sections stretch/elongate (last card unreachable at max scroll). Horizontal scroll + 12 px
+>   gap unchanged. Verify A-39a: with 3 cards the row fits exactly on landscape; every card,
+>   including the LAST (add-router), is reachable by scrolling; no card stretches to fill.
+
 ## device-round-7 — IP chip + RouterPanel grid + mode-flip flicker (2026-09-17, IMPLEMENTED — A-35..A-37; JS OTA — DEVICE VERIFY PENDING)
 
 > App half of round-7. Full run sheet: `../../guide/DEVICE-ROUND-7-2026-09-17.md` (§3 fix
