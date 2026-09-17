@@ -18,7 +18,11 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
   const [open, setOpen] = useState(false)
   const { height } = useWindowDimensions()
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES
-  const shown = previewMode ?? activeMode
+  // A-37: while the dropdown is open we freeze the shown selection to the mode
+  // captured at open time (previewMode still wins in NAV) — a stale car echo
+  // arriving mid-open can't snap the highlight back to the old mode.
+  const openModeRef = useRef<CarMode | null>(null)
+  const shown = previewMode ?? (open ? (openModeRef.current ?? activeMode) : activeMode)
   const shortName = MODE_NAMES[shown.token] ?? shown.name.split('·')[0].trim()
   const shortToken = shown.token
 
@@ -27,6 +31,7 @@ export function ModeChooser({ activeMode, canControl, onSelect, onCycle, modes, 
 
   const openDropdown = () => {
     if (open) { setOpen(false); return }
+    openModeRef.current = activeMode
     triggerRef.current?.measureInWindow((x, y, w, h) => {
       setAnchor({ x, y, w: Math.max(w, 236), h })
       setOpen(true)

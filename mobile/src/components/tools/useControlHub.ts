@@ -201,6 +201,12 @@ export function useControlHub(routeCategory?: string) {
   // Mode from car (mode sync)
   const [carModeId, setCarModeId] = useState<string | null>(null)
   const carModeIdRef = useRef<string | null>(null)
+  // A-37: user mode-commit grace (ESP remote R-33 parity) — remember the token
+  // the USER chose plus the car-truth mode at commit time so the stale in-flight
+  // echo (still the pre-commit mode) cannot undo the optimistic pick (that was
+  // the dropdown flicker). Any CHANGED echo is car truth and adopts + clears.
+  const MODE_CHANGE_GRACE_MS = 2500
+  const modeCommitRef = useRef<{ token: string; stale: string | null; at: number } | null>(null)
 
   // A-14/A-16: always-fresh mirrors for the connection/status setters so the
   // writers can dedupe without stale closures and without re-running drives.
@@ -422,12 +428,22 @@ export function useControlHub(routeCategory?: string) {
       setTelemetry((prev) => ({ ...prev, ...t }))
       // Mode: always mirror (applyRemoteState parity). X-8: incoming tokens
       // are canonicalized so old cars' MODE=BT still mirrors the 4WD4M row.
+      // A-37: R-33 parity — within MODE_CHANGE_GRACE_MS of selectMode, an echo
+      // still equal to the PRE-commit mode is the stale race line (skip, the
+      // optimistic pick stands); a changed echo is car truth → adopt + clear.
       if (t.mode) {
         const canonical = canonicalCarToken(t.mode)
-        setCarModeId(canonical)
-        carModeIdRef.current = canonical
-        const matched = carModesRef.current.find((m) => m.id === canonical.toLowerCase() || m.token === canonical)
-        if (matched) setActiveMode(matched)
+        const commit = modeCommitRef.current
+        if (commit && Date.now() - commit.at > MODE_CHANGE_GRACE_MS) modeCommitRef.current = null
+        const pending = modeCommitRef.current
+        const staleRace = pending != null && canonical === pending.stale && canonical !== pending.token
+        if (!staleRace) {
+          if (pending != null) modeCommitRef.current = null
+          setCarModeId(canonical)
+          carModeIdRef.current = canonical
+          const matched = carModesRef.current.find((m) => m.id === canonical.toLowerCase() || m.token === canonical)
+          if (matched) setActiveMode(matched)
+        }
       }
       // Speed: quantized mirror, NAV-edit-aware (see above).
       if (!navActiveRef.current && t.speed != null) {
@@ -1057,6 +1073,9 @@ setWifiProvisioning(true)
     setDriveStatusOnce(`Mode:${MODE_NAME_FOR_TOKEN[m.token] ?? m.token}`)
     sendCommand('S')
     sendCommand(m.token)
+    // A-37: open the commit-grace window (pre-commit car truth + chosen token)
+    // so the stale in-flight MODE echo can't flicker the optimistic pick back.
+    modeCommitRef.current = { token: canonicalCarToken(m.token), stale: carModeIdRef.current, at: Date.now() }
     // Persist the selected mode so it restores on reconnect / next power cycle.
     persistPrefsRef.current?.({ modeId: m.id })
   }, [sendCommand])
