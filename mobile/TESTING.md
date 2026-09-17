@@ -5,6 +5,36 @@
 
 ---
 
+## device-round-7 — IP chip + RouterPanel grid + mode-flip flicker (2026-09-17, IMPLEMENTED — A-35..A-37; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-7. Full run sheet: `../../guide/DEVICE-ROUND-7-2026-09-17.md` (§3 fix
+> matrix, §4 A-35..A-37 rationale). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7
+> roll into one same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18**
+> (2026-09-17). Code status: all A-35..A-37 implemented, push PENDING.
+> - **A-36** the top-bar IP chip (`RemoteControlScreen.tsx`) is **ALWAYS tappable** — no
+>   `disabled={!wifiConnected}`, and `handleOpenWebPage()` no longer early-returns when
+>   telemetry is missing: with a reachable STA IP it opens `http://<ip>`, otherwise it opens
+>   `http://192.168.4.1` (the car's AP page) so "nothing happens" is gone even offline; the
+>   chip label shows `(AP)` when the STA IP is absent. Verify A-36a (STA IP opens the car
+>   page) + A-36b (WiFi off / only-AP → still opens 192.168.4.1).
+> - **A-35/A-35b** `RouterPanel.tsx` is rebuilt as a **landscape split-card grid**: the panel
+>   is now a horizontal `ScrollView` of three min-width ~300 px cards — (1) the car's own WiFi
+>   connection (SSID + AP line + tappable IP, A-35b), (2) saved routers (Switch/Delete rows),
+>   (3) the add-router form. On a wide landscape deck the cards sit side-by-side; on a narrow
+>   screen they scroll sideways instead of squeezing. Inputs + buttons grew to `h-12` and the
+>   body type to 13–14 px. Verify A-35a (landscape shows ≥2 cards side-by-side, no squeeze) +
+>   A-35b (car's own WiFi card shows SSID/AP/IP correctly).
+> - **A-37** dead mode-flip flicker: the car's `MODE` echo was mirrored unconditionally
+>   (`useControlHub.ts` applyTelemetry) and a **stale in-flight echo of the pre-change mode**
+>   kept rewriting `activeMode` back to the old value right after the user picked a new one.
+>   Fix = ESP-remote R-33 parity: `selectMode()` opens a `MODE_CHANGE_GRACE_MS` (2500 ms)
+>   commit window (`{token, stale, at}`); while pending, an echo still equal to the pre-commit
+>   mode AND ≠ the chosen token is skipped (the optimistic pick stands) — any changed echo is
+>   car truth and adopts + clears. `ModeChooser.tsx` additionally freezes the shown selection
+>   to the mode captured at open-time while the dropdown is open (`openModeRef`). Verify A-37a
+>   (open dropdown, car sends a stale old-mode echo → highlight does not snap back; new echo
+>   → it follows) + A-37b (cycle button + dropdown select still land + OLED mirrors).
+
 ## device-round-6 — remote chrome rectification (2026-09-17, IMPLEMENTED — A-29..A-34; JS OTA — DEVICE VERIFY PENDING)
 
 > App half of round-6. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-6-2026-09-17.md`.

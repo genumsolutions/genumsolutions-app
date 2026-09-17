@@ -16,7 +16,7 @@
 // Drive controls (joystick/d-pad) are delegated to DriveControls.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, Pressable, ScrollView, Switch, Text, Vibration, View, useWindowDimensions } from 'react-native'
+import { Linking, Platform, Pressable, ScrollView, Switch, Text, Vibration, View, useWindowDimensions } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ScreenOrientation from 'expo-screen-orientation'
@@ -248,11 +248,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   const backLabel = navActive ? 'Cancel' : 'Back'
 
   // ── Weblink handlers ──
+  // A-36: the IP chip is ALWAYS tappable — with a reachable STA IP we open the
+  // car's web page directly; offline/AP-fallback we open http://192.168.4.1
+  // (the car's own AP page), so "nothing happens" is gone even unconnected.
   const handleOpenWebPage = useCallback(() => {
-    if (!wifiConnected || !telemetry.ip) return
-    const url = `http://${telemetry.ip}`
-    import('react-native').then(({ Linking }) => { Linking.openURL(url) })
-  }, [wifiConnected, telemetry.ip])
+    const url = telemetry.ip ? `http://${telemetry.ip}` : 'http://192.168.4.1'
+    void Linking.openURL(url).catch(() => undefined)
+  }, [telemetry.ip])
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false)
@@ -413,7 +415,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             {activeMode.id === 'website-server' ? (
               <Pressable
                 onPress={handleOpenWebPage}
-                disabled={!wifiConnected}
                 accessibilityRole="link"
                 accessibilityLabel={`Open car web page at ${telemetry.ip || '192.168.4.1'}`}
                 hitSlop={6}
@@ -422,7 +423,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 <Feather name={wifiConnected ? 'external-link' : 'wifi'} size={10} color={wifiConnected ? '#0284c7' : '#64748b'} />
                 <Text className={`font-mono text-[9px] ${wifiConnected ? 'text-sky-700 dark:text-sky-300' : 'text-muted'}`} numberOfLines={1}>
                   {telemetry.ip || '192.168.4.1'}
-                  {!telemetry.ip && wifiConnected ? '' : !telemetry.ip ? ' (AP)' : ''}
+                  {!telemetry.ip ? ' (AP)' : ''}
                 </Text>
               </Pressable>
             ) : null}
