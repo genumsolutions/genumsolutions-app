@@ -5,13 +5,14 @@
 
 ---
 
-## device-round-9 — WiFi clear-all + own-AP default + E-stop removal + light theme + FAB reliability (2026-09-17, IMPLEMENTED — A-40..A-47; JS OTA — DEVICE VERIFY PENDING)
+## device-round-9 — WiFi clear-all + own-AP default + E-stop removal + light theme + FAB reliability (2026-09-17, PUSHED `aa560bd` — A-40..A-47; JS OTA — DEVICE VERIFY PENDING)
 
 > App half of round-9. Full run sheet: `../../guide/DEVICE-ROUND-9-2026-09-17.md` (§3 fix
 > matrix, §5 checks, §6 failsafe note). NO native bump — v2.0.6 stays (rounds 5..9 roll into
 > one same-version OTA bundle; runtimeVersion 1.0.0). Gates: **tsc clean + vitest 54/54 +
-> expo-doctor 18/18** (2026-09-17). Push: pending the owner go (this push; the `OTA Only`
-> workflow publishes the bundle on main).
+> expo-doctor 18/18** (2026-09-17). **Pushed `aa560bd` on the owner go; the `OTA Only`
+> workflow (`ota-only.yml`) publishes the bundle on main — close + reopen the app to
+> receive it.**
 > - **A-40/A-41** `carProtocol.ts` `buildRouterCommand('CLEAR', …)` → `ROUTERS;CLEAR`;
 >   `useControlHub.routerClearAll()` broadcasts on every live link, optimistically clears
 >   `carNetworks`, persists `savedRouters: []` and reports "All routers cleared".
