@@ -270,6 +270,10 @@ export type RouterPanelProps = {
   onAdd: (ssid: string, pass: string) => void
   /** Fires on Delete — ROUTERS;DEL;<ssid>. */
   onDelete: (ssid: string) => void
+  /** A-42 (round-9): fires on "Clear all" (after the confirm) —
+      ROUTERS;CLEAR wipes every saved router + the active pair on car+remote
+      and reverts to the car's OWN network (T-62). */
+  onClear: () => void
   onOpenWebPage: () => void
 }
 
@@ -310,11 +314,12 @@ export type DriveControlsProps = {
   onPid: (key: 'kp' | 'ki' | 'kd' | 'out' | 'off', v: number) => void
   onRun?: () => void
   onStop?: () => void
-  /** Emergency stop (ESTOP + SPD0). Rendered when provided. */
-  onEStop?: () => void
   /** Compact game-remote deck: board fills the available space (joystick
-      flex-fill), slim speed strip, and the PID / start-stop / emergency
-      rows are hidden (the remote screen shows those elsewhere). */
+      flex-fill), slim speed strip, and the PID / start-stop rows are hidden
+      (the remote screen shows those elsewhere). A-43 (round-9): the emergency
+      stop button was REMOVED from the app UI (owner) — the failsafe path
+      (ESTOP protocol + auto safe-stop on link loss) is untouched, so no
+      onEStop prop exists anymore. */
   compact?: boolean
   /** NAV routing (ESP-remote parity): the deck reads this ref's CURRENT
       value on every touch (never stale) and routes input to the NAV

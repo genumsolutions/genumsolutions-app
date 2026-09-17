@@ -4,7 +4,9 @@
 //   2. trim (−/+ steppers)
 // Both values are remembered per device across restarts (ToolsScreen
 // persists them via deviceMemory). Mirror the hand-held ESP remote.
-// Emergency stop now lives in the drive deck (DriveControls.onEStop).
+// A-43 (round-9): the app UI no longer has an emergency-stop button (owner
+// removed it); the failsafe stays intact — handleEStop in the hub + the
+// ESTOP command + link-loss auto stop. UseControlHub.ESTOP_LINE drives it.
 // Compact controls match the shrunk Speed row in DriveControls.
 // =====================================================================
 import React from 'react'

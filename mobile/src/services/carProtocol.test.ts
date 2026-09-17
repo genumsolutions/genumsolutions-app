@@ -11,6 +11,8 @@ import {
   buildServo,
   buildTrim,
   buildWifiConfigLine,
+  buildRouterCommand,
+  OWN_AP_NAME,
   ESTOP_LINE,
   isAllowedDriveStatus,
   isCompleteJsonObject,
@@ -92,6 +94,29 @@ describe('command builders (wire format)', () => {
   it('exposes the fixed safety lines', () => {
     expect(ESTOP_LINE).toBe('ESTOP');
     expect(REQ_STATE_LINE).toBe('REQ_STATE');
+  });
+});
+
+describe('router-registry commands + protected own network (A-40/A-46)', () => {
+  it('builds the T-48 registry lines the car dispatches in every mode', () => {
+    expect(buildRouterCommand('LIST', '')).toBe('ROUTERS;LIST');
+    expect(buildRouterCommand('ADD', 'HomeNet', 's3cret')).toBe('ROUTERS;ADD;HomeNet;s3cret');
+    expect(buildRouterCommand('USE', 'HomeNet')).toBe('ROUTERS;USE;HomeNet');
+    expect(buildRouterCommand('DEL', 'HomeNet')).toBe('ROUTERS;DEL;HomeNet');
+  });
+
+  it('strips semicolons from SSID/password (protocol splits on ;)', () => {
+    expect(buildRouterCommand('ADD', 'A;B', 'pa;ss')).toBe('ROUTERS;ADD;AB;pass');
+  });
+
+  it('A-40: CLEAR wipes everything and ignores the ssid/pass args', () => {
+    expect(buildRouterCommand('CLEAR', 'any')).toBe('ROUTERS;CLEAR');
+    expect(buildRouterCommand('CLEAR', 'any', 'secret')).toBe('ROUTERS;CLEAR');
+  });
+
+  it('A-46: exports the car OWN network the UI pins as its protected default', () => {
+    expect(OWN_AP_NAME).toBe('WirelessCar_Wifi');
+    expect(buildRouterCommand('DEL', OWN_AP_NAME)).toBe('ROUTERS;DEL;WirelessCar_Wifi');
   });
 });
 

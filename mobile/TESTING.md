@@ -5,6 +5,46 @@
 
 ---
 
+## device-round-9 — WiFi clear-all + own-AP default + E-stop removal + light theme + FAB reliability (2026-09-17, IMPLEMENTED — A-40..A-47; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-9. Full run sheet: `../../guide/DEVICE-ROUND-9-2026-09-17.md` (§3 fix
+> matrix, §5 checks, §6 failsafe note). NO native bump — v2.0.6 stays (rounds 5..9 roll into
+> one same-version OTA bundle; runtimeVersion 1.0.0). Gates: **tsc clean + vitest 54/54 +
+> expo-doctor 18/18** (2026-09-17). Push: pending the owner go (this push; the `OTA Only`
+> workflow publishes the bundle on main).
+> - **A-40/A-41** `carProtocol.ts` `buildRouterCommand('CLEAR', …)` → `ROUTERS;CLEAR`;
+>   `useControlHub.routerClearAll()` broadcasts on every live link, optimistically clears
+>   `carNetworks`, persists `savedRouters: []` and reports "All routers cleared".
+> - **A-42/A-46** RouterPanel: **Clear all** pill (destructive `Alert` confirm, only when
+>   user routers exist) + count shows user routers `/6`; the car's OWN network is pinned as a
+>   non-deletable **Default** row (`OWN_AP_NAME = 'WirelessCar_Wifi'`, exported from
+>   carProtocol) with no Switch/Delete; `routerDelete` guard can never DEL the own name (the
+>   car also refuses it, T-66). Verify A-42/46a: clear-all asks first and wipes car+remote;
+>   the Default row always shows and cannot be deleted.
+> - **A-43/A-43b** The emergency-stop **button is removed from the app UI** (owner): E-stop
+>   FAB + latent DriveControls pill + `onEStop` prop + type deleted. `handleEStop`, the
+>   `ESTOP` command path and link-loss auto safe-stop are UNCHANGED (hub-only). A NEW
+>   **Disconnect** pill in the sub-header (right of the status/IP chips, only while linked)
+>   confirms via `Alert` then `hub.handleDisconnect()` (safe-stops first). Verify A-43a: no
+>   E-stop button anywhere; failsafe still walks on link loss. A-43ba: Disconnect closes BT
+>   and WiFi links.
+> - **A-44** light-theme contrast: ModeChooser trigger + cycle button now skin via theme
+>   tokens (`border-line bg-card` / `text-ink`, chevrons #475569/#cbd5e1) — the old white-on-
+>   white is gone in light mode; the fly-out stays a fixed dark slate-900 palette (its row
+>   text is tuned for that surface, matches the ESP32 remote hardware UI). StepperPill icon
+>   `#fff`→`#64748b`; ValueStrip rail max-track is `dark`-aware (`rgba(255,255,255,0.15)`
+>   dark / `rgba(100,116,139,0.3)` light); BalanceControls PID chips + coarse ± buttons use
+>   `bg-mist` + black/white alpha with `dark:` variants. Verify A-44a: every remote/deck
+>   control readable on white.
+> - **A-45** FloatingRemoteButton: the navigation `state` listener now RETRIES attach until
+>   `navigationRef.isReady()` (it was silently skipped at early mount → the FAB could float
+>   over the Remote screen), plus a 1 s poll re-checks link state + `remoteInFront`. Verify
+>   A-45a: FAB shows reliably on fresh boot + reconnect, hides when Remote is open.
+> - **A-47** text-overflow pass: RouterPanel AP + saved SSID rows (min-w-0 + middle ellipsis),
+>   Settings dropdown title (numberOfLines + middle ellipsis), ModeChooser trigger
+>   constrained; WeblinkControls rows verified inside the bounded ScrollView. Verify A-47a:
+>   long SSIDs never bleed outside their cards/boxes.
+
 ## device-round-8 — real BT name + RouterPanel fixed card widths (2026-09-17, DONE — A-38/A-39; JS OTA pushed + published, owner device-verified)
 
 > App half of round-8. Full run sheet: `../../guide/DEVICE-ROUND-8-2026-09-17.md` (§3 fix
