@@ -10,7 +10,7 @@
 > App half of round-8. Full run sheet: `../../guide/DEVICE-ROUND-8-2026-09-17.md` (§3 fix
 > matrix, §5 checks). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7+8 roll into one
 > same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18** (2026-09-17).
-> Code status: A-38/A-39 implemented, push pending.
+> Code status: A-38/A-39 implemented, pushed `23724ea` (JS OTA publishes on the `main` push).
 > - **A-38** `RemoteControlScreen.tsx` `friendlyBtName()` no longer invents a car name: a
 >   MAC-shaped scan result (or a 1–2 char fragment) now returns `''` instead of `'ESP32 Car'`.
 >   Callers already render `<name> || 'Connected'`, so the header shows the neutral state label
