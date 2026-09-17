@@ -79,4 +79,30 @@ App changes are part of the same **v2.0.6 JS-only OTA** (no versionCode bump).
 ### A-34 — no duplicate fixed header icon
 - [ ] Control-Panel header has no fixed remote icon; the big CTA is the only entry
 
+## Round-12 device tests (A-48..A-51, 2026-09-17) — IMPLEMENTED (typecheck + doctor PASS), OTA + verify pending
+
+Device round-12 run sheet: `guide/DEVICE-ROUND-12-2026-09-17.md` (repo root).
+App changes delivered as the same **v2.0.6 JS-only OTA** (no versionCode bump), auto-run
+by `ota-only.yml` on push to `main` (the push touches `mobile/src/*`; `global.css`
+rides the same bundle via `App.tsx:19`). Owner: close + reopen the app to receive.
+
+### A-48 — theme token refresh (whole app, subtle)
+- [ ] Remote screen, **light**: background no longer pure white — screens/panels separate clearly
+- [ ] Remote screen, **dark**: soft navy midnight (not pitch black); text/cards readable
+- [ ] Home/Shop/Account/Menu/Tools still look consistent with the refresh
+
+### A-49 — OLED data font standardized + fit
+- [ ] Compact OLED mirror (Remote): every readout in ONE consistent mono scale (no mixed sizes)
+- [ ] AUTO rows (Angle / P / D / OUT / I / OFF) fit the 160×80 slot with no clipping
+- [ ] Long mode names/directions truncate cleanly (no overflow)
+
+### A-50 — "Hide" → "Telemetry" control pill
+- [ ] Third pill reads **Telemetry**, SAME row as D-pad and Joystick
+- [ ] Webserver mode + Telemetry → WiFi & Router panel; PID-auto + Telemetry → balance controls
+- [ ] Any OTHER robocar mode + Telemetry → useful telemetry (full OLED mirror), NOT "Pad hidden"
+
+### A-51 — add-router card overflow
+- [ ] "Add a router" card: helper sentences stay INSIDE the rounded card (light AND dark)
+- [ ] "No saved routers yet…" and the Active-connection helper text also stay inside
+
 <!-- ag>tip: append per-round device checklists above this marker

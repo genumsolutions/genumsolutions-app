@@ -38,6 +38,9 @@ export function OledDisplay({
 }: OledDisplayProps) {
   const is2wd1m = activeMode.controls.includes('drive-2wd1m')
   const isAuto = activeMode.token === 'AUTO'
+  // A-49 (round-11): the compact 160x80 mirror uses ONE mono scale — 10px
+  // labels, 11px values/rows, 15px hero direction — so the AUTO rows never
+  // clip and every readout stays pixel-faithful to the physical OLED.
   const mono = (extra = '') => `font-mono ${extra}`
 
   // The mode the top bar + body currently SHOW: preview wins over active
@@ -132,7 +135,7 @@ export function OledDisplay({
           </Text>
         )}
         {body.kind === 'title' && (
-          <Text numberOfLines={1} className={mono(`font-bold text-emerald-300 ${compact ? 'text-[12px]' : 'text-lg'}`)}>
+          <Text numberOfLines={1} className={mono(`font-bold text-emerald-300 ${compact ? 'text-[11px]' : 'text-lg'}`)}>
             {body.text}
           </Text>
         )}
@@ -145,28 +148,28 @@ export function OledDisplay({
           <View className="w-full items-center">
             {/* Row 1: Angle — INVERTED (ui.md auto dashboard) */}
             <View className="rounded-sm bg-slate-200 px-1.5 py-px">
-              <Text className={mono(`font-bold text-slate-900 ${compact ? 'text-[10px]' : 'text-sm'}`)}>
+              <Text className={mono(`font-bold text-slate-900 ${compact ? 'text-[11px]' : 'text-sm'}`)}>
                 Angle: {telemetry.angle != null ? `${telemetry.angle.toFixed(1)}°` : '--°'}
               </Text>
             </View>
             {/* Row 2: P & D evenly spaced */}
             <View className={`w-full flex-row justify-between ${compact ? 'px-1' : 'px-2'}`}>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-xs'}`)}>
                 P:{telemetry.kp != null ? telemetry.kp.toFixed(2) : pidKpLocal()}
               </Text>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-xs'}`)}>
                 D:{telemetry.kd != null ? telemetry.kd.toFixed(3) : pidKdLocal()}
               </Text>
             </View>
             {/* Row 3: OUT, I, OFF evenly spaced */}
             <View className={`w-full flex-row justify-between ${compact ? 'px-1' : 'px-2'}`}>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-xs'}`)}>
                 OUT:{telemetry.out != null ? telemetry.out.toFixed(0) : pidOutLocal()}
               </Text>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-xs'}`)}>
                 I:{telemetry.ki != null ? telemetry.ki.toFixed(3) : pidKiLocal()}
               </Text>
-              <Text className={mono(`text-emerald-300 ${compact ? 'text-[10px]' : 'text-xs'}`)}>
+              <Text className={mono(`text-emerald-300 ${compact ? 'text-[11px]' : 'text-xs'}`)}>
                 OFF:{telemetry.off != null ? telemetry.off.toFixed(1) : pidOffLocal()}
               </Text>
             </View>
@@ -178,7 +181,7 @@ export function OledDisplay({
       <View className={`items-center rounded-sm bg-slate-200 ${compact ? 'py-0.5' : 'py-1'}`}>
         <Text
           numberOfLines={1}
-          className={mono(`font-bold text-slate-900 ${compact ? 'text-[10px]' : 'text-xs'}`)}
+          className={mono(`font-bold text-slate-900 ${compact ? 'text-[11px]' : 'text-xs'}`)}
         >
           {compact ? (driveStatus || 'READY').toUpperCase() : `${linkLabel} · ${bottomStatus}`}
         </Text>
