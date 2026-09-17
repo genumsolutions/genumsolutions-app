@@ -62,12 +62,17 @@ function clampStep(value: number, min: number, max: number, step: number): numbe
  * fallback (sppService `device.name ?? device.address`); here a MAC-shaped
  * string becomes a neutral label and underscores are prettified into spaces
  * (`WIRELESS_CAR` → `WIRELESS CAR`).
+ *
+ * A-38 (device-round-8, owner): never invent a car name. When the scan only
+ * gave us a MAC (or a 1–2 char fragment) there is no real name to show, so
+ * return '' — callers already fall back to the neutral "Connected" label.
+ * The old 'ESP32 Car' placeholder is removed.
  */
 function friendlyBtName(name: string): string {
   const n = (name || '').trim()
   if (!n) return ''
   const hexMac = /^([0-9A-Fa-f]{2}([:-])){5}[0-9A-Fa-f]{2}$/.test(n)
-  if (hexMac || n.length <= 2) return 'ESP32 Car'
+  if (hexMac || n.length <= 2) return ''
   return n.replace(/_/g, ' ')
 }
 

@@ -51,12 +51,20 @@ export function RouterPanel({
     setTimeout(() => setBusy(false), 600)
   }
 
-  // A-35: landscape split-card grid — the panel is a horizontal ScrollView of
-  // min-width ~300 px cards (active connection | saved routers | add router),
-  // so on a wide landscape deck they sit side-by-side and on a narrow screen
-  // they scroll instead of squeezing. Bigger touch targets (h-12) + 13–14 px
-  // type. A-35b: the car's own WiFi (SSID/AP/IP) is its own card.
-  const cardWidth = { width: '46%', minWidth: 300 } as const
+  // A-35/A-39: landscape split-card grid — three cards share the row. A-39
+  // (device-round-8): the card width is a FIXED PIXEL value measured from the
+  // panel on layout (`(available − 2 gaps) / 3`, clamped 260–380) instead of a
+  // `46%` percentage, which mis-measured inside a horizontal ScrollView and
+  // stretched/overflowed the cards (last card unreachable). `shrink-0` keeps
+  // them from compressing; narrow screens still scroll horizontally.
+  const GAP = 12
+  const PANEL_PAD = 24 // ScrollView `p-3` (12px) on both sides
+  const [availW, setAvailW] = React.useState(0)
+  const cardWidth = React.useMemo(() => {
+    const usable = Math.max(0, availW - PANEL_PAD)
+    const per = (usable - GAP * 2) / 3
+    return { width: Math.max(260, Math.min(380, per)) } as const
+  }, [availW])
 
   return (
     <KeyboardAvoidingView
@@ -78,8 +86,9 @@ export function RouterPanel({
 
       <ScrollView
         horizontal
+        onLayout={(e) => setAvailW(e.nativeEvent.layout.width)}
         className="mt-2 min-h-0 rounded-2xl border border-line bg-card p-3 shadow-card"
-        contentContainerStyle={{ gap: 12 }}
+        contentContainerStyle={{ gap: GAP }}
         keyboardShouldPersistTaps="handled"
         showsHorizontalScrollIndicator={false}
       >
