@@ -1,13 +1,11 @@
 # TESTING — Physical Device Test Checklist
 
-> 🆕 **2026-09-17 — FINALIZATION PHASE (industrial release).** Release plan:
+> 🆕 **2026-09-18 — RELEASE FINALIZATION (v3.2.0).** Release plan:
 > `../../guide/RELEASE-FINALIZATION-PLAN.md`; checklist `../../guide/FINALIZATION-TODO.md`;
-> failsafe `../../guide/FINALIZATION-FAILSAFE.md`. **RC: app v2.0.6/49 (`9dcdec7`, A-48..A-51).**
-> **#1 gate = the owner device verify of the round-12 increment** (push→OTA→close+reopen). This
-> file is the intended **single release gate** — Phase 4 folds the older, superseded per-round
-> checklists into one and archives the rest (do not delete anything before then).
+> failsafe `../../guide/FINALIZATION-FAILSAFE.md`. **RC: app v3.2.0 / 53**.
+> **#1 gate = the owner device verify** — close+reopen app to receive OTA.
 
-> Target: **v2.0.6/49 + OTA R12 + R13** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; **R13 (2026-09-15)** — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; **device-round-3 (2026-09-16)** — A-17 fleet wording + A-18 project names/asset line (JS OTA after push); tsc clean + **50/50 tests**; device verification pending: rounds R10 + R11 + R12 + R13 + A-17/A-18.
+> Target: **v3.2.0/53 + OTA** — full remote rebuild + car mode sync via REQ_STATE; fleet allow-all/mark (2026-09-15) — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; R13 — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; device-round-3 — A-17 fleet wording + A-18 project names/asset line; tsc clean + **52/52 tests**; device verification pending: rounds R10 + R11 + R12 + R13 + A-17/A-18.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
 
 ---
