@@ -4,9 +4,16 @@
 // Tapping a PID value row opens this modal with a TextInput pre-filled
 // with the current value. The user can type a new value and confirm.
 // Uses React Native Modal to render in its own layer (no overlap).
+//
+// R-15 (owner review 2026-09-18 — "keyboard weird, not in the proper
+// place"): the dialog used to float dead-center, so the decimal-pad
+// covered the input the moment it opened. Now the dialog sits in the
+// upper third (always above the keyboard) and the whole layer is a
+// KeyboardAvoidingView, so even a tall keyboard just nudges it further
+// up instead of hiding it.
 // =====================================================================
 import React, { useEffect, useRef, useState } from 'react'
-import { Keyboard, Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native'
 
 type Props = {
   visible: boolean
@@ -55,10 +62,15 @@ export function PidInputModal({ visible, label, value, min, max, step, decimals,
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable
-        className="flex-1 items-center justify-center bg-black/60"
-        onPress={onCancel}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        pointerEvents="box-none"
       >
+        <Pressable
+          className="flex-1 items-center justify-start bg-black/60 pt-[18%]"
+          onPress={() => { Keyboard.dismiss(); onCancel() }}
+        >
         <Pressable
           onPress={(e) => e.stopPropagation()}
           className="w-80 rounded-2xl border border-white/15 bg-slate-900 p-5 shadow-xl"
@@ -113,7 +125,8 @@ export function PidInputModal({ visible, label, value, min, max, step, decimals,
             </Pressable>
           </View>
         </Pressable>
-      </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
