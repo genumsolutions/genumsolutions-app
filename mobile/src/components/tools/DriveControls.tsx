@@ -344,7 +344,7 @@ function DualDpad({
         {padView('L')}
         {oledSlot && (
           <View pointerEvents="none" className="absolute items-center justify-center"
-            style={{ left: '50%', top: '50%', transform: [{ translateX: -80 }, { translateY: -40 }], width: 160, height: 80 }}>
+            style={{ left: '50%', top: '50%', transform: [{ translateX: -90 }, { translateY: -45 }], width: 180, height: 90 }}>
             {oledSlot}
           </View>
         )}
@@ -575,7 +575,7 @@ function DualJoystick({
             )
           })}
           {oledSlot && geo && (
-            <View pointerEvents="none" style={{ position: 'absolute', left: geo.w * 0.5 - 80, top: geo.h * 0.5 - 40, width: 160, height: 80 }}>
+            <View pointerEvents="none" style={{ position: 'absolute', left: geo.w * 0.5 - 90, top: geo.h * 0.5 - 45, width: 180, height: 90 }}>
               {oledSlot}
             </View>
           )}

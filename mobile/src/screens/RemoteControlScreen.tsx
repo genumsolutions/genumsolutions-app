@@ -319,7 +319,11 @@ export function RemoteControlScreen({ navigation }: Props) {
   }
 
   const oledSlot = isRobocar ? (
-    <View style={{ width: 160, height: 80 }} className="overflow-hidden rounded-lg">
+    /* R-17 (owner): the mirror reads best a little BIGGER — 180x90 keeps the
+       2:1 aspect of the physical 128x64 OLED while giving the compact
+       pixel-faithful rendering more room (A-49 single-scale rows still fit
+       with margin). */
+    <View style={{ width: 180, height: 90 }} className="overflow-hidden rounded-lg">
       <OledDisplay
         {...oledCommonProps}
         compact

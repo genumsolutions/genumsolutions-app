@@ -4,7 +4,7 @@
 //
 // Compact layout (immersive remote):
 //   Left:  [ANGLE +12.3° / ●BAL / OUT:50]   (single hero card)
-//   Right: [OLED 160×80]
+//   Right: [OLED 180×90]
 //   Grid:  Kp/Ki/Kd/OFF with fine + coarse ± buttons
 //
 // Step sizes match the firmware's significant bits.
