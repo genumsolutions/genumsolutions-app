@@ -1,7 +1,40 @@
 # TESTING — Physical Device Test Checklist
 
+> 🆕 **2026-09-17 — FINALIZATION PHASE (industrial release).** Release plan:
+> `../../guide/RELEASE-FINALIZATION-PLAN.md`; checklist `../../guide/FINALIZATION-TODO.md`;
+> failsafe `../../guide/FINALIZATION-FAILSAFE.md`. **RC: app v2.0.6/49 (`9dcdec7`, A-48..A-51).**
+> **#1 gate = the owner device verify of the round-12 increment** (push→OTA→close+reopen). This
+> file is the intended **single release gate** — Phase 4 folds the older, superseded per-round
+> checklists into one and archives the rest (do not delete anything before then).
+
 > Target: **v2.0.6/49 + OTA R12 + R13** — full remote rebuild + car mode sync via REQ_STATE; OTA R11 (`d5b95b2`) + R12 batch (4WD4M rename + legacy `BT` alias) are live in JS; **fleet allow-all/mark (2026-09-15)** — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; **R13 (2026-09-15)** — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; **device-round-3 (2026-09-16)** — A-17 fleet wording + A-18 project names/asset line (JS OTA after push); tsc clean + **50/50 tests**; device verification pending: rounds R10 + R11 + R12 + R13 + A-17/A-18.
 > Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
+
+---
+
+## device-round-12 — theme tokens + OLED font + Telemetry pill + overflow (2026-09-17, IMPLEMENTED — A-48..A-51; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-12. Full run sheet: `../../guide/DEVICE-ROUND-12-2026-09-17.md`.
+> NO native bump — v2.0.6/49 stays. Gates: **tsc clean + vitest 54/54 + expo-doctor 18/18**.
+
+### A-48 — theme token refresh (whole app, subtle)
+- [ ] Remote screen, **light**: background no longer pure white — screens/panels separate clearly
+- [ ] Remote screen, **dark**: soft navy midnight (not pitch black); text/cards readable
+- [ ] Home/Shop/Account/Menu/Tools still look consistent with the refresh
+
+### A-49 — OLED data font standardized + fit
+- [ ] Compact OLED mirror (Remote): every readout in ONE consistent mono scale (no mixed sizes)
+- [ ] AUTO rows (Angle / P / D / OUT / I / OFF) fit the 160×80 slot with no clipping
+- [ ] Long mode names/directions truncate cleanly (no overflow)
+
+### A-50 — "Hide" → "Telemetry" control pill
+- [ ] Third pill reads **Telemetry**, SAME row as D-pad and Joystick
+- [ ] Webserver mode + Telemetry → WiFi & Router panel; PID-auto + Telemetry → balance controls
+- [ ] Any OTHER robocar mode + Telemetry → useful telemetry (full OLED mirror), NOT "Pad hidden"
+
+### A-51 — add-router card overflow
+- [ ] "Add a router" card: helper sentences stay INSIDE the rounded card (light AND dark)
+- [ ] "No saved routers yet…" and the Active-connection helper text also stay inside
 
 ---
 
@@ -110,6 +143,42 @@
 > - **A-32** RouterPanel readable type + real em dash/apostrophe (no escape artifacts).
 > - **A-33** Dark-theme toggle in Remote Settings; chrome/sub-header/dropdown/RouterPanel token-skinned (drive deck stays dark).
 > - **A-34** Duplicate fixed Control-Panel header remote icon removed.
+
+## device-round-5 — friendly BT name + WiFi panel + saved routers + keyboard (2026-09-16, IMPLEMENTED — A-25..A-28; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-5. Full run sheet: `../../guide/DEVICE-ROUND-5-2026-09-16.md`.
+> NO native bump — v2.0.6/49 stays, JS OTA. tsc clean + **50/50 tests**.
+
+### A-25 — friendly BT name in header
+- [ ] Header shows the car's friendly BT name right of "Remote" (`_` → space,
+      e.g. `WIRELESS_CAR` → `WIRELESS CAR`)
+- [ ] Never a raw hex MAC — a MAC-shaped scan name renders as `ESP32 Car`
+- [ ] No standalone IP chip in the top chrome row anymore
+- [ ] ESP_SER mode: sub-header row below chrome shows the name + tappable IP
+      chip (opens the car's web page in the default browser)
+- [ ] `192.168.4.1 (AP)` shown when the car is in its own AP mode
+
+### A-26 — single "WiFi & Router" panel
+- [ ] Hide hides BOTH drives (D-pad + joystick) and shows the WiFi & Router panel
+- [ ] The old WeblinkControls card and the "Pad hidden" placeholder are gone
+- [ ] The Settings gear no longer contains a WiFi provisioning card
+- [ ] Panel shows: active SSID + AP name (tappable IP), LINK state, saved router
+      list, and the Add form
+
+### A-27 — saved-router add / switch / delete over WS
+- [ ] RouterPanel list entries re-sync from the car's `networks` (WS JSON) within
+      ~1-2 s after any change
+- [ ] Add: saves on the car (`ROUTERS;ADD;<ssid>;<pass>`), appears in the list,
+      persist across app restarts (car NVS is the source of truth)
+- [ ] Switch (Switch on): sets active router (`ROUTERS;USE;<ssid>`), car rejoins
+      over WiFi when reachable; app returns to BT fallback until then
+- [ ] Delete: removes from the car registry (`ROUTERS;DEL;<ssid>`)
+- [ ] Per-car: each vehicle keeps its own saved list (fleet parity)
+- [ ] Passwords are NEVER sent by the app back to the hub/panel (W-14)
+
+### A-28 — keyboard never covers inputs
+- [ ] Add-form inputs sit above the soft keyboard (resize + KeyboardAvoidingView)
+- [ ] Focused input scrolls into view; no obscured TextInput
 
 ## device-round-4 — remote window + floating icon (2026-09-16, IMPLEMENTED + pushed `ec90656` — A-19..A-24; JS OTA — DEVICE VERIFY PENDING)
 
