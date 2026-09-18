@@ -1,4 +1,8 @@
-# Device Test Checklist — Remote Screen
+# ⚠️ SUPERSEDED — Device Test Checklist — Remote Screen
+
+> **This file is archived.** All checklists have been folded into `../TESTING.md`
+> (the single release-gate checklist). Do not add new items here.
+> Archived: 2026-09-18 (Phase 4, FIN-29).
 
 ## Remote screen (v2.0.6)
 - [ ] Joystick: left stick drives, right stick steers (2WD1M)
