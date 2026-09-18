@@ -6,5 +6,5 @@
 // Display version for the app (menu -> "App v…"). Keep in sync with
 // "version" in ../app.json and bump BOTH on every release (version + android
 // .versionCode must increase) so installs update over-the-top.
-export const APP_VERSION = '2.0.6'; // v2.0.6 fixes: version check, Auto mode, car-app sync
+export const APP_VERSION = '3.0.0'; // v2.0.6 fixes: version check, Auto mode, car-app sync
 
