@@ -123,6 +123,10 @@ export function useControlHub(routeCategory?: string) {
   const [servo, setServo] = useState(90)
   const [steerLimit, setSteerLimit] = useState(90)
   const [trim, setTrim] = useState(0)
+  // R-19 (FIN-45): car-truth trip mirrors (STATE TRIP=/MSTEER=; telemetry-only,
+  // never persisted — the car owns them).
+  const [tripAvg, setTripAvg] = useState(0)
+  const [maxSteer, setMaxSteer] = useState(0)
   // driveStatus = the remote's bottom-bar status line (ESP statusMessage):
   // local action messages ("Speed:170", "Steer limit:90", "Mode:2WD1M")
   // merged with whitelisted car statuses ("Forward", "EMERGENCY STOP").
@@ -226,6 +230,8 @@ export function useControlHub(routeCategory?: string) {
 
   // ---- SPP auto-reconnect (ESP remote parity: 4 silent tries â†’ prompt) ----
   const sppReconnectAttemptsRef = useRef(0)
+  // FIN-44: last status message seen by the dedupe gate (see onStatus below).
+  const sppStatusMsgRef = useRef<string | null>(null)
   const sppReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sppLastAddressRef = useRef<string | null>(null)
 
@@ -451,6 +457,9 @@ export function useControlHub(routeCategory?: string) {
         if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag))
       }
       if (t.trim != null) setTrim(t.trim)
+      // R-19: car-truth trip metrics (2WD1M family STATE extras)
+      if (t.trip != null) setTripAvg(t.trip)
+      if (t.maxSteer != null) setMaxSteer(t.maxSteer)
       // PID telemetry from TEL; frames (self-balancing live values).
       if (t.kp != null) setPidKp(t.kp)
       if (t.ki != null) setPidKi(t.ki)
@@ -508,9 +517,19 @@ export function useControlHub(routeCategory?: string) {
     const offWifi = wifiService.onTelemetry(applyTelemetry)
     const offStatus = sppService.onStatus((kind, message) => {
       if (!mountedRef.current) return
+      // FIN-44 flicker fix: dedupe repeats of the same status kind (the SPP
+      // service emits per event; repeated 'connecting'/'error' bursts from the
+      // auto-reconnect backoff re-rendered the BT connection-details row on
+      // every attempt even though nothing changed). Transitions still render.
+      setSppStatus((prevKind) => {
+        if (prevKind === kind) {
+          // Same state again — only 'error' carries a NEW message worth a repaint.
+          if (kind !== 'error' || message === sppStatusMsgRef.current) return prevKind
+        }
+        return kind
+      })
       switch (kind) {
         case 'connecting':
-          setSppStatus('connecting')
           setSppStatusMsg('')
           setShowSppsRetry(false)
           break
@@ -550,7 +569,6 @@ export function useControlHub(routeCategory?: string) {
           }
           break
         case 'error':
-          setSppStatus('error')
           setSppStatusMsg(message ?? 'Connection error')
           setConnected(false)
           setDeviceName('')
@@ -1198,6 +1216,8 @@ setWifiProvisioning(true)
     speed, setSpeed, servo, steerLimit, trim, driveStatus, driveDir, telemetry, safetyLimits,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
     adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop, sendCommand,
+    // R-19 (FIN-45): car-truth trip metrics (2WD1M family)
+    tripAvg, maxSteer,
     // NAV (ESP INPUT_NAV parity)
     navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
     // pid

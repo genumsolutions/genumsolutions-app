@@ -35,6 +35,10 @@ export type CarTelemetry = {
   speed?: number
   trim?: number
   status?: string
+  /** R-19 (FIN-45): car's TRIP= — avg |speed| over moving seconds (2WD1M family). */
+  trip?: number
+  /** R-19: car's MSTEER= — max |steer deviation from 90| seen since reset. */
+  maxSteer?: number
   // AUTO live PID
   kp?: number
   ki?: number
@@ -360,6 +364,8 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (key === 'MODE') telemetry.mode = val
       else if (key === 'SPD') telemetry.speed = Number(val) || 0
       else if (key === 'TRIM') telemetry.trim = Number(val) || 0
+      else if (key === 'TRIP') telemetry.trip = Number(val) || 0
+      else if (key === 'MSTEER') telemetry.maxSteer = Number(val) || 0
       else if (key === 'STATUS') telemetry.status = val
       else if (key === 'CAP') {
         // A-7 (fleet parity with the remote's R-10): the car announces the

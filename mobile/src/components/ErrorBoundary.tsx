@@ -5,6 +5,19 @@
 // =====================================================================
 import React, { Component, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { logger } from '../services/logger'
+
+// FIN-44: in release builds a bare white screen after a crash usually means a
+// JS error escaped its boundary. Log through the shared logger (visible via
+// adb logcat with tag `GenumApp`) so the owner can capture the stack during a
+// repro instead of staring at a blank screen.
+function logBoundaryError(label: string, error: unknown, componentStack?: string) {
+  logger.error(
+    'error-boundary',
+    `[${label}] ${error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)}`,
+    componentStack ? `component stack:${componentStack}` : undefined,
+  )
+}
 
 function trimFirstLine(stack: string): string {
   const line = stack.split('\n').map((s) => s.trim()).find((s) => s && !s.startsWith('at '))
@@ -31,12 +44,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack?: string }) {
-    const tag = this.props.label ? ` (${this.props.label})` : ''
-    console.error(
-      `ErrorBoundary${tag} caught:`,
-      error,
-      info?.componentStack ? `\ncomponent stack:\n${info.componentStack}` : '',
-    )
+    const tag = this.props.label ?? 'App'
+    logBoundaryError(tag, error, info?.componentStack)
     if (info?.componentStack) {
       this.setState({ componentStack: info.componentStack })
     }
