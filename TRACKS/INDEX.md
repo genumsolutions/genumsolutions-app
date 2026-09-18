@@ -37,3 +37,11 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 - Env copies: `mobile/.env.local`, `C:\bs\.env.local` (build mirror — `E:\` LongPaths disabled).
 
 *Created 2026-09-18. Update status column on every change; never delete without owner OK.*
+
+**2026-09-18 · R-15 (owner) — keyboard + telemetry UX fixed, UNCOMMITTED (FIN-41).**
+Remote screens (landscape, webserver/telemetry): `RouterPanel` rebuilt responsive
+(flex-wrap cards, no horizontal scroll, Android KeyboardAvoidingView actually enabled —
+old code passed `undefined` on Android), `PidInputModal` anchored above the keyboard,
+telemetry view = OLED + live readout column (no scroll, uses the space). tsc clean ·
+62/62. ⚠️ Do NOT push until owner verifies on device — push auto-publishes JS OTA
+(`ota-only.yml`) to every 3.2.1/54 install.
