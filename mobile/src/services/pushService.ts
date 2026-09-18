@@ -12,6 +12,7 @@
 // of the app is unaffected. See src/config/push.ts for activation steps.
 // =====================================================================
 import { Platform } from 'react-native'
+import { logger } from './logger'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import { supabase, supabaseConfigured } from '../config/supabase'
@@ -80,8 +81,9 @@ export async function pushPermissionGranted(): Promise<boolean> {
 export async function getExpoPushToken(): Promise<string | null> {
   try {
     if (!PUSH_PROJECT_ID) {
-      console.warn(
-        '[push] inactive: no Expo project id. Set EXPO_PUBLIC_EAS_PROJECT_ID or app.json extra.eas.projectId (see src/config/push.ts).',
+      logger.warn(
+        'push',
+        'inactive: no Expo project id. Set EXPO_PUBLIC_EAS_PROJECT_ID or app.json extra.eas.projectId (see src/config/push.ts).',
       )
       return null
     }
@@ -92,7 +94,7 @@ export async function getExpoPushToken(): Promise<string | null> {
     })
     return token?.data ?? null
   } catch (e) {
-    console.warn('[push] token request skipped:', e instanceof Error ? e.message : e)
+    logger.warn('push', 'token request skipped:', e instanceof Error ? e.message : e)
     return null
   }
 }
@@ -116,7 +118,7 @@ export async function registerPushToken(userId: string): Promise<void> {
       { onConflict: 'user_id,token' },
     )
   } catch (e) {
-    console.warn('[push] register skipped:', e instanceof Error ? e.message : e)
+    logger.warn('push', 'register skipped:', e instanceof Error ? e.message : e)
   }
 }
 

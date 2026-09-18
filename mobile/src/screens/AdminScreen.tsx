@@ -24,6 +24,7 @@ import type { PagerViewOnPageSelectedEvent, PlatformPagerRef } from '../componen
 import { useApp } from '../context/AppContext'
 import { CategoryDropdown } from '../components/CategoryDropdown'
 import { isProjectPackage } from '../services/projectService'
+import { logger } from '../services/logger'
 import { fetchSiteContent, upsertSiteContent } from '../services/orderService'
 import {
   listAdminOrders,
@@ -244,7 +245,7 @@ export function AdminScreen() {
         try {
           setAnalytics(await fetchAdminAnalytics(30))
         } catch (e) {
-          console.error('Admin analytics load error:', e)
+          logger.error('admin', 'Admin analytics load error:', e)
           setAnalytics(null)
         }
       } else if (tab === 'Orders') {
@@ -279,7 +280,7 @@ export function AdminScreen() {
         setCurriculumHighlights(await listAdminCurriculumHighlights())
       }
     } catch (e) {
-      console.error('Admin load error:', e)
+      logger.error('admin', 'Admin load error:', e)
     } finally {
       setLoading(false)
       setVisited((v) => ({ ...v, [tab]: true }))
@@ -452,7 +453,7 @@ export function AdminScreen() {
       setJournalOpen(false)
       void loadTab()
     } catch (e) {
-      console.error('Journal save error:', e)
+      logger.error('admin', 'Journal save error:', e)
     }
   }
 
@@ -479,7 +480,7 @@ export function AdminScreen() {
       await upsertAdminJournalPost({ ...post, active: !post.active })
       void loadTab()
     } catch (e) {
-      console.error('Journal publish toggle error:', e)
+      logger.error('admin', 'Journal publish toggle error:', e)
     }
   }
 
@@ -500,7 +501,7 @@ export function AdminScreen() {
               await toggleAdminRole(user.id, newRole)
               void loadUsers(usersPage)
             } catch (e) {
-              console.error('Role toggle error:', e)
+              logger.error('admin', 'Role toggle error:', e)
             }
           },
         },
@@ -698,7 +699,7 @@ export function AdminScreen() {
                 await upsertSiteContent({ id: siteContent.id, home_title: contentTitle, home_body: contentBody })
                 setContentSaved(true)
               } catch (e) {
-                console.error('Site content save error:', e)
+                logger.error('admin', 'Site content save error:', e)
               }
             }}
             saved={contentSaved}
