@@ -92,9 +92,20 @@ jobs:
       # The project targets compileSdk 36 / targetSdk 36. GitHub's ubuntu
       # runner ships a default Android SDK, but not necessarily platform 36
       # (and building RN codegen for every ABI exhausts runner resources).
-      # Pin the SDK (+ licenses + cmake) and build arm64-only via the prebuild
-      # plugin so the release build is fast and reliable.
-      - uses: android-actions/setup-android@v3
+      #
+      # NOTE: android-actions/setup-android@v3 is deliberately NOT used anymore.
+      # Its internal `sdkmanager tools` step fails with exit code 1 (the legacy
+      # "tools" package was removed from the Android SDK repository), aborting
+      # the whole workflow ~20s in — observed on every 3.0.0/3.1.0/3.2.0 bump on
+      # 2026-09-18 (runs 35305760867, 35307854063, 35309637578). Replace it with
+      # the runner's OWN preinstalled sdkmanager: accept licenses, then pin the
+      # platform/build-tools/cmake we need. Gradle auto-downloads anything else.
+      - name: Set up Android SDK (licenses + platform 36)
+        run: |
+          SDK_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="${SDK_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "${SDKMANAGER}" --licenses >/dev/null 2>&1 || true
+          "${SDKMANAGER}" "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" || true
 
       - uses: actions/setup-node@v5
         with:
