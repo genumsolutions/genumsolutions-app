@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LOCAL_CAR_MODES, type CarMode, type CarModeId } from '../config/roboCarCatalog'
 import { resolveModeByToken, resolveModeByIndex, nextMode } from '../config/roboCarCatalog'
 import { getCarModes } from './carModeService'
+import { logger } from './logger'
 
 const CACHE_KEY = 'genum_car_modes_v1'
 
@@ -95,7 +96,7 @@ export async function syncCarModesFromWebsite(): Promise<CarMode[]> {
     if (modes.length > 0) await saveCarModes(modes)
     return modes
   } catch (e) {
-    console.error('Failed to sync car modes from Supabase', e)
+    logger.error('modes', 'Failed to sync car modes from Supabase', e)
     return loadCarModes()
   }
 }

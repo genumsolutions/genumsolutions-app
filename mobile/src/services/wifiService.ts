@@ -19,6 +19,7 @@
 // TEL / CAPS / NACK / JSON), so all consumers see identical telemetry.
 // =====================================================================
 import { parseTelemetryLine, REQ_STATE_LINE, type CarTelemetry } from './carProtocol'
+import { logger } from './logger'
 
 type TelemetryCallback = (t: CarTelemetry) => void
 type StatusCallback = (kind: 'connecting' | 'connected' | 'disconnected' | 'error', message?: string) => void
@@ -127,7 +128,7 @@ export class WifiService {
         const telemetry = parseTelemetryLine(raw)
         if (Object.keys(telemetry).length > 0) this.emitTelemetry(telemetry)
       } catch (e) {
-        if (__DEV__) console.warn('WiFi read handler error:', e)
+        if (__DEV__) logger.warn('wifi', 'read handler error:', e)
       }
     }
 

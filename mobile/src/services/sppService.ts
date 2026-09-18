@@ -21,6 +21,7 @@
 // =====================================================================
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native'
 import { parseTelemetryLine, REQ_STATE_LINE, type CarTelemetry } from './carProtocol';
+import { logger } from './logger'
 
 export type SppDevice = {
   id: string
@@ -294,7 +295,7 @@ export class SppService {
             }
           }
         } catch (e) {
-          if (__DEV__) console.warn('SPP read handler error:', e)
+          if (__DEV__) logger.warn('spp', 'read handler error:', e)
         }
       })
 
