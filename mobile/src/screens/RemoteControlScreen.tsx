@@ -591,11 +591,14 @@ export function RemoteControlScreen({ navigation }: Props) {
             ) : (
               /* A-50 (round-11): hidden modes without a dedicated panel now
                  mirror the FULL OLED readout (the same mirror the robotics
-                 screens show) — the "Pad hidden" placeholder is gone. The
-                 OLED keeps showing the active mode, drive direction and the
-                 NAV highlights while the pads are tucked away. */
-              <View className="min-h-0 flex-1 items-center justify-center px-4 py-2">
-                <View className="max-h-[85%] w-full max-w-[420px] flex-1">
+                 screens show) — the "Pad hidden" placeholder is gone.
+                 R-15 (owner review 2026-09-18 — "telemetry screen is not
+                 standard, monotonous, does not use the space"): the mirror
+                 now sits BESIDE a live readout column (mode / speed or
+                 steer / direction / link / IP) instead of one narrow
+                 centered column, so the landscape deck is used properly. */
+              <View className="min-h-0 flex-1 flex-row items-center justify-center gap-4 px-4 py-2">
+                <View className="aspect-[2/1] max-h-full shrink" style={{ width: '46%', maxWidth: 480 }}>
                   <OledDisplay
                     {...oledCommonProps}
                     topField={topField}
@@ -604,9 +607,39 @@ export function RemoteControlScreen({ navigation }: Props) {
                     steerLimit={steerLimit}
                   />
                 </View>
-                <Text numberOfLines={1} className="mt-2 text-[10px] font-black uppercase tracking-widest text-muted">
-                  {shownMode.name.split('·')[0].trim()}
-                </Text>
+                <View className="min-w-[150px] max-w-[280px] flex-1 justify-center gap-2.5">
+                  <Text numberOfLines={2} className="text-lg font-black uppercase tracking-wide text-ink dark:text-white">
+                    {shownMode.name.split('·')[0].trim()}
+                  </Text>
+                  <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                    <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                      {isShown2wd1m ? 'Steer' : 'Speed'}
+                    </Text>
+                    <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                      {isShown2wd1m ? `${steerLimit}°` : speed}
+                    </Text>
+                  </View>
+                  <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                    <Text className="text-[10px] font-black uppercase tracking-widest text-muted">Dir</Text>
+                    <Text numberOfLines={1} className="font-mono text-base font-bold text-ink dark:text-white">
+                      {driveStatus || 'Stop'}
+                    </Text>
+                  </View>
+                  <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                    <Text className="text-[10px] font-black uppercase tracking-widest text-muted">Link</Text>
+                    <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                      {connected ? 'Bluetooth' : wifiConnected ? 'WiFi' : '—'}
+                    </Text>
+                  </View>
+                  {(telemetry.ip || wifiConnected) && (
+                    <View className="flex-row items-baseline justify-between gap-2">
+                      <Text className="text-[10px] font-black uppercase tracking-widest text-muted">IP</Text>
+                      <Text numberOfLines={1} className="font-mono text-base font-bold text-ink dark:text-white">
+                        {telemetry.ip || '192.168.4.1'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
             )}
           </View>
