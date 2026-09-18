@@ -24,7 +24,8 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 - Fully-native app; not a WebView mirror. Shared schema lives in the SIBLING website repo
   (`genumsolutions-website/supabase/schema.sql`); `mobile/supabase/` intentionally empty.
 - Version single source of truth: `mobile/app.json` (version + versionCode). Mirrors:
-  `src/config/site.ts` `APP_VERSION`, `package.json`, git tag. Current: **3.2.0 / 53**.
+  `src/config/site.ts` `APP_VERSION`, `package.json`, git tag. Current: **3.2.1 / 54**
+  (bump `de8e595`, FIN-33 resolved — fresh APK; tag `v3.2.1` pending FIN-36).
 - `bump-version.mjs` intentionally does NOT touch the website fallback anymore.
 - **2026-09-18 result:** all B/C items landed on `main` (HEAD `a390b6e`). `4wd4m` display
   label aligned to `4WD4M`, CI triggers → `main`, docs refreshed to the fully-native app,
