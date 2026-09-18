@@ -12,12 +12,12 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 
 | ID | Change | Status |
 |---|---|---|
-| B1 | `mobile/src/config/roboCarCatalog.ts:55` `4wd4m` label → `'4WD4M'` | PENDING |
-| B2 | Root `README.md` + `.gitleaks.toml` header (drop stale WebView/mobile/shared/supabase.ts refs) | PENDING |
-| B3 | `.github/workflows/ci.yml` triggers `[dev]` → `[main]` (+PRs to `main`) | PENDING |
-| B4 | Parity tests (APP_VERSION vs app.json · 9-mode fixture · update.ts URLs) | PENDING |
-| C1 | README shared-contract section | PENDING |
-| C2 | Verify `typecheck` / `test` / `doctor` green | PENDING |
+| B1 | `mobile/src/config/roboCarCatalog.ts:55` `4wd4m` label → `'4WD4M'` | DONE |
+| B2 | Root `README.md` + `.gitleaks.toml` header (drop stale WebView/mobile/shared/supabase.ts refs) | DONE |
+| B3 | `.github/workflows/ci.yml` triggers `[dev]` → `[main]` (+PRs to `main`) | DONE |
+| B4 | Parity tests (APP_VERSION vs app.json · 9-mode fixture · update.ts URLs) | DONE |
+| C1 | README shared-contract section | DONE |
+| C2 | Verify `typecheck` / `test` / `doctor` green | DONE |
 
 ## Notes
 
@@ -26,6 +26,11 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 - Version single source of truth: `mobile/app.json` (version + versionCode). Mirrors:
   `src/config/site.ts` `APP_VERSION`, `package.json`, git tag. Current: **3.2.0 / 53**.
 - `bump-version.mjs` intentionally does NOT touch the website fallback anymore.
+- **2026-09-18 result:** all B/C items landed on `main` (HEAD `a390b6e`). `4wd4m` display
+  label aligned to `4WD4M`, CI triggers → `main`, docs refreshed to the fully-native app,
+  and `mobile/src/config/parity.test.ts` now pins APP_VERSION ↔ app.json, the 9-mode
+  catalogue, and the shared `app-releases` bucket URLs (62 tests + typecheck + doctor
+  18/18 green).
 - `.gitleaks.toml` allowlists ONLY the public anon key (ref `bkylfnlybtsujwzropru`) — the
   service-role key stays in env only. Never print secrets.
 - Env copies: `mobile/.env.local`, `C:\bs\.env.local` (build mirror — `E:\` LongPaths disabled).
