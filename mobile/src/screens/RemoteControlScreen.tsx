@@ -137,6 +137,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     canControl, wifiUrl,
     activeCategory, activeMode, carModes, carStubMap, carAvailMap, selectMode, cycleMode,
     speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
+    tripAvg, maxSteer,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
     adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim,
     handleDisconnect,
@@ -623,6 +624,23 @@ export function RemoteControlScreen({ navigation }: Props) {
                       {isShown2wd1m ? `${steerLimit}°` : speed}
                     </Text>
                   </View>
+                  {isShown2wd1m && (
+                    <>
+                      {/* R-19 (FIN-45): car-truth trip + max steer (STATE TRIP=/MSTEER=) */}
+                      <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                        <Text className="text-[10px] font-black uppercase tracking-widest text-muted">Trip</Text>
+                        <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                          {tripAvg || '—'}
+                        </Text>
+                      </View>
+                      <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                        <Text className="text-[10px] font-black uppercase tracking-widest text-muted">Max steer</Text>
+                        <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                          {maxSteer ? `${maxSteer}°` : '—'}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                   <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
                     <Text className="text-[10px] font-black uppercase tracking-widest text-muted">Dir</Text>
                     <Text numberOfLines={1} className="font-mono text-base font-bold text-ink dark:text-white">

@@ -32,6 +32,7 @@ import { LegalScreen } from '../screens/LegalScreen';
 import { FloatingRemoteButton } from '../components/FloatingRemoteButton';
 import { useApp } from '../context/AppContext';
 import { withErrorBoundary } from '../components/withErrorBoundary';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useNavigation } from '@react-navigation/native';
 import type { RootStackParamList } from './types';
 
@@ -83,7 +84,7 @@ function MainTabs() {
 
 export function RootNavigator() {
   return (
-    <>
+    <ErrorBoundary label="App">
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -178,6 +179,6 @@ export function RootNavigator() {
         />
       </Stack.Navigator>
       <FloatingRemoteButton />
-    </>
+    </ErrorBoundary>
   );
 }

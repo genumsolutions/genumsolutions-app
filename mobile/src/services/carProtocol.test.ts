@@ -130,6 +130,19 @@ describe('parseTelemetryLine', () => {
     });
   });
 
+  it('parses STATE TRIP=/MSTEER= (R-19, 2WD1M family extras)', () => {
+    expect(
+      parseTelemetryLine('STATE;MODE=2WD1M;SPD=150;TRIM=-5;TRIP=173;MSTEER=34;STATUS=Right'),
+    ).toEqual({
+      mode: '2WD1M',
+      speed: 150,
+      trim: -5,
+      trip: 173,
+      maxSteer: 34,
+      status: 'Right',
+    });
+  });
+
   it('parses STATE with : key separators (older remote firmware)', () => {
     expect(parseTelemetryLine('STATE;MODE:BT;SPD:150')).toEqual({
       mode: 'BT',
