@@ -52,7 +52,7 @@ export interface CarMode {
 export const LOCAL_CAR_MODES: CarMode[] = [
   {
     id: '4wd4m',
-    name: '4WD4M · 4WD (4M)',
+    name: '4WD4M',
     token: '4WD4M',
     deviceIndex: 0,
     car: '4-wheel-drive',
