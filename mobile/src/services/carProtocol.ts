@@ -382,7 +382,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       const val = body[i].slice(sep + 1).trim()
       if (key === 'MODE') telemetry.mode = val
       else if (key === 'SPD') telemetry.speed = Number(val) || 0
-      else      if (key === 'TRIM') telemetry.trim = Number(val) || 0
+      else if (key === 'TRIM') telemetry.trim = Number(val) || 0
       else if (key === 'TRIP') telemetry.trip = Number(val) || 0
       else if (key === 'MSTEER') telemetry.maxSteer = Number(val) || 0
       else if (key === 'STEER') telemetry.steerLimit = Number(val) || 0
@@ -461,6 +461,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.status === 'string') telemetry.status = j.status
       if (typeof j.mode === 'string') telemetry.mode = j.mode
       if (typeof j.speed === 'number') telemetry.speed = j.speed
+      if (typeof j.trim === 'number') telemetry.trim = j.trim
       if (typeof j.ip === 'string') telemetry.ip = j.ip
       if (typeof j.rssi === 'number') telemetry.rssi = j.rssi
       if (typeof j.signal === 'number') telemetry.signal = j.signal

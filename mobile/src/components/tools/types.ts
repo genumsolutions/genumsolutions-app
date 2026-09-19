@@ -197,6 +197,8 @@ export type OledDisplayProps = {
   /** 2WD1M: the user-set MAX steer limit for the top bar — the ESP remote
       top bar shows the LIMIT, never the live servo angle. */
   steerLimit?: number
+  /** 2WD1M: the user-set trim offset (-90..90) for top bar display. */
+  trim?: number
 }
 
 export type BalanceControlsProps = {
@@ -287,6 +289,19 @@ export type TwoWd1mExtrasProps = {
   onAdjustTrim: (delta: number) => void
 }
 
+export type TwoWd1mEditorProps = {
+  canControl: boolean
+  speed: number
+  steerLimit: number
+  trim: number
+  servo: number
+  onAdjustSpeed: (delta: number) => void
+  onAdjustSteerLimit: (delta: number) => void
+  onAdjustTrim: (delta: number) => void
+  editorFieldIndex: number
+  onEditorNav: (delta: number) => void
+}
+
 export type DriveControlsProps = {
   canControl: boolean
   isDrone: boolean
@@ -331,6 +346,14 @@ export type DriveControlsProps = {
   onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
   /** OLED display rendered centered between the joysticks (always visible). */
   oledSlot?: React.ReactNode
+  /** Editor/nav mode: left joystick navigates fields, right changes values. */
+  editorMode?: boolean
+  /** Currently highlighted editor row when editorMode is active. */
+  editorFieldIndex?: number
+  /** Editor navigation: +1 / -1 moves the highlighted field up/down. */
+  onEditorNav?: (delta: number) => void
+  /** Editor value adjust: (fieldIndex, delta) — delta is ±1 per tick. */
+  onEditorAdjust?: (fieldIndex: number, delta: number) => void
 }
 
 export type DroneControlsProps = {
