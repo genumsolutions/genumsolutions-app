@@ -71,6 +71,23 @@ export function isVersionNewer(current: string, latest: string): boolean {
   return compareVersions(current, latest) < 0;
 }
 
+// R-20a (owner: "the app shows wrong version in its app sections"): the
+// version LABELS must show what the device is ACTUALLY running — the NATIVE
+// build from expo-constants — not the JS-bundle APP_VERSION constant. On a
+// device that just installed a newer APK over an old one (or that is running
+// an OTA bundle) the JS constant can disagree with the installed native
+// version, which made the app self-report the wrong version even after a
+// successful install.
+export function installedAppVersion(): string {
+  const native = Constants.expoConfig?.version;
+  if (typeof native === 'string' && native.trim()) return native.trim();
+  return APP_VERSION;
+}
+
+export function installedVersionCode(): number {
+  return Constants.expoConfig?.android?.versionCode ?? 0;
+}
+
 // ── OTA Update Check ──────────────────────────────────────────────
 // Checks for expo-updates OTA bundle. Returns true if an OTA update
 // was found and applied (will take effect on next app reload).
@@ -189,13 +206,30 @@ export async function downloadAndInstall(
   apkUrl: string,
   onProgress?: (fraction: number) => void,
 ): Promise<void> {
-  const target = new File(Paths.cache, 'genum-update.apk');
+  // R-20a (owner: "the app is showing the old version even when downloading
+  // the new version"): the cache target used to be a FIXED filename
+  // (genum-update.apk) downloaded with `idempotent: true`, which in
+  // expo-file-system means "skip the download when the file exists". The
+  // first in-app download therefore poisoned every later update: the
+  // installer kept receiving the ORIGINAL cached APK (e.g. 3.2.1), the
+  // installed version never changed, and the update check kept reporting
+  // the same "update available" — forever. The target is now versioned
+  // from the APK URL, any stale file is deleted before downloading, and
+  // idempotent is off so the bytes are always freshly fetched.
+  const urlName = apkUrl.split('/').pop() || 'genum-update.apk';
+  const safeName = urlName.replace(/[^A-Za-z0-9._-]/g, '_');
+  const target = new File(Paths.cache, safeName);
+  try {
+    if (target.exists) target.delete();
+  } catch {
+    // best-effort — downloadFileAsync without idempotent overwrites anyway
+  }
 
   // Phase 1: download. Report precise, distinct download failures so they
   // can't be mistaken for an install problem.
   let file;
   try {
-    file = await File.downloadFileAsync(apkUrl, target, { idempotent: true });
+    file = await File.downloadFileAsync(apkUrl, target);
   } catch (e) {
     throw new Error(
       'Download failed. Check your connection or storage, then try again. (download: ' +

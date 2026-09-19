@@ -17,10 +17,10 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { APP_VERSION } from '../config/site';
 import {
   checkForAnyUpdate,
   downloadAndInstall,
+  installedAppVersion,
   type UpdateState,
 } from '../services/updateService';
 
@@ -72,7 +72,7 @@ export function AppUpdateCard({ compact = false }: Props) {
               is capped at one line so it never crosses the card edge. */}
           <View className="min-w-0 flex-row items-center gap-2">
             <Feather name="download" size={14} color="#64748b" />
-            <Text numberOfLines={1} className="text-xs font-bold text-ink">App v{APP_VERSION}</Text>
+            <Text numberOfLines={1} className="text-xs font-bold text-ink">App v{installedAppVersion()}</Text>
           </View>
           {isBusy && <ActivityIndicator size="small" color="#1e3a8a" />}
           {updateState.status === 'up-to-date' && (
@@ -120,7 +120,7 @@ export function AppUpdateCard({ compact = false }: Props) {
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <Feather name="info" size={14} color="#64748b" />
-          <Text className="text-xs font-bold text-muted">App v{APP_VERSION}</Text>
+          <Text className="text-xs font-bold text-muted">App v{installedAppVersion()}</Text>
         </View>
         {updateState.status === 'checking' && (
           <ActivityIndicator size="small" color="#1e3a8a" />
