@@ -139,7 +139,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     speed, servo, steerLimit, trim, driveStatus, driveDir, telemetry,
     tripAvg, maxSteer,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
-    adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim,
+    adjustSteerLimit, commitSpeed, adjustTrim,
     handleDisconnect,
     navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
     pidKp, pidKi, pidKd, pidOut, pidOff,
@@ -210,16 +210,11 @@ export function RemoteControlScreen({ navigation }: Props) {
       }
       return
     }
-    if (navField === 'steer') {
-      if (axis === 'y') {
-        adjustSteerLimit(value === -1 ? -5 : 5)
-      } else if (value === -1) {
-        setNavField('mode')
-      }
-      return
-    }
+    // R-20: NAV has no steer field — the top strip is the SPEED slider in
+    // every mode; the steering limit + trim live in the Settings menu
+    // (steppers there send STEER<n>/TRIM<n> to the car directly).
     if (axis === 'x' && value === -1) setNavField('mode')
-  }, [navField, previewMode, activeMode, modeList, speed, handleSpeed, adjustSteerLimit, setPreviewMode, setNavField])
+  }, [navField, previewMode, activeMode, modeList, speed, handleSpeed, setPreviewMode, setNavField])
 
   const handleSelect = useCallback(() => {
     Vibration.vibrate(10)
@@ -243,15 +238,10 @@ export function RemoteControlScreen({ navigation }: Props) {
       setNavField('none')
       return
     }
-    if (navField === 'steer') {
-      commitSteerLimit()
-      setNavActive(false)
-      setNavField('none')
-      return
-    }
+    // R-20: no NAV steer commit — steering edits live in Settings only.
     setNavActive(false)
     setNavField('none')
-  }, [navActive, navField, previewMode, activeMode, selectMode, commitSpeed, commitSteerLimit, setNavActive, setNavField, setPreviewMode])
+  }, [navActive, navField, previewMode, activeMode, selectMode, commitSpeed, setNavActive, setNavField, setPreviewMode])
 
   const handleBack = useCallback(() => {
     Vibration.vibrate(10)
@@ -306,10 +296,10 @@ export function RemoteControlScreen({ navigation }: Props) {
   const navActiveBool = navActive && isRobocar
   const shownMode = previewMode ?? activeMode
   const isShown2wd1m = shownMode.controls.includes('drive-2wd1m')
+  // R-20: NAV edits MODE and SPEED only — no steer field in the top bar.
   const topField = !navActiveBool ? 'none' as const
     : navField === 'speed' ? 'speed' as const
-      : navField === 'steer' ? 'steer' as const
-        : 'mode' as const
+      : 'mode' as const
 
   // ── OLED props ──
   const oledCommonProps = {
@@ -392,16 +382,19 @@ export function RemoteControlScreen({ navigation }: Props) {
                 previewMode={previewMode}
                 locked={navActiveBool}
               />
+              {/* R-20 (owner): the top strip is the DEFAULT SPEED slider in
+                  every mode — the 2WD1M steering slider is gone. Steering
+                  limit + trim are edited in the Settings menu only. */}
               <ValueStrip
-                label={isShown2wd1m ? 'Steer' : 'Spd'}
-                value={isShown2wd1m ? steerLimit : clampStep(speed, SPEED_MIN, SPEED_MAX, SPEED_STEP)}
-                min={isShown2wd1m ? 0 : SPEED_MIN}
-                max={isShown2wd1m ? 180 : SPEED_MAX}
+                label="Spd"
+                value={clampStep(speed, SPEED_MIN, SPEED_MAX, SPEED_STEP)}
+                min={SPEED_MIN}
+                max={SPEED_MAX}
                 canControl={canControl}
                 locked={navActiveBool}
-                highlight={isShown2wd1m ? topField === 'steer' : topField === 'speed'}
-                onChange={(v) => { if (isShown2wd1m) { adjustSteerLimit(v - steerLimit) } else handleSpeed(v) }}
-                onCommit={() => { if (!isShown2wd1m) commitSpeed() }}
+                highlight={topField === 'speed'}
+                onChange={handleSpeed}
+                onCommit={commitSpeed}
                 dark={themeMode === 'dark'}
               />
             </View>
@@ -616,12 +609,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                   <Text numberOfLines={2} className="text-lg font-black uppercase tracking-wide text-ink dark:text-white">
                     {shownMode.name.split('·')[0].trim()}
                   </Text>
+                  {/* R-20: the readout column shows SPEED in every mode (the
+                      steering limit lives in Settings). */}
                   <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
                     <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                      {isShown2wd1m ? 'Steer' : 'Speed'}
+                      Speed
                     </Text>
                     <Text className="font-mono text-base font-bold text-ink dark:text-white">
-                      {isShown2wd1m ? `${steerLimit}°` : speed}
+                      {speed}
                     </Text>
                   </View>
                   {isShown2wd1m && (

@@ -11,7 +11,9 @@
 //     Direction  F | B | L | R | S            (non-2WD1M modes)
 //     Speed      SPD<n>    ±255 (2WD1M signed) or SPD<100..255> (absolute)
 //     Servo      SERVO<n>  0..180, center 90
-//     Steer      STEER<n>  -90..90 direct degrees (2WD1M)
+//     Steer      STEER<n>  steering travel LIMIT — max |servo − 90|, 10..90
+//                          (2WD1M family; R-20. Car persists + echoes via
+//                          STATE ;STEER= so remote + app share one truth)
 //     Trim       TRIM<n>   steering offset, persisted on the car
 //     Emergency  ESTOP
 //     Mode       BT | 2WD1M | AUTO | PATH | OBS_US | OBS_IR | MAN | ESP_CLI | ESP_SER
@@ -39,6 +41,11 @@ export type CarTelemetry = {
   trip?: number
   /** R-19: car's MSTEER= — max |steer deviation from 90| seen since reset. */
   maxSteer?: number
+  /**
+   * R-20: car's STEER= — the steering travel LIMIT (max |servo − 90|, 10..90).
+   * Car-persisted car truth; the app mirrors it into steerLimit state.
+   */
+  steerLimit?: number
   // AUTO live PID
   kp?: number
   ki?: number
@@ -104,6 +111,14 @@ export const SPEED_MAX = 255
 export const SPEED_STEP = 5
 
 /**
+ * R-20 steering travel limit range (STEER token / STATE ;STEER=): the max
+ * |servo − 90| the 2WD1M drive model may command. Car-persisted; remote +
+ * app mirror the car's value. Floor 10 keeps at least a sliver of steering.
+ */
+export const STEER_LIMIT_MIN = 10
+export const STEER_LIMIT_MAX = 90
+
+/**
  * Exact port of the ESP remote's quantizeSpeedToStep() (ui_misc.cpp):
  * snap a raw value to the nearest SPEED_STEP grid point inside
  * SPEED_MIN..SPEED_MAX. Values at/below the floor clamp to SPEED_MIN
@@ -166,7 +181,11 @@ export function buildServo(value: number): string {
   return `SERVO${Math.round(value)}`
 }
 
-/** Build a direct steering command: STEER<degrees>, -90..90. */
+/**
+ * Build a steering travel LIMIT command: STEER<n> (R-20) — the max |servo − 90|
+ * the car's drive model may command (10..90). The car persists it and echoes
+ * STATE ;STEER= so the remote + app mirrors stay in sync.
+ */
 export function buildSteer(value: number): string {
   return `STEER${Math.round(value)}`
 }
@@ -363,9 +382,10 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       const val = body[i].slice(sep + 1).trim()
       if (key === 'MODE') telemetry.mode = val
       else if (key === 'SPD') telemetry.speed = Number(val) || 0
-      else if (key === 'TRIM') telemetry.trim = Number(val) || 0
+      else      if (key === 'TRIM') telemetry.trim = Number(val) || 0
       else if (key === 'TRIP') telemetry.trip = Number(val) || 0
       else if (key === 'MSTEER') telemetry.maxSteer = Number(val) || 0
+      else if (key === 'STEER') telemetry.steerLimit = Number(val) || 0
       else if (key === 'STATUS') telemetry.status = val
       else if (key === 'CAP') {
         // A-7 (fleet parity with the remote's R-10): the car announces the
