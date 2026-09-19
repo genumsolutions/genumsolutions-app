@@ -16,10 +16,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { APP_VERSION } from '../config/site';
 import {
   checkForAnyUpdate,
   downloadAndInstall,
+  installedAppVersion,
   type UpdateState,
 } from '../services/updateService';
 
@@ -72,7 +72,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
           <View>
             <Text className="font-display text-2xl font-bold text-white">Update</Text>
             <Text className="mt-0.5 text-sm text-navy-light">
-              You are on v{APP_VERSION}
+              You are on v{installedAppVersion()}
             </Text>
           </View>
           <Pressable onPress={onClose} className="rounded-full bg-white/15 px-4 py-2">
@@ -85,7 +85,7 @@ export function UpdateScreen({ visible, onClose }: Props) {
           <View className="rounded-lg border border-line bg-card p-4">
             <Text className="text-sm font-semibold text-ink">Installed version</Text>
             <Text className="mt-1 font-display text-2xl font-bold text-navy">
-              v{APP_VERSION}
+              v{installedAppVersion()}
             </Text>
           </View>
 
