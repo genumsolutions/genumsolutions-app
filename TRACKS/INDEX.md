@@ -1,5 +1,10 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> 🔁 **2026-09-19 — R-20/R-20a shipped (fixed-speed drive, Speed strip, STEER limit;
+> updater stale-cache repair; native version display; runtimeVersion appVersion policy).**
+> App is now **3.2.3 / versionCode 56**, all pushed + pipelines verified. Resume point:
+> `NEXT-SESSION.md` in this folder + `guide/SESSION-HANDOFF-2026-09-19-R20.md`.
+
 Per-project tracker for the **APP + WEBSITE SYNC / UNIFICATION (2026-09-18)** effort.
 Master plan + recovery: `(workspace) guide/APP-WEBSITE-SYNC-PLAN-2026-09-18.md`.
 
