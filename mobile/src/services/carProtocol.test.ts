@@ -84,7 +84,10 @@ describe('command builders (wire format)', () => {
   it('builds newline-terminated-free command lines the car parses', () => {
     expect(buildSpd(120.4)).toBe('SPD120');
     expect(buildServo(90)).toBe('SERVO90');
-    expect(buildSteer(-45.6)).toBe('STEER-46');
+    // R-20: STEER is the steering travel LIMIT (max |servo − 90|, 10..90),
+    // not direct degrees — always positive.
+    expect(buildSteer(45.6)).toBe('STEER46');
+    expect(buildSteer(90)).toBe('STEER90');
     expect(buildTrim(2)).toBe('TRIM2');
     expect(buildCalibration({ kp: 12.3, ki: 0.5, kd: 3.1, out: 50, off: 0.75 })).toBe(
       'CFG;Kp:12.30;Ki:0.500;Kd:3.100;OUT:50;OFF:0.75',
@@ -140,6 +143,20 @@ describe('parseTelemetryLine', () => {
       trip: 173,
       maxSteer: 34,
       status: 'Right',
+    });
+  });
+
+  it('parses STATE STEER= (R-20, steering travel limit mirror)', () => {
+    expect(
+      parseTelemetryLine('STATE;MODE=2WD1M;SPD=150;TRIM=0;STEER=45;TRIP=0;MSTEER=0;STATUS=Forward'),
+    ).toEqual({
+      mode: '2WD1M',
+      speed: 150,
+      trim: 0,
+      steerLimit: 45,
+      trip: 0,
+      maxSteer: 0,
+      status: 'Forward',
     });
   });
 

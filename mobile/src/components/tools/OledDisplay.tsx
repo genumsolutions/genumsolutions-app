@@ -50,10 +50,11 @@ export function OledDisplay({
   const shownIsAuto = shown.token === 'AUTO'
   const shownName = MODE_NAMES[shown.token] ?? shown.name.split('·')[0].trim()
 
-  // Right field: Steer LIMIT in 2WD1M (the max angle the remote passes to
-  // the car — never the live servo angle, ui.md 6b), Speed otherwise.
-  const rightLabel = shownIs2wd1m ? 'Steer' : 'Spd'
-  const rightFieldValue = shownIs2wd1m ? String(steerLimit ?? 90) : String(speed)
+  // Right field: SPEED in every mode (R-20 fleet rule — the hand-held remote's
+  // top-right slot is Speed everywhere; the steering limit lives in the
+  // Settings menu / the car's SW editor, not the top bar).
+  const rightLabel = 'Spd'
+  const rightFieldValue = String(speed)
 
   const linkLabel =
     linkKind === 'spp' ? 'SPP'

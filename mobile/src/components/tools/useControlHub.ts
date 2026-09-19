@@ -27,7 +27,7 @@ import { LOCAL_CAR_MODES, type CarMode, nextRemoteModeToken, sortRemoteModes } f
 import { getCarModes } from '../../services/carModeService'
 import { PROJECT_CATEGORIES } from '../../config/project-catalog'
 import { DRIVE_CMD_MIN_INTERVAL_MS, SPP_RECONNECT_DELAYS_MS } from './controlConstants'
-import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, buildRouterCommand, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP } from '../../services/carProtocol'
+import { isAllowedDriveStatus, statusToDirection, quantizeSpeedToStep, parseTelemetryLine, buildWifiConfigLine, buildRouterCommand, normalizeModeToken, canonicalCarToken, SPEED_MIN, SPEED_MAX, SPEED_STEP, STEER_LIMIT_MIN, STEER_LIMIT_MAX, buildSteer } from '../../services/carProtocol'
 import { MODE_NAMES as ESP_MODE_NAMES } from '../../config/roboCarCatalog'
 
 /** Token â†’ short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
@@ -121,6 +121,8 @@ export function useControlHub(routeCategory?: string) {
   const [activeMode, setActiveMode] = useState<CarMode>(LOCAL_CAR_MODES[0])
   const [speed, setSpeed] = useState(170)
   const [servo, setServo] = useState(90)
+  // R-20: steerLimit = the steering travel LIMIT (max |servo − 90|, 10..90).
+  // Car truth rides STATE ;STEER=; edits send STEER<n> and the car echoes.
   const [steerLimit, setSteerLimit] = useState(90)
   const [trim, setTrim] = useState(0)
   // R-19 (FIN-45): car-truth trip mirrors (STATE TRIP=/MSTEER=; telemetry-only,
@@ -460,6 +462,13 @@ export function useControlHub(routeCategory?: string) {
       // R-19: car-truth trip metrics (2WD1M family STATE extras)
       if (t.trip != null) setTripAvg(t.trip)
       if (t.maxSteer != null) setMaxSteer(t.maxSteer)
+      // R-20: car-truth steering travel limit (STATE ;STEER=). Clamped to the
+      // car's persisted range; the local steppers send STEER<n> and the car
+      // echoes the stored value, so remote + app converge on one truth.
+      if (t.steerLimit != null) {
+        const lim = Math.max(STEER_LIMIT_MIN, Math.min(STEER_LIMIT_MAX, Math.round(t.steerLimit)))
+        setSteerLimit((prev) => (prev === lim ? prev : lim))
+      }
       // PID telemetry from TEL; frames (self-balancing live values).
       if (t.kp != null) setPidKp(t.kp)
       if (t.ki != null) setPidKi(t.ki)
@@ -1046,32 +1055,43 @@ setWifiProvisioning(true)
     sendCommand(`CFG;Kp:${next.kp.toFixed(2)};Ki:${next.ki.toFixed(3)};Kd:${next.kd.toFixed(3)};OUT:${next.out.toFixed(0)};OFF:${next.off.toFixed(2)}`)
   }, [pidKp, pidKi, pidKd, pidOut, pidOff, sendCommand])
 
+  // R-20 fixed throttle (owner: "speed fixed, not gradually increasing"): the
+  // joystick/d-pad signals DIRECTION only — the magnitude sent is ALWAYS the
+  // speed setting (quantized 100..255). The car clamps it into MIN..MAX and
+  // holds that exact PWM while the stick is deflected.
   const handleStickDrive = useCallback((signed: number) => {
     setDriveDirOnce(signed > 0 ? 'F' : signed < 0 ? 'B' : 'S')
     setDriveStatusOnce(signed > 0 ? 'Forward' : signed < 0 ? 'Backward' : 'Stop')
-    sendThrottled('spd', `SPD${Math.round(signed)}`)
-  }, [sendThrottled])
+    const mag = quantizeSpeedToStep(speed)
+    sendThrottled('spd', `SPD${signed > 0 ? mag : signed < 0 ? -mag : 0}`)
+  }, [sendThrottled, speed])
 
-  // Steer limit edits mirror the ESP NAV behaviour: up/down steps 5Â°, and
-  // NOTHING is sent to the car â€” the limit is applied app-side when driving
-  // (clamp) and only "recorded" on Select (commitSteerLimit).
+  // R-20: steering travel LIMIT edits — clamp to the car's 10..90 range,
+  // send STEER<n> IMMEDIATELY (car persists + echoes STATE ;STEER=, so the
+  // hand-held remote mirrors the same value), and persist locally. Same
+  // pattern as adjustTrim (TRIM<n>).
   const adjustSteerLimit = useCallback((delta: number) => {
     setSteerLimit((prev) => {
-      const next = Math.max(0, Math.min(180, prev + delta))
+      const next = Math.max(STEER_LIMIT_MIN, Math.min(STEER_LIMIT_MAX, prev + delta))
+      if (next !== prev) {
+        sendCommand(buildSteer(next))
+        persistPrefsRef.current?.({ steerLimit: next })
+      }
       return next
     })
-  }, [])
+  }, [sendCommand])
 
-  // Select on the Steer field: record the limit (status + persist), never
-  // send a servo command (the .ino TOP_STEER branch: "Just record the
-  // maximum allowable steering limit - never move the servo here").
+  // Select on the Steer field: record the limit (status + persist + send).
+  // Kept for NAV parity; the Remote screen's NAV no longer routes here (the
+  // top strip is the SPEED slider in every mode) but the API stays stable.
   const commitSteerLimit = useCallback(() => {
     setSteerLimit((s) => {
+      sendCommand(buildSteer(s))
       setDriveStatusOnce(`Steer limit:${s}`)
       persistPrefsRef.current?.({ steerLimit: s })
       return s
     })
-  }, [])
+  }, [sendCommand])
 
   const adjustTrim = useCallback((delta: number) => {
     setTrim((prev) => {
