@@ -85,7 +85,6 @@ function DpadGap() {
 function DualDpad({
   canControl, speed, steerLimit, is2wd1m, onSignedDrive, sendDir, onServo, limits,
   compact, navActiveRef, onNavInput, oledSlot,
-  editorMode = false, editorFieldIndex = 0, onEditorNav, onEditorAdjust,
 }: {
   canControl: boolean; speed: number; steerLimit: number; is2wd1m: boolean
   onSignedDrive?: (s: number) => void; sendDir: (d: 'F' | 'B' | 'L' | 'R' | 'S') => void
@@ -93,8 +92,6 @@ function DualDpad({
   compact?: boolean
   navActiveRef?: { current: boolean }; onNavInput?: (a: 'x' | 'y', v: -1 | 0 | 1) => void
   oledSlot?: React.ReactNode
-  editorMode?: boolean; editorFieldIndex?: number
-  onEditorNav?: (delta: number) => void; onEditorAdjust?: (fieldIndex: number, delta: number) => void
 }) {
   const [surf, setSurf] = useState<{ w: number; h: number } | null>(null)
   const [activeCells, setActiveCells] = useState<Partial<Record<'L1' | 'L2' | 'R1' | 'R2', PadZone>>>({})
@@ -107,10 +104,6 @@ function DualDpad({
   const onServoRef = useRef(onServo); onServoRef.current = onServo
   const limitsRef = useRef(limits); limitsRef.current = limits
   const onNavInputRef = useRef(onNavInput); onNavInputRef.current = onNavInput
-  const editorModeRef = useRef(editorMode); editorModeRef.current = editorMode
-  const editorFieldIndexRef = useRef(editorFieldIndex); editorFieldIndexRef.current = editorFieldIndex
-  const onEditorNavRef = useRef(onEditorNav); onEditorNavRef.current = onEditorNav
-  const onEditorAdjustRef = useRef(onEditorAdjust); onEditorAdjustRef.current = onEditorAdjust
 
   // Cache for hold-resend: preserve the other pad's last command.
   const lastDriveRef = useRef(0)
@@ -146,21 +139,6 @@ function DualDpad({
       else if (cell.pad === 'R' && en.R.includes(cell.zone)) rZones.push(cell.zone)
     }
     const has = (arr: PadZone[], z: PadZone) => arr.includes(z)
-
-    // EDITOR routing: left pad F/B navigates fields, right pad L/R adjusts.
-    if (editorModeRef.current) {
-      if (lZones.length) {
-        const z = lZones[lZones.length - 1]!
-        if (z === 'F') onEditorNavRef.current?.(-1)
-        else if (z === 'B') onEditorNavRef.current?.(1)
-      }
-      if (rZones.length) {
-        const z = rZones[rZones.length - 1]!
-        if (z === 'L') onEditorAdjustRef.current?.(editorFieldIndexRef.current, -1)
-        else if (z === 'R') onEditorAdjustRef.current?.(editorFieldIndexRef.current, 1)
-      }
-      return
-    }
 
     // NAV routing
     if (navActiveRef?.current && onNavInputRef.current) {
@@ -387,15 +365,12 @@ function DualDpad({
 function DualJoystick({
   canControl, rightEnabled, onLeft, onRight, fill = false,
   navActiveRef, onNavInput, oledSlot,
-  editorMode = false, editorFieldIndex = 0, onEditorNav, onEditorAdjust,
 }: {
   canControl: boolean; rightEnabled: boolean
   onLeft: (x: number, y: number) => void; onRight: (x: number) => void
   fill?: boolean
   navActiveRef?: { current: boolean }; onNavInput?: (a: 'x' | 'y', v: -1 | 0 | 1) => void
   oledSlot?: React.ReactNode
-  editorMode?: boolean; editorFieldIndex?: number
-  onEditorNav?: (delta: number) => void; onEditorAdjust?: (fieldIndex: number, delta: number) => void
 }) {
   const [geo, setGeo] = useState<{ w: number; h: number } | null>(null)
   const touchesRef = useRef(new Map<string, { stick: 'L' | 'R' }>())
@@ -407,10 +382,6 @@ function DualJoystick({
   const onLeftRef = useRef(onLeft); onLeftRef.current = onLeft
   const onRightRef = useRef(onRight); onRightRef.current = onRight
   const onNavInputRef = useRef(onNavInput); onNavInputRef.current = onNavInput
-  const editorModeRef = useRef(editorMode); editorModeRef.current = editorMode
-  const editorFieldIndexRef = useRef(editorFieldIndex); editorFieldIndexRef.current = editorFieldIndex
-  const onEditorNavRef = useRef(onEditorNav); onEditorNavRef.current = onEditorNav
-  const onEditorAdjustRef = useRef(onEditorAdjust); onEditorAdjustRef.current = onEditorAdjust
 
   const radius = geo ? Math.min(geo.w * 0.18, geo.h * 0.30, 85) : 0
   const centerOf = (stick: 'L' | 'R') =>
@@ -431,10 +402,6 @@ function DualJoystick({
       setKnobL({ x: nx, y: ny })
       if (report) {
         const nX = nx / cap, nY = ny / cap
-        if (editorModeRef.current) {
-          if (Math.abs(nY) > 0.35) onEditorNavRef.current?.(nY < 0 ? -1 : 1)
-          return
-        }
         if (navActiveRef?.current && onNavInputRef.current) {
           if (Math.abs(nX) >= Math.abs(nY)) { if (Math.abs(nX) > 0.35) onNavInputRef.current('x', nX < 0 ? -1 : 1) }
           else if (Math.abs(nY) > 0.35) onNavInputRef.current('y', nY < 0 ? -1 : 1)
@@ -446,10 +413,6 @@ function DualJoystick({
       setKnobR({ x: nx, y: ny })
       if (report) {
         const nX = nx / cap
-        if (editorModeRef.current) {
-          if (Math.abs(nX) > 0.35) onEditorAdjustRef.current?.(editorFieldIndexRef.current, nX < 0 ? -1 : 1)
-          return
-        }
         if (navActiveRef?.current && onNavInputRef.current) {
           if (Math.abs(nX) > 0.35) onNavInputRef.current('x', nX < 0 ? -1 : 1)
           return
@@ -539,7 +502,6 @@ function DualJoystick({
     if (!canControl) return
     const id = setInterval(() => {
       if (touchesRef.current.size === 0) return
-      if (editorModeRef.current) return
       if (navActiveRef?.current) return
       let hasL = false, hasR = false
       for (const [, v] of touchesRef.current) {
@@ -634,7 +596,6 @@ export function DriveControls({
   onDirection, onSpeed, onServo, onPid, onRun, onStop,
   onSignedDrive, steerLimit,
   safetyLimits, compact = false, navActiveRef, onNavInput, oledSlot,
-  editorMode = false, editorFieldIndex = 0, onEditorNav, onEditorAdjust,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   const limits = safetyLimits ?? DEFAULT_LIMITS
   const showSpeed = activeMode.controls.includes('drive-tank') || activeMode.controls.includes('drive-2wd1m')
@@ -708,8 +669,6 @@ export function DriveControls({
             onLeft={handleLeftJoy} onRight={handleRightJoy}
             fill={compact} navActiveRef={navActiveRef} onNavInput={onNavInput}
             oledSlot={oledSlot}
-            editorMode={editorMode} editorFieldIndex={editorFieldIndex}
-            onEditorNav={onEditorNav} onEditorAdjust={onEditorAdjust}
           />
           {!compact && (
             <Text className="mt-3 text-center text-sm text-muted">
@@ -728,8 +687,6 @@ export function DriveControls({
             onServo={onServo} limits={limits}
             compact={compact} navActiveRef={navActiveRef} onNavInput={onNavInput}
             oledSlot={oledSlot}
-            editorMode={editorMode} editorFieldIndex={editorFieldIndex}
-            onEditorNav={onEditorNav} onEditorAdjust={onEditorAdjust}
           />
           {!compact && (
             <View className="mt-3 flex-row items-center justify-center">

@@ -169,14 +169,6 @@ export function useControlHub(routeCategory?: string) {
   }, [])
    // Which top-bar field NAV is editing right now.
   const [navField, setNavField] = useState<'mode' | 'speed' | 'steer' | 'none'>('none')
-  // Editor navigation mode: field index 0-3 (speed, steerLimit, trim, servo).
-  const [editorNavIndex, setEditorNavIndex] = useState(0)
-  const navigateEditor = useCallback((delta: number) => {
-    setEditorNavIndex(prev => {
-      const next = prev + delta
-      return Math.max(0, Math.min(3, next))
-    })
-  }, [])
   // NAV mode preview (ESP previewModeIndex): the browsed-to mode shown
   // before Select confirms.
   const [previewMode, setPreviewMode] = useState<CarMode | null>(null)
@@ -1248,8 +1240,6 @@ setWifiProvisioning(true)
     tripAvg, maxSteer,
     // NAV (ESP INPUT_NAV parity)
     navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
-    // Editor navigation mode
-    editorNavIndex, navigateEditor,
     // pid
     pidKp, pidKi, pidKd, pidOut, pidOff,
     // drone
