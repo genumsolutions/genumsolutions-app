@@ -29,6 +29,7 @@ import { useControlHub } from '../components/tools/useControlHub'
 import { DriveControls } from '../components/tools/DriveControls'
 import { BalanceControls, PID_DEFS } from '../components/tools/BalanceControls'
 import type { PidKey } from '../components/tools/BalanceControls'
+import { TwoWd1mEditor } from '../components/tools/TwoWd1mEditor'
 import { ModeChooser } from '../components/tools/ModeChooser'
 import { OledDisplay } from '../components/tools/OledDisplay'
 import { SensorGrid } from '../components/tools/SensorGrid'
@@ -142,6 +143,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     adjustSteerLimit, commitSpeed, adjustTrim,
     handleDisconnect,
     navActive, setNavActive, navActiveRef, navField, setNavField, previewMode, setPreviewMode,
+    editorNavIndex, navigateEditor,
     pidKp, pidKi, pidKd, pidOut, pidOff,
     gimbalPan, gimbalTilt, targetAltitude, handleGimbalPan, handleGimbalTilt, handleAltitude,
     sensorData, relays, toggleRelay,
@@ -271,6 +273,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   // Pads are the primary drive surface — show them by default for every mode;
   // users can still hide via Settings (choice lives for the session only).
   const [showJoystick, setShowJoystick] = useState(true)
+  // 2WD1M editor/navigation mode: left joystick navigates fields, right changes values.
+  const [editorMode, setEditorMode] = useState(false)
+  const handleEditorAdjust = useCallback((fieldIndex: number, delta: number) => {
+    if (fieldIndex === 0) handleSpeed(Math.min(255, Math.max(100, speed + delta)))
+    else if (fieldIndex === 1) adjustSteerLimit(delta)
+    else adjustTrim(delta)
+  }, [speed, handleSpeed, adjustSteerLimit, adjustTrim])
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null)
@@ -307,6 +316,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     driveStatus, driveDir, targetAltitude, gimbalPan, gimbalTilt,
     sensorData, telemetry, isDrone, isNonRobocar,
     linkKind: connected ? ('spp' as const) : wifiConnected ? ('wifi' as const) : undefined,
+    trim,
   }
 
   const oledSlot = isRobocar ? (
@@ -530,6 +540,7 @@ export function RemoteControlScreen({ navigation }: Props) {
           /* ── Robocar drive deck ── */
           <View key={boardKey} className="relative mt-2 min-h-0 flex-1">
             {showJoystick ? (
+              <>
               <DriveControls
                 canControl={canControl}
                 isDrone={isDrone}
@@ -553,7 +564,26 @@ export function RemoteControlScreen({ navigation }: Props) {
                 navActiveRef={navActiveRef}
                 onNavInput={navInput}
                 oledSlot={oledSlot}
+                editorMode={editorMode && is2wd1mActive}
+                onEditorNav={navigateEditor}
+                onEditorAdjust={handleEditorAdjust}
+                editorFieldIndex={editorNavIndex}
               />
+              {is2wd1mActive && editorMode ? (
+                <TwoWd1mEditor
+                  canControl={canControl}
+                  speed={speed}
+                  steerLimit={steerLimit}
+                  trim={trim}
+                  servo={servo}
+                  onAdjustSpeed={(d) => handleSpeed(Math.min(255, Math.max(100, speed + d)))}
+                  onAdjustSteerLimit={adjustSteerLimit}
+                  onAdjustTrim={adjustTrim}
+                  editorFieldIndex={editorNavIndex}
+                  onEditorNav={navigateEditor}
+                />
+              ) : null}
+              </>
             ) : activeMode.controls.includes('pid-auto') ? (
               <BalanceControls
                 canControl={canControl}
@@ -699,6 +729,19 @@ export function RemoteControlScreen({ navigation }: Props) {
 
             {/* Steering limit + Trim (2WD1M only) */}
             <View className={`${is2wd1mActive ? '' : 'opacity-40'}`} pointerEvents={is2wd1mActive ? 'auto' : 'none'}>
+              <View className="mt-1.5 flex-row items-center justify-between border-b border-line pb-1.5">
+                <View className="flex-row items-center gap-2">
+                  <Feather name="sliders" size={14} color="#64748b" />
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">2WD1M Editor</Text>
+                </View>
+                <Switch
+                  value={editorMode}
+                  onValueChange={setEditorMode}
+                  trackColor={{ false: '#cbd5e1', true: '#1e3a8a' }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Toggle 2WD1M editor mode"
+                />
+              </View>
               <View className="mt-1.5 flex-row items-center justify-between">
                 <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">Steering</Text>
                 <View className="flex-row items-center gap-2">

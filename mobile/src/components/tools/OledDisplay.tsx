@@ -34,9 +34,8 @@ export function OledDisplay({
   connected, wifiConnected, deviceName, activeMode,
   speed, servo, driveStatus, targetAltitude, gimbalPan, gimbalTilt,
   sensorData, telemetry, isDrone, isNonRobocar, linkKind, compact = false,
-  topField = 'none', previewMode = null, previewComingSoon = false, previewModeAvail, steerLimit,
+  topField = 'none', previewMode = null, previewComingSoon = false, previewModeAvail, steerLimit, trim,
 }: OledDisplayProps) {
-  const is2wd1m = activeMode.controls.includes('drive-2wd1m')
   const isAuto = activeMode.token === 'AUTO'
   // A-49 (round-11): the compact 160x80 mirror uses ONE mono scale — 10px
   // labels, 11px values/rows, 15px hero direction — so the AUTO rows never
@@ -50,11 +49,10 @@ export function OledDisplay({
   const shownIsAuto = shown.token === 'AUTO'
   const shownName = MODE_NAMES[shown.token] ?? shown.name.split('·')[0].trim()
 
-  // Right field: SPEED in every mode (R-20 fleet rule — the hand-held remote's
-  // top-right slot is Speed everywhere; the steering limit lives in the
-  // Settings menu / the car's SW editor, not the top bar).
-  const rightLabel = 'Spd'
-  const rightFieldValue = String(speed)
+  // Right field: Trim for 2WD1M, Speed for all other modes
+  const is2wd1m = activeMode.controls.includes('drive-2wd1m')
+  const rightLabel = is2wd1m ? 'Trim' : 'Spd'
+  const rightFieldValue = is2wd1m ? String(trim ?? 0) : String(speed)
 
   const linkLabel =
     linkKind === 'spp' ? 'SPP'
