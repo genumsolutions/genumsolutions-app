@@ -289,19 +289,6 @@ export type TwoWd1mExtrasProps = {
   onAdjustTrim: (delta: number) => void
 }
 
-export type TwoWd1mEditorProps = {
-  canControl: boolean
-  speed: number
-  steerLimit: number
-  trim: number
-  servo: number
-  onAdjustSpeed: (delta: number) => void
-  onAdjustSteerLimit: (delta: number) => void
-  onAdjustTrim: (delta: number) => void
-  editorFieldIndex: number
-  onEditorNav: (delta: number) => void
-}
-
 export type DriveControlsProps = {
   canControl: boolean
   isDrone: boolean
@@ -343,17 +330,9 @@ export type DriveControlsProps = {
   navActiveRef?: { current: boolean }
   /** NAV input from the pads/joysticks (left stick / d-pad nav: -1 left,
       +1 right, 0 up, 1 down on the Y axis). Optional. */
-  onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
+onNavInput?: (axis: 'x' | 'y', value: -1 | 0 | 1) => void
   /** OLED display rendered centered between the joysticks (always visible). */
   oledSlot?: React.ReactNode
-  /** Editor/nav mode: left joystick navigates fields, right changes values. */
-  editorMode?: boolean
-  /** Currently highlighted editor row when editorMode is active. */
-  editorFieldIndex?: number
-  /** Editor navigation: +1 / -1 moves the highlighted field up/down. */
-  onEditorNav?: (delta: number) => void
-  /** Editor value adjust: (fieldIndex, delta) — delta is ±1 per tick. */
-  onEditorAdjust?: (fieldIndex: number, delta: number) => void
 }
 
 export type DroneControlsProps = {

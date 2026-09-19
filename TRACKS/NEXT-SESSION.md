@@ -2,9 +2,12 @@
 
 **Current state:** 3.2.3 / versionCode 56, all pushed (`ac62ef6` R-20 feat →
 `832c96a` R-20a updater repair (OTA to 3.2.x devices) → `9085d56` bump +
-`runtimeVersion: {policy: "appVersion"}`). Tree clean, `main` == origin.
-Pipelines verified: release run `35439635378` green; live `release.json` =
-3.2.3/56; `latest.apk` + website `/app` fallback synced (bot `6915544`).
+`runtimeVersion: {policy: "appVersion"}`). **R-20b editor (2WD1M panel + toggle
+`1ae57a0`) was REVERTED in R-21b — the ESP remote owns 2WD1M editing now, so the
+duplicate app editor + its Settings switch were removed (no version bump; rides
+OTA-only).** Tree clean, `main` == origin. Pipelines verified: release run
+`35439635378` green; live `release.json` = 3.2.3/56; `latest.apk` + website
+`/app` fallback synced (bot `6915544`).
 
 ## Open items
 
@@ -16,9 +19,13 @@ Pipelines verified: release run `35439635378` green; live `release.json` =
    - The R-20 drive changes: fixed-speed joystick, Speed slider in the top
      strip in every mode, steering only in Settings, STEER-limit edit mirrors
      car truth (`;STEER=`).
+   - The 2WD1M editor page + its Settings toggle are GONE; 2WD1M steering/trim
+     quick-steppers still live in Settings (Steering/Trim rows remain; the
+     editor lived on the ESP `SW` long-hold instead).
 2. 🔜 **RELEASE-NOTES-DRAFT.md** (guide/, FIN-35): refresh app line to
-   3.2.3/56 + add a "Bug fixes" block — updater stale-cache fix, native
-   version display, runtime policy change.
+   3.2.3/56 — the release carries R-20 + R-20a fixes; the R-20b 2WD1M editor
+   page was removed pre-release (R-21b, remote-owned editing), so do NOT list
+   an app editor feature.
 3. 🔜 **FIN-36:** version-defining commit for `v3.2.3` = `9085d56` (the bump
    commit — consistent with v3.0.0/v3.1.0/v3.2.0/v3.2.1 convention).
 4. 🧹 **Cleanup candidates (next calm session):**
