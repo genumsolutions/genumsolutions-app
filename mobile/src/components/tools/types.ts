@@ -279,16 +279,6 @@ export type RouterPanelProps = {
   onOpenWebPage: () => void
 }
 
-export type TwoWd1mExtrasProps = {
-  canControl: boolean
-  /** Max steering deflection the user allows (0..90). */
-  steerLimit: number
-  /** Steering trim offset (persisted on the car via TRIM). */
-  trim: number
-  onAdjustSteerLimit: (delta: number) => void
-  onAdjustTrim: (delta: number) => void
-}
-
 export type DriveControlsProps = {
   canControl: boolean
   isDrone: boolean

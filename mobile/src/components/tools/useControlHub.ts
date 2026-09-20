@@ -1081,18 +1081,6 @@ setWifiProvisioning(true)
     })
   }, [sendCommand])
 
-  // Select on the Steer field: record the limit (status + persist + send).
-  // Kept for NAV parity; the Remote screen's NAV no longer routes here (the
-  // top strip is the SPEED slider in every mode) but the API stays stable.
-  const commitSteerLimit = useCallback(() => {
-    setSteerLimit((s) => {
-      sendCommand(buildSteer(s))
-      setDriveStatusOnce(`Steer limit:${s}`)
-      persistPrefsRef.current?.({ steerLimit: s })
-      return s
-    })
-  }, [sendCommand])
-
   const adjustTrim = useCallback((delta: number) => {
     setTrim((prev) => {
       const next = Math.max(-safetyLimits.maxTrim, Math.min(safetyLimits.maxTrim, prev + delta))
@@ -1235,7 +1223,7 @@ setWifiProvisioning(true)
     // drive state
     speed, setSpeed, servo, steerLimit, trim, driveStatus, driveDir, telemetry, safetyLimits,
     handleDirection, handleSpeed, handleServo, applyPid, handleStickDrive,
-    adjustSteerLimit, commitSpeed, commitSteerLimit, adjustTrim, handleEStop, sendCommand,
+    adjustSteerLimit, commitSpeed, adjustTrim, handleEStop, sendCommand,
     // R-19 (FIN-45): car-truth trip metrics (2WD1M family)
     tripAvg, maxSteer,
     // NAV (ESP INPUT_NAV parity)
