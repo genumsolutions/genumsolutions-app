@@ -526,20 +526,37 @@ export function useControlHub(routeCategory?: string) {
     const offWifi = wifiService.onTelemetry(applyTelemetry)
     const offStatus = sppService.onStatus((kind, message) => {
       if (!mountedRef.current) return
+      // FIN-50: FIN-44's dedupe compares against sppStatusMsgRef, but the ref
+      // was never WRITTEN — every comparison saw `null`, so the 'error'
+      // same-message guard never matched and the reconnect burst kept
+      // re-rendering. Keep it truthful (ref write = no re-render).
+      sppStatusMsgRef.current = message ?? null
+      // FIN-50 flicker fix (owner gate 2026-09-20): during the SILENT
+      // auto-reconnect burst the UI flapped connecting↔error on every attempt
+      // (each transition re-rendered the control panel + remote screen). While
+      // the backoff is running, collapse both transient kinds into ONE stable
+      // presentation ('connecting' + 'Reconnecting…') so repeated attempts no
+      // longer change any rendered value. Real transitions ('connected',
+      // 'disconnected') and the exhausted-attempts banner are unaffected.
+      const reconnecting =
+        !manualCloseRef.current && !!sppLastAddressRef.current && sppReconnectAttemptsRef.current > 0
+      const burst = reconnecting && (kind === 'connecting' || kind === 'error')
+      const presentationKind = burst ? 'connecting' : kind
+      const presentationMsg = burst ? 'Reconnecting…' : (message ?? null)
       // FIN-44 flicker fix: dedupe repeats of the same status kind (the SPP
       // service emits per event; repeated 'connecting'/'error' bursts from the
       // auto-reconnect backoff re-rendered the BT connection-details row on
       // every attempt even though nothing changed). Transitions still render.
       setSppStatus((prevKind) => {
-        if (prevKind === kind) {
+        if (prevKind === presentationKind) {
           // Same state again — only 'error' carries a NEW message worth a repaint.
-          if (kind !== 'error' || message === sppStatusMsgRef.current) return prevKind
+          if (presentationKind !== 'error' || presentationMsg === sppStatusMsgRef.current) return prevKind
         }
-        return kind
+        return presentationKind
       })
       switch (kind) {
         case 'connecting':
-          setSppStatusMsg('')
+          if (!burst) setSppStatusMsg('')  // burst: keep the stable message
           setShowSppsRetry(false)
           break
         case 'connected':
@@ -578,7 +595,7 @@ export function useControlHub(routeCategory?: string) {
           }
           break
         case 'error':
-          setSppStatusMsg(message ?? 'Connection error')
+          if (!burst) setSppStatusMsg(presentationMsg ?? 'Connection error')  // burst: no flap
           setConnected(false)
           setDeviceName('')
           setDriveStatusOnce('Stop')
