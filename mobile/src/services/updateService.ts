@@ -202,6 +202,15 @@ export async function checkForAnyUpdate(
 // ── APK Download + Install ────────────────────────────────────────
 // Download the release APK and launch the Android installer for it.
 // The user taps INSTALL — Android never allows silent installs.
+
+// R-20a cache-target contract: the filename is DERIVED FROM THE URL so each
+// release gets its own cache entry (a fixed name + `idempotent: true` was the
+// original cache-poisoning bug), and URL-unsafe characters are flattened for
+// the filesystem. Unit-tested in updateService.test.ts.
+export function cacheFileNameFor(apkUrl: string): string {
+  const urlName = apkUrl.split('/').pop() || 'genum-update.apk';
+  return urlName.replace(/[^A-Za-z0-9._-]/g, '_');
+}
 export async function downloadAndInstall(
   apkUrl: string,
   onProgress?: (fraction: number) => void,
@@ -216,9 +225,7 @@ export async function downloadAndInstall(
   // the same "update available" — forever. The target is now versioned
   // from the APK URL, any stale file is deleted before downloading, and
   // idempotent is off so the bytes are always freshly fetched.
-  const urlName = apkUrl.split('/').pop() || 'genum-update.apk';
-  const safeName = urlName.replace(/[^A-Za-z0-9._-]/g, '_');
-  const target = new File(Paths.cache, safeName);
+  const target = new File(Paths.cache, cacheFileNameFor(apkUrl));
   try {
     if (target.exists) target.delete();
   } catch {
