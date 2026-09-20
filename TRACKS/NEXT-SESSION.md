@@ -5,7 +5,11 @@
 `runtimeVersion: {policy: "appVersion"}`). **R-20b editor (2WD1M panel + toggle
 `1ae57a0`) was REVERTED in R-21b — the ESP remote owns 2WD1M editing now, so the
 duplicate app editor + its Settings switch were removed (no version bump; rides
-OTA-only).** Tree clean, `main` == origin. Pipelines verified: release run
+OTA-only).** **2026-09-20 cleanup commit `4967c70` (LOCAL — NOT pushed):** dead
+`TwoWd1mExtras.tsx` + its props type deleted, unused `commitSteerLimit` dropped,
+`cacheFileNameFor()` extracted + pinned by `updateService.test.ts` (R-20a cache
+contract; tsc clean, vitest 73/73). JS-only — pushing rides ota-only.yml as a
+same-version OTA. Pipelines verified: release run
 `35439635378` green; live `release.json` = 3.2.3/56; `latest.apk` + website
 `/app` fallback synced (bot `6915544`).
 
@@ -29,13 +33,9 @@ OTA-only).** Tree clean, `main` == origin. Pipelines verified: release run
 3. 🔜 **FIN-36:** version-defining commit for `v3.2.3` = `9085d56` (the bump
    commit — consistent with v3.0.0/v3.1.0/v3.2.0/v3.2.1 convention).
 4. 🧹 **Cleanup candidates (next calm session):**
-   - `TwoWd1mExtras.tsx` is dead code (steering/trim editing lives in
-     Settings) — delete + sweep imports.
-   - `commitSteerLimit` is exported-but-unused in `useControlHub.ts` (kept for
-     API symmetry when R-20 landed) — either wire it or drop it.
-   - `updateService.test.ts` has no coverage of the new cache-target logic —
-     worth a unit test (mock `File.downloadFileAsync`, assert the versioned
-     filename + delete-before-download order).
+   - ~~`TwoWd1mExtras.tsx` is dead code~~ ✅ DONE 2026-09-20 (`4967c70`).
+   - ~~`commitSteerLimit` is exported-but-unused in `useControlHub.ts`~~ ✅ DONE 2026-09-20 (`4967c70`).
+   - ~~`updateService.test.ts` has no coverage of the new cache-target logic~~ ✅ DONE 2026-09-20 (`4967c70` — 9 tests: per-release filenames, delete-before-download order, always re-download, installer intent, error prefixes).
 
 ## Do-not-regress (the R-20a lessons)
 
