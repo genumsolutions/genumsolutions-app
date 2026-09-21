@@ -456,7 +456,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
 
 export async function listAdminActivity(page = 1, limit = 20): Promise<{ entries: ActivityEntry[]; total: number; page: number; totalPages: number }> {
   const { data, error, count } = await supabase
-    .from('admin_activity')
+    .from('activity_log')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * limit, page * limit - 1)
