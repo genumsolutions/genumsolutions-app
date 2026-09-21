@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseConfigured } from '../config/supabase';
 import * as auth from '../services/authService';
 import * as push from '../services/pushService';
+import * as settings from '../services/settingsService';
 import * as cart from '../services/cartService';
 import type { CartLine } from '../types';
 import type { CarMode } from '../config/roboCarCatalog';
@@ -141,6 +142,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const session = current.data.session;
         if (session) {
           if (active) setUser(await genumUserFromSession(session));
+          // Adopt the cloud-saved theme + settings (website parity: the
+          // same user sees the same look and feel on both clients).
+          void settings.syncOnSignIn(applyThemeOnly);
         } else {
           // Try to restore from SecureStore so Google/email login survives
           // an OS restart even if the client did not persist it.
@@ -173,10 +177,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Apply + cache WITHOUT the DB write-back (used when adopting the cloud
+  // preference on sign-in — the value just came FROM the database).
+  const applyThemeOnly = useCallback((mode: ThemeMode) => {
+    setThemeModeState(mode);
+    applyColorScheme(mode);
+    void AsyncStorage.setItem('genum-theme-mode', mode);
+  }, []);
+
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
     applyColorScheme(mode);
     void AsyncStorage.setItem('genum-theme-mode', mode);
+    // Cloud mirror: the canonical preference lives on profiles
+    // (theme_preference) so the website sees the same choice (W-6 parity).
+    void settings.saveThemePreference(mode);
   }, []);
 
   // ── launch-level update check (every app open) ────────────────────
@@ -200,6 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const sub = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         void genumUserFromSession(session).then(setUser);
+        void settings.syncOnSignIn(applyThemeOnly);
       } else {
         setUser(null);
       }

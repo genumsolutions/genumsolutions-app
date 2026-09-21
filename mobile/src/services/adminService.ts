@@ -384,10 +384,28 @@ export async function listAdminUsers(page = 1, limit = 20, query?: string): Prom
   return { users: (data ?? []).map(mapUserRow), total: count ?? 0, page, totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)) }
 }
 
+// Role changes MUST go through the admin-set-role edge function: the DB
+// trigger protect_role_column only lets the service role change profiles.role,
+// so a direct anon-key update is REJECTED (the old direct call silently did
+// nothing — revoke never applied). The edge function verifies the caller is
+// an admin, blocks self-demotion, and logs to activity_log.
 export async function toggleAdminRole(userId: string, role: 'admin' | 'customer') {
-  const { data, error } = await supabase.from('profiles').update({ role }).eq('id', userId).select()
-  if (error) throw error
-  return data[0]
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Sign in to change roles.')
+  const { data, error } = await supabase.functions.invoke('admin-set-role', {
+    body: { userId, role },
+  })
+  if (error) {
+    // functions.invoke surfaces non-2xx as FunctionsHttpError; the function's
+    // JSON error message is the useful part for the admin UI.
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not update the role.'
+    throw new Error(message)
+  }
+  return data
 }
 
 // --- Messages ---
