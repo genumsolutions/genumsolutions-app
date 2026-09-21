@@ -77,7 +77,7 @@ type Tab = 'Dashboard' | 'Orders' | 'Products' | 'Projects' | 'Services' | 'Jour
 const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'Projects', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content', 'Settings']
 
 export function AdminScreen() {
-  const { isAdmin, signOut } = useApp()
+  const { isAdmin, signOut, user: currentUser } = useApp()
   const [tab, setTab] = useState<Tab>('Dashboard')
   const pagerRef = useRef<PlatformPagerRef>(null)
   const tabScrollRef = useRef<ScrollView>(null)
@@ -486,6 +486,10 @@ export function AdminScreen() {
 
   function handleToggleUserRole(user: AdminUser) {
     const newRole = user.role === 'admin' ? 'customer' : 'admin'
+    if (newRole === 'customer' && user.id === currentUser?.id) {
+      Alert.alert('Not allowed', 'You cannot revoke your own admin role.')
+      return
+    }
     Alert.alert(
       'Change role',
       newRole === 'admin'
@@ -502,6 +506,9 @@ export function AdminScreen() {
               void loadUsers(usersPage)
             } catch (e) {
               logger.error('admin', 'Role toggle error:', e)
+              // Surface the failure — role changes previously failed silently
+              // (the DB trigger rejected the direct anon-key update).
+              Alert.alert('Could not change role', e instanceof Error ? e.message : 'Please try again.')
             }
           },
         },
