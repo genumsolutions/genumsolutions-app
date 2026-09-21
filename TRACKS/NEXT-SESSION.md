@@ -5,11 +5,11 @@
 `runtimeVersion: {policy: "appVersion"}`). **R-20b editor (2WD1M panel + toggle
 `1ae57a0`) was REVERTED in R-21b — the ESP remote owns 2WD1M editing now, so the
 duplicate app editor + its Settings switch were removed (no version bump; rides
-OTA-only).** **2026-09-20 cleanup commit `4967c70` (LOCAL — NOT pushed):** dead
+OTA-only).** **2026-09-20 cleanup (commit `4967c70`, PUSHED same day as inert
+OTA `4da93d9` via ota-only.yml — same-version, no bump):** dead
 `TwoWd1mExtras.tsx` + its props type deleted, unused `commitSteerLimit` dropped,
 `cacheFileNameFor()` extracted + pinned by `updateService.test.ts` (R-20a cache
-contract; tsc clean, vitest 73/73). JS-only — pushing rides ota-only.yml as a
-same-version OTA. Pipelines verified: release run
+contract; tsc clean, vitest 73/73). Pipelines verified: release run
 `35439635378` green; live `release.json` = 3.2.3/56; `latest.apk` + website
 `/app` fallback synced (bot `6915544`).
 
@@ -26,10 +26,14 @@ same-version OTA. Pipelines verified: release run
    - The 2WD1M editor page + its Settings toggle are GONE; 2WD1M steering/trim
      quick-steppers still live in Settings (Steering/Trim rows remain; the
      editor lived on the ESP `SW` long-hold instead).
-2. 🔜 **RELEASE-NOTES-DRAFT.md** (guide/, FIN-35): refresh app line to
-   3.2.3/56 — the release carries R-20 + R-20a fixes; the R-20b 2WD1M editor
-   page was removed pre-release (R-21b, remote-owned editing), so do NOT list
-   an app editor feature.
+2. ✅ **RELEASE-NOTES-DRAFT.md** (guide/, FIN-35) — DONE 2026-09-21: app line
+   refreshed to 3.2.3/56. The R-20a updater repair now leads "What ships"
+   (per-release cache filename + delete-before-download, `appVersion`
+   runtimeVersion policy, native-version labels; the 2026-09-20 cleanup +
+   vitest 73/73 noted); the stale `runtimeVersion stays 1.0.0` line was
+   corrected to the `appVersion` policy; test count 64→73/73; the R-20b 2WD1M
+   app editor is confirmed removed pre-release (R-21b, remote-owned editing)
+   and NOT listed as a feature.
 3. 🔜 **FIN-36:** version-defining commit for `v3.2.3` = `9085d56` (the bump
    commit — consistent with v3.0.0/v3.1.0/v3.2.0/v3.2.1 convention).
 4. 🧹 **Cleanup candidates (next calm session):**
