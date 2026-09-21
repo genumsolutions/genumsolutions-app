@@ -36,7 +36,14 @@ contract; tsc clean, vitest 73/73). Pipelines verified: release run
    and NOT listed as a feature.
 3. 🔜 **FIN-36:** version-defining commit for `v3.2.3` = `9085d56` (the bump
    commit — consistent with v3.0.0/v3.1.0/v3.2.0/v3.2.1 convention).
-4. 🧹 **Cleanup candidates (next calm session):**
+4. 🌉 **ECOSYSTEM UNIFICATION registered (2026-09-21, docs-only):** master docs live
+   in `guide/` — `ARCHITECTURE.md` (boundaries B-1..B-7: Supabase is the ONLY
+   app↔website bridge, app stays 100% native) + `UNIFICATION-PLAN-2026-09-21.md`
+   (gap ledger: W-1..W-6 website gaps, A-1/A-2 app gaps; phases P0–P5). Next app-side
+   code (owner "go P1"): admin field-level audit vs website's 12 panels (tab sets
+   already match), then A-1 (project/category detail pages) + A-2 (Open-Tools)
+   natively. Remote control untouched. Website remote stays parked.
+5. 🧹 **Cleanup candidates (next calm session):**
    - ~~`TwoWd1mExtras.tsx` is dead code~~ ✅ DONE 2026-09-20 (`4967c70`).
    - ~~`commitSteerLimit` is exported-but-unused in `useControlHub.ts`~~ ✅ DONE 2026-09-20 (`4967c70`).
    - ~~`updateService.test.ts` has no coverage of the new cache-target logic~~ ✅ DONE 2026-09-20 (`4967c70` — 9 tests: per-release filenames, delete-before-download order, always re-download, installer intent, error prefixes).

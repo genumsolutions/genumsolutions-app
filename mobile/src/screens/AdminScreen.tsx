@@ -850,6 +850,7 @@ function DashboardTab({ stats, analytics }: { stats: DashboardStats | null; anal
         <StatCard label="Cart items" value={String(stats.totalCartItems)} sub={`${stats.activeCarts} active carts`} />
         <StatCard label="Products" value={String(stats.totalProducts)} sub={stats.lowStockProducts > 0 ? `${stats.lowStockProducts} low stock` : 'OK'} />
         <StatCard label="Messages" value={String(stats.totalMessages)} sub={`${stats.unreadMessages} unread`} />
+        <StatCard label="Transactions" value={String(stats.totalTransactions)} sub={`${stats.succeededTransactions} succeeded`} />
         <StatCard label="Page Views (30d)" value={analytics ? String(analytics.totalViews) : '—'} sub={`Today: ${analytics?.todayViews ?? '—'}`} />
         <StatCard label="Conversion Rate" value={conversionRate} sub="Paid orders / users" />
       </View>
