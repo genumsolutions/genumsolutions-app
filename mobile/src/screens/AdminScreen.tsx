@@ -779,6 +779,19 @@ export function AdminScreen() {
               }
             }}
             saved={contentSaved}
+            trainingPrograms={trainingPrograms}
+            setTrainingPrograms={setTrainingPrograms}
+            onSaveProgram={async (program, isNew) => { await upsertAdminTrainingProgram(program) }}
+            onDeleteProgram={async (id) => { await deleteAdminTrainingProgram(id) }}
+            pilotCostLines={pilotCostLines}
+            setPilotCostLines={setPilotCostLines}
+            onSavePilotLine={async (line, isNew) => { await upsertAdminPilotCostLine(line) }}
+            onDeletePilotLine={async (id) => { await deleteAdminPilotCostLine(id) }}
+            curriculumHighlights={curriculumHighlights}
+            setCurriculumHighlights={setCurriculumHighlights}
+            onSaveCurriculum={async (highlight, isNew) => { await upsertAdminCurriculumHighlight(highlight) }}
+            onDeleteCurriculum={async (id) => { await deleteAdminCurriculumHighlight(id) }}
+            canDelete={canDelete}
           />
         )
       case 'Settings':
@@ -786,38 +799,8 @@ export function AdminScreen() {
           <SettingsTab
             company={companyInfo}
             setCompany={setCompanyInfo}
-            trainingPrograms={trainingPrograms}
-            setTrainingPrograms={setTrainingPrograms}
-            pilotCostLines={pilotCostLines}
-            setPilotCostLines={setPilotCostLines}
-            curriculumHighlights={curriculumHighlights}
-            setCurriculumHighlights={setCurriculumHighlights}
             canDelete={canDelete}
             onCompanySaved={async (next) => { await saveCompanyInfo(next); setCompanyInfo(next) }}
-            onSaveProgram={async (program, isNew) => {
-              await upsertAdminTrainingProgram(program)
-              setTrainingPrograms(await listAdminTrainingPrograms())
-            }}
-            onDeleteProgram={async (id) => {
-              await deleteAdminTrainingProgram(id)
-              setTrainingPrograms(await listAdminTrainingPrograms())
-            }}
-            onSavePilotLine={async (line, isNew) => {
-              await upsertAdminPilotCostLine(line)
-              setPilotCostLines(await listAdminPilotCostLines())
-            }}
-            onDeletePilotLine={async (id) => {
-              await deleteAdminPilotCostLine(id)
-              setPilotCostLines(await listAdminPilotCostLines())
-            }}
-            onSaveCurriculum={async (highlight, isNew) => {
-              await upsertAdminCurriculumHighlight(highlight)
-              setCurriculumHighlights(await listAdminCurriculumHighlights())
-            }}
-            onDeleteCurriculum={async (id) => {
-              await deleteAdminCurriculumHighlight(id)
-              setCurriculumHighlights(await listAdminCurriculumHighlights())
-            }}
             onEditingChange={setSettingsEditing}
           />
         )
@@ -1735,53 +1718,44 @@ function UsersTab({ users, total, page, totalPages, query, onQueryChange, onAppl
   )
 }
 
-function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onBodyChange, onSave, saved }: {
+function ContentTab({ siteContent, contentTitle, contentBody, onTitleChange, onBodyChange, onSave, saved, trainingPrograms, setTrainingPrograms, onSaveProgram, onDeleteProgram, pilotCostLines, setPilotCostLines, onSavePilotLine, onDeletePilotLine, curriculumHighlights, setCurriculumHighlights, onSaveCurriculum, onDeleteCurriculum, canDelete }: {
   siteContent: { id: number; home_title: string; home_body: string } | null;
   contentTitle: string; contentBody: string;
   onTitleChange: (t: string) => void; onBodyChange: (b: string) => void;
   onSave: () => void; saved: boolean;
+  trainingPrograms: AdminTrainingProgram[]; setTrainingPrograms: (p: AdminTrainingProgram[]) => void
+  onSaveProgram: (p: AdminTrainingProgram, isNew: boolean) => void; onDeleteProgram: (id: string) => void
+  pilotCostLines: AdminPilotCostLine[]; setPilotCostLines: (p: AdminPilotCostLine[]) => void
+  onSavePilotLine: (p: AdminPilotCostLine, isNew: boolean) => void; onDeletePilotLine: (id: string) => void
+  curriculumHighlights: AdminCurriculumHighlight[]; setCurriculumHighlights: (c: AdminCurriculumHighlight[]) => void
+  onSaveCurriculum: (c: AdminCurriculumHighlight, isNew: boolean) => void; onDeleteCurriculum: (id: string) => void
+  canDelete: boolean
 }) {
+  const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
   return (
     <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text className="text-base font-bold text-ink">Home page content</Text>
       <Text className="mt-1 text-xs leading-5 text-muted">
         Edit the hero title and body shown on the app home screen and the website homepage.
       </Text>
-
       <View className="mt-4 rounded-xl border border-line bg-card p-4">
         <Text className="text-xs font-bold uppercase tracking-wide text-muted">Hero title</Text>
-        <TextInput
-          value={contentTitle}
-          onChangeText={onTitleChange}
-          placeholder="Technology you can touch, test, and trust."
-          placeholderTextColor="#94a3b8"
-          className="mt-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-        />
+        <TextInput value={contentTitle} onChangeText={onTitleChange} placeholder="Technology you can touch, test, and trust." placeholderTextColor="#94a3b8" className="mt-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" />
       </View>
-
       <View className="mt-3 rounded-xl border border-line bg-card p-4">
         <Text className="text-xs font-bold uppercase tracking-wide text-muted">Hero body</Text>
-        <TextInput
-          value={contentBody}
-          onChangeText={onBodyChange}
-          placeholder="Robotics kits, project solutions, fabrication, open tools, and training…"
-          placeholderTextColor="#94a3b8"
-          multiline
-          style={{ textAlignVertical: 'top' }}
-          className="mt-1 min-h-24 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-        />
+        <TextInput value={contentBody} onChangeText={onBodyChange} placeholder="Robotics kits, project solutions, fabrication, open tools, and training…" placeholderTextColor="#94a3b8" multiline style={{ textAlignVertical: 'top' }} className="mt-1 min-h-24 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" />
       </View>
-
       <Pressable onPress={onSave} className="mt-4 items-center rounded-full bg-navy py-3">
         <Text className="text-sm font-black text-white">Save changes</Text>
       </Pressable>
-
-      {saved && (
-        <Text className="mt-3 text-center text-sm font-semibold text-emerald-700">Saved.</Text>
-      )}
-      {!siteContent && (
-        <Text className="mt-3 text-center text-sm text-muted">Content not loaded.</Text>
-      )}
+      {saved && <Text className="mt-3 text-center text-sm font-semibold text-emerald-700">Saved.</Text>}
+      {!siteContent && <Text className="mt-3 text-center text-sm text-muted">Content not loaded.</Text>}
+      <View className="mt-5">
+        <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} canDelete={canDelete} onDelete={onDeleteProgram} inputClass={inputClass} onEditingChange={() => {}} />
+        <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} canDelete={canDelete} onDelete={onDeletePilotLine} inputClass={inputClass} onEditingChange={() => {}} />
+        <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} canDelete={canDelete} onDelete={onDeleteCurriculum} inputClass={inputClass} onEditingChange={() => {}} />
+      </View>
     </ScrollView>
   )
 }
@@ -2118,26 +2092,13 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
 
 // ─── Settings (company info + programs) ─────────────────────────────
 
-function SettingsTab({ company, setCompany, trainingPrograms, setTrainingPrograms, pilotCostLines, setPilotCostLines, curriculumHighlights, setCurriculumHighlights, canDelete, onCompanySaved, onSaveProgram, onDeleteProgram, onSavePilotLine, onDeletePilotLine, onSaveCurriculum, onDeleteCurriculum, onEditingChange }: {
+function SettingsTab({ company, setCompany, canDelete, onCompanySaved, onEditingChange }: {
   company: AdminCompanyInfo | null; setCompany: (c: AdminCompanyInfo | null) => void
-  trainingPrograms: AdminTrainingProgram[]; setTrainingPrograms: (p: AdminTrainingProgram[]) => void
-  pilotCostLines: AdminPilotCostLine[]; setPilotCostLines: (p: AdminPilotCostLine[]) => void
-  curriculumHighlights: AdminCurriculumHighlight[]; setCurriculumHighlights: (c: AdminCurriculumHighlight[]) => void
   canDelete: boolean
   onCompanySaved: (next: AdminCompanyInfo) => void
-  onSaveProgram: (p: AdminTrainingProgram, isNew: boolean) => void
-  onDeleteProgram: (id: string) => void
-  onSavePilotLine: (p: AdminPilotCostLine, isNew: boolean) => void
-  onDeletePilotLine: (id: string) => void
-  onSaveCurriculum: (c: AdminCurriculumHighlight, isNew: boolean) => void
-  onDeleteCurriculum: (id: string) => void
   onEditingChange: (v: boolean) => void
 }) {
   const inputClass = 'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink'
-
-  // Aggregate the 4 Settings editors (company fields + the three item
-  // managers) into ONE flag so the admin pager disables swiping while any
-  // item is being edited. Each child reports its own idempotent flag.
   const activeEditorsRef = useRef<Record<string, boolean>>({})
   const [anyEditing, setAnyEditing] = useState(false)
   const report = useCallback((key: string) => (isEditing: boolean) => {
@@ -2147,19 +2108,11 @@ function SettingsTab({ company, setCompany, trainingPrograms, setTrainingProgram
   useEffect(() => {
     onEditingChange(anyEditing)
   }, [anyEditing, onEditingChange])
-
   return (
     <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text className="font-display text-2xl font-bold tracking-tight text-ink">Settings</Text>
-      <Text className="mt-1 text-xs text-muted">Company details, training programs, pilot costs, and curriculum highlights — all DB-first (shared with the website).</Text>
-
+      <Text className="mt-1 text-xs text-muted">Company details — all DB-first (shared with the website).</Text>
       <CompanyInfoEditor company={company} setCompany={setCompany} onSaved={onCompanySaved} inputClass={inputClass} onEditingChange={report('company')} />
-
-      <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} canDelete={canDelete} onDelete={onDeleteProgram} inputClass={inputClass} onEditingChange={report('programs')} />
-
-      <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} canDelete={canDelete} onDelete={onDeletePilotLine} inputClass={inputClass} onEditingChange={report('pilot')} />
-
-      <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} canDelete={canDelete} onDelete={onDeleteCurriculum} inputClass={inputClass} onEditingChange={report('curriculum')} />
     </ScrollView>
   )
 }
