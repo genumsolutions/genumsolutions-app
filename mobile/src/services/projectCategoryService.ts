@@ -77,13 +77,35 @@ function mapRow(row: ProjectCategoryRow): ProjectCategory | null {
     name: row.name,
     tagline: '', // DB doesn't store tagline; use hardcoded fallback if needed
     description: '',
-    hardware: parseList(row.hardware),
-    capabilities: parseList(row.capabilities).filter(
-      (c): c is ControlCapability =>
-        (CAPABILITY_KINDS as readonly string[]).includes(c)
-    ),
+    // DB rows store hardware/capabilities entries that may be plain strings
+    // OR structured objects ({name, role}) managed by the website admin. The
+    // app renders these as text lines, so object entries are flattened to
+    // "name — role" strings here (raw objects inside <Text> crash React
+    // Native: "objects are not valid as a react child").
+    hardware: parseList(row.hardware).map(flattenEntry),
+    capabilities: parseList(row.capabilities)
+      .map(flattenEntry)
+      .filter(
+        (c): c is ControlCapability =>
+          (CAPABILITY_KINDS as readonly string[]).includes(c)
+      ),
     carType: row.car_type ?? undefined,
   };
+}
+
+/** Flatten a string OR {name, role}-style object entry to display text. */
+function flattenEntry(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const rec = value as Record<string, unknown>;
+    const name = typeof rec.name === 'string' ? rec.name : '';
+    const role = typeof rec.role === 'string' ? rec.role : '';
+    if (name && role) return `${name} — ${role}`;
+    if (name) return name;
+    if (role) return role;
+    return '';
+  }
+  return value == null ? '' : String(value);
 }
 
 /** Fetch project categories DB-first with the bundled list as fallback. */
