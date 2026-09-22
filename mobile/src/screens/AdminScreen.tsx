@@ -37,6 +37,11 @@ import {
   deleteAdminService,
   listAdminUsers,
   toggleAdminRole,
+  setUserTier,
+  type AdminRobotSetting,
+  listUserRobotSettings,
+  upsertUserRobotSettings,
+  deleteUserRobotSetting,
   listAdminMessages,
   markMessageReplied,
   fetchDashboardStats,
@@ -484,6 +489,32 @@ export function AdminScreen() {
     }
   }
 
+  function handleToggleUserTier(user: AdminUser) {
+    const nextTier = user.tier === 'pro' ? 'free' : 'pro'
+    Alert.alert(
+      'Change tier',
+      nextTier === 'pro'
+        ? `Upgrade ${user.email} to PRO? (Pro unlocks the remote window and robot preference profiles.)`
+        : `Downgrade ${user.email} to FREE? (Robot preference rows are kept but become read-only.)`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: nextTier === 'pro' ? 'Make Pro' : 'Make Free',
+          style: nextTier === 'pro' ? 'default' : 'destructive',
+          onPress: async () => {
+            try {
+              await setUserTier(user.id, nextTier)
+              void loadUsers(usersPage)
+            } catch (e) {
+              logger.error('admin', 'Tier toggle error:', e)
+              Alert.alert('Could not change tier', e instanceof Error ? e.message : 'Please try again.')
+            }
+          },
+        },
+      ],
+    )
+  }
+
   function handleToggleUserRole(user: AdminUser) {
     const newRole = user.role === 'admin' ? 'customer' : 'admin'
     if (newRole === 'customer' && user.id === currentUser?.id) {
@@ -664,6 +695,7 @@ export function AdminScreen() {
             onApply={() => void loadUsers(1)}
             onPage={(p) => void loadUsers(p)}
             onToggleRole={handleToggleUserRole}
+            onToggleTier={handleToggleUserTier}
           />
         )
       case 'Messages':
@@ -1466,10 +1498,156 @@ function ServiceEditor({ service, onChange, onSave, onCancel, isNew, categoryOpt
   )
 }
 
-function UsersTab({ users, total, page, totalPages, query, onQueryChange, onApply, onPage, onToggleRole }: {
+// Expandable per-user robot-settings manager (admin view of robot_user_settings).
+// Same rows the user edits in their Robot Preferences screen + the website Account
+// page — the admin sees and manages them all so nothing stays untracked.
+function UserRobotSettingsManager({ userId, email }: { userId: string; email: string }) {
+  const [rows, setRows] = useState<AdminRobotSetting[] | null>(null)
+  const [robotId, setRobotId] = useState('')
+  const [robotName, setRobotName] = useState('')
+  const [values, setValues] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    void listUserRobotSettings(userId)
+      .then(setRows)
+      .catch(() => setRows([]))
+  }, [userId])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  // values: one "key=value" per line (scalars) — kept deliberately simple.
+  function parseValues(src: string): Record<string, string | number | boolean | string[]> {
+    const out: Record<string, string | number | boolean | string[]> = {}
+    for (const line of src.split('\n')) {
+      const idx = line.indexOf('=')
+      if (idx <= 0) continue
+      const key = line.slice(0, idx).trim()
+      const raw = line.slice(idx + 1).trim()
+      if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(key) || !raw) continue
+      if (/^-?\d+(\.\d+)?$/.test(raw)) out[key] = Number(raw)
+      else if (raw === 'true' || raw === 'false') out[key] = raw === 'true'
+      else out[key] = raw
+    }
+    return out
+  }
+
+  async function handleSave() {
+    setErr('')
+    const id = robotId.trim().toLowerCase().replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '')
+    if (!id) {
+      setErr('A robot id (or name) is required.')
+      return
+    }
+    setBusy(true)
+    try {
+      await upsertUserRobotSettings(userId, id, robotName.trim() || id, parseValues(values))
+      setRobotId('')
+      setRobotName('')
+      setValues('')
+      load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not save.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(robotIdToDelete: string) {
+    setBusy(true)
+    try {
+      await deleteUserRobotSetting(userId, robotIdToDelete)
+      load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not delete.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (rows === null) return <Text className="py-2 text-xs text-muted">Loading robot settings…</Text>
+  return (
+    <View className="mt-3 rounded-lg border border-line bg-surface p-3">
+      <Text className="text-xs font-black uppercase tracking-widest text-navy">Robot preferences ({rows.length})</Text>
+      <Text className="mt-0.5 text-[11px] leading-4 text-muted">Same rows the user edits in the app + website. Separate from orders/carts.</Text>
+      {rows.length === 0 ? (
+        <Text className="mt-2 text-xs text-muted">No robot profiles for this user.</Text>
+      ) : (
+        rows.map((r) => (
+          <View key={r.robotId} className="mt-2 rounded border border-line bg-card p-2">
+            <View className="flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 text-xs font-bold text-ink" numberOfLines={1}>
+                {r.robotName || r.robotId} <Text className="font-normal text-muted">· {r.robotId}</Text>
+              </Text>
+              <Pressable onPress={() => void handleDelete(r.robotId)} disabled={busy} className="shrink-0 rounded border border-line px-2 py-0.5">
+                <Text className="text-[10px] font-bold text-red-600">Delete</Text>
+              </Pressable>
+            </View>
+            <Text className="mt-1 text-[11px] text-muted" numberOfLines={3}>
+              {Object.entries(r.settings).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : String(v)}`).join(' · ') || '(empty)'}
+            </Text>
+          </View>
+        ))
+      )}
+      <Text className="mt-3 text-xs font-bold text-ink">Add / update a robot profile for {email}</Text>
+      <TextInput value={robotName} onChangeText={setRobotName} placeholder="Robot name (e.g. 2WD Car)" placeholderTextColor="#94a3b8" className="mt-1 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink" />
+      <TextInput value={values} onChangeText={setValues} placeholder={'One key=value per line, e.g.\nmaxSpeed=220\ntelemetryChannels=battery|us_distance'} placeholderTextColor="#94a3b8" multiline style={{ textAlignVertical: 'top' }} className="mt-1 min-h-16 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink" />
+      <View className="mt-2 flex-row items-center gap-2">
+        <Pressable onPress={() => void handleSave()} disabled={busy} className="rounded-full bg-navy px-4 py-1.5">
+          <Text className="text-[11px] font-black text-white">Save robot profile</Text>
+        </Pressable>
+        {err ? <Text className="flex-1 text-[11px] text-red-600" numberOfLines={2}>{err}</Text> : null}
+      </View>
+    </View>
+  )
+}
+
+// One user row in the admin Users tab: identity, role + tier badges, the
+// role/tier toggle buttons, and the expandable robot-preferences manager.
+function UserCard({ item, onToggleRole, onToggleTier }: {
+  item: AdminUser; onToggleRole: (u: AdminUser) => void; onToggleTier: (u: AdminUser) => void
+}) {
+  const [expanded, setExpanded] = useState<boolean>(false)
+  return (
+    <View className="mb-3 rounded-xl border border-line bg-card p-4">
+      <View className="flex-row items-center justify-between gap-2">
+        <View className="min-w-0 flex-1">
+          <Text className="text-sm font-bold text-ink" numberOfLines={1}>{item.name || '—'} <Text className="font-normal text-muted">· {item.email}</Text></Text>
+          {item.phone ? <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text> : null}
+          {item.address ? <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>{item.address}</Text> : null}
+          {item.createdAt ? <Text className="mt-0.5 text-xs text-muted">Joined {new Date(item.createdAt).toLocaleDateString()}</Text> : null}
+          <View className="mt-1 flex-row gap-1">
+            <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky text-navy'}`}>{item.role}</Text>
+            <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.tier === 'pro' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{item.tier}</Text>
+          </View>
+        </View>
+        <View className="shrink-0 items-end gap-1">
+          <Pressable onPress={() => onToggleRole(item)} className="rounded-full border border-line px-3 py-1.5">
+            <Text className={`text-xs font-bold ${item.role === 'admin' ? 'text-red-600' : 'text-navy'}`}>
+              {item.role === 'admin' ? 'Revoke admin' : 'Make admin'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => onToggleTier(item)} className="rounded-full border border-line px-3 py-1.5">
+            <Text className={`text-xs font-bold ${item.tier === 'pro' ? 'text-red-600' : 'text-emerald-700'}`}>
+              {item.tier === 'pro' ? 'Make Free' : 'Make Pro'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => setExpanded(!expanded)} className="rounded-full border border-line px-3 py-1.5">
+            <Text className="text-xs font-bold text-navy">{expanded ? 'Hide robots' : 'Robot prefs'}</Text>
+          </Pressable>
+        </View>
+      </View>
+      {expanded && <UserRobotSettingsManager userId={item.id} email={item.email} />}
+    </View>
+  )
+}
+
+function UsersTab({ users, total, page, totalPages, query, onQueryChange, onApply, onPage, onToggleRole, onToggleTier }: {
   users: AdminUser[]; total: number; page: number; totalPages: number; query: string;
   onQueryChange: (q: string) => void; onApply: () => void; onPage: (p: number) => void;
-  onToggleRole: (u: AdminUser) => void;
+  onToggleRole: (u: AdminUser) => void; onToggleTier: (u: AdminUser) => void;
 }) {
   return (
     <View className="flex-1">
@@ -1499,24 +1677,7 @@ function UsersTab({ users, total, page, totalPages, query, onQueryChange, onAppl
         }
         ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No users found.</Text>}
         ListFooterComponent={totalPages > 1 ? <AdminPager page={page} totalPages={totalPages} onPage={onPage} /> : null}
-        renderItem={({ item }) => (
-          <View className="mb-3 rounded-xl border border-line bg-card p-4">
-            <View className="flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-ink" numberOfLines={1}>{item.name || '—'} <Text className="font-normal text-muted">· {item.email}</Text></Text>
-                {item.phone ? <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text> : null}
-                {item.address ? <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>{item.address}</Text> : null}
-                {item.createdAt ? <Text className="mt-0.5 text-xs text-muted">Joined {new Date(item.createdAt).toLocaleDateString()}</Text> : null}
-                <Text className={`mt-1 self-start rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky text-navy'}`}>{item.role}</Text>
-              </View>
-              <Pressable onPress={() => onToggleRole(item)} className="shrink-0 rounded-full border border-line px-3 py-1.5">
-                <Text className={`text-xs font-bold ${item.role === 'admin' ? 'text-red-600' : 'text-navy'}`}>
-                  {item.role === 'admin' ? 'Revoke admin' : 'Make admin'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
+        renderItem={({ item }) => <UserCard item={item} onToggleRole={onToggleRole} onToggleTier={onToggleTier} />}
       />
     </View>
   )
