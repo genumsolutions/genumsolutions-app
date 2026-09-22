@@ -9,10 +9,10 @@
 
 | # | Category | Issue | File |
 |---|----------|-------|------|
-| M1 | Security | Session stored in AsyncStorage (unencrypted). Set `persistSession: false` — rely on SecureStore in authService only | `src/config/supabase.ts:43-44` |
-| M2 | Security | Keystore passwords in plaintext on disk. Move to env vars or secrets manager | `keystores/keystore.properties` |
-| M3 | Testing | Zero test coverage. Add unit tests for carProtocol, cartService, updateService, roboCarCatalog | All `src/` |
-| M4 | DevOps | No CI/CD workflows. Add typecheck + lint on PR, release build on tag | `.github/workflows/` |
+| M1 | Security | ~~Session stored in AsyncStorage (unencrypted). Set `persistSession: false` — rely on SecureStore in authService only~~ → **FIXED 2026-09-22**: `persistSession: false` + SecureStore via authService | `src/config/supabase.ts:46` | ✅ fixed |
+| M2 | Security | Keystore passwords in plaintext on disk. Move to env vars or secrets manager | `keystores/keystore.properties` | ⬜ pending |
+| M3 | Testing | Unit tests for carProtocol + updateService written; cartService + roboCarCatalog remain. Add tests | `src/services/carProtocol.test.ts`, `src/services/updateService.test.ts` | ⬜ partial (2/4 services) |
+| M4 | DevOps | ~~No CI/CD workflows. Add typecheck + test on PR~~ → **FIXED 2026-09-23**: `.github/workflows/ci.yml` added (typecheck + unit tests + expo-doctor) | `.github/workflows/ci.yml` | ✅ fixed |
 
 ### P1 — Fix Within 2 Weeks
 
@@ -22,7 +22,7 @@
 | M6 | Security | `package.json` version `2.0.5` vs `app.json` `2.0.6` — out of sync | `package.json:3` |
 | M7 | Performance | AppContext has 20+ deps — full tree re-renders on any state change. Split into Auth/Cart/Theme contexts | `src/context/AppContext.tsx:373-426` |
 | M8 | Performance | useControlHub is 829 lines — monolithic hook. Split into useSppConnection, useWifiConnection, useCarState, usePidControl | `src/components/tools/useControlHub.ts` |
-| M9 | Code Quality | No lint/format/test scripts in package.json | `package.json:55-63` |
+| M9 | Code Quality | ~~No lint/format/test scripts in package.json~~ → **FIXED**: test/typecheck/doctor scripts present. Add lint + format | `package.json:56-65` | ⬜ partial |
 | M10 | Code Quality | No pre-commit hooks (husky + lint-staged) | Root |
 
 ### P2 — Fix Within 1 Month
