@@ -11,7 +11,7 @@
 |---|----------|-------|------|
 | M1 | Security | ~~Session stored in AsyncStorage (unencrypted). Set `persistSession: false` — rely on SecureStore in authService only~~ → **FIXED 2026-09-22**: `persistSession: false` + SecureStore via authService | `src/config/supabase.ts:46` | ✅ fixed |
 | M2 | Security | Keystore passwords in plaintext on disk. Move to env vars or secrets manager | `keystores/keystore.properties` | ⬜ pending |
-| M3 | Testing | Unit tests for carProtocol + updateService written; cartService + roboCarCatalog remain. Add tests | `src/services/carProtocol.test.ts`, `src/services/updateService.test.ts` | ⬜ partial (2/4 services) |
+| M3 | Testing | Unit tests for carProtocol + updateService + cartService + roboCarCatalog written | `src/services/carProtocol.test.ts`, `src/services/updateService.test.ts`, `src/services/cartService.test.ts`, `src/config/roboCarCatalog.test.ts` | ✅ fixed (4/4 services) |
 | M4 | DevOps | ~~No CI/CD workflows. Add typecheck + test on PR~~ → **FIXED 2026-09-23**: `.github/workflows/ci.yml` added (typecheck + unit tests + expo-doctor) | `.github/workflows/ci.yml` | ✅ fixed |
 
 ### P1 — Fix Within 2 Weeks
