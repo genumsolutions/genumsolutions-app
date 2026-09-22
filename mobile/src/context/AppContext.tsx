@@ -47,6 +47,8 @@ type AppContextValue = {
   sessionReady: boolean;
   isSignedIn: boolean;
   isAdmin: boolean;
+  isStaff: boolean;
+  isOwner: boolean;
   isPro: boolean;
   cartCount: number;
   setCart: (cart: { count: number; size: number }) => void;
@@ -85,16 +87,18 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
     .eq('id', session.user.id)
     .maybeSingle();
   const profile = profileResult.data;
+  const rawRole = String(profile?.role || app.role || 'customer');
   return {
     id: session.user?.id ?? '',
     name: profile?.name || (typeof meta.name === 'string' ? meta.name : ''),
     email: session.user?.email ?? '',
     phone: profile?.phone || session.user?.user_metadata?.phone || '',
     address: profile?.address || session.user?.user_metadata?.address || '',
-    role: profile?.role === 'admin' || app.role === 'admin' ? 'admin' : 'customer',
-    // Admins always enjoy Pro capabilities; customers need profiles.tier='pro'
-    // (set by an admin — the protect_tier_column trigger blocks self-service).
-    tier: profile?.role === 'admin' || profile?.tier === 'pro' ? 'pro' : 'free',
+    role: rawRole === 'staff' || rawRole === 'admin' || rawRole === 'owner' ? rawRole : 'customer',
+    // Admins and above always enjoy Pro capabilities; customers need
+    // profiles.tier='pro' (set by an admin — the protect_tier_column
+    // trigger blocks self-service).
+    tier: rawRole === 'staff' || rawRole === 'admin' || rawRole === 'owner' || profile?.tier === 'pro' ? 'pro' : 'free',
   };
 }
 
@@ -402,8 +406,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user,
       sessionReady,
       isSignedIn: Boolean(user),
-      isAdmin: user?.role === 'admin',
-      isPro: user?.tier === 'pro' || user?.role === 'admin',
+      // staff+ can operate every admin panel except deletions; isAdmin means
+      // admin+owner (deletion rights); only the sole owner can delete users.
+      isStaff: user?.role === 'staff' || user?.role === 'admin' || user?.role === 'owner',
+      isAdmin: user?.role === 'admin' || user?.role === 'owner',
+      isOwner: user?.role === 'owner',
+      isPro: user?.tier === 'pro' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'owner',
       cartCount,
       setCart,
       authSheetOpen,

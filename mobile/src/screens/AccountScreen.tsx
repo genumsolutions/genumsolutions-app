@@ -52,7 +52,7 @@ function formatNPR(amount: number): string {
 }
 
 export function AccountScreen() {
-  const { user, isSignedIn, isAdmin, signOut, cartCount, setAuthSheetOpen } = useApp()
+  const { user, isSignedIn, isAdmin, isStaff, isOwner, signOut, cartCount, setAuthSheetOpen } = useApp()
   const [orders, setOrders] = useState<Order[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [messages, setMessages] = useState<{ message: string; status: string; createdAt: string }[]>([])
@@ -149,9 +149,11 @@ export function AccountScreen() {
                 <Text className="mt-0.5 text-sm text-muted" numberOfLines={1}>{user?.email}</Text>
               </View>
             </View>
-            {isAdmin && (
+            {isStaff && (
               <View className="shrink-0 rounded-full bg-gold px-2 py-0.5">
-                <Text className="text-xs font-black uppercase text-ink">Admin</Text>
+                <Text className="text-xs font-black uppercase text-ink">
+                  {isOwner ? 'Owner' : isAdmin ? 'Admin' : 'Staff'}
+                </Text>
               </View>
             )}
           </View>

@@ -16,13 +16,27 @@ types removed from `tools/types.ts`). Also inside: the entire P6 round (role-rev
 only with a native APK) and the FIN-50/R-20 line. 3.2.4/57 shipped 2026-09-21 and is
 superseded; 3.2.3/56 after one day. Vitest 76/76, CI + OTA green.
 
+**Theme parity pushed 2026-09-22 (`78e10f9`, rides the next OTA — JS-only):** the owner's
+2-mode decision (website theme → Light/Dim, System removed). The app's **shared**
+preference now stores canonical `'light'|'dim'` only; AppContext restore maps a legacy
+`'system'`/`'dim'` cloud value → dark, else light, and writes the migrated value back.
+**Latent bug fixed:** `saveThemePreference` was writing the canonical `'dim'` into the
+`genum-theme-mode` AsyncStorage cache key the restore effect never recognized → dark never
+survived restarts; the cache now holds the app mode (light/dark), canonical only the DB
+(site + app agree on one `profiles.theme_preference`). The app's OWN native Settings theme
+switch keeps its OS option (native OS-follow is by design; the web System state was the
+one removed). OTA run for `78e10f9` needs a green confirmation.
+
 **Server side of the tier/robot flow is DONE + VERIFIED:** schema (`profiles.tier` +
 `robot_user_settings`, RLS + `protect_tier_column`) applied to the live DB 2026-09-22;
 website gates (registered-only /app download) + admin tier toggle + per-user robot-settings
 manager shipped; **`genumsolutions-website/scripts/tier-robot-e2e.mjs` = 23/23 PASS vs
 production** (tier lifecycle, admin cross-user access, pro gate, 401/403/405 negatives).
+Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mode deploy.
 
 ## Open items
+
+0. 🔜 **PLANNED + OWNER-AGREED 2026-09-22 — RBAC levels + Admin Settings→Content reorg (rides OTA, no bump):** roles become `customer / staff / admin / owner`; staff = all admin powers EXCEPT deletions; delete-user is **owner-only** (`genumsolutions`); website + app admin tabs both move Training programs / Pilot cost lines / Curriculum highlights from **Settings → Content**, rebuilt as the unified windowed editors (list + editor pane + Preview / Edit / Hide / Delete like Products/Services/Projects); Settings keeps company info only; delete buttons hidden for staff. Website roots the whole effort (`cleanup-test-residue.mjs`, `lib/admin.ts`, schema, edge, routes, AdminContent/AdminUsers) — mirror into this app via `AppContext` role (`isStaff/isOwner`), `AdminScreen` gating + Content panels, `adminService` delete-user.
 
 1. ⏳ **OWNER: install 3.2.5/58 on the test devices** → via the in-app updater prompt
    (3.2.3/3.2.4 installs ARE offered 3.2.5 — the prompt appearing is EXPECTED, it is the
@@ -53,6 +67,11 @@ production** (tier lifecycle, admin cross-user access, pro gate, 401/403/405 neg
    `ModeInfo.tsx`, `deviceMemoryService.ts`, `carModeStorage.ts` + their dead prop types.
    Website removed unreferenced `ProjectCard.tsx`. No other orphans found (`.web.tsx`
    platform files and vitest-discovered tests are false positives — verified).
+6. 🌗 **Theme parity `78e10f9` (2026-09-22):** confirm the OTA run for it turns green on
+   main push. Flag to the owner: the app's own native Settings theme switch still offers
+   its **System/OS-follow** option (kept by design, native OS-follow); the website System
+   state was the one removed per owner decision #1 — if the app Settings control should
+   also drop System, that is a small follow-up.
 
 ## Do-not-regress (the R-20a lessons)
 
