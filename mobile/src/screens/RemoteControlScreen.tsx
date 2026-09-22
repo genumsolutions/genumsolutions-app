@@ -130,7 +130,33 @@ export function RemoteControlScreen({ navigation }: Props) {
   const { width, height } = useWindowDimensions()
   const isLandscape = width > height
   const insets = useSafeAreaInsets()
-  const { themeMode, setThemeMode } = useApp()
+  const { themeMode, setThemeMode, isPro, isSignedIn } = useApp()
+
+  // PRO GATE (2026-09-22): the immersive remote window is a Pro feature.
+  // Rendered as an early return BEFORE the hub UI so free/guest users can
+  // never reach the controls; the Control Panel itself stays available to
+  // everyone (connection + category organizer are not gated).
+  if (!isPro) {
+    return (
+      <View className="flex-1 items-center justify-center bg-surface px-8">
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
+          <Feather name="lock" size={26} color="#ffffff" />
+        </View>
+        <Text className="mt-4 font-display text-xl font-bold text-ink">Remote window is a Pro feature</Text>
+        <Text className="mt-2 text-center text-sm leading-6 text-muted">
+          {isSignedIn
+            ? 'Upgrade your account to Pro to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls.'
+            : 'Sign in with a Pro account to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls.'}
+        </Text>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          className="mt-6 rounded-full bg-navy px-6 py-3"
+        >
+          <Text className="text-sm font-black text-white">Back to Control Panel</Text>
+        </Pressable>
+      </View>
+    )
+  }
 
   const {
     connected, wifiConnected, sppStatus, deviceName,

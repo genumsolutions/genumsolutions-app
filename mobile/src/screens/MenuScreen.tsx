@@ -41,7 +41,7 @@ const COMPANY: Dest[] = [
 
 export function MenuScreen() {
   const navigation = useNavigation<any>();
-  const { isAdmin, themeMode, setThemeMode } = useApp();
+  const { isAdmin, isPro, themeMode, setThemeMode } = useApp();
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingVertical: 12 }}>
@@ -77,6 +77,24 @@ export function MenuScreen() {
           label="App Updates"
           onPress={() => navigation.push('Update')}
         />
+      </MenuGroup>
+
+      {/* Robot preferences (2026-09-22): per-robot code values / parameters /
+          telemetry channels for the signed-in user. Pro feature — the screen
+          itself explains the tier gate to free users. */}
+      <MenuGroup title="Robot Settings">
+        <View className="mx-3 flex-row items-center justify-between rounded-xl px-4 py-3.5">
+          <MenuItem
+            icon="sliders"
+            label="Robot preferences"
+            onPress={() => navigation.push('RobotPreferences')}
+          />
+          {!isPro ? (
+            <View className="rounded-full bg-slate-200 px-2 py-0.5">
+              <Text className="text-[10px] font-black uppercase tracking-wide text-slate-500">Pro</Text>
+            </View>
+          ) : null}
+        </View>
       </MenuGroup>
 
       {/* Appearance - theme toggle moved here from the Account page */}
