@@ -79,6 +79,7 @@ export type AdminUser = {
   phone: string
   address: string
   role: string
+  tier: 'free' | 'pro'
   createdAt: string | null
 }
 
@@ -289,6 +290,7 @@ export function mapUserRow(row: RawRow): AdminUser {
     phone: String(row.phone ?? ''),
     address: String(row.address ?? ''),
     role: String(row.role ?? 'customer'),
+    tier: row.tier === 'pro' ? 'pro' : 'free',
     createdAt: row.created_at != null ? String(row.created_at) : null,
   }
 }
@@ -384,11 +386,12 @@ export async function listAdminUsers(page = 1, limit = 20, query?: string): Prom
   return { users: (data ?? []).map(mapUserRow), total: count ?? 0, page, totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)) }
 }
 
-// Role changes MUST go through the admin-set-role edge function: the DB
-// trigger protect_role_column only lets the service role change profiles.role,
-// so a direct anon-key update is REJECTED (the old direct call silently did
-// nothing — revoke never applied). The edge function verifies the caller is
-// an admin, blocks self-demotion, and logs to activity_log.
+// Role + tier changes MUST go through the admin-set-role edge function: the DB
+// triggers protect_role_column / protect_tier_column only let the service role
+// change profiles.role / profiles.tier, so a direct anon-key update is REJECTED
+// (the old direct call silently did nothing — revoke never applied). The edge
+// function verifies the caller is an admin, blocks self-demotion, and logs to
+// activity_log. Send whichever field changed; the function accepts either.
 export async function toggleAdminRole(userId: string, role: 'admin' | 'customer') {
   const { data: sessionData } = await supabase.auth.getSession()
   const token = sessionData.session?.access_token
@@ -406,6 +409,73 @@ export async function toggleAdminRole(userId: string, role: 'admin' | 'customer'
     throw new Error(message)
   }
   return data
+}
+
+// Tier flips ride the SAME edge function (one deploy, one audit vocabulary).
+export async function setUserTier(userId: string, tier: 'free' | 'pro') {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Sign in to change tiers.')
+  const { data, error } = await supabase.functions.invoke('admin-set-role', {
+    body: { userId, tier },
+  })
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not update the tier.'
+    throw new Error(message)
+  }
+  return data
+}
+
+// --- Admin per-user robot settings (robot_user_settings) -------------------
+// RLS: admins (role='admin' in profiles) may read/write every user's rows,
+// so these run on the signed-in admin's own session — same contract as the
+// website admin panel.
+
+export type AdminRobotSetting = {
+  robotId: string
+  robotName: string
+  settings: Record<string, string | number | boolean | string[]>
+  updatedAt: string
+}
+
+export async function listUserRobotSettings(userId: string): Promise<AdminRobotSetting[]> {
+  const { data, error } = await supabase
+    .from('robot_user_settings')
+    .select('robot_id, robot_name, settings, updated_at')
+    .eq('user_id', userId)
+    .order('robot_name', { ascending: true })
+  if (error) throw error
+  return (data || []).map((row) => ({
+    robotId: row.robot_id as string,
+    robotName: (row.robot_name as string) || '',
+    settings: (row.settings as AdminRobotSetting['settings']) || {},
+    updatedAt: row.updated_at as string,
+  }))
+}
+
+export async function upsertUserRobotSettings(
+  userId: string,
+  robotId: string,
+  robotName: string,
+  settings: AdminRobotSetting['settings'],
+) {
+  const { error } = await supabase.from('robot_user_settings').upsert(
+    { user_id: userId, robot_id: robotId, robot_name: robotName, settings, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,robot_id' },
+  )
+  if (error) throw error
+}
+
+export async function deleteUserRobotSetting(userId: string, robotId: string) {
+  const { error } = await supabase
+    .from('robot_user_settings')
+    .delete()
+    .eq('user_id', userId)
+    .eq('robot_id', robotId)
+  if (error) throw error
 }
 
 // --- Messages ---
