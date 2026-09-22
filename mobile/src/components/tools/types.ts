@@ -221,30 +221,6 @@ export type BalanceControlsProps = {
   oledSlot?: React.ReactNode
 }
 
-export type AutonomousControlsProps = {
-  canControl: boolean
-  activeMode: CarMode
-  /** Current run speed (100..255, 5-unit steps — absolute SPD). */
-  speed: number
-  /** Latest drive status (e.g. "Running" / "Stopped") for the status row. */
-  driveStatus: string
-  onSpeed: (v: number) => void
-  onRun: () => void
-  onStop: () => void
-}
-
-export type WeblinkControlsProps = {
-  canControl: boolean
-  wifiConnected: boolean
-  activeMode: CarMode
-  /** Latest parsed telemetry — wireless cars stream JSON status over WS. */
-  telemetry: CarTelemetry
-  /** Opens the car's own web page (website-server cars host one on :80). */
-  onOpenWebPage: () => void
-  /** Switches the car into this package's mode (token ESP_SER / ESP_CLI). */
-  onEnterMode: () => void
-}
-
 /**
  * A-26/A-27/A-28 (device-round-5): the ONE "WiFi & Router" panel shown when
  * the drive pads are hidden — saved-router list (car truth names, with
