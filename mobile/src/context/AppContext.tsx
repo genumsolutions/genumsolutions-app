@@ -32,6 +32,9 @@ export type GenumUser = {
   phone: string;
   address: string;
   role: string;
+  /** Account tier from profiles.tier (admin-managed). Pro unlocks the
+   *  Remote window + per-robot preference profiles. */
+  tier: 'free' | 'pro';
 };
 
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -44,6 +47,7 @@ type AppContextValue = {
   sessionReady: boolean;
   isSignedIn: boolean;
   isAdmin: boolean;
+  isPro: boolean;
   cartCount: number;
   setCart: (cart: { count: number; size: number }) => void;
   authSheetOpen: boolean;
@@ -77,7 +81,7 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
   const app = session.user?.app_metadata ?? {};
   const profileResult = await supabase
     .from('profiles')
-    .select('name, phone, address, role')
+    .select('name, phone, address, role, tier')
     .eq('id', session.user.id)
     .maybeSingle();
   const profile = profileResult.data;
@@ -88,6 +92,9 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
     phone: profile?.phone || session.user?.user_metadata?.phone || '',
     address: profile?.address || session.user?.user_metadata?.address || '',
     role: profile?.role === 'admin' || app.role === 'admin' ? 'admin' : 'customer',
+    // Admins always enjoy Pro capabilities; customers need profiles.tier='pro'
+    // (set by an admin — the protect_tier_column trigger blocks self-service).
+    tier: profile?.role === 'admin' || profile?.tier === 'pro' ? 'pro' : 'free',
   };
 }
 
@@ -392,6 +399,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sessionReady,
       isSignedIn: Boolean(user),
       isAdmin: user?.role === 'admin',
+      isPro: user?.tier === 'pro' || user?.role === 'admin',
       cartCount,
       setCart,
       authSheetOpen,

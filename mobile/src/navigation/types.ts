@@ -29,8 +29,11 @@ export type RootStackParamList = {
   Tools: { category?: string } | undefined;
   /** Immersive game-style joystick remote window (opened from the Control
    *  Panel's header joystick icon). Same hub state as Tools; own full-screen,
-   *  landscape-by-default UI. */
+   *  landscape-by-default UI. PRO USERS ONLY — the screen enforces the tier. */
   RemoteControl: { category?: string } | undefined;
+  /** Per-robot preference profiles (Settings menu, Pro users): code values,
+   *  parameters, and telemetry channel picks stored per user × robot. */
+  RobotPreferences: undefined;
   Admin: undefined;
   Journal: undefined;
   Printing: undefined;
