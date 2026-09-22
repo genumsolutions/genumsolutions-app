@@ -4,9 +4,12 @@
 //
 // Two pieces of shared truth:
 //   • profiles.theme_preference — the flat theme choice. Canonical DB
-//     values: 'system' | 'light' | 'dim'. The app's ThemeMode is
+//     values going forward: 'light' | 'dim' (2-mode, owner decision
+//     2026-09-22). The legacy 'system' (OS-follow) value migrates to
+//     'dim' on read; never stored again. The app's ThemeMode is
 //     'system' | 'light' | 'dark', so map at this boundary: the app's
-//     'dark' ↔ the canonical 'dim'. Never store 'dark' in the DB.
+//     'dark' ↔ the canonical 'dim', and any legacy 'system' reads as
+//     'dark'. Never store 'system'/'dark' in the DB.
 //   • user_settings.settings    — a JSONB bag for arbitrary per-user
 //     preferences (e.g. robot command keywords, notification quirks).
 //     The website mirrors the same rows via /api/user-settings, so a
@@ -24,14 +27,17 @@ import type { ThemeMode } from '../context/AppContext';
 const THEME_CACHE_KEY = 'genum-theme-mode'; // existing AppContext cache key
 const SETTINGS_CACHE_KEY = 'genum-user-settings';
 
-/** App ThemeMode -> canonical DB value ('dark' is stored as 'dim'). */
-export function themeModeToPreference(mode: ThemeMode): 'system' | 'light' | 'dim' {
-  return mode === 'dark' ? 'dim' : mode;
+/** App ThemeMode -> canonical DB value (2-mode: 'dark' → 'dim', 'system' never stored). */
+export function themeModeToPreference(mode: ThemeMode): 'light' | 'dim' {
+  return mode === 'light' ? 'light' : 'dim';
 }
 
-/** Canonical DB value -> app ThemeMode ('dim' renders as the app's 'dark'). */
+/** Canonical DB value -> app ThemeMode (legacy 'system' → 'dark'; unknown → 'light'). */
 export function preferenceToThemeMode(value: unknown): ThemeMode {
-  return value === 'light' ? 'light' : value === 'dim' ? 'dark' : 'system';
+  if (value === 'light') return 'light';
+  if (value === 'dark') return 'dark';
+  if (value === 'dim' || value === 'system') return 'dark';
+  return 'light';
 }
 
 export type UserSettings = Record<string, string | number | boolean | (string | number | boolean)[]>;
@@ -57,7 +63,10 @@ export async function fetchThemePreference(): Promise<ThemeMode | null> {
 }
 
 export async function saveThemePreference(mode: ThemeMode): Promise<boolean> {
-  await AsyncStorage.setItem(THEME_CACHE_KEY, themeModeToPreference(mode));
+  // Cache holds the app's own ThemeMode (light/dark) — NOT the canonical
+  // DB value — so a restart restores the same look (was writing 'dim' here,
+  // which the restore effect never recognized → dark never survived restarts).
+  await AsyncStorage.setItem(THEME_CACHE_KEY, mode);
   try {
     const { error } = await supabase
       .from('profiles')
@@ -66,7 +75,7 @@ export async function saveThemePreference(mode: ThemeMode): Promise<boolean> {
     return !error;
   } catch {
     return false;
-}
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -133,6 +142,7 @@ export async function syncOnSignIn(applyTheme: (mode: ThemeMode) => void): Promi
     if (error || !data) return;
     const stored = data.theme_preference;
     // Unknown or absent cloud value — the local choice stays authoritative.
+    // Legacy 'system' rows are accepted and read as 'dark' (= 'dim').
     if (stored !== 'system' && stored !== 'light' && stored !== 'dim') return;
     const mode = preferenceToThemeMode(stored);
     await AsyncStorage.setItem(THEME_CACHE_KEY, mode);

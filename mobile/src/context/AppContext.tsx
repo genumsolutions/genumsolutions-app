@@ -176,11 +176,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Theme restore — 2-mode (owner decision 2026-09-22): only 'light' /
+    // 'dark' are stored; the legacy 'system' (OS-follow) default migrates to
+    // 'dark' (= the website's 'dim'), and a fresh install with no stored
+    // choice starts 'light' — matching the website exactly.
     void AsyncStorage.getItem('genum-theme-mode').then((stored) => {
-      if (stored === 'system' || stored === 'light' || stored === 'dark') {
-        setThemeModeState(stored);
-        applyColorScheme(stored);
-      }
+      const mode: ThemeMode = stored === 'dark' || stored === 'light' ? stored : stored === 'system' || stored === 'dim' ? 'dark' : 'light';
+      setThemeModeState(mode);
+      applyColorScheme(mode);
+      void AsyncStorage.setItem('genum-theme-mode', mode);
     });
   }, []);
 
