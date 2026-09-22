@@ -1617,7 +1617,7 @@ function UserCard({ item, onToggleRole, onToggleTier }: {
           <Text className="text-sm font-bold text-ink" numberOfLines={1}>{item.name || '—'} <Text className="font-normal text-muted">· {item.email}</Text></Text>
           {item.phone ? <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text> : null}
           {item.address ? <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>{item.address}</Text> : null}
-          {item.createdAt ? <Text className="mt-0.5 text-xs text-muted">Joined {new Date(item.createdAt).toLocaleDateString()}</Text> : null}
+          {item.createdAt ? <Text className="mt-0.5 text-xs text-muted">Joined {new Date(item.createdAt).toLocaleDateString()}{item.lastSeenAt ? ` · Last seen ${new Date(item.lastSeenAt).toLocaleDateString()}` : ''}</Text> : null}
           <View className="mt-1 flex-row gap-1">
             <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky text-navy'}`}>{item.role}</Text>
             <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.tier === 'pro' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{item.tier}</Text>

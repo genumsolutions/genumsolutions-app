@@ -80,6 +80,7 @@ export type AdminUser = {
   address: string
   role: string
   tier: 'free' | 'pro'
+  lastSeenAt: string | null
   createdAt: string | null
 }
 
@@ -291,6 +292,7 @@ export function mapUserRow(row: RawRow): AdminUser {
     address: String(row.address ?? ''),
     role: String(row.role ?? 'customer'),
     tier: row.tier === 'pro' ? 'pro' : 'free',
+    lastSeenAt: typeof row.last_seen_at === 'string' ? row.last_seen_at : null,
     createdAt: row.created_at != null ? String(row.created_at) : null,
   }
 }
@@ -383,7 +385,14 @@ export async function listAdminUsers(page = 1, limit = 20, query?: string): Prom
   if (query) q = q.or(`email.ilike.%${query}%,name.ilike.%${query}%`)
   const { data, error, count } = await q
   if (error) throw error
-  return { users: (data ?? []).map(mapUserRow), total: count ?? 0, page, totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)) }
+  const users = (data ?? []).map(mapUserRow)
+  // Website-parity "Last seen": auth.users is invisible to the anon key, so
+  // read it per-user through the admin-gated SECURITY DEFINER function.
+  await Promise.all(users.map(async (user) => {
+    const { data: seen, error: fnError } = await supabase.rpc('admin_user_last_seen', { target_user_id: user.id })
+    if (!fnError && typeof seen === 'string') user.lastSeenAt = seen
+  }))
+  return { users, total: count ?? 0, page, totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)) }
 }
 
 // Role + tier changes MUST go through the admin-set-role edge function: the DB
