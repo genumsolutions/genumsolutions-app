@@ -401,7 +401,7 @@ export async function listAdminUsers(page = 1, limit = 20, query?: string): Prom
 // (the old direct call silently did nothing — revoke never applied). The edge
 // function verifies the caller is an admin, blocks self-demotion, and logs to
 // activity_log. Send whichever field changed; the function accepts either.
-export async function toggleAdminRole(userId: string, role: 'admin' | 'customer') {
+export async function toggleAdminRole(userId: string, role: 'customer' | 'staff' | 'admin') {
   const { data: sessionData } = await supabase.auth.getSession()
   const token = sessionData.session?.access_token
   if (!token) throw new Error('Sign in to change roles.')
@@ -438,10 +438,31 @@ export async function setUserTier(userId: string, tier: 'free' | 'pro') {
   return data
 }
 
+// --- Delete user (owner-only) ----------------------------------------------
+// auth.users is invisible to the anon key and deletes demand the service role,
+// so this mirrors the website's DELETE /api/admin/users through an edge
+// function. The function re-checks the caller is role 'owner' server-side.
+export async function deleteAdminUser(userId: string) {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Sign in to delete users.')
+  const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+    body: { userId },
+  })
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not delete the user.'
+    throw new Error(message)
+  }
+  return data
+}
+
 // --- Admin per-user robot settings (robot_user_settings) -------------------
-// RLS: admins (role='admin' in profiles) may read/write every user's rows,
-// so these run on the signed-in admin's own session — same contract as the
-// website admin panel.
+// RLS: staff and above (is_staff()) may read/write every user's robot rows;
+// deletes require admin or above (is_admin()). These run on the signed-in
+// user's own session — same contract as the website admin panel.
 
 export type AdminRobotSetting = {
   robotId: string

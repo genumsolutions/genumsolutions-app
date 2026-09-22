@@ -38,6 +38,7 @@ import {
   listAdminUsers,
   toggleAdminRole,
   setUserTier,
+  deleteAdminUser,
   type AdminRobotSetting,
   listUserRobotSettings,
   upsertUserRobotSettings,
@@ -82,7 +83,11 @@ type Tab = 'Dashboard' | 'Orders' | 'Products' | 'Projects' | 'Services' | 'Jour
 const TABS: Tab[] = ['Dashboard', 'Orders', 'Products', 'Projects', 'Services', 'Journal', 'Users', 'Messages', 'Finance', 'Activity', 'Content', 'Settings']
 
 export function AdminScreen() {
-  const { isAdmin, signOut, user: currentUser } = useApp()
+  const { isAdmin, isOwner, signOut, user: currentUser } = useApp()
+  // Staff can operate every admin panel except deletions; isAdmin means
+  // admin+owner (deletion rights). Only the sole owner may delete users
+  // (see the Users tab).
+  const canDelete = isAdmin
   const [tab, setTab] = useState<Tab>('Dashboard')
   const pagerRef = useRef<PlatformPagerRef>(null)
   const tabScrollRef = useRef<ScrollView>(null)
@@ -555,6 +560,30 @@ export function AdminScreen() {
     setActivityTotalPages(result.totalPages)
   }
 
+  function handleDeleteUser(user: AdminUser) {
+    if (!isOwner) return
+    Alert.alert(
+      'Delete user',
+      `Permanently delete ${user.email}? This removes their account and all related data. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete user',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAdminUser(user.id)
+              void loadUsers(usersPage)
+            } catch (e) {
+              logger.error('admin', 'User delete error:', e)
+              Alert.alert('Could not delete user', e instanceof Error ? e.message : 'Please try again.')
+            }
+          },
+        },
+      ],
+    )
+  }
+
   async function handleMarkReplied(id: string) {
     await markMessageReplied(id)
     void loadMessages(messagesPage)
@@ -627,6 +656,7 @@ export function AdminScreen() {
             }}
             onNew={handleNewProduct}
             onSave={handleSaveProduct}
+            canDelete={canDelete}
             onDelete={handleDeleteProduct}
             onToggleActive={(p) => void handleToggleProductActive(p)}
           />
@@ -641,6 +671,7 @@ export function AdminScreen() {
             onEdit={setEditingProject}
             onNew={() => setEditingProject(blankProjectProduct())}
             onSaveProduct={saveProduct}
+            canDelete={canDelete}
             onDelete={handleDeleteProduct}
             onToggleActive={(p) => void handleToggleProductActive(p)}
           />
@@ -654,6 +685,7 @@ export function AdminScreen() {
             onEdit={setEditingService}
             onNew={handleNewService}
             onSave={handleSaveService}
+            canDelete={canDelete}
             onDelete={handleDeleteService}
             onToggleActive={(s) => void handleToggleServiceActive(s)}
           />
@@ -672,6 +704,7 @@ export function AdminScreen() {
             onNew={() => startEditJournal(null)}
             onEdit={(post) => startEditJournal(post)}
             onTogglePublish={(post) => void handleToggleJournalPublished(post)}
+            canDelete={canDelete}
             onDelete={handleDeleteJournal}
             onEditIdChange={setJournalEditId}
             onTagChange={setJournalTag}
@@ -694,8 +727,12 @@ export function AdminScreen() {
             onQueryChange={setUserQuery}
             onApply={() => void loadUsers(1)}
             onPage={(p) => void loadUsers(p)}
+            canDelete={canDelete}
+            isOwner={isOwner}
             onToggleRole={handleToggleUserRole}
             onToggleTier={handleToggleUserTier}
+            onDeleteUser={handleDeleteUser}
+            currentUserId={currentUser?.id ?? ''}
           />
         )
       case 'Messages':
@@ -755,6 +792,7 @@ export function AdminScreen() {
             setPilotCostLines={setPilotCostLines}
             curriculumHighlights={curriculumHighlights}
             setCurriculumHighlights={setCurriculumHighlights}
+            canDelete={canDelete}
             onCompanySaved={async (next) => { await saveCompanyInfo(next); setCompanyInfo(next) }}
             onSaveProgram={async (program, isNew) => {
               await upsertAdminTrainingProgram(program)
@@ -1026,10 +1064,10 @@ function OrdersTab({ orders, total, page, totalPages, onPage, onStatusChange, qu
   )
 }
 
-function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onNew, onSave, onDelete, onToggleActive }: {
+function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onNew, onSave, canDelete, onDelete, onToggleActive }: {
   products: AdminProduct[]; query: string; onQueryChange: (q: string) => void;
   editing: AdminProduct | null; onChange: (p: AdminProduct) => void; onEdit: (p: AdminProduct | null) => void;
-  onNew: () => void; onSave: () => void; onDelete: (id: string) => void; onToggleActive: (p: AdminProduct) => void;
+  onNew: () => void; onSave: () => void; canDelete: boolean; onDelete: (id: string) => void; onToggleActive: (p: AdminProduct) => void;
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null)
   const [page, setPage] = useState(1)
@@ -1102,7 +1140,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
               <AdminAction onPress={() => onEdit(item)} label="Edit" tone="navy" />
               <AdminAction onPress={() => setPreview(item)} label="Preview" tone="plain" />
               <AdminAction onPress={() => onToggleActive(item)} label={item.active ? 'Hide' : 'Show'} tone="plain" />
-              <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />
+              {canDelete && <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />}
             </View>
           </View>
         )}
@@ -1112,11 +1150,11 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
   )
 }
 
-function ProjectTab({ title, products, editing, onChange, onEdit, onNew, onSaveProduct, onDelete, onToggleActive }: {
-  title: string; products: AdminProduct[];
-  editing: AdminProduct | null; onChange: (p: AdminProduct | null) => void; onEdit: (p: AdminProduct) => void; onNew: () => void;
-  onSaveProduct: (p: AdminProduct) => Promise<boolean>; onDelete: (id: string) => void;
-  onToggleActive: (p: AdminProduct) => void;
+function ProjectTab({ title, products, editing, onChange, onEdit, onNew, onSaveProduct, canDelete, onDelete, onToggleActive }: {
+  title: string; products: AdminProduct[]; editing: AdminProduct | null;
+  onChange: (p: AdminProduct | null) => void; onEdit: (p: AdminProduct) => void;
+  onNew: () => void; onSaveProduct: (p: AdminProduct) => Promise<boolean>;
+  canDelete: boolean; onDelete: (id: string) => void; onToggleActive: (p: AdminProduct) => void;
 }) {
   const isNew = editing ? !products.some((p) => p.id === editing.id) : false
   const [category, setCategory] = useState('All')
@@ -1197,7 +1235,7 @@ function ProjectTab({ title, products, editing, onChange, onEdit, onNew, onSaveP
               <AdminAction onPress={() => onEdit(item)} label="Edit" tone="navy" />
                 <AdminAction onPress={() => setPreview(item)} label="Preview" tone="plain" />
                 <AdminAction onPress={() => onToggleActive(item)} label={item.active ? 'Hide' : 'Show'} tone="plain" />
-                <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />
+                {canDelete && <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />}
               </View>
             </View>
           </View>
@@ -1347,10 +1385,10 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOpt
   )
 }
 
-function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, onDelete, onToggleActive }: {
+function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, canDelete, onDelete, onToggleActive }: {
   services: AdminService[]; editing: AdminService | null; onChange: (s: AdminService) => void;
   onEdit: (s: AdminService | null) => void; onNew: () => void; onSave: () => void;
-  onDelete: (id: string) => void; onToggleActive: (s: AdminService) => void;
+  canDelete: boolean; onDelete: (id: string) => void; onToggleActive: (s: AdminService) => void;
 }) {
   const [preview, setPreview] = useState<AdminService | null>(null)
   const [query, setQuery] = useState('')
@@ -1419,7 +1457,7 @@ function ServicesTab({ services, editing, onChange, onEdit, onNew, onSave, onDel
               <AdminAction onPress={() => onEdit(item)} label="Edit" tone="navy" />
               <AdminAction onPress={() => setPreview(item)} label="Preview" tone="plain" />
               <AdminAction onPress={() => onToggleActive(item)} label={item.active ? 'Hide' : 'Show'} tone="plain" />
-              <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />
+              {canDelete && <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />}
               {!item.active && <Text className="text-[10px] font-black uppercase text-red-500">Inactive</Text>}
             </View>
           </View>
@@ -1501,7 +1539,7 @@ function ServiceEditor({ service, onChange, onSave, onCancel, isNew, categoryOpt
 // Expandable per-user robot-settings manager (admin view of robot_user_settings).
 // Same rows the user edits in their Robot Preferences screen + the website Account
 // page — the admin sees and manages them all so nothing stays untracked.
-function UserRobotSettingsManager({ userId, email }: { userId: string; email: string }) {
+function UserRobotSettingsManager({ userId, email, canDelete }: { userId: string; email: string; canDelete: boolean }) {
   const [rows, setRows] = useState<AdminRobotSetting[] | null>(null)
   const [robotId, setRobotId] = useState('')
   const [robotName, setRobotName] = useState('')
@@ -1581,9 +1619,11 @@ function UserRobotSettingsManager({ userId, email }: { userId: string; email: st
               <Text className="min-w-0 flex-1 text-xs font-bold text-ink" numberOfLines={1}>
                 {r.robotName || r.robotId} <Text className="font-normal text-muted">· {r.robotId}</Text>
               </Text>
+              {canDelete && (
               <Pressable onPress={() => void handleDelete(r.robotId)} disabled={busy} className="shrink-0 rounded border border-line px-2 py-0.5">
                 <Text className="text-[10px] font-bold text-red-600">Delete</Text>
               </Pressable>
+            )}
             </View>
             <Text className="mt-1 text-[11px] text-muted" numberOfLines={3}>
               {Object.entries(r.settings).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : String(v)}`).join(' · ') || '(empty)'}
@@ -1605,9 +1645,12 @@ function UserRobotSettingsManager({ userId, email }: { userId: string; email: st
 }
 
 // One user row in the admin Users tab: identity, role + tier badges, the
-// role/tier toggle buttons, and the expandable robot-preferences manager.
-function UserCard({ item, onToggleRole, onToggleTier }: {
-  item: AdminUser; onToggleRole: (u: AdminUser) => void; onToggleTier: (u: AdminUser) => void
+// role/tier toggle buttons (admin+), an owner-only delete button, and the
+// expandable robot-preferences manager.
+function UserCard({ item, canDelete, isOwner, onToggleRole, onToggleTier, onDeleteUser, currentUserId }: {
+  item: AdminUser; canDelete: boolean; isOwner: boolean;
+  onToggleRole: (u: AdminUser) => void; onToggleTier: (u: AdminUser) => void;
+  onDeleteUser: (u: AdminUser) => void; currentUserId: string
 }) {
   const [expanded, setExpanded] = useState<boolean>(false)
   return (
@@ -1619,16 +1662,18 @@ function UserCard({ item, onToggleRole, onToggleTier }: {
           {item.address ? <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>{item.address}</Text> : null}
           {item.createdAt ? <Text className="mt-0.5 text-xs text-muted">Joined {new Date(item.createdAt).toLocaleDateString()}{item.lastSeenAt ? ` · Last seen ${new Date(item.lastSeenAt).toLocaleDateString()}` : ''}</Text> : null}
           <View className="mt-1 flex-row gap-1">
-            <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-sky text-navy'}`}>{item.role}</Text>
+            <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.role === 'owner' ? 'bg-ink text-white' : item.role === 'admin' ? 'bg-amber-100 text-amber-700' : item.role === 'staff' ? 'bg-navy text-white' : 'bg-sky text-navy'}`}>{item.role}</Text>
             <Text className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.tier === 'pro' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{item.tier}</Text>
           </View>
         </View>
         <View className="shrink-0 items-end gap-1">
-          <Pressable onPress={() => onToggleRole(item)} className="rounded-full border border-line px-3 py-1.5">
-            <Text className={`text-xs font-bold ${item.role === 'admin' ? 'text-red-600' : 'text-navy'}`}>
-              {item.role === 'admin' ? 'Revoke admin' : 'Make admin'}
-            </Text>
-          </Pressable>
+          {canDelete && item.role !== 'owner' && (
+            <Pressable onPress={() => onToggleRole(item)} className="rounded-full border border-line px-3 py-1.5">
+              <Text className={`text-xs font-bold ${item.role === 'admin' ? 'text-red-600' : 'text-navy'}`}>
+                {item.role === 'admin' ? 'Revoke admin' : item.role === 'staff' ? 'Promote to admin' : 'Make admin'}
+              </Text>
+            </Pressable>
+          )}
           <Pressable onPress={() => onToggleTier(item)} className="rounded-full border border-line px-3 py-1.5">
             <Text className={`text-xs font-bold ${item.tier === 'pro' ? 'text-red-600' : 'text-emerald-700'}`}>
               {item.tier === 'pro' ? 'Make Free' : 'Make Pro'}
@@ -1637,17 +1682,24 @@ function UserCard({ item, onToggleRole, onToggleTier }: {
           <Pressable onPress={() => setExpanded(!expanded)} className="rounded-full border border-line px-3 py-1.5">
             <Text className="text-xs font-bold text-navy">{expanded ? 'Hide robots' : 'Robot prefs'}</Text>
           </Pressable>
+          {isOwner && item.id !== currentUserId && (
+            <Pressable onPress={() => onDeleteUser(item)} className="rounded-full border border-red-200 px-3 py-1.5">
+              <Text className="text-xs font-bold text-red-600">Delete user</Text>
+            </Pressable>
+          )}
         </View>
       </View>
-      {expanded && <UserRobotSettingsManager userId={item.id} email={item.email} />}
+      {expanded && <UserRobotSettingsManager userId={item.id} email={item.email} canDelete={canDelete} />}
     </View>
   )
 }
 
-function UsersTab({ users, total, page, totalPages, query, onQueryChange, onApply, onPage, onToggleRole, onToggleTier }: {
+function UsersTab({ users, total, page, totalPages, query, onQueryChange, onApply, onPage, canDelete, isOwner, onToggleRole, onToggleTier, onDeleteUser, currentUserId }: {
   users: AdminUser[]; total: number; page: number; totalPages: number; query: string;
   onQueryChange: (q: string) => void; onApply: () => void; onPage: (p: number) => void;
+  canDelete: boolean; isOwner: boolean;
   onToggleRole: (u: AdminUser) => void; onToggleTier: (u: AdminUser) => void;
+  onDeleteUser: (u: AdminUser) => void; currentUserId: string;
 }) {
   return (
     <View className="flex-1">
@@ -1677,7 +1729,7 @@ function UsersTab({ users, total, page, totalPages, query, onQueryChange, onAppl
         }
         ListEmptyComponent={<Text className="py-8 text-center text-sm text-muted">No users found.</Text>}
         ListFooterComponent={totalPages > 1 ? <AdminPager page={page} totalPages={totalPages} onPage={onPage} /> : null}
-        renderItem={({ item }) => <UserCard item={item} onToggleRole={onToggleRole} onToggleTier={onToggleTier} />}
+        renderItem={({ item }) => <UserCard item={item} canDelete={canDelete} isOwner={isOwner} onToggleRole={onToggleRole} onToggleTier={onToggleTier} onDeleteUser={onDeleteUser} currentUserId={currentUserId} />}
       />
     </View>
   )
@@ -1746,7 +1798,7 @@ function formatNPR(amount: number): string {
   return `NPR ${amount.toLocaleString('en-IN')}`
 }
 
-function JournalTab({ journals, editorOpen, editId, tag, title, text, sort, active, onNew, onEdit, onTogglePublish, onDelete, onEditIdChange, onTagChange, onTitleChange, onTextChange, onSortChange, onActiveChange, onSave, onCancel }: {
+function JournalTab({ journals, editorOpen, editId, tag, title, text, sort, active, onNew, onEdit, onTogglePublish, canDelete, onDelete, onEditIdChange, onTagChange, onTitleChange, onTextChange, onSortChange, onActiveChange, onSave, onCancel }: {
   journals: AdminJournalPost[]
   editorOpen: boolean
   editId: string
@@ -1758,6 +1810,7 @@ function JournalTab({ journals, editorOpen, editId, tag, title, text, sort, acti
   onNew: () => void
   onEdit: (post: AdminJournalPost) => void
   onTogglePublish: (post: AdminJournalPost) => void
+  canDelete: boolean
   onDelete: (id: string) => void
   onEditIdChange: (v: string) => void
   onTagChange: (v: string) => void
@@ -1852,7 +1905,7 @@ function JournalTab({ journals, editorOpen, editId, tag, title, text, sort, acti
               <AdminAction onPress={() => onEdit(item)} label="Edit" tone="navy" />
               <AdminAction onPress={() => setPreview(item)} label="Preview" tone="plain" />
               <AdminAction onPress={() => onTogglePublish(item)} label={item.active ? 'Unpublish' : 'Publish'} tone="plain" />
-              <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />
+              {canDelete && <AdminAction onPress={() => onDelete(item.id)} label="Delete" tone="red" />}
             </View>
           </View>
         ))
@@ -2065,11 +2118,12 @@ function MessagesTab({ messages, total, page, totalPages, onPage, status, onStat
 
 // ─── Settings (company info + programs) ─────────────────────────────
 
-function SettingsTab({ company, setCompany, trainingPrograms, setTrainingPrograms, pilotCostLines, setPilotCostLines, curriculumHighlights, setCurriculumHighlights, onCompanySaved, onSaveProgram, onDeleteProgram, onSavePilotLine, onDeletePilotLine, onSaveCurriculum, onDeleteCurriculum, onEditingChange }: {
+function SettingsTab({ company, setCompany, trainingPrograms, setTrainingPrograms, pilotCostLines, setPilotCostLines, curriculumHighlights, setCurriculumHighlights, canDelete, onCompanySaved, onSaveProgram, onDeleteProgram, onSavePilotLine, onDeletePilotLine, onSaveCurriculum, onDeleteCurriculum, onEditingChange }: {
   company: AdminCompanyInfo | null; setCompany: (c: AdminCompanyInfo | null) => void
   trainingPrograms: AdminTrainingProgram[]; setTrainingPrograms: (p: AdminTrainingProgram[]) => void
   pilotCostLines: AdminPilotCostLine[]; setPilotCostLines: (p: AdminPilotCostLine[]) => void
   curriculumHighlights: AdminCurriculumHighlight[]; setCurriculumHighlights: (c: AdminCurriculumHighlight[]) => void
+  canDelete: boolean
   onCompanySaved: (next: AdminCompanyInfo) => void
   onSaveProgram: (p: AdminTrainingProgram, isNew: boolean) => void
   onDeleteProgram: (id: string) => void
@@ -2101,11 +2155,11 @@ function SettingsTab({ company, setCompany, trainingPrograms, setTrainingProgram
 
       <CompanyInfoEditor company={company} setCompany={setCompany} onSaved={onCompanySaved} inputClass={inputClass} onEditingChange={report('company')} />
 
-      <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} onDelete={onDeleteProgram} inputClass={inputClass} onEditingChange={report('programs')} />
+      <TrainingProgramsManager programs={trainingPrograms} setPrograms={setTrainingPrograms} onSave={onSaveProgram} canDelete={canDelete} onDelete={onDeleteProgram} inputClass={inputClass} onEditingChange={report('programs')} />
 
-      <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} onDelete={onDeletePilotLine} inputClass={inputClass} onEditingChange={report('pilot')} />
+      <PilotCostManager lines={pilotCostLines} setLines={setPilotCostLines} onSave={onSavePilotLine} canDelete={canDelete} onDelete={onDeletePilotLine} inputClass={inputClass} onEditingChange={report('pilot')} />
 
-      <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} onDelete={onDeleteCurriculum} inputClass={inputClass} onEditingChange={report('curriculum')} />
+      <CurriculumManager highlights={curriculumHighlights} setHighlights={setCurriculumHighlights} onSave={onSaveCurriculum} canDelete={canDelete} onDelete={onDeleteCurriculum} inputClass={inputClass} onEditingChange={report('curriculum')} />
     </ScrollView>
   )
 }
@@ -2203,9 +2257,9 @@ function CompanyInfoEditor({ company, setCompany, onSaved, inputClass, onEditing
   )
 }
 
-function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inputClass, onEditingChange }: {
+function TrainingProgramsManager({ programs, setPrograms, onSave, canDelete, onDelete, inputClass, onEditingChange }: {
   programs: AdminTrainingProgram[]; setPrograms: (p: AdminTrainingProgram[]) => void
-  onSave: (p: AdminTrainingProgram, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+  onSave: (p: AdminTrainingProgram, isNew: boolean) => void; canDelete: boolean; onDelete: (id: string) => void; inputClass: string
   onEditingChange: (v: boolean) => void
 }) {
   const [editing, setEditing] = useState<AdminTrainingProgram | null>(null)
@@ -2273,7 +2327,7 @@ function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inpu
               <AdminAction onPress={() => setEditing({ ...program })} label="Edit" tone="navy" />
               <AdminAction onPress={() => setPreview(program)} label="Preview" tone="plain" />
               <AdminAction onPress={() => toggleActive(program)} label={program.active ? 'Hide' : 'Show'} tone="plain" />
-              <AdminAction onPress={() => onDelete(program.id)} label="Delete" tone="red" />
+              {canDelete && <AdminAction onPress={() => onDelete(program.id)} label="Delete" tone="red" />}
             </View>
           </View>
         ))
@@ -2301,9 +2355,9 @@ function TrainingProgramsManager({ programs, setPrograms, onSave, onDelete, inpu
   )
 }
 
-function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass, onEditingChange }: {
+function PilotCostManager({ lines, setLines, onSave, canDelete, onDelete, inputClass, onEditingChange }: {
   lines: AdminPilotCostLine[]; setLines: (p: AdminPilotCostLine[]) => void
-  onSave: (p: AdminPilotCostLine, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+  onSave: (p: AdminPilotCostLine, isNew: boolean) => void; canDelete: boolean; onDelete: (id: string) => void; inputClass: string
   onEditingChange: (v: boolean) => void
 }) {
   const [editing, setEditing] = useState<AdminPilotCostLine | null>(null)
@@ -2365,7 +2419,7 @@ function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass, onEdi
               <AdminAction onPress={() => setEditing({ ...line })} label="Edit" tone="navy" />
               <AdminAction onPress={() => setPreview(line)} label="Preview" tone="plain" />
               <AdminAction onPress={() => toggleActive(line)} label={line.active ? 'Hide' : 'Show'} tone="plain" />
-              <AdminAction onPress={() => onDelete(line.id)} label="Delete" tone="red" />
+              {canDelete && <AdminAction onPress={() => onDelete(line.id)} label="Delete" tone="red" />}
             </View>
           </View>
         ))
@@ -2392,9 +2446,9 @@ function PilotCostManager({ lines, setLines, onSave, onDelete, inputClass, onEdi
   )
 }
 
-function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputClass, onEditingChange }: {
+function CurriculumManager({ highlights, setHighlights, onSave, canDelete, onDelete, inputClass, onEditingChange }: {
   highlights: AdminCurriculumHighlight[]; setHighlights: (c: AdminCurriculumHighlight[]) => void
-  onSave: (c: AdminCurriculumHighlight, isNew: boolean) => void; onDelete: (id: string) => void; inputClass: string
+  onSave: (c: AdminCurriculumHighlight, isNew: boolean) => void; canDelete: boolean; onDelete: (id: string) => void; inputClass: string
   onEditingChange: (v: boolean) => void
 }) {
   const [editing, setEditing] = useState<AdminCurriculumHighlight | null>(null)
@@ -2454,7 +2508,7 @@ function CurriculumManager({ highlights, setHighlights, onSave, onDelete, inputC
               <AdminAction onPress={() => setEditing({ ...highlight })} label="Edit" tone="navy" />
               <AdminAction onPress={() => setPreview(highlight)} label="Preview" tone="plain" />
               <AdminAction onPress={() => toggleActive(highlight)} label={highlight.active ? 'Hide' : 'Show'} tone="plain" />
-              <AdminAction onPress={() => onDelete(highlight.id)} label="Delete" tone="red" />
+              {canDelete && <AdminAction onPress={() => onDelete(highlight.id)} label="Delete" tone="red" />}
             </View>
           </View>
         ))

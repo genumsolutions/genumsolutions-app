@@ -41,7 +41,7 @@ const COMPANY: Dest[] = [
 
 export function MenuScreen() {
   const navigation = useNavigation<any>();
-  const { isAdmin, isPro, themeMode, setThemeMode } = useApp();
+  const { isStaff, isPro, themeMode, setThemeMode } = useApp();
 
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingVertical: 12 }}>
@@ -116,7 +116,7 @@ export function MenuScreen() {
         </View>
       </MenuGroup>
 
-      {isAdmin ? (
+      {isStaff ? (
         <MenuGroup title="Admin">
           <MenuItem icon="settings" label="Admin Dashboard" onPress={() => navigation.push('Admin')} />
         </MenuGroup>
