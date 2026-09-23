@@ -369,6 +369,9 @@ export type LinkPreview = {
   tags: string[]
   images: string[]
   categoryHint: string
+  specs?: string[]
+  priceLabel?: string
+  extra?: Record<string, unknown>
 }
 
 async function invokeLinkImport(body: { action: string; url: string; product?: Record<string, unknown> }) {
@@ -399,6 +402,7 @@ export async function createLinkImport(url: string, product: Partial<AdminProduc
       price: Number(product.price) || 0,
       priceLabel: product.priceLabel || 'Request quote',
       stock: Number(product.stock) || 0,
+      specs: Array.isArray(product.specs) ? product.specs : [],
     },
   })
   return mapProductRow((data.product as RawRow) ?? {})

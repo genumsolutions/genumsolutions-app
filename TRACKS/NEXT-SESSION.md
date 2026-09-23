@@ -1,5 +1,20 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **RICHER LINK-IMPORT EXTRACTION
+(website U-16) — "make the extraction better so manual input may not be required."** The
+shared `link-import` edge function now extracts MakerWorld **specs** (print profile,
+weight, materials, filament types, compatible printer/nozzle), a **full gallery** of
+images, an **enriched description** (clean summary + `Printed N times · N likes · N
+collected · License:`), and pricing/category metadata in `extra`; the generic path picks
+up multiple og:image/itemprop images + JSON-LD `additionalProperty` specs. App side:
+`LinkPreview` gained `specs`/`priceLabel`/`extra`, **import-by-link seeds the editor with
+`specs`**, and `createLinkImport` sends `specs` so the created row stores them (web
+`AdminProducts.tsx` does the same). Edge fn deployed live (**verified 22/22** incl. 9-image
+gallery + 5 spec lines). App tsc clean, vitest **140/140**. NOTE: the website harness
+gained a cleanup guard (never deletes pre-existing/curated rows on upsert-collide) after a
+harness run overwrote+deleted a live sample row — restored on the website side. Website gates:
+tsc clean, lint 0, vitest **92/92**.
+
 **LATEST (2026-09-23, rides the next OTA — JS-only):** **link-based product import round
 (arrived with website U-14).** The app admin Products tab now has **"Import by link"** next
 to "+ New product": prompt → paste any product URL → the shared `link-import` edge function
