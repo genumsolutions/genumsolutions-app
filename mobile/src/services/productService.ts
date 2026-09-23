@@ -7,6 +7,7 @@
 // app's anon key can SELECT without a session.
 // =====================================================================
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { logger } from "./logger";
 import { supabase } from "../config/supabase";
 import type { Product, ProductType, Difficulty } from "../types";
 
@@ -169,7 +170,9 @@ export async function getProducts(): Promise<Product[]> {
     const list = await getProductsFromSupabase();
     cacheProducts(list);
     return list;
-  } catch {
+  } catch (e) {
+    // C8: was silent — a dead catalog now leaves a trace before cache fallback.
+    logger.error("catalog", "live catalog fetch failed, serving cache", e);
     const cached = await cachedProducts();
     return cached ?? [];
   }
@@ -186,7 +189,8 @@ export async function getProductsWithSource(): Promise<{
     const list = await getProductsFromSupabase();
     cacheProducts(list);
     return { products: list, source: "live" };
-  } catch {
+  } catch (e) {
+    logger.error("catalog", "live catalog fetch failed, serving cache", e);
     const cached = await cachedProducts();
     return { products: cached ?? [], source: "cache" };
   }
@@ -202,11 +206,13 @@ export async function getProductById(id: string): Promise<Product | null> {
       .maybeSingle();
     if (error) throw error;
     return data ? rowToProduct(data as ProductRow) : null;
-  } catch {
+  } catch (e) {
+    logger.error("catalog", `product ${id} fetch failed, serving cache`, e);
     try {
       const cached = await cachedProducts();
       return cached?.find((p) => p.id === id) ?? null;
-    } catch {
+    } catch (e2) {
+      logger.warn("catalog", "cache read failed", e2);
       return null;
     }
   }
@@ -228,7 +234,8 @@ export async function getProductByIdWithSource(
       product: data ? rowToProduct(data as ProductRow) : null,
       source: "live",
     };
-  } catch {
+  } catch (e) {
+    logger.error("catalog", `product ${id} fetch failed, serving cache`, e);
     try {
       const cached = await cachedProducts();
       return {

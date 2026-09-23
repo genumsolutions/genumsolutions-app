@@ -11,19 +11,20 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import type { ReactNode } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { Appearance, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, supabaseConfigured } from '../config/supabase';
-import * as auth from '../services/authService';
-import * as push from '../services/pushService';
-import * as settings from '../services/settingsService';
-import * as cart from '../services/cartService';
-import type { CartLine } from '../types';
-import type { CarMode } from '../config/roboCarCatalog';
-import { checkForAnyUpdate } from '../services/updateService';
+} from "react";
+import type { ReactNode } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { Appearance, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase, supabaseConfigured } from "../config/supabase";
+import * as auth from "../services/authService";
+import * as push from "../services/pushService";
+import * as settings from "../services/settingsService";
+import * as cart from "../services/cartService";
+import { logger } from "../services/logger";
+import type { CartLine } from "../types";
+import type { CarMode } from "../config/roboCarCatalog";
+import { checkForAnyUpdate } from "../services/updateService";
 
 export type GenumUser = {
   id: string;
@@ -34,10 +35,10 @@ export type GenumUser = {
   role: string;
   /** Account tier from profiles.tier (admin-managed). Pro unlocks the
    *  Remote window + per-robot preference profiles. */
-  tier: 'free' | 'pro';
+  tier: "free" | "pro";
 };
 
-export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemeMode = "system" | "light" | "dark";
 
 /** State for the top-bar "vX available" pill (a NEWER APK exists). */
 export type UpdatePill = { version: string };
@@ -59,7 +60,11 @@ type AppContextValue = {
   authBusy: boolean;
   authError: string | null;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
-  signUp: (name: string, email: string, password: string) => Promise<'ok' | 'confirm' | 'error'>;
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+  ) => Promise<"ok" | "confirm" | "error">;
   signInWithGoogle: () => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   signOut: () => void;
@@ -82,23 +87,32 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
   const meta = session.user?.user_metadata ?? {};
   const app = session.user?.app_metadata ?? {};
   const profileResult = await supabase
-    .from('profiles')
-    .select('name, phone, address, role, tier')
-    .eq('id', session.user.id)
+    .from("profiles")
+    .select("name, phone, address, role, tier")
+    .eq("id", session.user.id)
     .maybeSingle();
   const profile = profileResult.data;
-  const rawRole = String(profile?.role || app.role || 'customer');
+  const rawRole = String(profile?.role || app.role || "customer");
   return {
-    id: session.user?.id ?? '',
-    name: profile?.name || (typeof meta.name === 'string' ? meta.name : ''),
-    email: session.user?.email ?? '',
-    phone: profile?.phone || session.user?.user_metadata?.phone || '',
-    address: profile?.address || session.user?.user_metadata?.address || '',
-    role: rawRole === 'staff' || rawRole === 'admin' || rawRole === 'owner' ? rawRole : 'customer',
+    id: session.user?.id ?? "",
+    name: profile?.name || (typeof meta.name === "string" ? meta.name : ""),
+    email: session.user?.email ?? "",
+    phone: profile?.phone || session.user?.user_metadata?.phone || "",
+    address: profile?.address || session.user?.user_metadata?.address || "",
+    role:
+      rawRole === "staff" || rawRole === "admin" || rawRole === "owner"
+        ? rawRole
+        : "customer",
     // Admins and above always enjoy Pro capabilities; customers need
     // profiles.tier='pro' (set by an admin — the protect_tier_column
     // trigger blocks self-service).
-    tier: rawRole === 'staff' || rawRole === 'admin' || rawRole === 'owner' || profile?.tier === 'pro' ? 'pro' : 'free',
+    tier:
+      rawRole === "staff" ||
+      rawRole === "admin" ||
+      rawRole === "owner" ||
+      profile?.tier === "pro"
+        ? "pro"
+        : "free",
   };
 }
 
@@ -114,16 +128,19 @@ async function genumUserFromSession(session: Session): Promise<GenumUser> {
  */
 function applyColorScheme(mode: ThemeMode) {
   try {
-    if (Platform.OS !== 'web' && typeof Appearance.setColorScheme === 'function') {
-      Appearance.setColorScheme(mode === 'system' ? null : mode);
+    if (
+      Platform.OS !== "web" &&
+      typeof Appearance.setColorScheme === "function"
+    ) {
+      Appearance.setColorScheme(mode === "system" ? null : mode);
     }
   } catch {
     // some platforms (react-native-web) don't implement setColorScheme
   }
-  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  if (Platform.OS === "web" && typeof document !== "undefined") {
     const root = document.documentElement;
-    if (mode === 'system') root.removeAttribute('data-theme');
-    else root.setAttribute('data-theme', mode);
+    if (mode === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", mode);
   }
 }
 
@@ -136,7 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [carModes, setCarModes] = useState<CarMode[]>([]);
-  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [updatePill, setUpdatePill] = useState<UpdatePill | null>(null);
   const [appUpdated, setAppUpdated] = useState(false);
 
@@ -165,11 +182,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
               access_token: stored.accessToken,
               refresh_token: stored.refreshToken,
             });
-            if (data.session && active) setUser(await genumUserFromSession(data.session));
+            if (data.session && active)
+              setUser(await genumUserFromSession(data.session));
           }
         }
-      } catch {
-        /* ignore */
+      } catch (e) {
+        // C8: was silent — session-restore failures looked like signed-out
+        // state with no trace. Log so field reports are diagnosable.
+        logger.error("auth", "session restore failed", e);
       } finally {
         if (active) setSessionReady(true);
       }
@@ -184,11 +204,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // 'dark' are stored; the legacy 'system' (OS-follow) default migrates to
     // 'dark' (= the website's 'dim'), and a fresh install with no stored
     // choice starts 'light' — matching the website exactly.
-    void AsyncStorage.getItem('genum-theme-mode').then((stored) => {
-      const mode: ThemeMode = stored === 'dark' || stored === 'light' ? stored : stored === 'system' || stored === 'dim' ? 'dark' : 'light';
+    void AsyncStorage.getItem("genum-theme-mode").then((stored) => {
+      const mode: ThemeMode =
+        stored === "dark" || stored === "light"
+          ? stored
+          : stored === "system" || stored === "dim"
+            ? "dark"
+            : "light";
       setThemeModeState(mode);
       applyColorScheme(mode);
-      void AsyncStorage.setItem('genum-theme-mode', mode);
+      void AsyncStorage.setItem("genum-theme-mode", mode);
     });
   }, []);
 
@@ -197,13 +222,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const applyThemeOnly = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
     applyColorScheme(mode);
-    void AsyncStorage.setItem('genum-theme-mode', mode);
+    void AsyncStorage.setItem("genum-theme-mode", mode);
   }, []);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
     applyColorScheme(mode);
-    void AsyncStorage.setItem('genum-theme-mode', mode);
+    void AsyncStorage.setItem("genum-theme-mode", mode);
     // Cloud mirror: the canonical preference lives on profiles
     // (theme_preference) so the website sees the same choice (W-6 parity).
     void settings.saveThemePreference(mode);
@@ -215,7 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // "vX available" pill; an OTA was fetched → offer "App updated · reload".
   const runLaunchUpdateCheck = useCallback(async () => {
     const result = await checkForAnyUpdate();
-    if (result.status === 'update-available' && result.latestVersion) {
+    if (result.status === "update-available" && result.latestVersion) {
       setUpdatePill({ version: result.latestVersion });
     }
     if (result.otaApplied) setAppUpdated(true);
@@ -266,7 +291,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pushCartToServer = useCallback((userId: string, lines: CartLine[]) => {
     cartWriteQueueRef.current = cartWriteQueueRef.current
       .then(() => cart.pushCartToServer(userId, lines))
-      .catch(() => undefined);
+      .catch((e: unknown) => {
+        // C8: was silent — server cart writes failing meant website/app cart
+        // drift with no trace. Logged (not thrown) to keep the queue alive.
+        logger.error("cart", "server cart push failed", e);
+        return undefined;
+      });
   }, []);
 
   // Signed in: adopt the DB cart (merge guest lines, DB wins per product),
@@ -293,7 +323,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // DB sticks with the merged cart so both clients start from the same state.
         pushCartToServer(userId, merged);
         setCartCount(cart.totalCount(merged));
-      } catch {
+      } catch (e) {
+        logger.error("cart", "cart merge on sign-in failed", e);
         if (!cancelled) void refreshCartCount();
       }
     })();
@@ -319,7 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signInWithPassword = useCallback(
     async (email: string, password: string) => {
       if (!supabaseConfigured) {
-        setAuthError('Sign-in is not configured yet.');
+        setAuthError("Sign-in is not configured yet.");
         return false;
       }
       setAuthBusy(true);
@@ -330,7 +361,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         applyAuthed();
         return true;
       } catch (e) {
-        return applyError(e instanceof Error ? e.message : 'Sign-in failed.');
+        return applyError(e instanceof Error ? e.message : "Sign-in failed.");
       }
     },
     [applyAuthed, applyError],
@@ -339,8 +370,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(
     async (name: string, email: string, password: string) => {
       if (!supabaseConfigured) {
-        setAuthError('Sign-up is not configured yet.');
-        return 'error';
+        setAuthError("Sign-up is not configured yet.");
+        return "error";
       }
       setAuthBusy(true);
       setAuthError(null);
@@ -349,14 +380,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
           setAuthSheetOpen(false);
           applyAuthed();
-          return 'ok';
+          return "ok";
         }
         // confirmation email required
         applyAuthed();
-        return 'confirm';
+        return "confirm";
       } catch (e) {
-        applyError(e instanceof Error ? e.message : 'Sign-up failed.');
-        return 'error';
+        applyError(e instanceof Error ? e.message : "Sign-up failed.");
+        return "error";
       }
     },
     [applyAuthed, applyError],
@@ -364,35 +395,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     if (!supabaseConfigured) {
-      setAuthError('Sign-in is not configured yet.');
+      setAuthError("Sign-in is not configured yet.");
       return false;
     }
     setAuthBusy(true);
     setAuthError(null);
     const result = await auth.signInWithGoogle();
-    if (result.status === 'ok') {
+    if (result.status === "ok") {
       setAuthSheetOpen(false);
       applyAuthed();
       return true;
     }
-    if (result.status === 'error') setAuthError(result.message);
+    if (result.status === "error") setAuthError(result.message);
     setAuthBusy(false);
     return false;
   }, [applyAuthed]);
 
-  const resetPassword = useCallback(async (email: string) => {
-    if (!supabaseConfigured) return false;
-    setAuthBusy(true);
-    setAuthError(null);
-    try {
-      await auth.resetPassword(email);
-      setAuthBusy(false);
-      return true;
-    } catch (e) {
-      setAuthBusy(false);
-      return applyError(e instanceof Error ? e.message : 'Failed to send reset link.');
-    }
-  }, [applyError]);
+  const resetPassword = useCallback(
+    async (email: string) => {
+      if (!supabaseConfigured) return false;
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.resetPassword(email);
+        setAuthBusy(false);
+        return true;
+      } catch (e) {
+        setAuthBusy(false);
+        return applyError(
+          e instanceof Error ? e.message : "Failed to send reset link.",
+        );
+      }
+    },
+    [applyError],
+  );
 
   const signOut = useCallback(() => {
     void auth.signOut();
@@ -408,10 +444,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isSignedIn: Boolean(user),
       // staff+ can operate every admin panel except deletions; isAdmin means
       // admin+owner (deletion rights); only the sole owner can delete users.
-      isStaff: user?.role === 'staff' || user?.role === 'admin' || user?.role === 'owner',
-      isAdmin: user?.role === 'admin' || user?.role === 'owner',
-      isOwner: user?.role === 'owner',
-      isPro: user?.tier === 'pro' || user?.role === 'staff' || user?.role === 'admin' || user?.role === 'owner',
+      isStaff:
+        user?.role === "staff" ||
+        user?.role === "admin" ||
+        user?.role === "owner",
+      isAdmin: user?.role === "admin" || user?.role === "owner",
+      isOwner: user?.role === "owner",
+      isPro:
+        user?.tier === "pro" ||
+        user?.role === "staff" ||
+        user?.role === "admin" ||
+        user?.role === "owner",
       cartCount,
       setCart,
       authSheetOpen,
@@ -466,6 +509,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used inside <AppProvider>');
+  if (!ctx) throw new Error("useApp must be used inside <AppProvider>");
   return ctx;
 }

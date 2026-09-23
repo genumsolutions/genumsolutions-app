@@ -29,6 +29,7 @@ import {
 } from "../services/productService";
 import { OfflineBadge } from "../components/OfflineBadge";
 import { CategoryDropdown } from "../components/CategoryDropdown";
+import { ShopSkeletonGrid } from "../components/SkeletonCard";
 import type { Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
@@ -86,9 +87,14 @@ export function ShopScreen() {
   }, [category, query, sort, maxPrice, inStock]);
 
   if (loading) {
+    // C8 (2026-09-23): skeleton grid instead of a bare spinner — the card
+    // shapes match the real grid so nothing jumps when data arrives.
     return (
-      <View className="flex-1 items-center justify-center bg-surface">
-        <ActivityIndicator size="large" color="#1e3a8a" />
+      <View className="flex-1 bg-surface pt-3">
+        <View className="px-4 pb-3">
+          <View className="h-11 rounded-xl border border-line bg-card" />
+        </View>
+        <ShopSkeletonGrid />
       </View>
     );
   }

@@ -10,104 +10,147 @@
 // App updates + theme toggles now live on the Menu tab (visible without
 // signing in); nothing here gates updates behind an account.
 // =====================================================================
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
+  ScrollView,
   Text,
   TextInput,
   View,
-} from 'react-native'
-import { Feather } from '@expo/vector-icons'
-import { useApp } from '../context/AppContext'
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useApp } from "../context/AppContext";
 import {
   getMyMessages,
   getMyOrders,
   updateProfile,
-} from '../services/orderService'
-import type { Order } from '../types'
+} from "../services/orderService";
+import { logger } from "../services/logger";
+import type { Order } from "../types";
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  paid: 'bg-emerald-100 text-emerald-800',
-  fulfilled: 'bg-navy/10 text-navy',
-  cancelled: 'bg-red-100 text-red-700',
-}
+  pending: "bg-amber-100 text-amber-800",
+  paid: "bg-emerald-100 text-emerald-800",
+  fulfilled: "bg-navy/10 text-navy",
+  cancelled: "bg-red-100 text-red-700",
+};
 
 function statusLabel(status: string): string {
-  return status || 'pending'
+  return status || "pending";
 }
 
 function providerLabel(provider: string): string {
   switch (provider) {
-    case 'cod': return 'Pay on delivery'
-    case 'esewa': return 'eSewa'
-    case 'khalti': return 'Khalti'
-    default: return provider
+    case "cod":
+      return "Pay on delivery";
+    case "esewa":
+      return "eSewa";
+    case "khalti":
+      return "Khalti";
+    default:
+      return provider;
   }
 }
 
 function formatNPR(amount: number): string {
-  return `NPR ${(amount || 0).toLocaleString('en-IN')}`
+  return `NPR ${(amount || 0).toLocaleString("en-IN")}`;
 }
 
 export function AccountScreen() {
-  const { user, isSignedIn, isAdmin, isStaff, isOwner, signOut, cartCount, setAuthSheetOpen } = useApp()
-  const [orders, setOrders] = useState<Order[]>([])
-  const [ordersLoading, setOrdersLoading] = useState(false)
-  const [messages, setMessages] = useState<{ message: string; status: string; createdAt: string }[]>([])
-  const [messagesLoading, setMessagesLoading] = useState(false)
-  const [editingProfile, setEditingProfile] = useState(false)
-  const [name, setName] = useState(user?.name || '')
-  const [phone, setPhone] = useState(user?.phone || '')
-  const [address, setAddress] = useState(user?.address || '')
-  const [profileSaving, setProfileSaving] = useState(false)
-  const [profileSaved, setProfileSaved] = useState(false)
+  const {
+    user,
+    isSignedIn,
+    isAdmin,
+    isStaff,
+    isOwner,
+    signOut,
+    cartCount,
+    setAuthSheetOpen,
+  } = useApp();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [messages, setMessages] = useState<
+    { message: string; status: string; createdAt: string }[]
+  >([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [name, setName] = useState(user?.name || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [address, setAddress] = useState(user?.address || "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // C8 (2026-09-23): shared loader so pull-to-refresh can re-run both fetches.
+  const reload = useCallback(() => {
+    if (!isSignedIn) return Promise.resolve();
+    setOrdersLoading(true);
+    setMessagesLoading(true);
+    // C8: failures used to be swallowed silently — log them so field issues
+    // are visible, but keep the UI stable (empty lists, not error screens).
+    return Promise.all([
+      getMyOrders()
+        .then(setOrders)
+        .catch((e: unknown) => {
+          logger.error("account", "load orders failed", e);
+          setOrders([]);
+        }),
+      getMyMessages()
+        .then(setMessages)
+        .catch((e: unknown) => {
+          logger.error("account", "load messages failed", e);
+          setMessages([]);
+        }),
+    ]).finally(() => {
+      setOrdersLoading(false);
+      setMessagesLoading(false);
+    });
+  }, [isSignedIn]);
 
   useEffect(() => {
-    if (!isSignedIn) return
-    setOrdersLoading(true)
-    getMyOrders()
-      .then(setOrders)
-      .catch(() => setOrders([]))
-      .finally(() => setOrdersLoading(false))
-  }, [isSignedIn])
-
-  useEffect(() => {
-    if (!isSignedIn) return
-    setMessagesLoading(true)
-    getMyMessages()
-      .then(setMessages)
-      .catch(() => setMessages([]))
-      .finally(() => setMessagesLoading(false))
-  }, [isSignedIn])
+    void reload();
+  }, [reload]);
 
   useEffect(() => {
     if (user) {
-      setName(user.name || '')
-      setPhone(user.phone || '')
-      setAddress(user.address || '')
+      setName(user.name || "");
+      setPhone(user.phone || "");
+      setAddress(user.address || "");
     }
-  }, [user])
+  }, [user]);
 
-  const initials = (user?.name || 'U')
+  const initials = (user?.name || "U")
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
-    .join('')
+    .join("");
+
+  // C8: pull-to-refresh — re-run both fetches, guarded so an in-flight
+  // spinner can't be re-triggered concurrently.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await reload();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reload]);
 
   async function saveProfile() {
-    setProfileSaving(true)
-    setProfileSaved(false)
+    setProfileSaving(true);
+    setProfileSaved(false);
     try {
-      await updateProfile(user?.id || '', { name, phone, address })
-      setProfileSaved(true)
-      setEditingProfile(false)
-    } catch {
-      // no-op
+      await updateProfile(user?.id || "", { name, phone, address });
+      setProfileSaved(true);
+      setEditingProfile(false);
+    } catch (e) {
+      // C8: was a silent no-op — the button just appeared to do nothing.
+      logger.error("account", "save profile failed", e);
     } finally {
-      setProfileSaving(false)
+      setProfileSaving(false);
     }
   }
 
@@ -117,7 +160,9 @@ export function AccountScreen() {
         <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
           <Feather name="user" size={26} color="#ffffff" />
         </View>
-        <Text className="mt-4 font-display text-xl font-bold text-ink">Sign in to account</Text>
+        <Text className="mt-4 font-display text-xl font-bold text-ink">
+          Sign in to account
+        </Text>
         <Text className="mt-1 text-center text-sm text-muted">
           Access your profile, orders, and synced build list.
         </Text>
@@ -128,31 +173,48 @@ export function AccountScreen() {
           <Text className="font-bold text-white">Sign in</Text>
         </Pressable>
       </View>
-    )
+    );
   }
 
+  // C8: ScrollView root — long profiles clipped on small screens before, and
+  // this gives the screen pull-to-refresh over orders + messages.
   return (
-    <View className="flex-1 bg-surface">
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ paddingBottom: 24 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <View className="px-5 pb-2 pt-4">
         {/* Header card — avatar + name + email + admin badge + sign out */}
         <View className="rounded-2xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <View className="min-w-0 flex-1 flex-row items-center">
               <View className="h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy">
-                <Text className="text-sm font-black text-white">{initials}</Text>
+                <Text className="text-sm font-black text-white">
+                  {initials}
+                </Text>
               </View>
               <View className="ml-3 min-w-0 flex-1">
-                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Customer account</Text>
-                <Text className="mt-0.5 font-display text-xl font-bold tracking-tight text-ink" numberOfLines={1}>
-                  Welcome, {user?.name || 'Genum user'}.
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Customer account
                 </Text>
-                <Text className="mt-0.5 text-sm text-muted" numberOfLines={1}>{user?.email}</Text>
+                <Text
+                  className="mt-0.5 font-display text-xl font-bold tracking-tight text-ink"
+                  numberOfLines={1}
+                >
+                  Welcome, {user?.name || "Genum user"}.
+                </Text>
+                <Text className="mt-0.5 text-sm text-muted" numberOfLines={1}>
+                  {user?.email}
+                </Text>
               </View>
             </View>
             {isStaff && (
               <View className="shrink-0 rounded-full bg-gold px-2 py-0.5">
                 <Text className="text-xs font-black uppercase text-ink">
-                  {isOwner ? 'Owner' : isAdmin ? 'Admin' : 'Staff'}
+                  {isOwner ? "Owner" : isAdmin ? "Admin" : "Staff"}
                 </Text>
               </View>
             )}
@@ -169,29 +231,35 @@ export function AccountScreen() {
         <View className="mt-4 flex-row gap-3">
           <View className="flex-1 rounded-2xl border border-line bg-card p-4">
             <Text className="font-display text-3xl font-bold text-ink">
-              {ordersLoading ? '…' : orders.length}
+              {ordersLoading ? "…" : orders.length}
             </Text>
             <Text className="mt-1 text-xs font-semibold text-muted">
-              Order{orders.length === 1 ? '' : 's'} placed
+              Order{orders.length === 1 ? "" : "s"} placed
             </Text>
-          </View>
-          <View className="flex-1 rounded-2xl border border-line bg-card p-4">
-            <Text className="font-display text-3xl font-bold text-ink">{cartCount}</Text>
-            <Text className="mt-1 text-xs font-semibold text-muted">Items in build list</Text>
           </View>
           <View className="flex-1 rounded-2xl border border-line bg-card p-4">
             <Text className="font-display text-3xl font-bold text-ink">
-              {messagesLoading ? '…' : messages.length}
+              {cartCount}
             </Text>
             <Text className="mt-1 text-xs font-semibold text-muted">
-              Support message{messages.length === 1 ? '' : 's'}
+              Items in build list
+            </Text>
+          </View>
+          <View className="flex-1 rounded-2xl border border-line bg-card p-4">
+            <Text className="font-display text-3xl font-bold text-ink">
+              {messagesLoading ? "…" : messages.length}
+            </Text>
+            <Text className="mt-1 text-xs font-semibold text-muted">
+              Support message{messages.length === 1 ? "" : "s"}
             </Text>
           </View>
         </View>
 
         {/* Your orders — status pill + provider + total + line items */}
         <View className="mt-5 rounded-2xl border border-line bg-card p-4">
-          <Text className="font-display text-lg font-bold text-ink">Your orders</Text>
+          <Text className="font-display text-lg font-bold text-ink">
+            Your orders
+          </Text>
           {ordersLoading ? (
             <View className="mt-4 items-center py-4">
               <ActivityIndicator color="#1e3a8a" />
@@ -206,22 +274,37 @@ export function AccountScreen() {
                 <View key={o.id} className="rounded-xl border border-line p-4">
                   <View className="flex-row flex-wrap items-center justify-between gap-2">
                     <View className="min-w-0 flex-1">
-                      <Text className="font-bold text-ink">#{o.id.slice(0, 8).toUpperCase()}</Text>
-                      <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
-                        {new Date(o.created_at).toLocaleDateString()} · {providerLabel(o.provider)}
+                      <Text className="font-bold text-ink">
+                        #{o.id.slice(0, 8).toUpperCase()}
+                      </Text>
+                      <Text
+                        className="mt-0.5 text-xs text-muted"
+                        numberOfLines={1}
+                      >
+                        {new Date(o.created_at).toLocaleDateString()} ·{" "}
+                        {providerLabel(o.provider)}
                       </Text>
                     </View>
                     <View className="flex-row items-center gap-3">
-                      <Text className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${STATUS_STYLES[statusLabel(o.status)] || 'bg-slate-100 text-slate-700'}`}>
+                      <Text
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${STATUS_STYLES[statusLabel(o.status)] || "bg-slate-100 text-slate-700"}`}
+                      >
                         {statusLabel(o.status)}
                       </Text>
-                      <Text className="font-black text-ink">{formatNPR(o.total_npr)}</Text>
+                      <Text className="font-black text-ink">
+                        {formatNPR(o.total_npr)}
+                      </Text>
                     </View>
                   </View>
                   <View className="mt-2">
                     {o.items.map((item) => (
-                      <Text key={`${o.id}-${item.name}`} className="text-xs leading-5 text-muted" numberOfLines={1}>
-                        {item.quantity} × {item.name} · {formatNPR(item.priceNpr * item.quantity)}
+                      <Text
+                        key={`${o.id}-${item.name}`}
+                        className="text-xs leading-5 text-muted"
+                        numberOfLines={1}
+                      >
+                        {item.quantity} × {item.name} ·{" "}
+                        {formatNPR(item.priceNpr * item.quantity)}
                       </Text>
                     ))}
                   </View>
@@ -233,31 +316,65 @@ export function AccountScreen() {
 
         {/* Your details — profile edit */}
         <View className="mt-5 rounded-2xl border border-line bg-card p-4">
-          <Text className="font-display text-lg font-bold text-ink">Your details</Text>
-          <Text className="mt-1 text-sm text-muted">Used for delivery and order updates.</Text>
+          <Text className="font-display text-lg font-bold text-ink">
+            Your details
+          </Text>
+          <Text className="mt-1 text-sm text-muted">
+            Used for delivery and order updates.
+          </Text>
 
           {!editingProfile ? (
-            <Pressable onPress={() => setEditingProfile(true)} className="mt-3 rounded-full bg-navy px-4 py-2 self-start">
+            <Pressable
+              onPress={() => setEditingProfile(true)}
+              className="mt-3 rounded-full bg-navy px-4 py-2 self-start"
+            >
               <Text className="text-xs font-bold text-white">Edit Profile</Text>
             </Pressable>
           ) : (
             <View className="mt-3">
-              <Text className="text-xs font-bold uppercase tracking-wide text-muted">Name</Text>
-              <TextInput value={name} onChangeText={setName} className="mt-1 mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Name" />
-              <Text className="text-xs font-bold uppercase tracking-wide text-muted">Phone</Text>
-              <TextInput value={phone} onChangeText={setPhone} className="mt-1 mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Phone" keyboardType="phone-pad" />
-              <Text className="text-xs font-bold uppercase tracking-wide text-muted">Delivery address</Text>
-              <TextInput value={address} onChangeText={setAddress} className="mt-1 mb-4 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Address" multiline />
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Name
+              </Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                className="mt-1 mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                placeholder="Name"
+              />
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Phone
+              </Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                className="mt-1 mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                placeholder="Phone"
+                keyboardType="phone-pad"
+              />
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Delivery address
+              </Text>
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                className="mt-1 mb-4 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                placeholder="Address"
+                multiline
+              />
               <View className="flex-row gap-3">
                 <Pressable
                   onPress={saveProfile}
                   disabled={profileSaving}
                   className="rounded-full bg-gold px-5 py-2"
                 >
-                  <Text className="text-xs font-black text-ink">{profileSaving ? 'Saving…' : 'Save details'}</Text>
+                  <Text className="text-xs font-black text-ink">
+                    {profileSaving ? "Saving…" : "Save details"}
+                  </Text>
                 </Pressable>
                 {profileSaved && (
-                  <Text className="self-center text-xs font-bold text-emerald-700">Details saved.</Text>
+                  <Text className="self-center text-xs font-bold text-emerald-700">
+                    Details saved.
+                  </Text>
                 )}
               </View>
             </View>
@@ -266,7 +383,9 @@ export function AccountScreen() {
 
         {/* Your messages — support history with status pills */}
         <View className="mt-5 rounded-2xl border border-line bg-card p-4">
-          <Text className="font-display text-lg font-bold text-ink">Your messages</Text>
+          <Text className="font-display text-lg font-bold text-ink">
+            Your messages
+          </Text>
           {messagesLoading ? (
             <View className="mt-4 items-center py-4">
               <ActivityIndicator color="#1e3a8a" />
@@ -278,12 +397,25 @@ export function AccountScreen() {
           ) : (
             <View className="mt-3">
               {messages.map((m, i) => (
-                <View key={m.createdAt + String(i)} className="py-3 first:pt-0 last:pb-0" style={{ borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#e2e8f0' }}>
-                  <Text className="text-sm leading-6 text-ink">{m.message}</Text>
+                <View
+                  key={m.createdAt + String(i)}
+                  className="py-3 first:pt-0 last:pb-0"
+                  style={{
+                    borderTopWidth: i > 0 ? 1 : 0,
+                    borderTopColor: "#e2e8f0",
+                  }}
+                >
+                  <Text className="text-sm leading-6 text-ink">
+                    {m.message}
+                  </Text>
                   <View className="mt-2 flex-row items-center gap-2">
-                    <Text className="text-xs text-muted">{new Date(m.createdAt).toLocaleDateString()}</Text>
-                    <Text className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${m.status === 'replied' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                      {m.status === 'replied' ? 'Replied' : 'New'}
+                    <Text className="text-xs text-muted">
+                      {new Date(m.createdAt).toLocaleDateString()}
+                    </Text>
+                    <Text
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${m.status === "replied" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
+                    >
+                      {m.status === "replied" ? "Replied" : "New"}
                     </Text>
                   </View>
                 </View>
@@ -292,6 +424,6 @@ export function AccountScreen() {
           )}
         </View>
       </View>
-    </View>
-  )
+    </ScrollView>
+  );
 }

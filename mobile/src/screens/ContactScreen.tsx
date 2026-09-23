@@ -3,7 +3,7 @@
 // Form posts via the /contact edge function (persists to customer_messages
 // and emails GENUM via Resend), reads up to the website's ContactForm.
 // =====================================================================
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,24 +14,28 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Feather } from '@expo/vector-icons';
-import { company as fallbackCompany } from '../config/company';
-import { getCompany } from '../services/companyService';
-import { sendContactInquiry } from '../services/orderService';
-import type { RootStackParamList } from '../navigation/types';
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
+import { company as fallbackCompany } from "../config/company";
+import { getCompany } from "../services/companyService";
+import { sendContactInquiry } from "../services/orderService";
+import { logger } from "../services/logger";
+import type { RootStackParamList } from "../navigation/types";
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
+type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
 
 export function ContactScreen() {
   const navigation = useNavigation<Nav>();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<{ text: string; isError: boolean } | null>(null);
+  const [status, setStatus] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
   // Contact details come from the shared company_info table (bundled copy as
   // fallback until the read resolves) so app and website stay in sync.
   const [company, setCompany] = useState(fallbackCompany);
@@ -39,30 +43,49 @@ export function ContactScreen() {
   useEffect(() => {
     let active = true;
     getCompany()
-      .then((c) => { if (active) setCompany(c); })
-      .catch(() => { /* keep bundled fallback */ });
-    return () => { active = false; };
+      .then((c) => {
+        if (active) setCompany(c);
+      })
+      .catch((e: unknown) => {
+        // C8: was silent — keep the bundled fallback, but log why.
+        logger.warn(
+          "contact",
+          "company info fetch failed, using bundled copy",
+          e,
+        );
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function submit() {
     if (!name.trim() || !email.trim() || !message.trim()) {
-      setStatus({ text: 'Please complete all fields.', isError: true });
+      setStatus({ text: "Please complete all fields.", isError: true });
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setStatus({ text: 'Please check your email address.', isError: true });
+      setStatus({ text: "Please check your email address.", isError: true });
       return;
     }
     setSending(true);
     setStatus(null);
     try {
       await sendContactInquiry(name.trim(), email.trim(), message.trim());
-      setStatus({ text: 'Thanks. Your inquiry has been sent.', isError: false });
-      setName('');
-      setEmail('');
-      setMessage('');
-    } catch {
-      setStatus({ text: 'We could not send your inquiry right now. Please email us directly.', isError: true });
+      setStatus({
+        text: "Thanks. Your inquiry has been sent.",
+        isError: false,
+      });
+      setName("");
+      setEmail("");
+      setMessage("");
+    } catch (e) {
+      // C8: was silent — log before surfacing the user-facing error.
+      logger.error("contact", "send inquiry failed", e);
+      setStatus({
+        text: "We could not send your inquiry right now. Please email us directly.",
+        isError: true,
+      });
     } finally {
       setSending(false);
     }
@@ -71,18 +94,26 @@ export function ContactScreen() {
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-surface"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Contact</Text>
-        <Text className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">Get in touch</Text>
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Contact
+        </Text>
+        <Text className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">
+          Get in touch
+        </Text>
 
         <View className="mt-4 space-y-3">
           <Row
             icon="map-pin"
             label="Address"
             value={company.address}
-            onPress={() => void Linking.openURL('geo:0,0?q=' + encodeURIComponent(company.address))}
+            onPress={() =>
+              void Linking.openURL(
+                "geo:0,0?q=" + encodeURIComponent(company.address),
+              )
+            }
           />
           <Row
             icon="mail"
@@ -94,13 +125,17 @@ export function ContactScreen() {
             icon="phone"
             label="Phone"
             value={company.phone}
-            onPress={() => void Linking.openURL(`tel:${company.phone.replace(/\s/g, '')}`)}
+            onPress={() =>
+              void Linking.openURL(`tel:${company.phone.replace(/\s/g, "")}`)
+            }
           />
         </View>
 
         {/* Inquiry form */}
         <View className="mt-6 rounded-2xl border border-line bg-card p-5 shadow-card">
-          <Text className="font-display text-lg font-bold text-ink">Send an inquiry</Text>
+          <Text className="font-display text-lg font-bold text-ink">
+            Send an inquiry
+          </Text>
           <Text className="mt-1 text-sm leading-5 text-muted">
             Tell us what you are working on and we will reply by email.
           </Text>
@@ -138,7 +173,7 @@ export function ContactScreen() {
             maxLength={5000}
             multiline
             numberOfLines={6}
-            style={{ textAlignVertical: 'top' }}
+            style={{ textAlignVertical: "top" }}
             className="mt-1 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink"
           />
 
@@ -150,12 +185,16 @@ export function ContactScreen() {
             {sending ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text className="text-sm font-black text-white">Send inquiry</Text>
+              <Text className="text-sm font-black text-white">
+                Send inquiry
+              </Text>
             )}
           </Pressable>
 
           {status && (
-            <Text className={`mt-3 text-sm font-semibold ${status.isError ? 'text-red-600' : 'text-emerald-700'}`}>
+            <Text
+              className={`mt-3 text-sm font-semibold ${status.isError ? "text-red-600" : "text-emerald-700"}`}
+            >
               {status.text}
             </Text>
           )}
@@ -163,12 +202,18 @@ export function ContactScreen() {
 
         {/* Legal links */}
         <View className="mt-8 flex-row items-center justify-center gap-3">
-          <Pressable onPress={() => navigation.push('Legal', { doc: 'privacy' })}>
-            <Text className="text-sm font-bold text-navy underline">Privacy Policy</Text>
+          <Pressable
+            onPress={() => navigation.push("Legal", { doc: "privacy" })}
+          >
+            <Text className="text-sm font-bold text-navy underline">
+              Privacy Policy
+            </Text>
           </Pressable>
           <Text className="text-sm text-border">·</Text>
-          <Pressable onPress={() => navigation.push('Legal', { doc: 'terms' })}>
-            <Text className="text-sm font-bold text-navy underline">Terms of Service</Text>
+          <Pressable onPress={() => navigation.push("Legal", { doc: "terms" })}>
+            <Text className="text-sm font-bold text-navy underline">
+              Terms of Service
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -182,7 +227,7 @@ function Row({
   value,
   onPress,
 }: {
-  icon: 'map-pin' | 'mail' | 'phone';
+  icon: "map-pin" | "mail" | "phone";
   label: string;
   value: string;
   onPress: () => void;
@@ -196,8 +241,15 @@ function Row({
         <Feather name={icon} size={18} color="#1e3a8a" />
       </View>
       <View className="ml-3 min-w-0 flex-1">
-        <Text className="text-xs font-bold uppercase tracking-wide text-border">{label}</Text>
-        <Text numberOfLines={1} className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
+        <Text className="text-xs font-bold uppercase tracking-wide text-border">
+          {label}
+        </Text>
+        <Text
+          numberOfLines={1}
+          className="mt-0.5 text-sm font-semibold text-ink"
+        >
+          {value}
+        </Text>
       </View>
       <Feather name="external-link" size={16} color="#94a3b8" />
     </Pressable>

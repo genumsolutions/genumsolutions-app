@@ -1,5 +1,20 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **C8 — APP POLISH: SKELETONS,
+PULL-TO-REFRESH, LOGGER WIRING.** ① Shop loading state is now a skeleton grid
+(`components/SkeletonCard.tsx` — 2-column card-shaped placeholders with an opacity
+pulse, `ShopSkeletonGrid`) instead of a bare spinner, so the grid doesn't jump when
+data arrives. ② Account tab gained pull-to-refresh AND stopped clipping: the root is
+now a `ScrollView` (+`RefreshControl`) instead of a plain `View`; both orders and
+messages reload via one shared `reload()` used by the initial effect and the pull.
+③ Silent catch blocks now log through `services/logger.ts` (error = all builds, warn =
+dev only): AccountScreen (order/message loads + profile save — was a `// no-op` that
+made Save look dead), ContactScreen (company-info fallback + send failure),
+AppContext (session restore, server cart push, cart merge on sign-in), and
+productService's live→cache fallbacks. Intentional-quiet catches (BLE/control hot
+paths, AsyncStorage cache writes, `setColorScheme` platform guard) were left alone.
+Gates: app tsc 0 · vitest **150/150**.
+
 **LATEST (2026-09-23, rides the next OTA — JS-only):** **C2 — SHOP SORT + PRICE/STOCK
 FILTERS (website U-18, app parity `f058200`).** The Shop tab now has: sort (Featured /
 Price low-high / Price high-low / Name A–Z), a max-price ceiling picker (500–10,000 NPR
