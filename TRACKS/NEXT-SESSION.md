@@ -14,7 +14,9 @@ tab), plus the **2026-09-22 residue cleanup** (`AutonomousControls`, `WeblinkCon
 types removed from `tools/types.ts`). Also inside: the entire P6 round (role-revoke via
 `admin-set-role`, settingsService cloud-theme adoption, company-stamp icon — icons ship
 only with a native APK) and the FIN-50/R-20 line. 3.2.4/57 shipped 2026-09-21 and is
-superseded; 3.2.3/56 after one day. Vitest 76/76, CI + OTA green.
+superseded; 3.2.3/56 after one day. Vitest **137/137** (M3 test-repair round
+2026-09-23 closed the 3 failing cartService/roboCarCatalog tests + added the tsc-fix
+for the same files — see TRACKS/INDEX.md), CI green.
 
 **Theme parity pushed 2026-09-22 (`78e10f9`, rides the next OTA — JS-only):** the owner's
 2-mode decision (website theme → Light/Dim, System removed). The app's **shared**
