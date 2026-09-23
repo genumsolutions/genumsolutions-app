@@ -18,7 +18,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { company as fallbackCompany } from "../config/company";
+import { company as fallbackCompany, whatsappLink } from "../config/company";
 import { getCompany } from "../services/companyService";
 import { sendContactInquiry } from "../services/orderService";
 import { logger } from "../services/logger";
@@ -129,6 +129,24 @@ export function ContactScreen() {
               void Linking.openURL(`tel:${company.phone.replace(/\s/g, "")}`)
             }
           />
+          {/* C5 (2026-09-23): WhatsApp chat — hidden until the owner sets a
+              number in the shared company row (falls back to the bundled
+              default, which already carries the business phone). */}
+          {company.whatsappNumber ? (
+            <Row
+              icon="message-circle"
+              label="WhatsApp"
+              value="Chat with us"
+              onPress={() =>
+                void Linking.openURL(
+                  whatsappLink(
+                    company.whatsappNumber,
+                    "Hi GENUM Solutions! I have a question.",
+                  ),
+                )
+              }
+            />
+          ) : null}
         </View>
 
         {/* Inquiry form */}
@@ -227,7 +245,7 @@ function Row({
   value,
   onPress,
 }: {
-  icon: "map-pin" | "mail" | "phone";
+  icon: "map-pin" | "mail" | "phone" | "message-circle";
   label: string;
   value: string;
   onPress: () => void;
