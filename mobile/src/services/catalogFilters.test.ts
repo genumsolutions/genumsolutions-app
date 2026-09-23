@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   inStockOnly,
   isPriceCeiling,
+  pushRecentlyViewed,
+  relatedProducts,
+  resolveRecentlyViewed,
   sortProducts,
   withinPrice,
   type SortOption,
@@ -125,5 +128,80 @@ describe("sort option type safety", () => {
       "name",
     ];
     expect(expected).toHaveLength(4);
+  });
+});
+
+describe("relatedProducts + recently viewed (C3)", () => {
+  const make = (
+    id: string,
+    category: string,
+    price: number,
+    productType: Product["productType"] = "Retail kit",
+    active = true,
+  ): Product =>
+    ({
+      id,
+      name: `Product ${id}`,
+      category,
+      price,
+      priceLabel: `NPR ${price}`,
+      sku: id,
+      productType,
+      active,
+      note: "",
+      description: "",
+      specs: [],
+      audience: "",
+      difficulty: "Beginner",
+      warranty: "",
+      stock: 5,
+      delivery: "",
+      color: "",
+    }) as Product;
+  const current = make("cur", "Sensors", 1000);
+  const catalog = [
+    current,
+    make("s1", "Sensors", 900),
+    make("s2", "Sensors", 1200),
+    make("s3", "Sensors", 2000, "Retail kit", false), // inactive same-category
+    make("k1", "Kits", 1000), // same type, different category
+    make("k2", "Kits", 5000, "Project package"), // different category + type
+  ];
+
+  it("orders same-category by price proximity, then same-type, excluding self and inactive", () => {
+    const related = relatedProducts(catalog, current);
+    expect(related.map((p) => p.id)).toEqual(["s1", "s2", "k1"]);
+  });
+
+  it("caps at the limit", () => {
+    const many = [
+      ...Array.from({ length: 6 }, (_, i) => make(`x${i}`, "Sensors", 100 + i)),
+      current,
+    ];
+    expect(relatedProducts(many, current)).toHaveLength(4);
+  });
+
+  it("pushRecentlyViewed dedupes, recaps, and caps", () => {
+    expect(pushRecentlyViewed(["a", "b", "c"], "b")).toEqual(["b", "a", "c"]);
+    expect(pushRecentlyViewed([], "a")).toEqual(["a"]);
+    const long = Array.from({ length: 10 }, (_, i) => `id${i}`);
+    const pushed = pushRecentlyViewed(long, "new");
+    expect(pushed).toHaveLength(8);
+    expect(pushed[0]).toBe("new");
+  });
+
+  it("resolveRecentlyViewed keeps view order, skips inactive/unknown, excludes current", () => {
+    const resolved = resolveRecentlyViewed(
+      catalog,
+      ["s2", "zzz", "s3", "cur", "s1"],
+      "cur",
+    );
+    expect(resolved.map((p) => p.id)).toEqual(["s2", "s1"]);
+  });
+
+  it("resolveRecentlyViewed does not mutate the input list", () => {
+    const snapshot = [...catalog];
+    resolveRecentlyViewed(catalog, ["s1"]);
+    expect(catalog).toEqual(snapshot);
   });
 });

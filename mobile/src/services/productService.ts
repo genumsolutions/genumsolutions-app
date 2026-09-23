@@ -320,3 +320,101 @@ export function withinPrice(list: Product[], ceiling: number): Product[] {
 export function inStockOnly(list: Product[], only: boolean): Product[] {
   return only ? list.filter((p) => p.stock > 0) : list;
 }
+
+// ===== C3 (2026-09-23): related products + recently viewed (mirrors the
+// website's lib/catalog.ts 1:1 so both clients behave identically) =====
+
+export const RECENTLY_VIEWED_LIMIT = 8;
+
+/**
+ * Related products: same category first (closest price when several),
+ * then active same-type items. Excludes the product itself; cap 4.
+ */
+export function relatedProducts(
+  all: Product[],
+  current: Product,
+  limit = 4,
+): Product[] {
+  const candidates = all.filter(
+    (p) => p.id !== current.id && p.active !== false,
+  );
+  const sameCategory = candidates
+    .filter((p) => p.category === current.category)
+    .sort(
+      (a, b) =>
+        Math.abs(a.price - current.price) - Math.abs(b.price - current.price) ||
+        a.name.localeCompare(b.name),
+    );
+  const sameType = candidates.filter(
+    (p) =>
+      p.category !== current.category && p.productType === current.productType,
+  );
+  return [...sameCategory, ...sameType].slice(0, limit);
+}
+
+/**
+ * Add a product id to the recently-viewed list (pure — returns the new
+ * list): most-recent first, self deduped, capped at the limit.
+ */
+export function pushRecentlyViewed(
+  viewed: string[],
+  productId: string,
+  limit = RECENTLY_VIEWED_LIMIT,
+): string[] {
+  const next = [productId, ...viewed.filter((id) => id !== productId)];
+  return next.slice(0, limit);
+}
+
+/**
+ * Resolve recently-viewed ids against the catalog: active products only,
+ * keeping the view order (most recent first). The current product is
+ * excluded so the row never shows the page you are on.
+ */
+export function resolveRecentlyViewed(
+  all: Product[],
+  viewedIds: string[],
+  excludeId?: string,
+  limit = RECENTLY_VIEWED_LIMIT,
+): Product[] {
+  const byId = new Map(all.map((p) => [p.id, p]));
+  const out: Product[] = [];
+  for (const id of viewedIds) {
+    if (out.length >= limit) break;
+    if (id === excludeId) continue;
+    const product = byId.get(id);
+    if (product && product.active !== false && !out.some((p) => p.id === id)) {
+      out.push(product);
+    }
+  }
+  return out;
+}
+
+const RECENTLY_VIEWED_KEY = "genum-recently-viewed";
+
+/** C3: recently-viewed ids (most recent first) from AsyncStorage. */
+export async function loadRecentlyViewed(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENTLY_VIEWED_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    return [];
+  }
+}
+
+/** C3: persist the recently-viewed id list (best-effort). */
+export async function saveRecentlyViewed(ids: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(ids));
+  } catch {
+    /* storage disabled — tracking is best-effort */
+  }
+}
+
+/** C3: record a product view (dedupe + cap via the pure helper). */
+export async function recordProductView(productId: string): Promise<void> {
+  const viewed = await loadRecentlyViewed();
+  await saveRecentlyViewed(pushRecentlyViewed(viewed, productId));
+}

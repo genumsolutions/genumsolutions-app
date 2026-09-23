@@ -2,7 +2,7 @@
 // ShopScreen - native product catalog backed by the shared Supabase
 // `products` table. Supports category chips + search.
 // =====================================================================
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -30,6 +30,11 @@ import {
 import { OfflineBadge } from "../components/OfflineBadge";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { ShopSkeletonGrid } from "../components/SkeletonCard";
+import {
+  loadRecentlyViewed,
+  resolveRecentlyViewed,
+} from "../services/productService";
+import { useFocusEffect } from "@react-navigation/native";
 import type { Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
@@ -47,6 +52,7 @@ export function ShopScreen() {
   const [maxPrice, setMaxPrice] = useState(0);
   const [inStock, setInStock] = useState(false);
   const [page, setPage] = useState(1);
+  const [recent, setRecent] = useState<Product[]>([]);
   const pageSize = 8;
 
   const categories = useMemo(() => distinctCategories(products), [products]);
@@ -81,6 +87,21 @@ export function ShopScreen() {
   useEffect(() => {
     void load();
   }, []);
+
+  // C3 (2026-09-23): "Recently viewed" strip above the grid. Re-read on every
+  // focus — navigation.push to ProductDetail keeps this screen mounted, so a
+  // mount-only effect would go stale after returning from a detail page.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void loadRecentlyViewed().then((ids) => {
+        if (active) setRecent(resolveRecentlyViewed(products, ids));
+      });
+      return () => {
+        active = false;
+      };
+    }, [products]),
+  );
 
   useEffect(() => {
     setPage(1);
@@ -192,6 +213,52 @@ export function ShopScreen() {
         contentContainerStyle={{ paddingBottom: 24 }}
         refreshing={refreshing}
         onRefresh={() => load(true)}
+        ListHeaderComponent={
+          recent.length > 0 ? (
+            <View className="pb-2">
+              <Text className="px-4 text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Recently viewed
+              </Text>
+              <FlatList
+                horizontal
+                data={recent.slice(0, 8)}
+                keyExtractor={(p) => p.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() =>
+                      navigation.push("ProductDetail", { productId: item.id })
+                    }
+                    className="mt-2 w-36 overflow-hidden rounded-2xl border border-line bg-card p-3"
+                    accessibilityLabel={`View ${item.name}`}
+                  >
+                    <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
+                      {item.image ? (
+                        <Image
+                          source={{ uri: item.image }}
+                          className="h-full w-full"
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Feather name="box" size={24} color="#94a3b8" />
+                      )}
+                    </View>
+                    <Text
+                      numberOfLines={2}
+                      className="mt-2 text-[13px] font-bold leading-tight text-ink"
+                    >
+                      {item.name}
+                    </Text>
+                    <Text className="mt-1 text-xs font-black text-navy">
+                      {item.priceLabel}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View className="items-center py-16">
             <Feather name="inbox" size={40} color="#cbd5e1" />

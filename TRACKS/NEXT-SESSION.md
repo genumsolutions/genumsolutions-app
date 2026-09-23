@@ -1,5 +1,20 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **C3 — RELATED PRODUCTS +
+RECENTLY VIEWED (website U-20).** Both clients now share the same discovery helpers,
+mirrored 1:1 (`productService.ts` ← web `lib/catalog.ts`):
+`relatedProducts(all, current, limit=4)` — same category first ordered by price
+proximity, then same-type active items — and `pushRecentlyViewed` /
+`resolveRecentlyViewed` (most-recent-first, deduped, capped at 8, active-only, current
+product excluded). App surfaces: **ProductDetail** records views to AsyncStorage and
+renders "Related products" + "Recently viewed" horizontal strips (4-up cards matching
+the Home grid idiom); **Shop** gains a "Recently viewed" strip above the grid, re-read
+on every focus via `useFocusEffect` (navigation.push keeps Shop mounted, so a
+mount-only effect would go stale). Storage is best-effort — disabled storage just hides
+the rows. 5 new tests in `catalogFilters.test.ts` (ordering, cap, dedupe,
+inactive-skip, no-mutation), identical to the web suite. Gates: app tsc 0 · vitest
+**155/155**; web tsc 0 · lint 0 · vitest **106/106** · build green.
+
 **LATEST (2026-09-23, rides the next OTA — JS-only):** **C8 — APP POLISH: SKELETONS,
 PULL-TO-REFRESH, LOGGER WIRING.** ① Shop loading state is now a skeleton grid
 (`components/SkeletonCard.tsx` — 2-column card-shaped placeholders with an opacity
