@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { ADMIN_TABS } from './adminTabs'
+import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { ADMIN_TABS } from "./adminTabs";
 
 // =====================================================================
 // Admin-surface parity guard (ARCHITECTURE.md B-6): the website AdminPanel
@@ -11,49 +11,56 @@ import { ADMIN_TABS } from './adminTabs'
 // `src/config/adminTabs.ts`. Change both + both tests together.
 // =====================================================================
 
-describe('admin tab inventory (website <-> app mirror, B-6)', () => {
-  it('exposes the 12 canonical tabs in the canonical order', () => {
+describe("admin tab inventory (website <-> app mirror, B-6)", () => {
+  it("exposes the 12 canonical tabs in the canonical order", () => {
     expect(ADMIN_TABS).toEqual([
-      'Dashboard',
-      'Orders',
-      'Products',
-      'Projects',
-      'Services',
-      'Journal',
-      'Users',
-      'Messages',
-      'Finance',
-      'Activity',
-      'Content',
-      'Settings',
-    ])
-  })
+      "Dashboard",
+      "Orders",
+      "Products",
+      "Projects",
+      "Services",
+      "Journal",
+      "Users",
+      "Messages",
+      "Finance",
+      "Activity",
+      "Content",
+      "Settings",
+    ]);
+  });
 
-  it('matches the website AdminPanel TABS list (read from the sibling repo)', () => {
+  it("matches the website AdminPanel TABS list (read from the sibling repo)", () => {
     const websitePath = resolve(
       __dirname,
-      '../../../../genumsolutions-website/components/admin/admin-types.ts',
-    )
+      "../../../../genumsolutions-website/components/admin/admin-types.ts",
+    );
     if (!existsSync(websitePath)) {
       // Website repo not checked out next to the app (CI) — canonical list
       // above is the contract; skip the cross-repo read.
-      return
+      return;
     }
-    const source = readFileSync(websitePath, 'utf8')
-    const match = source.match(/export const TABS = \[([^\]]+)\] as const/)
-    expect(match, 'admin-types.ts TABS declaration not found').toBeTruthy()
-    const webTabs = (match![1] ?? '')
-      .split(',')
-      .map((s) => s.trim().replace(/^'|'$/g, ''))
-      .filter(Boolean)
-    expect(webTabs).toEqual([...ADMIN_TABS])
-  })
+    const source = readFileSync(websitePath, "utf8");
+    const match = source.match(/export const TABS = \[([^\]]+)\] as const/);
+    expect(match, "admin-types.ts TABS declaration not found").toBeTruthy();
+    const webTabs = (match![1] ?? "")
+      .split(",")
+      .map((s) => s.trim().replace(/^'|'$/g, ""))
+      .filter(Boolean);
+    expect(webTabs).toEqual([...ADMIN_TABS]);
+  });
 
-  it('is reflected verbatim in the app AdminScreen tab strip', () => {
-    const screenPath = resolve(__dirname, '../screens/AdminScreen.tsx')
-    const source = readFileSync(screenPath, 'utf8')
+  it("is reflected verbatim in the app AdminScreen tab strip", () => {
+    const screenPath = resolve(__dirname, "../screens/AdminScreen.tsx");
+    const source = readFileSync(screenPath, "utf8");
     for (const tab of ADMIN_TABS) {
-      expect(source).toContain(`'${tab}'`)
+      // Quote-agnostic: prettier may render literals with ' or " — the
+      // contract is the tab string itself, not the surrounding quote style.
+      const singleQuoted = source.includes(`'${tab}'`);
+      const doubleQuoted = source.includes(`"${tab}"`);
+      expect(
+        singleQuoted || doubleQuoted,
+        `tab '${tab}' not found in AdminScreen.tsx`,
+      ).toBe(true);
     }
-  })
-})
+  });
+});
