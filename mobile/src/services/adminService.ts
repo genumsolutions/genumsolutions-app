@@ -314,7 +314,14 @@ export async function updateOrderStatus(orderId: string, status: string) {
   return data[0]
 }
 
-// --- Products ---
+// --- Products --------------------------------------------------------
+// Product writes MUST go through the `admin-products` edge function: the
+// function re-verifies the caller's role server-side (staff+; delete = admin+)
+// and writes with the service role, so inserts can't be silently rejected by
+// RLS the way the old raw-fetch + direct anon-key fallback was (that path
+// returned 404 because the function wasn't deployed and swallowed the error —
+// the "saved product never showed" bug). functions.invoke attaches the user's
+// JWT automatically and surfaces real errors to the UI.
 
 export async function listAdminProducts(): Promise<AdminProduct[]> {
   const { data, error } = await supabase.from('products').select('*').order('sort_order', { ascending: true })
@@ -323,32 +330,80 @@ export async function listAdminProducts(): Promise<AdminProduct[]> {
 }
 
 export async function upsertAdminProduct(product: AdminProduct) {
-  const res = await fetch(`${EDGE_BASE}/admin-products`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'create', product: toProductRow(product) }),
+  const { data, error } = await supabase.functions.invoke('admin-products', {
+    body: { action: 'create', product: toProductRow(product) },
   })
-  if (!res.ok) {
-    // Fallback to direct Supabase
-    const { data, error } = await supabase.from('products').upsert(toProductRow(product)).select()
-    if (error) throw error
-    return data[0]
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not save the product.'
+    throw new Error(message)
   }
-  return res.json()
+  return data
 }
 
 export async function deleteAdminProduct(id: string) {
-  const res = await fetch(`${EDGE_BASE}/admin-products`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'delete', id }),
+  const { data, error } = await supabase.functions.invoke('admin-products', {
+    body: { action: 'delete', id },
   })
-  if (!res.ok) {
-    const { error } = await supabase.from('products').delete().eq('id', id)
-    if (error) throw error
-    return true
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not delete the product.'
+    throw new Error(message)
   }
-  return res.json()
+  return data
+}
+
+// --- Import by link (shared `link-import` edge function) -------------
+// Both clients call the SAME edge function, so a pasted link imports the
+// same way on the website admin and this app (same extraction, image
+// upload to `product-images`, products upsert with documentation_url).
+
+export type LinkPreview = {
+  found: boolean
+  provider: string
+  sourceUrl: string
+  title: string
+  description: string
+  tags: string[]
+  images: string[]
+  categoryHint: string
+}
+
+async function invokeLinkImport(body: { action: string; url: string; product?: Record<string, unknown> }) {
+  const { data, error } = await supabase.functions.invoke('link-import', { body })
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not import from that link.'
+    throw new Error(message)
+  }
+  return data as Record<string, unknown>
+}
+
+export async function previewLinkImport(url: string): Promise<LinkPreview> {
+  const data = await invokeLinkImport({ action: 'preview', url })
+  return (data.preview as LinkPreview) ?? { found: false, provider: 'generic', sourceUrl: url, title: '', description: '', tags: [], images: [], categoryHint: '' }
+}
+
+export async function createLinkImport(url: string, product: Partial<AdminProduct>): Promise<AdminProduct> {
+  const data = await invokeLinkImport({
+    action: 'create',
+    url,
+    product: {
+      name: product.name ?? '',
+      category: product.category ?? '',
+      description: product.description ?? '',
+      price: Number(product.price) || 0,
+      priceLabel: product.priceLabel || 'Request quote',
+      stock: Number(product.stock) || 0,
+    },
+  })
+  return mapProductRow((data.product as RawRow) ?? {})
 }
 
 // --- Services ---

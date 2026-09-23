@@ -32,6 +32,8 @@ import {
   listAdminProducts,
   upsertAdminProduct,
   deleteAdminProduct,
+  previewLinkImport,
+  createLinkImport,
   listAdminServices,
   upsertAdminService,
   deleteAdminService,
@@ -177,6 +179,11 @@ export function AdminScreen() {
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null)
   const [editingService, setEditingService] = useState<AdminService | null>(null)
   const [editingProject, setEditingProject] = useState<AdminProduct | null>(null)
+  // Set while the Most Recent "Import by link" product is being previewed; a
+  // product seeded from a link is saved through the shared link-import flow
+  // (uploads the extracted image into product-images + records documentationUrl).
+  const [pendingImportUrl, setPendingImportUrl] = useState<string | null>(null)
+  const [importBusy, setImportBusy] = useState(false)
   // Settings editors (company inputs, training programs, pilot costs,
   // curriculum highlights) report their editing state through this flag —
   // it is owned here so the admin pager can disable swiping while ANY
@@ -340,7 +347,23 @@ export function AdminScreen() {
 
   async function handleSaveProduct() {
     if (!editingProduct) return
-    if (await saveProduct(editingProduct)) setEditingProduct(null)
+    try {
+      if (pendingImportUrl) {
+        if (!editingProduct.name.trim()) {
+          Alert.alert('Missing name', 'Give the imported product a name before saving.')
+          return
+        }
+        const created = await createLinkImport(pendingImportUrl, editingProduct)
+        setEditingProduct(null)
+        setPendingImportUrl(null)
+        void loadTab()
+        Alert.alert('Imported', `"${created.name}" was saved.`)
+        return
+      }
+      if (await saveProduct(editingProduct)) setEditingProduct(null)
+    } catch (e) {
+      Alert.alert('Save failed', e instanceof Error ? e.message : 'Could not save the product.')
+    }
   }
 
   function handleDeleteProduct(id: string) {
@@ -353,8 +376,12 @@ export function AdminScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteAdminProduct(id)
-            void loadTab()
+            try {
+              await deleteAdminProduct(id)
+              void loadTab()
+            } catch (e) {
+              Alert.alert('Delete failed', e instanceof Error ? e.message : 'Could not delete the product.')
+            }
           },
         },
       ],
@@ -419,6 +446,50 @@ export function AdminScreen() {
   function handleNewProduct() {
     setEditingProduct(blankProduct('Retail kit'))
     setEditingService(null)
+  }
+
+  /** Prompt for a product link, preview it via the shared edge function,
+   *  and seed the editor so staff can review/fine-tune before saving. */
+  async function handleImportFromLink() {
+    const url = await new Promise<string | null>((resolve) => {
+      Alert.prompt(
+        'Import product by link',
+        'Paste any product page URL (makerworld.com, a shop listing, etc.). We extract the details; you review before saving.',
+        [{ text: 'Cancel', style: 'cancel', onPress: () => resolve(null) }, { text: 'Look up', onPress: (text?: string) => resolve(text ?? null) }],
+        'plain-text',
+        '',
+      )
+    })
+    if (!url?.trim()) return
+    const link = url.trim()
+    setImportBusy(true)
+    try {
+      const preview = await previewLinkImport(link)
+      if (!preview?.found && !preview?.title) {
+        Alert.alert(
+          'No details found',
+          'That page blocked the scan. The editor will open empty — fill the name, image, and details manually, then save.',
+        )
+      }
+      const seeded = {
+        ...blankProduct('Retail kit', preview?.categoryHint || '3D Models'),
+        name: preview?.title || '',
+        description: preview?.description || '',
+        image: preview?.images?.[0] || '',
+        documentationUrl: link,
+        id: preview?.title ? String(preview.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) : '',
+      }
+      setEditingProduct(seeded)
+      setPendingImportUrl(link)
+      goToTab('Products')
+      if (preview?.found && preview?.title) {
+        Alert.alert(`Found: ${preview.provider}`, `Imported "${preview.title}". Review the fields below, then save.`)
+      }
+    } catch (e) {
+      Alert.alert('Lookup failed', e instanceof Error ? e.message : 'Could not read that link.')
+    } finally {
+      setImportBusy(false)
+    }
   }
 
   function handleNewService() {
@@ -655,10 +726,13 @@ export function AdminScreen() {
               if (product) goToTab('Products')
             }}
             onNew={handleNewProduct}
+            onImportLink={() => void handleImportFromLink()}
+            importBusy={importBusy}
             onSave={handleSaveProduct}
             canDelete={canDelete}
             onDelete={handleDeleteProduct}
             onToggleActive={(p) => void handleToggleProductActive(p)}
+            onImportCancel={() => setPendingImportUrl(null)}
           />
         )
       case 'Projects':
@@ -1047,10 +1121,11 @@ function OrdersTab({ orders, total, page, totalPages, onPage, onStatusChange, qu
   )
 }
 
-function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onNew, onSave, canDelete, onDelete, onToggleActive }: {
+function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onNew, onImportLink, importBusy, onImportCancel, onSave, canDelete, onDelete, onToggleActive }: {
   products: AdminProduct[]; query: string; onQueryChange: (q: string) => void;
   editing: AdminProduct | null; onChange: (p: AdminProduct) => void; onEdit: (p: AdminProduct | null) => void;
-  onNew: () => void; onSave: () => void; canDelete: boolean; onDelete: (id: string) => void; onToggleActive: (p: AdminProduct) => void;
+  onNew: () => void; onImportLink: () => void; importBusy: boolean; onSave: () => void; canDelete: boolean; onDelete: (id: string) => void; onToggleActive: (p: AdminProduct) => void;
+  onImportCancel: () => void;
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null)
   const [page, setPage] = useState(1)
@@ -1069,7 +1144,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
   if (editing) {
     return (
       <View className="flex-1">
-        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => onEdit(null)} isNew={!products.some((p) => p.id === editing.id)} categoryOptions={categories.filter((c) => c !== 'All')} />
+        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => { onEdit(null); onImportCancel() }} isNew={!products.some((p) => p.id === editing.id)} categoryOptions={categories.filter((c) => c !== 'All')} />
       </View>
     )
   }
@@ -1084,9 +1159,14 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
           <View className="mb-3">
             <View className="flex-row items-center justify-between">
               <Text className="font-display text-xl font-bold text-ink">Products ({products.length})</Text>
-              <Pressable onPress={onNew} className="rounded-full bg-navy px-4 py-2">
-                <Text className="text-xs font-black text-white">+ New product</Text>
-              </Pressable>
+              <View className="flex-row items-center gap-2">
+                <Pressable onPress={onImportLink} disabled={importBusy} className="rounded-full bg-gold px-4 py-2" accessibilityRole="button" accessibilityLabel="Import product by link">
+                  <Text className="text-xs font-black text-ink">{importBusy ? 'Importing...' : 'Import by link'}</Text>
+                </Pressable>
+                <Pressable onPress={onNew} className="rounded-full bg-navy px-4 py-2">
+                  <Text className="text-xs font-black text-white">+ New product</Text>
+                </Pressable>
+              </View>
             </View>
             <View className="mt-3 flex-row items-center gap-2">
               <View className="flex-1">
