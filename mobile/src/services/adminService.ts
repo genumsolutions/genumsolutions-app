@@ -688,18 +688,16 @@ export async function upsertUserRobotSettings(
   robotName: string,
   settings: AdminRobotSetting["settings"],
 ) {
-  const { error } = await supabase
-    .from("robot_user_settings")
-    .upsert(
-      {
-        user_id: userId,
-        robot_id: robotId,
-        robot_name: robotName,
-        settings,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,robot_id" },
-    );
+  const { error } = await supabase.from("robot_user_settings").upsert(
+    {
+      user_id: userId,
+      robot_id: robotId,
+      robot_name: robotName,
+      settings,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,robot_id" },
+  );
   if (error) throw error;
 }
 
@@ -980,6 +978,13 @@ export type AdminCompanyInfo = {
   pan: string;
   vatLabel: string;
   description: string;
+  // C5 (2026-09-23): socials + WhatsApp (admin-editable). Empty = unused.
+  whatsappNumber: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+  linkedinUrl: string;
+  youtubeUrl: string;
 };
 
 export async function getCompanyInfo(): Promise<AdminCompanyInfo | null> {
@@ -1001,6 +1006,12 @@ export async function getCompanyInfo(): Promise<AdminCompanyInfo | null> {
     pan: String(data.pan ?? ""),
     vatLabel: String(data.vat_label ?? ""),
     description: String(data.description ?? ""),
+    whatsappNumber: String(data.whatsapp_number ?? ""),
+    facebookUrl: String(data.facebook_url ?? ""),
+    instagramUrl: String(data.instagram_url ?? ""),
+    tiktokUrl: String(data.tiktok_url ?? ""),
+    linkedinUrl: String(data.linkedin_url ?? ""),
+    youtubeUrl: String(data.youtube_url ?? ""),
   };
 }
 
@@ -1019,6 +1030,13 @@ export async function saveCompanyInfo(info: AdminCompanyInfo) {
       pan: info.pan,
       vat_label: info.vatLabel,
       description: info.description,
+      // C5: WhatsApp normalized to digits-only on save (canonical form).
+      whatsapp_number: info.whatsappNumber.replace(/[^\d]/g, ""),
+      facebook_url: info.facebookUrl,
+      instagram_url: info.instagramUrl,
+      tiktok_url: info.tiktokUrl,
+      linkedin_url: info.linkedinUrl,
+      youtube_url: info.youtubeUrl,
       updated_at: new Date().toISOString(),
     })
     .select();
