@@ -395,9 +395,13 @@ export function AdminScreen() {
       Alert.alert('Missing fields', 'A service needs at least an id and a name.')
       return
     }
-    await upsertAdminService(normalized)
-    setEditingService(null)
-    void loadTab()
+    try {
+      await upsertAdminService(normalized)
+      setEditingService(null)
+      void loadTab()
+    } catch (e) {
+      Alert.alert('Save failed', e instanceof Error ? e.message : 'Could not save the service.')
+    }
   }
 
   function handleDeleteService(id: string) {
@@ -410,8 +414,12 @@ export function AdminScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteAdminService(id)
-            void loadTab()
+            try {
+              await deleteAdminService(id)
+              void loadTab()
+            } catch (e) {
+              Alert.alert('Delete failed', e instanceof Error ? e.message : 'Could not delete the service.')
+            }
           },
         },
       ],
@@ -439,8 +447,12 @@ export function AdminScreen() {
   }
 
   async function handleToggleServiceActive(service: AdminService) {
-    await upsertAdminService({ ...service, active: !service.active })
-    void loadTab()
+    try {
+      await upsertAdminService({ ...service, active: !service.active })
+      void loadTab()
+    } catch (e) {
+      Alert.alert('Update failed', e instanceof Error ? e.message : 'Could not update the service.')
+    }
   }
 
   function handleNewProduct() {

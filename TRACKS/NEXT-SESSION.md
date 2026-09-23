@@ -16,6 +16,17 @@ SUPABASE_ACCESS_TOKEN restored by owner for 1 week (2026-09-23) for the U-14 edg
 (`admin-products` + `link-import` both ACTIVE and live-verified 9/9 + 15/15). App vitest
 **140/140**, app tsc clean, web vitest 71/71 + tsc + lint all green.
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **admin-services write-path parity +
+security fix.** `upsertAdminService`/`deleteAdminService` now go through
+`supabase.functions.invoke('admin-services')` (JWT attached, real error surfacing + Alert
+toasts in save/delete/toggle) instead of the old bare-`fetch` to the edge URL with a direct
+anon-key fallback. **The old target was an UNGATED service-role function** — anyone who knew
+the URL could create/update/delete services (fixed at the source: the edge fn now re-verifies
+the caller role staff+/admin+ exactly like `admin-products`). `EDGE_BASE` removed from
+adminService (it was only used by that one call). Service ops UX now mirrors products:
+save/delete/show-hide failures surface an alert, never silently drop. App tsc clean, vitest
+**140/140**. Related: website has `scripts/verify-admin-services.mjs` (**10/10** live).
+
 **Current state:** **3.2.5 / versionCode 58** (`5fd10b1`) — **RELEASED 2026-09-22 via CI**
 (bump push → `release.yml` run `35688360720` built + uploaded the APK; `release.json` =
 3.2.5/58 live, website fallback synced by bot `7bb6cb5`). This native build carries the
