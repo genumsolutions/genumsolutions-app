@@ -69,11 +69,14 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
    `ModeInfo.tsx`, `deviceMemoryService.ts`, `carModeStorage.ts` + their dead prop types.
    Website removed unreferenced `ProjectCard.tsx`. No other orphans found (`.web.tsx`
    platform files and vitest-discovered tests are false positives — verified).
-6. 🌗 **Theme parity `78e10f9` (2026-09-22):** confirm the OTA run for it turns green on
-   main push. Flag to the owner: the app's own native Settings theme switch still offers
-   its **System/OS-follow** option (kept by design, native OS-follow); the website System
-   state was the one removed per owner decision #1 — if the app Settings control should
-   also drop System, that is a small follow-up.
+6. 🌗 **Theme parity `78e10f9` (2026-09-22):** ✅ **CONFIRMED 2026-09-23 — OTA run
+   35709327384 GREEN.** CI is fully green back to the bump (the only red runs —
+   M3 `add unit tests`/`update audit` CI+OTA — were repaired by the 2026-09-23
+   test-fix push `ea4d07e`, CI 35818092418 + OTA 35818092425). Flag to the owner:
+   the app's own native Settings theme switch still offers its **System/OS-follow**
+   option (kept by design, native OS-follow); the website System state was the one
+   removed per owner decision #1 — if the app Settings control should also drop
+   System, that is a small follow-up.
 
 ## Do-not-regress (the R-20a lessons)
 
