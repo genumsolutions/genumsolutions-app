@@ -6,18 +6,18 @@
 // RLS: products has a public-read policy ("public read products"), so the
 // app's anon key can SELECT without a session.
 // =====================================================================
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../config/supabase';
-import type { Product, ProductType, Difficulty } from '../types';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../config/supabase";
+import type { Product, ProductType, Difficulty } from "../types";
 
-const CATALOG_CACHE_KEY = 'genum_products_v1';
+const CATALOG_CACHE_KEY = "genum_products_v1";
 
 // Product images are stored as absolute public URLs (Supabase Storage) in the
 // shared `products.image_url` column. The native app renders that value as-is
 // and NEVER derives, prefixes, or fabricates image URLs - it must not depend
 // on the website/web app in any way.
 function normalizeImageUrl(image: string | null): string {
-  return image ?? '';
+  return image ?? "";
 }
 
 function normalizePrice(price: number | null | undefined): number {
@@ -25,11 +25,15 @@ function normalizePrice(price: number | null | undefined): number {
   return Math.max(0, n);
 }
 
-function priceLabelFrom(price: number, label: string | null | undefined, row?: ProductRow): string {
+function priceLabelFrom(
+  price: number,
+  label: string | null | undefined,
+  row?: ProductRow,
+): string {
   if (label) return label;
-  if (price > 0) return `NPR ${price.toLocaleString('en-IN')}`;
+  if (price > 0) return `NPR ${price.toLocaleString("en-IN")}`;
   void row;
-  return 'Request quote';
+  return "Request quote";
 }
 
 type ProductRow = {
@@ -77,32 +81,47 @@ export function rowToProduct(row: ProductRow): Product {
     category: row.category,
     price,
     priceLabel: priceLabelFrom(price, row.price_label),
-    sku: row.sku || '',
-    productType: (row.product_type as ProductType) || 'Retail kit',
-    inventoryType: (row.inventory_type as Product['inventoryType']) || 'Catalog',
+    sku: row.sku || "",
+    productType: (row.product_type as ProductType) || "Retail kit",
+    inventoryType:
+      (row.inventory_type as Product["inventoryType"]) || "Catalog",
     active: row.active !== false,
-    projectOverview: row.project_overview || '',
-    objectives: Array.isArray(row.objectives) ? row.objectives as string[] : [],
-    materialsRequired: Array.isArray(row.materials_required) ? row.materials_required as string[] : [],
-    learningOutcomes: Array.isArray(row.learning_outcomes) ? row.learning_outcomes as string[] : [],
-    buildSteps: Array.isArray(row.build_steps) ? row.build_steps as string[] : [],
-    controlMethods: Array.isArray(row.control_methods) ? row.control_methods as string[] : [],
-    prerequisites: Array.isArray(row.prerequisites) ? row.prerequisites as string[] : [],
-    deliverables: Array.isArray(row.deliverables) ? row.deliverables as string[] : [],
-    estimatedDuration: row.estimated_duration || '',
-    sourceFolder: row.source_folder || '',
-    documentationUrl: row.documentation_url || '',
-    videoUrl: row.video_url || '',
-    maintenanceNotes: row.maintenance_notes || '',
-    note: row.note || '',
-    description: row.description || '',
+    projectOverview: row.project_overview || "",
+    objectives: Array.isArray(row.objectives)
+      ? (row.objectives as string[])
+      : [],
+    materialsRequired: Array.isArray(row.materials_required)
+      ? (row.materials_required as string[])
+      : [],
+    learningOutcomes: Array.isArray(row.learning_outcomes)
+      ? (row.learning_outcomes as string[])
+      : [],
+    buildSteps: Array.isArray(row.build_steps)
+      ? (row.build_steps as string[])
+      : [],
+    controlMethods: Array.isArray(row.control_methods)
+      ? (row.control_methods as string[])
+      : [],
+    prerequisites: Array.isArray(row.prerequisites)
+      ? (row.prerequisites as string[])
+      : [],
+    deliverables: Array.isArray(row.deliverables)
+      ? (row.deliverables as string[])
+      : [],
+    estimatedDuration: row.estimated_duration || "",
+    sourceFolder: row.source_folder || "",
+    documentationUrl: row.documentation_url || "",
+    videoUrl: row.video_url || "",
+    maintenanceNotes: row.maintenance_notes || "",
+    note: row.note || "",
+    description: row.description || "",
     specs: Array.isArray(row.specs) ? (row.specs as string[]) : [],
-    audience: row.audience || '',
-    difficulty: (row.difficulty as Difficulty) || 'Beginner',
-    warranty: row.warranty || '',
+    audience: row.audience || "",
+    difficulty: (row.difficulty as Difficulty) || "Beginner",
+    warranty: row.warranty || "",
     stock: normalizePrice(row.stock),
-    delivery: row.delivery || '',
-    color: row.color || 'from-[#dce8ff] to-[#7e9ff2]',
+    delivery: row.delivery || "",
+    color: row.color || "from-[#dce8ff] to-[#7e9ff2]",
     ...(row.badge ? { badge: row.badge } : {}),
     ...(row.supplier ? { supplier: row.supplier } : {}),
     image: normalizeImageUrl(row.image_url),
@@ -122,7 +141,9 @@ async function cachedProducts(): Promise<Product[] | null> {
     const raw = await AsyncStorage.getItem(CATALOG_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as Product[]) : null;
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed as Product[])
+      : null;
   } catch {
     return null;
   }
@@ -131,11 +152,11 @@ async function cachedProducts(): Promise<Product[] | null> {
 /** Fetch the full catalog from Supabase (shared with the website). */
 export async function getProductsFromSupabase(): Promise<Product[]> {
   const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .eq('active', true)
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
+    .from("products")
+    .select("*")
+    .eq("active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
 
   if (error) throw error;
   if (!data || data.length === 0) return [];
@@ -154,27 +175,30 @@ export async function getProducts(): Promise<Product[]> {
   }
 }
 
-export type CatalogSource = 'live' | 'cache';
+export type CatalogSource = "live" | "cache";
 
 /** Like getProducts(), but also reports whether the data is live or cached. */
-export async function getProductsWithSource(): Promise<{ products: Product[]; source: CatalogSource }> {
+export async function getProductsWithSource(): Promise<{
+  products: Product[];
+  source: CatalogSource;
+}> {
   try {
     const list = await getProductsFromSupabase();
     cacheProducts(list);
-    return { products: list, source: 'live' };
+    return { products: list, source: "live" };
   } catch {
     const cached = await cachedProducts();
-    return { products: cached ?? [], source: 'cache' };
+    return { products: cached ?? [], source: "cache" };
   }
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
   try {
     const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('active', true)
-      .eq('id', id)
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .eq("id", id)
       .maybeSingle();
     if (error) throw error;
     return data ? rowToProduct(data as ProductRow) : null;
@@ -189,22 +213,30 @@ export async function getProductById(id: string): Promise<Product | null> {
 }
 
 /** Like getProductById(), but also reports whether the product is live or cached. */
-export async function getProductByIdWithSource(id: string): Promise<{ product: Product | null; source: CatalogSource }> {
+export async function getProductByIdWithSource(
+  id: string,
+): Promise<{ product: Product | null; source: CatalogSource }> {
   try {
     const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('active', true)
-      .eq('id', id)
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .eq("id", id)
       .maybeSingle();
     if (error) throw error;
-    return { product: data ? rowToProduct(data as ProductRow) : null, source: 'live' };
+    return {
+      product: data ? rowToProduct(data as ProductRow) : null,
+      source: "live",
+    };
   } catch {
     try {
       const cached = await cachedProducts();
-      return { product: cached?.find((p) => p.id === id) ?? null, source: 'cache' };
+      return {
+        product: cached?.find((p) => p.id === id) ?? null,
+        source: "cache",
+      };
     } catch {
-      return { product: null, source: 'cache' };
+      return { product: null, source: "cache" };
     }
   }
 }
@@ -220,7 +252,6 @@ export function distinctCategories(products: Product[]): string[] {
   }
   return out;
 }
-
 export function filterProducts(
   list: Product[],
   category: string,
@@ -228,10 +259,57 @@ export function filterProducts(
 ): Product[] {
   const needle = query.trim().toLowerCase();
   return list.filter((p) => {
-    if (category && category !== 'All' && p.category !== category) return false;
+    if (category && category !== "All" && p.category !== category) return false;
     if (!needle) return true;
     return `${p.name} ${p.note} ${p.description}`
       .toLowerCase()
       .includes(needle);
   });
+}
+
+// ===== C2 (2026-09-23): sort + price/stock filters (mirrors the website's
+// lib/catalog.ts 1:1 so both catalogs behave identically) =====
+export const SORT_OPTIONS = [
+  "featured",
+  "price-asc",
+  "price-desc",
+  "name",
+] as const;
+export type SortOption = (typeof SORT_OPTIONS)[number];
+
+export const SORT_LABELS: Record<SortOption, string> = {
+  featured: "Featured",
+  "price-asc": "Price: low to high",
+  "price-desc": "Price: high to low",
+  name: "Name A–Z",
+};
+
+// Price ceilings in NPR (0 = any price). Quote-only rows (price 0) never
+// match a ceiling — filtering by price implies a buyable budget.
+export const PRICE_CEILINGS = [0, 500, 1000, 2500, 5000, 10000] as const;
+export const priceCeilingLabel = (ceiling: number): string =>
+  ceiling === 0 ? "Any price" : `Up to NPR ${ceiling.toLocaleString("en-IN")}`;
+
+export function isPriceCeiling(value: number): boolean {
+  return (PRICE_CEILINGS as readonly number[]).includes(value);
+}
+
+// 'featured' preserves the curated sort_order the list arrived in.
+export function sortProducts(list: Product[], sort: SortOption): Product[] {
+  const sorted = [...list];
+  if (sort === "price-asc")
+    sorted.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name));
+  else if (sort === "price-desc")
+    sorted.sort((a, b) => b.price - a.price || a.name.localeCompare(b.name));
+  else if (sort === "name") sorted.sort((a, b) => a.name.localeCompare(b.name));
+  return sorted;
+}
+
+export function withinPrice(list: Product[], ceiling: number): Product[] {
+  if (!ceiling) return list;
+  return list.filter((p) => p.price > 0 && p.price <= ceiling);
+}
+
+export function inStockOnly(list: Product[], only: boolean): Product[] {
+  return only ? list.filter((p) => p.stock > 0) : list;
 }
