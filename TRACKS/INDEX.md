@@ -43,6 +43,8 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 
 *Created 2026-09-18. Update status column on every change; never delete without owner OK.*
 
+**2026-09-23 · push config project-id fallback (`71f1855`).** `config/push.ts` resolved `PUSH_PROJECT_ID` ONLY from `process.env.EXPO_PUBLIC_EAS_PROJECT_ID` (unset) so push stayed permanently dormant — no device could register a `push_tokens` row even after Firebase is added. Now falls back to the `extra.eas.projectId` declared in `app.json` (`f09b820e-…`, single source of truth), via exported pure `resolvePushProjectId(env, appJson)`. New `config/push.test.ts` (3 cases). Gates: tsc clean · vitest **140/140** (137+3). Behavior-neutral JS fix — rides `ci.yml` + `ota-only.yml` (no version bump). Push delivery still blocked on Firebase (owner decision) until `google-services.json` + rebuild.
+
 **2026-09-23 · M3 test-repair round: cartService.ts totalCount + failing unit tests.**
 The two last commits (`2aa548b`/`6e48380`) added unit tests for `cartService` +
 `roboCarCatalog` that were RED under the CI vitest 4.1.11: (a) two `totalCount`
