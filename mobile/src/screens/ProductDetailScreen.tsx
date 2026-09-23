@@ -3,30 +3,38 @@
 // ProductDetailPro). Retail kits add to the build list; Project packages /
 // out-of-stock items request a scoped quote instead.
 // =====================================================================
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   Linking,
   Pressable,
   ScrollView,
   Text,
   View,
-} from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RouteProp } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
-import { getProductByIdWithSource } from '../services/productService';
-import { resolveModeForProduct } from '../config/roboCarCatalog';
-import { OfflineBadge } from '../components/OfflineBadge';
-import { addToCart } from '../services/cartService';
-import { useApp } from '../context/AppContext';
-import type { Product } from '../types';
-import type { RootStackParamList } from '../navigation/types';
+} from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import {
+  getProductByIdWithSource,
+  getProducts,
+  recordProductView,
+  relatedProducts,
+  resolveRecentlyViewed,
+  loadRecentlyViewed,
+} from "../services/productService";
+import { resolveModeForProduct } from "../config/roboCarCatalog";
+import { OfflineBadge } from "../components/OfflineBadge";
+import { addToCart } from "../services/cartService";
+import { useApp } from "../context/AppContext";
+import type { Product } from "../types";
+import type { RootStackParamList } from "../navigation/types";
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'ProductDetail'>;
-type Route = RouteProp<RootStackParamList, 'ProductDetail'>;
+type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
+type Route = RouteProp<RootStackParamList, "ProductDetail">;
 
 export function ProductDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -37,15 +45,36 @@ export function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  // C3 (2026-09-23): related (same category → same type) + recently-viewed
+  // rows resolved against the full catalog once it loads.
+  const [related, setRelated] = useState<Product[]>([]);
+  const [recent, setRecent] = useState<Product[]>([]);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const { product, source } = await getProductByIdWithSource(route.params.productId);
+        const { product, source } = await getProductByIdWithSource(
+          route.params.productId,
+        );
         if (active) {
           setProduct(product);
-          setOffline(source === 'cache');
+          setOffline(source === "cache");
+          if (product) {
+            // C3: record the view BEFORE resolving the strip so this product
+            // lands at the front of "Recently viewed" on the next screen.
+            void recordProductView(product.id);
+            void getProducts()
+              .then((all) => {
+                if (!active) return;
+                setRelated(relatedProducts(all, product));
+                return loadRecentlyViewed().then((ids) => {
+                  if (active)
+                    setRecent(resolveRecentlyViewed(all, ids, product.id));
+                });
+              })
+              .catch(() => undefined);
+          }
         }
       } catch {
         // no-op
@@ -72,35 +101,42 @@ export function ProductDetailScreen() {
     );
   }
 
-  const isQuote = product.productType === 'Project package' || product.stock === 0;
+  const isQuote =
+    product.productType === "Project package" || product.stock === 0;
   const projectSections: [string, string[] | undefined][] = [
-    ['Objectives', product.objectives],
-    ['Materials required', product.materialsRequired],
-    ['Learning outcomes', product.learningOutcomes],
-    ['Build steps', product.buildSteps],
-    ['Control methods', product.controlMethods],
-    ['Prerequisites', product.prerequisites],
-    ['Deliverables', product.deliverables],
+    ["Objectives", product.objectives],
+    ["Materials required", product.materialsRequired],
+    ["Learning outcomes", product.learningOutcomes],
+    ["Build steps", product.buildSteps],
+    ["Control methods", product.controlMethods],
+    ["Prerequisites", product.prerequisites],
+    ["Deliverables", product.deliverables],
   ];
 
   const handleAdd = async () => {
     if (isQuote) return;
-    const count = await addToCart(product.id, Math.min(qty, Math.max(1, product.stock)));
+    const count = await addToCart(
+      product.id,
+      Math.min(qty, Math.max(1, product.stock)),
+    );
     setCart({ count, size: count });
     setAdded(true);
   };
 
   const handleQuote = () => {
-    navigation.push('Contact');
+    navigation.push("Contact");
   };
 
   const colorLabel =
     product.color && !/from-\[.*?\]\s*to-\[.*?\]/.test(product.color)
       ? product.color
-      : 'Standard finish';
+      : "Standard finish";
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingBottom: 32 }}>
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
       {/* Offline indicator (product came from local cache) */}
       {offline && (
         <View className="px-4 pt-3">
@@ -126,84 +162,129 @@ export function ProductDetailScreen() {
           {product.category} · {product.badge || product.productType}
         </Text>
         {product.note ? (
-          <Text className="mt-1 text-xs font-bold leading-4 text-gold">{product.note}</Text>
+          <Text className="mt-1 text-xs font-bold leading-4 text-gold">
+            {product.note}
+          </Text>
         ) : null}
         <Text className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-ink">
           {product.name}
         </Text>
-        <Text className="mt-3 text-sm leading-6 text-muted">{product.description}</Text>
+        <Text className="mt-3 text-sm leading-6 text-muted">
+          {product.description}
+        </Text>
 
         <View className="mt-6 flex-row flex-wrap items-baseline gap-x-2">
-          <Text className="font-display text-3xl font-bold tracking-tight text-ink">{product.priceLabel}</Text>
+          <Text className="font-display text-3xl font-bold tracking-tight text-ink">
+            {product.priceLabel}
+          </Text>
           <Text className="text-sm text-muted">
-            {product.productType === 'Project package' ? 'indicative package' : 'per unit'}
+            {product.productType === "Project package"
+              ? "indicative package"
+              : "per unit"}
           </Text>
         </View>
 
         <View className="mt-4 flex-row flex-wrap gap-x-5 gap-y-2 border-t border-b border-line py-3">
           <Info label="Price" value={product.priceLabel} />
-          <Info label="SKU" value={product.sku || '—'} />
+          <Info label="SKU" value={product.sku || "—"} />
           <Info label="Category" value={product.category} />
-          <Info label="Stock" value={product.stock > 0 ? `${product.stock} in stock` : 'Made to order'} />
-          {product.supplier ? <Info label="Supplier" value={product.supplier} /> : null}
-          {product.inventoryType ? <Info label="Type" value={product.inventoryType} /> : null}
+          <Info
+            label="Stock"
+            value={
+              product.stock > 0 ? `${product.stock} in stock` : "Made to order"
+            }
+          />
+          {product.supplier ? (
+            <Info label="Supplier" value={product.supplier} />
+          ) : null}
+          {product.inventoryType ? (
+            <Info label="Type" value={product.inventoryType} />
+          ) : null}
         </View>
 
         {/* Audience / warranty */}
         <View className="mt-4 flex-row border-b border-line pb-4">
           <View className="flex-1 pr-3">
-            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Audience</Text>
-            <Text className="mt-1 text-sm leading-5 text-muted">{product.audience}</Text>
-            <Text className="mt-1 text-sm leading-5 text-muted">{product.difficulty}</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+              Audience
+            </Text>
+            <Text className="mt-1 text-sm leading-5 text-muted">
+              {product.audience}
+            </Text>
+            <Text className="mt-1 text-sm leading-5 text-muted">
+              {product.difficulty}
+            </Text>
           </View>
           <View className="flex-1 pl-3">
-            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Warranty</Text>
-            <Text className="mt-1 text-sm leading-5 text-muted">{product.warranty}</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+              Warranty
+            </Text>
+            <Text className="mt-1 text-sm leading-5 text-muted">
+              {product.warranty}
+            </Text>
           </View>
         </View>
 
         {/* Color / delivery */}
         <View className="mt-4 flex-row border-b border-line pb-4">
           <View className="flex-1 pr-3">
-            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Color</Text>
-            <Text className="mt-1 text-sm leading-5 text-muted">{colorLabel}</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+              Color
+            </Text>
+            <Text className="mt-1 text-sm leading-5 text-muted">
+              {colorLabel}
+            </Text>
           </View>
           <View className="flex-1 pl-3">
-            <Text className="text-xs font-bold uppercase tracking-widest text-navy">Delivery</Text>
-            <Text className="mt-1 text-sm leading-5 text-muted">{product.delivery}</Text>
+            <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+              Delivery
+            </Text>
+            <Text className="mt-1 text-sm leading-5 text-muted">
+              {product.delivery}
+            </Text>
           </View>
         </View>
 
         {product.specs.length > 0 && (
           <View className="mt-4">
-            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">Specs</Text>
+            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+              Specs
+            </Text>
             {product.specs.map((spec, i) => (
               <View key={i} className="mt-2 flex-row items-start">
                 <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-gold" />
-                <Text className="flex-1 text-sm leading-5 text-muted">{spec}</Text>
+                <Text className="flex-1 text-sm leading-5 text-muted">
+                  {spec}
+                </Text>
               </View>
             ))}
           </View>
         )}
 
-        {product.productType === 'Project package' && (
+        {product.productType === "Project package" && (
           <View className="mt-5 border-t-2 border-line pt-5">
             <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
               Project information
             </Text>
             {product.projectOverview ? (
-              <Text className="mt-3 text-sm leading-6 text-muted">{product.projectOverview}</Text>
+              <Text className="mt-3 text-sm leading-6 text-muted">
+                {product.projectOverview}
+              </Text>
             ) : null}
             {product.estimatedDuration ? (
               <Text className="mt-3 text-sm font-bold text-ink">
-                Estimated duration:{' '}
-                <Text className="font-normal text-muted">{product.estimatedDuration}</Text>
+                Estimated duration:{" "}
+                <Text className="font-normal text-muted">
+                  {product.estimatedDuration}
+                </Text>
               </Text>
             ) : null}
             {product.sourceFolder ? (
               <Text className="mt-2 text-sm font-bold text-ink">
-                Source folder:{' '}
-                <Text className="font-normal text-muted">{product.sourceFolder}</Text>
+                Source folder:{" "}
+                <Text className="font-normal text-muted">
+                  {product.sourceFolder}
+                </Text>
               </Text>
             ) : null}
 
@@ -214,9 +295,14 @@ export function ProductDetailScreen() {
                   <View key={title} className="mb-4">
                     <Text className="text-sm font-bold text-ink">{title}</Text>
                     {(items ?? []).map((item, i) => (
-                      <View key={i} className="mt-1.5 flex-row items-start pl-1">
+                      <View
+                        key={i}
+                        className="mt-1.5 flex-row items-start pl-1"
+                      >
                         <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-gold" />
-                        <Text className="flex-1 text-sm leading-5 text-muted">{item}</Text>
+                        <Text className="flex-1 text-sm leading-5 text-muted">
+                          {item}
+                        </Text>
                       </View>
                     ))}
                   </View>
@@ -225,7 +311,9 @@ export function ProductDetailScreen() {
 
             {product.maintenanceNotes ? (
               <Text className="mt-2 text-sm leading-6 text-muted">
-                <Text className="font-bold text-ink">Maintenance and safety: </Text>
+                <Text className="font-bold text-ink">
+                  Maintenance and safety:{" "}
+                </Text>
                 {product.maintenanceNotes}
               </Text>
             ) : null}
@@ -233,9 +321,14 @@ export function ProductDetailScreen() {
             {(product.documentationUrl || product.videoUrl) && (
               <View className="mt-4 flex-row flex-wrap gap-4">
                 {product.documentationUrl ? (
-                  <LinkRow label="Documentation" url={product.documentationUrl} />
+                  <LinkRow
+                    label="Documentation"
+                    url={product.documentationUrl}
+                  />
                 ) : null}
-                {product.videoUrl ? <LinkRow label="Project video" url={product.videoUrl} /> : null}
+                {product.videoUrl ? (
+                  <LinkRow label="Project video" url={product.videoUrl} />
+                ) : null}
               </View>
             )}
           </View>
@@ -245,6 +338,106 @@ export function ProductDetailScreen() {
           {product.delivery} · {product.warranty}
         </Text>
       </View>
+
+      {/* C3: Related products — same category (closest price) → same type. */}
+      {related.length > 0 && (
+        <View className="mt-6 border-t-2 border-line pt-5">
+          <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Related products
+          </Text>
+          <FlatList
+            horizontal
+            data={related}
+            keyExtractor={(p) => p.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingTop: 10,
+              gap: 10,
+            }}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() =>
+                  navigation.push("ProductDetail", { productId: item.id })
+                }
+                className="w-40 overflow-hidden rounded-2xl border border-line bg-card p-3"
+                accessibilityLabel={`View ${item.name}`}
+              >
+                <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
+                  {item.image ? (
+                    <Image
+                      source={{ uri: item.image }}
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Feather name="box" size={24} color="#94a3b8" />
+                  )}
+                </View>
+                <Text
+                  numberOfLines={2}
+                  className="mt-2 text-[13px] font-bold leading-tight text-ink"
+                >
+                  {item.name}
+                </Text>
+                <Text className="mt-1 text-xs font-black text-navy">
+                  {item.priceLabel}
+                </Text>
+              </Pressable>
+            )}
+          />
+        </View>
+      )}
+
+      {/* C3: Recently viewed — view order, excluding this product. */}
+      {recent.length > 0 && (
+        <View className="mt-5 border-t border-line pt-4">
+          <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Recently viewed
+          </Text>
+          <FlatList
+            horizontal
+            data={recent.slice(0, 8)}
+            keyExtractor={(p) => p.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingTop: 10,
+              gap: 10,
+            }}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() =>
+                  navigation.push("ProductDetail", { productId: item.id })
+                }
+                className="w-40 overflow-hidden rounded-2xl border border-line bg-card p-3"
+                accessibilityLabel={`View ${item.name}`}
+              >
+                <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
+                  {item.image ? (
+                    <Image
+                      source={{ uri: item.image }}
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Feather name="box" size={24} color="#94a3b8" />
+                  )}
+                </View>
+                <Text
+                  numberOfLines={2}
+                  className="mt-2 text-[13px] font-bold leading-tight text-ink"
+                >
+                  {item.name}
+                </Text>
+                <Text className="mt-1 text-xs font-black text-navy">
+                  {item.priceLabel}
+                </Text>
+              </Pressable>
+            )}
+          />
+        </View>
+      )}
 
       {/* Quantity + CTA */}
       <View className="mt-6 flex-row items-center gap-3 px-5">
@@ -257,9 +450,13 @@ export function ProductDetailScreen() {
             >
               <Feather name="minus" size={16} color="#1e3a8a" />
             </Pressable>
-            <Text className="min-w-8 text-center text-sm font-bold text-ink">{qty}</Text>
+            <Text className="min-w-8 text-center text-sm font-bold text-ink">
+              {qty}
+            </Text>
             <Pressable
-              onPress={() => setQty((q) => Math.min(Math.max(1, product.stock), q + 1))}
+              onPress={() =>
+                setQty((q) => Math.min(Math.max(1, product.stock), q + 1))
+              }
               className="px-3 py-2"
               accessibilityLabel="Increase quantity"
             >
@@ -271,7 +468,9 @@ export function ProductDetailScreen() {
             preconfigured for the car's firmware mode - like the ESP remote. */}
         {isQuote && resolveModeForProduct(product) && (
           <Pressable
-            onPress={() => navigation.push('Tools', { category: product.category })}
+            onPress={() =>
+              navigation.push("Tools", { category: product.category })
+            }
             className="flex-1 flex-row items-center justify-center gap-2 rounded-full border-2 border-gold bg-gold/10 py-3"
           >
             <Feather name="activity" size={15} color="#1e3a8a" />
@@ -281,12 +480,18 @@ export function ProductDetailScreen() {
         <Pressable
           onPress={isQuote ? handleQuote : () => void handleAdd()}
           className={`flex-1 flex-row items-center justify-center gap-2 rounded-full py-3 disabled:opacity-50 ${
-            added && !isQuote ? 'bg-emerald-600' : 'bg-navy'
+            added && !isQuote ? "bg-emerald-600" : "bg-navy"
           }`}
         >
-          <Text className="font-bold text-white">{isQuote ? 'Request a scoped quote' : added ? 'Added to build list' : 'Add to build list'}</Text>
+          <Text className="font-bold text-white">
+            {isQuote
+              ? "Request a scoped quote"
+              : added
+                ? "Added to build list"
+                : "Add to build list"}
+          </Text>
           <Feather
-            name={isQuote ? 'arrow-up-right' : added ? 'check' : 'shopping-bag'}
+            name={isQuote ? "arrow-up-right" : added ? "check" : "shopping-bag"}
             size={15}
             color="#ffffff"
           />
@@ -303,7 +508,9 @@ function Info({ label, value }: { label: string; value: string }) {
         {label}
       </Text>
       {/* R5 overflow fix: values ellipsize within the wrapped row. */}
-      <Text numberOfLines={1} className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
+      <Text numberOfLines={1} className="mt-0.5 text-sm font-semibold text-ink">
+        {value}
+      </Text>
     </View>
   );
 }
