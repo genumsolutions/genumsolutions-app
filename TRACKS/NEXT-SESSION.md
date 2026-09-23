@@ -1,5 +1,24 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **C1 — STOCK DECREMENT ON PAID
+ORDERS (website U-17).** Stock now leaves the shelf exactly once per order, at the
+pending→paid moment, and comes back on cancel — enforced in the DATABASE, not the
+clients. Three SECURITY DEFINER RPCs in the shared `supabase/schema.sql`:
+`adjust_order_stock(items, direction)` (decrement clamps at 0 / restore),
+`mark_order_paid(order_id, provider_ref)` (row-locked + idempotent: decrements items and
+flips status→paid in ONE transaction; a webhook/redirect race can never double-decrement),
+`restore_order_stock(order_id, expect_status)` (restore + atomic flip→cancelled, guarded
+so a retry can never double-restore). Server side: website confirm routes + admin PATCH
+(`lib/orders.ts` transition-aware: pending→paid decrement, paid/fulfilled→cancelled
+restore, cancelled→paid re-decrement, paid→fulfilled no-op) and edge fns
+`payment-esewa`/`payment-khalti`/`payment-webhook` (redeployed ACTIVE). **App side:
+`adminService.updateOrderStatus` mirrors the same transitions via `supabase.rpc(...)` —
+the stock RPCs re-verify staff+ server-side, so a customer token is rejected.** Buyer
+flows need no change (pay path is the edge fns). Schema applied live; new harness
+`genumsolutions-website/scripts/verify-stock-rpc.mjs` **15/15 PASS** vs prod. Gates:
+web tsc 0 · lint 0 · vitest **92/92**; app tsc 0 · vitest **140/140**; live harnesses
+9/9 + 25/25 + 10/10 + 25/25.
+
 **LATEST (2026-09-23, rides the next OTA — JS-only):** **RICHER LINK-IMPORT EXTRACTION
 (website U-16) — "make the extraction better so manual input may not be required."** The
 shared `link-import` edge function now extracts MakerWorld **specs** (print profile,
