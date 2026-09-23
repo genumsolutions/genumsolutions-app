@@ -89,10 +89,16 @@ console.log(`  app.json            -> ${VERSION} (${VERSION_CODE})`);
 if (!existsSync(appJsonPath)) throw new Error(`File not found: ${appJsonPath}`);
 
 // 2) src/config/site.ts -> APP_VERSION
+// Quote-agnostic (2026-09-23 sweep): prettier (pre-commit) renders site.ts
+// strings with single OR double quotes; match either and preserve the file's
+// current style so the bump never silently no-ops after a prettier pass.
 changed =
-  editFile(resolve(rootDir, 'src/config/site.ts'), (src) =>
-    src.replace(/export const APP_VERSION = '[^']*';/, `export const APP_VERSION = '${VERSION}';`),
-  ) || changed;
+  editFile(resolve(rootDir, 'src/config/site.ts'), (src) => {
+    const q = /["']/.exec(src.match(/APP_VERSION\s*=\s*["']/)?.[0] ?? "'")?.[0] ?? "'";
+    const pattern = new RegExp(`export const APP_VERSION = ["'][^"']*["'];`);
+    if (!pattern.test(src)) return src;
+    return src.replace(pattern, `export const APP_VERSION = ${q}${VERSION}${q};`);
+  }) || changed;
 
 // 3) package.json + package-lock.json version
 changed = editFile(resolve(rootDir, 'package.json'), (src) =>
