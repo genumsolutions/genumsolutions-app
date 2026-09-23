@@ -15,7 +15,12 @@ restore, cancelled→paid re-decrement, paid→fulfilled no-op) and edge fns
 `adminService.updateOrderStatus` mirrors the same transitions via `supabase.rpc(...)` —
 the stock RPCs re-verify staff+ server-side, so a customer token is rejected.** Buyer
 flows need no change (pay path is the edge fns). Schema applied live; new harness
-`genumsolutions-website/scripts/verify-stock-rpc.mjs` **15/15 PASS** vs prod. Gates:
+`genumsolutions-website/scripts/verify-stock-rpc.mjs` **15/15 PASS** vs prod. **IMPORTANT
+for app checkout: the shared edge payment functions had never actually worked** — they
+boot-crashed in prod (missing `NEXT_PUBLIC_*` env fallbacks) and the ESEWA/KHALTI secrets
+were never set. Now fixed + live-verified (web `a2c97e2`). NOTE for future deploys: the
+three payment fns MUST be deployed with `--no-verify-jwt` (the app initiates payments with
+bare fetches; a plain deploy 401s every app checkout). Gates:
 web tsc 0 · lint 0 · vitest **92/92**; app tsc 0 · vitest **140/140**; live harnesses
 9/9 + 25/25 + 10/10 + 25/25.
 
