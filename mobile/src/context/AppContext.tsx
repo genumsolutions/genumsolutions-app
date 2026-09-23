@@ -251,7 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // --- load the cart badge on launch + keep it current ---
   const refreshCartCount = useCallback(async () => {
     const lines = await cart.getLocalCart();
-    setCartCount(await cart.totalCount(lines));
+    setCartCount(cart.totalCount(lines));
   }, []);
 
   useEffect(() => {
@@ -292,7 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         // DB sticks with the merged cart so both clients start from the same state.
         pushCartToServer(userId, merged);
-        setCartCount(await cart.totalCount(merged));
+        setCartCount(cart.totalCount(merged));
       } catch {
         if (!cancelled) void refreshCartCount();
       }

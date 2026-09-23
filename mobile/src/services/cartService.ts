@@ -105,7 +105,7 @@ export async function clearCart(): Promise<void> {
   notifySync([]);
 }
 
-export async function totalCount(lines: CartLine[]): Promise<number> {
+export function totalCount(lines: CartLine[]): number {
   return lines.reduce((sum, l) => sum + l.quantity, 0);
 }
 

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 
 // ── mocks (factory creates state internally — vi.mock is hoisted) ──
 vi.mock('@react-native-async-storage/async-storage', () => {
@@ -12,17 +13,27 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 });
 
 vi.mock('@supabase/supabase-js', () => {
-  const _createClient = vi.fn(() => ({
+  // The client is constructed once at module import (src/config/supabase.ts)
+  // and cached, so swapping the whole client per scenario never reaches the
+  // service. Instead expose the chain mocks and drive them per test.
+  const _maybeSingle = vi.fn(() => Promise.resolve({ data: null }));
+  const _upsert = vi.fn(() => Promise.resolve({}));
+  const client = {
     from: () => ({
       select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: null }),
-        }),
+        eq: () => ({ maybeSingle: _maybeSingle }),
       }),
+      upsert: _upsert,
     }),
-    upsert: () => Promise.resolve({}),
-  }));
-  return { default: _createClient, createClient: _createClient, __createClient: _createClient };
+  };
+  const _createClient = vi.fn(() => client);
+  return {
+    default: _createClient,
+    createClient: _createClient,
+    __createClient: _createClient,
+    __maybeSingle: _maybeSingle,
+    __upsert: _upsert,
+  };
 });
 
 // ── imports (after mocks) ──────────────────────────────
@@ -42,32 +53,31 @@ import {
   pushCartToServer,
 } from './cartService';
 
-const { __getItem, __setItem } = AsyncStorage as { __getItem: typeof vi.fn; __setItem: typeof vi.fn };
-const { __createClient } = Supabase as { __createClient: typeof vi.fn };
+const { __getItem, __setItem } = AsyncStorage as unknown as {
+  __getItem: Mock;
+  __setItem: Mock;
+};
+const { __createClient, __maybeSingle, __upsert } = Supabase as unknown as {
+  __createClient: Mock;
+  __maybeSingle: Mock;
+  __upsert: Mock;
+};
+
+// Vitest 4 (the CI version) does NOT clear mocks between tests, so call
+// history leaks across cases. Reset usage data before each test so
+// assertions like __setItem.mock.calls[0] refer to the current test only.
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 // ── helpers ────────────────────────────────────────────
 function mockSupabaseResponse(data: unknown) {
-  __createClient.mockReturnValue({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data }),
-        }),
-      }),
-    }),
-  });
+  __maybeSingle.mockResolvedValue({ data });
 }
 
 function mockSupabaseError() {
-  __createClient.mockReturnValue({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.reject(new Error('DB down')),
-        }),
-      }),
-    }),
-  });
+  __maybeSingle.mockRejectedValue(new Error('DB down'));
+  __upsert.mockRejectedValue(new Error('DB down'));
 }
 
 // ── sanitizeLines ────────────────────────────────────

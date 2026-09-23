@@ -123,7 +123,7 @@ describe('nextMode', () => {
   });
 
   it('returns the first mode for an unknown id', () => {
-    const unknown = { id: 'bogus' as CarModeId };
+    const unknown = { ...LOCAL_CAR_MODES[0], id: 'bogus' as CarModeId };
     expect(nextMode(unknown).id).toBe(LOCAL_CAR_MODES[0].id);
   });
 });

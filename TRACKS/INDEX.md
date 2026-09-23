@@ -43,6 +43,24 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 
 *Created 2026-09-18. Update status column on every change; never delete without owner OK.*
 
+**2026-09-23 · M3 test-repair round: cartService.ts totalCount + failing unit tests.**
+The two last commits (`2aa548b`/`6e48380`) added unit tests for `cartService` +
+`roboCarCatalog` that were RED under the CI vitest 4.1.11: (a) two `totalCount`
+tests expected a sync `number` while the fn was `async` — the uncommitted working
+copy (the one modified file the owner saw) had started the fix (`async` → sync,
+`cartService.ts:108`) but left the `AppContext.tsx:254/295` `await`s stale; (b) the
+supabase mock swapped the whole `__createClient` return value, but the client is
+constructed once at module import (`src/config/supabase.ts:37`) and cached, so the
+sanitize-path test always saw `data:null` → `[]`; (c) mock call-history leaked across
+tests (`.mock.calls[0]` referenced earlier tests). Fixed: completed the totalCount
+change + de-awaited the callsites; the mock now exposes `maybeSingle`/`upsert` fns
+driven per test; added `beforeEach(vi.clearAllMocks)`; casts typed as vitest `Mock`
+(was `typeof vi.fn` → TS2339/TS2352 errors); `roboCarCatalog.test.ts` padded an
+unknown-id fixture to a full `CarMode` (TS2345). Gates: `npm run typecheck` clean ·
+vitest **137/137** · expo-doctor 18/18 (was 3/4 failing tests + 20+ tsc errors). Push
+does NOT bump the version: rides `ci.yml` + `ota-only.yml` only (behavior-neutral JS
+fix).
+
 **2026-09-18 · R-15 (owner) — keyboard + telemetry UX fixed, UNCOMMITTED (FIN-41).**
 Remote screens (landscape, webserver/telemetry): `RouterPanel` rebuilt responsive
 (flex-wrap cards, no horizontal scroll, Android KeyboardAvoidingView actually enabled —
