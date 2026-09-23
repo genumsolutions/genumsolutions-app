@@ -10,18 +10,20 @@
 //     guest lines that were added before authentication.
 // AppContext registers the push handler via setCartSyncHandler.
 // =====================================================================
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../config/supabase';
-import type { CartLine, Product } from '../types';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../config/supabase";
+import type { CartLine, Product } from "../types";
 
-const CART_KEY = 'genum_native_cart_v1';
+const CART_KEY = "genum_native_cart_v1";
 // Must match the website (lib/cart-client.ts).
 const MAX_QUANTITY_PER_LINE = 99;
 
 /** Registered by AppContext while a user is signed in; called after every local mutation. */
 let syncHandler: ((lines: CartLine[]) => void) | null = null;
 
-export function setCartSyncHandler(handler: ((lines: CartLine[]) => void) | null): void {
+export function setCartSyncHandler(
+  handler: ((lines: CartLine[]) => void) | null,
+): void {
   syncHandler = handler;
 }
 
@@ -35,11 +37,14 @@ export function sanitizeLines(lines: unknown): CartLine[] {
   return lines
     .filter(
       (line): line is CartLine =>
-        Boolean(line && typeof line === 'object') &&
-        typeof (line as CartLine).productId === 'string' &&
+        Boolean(line && typeof line === "object") &&
+        typeof (line as CartLine).productId === "string" &&
         Number.isFinite((line as CartLine).quantity),
     )
-    .map((line) => ({ productId: line.productId, quantity: clampQuantity(line.quantity) }));
+    .map((line) => ({
+      productId: line.productId,
+      quantity: clampQuantity(line.quantity),
+    }));
 }
 
 export async function getLocalCart(): Promise<CartLine[]> {
@@ -70,7 +75,10 @@ function notifySync(lines: CartLine[]): void {
 }
 
 /** Add a product to the local cart (or bump quantity) and sync. Returns new count. */
-export async function addToCart(productId: string, quantity = 1): Promise<number> {
+export async function addToCart(
+  productId: string,
+  quantity = 1,
+): Promise<number> {
   const lines = await getLocalCart();
   const existing = lines.find((l) => l.productId === productId);
   if (existing) {
@@ -86,7 +94,10 @@ export async function addToCart(productId: string, quantity = 1): Promise<number
   return totalCount(lines);
 }
 
-export async function setQuantity(productId: string, quantity: number): Promise<number> {
+export async function setQuantity(
+  productId: string,
+  quantity: number,
+): Promise<number> {
   let lines = await getLocalCart();
   if (quantity <= 0) {
     lines = lines.filter((l) => l.productId !== productId);
@@ -110,9 +121,9 @@ export function totalCount(lines: CartLine[]): number {
 }
 
 /** Combine cart lines with the product catalog for display/checkout. */
-export async function resolveCart(products: Product[]): Promise<
-  { line: CartLine; product: Product }[]
-> {
+export async function resolveCart(
+  products: Product[],
+): Promise<{ line: CartLine; product: Product }[]> {
   const lines = await getLocalCart();
   const byId = new Map(products.map((p) => [p.id, p]));
   return lines
@@ -126,9 +137,9 @@ export async function resolveCart(products: Product[]): Promise<
 export async function fetchServerCart(userId: string): Promise<CartLine[]> {
   try {
     const { data } = await supabase
-      .from('carts')
-      .select('lines')
-      .eq('user_id', userId)
+      .from("carts")
+      .select("lines")
+      .eq("user_id", userId)
       .maybeSingle();
     return sanitizeLines(data?.lines);
   } catch {
@@ -137,12 +148,17 @@ export async function fetchServerCart(userId: string): Promise<CartLine[]> {
 }
 
 /** Upsert the user's full cart into the DB (REPLACE semantics like the website). */
-export async function pushCartToServer(userId: string, lines: CartLine[]): Promise<void> {
+export async function pushCartToServer(
+  userId: string,
+  lines: CartLine[],
+): Promise<void> {
   try {
     const clean = sanitizeLines(lines);
-    await supabase
-      .from('carts')
-      .upsert({ user_id: userId, lines: clean, updated_at: new Date().toISOString() });
+    await supabase.from("carts").upsert({
+      user_id: userId,
+      lines: clean,
+      updated_at: new Date().toISOString(),
+    });
   } catch {
     /* best effort - local cart remains usable offline */
   }
@@ -155,6 +171,8 @@ export async function pushCartToServer(userId: string, lines: CartLine[]): Promi
  */
 export function mergeCarts(server: CartLine[], local: CartLine[]): CartLine[] {
   const serverIds = new Set(server.map((l) => l.productId));
-  const localOnly = local.filter((l) => !serverIds.has(l.productId) && l.quantity > 0);
+  const localOnly = local.filter(
+    (l) => !serverIds.has(l.productId) && l.quantity > 0,
+  );
   return [...server, ...localOnly];
 }

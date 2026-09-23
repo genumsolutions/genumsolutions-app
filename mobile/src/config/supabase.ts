@@ -12,19 +12,20 @@
 // tokens from SecureStore (see authService) on launch. autoRefreshToken is
 // enabled so the in-memory session refreshes while the app is running.
 // =====================================================================
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 // EXPO_PUBLIC_* vars are inlined by Metro at build time (add them to
 // mobile/.env.local). SUPABASE_URL is kept as a fallback for existing setups.
 const url =
-  process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+  process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
 /** True once the native anon key is configured. */
 export const supabaseConfigured = Boolean(url && anonKey);
 
 /** Google Web OAuth client ID (inlined by Metro at build time). */
-export const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+export const googleWebClientId =
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
 export const googleConfigured = Boolean(googleWebClientId);
 
 // createClient() throws at construction when handed empty strings
@@ -35,8 +36,8 @@ export const googleConfigured = Boolean(googleWebClientId);
 // fall back to an invalid placeholder so every request fails fast instead
 // (callers gate on supabaseConfigured / treat failures as offline).
 export const supabase = createClient(
-  url || 'https://placeholder.invalid',
-  anonKey || 'placeholder-key',
+  url || "https://placeholder.invalid",
+  anonKey || "placeholder-key",
   {
     auth: {
       // Tokens are NEVER written to AsyncStorage (unencrypted). The only
@@ -46,7 +47,7 @@ export const supabase = createClient(
       persistSession: false,
       autoRefreshToken: true,
       detectSessionInUrl: false,
-      flowType: 'pkce',
+      flowType: "pkce",
     },
   },
 );

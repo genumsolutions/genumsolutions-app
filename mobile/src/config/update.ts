@@ -7,12 +7,12 @@
 // =====================================================================
 
 export const APK_URL =
-  'https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/genum-solutions-latest.apk';
+  "https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/genum-solutions-latest.apk";
 
 // A small JSON manifest next to the APK describing the newest published
 // release. Updated by scripts/upload-release.mjs on every publish.
 export const RELEASE_MANIFEST_URL =
-  'https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json';
+  "https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json";
 
 // Expected shape of release.json (written by scripts/upload-release.mjs):
 //   { "version": "1.5.5", "version_code": 13, "apkUrl": "https://...",

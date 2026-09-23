@@ -5,69 +5,81 @@
 //     └─ ProductDetail, Checkout, OrderSuccess, Services, Projects,
 //        Contact, About, Tools
 // =====================================================================
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import { HomeScreen } from '../screens/HomeScreen';
-import { ShopScreen } from '../screens/ShopScreen';
-import { CartScreen } from '../screens/CartScreen';
-import { AdminScreen } from '../screens/AdminScreen';
-import { AccountScreen } from '../screens/AccountScreen';
-import { MenuScreen } from '../screens/MenuScreen';
-import { MainTabPager } from './MainTabPager';
-import { ProductDetailScreen } from '../screens/ProductDetailScreen';
-import { CheckoutScreen } from '../screens/CheckoutScreen';
-import { OrderSuccessScreen } from '../screens/OrderSuccessScreen';
-import { ServicesScreen } from '../screens/ServicesScreen';
-import { ProjectsScreen } from '../screens/ProjectsScreen';
-import { ContactScreen } from '../screens/ContactScreen';
-import { AboutScreen } from '../screens/AboutScreen';
-import { ToolsScreen } from '../screens/ToolsScreen';
-import { RemoteControlScreen } from '../screens/RemoteControlScreen';
-import { RobotPreferencesScreen } from '../screens/RobotPreferencesScreen';
-import { UpdateScreen } from '../screens/UpdateScreen';
-import { JournalScreen } from '../screens/JournalScreen';
-import { PrintingScreen } from '../screens/PrintingScreen';
-import { OpenToolsScreen } from '../screens/OpenToolsScreen';
-import { LegalScreen } from '../screens/LegalScreen';
-import { FloatingRemoteButton } from '../components/FloatingRemoteButton';
-import { useApp } from '../context/AppContext';
-import { withErrorBoundary } from '../components/withErrorBoundary';
-import { ErrorBoundary } from '../components/ErrorBoundary';
-import { useNavigation } from '@react-navigation/native';
-import type { RootStackParamList } from './types';
+import { HomeScreen } from "../screens/HomeScreen";
+import { ShopScreen } from "../screens/ShopScreen";
+import { CartScreen } from "../screens/CartScreen";
+import { AdminScreen } from "../screens/AdminScreen";
+import { AccountScreen } from "../screens/AccountScreen";
+import { MenuScreen } from "../screens/MenuScreen";
+import { MainTabPager } from "./MainTabPager";
+import { ProductDetailScreen } from "../screens/ProductDetailScreen";
+import { CheckoutScreen } from "../screens/CheckoutScreen";
+import { OrderSuccessScreen } from "../screens/OrderSuccessScreen";
+import { ServicesScreen } from "../screens/ServicesScreen";
+import { ProjectsScreen } from "../screens/ProjectsScreen";
+import { ContactScreen } from "../screens/ContactScreen";
+import { AboutScreen } from "../screens/AboutScreen";
+import { ToolsScreen } from "../screens/ToolsScreen";
+import { RemoteControlScreen } from "../screens/RemoteControlScreen";
+import { RobotPreferencesScreen } from "../screens/RobotPreferencesScreen";
+import { UpdateScreen } from "../screens/UpdateScreen";
+import { JournalScreen } from "../screens/JournalScreen";
+import { PrintingScreen } from "../screens/PrintingScreen";
+import { OpenToolsScreen } from "../screens/OpenToolsScreen";
+import { LegalScreen } from "../screens/LegalScreen";
+import { FloatingRemoteButton } from "../components/FloatingRemoteButton";
+import { useApp } from "../context/AppContext";
+import { withErrorBoundary } from "../components/withErrorBoundary";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import { useNavigation } from "@react-navigation/native";
+import type { RootStackParamList } from "./types";
 
 // Each screen gets its own error boundary so a crash in one screen shows a
 // friendly fallback instead of killing the whole app. Defined at module scope
 // so component identity is stable across renders.
-const MainTabsSafe = withErrorBoundary(MainTabs, 'Main');
-const HomeScreenSafe = withErrorBoundary(HomeScreen, 'Home');
-const ShopScreenSafe = withErrorBoundary(ShopScreen, 'Shop');
-const CartScreenSafe = withErrorBoundary(CartScreen, 'Cart');
-const MenuScreenSafe = withErrorBoundary(MenuScreen, 'Menu');
-const AccountScreenSafe = withErrorBoundary(AccountScreen, 'Account');
-const ProductDetailScreenSafe = withErrorBoundary(ProductDetailScreen, 'ProductDetail');
-const CheckoutScreenSafe = withErrorBoundary(CheckoutScreen, 'Checkout');
-const OrderSuccessScreenSafe = withErrorBoundary(OrderSuccessScreen, 'OrderSuccess');
-const ServicesScreenSafe = withErrorBoundary(ServicesScreen, 'Services');
-const ProjectsScreenSafe = withErrorBoundary(ProjectsScreen, 'Projects');
-const ContactScreenSafe = withErrorBoundary(ContactScreen, 'Contact');
-const AboutScreenSafe = withErrorBoundary(AboutScreen, 'About');
-const ToolsScreenSafe = withErrorBoundary(ToolsScreen, 'Tools');
-const RemoteControlScreenSafe = withErrorBoundary(RemoteControlScreen, 'RemoteControl');
-const AdminScreenSafe = withErrorBoundary(AdminScreen, 'Admin');
-const JournalScreenSafe = withErrorBoundary(JournalScreen, 'Journal');
-const PrintingScreenSafe = withErrorBoundary(PrintingScreen, 'Printing');
-const OpenToolsScreenSafe = withErrorBoundary(OpenToolsScreen, 'OpenTools');
-const LegalScreenSafe = withErrorBoundary(LegalScreen, 'Legal');
-const RobotPreferencesScreenSafe = withErrorBoundary(RobotPreferencesScreen, 'RobotPreferences');
+const MainTabsSafe = withErrorBoundary(MainTabs, "Main");
+const HomeScreenSafe = withErrorBoundary(HomeScreen, "Home");
+const ShopScreenSafe = withErrorBoundary(ShopScreen, "Shop");
+const CartScreenSafe = withErrorBoundary(CartScreen, "Cart");
+const MenuScreenSafe = withErrorBoundary(MenuScreen, "Menu");
+const AccountScreenSafe = withErrorBoundary(AccountScreen, "Account");
+const ProductDetailScreenSafe = withErrorBoundary(
+  ProductDetailScreen,
+  "ProductDetail",
+);
+const CheckoutScreenSafe = withErrorBoundary(CheckoutScreen, "Checkout");
+const OrderSuccessScreenSafe = withErrorBoundary(
+  OrderSuccessScreen,
+  "OrderSuccess",
+);
+const ServicesScreenSafe = withErrorBoundary(ServicesScreen, "Services");
+const ProjectsScreenSafe = withErrorBoundary(ProjectsScreen, "Projects");
+const ContactScreenSafe = withErrorBoundary(ContactScreen, "Contact");
+const AboutScreenSafe = withErrorBoundary(AboutScreen, "About");
+const ToolsScreenSafe = withErrorBoundary(ToolsScreen, "Tools");
+const RemoteControlScreenSafe = withErrorBoundary(
+  RemoteControlScreen,
+  "RemoteControl",
+);
+const AdminScreenSafe = withErrorBoundary(AdminScreen, "Admin");
+const JournalScreenSafe = withErrorBoundary(JournalScreen, "Journal");
+const PrintingScreenSafe = withErrorBoundary(PrintingScreen, "Printing");
+const OpenToolsScreenSafe = withErrorBoundary(OpenToolsScreen, "OpenTools");
+const LegalScreenSafe = withErrorBoundary(LegalScreen, "Legal");
+const RobotPreferencesScreenSafe = withErrorBoundary(
+  RobotPreferencesScreen,
+  "RobotPreferences",
+);
 
 // Wrapper to adapt UpdateScreen (modal with visible/onClose) to navigation screen
 function UpdateScreenWrapper() {
   const navigation = useNavigation<any>();
   return <UpdateScreen visible onClose={() => navigation.goBack()} />;
 }
-const UpdateScreenSafe = withErrorBoundary(UpdateScreenWrapper, 'Update');
+const UpdateScreenSafe = withErrorBoundary(UpdateScreenWrapper, "Update");
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -90,24 +102,39 @@ export function RootNavigator() {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#ffffff' },
+          contentStyle: { backgroundColor: "#ffffff" },
         }}
       >
         <Stack.Screen name="Main" component={MainTabsSafe} />
         <Stack.Screen
           name="Account"
           component={AccountScreenSafe}
-          options={{ headerShown: true, title: 'My Account', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "My Account",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="ProductDetail"
           component={ProductDetailScreenSafe}
-          options={{ headerShown: true, title: 'Product', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Product",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Checkout"
           component={CheckoutScreenSafe}
-          options={{ headerShown: true, title: 'Checkout', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Checkout",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="OrderSuccess"
@@ -117,71 +144,134 @@ export function RootNavigator() {
         <Stack.Screen
           name="Services"
           component={ServicesScreenSafe}
-          options={{ headerShown: true, title: 'Services', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Services",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Projects"
           component={ProjectsScreenSafe}
-          options={{ headerShown: true, title: 'Projects', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Projects",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Contact"
           component={ContactScreenSafe}
-          options={{ headerShown: true, title: 'Contact', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Contact",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="About"
           component={AboutScreenSafe}
-          options={{ headerShown: true, title: 'About', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "About",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Tools"
           component={ToolsScreenSafe}
-          options={{ headerShown: true, title: 'Control Panel', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Control Panel",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="RemoteControl"
           component={RemoteControlScreenSafe}
-          options={{ headerShown: false, title: 'Remote', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: false,
+            title: "Remote",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="RobotPreferences"
           component={RobotPreferencesScreenSafe}
-          options={{ headerShown: true, title: 'Robot preferences', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Robot preferences",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Admin"
           component={AdminScreenSafe}
-          options={{ headerShown: true, title: 'Admin', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Admin",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Update"
           component={UpdateScreenSafe}
-          options={{ headerShown: true, title: 'App Update', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "App Update",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Journal"
           component={JournalScreenSafe}
-          options={{ headerShown: true, title: 'Journal', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Journal",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Printing"
           component={PrintingScreenSafe}
-          options={{ headerShown: true, title: '3D Printing', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "3D Printing",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="OpenTools"
           component={OpenToolsScreenSafe}
-          options={{ headerShown: true, title: 'Open Tools', headerTintColor: '#1e3a8a', headerBackTitle: 'Back' }}
+          options={{
+            headerShown: true,
+            title: "Open Tools",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="Legal"
           component={LegalScreenSafe}
           options={({ route }) => ({
             headerShown: true,
-            title: route.params.doc === 'privacy' ? 'Privacy Policy' : 'Terms of Service',
-            headerTintColor: '#1e3a8a',
-            headerBackTitle: 'Back',
+            title:
+              route.params.doc === "privacy"
+                ? "Privacy Policy"
+                : "Terms of Service",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
           })}
         />
       </Stack.Navigator>

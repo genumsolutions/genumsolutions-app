@@ -1,4 +1,7 @@
 {
-  "mobile/**/*.{ts,tsx,js,jsx}": ["prettier --write", "bash -c 'npm run lint:check --prefix mobile'"],
+  "mobile/**/*.{ts,tsx,js,jsx}": [
+    "prettier --write",
+    "bash -c 'npm run lint:check --prefix mobile'"
+  ],
   "mobile/**/*.{css,md,json}": ["prettier --write"]
 }

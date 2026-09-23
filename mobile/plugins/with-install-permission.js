@@ -8,22 +8,23 @@
 // into AndroidManifest.xml during `expo prebuild` so the native manifest
 // always carries it (prebuild regenerates the manifest from scratch).
 // =====================================================================
-const { withAndroidManifest } = require('expo/config-plugins');
+const { withAndroidManifest } = require("expo/config-plugins");
 
 module.exports = function withInstallPermission(config) {
   return withAndroidManifest(config, (config) => {
     const manifest = config.modResults.manifest;
-    const usesPermissions = (manifest['uses-permission'] = manifest['uses-permission'] || []);
+    const usesPermissions = (manifest["uses-permission"] =
+      manifest["uses-permission"] || []);
 
     const hasInstallPermission = usesPermissions.some(
       (p) =>
         p.$ &&
-        p.$['android:name'] === 'android.permission.REQUEST_INSTALL_PACKAGES',
+        p.$["android:name"] === "android.permission.REQUEST_INSTALL_PACKAGES",
     );
 
     if (!hasInstallPermission) {
       usesPermissions.push({
-        $: { 'android:name': 'android.permission.REQUEST_INSTALL_PACKAGES' },
+        $: { "android:name": "android.permission.REQUEST_INSTALL_PACKAGES" },
       });
     }
 

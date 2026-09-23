@@ -7,7 +7,7 @@
 // update UX is identical everywhere. The component auto-checks once on
 // mount, lets the user re-check, and guides the download + install.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,14 +15,14 @@ import {
   Pressable,
   Text,
   View,
-} from 'react-native';
-import { Feather } from '@expo/vector-icons';
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
 import {
   checkForAnyUpdate,
   downloadAndInstall,
   installedAppVersion,
   type UpdateState,
-} from '../services/updateService';
+} from "../services/updateService";
 
 type Props = {
   /** compact = slim row for the menu footer; full = card for Account. */
@@ -30,38 +30,47 @@ type Props = {
 };
 
 export function AppUpdateCard({ compact = false }: Props) {
-  const [updateState, setUpdateState] = useState<UpdateState>({ status: 'unknown' });
+  const [updateState, setUpdateState] = useState<UpdateState>({
+    status: "unknown",
+  });
 
   // Auto-check once on mount so the badge/status is current when opened.
   useEffect(() => {
-    setUpdateState({ status: 'checking' });
-    checkForAnyUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }));
+    setUpdateState({ status: "checking" });
+    checkForAnyUpdate()
+      .then(setUpdateState)
+      .catch(() => setUpdateState({ status: "error" }));
   }, []);
 
   const handleCheckUpdate = useCallback(() => {
-    setUpdateState({ status: 'checking' });
-    checkForAnyUpdate().then(setUpdateState).catch(() => setUpdateState({ status: 'error' }));
+    setUpdateState({ status: "checking" });
+    checkForAnyUpdate()
+      .then(setUpdateState)
+      .catch(() => setUpdateState({ status: "error" }));
   }, []);
 
   const handleDownloadInstall = useCallback(async () => {
     if (!updateState.apkUrl) return;
-    setUpdateState((prev) => ({ ...prev, status: 'downloading' }));
+    setUpdateState((prev) => ({ ...prev, status: "downloading" }));
     try {
       await downloadAndInstall(updateState.apkUrl);
-      setUpdateState((prev) => ({ ...prev, status: 'installing' }));
+      setUpdateState((prev) => ({ ...prev, status: "installing" }));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Update failed.';
-      Alert.alert('Update failed', msg, [
-        { text: 'Open in browser', onPress: () => Linking.openURL(updateState.apkUrl!) },
-        { text: 'Cancel', style: 'cancel' },
+      const msg = e instanceof Error ? e.message : "Update failed.";
+      Alert.alert("Update failed", msg, [
+        {
+          text: "Open in browser",
+          onPress: () => Linking.openURL(updateState.apkUrl!),
+        },
+        { text: "Cancel", style: "cancel" },
       ]);
-      setUpdateState((prev) => ({ ...prev, status: 'update-available' }));
+      setUpdateState((prev) => ({ ...prev, status: "update-available" }));
     }
   }, [updateState.apkUrl]);
 
   const isBusy =
-    updateState.status === 'checking' || updateState.status === 'downloading';
-  const hasUpdate = updateState.status === 'update-available';
+    updateState.status === "checking" || updateState.status === "downloading";
+  const hasUpdate = updateState.status === "update-available";
 
   if (compact) {
     // ── Menu footer row: version + status + one-tap update ─────────────
@@ -72,20 +81,42 @@ export function AppUpdateCard({ compact = false }: Props) {
               is capped at one line so it never crosses the card edge. */}
           <View className="min-w-0 flex-row items-center gap-2">
             <Feather name="download" size={14} color="#64748b" />
-            <Text numberOfLines={1} className="text-xs font-bold text-ink">App v{installedAppVersion()}</Text>
+            <Text numberOfLines={1} className="text-xs font-bold text-ink">
+              App v{installedAppVersion()}
+            </Text>
           </View>
           {isBusy && <ActivityIndicator size="small" color="#1e3a8a" />}
-          {updateState.status === 'up-to-date' && (
-            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-emerald-600">Up to date</Text>
+          {updateState.status === "up-to-date" && (
+            <Text
+              numberOfLines={1}
+              className="shrink-0 pl-2 text-[11px] font-bold text-emerald-600"
+            >
+              Up to date
+            </Text>
           )}
           {hasUpdate && (
-            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-gold">v{updateState.latestVersion} available</Text>
+            <Text
+              numberOfLines={1}
+              className="shrink-0 pl-2 text-[11px] font-bold text-gold"
+            >
+              v{updateState.latestVersion} available
+            </Text>
           )}
-          {updateState.status === 'error' && (
-            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-red-500">Check failed</Text>
+          {updateState.status === "error" && (
+            <Text
+              numberOfLines={1}
+              className="shrink-0 pl-2 text-[11px] font-bold text-red-500"
+            >
+              Check failed
+            </Text>
           )}
-          {updateState.status === 'installing' && (
-            <Text numberOfLines={1} className="shrink-0 pl-2 text-[11px] font-bold text-navy">Installing…</Text>
+          {updateState.status === "installing" && (
+            <Text
+              numberOfLines={1}
+              className="shrink-0 pl-2 text-[11px] font-bold text-navy"
+            >
+              Installing…
+            </Text>
           )}
         </View>
 
@@ -96,19 +127,24 @@ export function AppUpdateCard({ compact = false }: Props) {
             className="mt-2 items-center rounded-full bg-navy py-2 disabled:opacity-50"
           >
             <Text className="text-xs font-black text-white">
-              Update now{updateState.size ? ` · ${updateState.size}` : ''}
+              Update now{updateState.size ? ` · ${updateState.size}` : ""}
             </Text>
           </Pressable>
         )}
 
-        {updateState.status === 'error' && (
-          <Pressable onPress={handleCheckUpdate} className="mt-1.5 items-center">
+        {updateState.status === "error" && (
+          <Pressable
+            onPress={handleCheckUpdate}
+            className="mt-1.5 items-center"
+          >
             <Text className="text-[11px] font-bold text-navy">Retry check</Text>
           </Pressable>
         )}
 
-        {updateState.status === 'downloading' && (
-          <Text className="mt-1.5 text-center text-[11px] text-muted">Downloading update…</Text>
+        {updateState.status === "downloading" && (
+          <Text className="mt-1.5 text-center text-[11px] text-muted">
+            Downloading update…
+          </Text>
         )}
       </View>
     );
@@ -120,26 +156,28 @@ export function AppUpdateCard({ compact = false }: Props) {
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <Feather name="info" size={14} color="#64748b" />
-          <Text className="text-xs font-bold text-muted">App v{installedAppVersion()}</Text>
+          <Text className="text-xs font-bold text-muted">
+            App v{installedAppVersion()}
+          </Text>
         </View>
-        {updateState.status === 'checking' && (
+        {updateState.status === "checking" && (
           <ActivityIndicator size="small" color="#1e3a8a" />
         )}
       </View>
 
-      {updateState.status === 'up-to-date' && updateState.latestVersion && (
+      {updateState.status === "up-to-date" && updateState.latestVersion && (
         <Text className="mt-2 text-xs font-medium text-emerald-600">
           ✓ Up to date (latest: v{updateState.latestVersion})
         </Text>
       )}
 
-      {updateState.status === 'up-to-date' && updateState.updatedAt && (
+      {updateState.status === "up-to-date" && updateState.updatedAt && (
         <Text className="mt-1 text-[11px] text-muted">
-          Last published:{' '}
+          Last published:{" "}
           {new Date(updateState.updatedAt).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
+            year: "numeric",
+            month: "short",
+            day: "numeric",
           })}
         </Text>
       )}
@@ -148,7 +186,7 @@ export function AppUpdateCard({ compact = false }: Props) {
         <View className="mt-3">
           <Text className="text-xs font-bold text-navy">
             Update available: v{updateState.latestVersion}
-            {updateState.size ? ` (${updateState.size})` : ''}
+            {updateState.size ? ` (${updateState.size})` : ""}
           </Text>
           {updateState.notes && (
             <Text className="mt-1 text-xs text-muted" numberOfLines={2}>
@@ -159,34 +197,38 @@ export function AppUpdateCard({ compact = false }: Props) {
             onPress={() => void handleDownloadInstall()}
             className="mt-3 items-center rounded-full bg-navy py-2.5"
           >
-            <Text className="text-xs font-black text-white">Download & Install</Text>
+            <Text className="text-xs font-black text-white">
+              Download & Install
+            </Text>
           </Pressable>
         </View>
       )}
 
-      {updateState.status === 'downloading' && (
+      {updateState.status === "downloading" && (
         <View className="mt-2 flex-row items-center gap-2">
           <ActivityIndicator size="small" color="#1e3a8a" />
           <Text className="text-xs text-muted">Downloading update…</Text>
         </View>
       )}
 
-      {updateState.status === 'installing' && (
+      {updateState.status === "installing" && (
         <Text className="mt-2 text-xs font-medium text-navy">
           Installer opened — tap Install on your device.
         </Text>
       )}
 
-      {updateState.status === 'error' && (
+      {updateState.status === "error" && (
         <View className="mt-2 flex-row items-center justify-between">
-          <Text className="text-xs text-red-500">Could not check for updates</Text>
+          <Text className="text-xs text-red-500">
+            Could not check for updates
+          </Text>
           <Pressable onPress={handleCheckUpdate}>
             <Text className="text-xs font-bold text-navy">Retry</Text>
           </Pressable>
         </View>
       )}
 
-      {updateState.status === 'unknown' && (
+      {updateState.status === "unknown" && (
         <Pressable onPress={handleCheckUpdate} className="mt-2">
           <Text className="text-xs font-bold text-navy">Check for updates</Text>
         </Pressable>

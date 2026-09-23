@@ -13,46 +13,46 @@
 // with onAuthStateChange (see AppContext). SecureStore is used to survive a
 // cold start when the OS clears the in-memory session.
 // =====================================================================
-import * as SecureStore from 'expo-secure-store';
-import type { Session } from '@supabase/supabase-js';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as SecureStore from "expo-secure-store";
+import type { Session } from "@supabase/supabase-js";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import {
   googleConfigured,
   googleWebClientId,
   supabase,
   supabaseConfigured,
-} from '../config/supabase';
+} from "../config/supabase";
 
-const SESSION_KEY = 'genum-native-session';
+const SESSION_KEY = "genum-native-session";
 
 /** Map Supabase's server messages to user-friendly text. */
 export function mapAuthError(message: string): string {
-  const m = message || '';
+  const m = message || "";
   if (/invalid login credentials/i.test(m)) {
-    return 'Email or password is incorrect.';
+    return "Email or password is incorrect.";
   }
   if (/email not confirmed/i.test(m)) {
-    return 'Please confirm your email before signing in.';
+    return "Please confirm your email before signing in.";
   }
   if (/already registered/i.test(m)) {
-    return 'An account with this email already exists.';
+    return "An account with this email already exists.";
   }
   if (/rate limit/i.test(m)) {
-    return 'Too many attempts. Please wait a moment and try again.';
+    return "Too many attempts. Please wait a moment and try again.";
   }
   if (/password should be at least/i.test(m)) {
-    return 'Password must be at least 6 characters.';
+    return "Password must be at least 6 characters.";
   }
   if (/not configured/i.test(m)) {
-    return 'Sign-in is not set up yet. Please try email & password.';
+    return "Sign-in is not set up yet. Please try email & password.";
   }
   return m;
 }
 
 export type GoogleAuthResult =
-  | { status: 'ok'; session: Session }
-  | { status: 'cancelled' }
-  | { status: 'error'; message: string };
+  | { status: "ok"; session: Session }
+  | { status: "cancelled" }
+  | { status: "error"; message: string };
 
 // ---------------------------------------------------------------------
 // Email / password
@@ -61,14 +61,15 @@ export async function signInWithPassword(
   email: string,
   password: string,
 ): Promise<Session> {
-  if (!supabaseConfigured) throw new Error('not configured');
+  if (!supabaseConfigured) throw new Error("not configured");
   const { data, error } = await supabase.auth.signInWithPassword({
     email: email.trim().toLowerCase(),
     password,
   });
   if (error) throw new Error(error.message);
   const session = data.session;
-  if (!session?.access_token) throw new Error('Sign-in did not return a session.');
+  if (!session?.access_token)
+    throw new Error("Sign-in did not return a session.");
   await persistSession(session);
   return session;
 }
@@ -78,7 +79,7 @@ export async function signUp(
   email: string,
   password: string,
 ): Promise<Session | null> {
-  if (!supabaseConfigured) throw new Error('not configured');
+  if (!supabaseConfigured) throw new Error("not configured");
   const { data, error } = await supabase.auth.signUp({
     email: email.trim().toLowerCase(),
     password,
@@ -120,11 +121,11 @@ async function clearCachedGoogleAccount(): Promise<void> {
 
 export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
-    return { status: 'error', message: mapAuthError('not configured') };
+    return { status: "error", message: mapAuthError("not configured") };
   }
   if (!googleConfigured) {
     return {
-      status: 'error',
+      status: "error",
       message:
         "Google sign-in isn't set up in this build yet. Please use email & password instead.",
     };
@@ -138,23 +139,23 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
     const response = await GoogleSignin.signIn();
     if (response.data?.idToken) {
       const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
+        provider: "google",
         token: response.data.idToken,
       });
       if (error) {
         return {
-          status: 'error',
+          status: "error",
           message:
-            'Google sign-in failed. Please try signing in with email, or make sure Google is configured in the Supabase dashboard.',
+            "Google sign-in failed. Please try signing in with email, or make sure Google is configured in the Supabase dashboard.",
         };
       }
       if (data.session) await persistSession(data.session);
-      return { status: 'ok', session: data.session! };
+      return { status: "ok", session: data.session! };
     }
-    return { status: 'cancelled' };
+    return { status: "cancelled" };
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Google sign-in failed.';
-    return { status: 'error', message };
+    const message = e instanceof Error ? e.message : "Google sign-in failed.";
+    return { status: "error", message };
   }
 }
 
@@ -165,7 +166,7 @@ export async function persistSession(session: Session): Promise<void> {
   try {
     const pair = {
       accessToken: session.access_token,
-      refreshToken: session.refresh_token ?? '',
+      refreshToken: session.refresh_token ?? "",
     };
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(pair));
   } catch {

@@ -31,77 +31,109 @@
 //     app already uses softwareKeyboardLayoutMode=resize) and
 //     keyboardShouldPersistTaps keeps taps alive over the keyboard.
 // =====================================================================
-import React from 'react'
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
-import { Feather } from '@expo/vector-icons'
-import type { RouterPanelProps } from './types'
-import { OWN_AP_NAME } from '../../services/carProtocol'
+import React from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import type { RouterPanelProps } from "./types";
+import { OWN_AP_NAME } from "../../services/carProtocol";
 
 export function RouterPanel({
-  canControl, linked, carSsid, carApName, ip,
-  networks, onUse, onAdd, onDelete, onClear, onOpenWebPage,
+  canControl,
+  linked,
+  carSsid,
+  carApName,
+  ip,
+  networks,
+  onUse,
+  onAdd,
+  onDelete,
+  onClear,
+  onOpenWebPage,
 }: RouterPanelProps) {
-  const [ssid, setSsid] = React.useState('')
-  const [pass, setPass] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
-  const activeName = carSsid ?? carApName ?? null
-  const ipOut = ip || (linked ? '192.168.4.1' : null)
-  const { width } = useWindowDimensions()
+  const [ssid, setSsid] = React.useState("");
+  const [pass, setPass] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const activeName = carSsid ?? carApName ?? null;
+  const ipOut = ip || (linked ? "192.168.4.1" : null);
+  const { width } = useWindowDimensions();
   // R-15: medium+ widths (landscape phones / tablets) share one row;
   // narrow portrait stacks the cards full-width.
-  const isWide = width >= 640
+  const isWide = width >= 640;
 
   // A-46 (round-9): the car's OWN network is pinned as a non-deletable
   // Default row and never enters the saved-list delete/switch path.
-  const userNetworks = networks.filter((n) => n !== OWN_AP_NAME)
+  const userNetworks = networks.filter((n) => n !== OWN_AP_NAME);
 
   const confirmClearAll = () => {
     // A-42: destructive — confirm before wiping every saved router (car NVS +
     // remote cache); the clear itself only ever references the own network as
     // the protected default (car T-62/T-66).
     Alert.alert(
-      'Clear all routers?',
+      "Clear all routers?",
       `Removes every saved router from the car and the remote. The car keeps only its own ${OWN_AP_NAME} as the default.`,
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear all', style: 'destructive', onPress: () => { if (!busy) onClear() } },
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: () => {
+            if (!busy) onClear();
+          },
+        },
       ],
-    )
-  }
+    );
+  };
 
   const handleDelete = (name: string) => {
-    if (name === OWN_AP_NAME) return
-    onDelete(name)
-  }
+    if (name === OWN_AP_NAME) return;
+    onDelete(name);
+  };
 
   const handleAdd = () => {
-    const s = ssid.trim()
-    if (!s || busy) return
-    setBusy(true)
-    onAdd(s, pass)
-    setSsid('')
-    setPass('')
-    setTimeout(() => setBusy(false), 600)
-  }
+    const s = ssid.trim();
+    if (!s || busy) return;
+    setBusy(true);
+    onAdd(s, pass);
+    setSsid("");
+    setPass("");
+    setTimeout(() => setBusy(false), 600);
+  };
 
   // R-15: responsive card — flexGrow + flexBasis (never a fixed pixel width):
   // wide → all three share the row; medium → 2+1 wrap; narrow → stack.
-  const cardStyle = { flexGrow: 1, flexBasis: isWide ? 220 : '100%' } as const
+  const cardStyle = { flexGrow: 1, flexBasis: isWide ? 220 : "100%" } as const;
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1 }}
       className="min-h-0"
     >
       {/* Header */}
       <View className="flex-row items-center gap-2 px-1 pt-1">
         <Feather name="wifi" size={15} color="#1e3a8a" />
-        <Text className="text-[13px] font-black uppercase tracking-widest text-navy">WiFi &amp; Router</Text>
+        <Text className="text-[13px] font-black uppercase tracking-widest text-navy">
+          WiFi &amp; Router
+        </Text>
         <View className="ml-auto flex-row items-center gap-1">
-          <View className={`h-2.5 w-2.5 rounded-full ${linked ? 'bg-emerald-500' : 'bg-border'}`} />
-          <Text className={`text-[11px] font-black uppercase tracking-wide ${linked ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted'}`}>
-            {linked ? 'LINK' : 'NO LINK'}
+          <View
+            className={`h-2.5 w-2.5 rounded-full ${linked ? "bg-emerald-500" : "bg-border"}`}
+          />
+          <Text
+            className={`text-[11px] font-black uppercase tracking-wide ${linked ? "text-emerald-600 dark:text-emerald-400" : "text-muted"}`}
+          >
+            {linked ? "LINK" : "NO LINK"}
           </Text>
         </View>
       </View>
@@ -115,15 +147,28 @@ export function RouterPanel({
           nestedScrollEnabled
         >
           {/* Row 1 (wide): active connection + saved routers side by side */}
-          <View style={{ flexDirection: isWide ? 'row' : 'column', gap: 8 }}>
+          <View style={{ flexDirection: isWide ? "row" : "column", gap: 8 }}>
             {/* A-35b · Card: active connection + IP (tappable → web page) */}
-            <View style={cardStyle} className="shrink-0 grow rounded-xl bg-mist px-3 py-3 shadow-inner dark:bg-mist">
-              <Text className="font-mono text-[11px] font-bold uppercase tracking-wide text-muted">Active connection</Text>
-              <Text className="mt-1 text-[15px] font-bold text-ink dark:text-white" numberOfLines={1} ellipsizeMode="middle">
-                {activeName ?? (linked ? 'Default router' : '\u2014')}
+            <View
+              style={cardStyle}
+              className="shrink-0 grow rounded-xl bg-mist px-3 py-3 shadow-inner dark:bg-mist"
+            >
+              <Text className="font-mono text-[11px] font-bold uppercase tracking-wide text-muted">
+                Active connection
               </Text>
-              {activeName && carApName && (carApName !== carSsid) ? (
-                <Text className="mt-0.5 text-[12px] text-muted" numberOfLines={1} ellipsizeMode="middle">
+              <Text
+                className="mt-1 text-[15px] font-bold text-ink dark:text-white"
+                numberOfLines={1}
+                ellipsizeMode="middle"
+              >
+                {activeName ?? (linked ? "Default router" : "\u2014")}
+              </Text>
+              {activeName && carApName && carApName !== carSsid ? (
+                <Text
+                  className="mt-0.5 text-[12px] text-muted"
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
                   AP: {carApName}
                 </Text>
               ) : null}
@@ -135,9 +180,17 @@ export function RouterPanel({
                   hitSlop={6}
                   className="mt-1.5 flex-row items-center gap-1.5"
                 >
-                  <Feather name={linked ? 'external-link' : 'wifi'} size={13} color={linked ? '#0284c7' : '#64748b'} />
-                  <Text className={`font-mono text-[13px] ${linked ? 'text-sky-700 underline dark:text-sky-300' : 'text-muted'}`} numberOfLines={1}>
-                    {ipOut}{!ip ? ' (AP)' : ''}
+                  <Feather
+                    name={linked ? "external-link" : "wifi"}
+                    size={13}
+                    color={linked ? "#0284c7" : "#64748b"}
+                  />
+                  <Text
+                    className={`font-mono text-[13px] ${linked ? "text-sky-700 underline dark:text-sky-300" : "text-muted"}`}
+                    numberOfLines={1}
+                  >
+                    {ipOut}
+                    {!ip ? " (AP)" : ""}
                   </Text>
                 </Pressable>
               ) : null}
@@ -147,10 +200,19 @@ export function RouterPanel({
             </View>
 
             {/* Card: saved routers — own network pinned as Default (A-46) */}
-            <View style={cardStyle} className="shrink-0 grow rounded-xl border border-line bg-mist p-3 dark:bg-mist">
+            <View
+              style={cardStyle}
+              className="shrink-0 grow rounded-xl border border-line bg-mist p-3 dark:bg-mist"
+            >
               <View className="flex-row items-center justify-between gap-2">
-                <Text className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-wide text-muted" numberOfLines={1}>
-                  Saved on the car{userNetworks.length > 0 ? ` \u00b7 ${userNetworks.length}/6` : ''}
+                <Text
+                  className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-wide text-muted"
+                  numberOfLines={1}
+                >
+                  Saved on the car
+                  {userNetworks.length > 0
+                    ? ` \u00b7 ${userNetworks.length}/6`
+                    : ""}
                 </Text>
                 {userNetworks.length > 0 && (
                   <Pressable
@@ -162,7 +224,9 @@ export function RouterPanel({
                     className="shrink-0 flex-row items-center gap-1 rounded-full border border-red-300/50 bg-red-500/10 px-2 py-1 disabled:opacity-40"
                   >
                     <Feather name="trash-2" size={11} color="#dc2626" />
-                    <Text className="text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">Clear all</Text>
+                    <Text className="text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
+                      Clear all
+                    </Text>
                   </Pressable>
                 )}
               </View>
@@ -171,10 +235,16 @@ export function RouterPanel({
                   no Switch (it IS the fallback network). */}
               <View className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/10 px-2.5 py-2">
                 <Feather name="wifi" size={12} color="#0284c7" />
-                <Text className="min-w-0 flex-1 text-[13px] font-bold text-ink dark:text-white" numberOfLines={1} ellipsizeMode="middle">
+                <Text
+                  className="min-w-0 flex-1 text-[13px] font-bold text-ink dark:text-white"
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
                   {OWN_AP_NAME}
                 </Text>
-                <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">Default</Text>
+                <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">
+                  Default
+                </Text>
               </View>
 
               {userNetworks.length === 0 ? (
@@ -187,7 +257,11 @@ export function RouterPanel({
                     key={n}
                     className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-2"
                   >
-                    <Feather name="wifi" size={12} color={n === carSsid ? '#059669' : '#64748b'} />
+                    <Feather
+                      name="wifi"
+                      size={12}
+                      color={n === carSsid ? "#059669" : "#64748b"}
+                    />
                     <Text
                       className="min-w-0 flex-1 text-[13px] font-bold text-ink dark:text-white"
                       numberOfLines={1}
@@ -196,7 +270,9 @@ export function RouterPanel({
                       {n}
                     </Text>
                     {n === carSsid ? (
-                      <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Active</Text>
+                      <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        Active
+                      </Text>
                     ) : (
                       <Pressable
                         onPress={() => onUse(n)}
@@ -206,7 +282,9 @@ export function RouterPanel({
                         hitSlop={6}
                         className="rounded-full border border-sky-500/50 bg-sky-500/15 px-2.5 py-1.5 disabled:opacity-40"
                       >
-                        <Text className="text-[11px] font-black text-sky-700 dark:text-sky-300">Switch</Text>
+                        <Text className="text-[11px] font-black text-sky-700 dark:text-sky-300">
+                          Switch
+                        </Text>
                       </Pressable>
                     )}
                     <Pressable
@@ -217,7 +295,9 @@ export function RouterPanel({
                       hitSlop={6}
                       className="rounded-full border border-line bg-card px-2.5 py-1.5 disabled:opacity-40"
                     >
-                      <Text className="text-[11px] font-black text-muted">Delete</Text>
+                      <Text className="text-[11px] font-black text-muted">
+                        Delete
+                      </Text>
                     </Pressable>
                   </View>
                 ))
@@ -228,7 +308,9 @@ export function RouterPanel({
           {/* Card: add form — full width on its own row so the inputs never
               sit beside long router lists (R-15: keyboard stays predictable). */}
           <View className="grow rounded-xl border border-line bg-mist p-3 dark:bg-mist">
-            <Text className="text-[11px] font-black uppercase tracking-wide text-muted">Add a router</Text>
+            <Text className="text-[11px] font-black uppercase tracking-wide text-muted">
+              Add a router
+            </Text>
             <TextInput
               value={ssid}
               onChangeText={setSsid}
@@ -266,17 +348,21 @@ export function RouterPanel({
               ) : (
                 <Feather name="plus" size={14} color="#fff" />
               )}
-              <Text className="text-[13px] font-black text-white">{busy ? 'Saving…' : 'Add + switch'}</Text>
+              <Text className="text-[13px] font-black text-white">
+                {busy ? "Saving…" : "Add + switch"}
+              </Text>
             </Pressable>
             <Text className="mt-1.5 text-[11px] leading-4 text-muted">
               Stored on the car only — the password never leaves it (W-14).
             </Text>
             {!canControl && (
-              <Text className="mt-1 text-[11px] leading-4 text-muted">Connect the car to manage routers.</Text>
+              <Text className="mt-1 text-[11px] leading-4 text-muted">
+                Connect the car to manage routers.
+              </Text>
             )}
           </View>
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
-  )
+  );
 }

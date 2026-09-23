@@ -17,9 +17,9 @@
 name: Sync Version to Supabase
 
 on:
-  workflow_dispatch:  # Manual trigger only — release.yml already syncs the manifest on push.
-                     # The old push trigger raced with release.yml: sync-version.mjs would
-                     # abort because the APK wasn't uploaded yet (release.yml was still building).
+  workflow_dispatch: # Manual trigger only — release.yml already syncs the manifest on push.
+    # The old push trigger raced with release.yml: sync-version.mjs would
+    # abort because the APK wasn't uploaded yet (release.yml was still building).
 
 jobs:
   sync-manifest:
@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 

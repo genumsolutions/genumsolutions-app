@@ -54,7 +54,7 @@ signing key changes.
   `upload-release.mjs`) responds on the bucket, or you pass `--force`. The normal release order is:
   bump version -> build APK (`gradlew assembleRelease`) -> `upload-release.mjs` (uploads APK +
   manifest in one step) -> sync the website fallback (`genumsolutions-website`: `node
-  scripts/sync-app-fallback.mjs`) and push it.
+scripts/sync-app-fallback.mjs`) and push it.
 
 # Update channels (v2.0.4+)
 

@@ -18,10 +18,10 @@ Do-not-break invariants + recovery during the app·website sync effort. Master p
 
 ## Recovery
 
-| Symptom | Action |
-|---|---|
-| B1 breaks a mode test | It is a label only. If a test pins the old label, update the pinned expected string to the website's `'4WD4M'`. |
-| Parity test flags a mode mismatch | Compare `mobile/src/config/roboCarCatalog.ts` vs website `lib/robo-car-catalog.ts` vs DB `robo_car_modes`; correct only the drifted field. |
-| CI trigger change (B3) unexpectedly skips workflow | Triggers become `[main]` (like the website). Nothing else in the workflow changes. Verify once after push. |
-| Env edit breaks supabase config | We don't touch `.env.local` or `supabase.ts` values — supabase config untouched. |
-| Typecheck red after edits | Only B1 (string) + B4 (new test files) touch `mobile/src`; revert B4 additions if a runner config issue appears; B1 is inert. |
+| Symptom                                            | Action                                                                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| B1 breaks a mode test                              | It is a label only. If a test pins the old label, update the pinned expected string to the website's `'4WD4M'`.                            |
+| Parity test flags a mode mismatch                  | Compare `mobile/src/config/roboCarCatalog.ts` vs website `lib/robo-car-catalog.ts` vs DB `robo_car_modes`; correct only the drifted field. |
+| CI trigger change (B3) unexpectedly skips workflow | Triggers become `[main]` (like the website). Nothing else in the workflow changes. Verify once after push.                                 |
+| Env edit breaks supabase config                    | We don't touch `.env.local` or `supabase.ts` values — supabase config untouched.                                                           |
+| Typecheck red after edits                          | Only B1 (string) + B4 (new test files) touch `mobile/src`; revert B4 additions if a runner config issue appears; B1 is inert.              |

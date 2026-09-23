@@ -6,12 +6,10 @@
 // =====================================================================
 
 export type ProductType =
-  | 'Retail kit'
-  | 'Project package'
-  | 'Material'
-  | 'Service package';
+  "Retail kit" | "Project package" | "Material" | "Service package";
 
-export type Difficulty = 'Beginner' | 'Intermediate' | 'Advanced' | 'Professional';
+export type Difficulty =
+  "Beginner" | "Intermediate" | "Advanced" | "Professional";
 
 export interface Product {
   id: string;
@@ -21,7 +19,7 @@ export interface Product {
   priceLabel: string;
   sku: string;
   productType: ProductType;
-  inventoryType?: 'Inhouse' | 'Catalog' | 'Supplier';
+  inventoryType?: "Inhouse" | "Catalog" | "Supplier";
   active?: boolean;
   projectOverview?: string;
   objectives?: string[];
@@ -98,7 +96,7 @@ export interface CheckoutInput {
   email: string;
   phone: string;
   address: string;
-  provider: 'cod' | 'esewa' | 'khalti';
+  provider: "cod" | "esewa" | "khalti";
 }
 
 export interface Order {
@@ -106,7 +104,7 @@ export interface Order {
   user_id: string | null;
   items: CheckoutLine[];
   total_npr: number;
-  status: 'pending' | 'paid' | 'fulfilled' | 'cancelled';
+  status: "pending" | "paid" | "fulfilled" | "cancelled";
   provider: string;
   customer_name: string;
   email: string;

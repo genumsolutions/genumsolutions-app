@@ -21,21 +21,21 @@
 // The version/versionCode are written to app.json first, then every derived
 // app-side value is regenerated from them.
 // =====================================================================
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..'); // mobile/
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), ".."); // mobile/
 
 // ── Parse args ───────────────────────────────────────────────────────
 const positionals = [];
 const flags = {};
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i] === '--website' && argv[i + 1]) {
+  if (argv[i] === "--website" && argv[i + 1]) {
     flags.website = argv[i + 1];
     i++;
-  } else if (argv[i] === '--runtime' && argv[i + 1]) {
+  } else if (argv[i] === "--runtime" && argv[i + 1]) {
     flags.runtime = argv[i + 1];
     i++;
   } else {
@@ -43,7 +43,9 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 if (positionals.length < 2) {
-  console.error('Usage: node scripts/bump-version.mjs <version> <versionCode> [--runtime <runtimeVersion>]');
+  console.error(
+    "Usage: node scripts/bump-version.mjs <version> <versionCode> [--runtime <runtimeVersion>]",
+  );
   process.exit(1);
 }
 const VERSION = positionals[0];
@@ -57,28 +59,30 @@ if (!/^\d+$/.test(VERSION_CODE)) {
   process.exit(1);
 }
 if (flags.runtime && !/^\d+\.\d+\.\d+$/.test(flags.runtime)) {
-  console.error(`Invalid runtimeVersion '${flags.runtime}' - expected semver like 1.0.0`);
+  console.error(
+    `Invalid runtimeVersion '${flags.runtime}' - expected semver like 1.0.0`,
+  );
   process.exit(1);
 }
 
 function readJson(p) {
-  return JSON.parse(readFileSync(p, 'utf8'));
+  return JSON.parse(readFileSync(p, "utf8"));
 }
 function writeJson(p, obj) {
-  writeFileSync(p, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+  writeFileSync(p, JSON.stringify(obj, null, 2) + "\n", "utf8");
 }
 function editFile(p, fn) {
   if (!existsSync(p)) throw new Error(`File not found: ${p}`);
-  const before = readFileSync(p, 'utf8');
+  const before = readFileSync(p, "utf8");
   const after = fn(before);
-  if (after !== before) writeFileSync(p, after, 'utf8');
+  if (after !== before) writeFileSync(p, after, "utf8");
   return after !== before;
 }
 
 let changed = false;
 
 // 1) app.json (source of truth) - targeted replace to preserve file formatting
-const appJsonPath = resolve(rootDir, 'app.json');
+const appJsonPath = resolve(rootDir, "app.json");
 changed =
   editFile(appJsonPath, (src) =>
     src
@@ -93,21 +97,26 @@ if (!existsSync(appJsonPath)) throw new Error(`File not found: ${appJsonPath}`);
 // strings with single OR double quotes; match either and preserve the file's
 // current style so the bump never silently no-ops after a prettier pass.
 changed =
-  editFile(resolve(rootDir, 'src/config/site.ts'), (src) => {
-    const q = /["']/.exec(src.match(/APP_VERSION\s*=\s*["']/)?.[0] ?? "'")?.[0] ?? "'";
+  editFile(resolve(rootDir, "src/config/site.ts"), (src) => {
+    const q =
+      /["']/.exec(src.match(/APP_VERSION\s*=\s*["']/)?.[0] ?? "'")?.[0] ?? "'";
     const pattern = new RegExp(`export const APP_VERSION = ["'][^"']*["'];`);
     if (!pattern.test(src)) return src;
-    return src.replace(pattern, `export const APP_VERSION = ${q}${VERSION}${q};`);
+    return src.replace(
+      pattern,
+      `export const APP_VERSION = ${q}${VERSION}${q};`,
+    );
   }) || changed;
 
 // 3) package.json + package-lock.json version
-changed = editFile(resolve(rootDir, 'package.json'), (src) =>
-  src.replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`),
-) || changed;
-const lockPath = resolve(rootDir, 'package-lock.json');
+changed =
+  editFile(resolve(rootDir, "package.json"), (src) =>
+    src.replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`),
+  ) || changed;
+const lockPath = resolve(rootDir, "package-lock.json");
 const lock = readJson(lockPath);
 lock.version = VERSION;
-if (lock.packages?.['']) lock.packages[''].version = VERSION;
+if (lock.packages?.[""]) lock.packages[""].version = VERSION;
 writeJson(lockPath, lock);
 changed = true;
 
@@ -115,7 +124,10 @@ changed = true;
 if (flags.runtime) {
   changed =
     editFile(appJsonPath, (src) =>
-      src.replace(/"runtimeVersion": "[^"]*"/, `"runtimeVersion": "${flags.runtime}"`),
+      src.replace(
+        /"runtimeVersion": "[^"]*"/,
+        `"runtimeVersion": "${flags.runtime}"`,
+      ),
     ) || changed;
   console.log(`  app.json runtimeVersion -> ${flags.runtime}`);
 }
@@ -124,10 +136,14 @@ if (flags.runtime) {
 //    here. Bumping it in advance made /app advertise a version whose APK wasn't
 //    uploaded yet. The live manifest drives the site; after a release upload,
 //    sync the fallback with the website repo's scripts/sync-app-fallback.mjs.
-console.log('Version bumped. Commit + push the app repo with:');
-console.log('  git add -A && git commit -m "chore: bump app version to ..." && git push origin main');
-console.log('After the release uploads, sync the website fallback:');
-console.log('  (genumsolutions-website) node scripts/sync-app-fallback.mjs');
+console.log("Version bumped. Commit + push the app repo with:");
+console.log(
+  '  git add -A && git commit -m "chore: bump app version to ..." && git push origin main',
+);
+console.log("After the release uploads, sync the website fallback:");
+console.log("  (genumsolutions-website) node scripts/sync-app-fallback.mjs");
 if (flags.runtime) {
-  console.log('RuntimeVersion bumped for OTA — devices will check for new bundle on next load.');
+  console.log(
+    "RuntimeVersion bumped for OTA — devices will check for new bundle on next load.",
+  );
 }

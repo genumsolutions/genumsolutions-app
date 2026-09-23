@@ -1,13 +1,20 @@
 // DroneControls — altitude slider, gimbal pan/tilt, takeoff/land/emergency.
-import React from 'react'
-import { Pressable, Text, Vibration, View } from 'react-native'
-import { Feather } from '@expo/vector-icons'
-import Slider from '@react-native-community/slider'
-import type { DroneControlsProps } from './types'
+import React from "react";
+import { Pressable, Text, Vibration, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import Slider from "@react-native-community/slider";
+import type { DroneControlsProps } from "./types";
 
 export function DroneControls({
-  canControl, targetAltitude, gimbalPan, gimbalTilt,
-  onAltitude, onGimbalPan, onGimbalTilt, onCommand, onSetAltitude,
+  canControl,
+  targetAltitude,
+  gimbalPan,
+  gimbalTilt,
+  onAltitude,
+  onGimbalPan,
+  onGimbalTilt,
+  onCommand,
+  onSetAltitude,
 }: DroneControlsProps) {
   return (
     <View className="mt-2">
@@ -16,9 +23,13 @@ export function DroneControls({
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-1">
             <Feather name="arrow-up" size={12} color="#94a3b8" />
-            <Text className="text-xs font-bold uppercase tracking-wide text-muted">Altitude (m)</Text>
+            <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+              Altitude (m)
+            </Text>
           </View>
-          <Text className="font-mono text-sm font-bold text-navy">{targetAltitude}m</Text>
+          <Text className="font-mono text-sm font-bold text-navy">
+            {targetAltitude}m
+          </Text>
         </View>
         <Slider
           value={targetAltitude}
@@ -33,25 +44,37 @@ export function DroneControls({
         />
         <View className="mt-2 flex-row gap-2">
           <Pressable
-            onPress={() => { Vibration.vibrate(10); onCommand('TAKEOFF') }}
+            onPress={() => {
+              Vibration.vibrate(10);
+              onCommand("TAKEOFF");
+            }}
             disabled={!canControl}
             className="flex-1 items-center rounded-full bg-emerald-600 py-2.5"
           >
             <Text className="text-xs font-black text-white">Take Off</Text>
           </Pressable>
           <Pressable
-            onPress={() => { Vibration.vibrate(10); onCommand('LAND') }}
+            onPress={() => {
+              Vibration.vibrate(10);
+              onCommand("LAND");
+            }}
             disabled={!canControl}
             className="flex-1 items-center rounded-full bg-amber-600 py-2.5"
           >
             <Text className="text-xs font-black text-white">Land</Text>
           </Pressable>
           <Pressable
-            onPress={() => { Vibration.vibrate(50); onSetAltitude(0); onCommand('EMERGENCY') }}
+            onPress={() => {
+              Vibration.vibrate(50);
+              onSetAltitude(0);
+              onCommand("EMERGENCY");
+            }}
             disabled={!canControl}
             className="flex-1 items-center rounded-full bg-red-600 py-2.5"
           >
-            <Text className="text-xs font-black text-white">Emergency Stop</Text>
+            <Text className="text-xs font-black text-white">
+              Emergency Stop
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -60,11 +83,15 @@ export function DroneControls({
       <View className="mt-4 rounded-xl border border-line bg-surface p-4">
         <View className="flex-row items-center gap-1">
           <Feather name="video" size={12} color="#94a3b8" />
-          <Text className="text-xs font-bold uppercase tracking-wide text-muted">Camera Gimbal</Text>
+          <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+            Camera Gimbal
+          </Text>
         </View>
         <View className="mt-3 flex-row gap-4">
           <View className="flex-1">
-            <Text className="text-xs font-bold text-muted">Pan: {gimbalPan}°</Text>
+            <Text className="text-xs font-bold text-muted">
+              Pan: {gimbalPan}°
+            </Text>
             <Slider
               value={gimbalPan}
               minimumValue={0}
@@ -76,10 +103,14 @@ export function DroneControls({
               maximumTrackTintColor="#cbd5e1"
               thumbTintColor="#1e3a8a"
             />
-            <Text className="text-center text-[9px] text-slate-400">90° center</Text>
+            <Text className="text-center text-[9px] text-slate-400">
+              90° center
+            </Text>
           </View>
           <View className="flex-1">
-            <Text className="text-xs font-bold text-muted">Tilt: {gimbalTilt}°</Text>
+            <Text className="text-xs font-bold text-muted">
+              Tilt: {gimbalTilt}°
+            </Text>
             <Slider
               value={gimbalTilt}
               minimumValue={0}
@@ -91,10 +122,12 @@ export function DroneControls({
               maximumTrackTintColor="#cbd5e1"
               thumbTintColor="#1e3a8a"
             />
-            <Text className="text-center text-[9px] text-slate-400">90° center</Text>
+            <Text className="text-center text-[9px] text-slate-400">
+              90° center
+            </Text>
           </View>
         </View>
       </View>
     </View>
-  )
+  );
 }

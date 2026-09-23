@@ -9,7 +9,7 @@
 // so the badge (AppContext cartCount) and the list can never drift apart
 // from each other.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,17 +17,20 @@ import {
   Pressable,
   Text,
   View,
-} from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
-import { getProducts } from '../services/productService';
-import { resolveCart, setQuantity } from '../services/cartService';
-import { useApp } from '../context/AppContext';
-import type { Product } from '../types';
-import type { TabNav } from '../navigation/types';
+} from "react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import { getProducts } from "../services/productService";
+import { resolveCart, setQuantity } from "../services/cartService";
+import { useApp } from "../context/AppContext";
+import type { Product } from "../types";
+import type { TabNav } from "../navigation/types";
 
-type Nav = TabNav<'Cart'>;
-type CartEntry = { line: { productId: string; quantity: number }; product: Product };
+type Nav = TabNav<"Cart">;
+type CartEntry = {
+  line: { productId: string; quantity: number };
+  product: Product;
+};
 
 export function CartScreen() {
   const navigation = useNavigation<Nav>();
@@ -85,7 +88,9 @@ export function CartScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-surface px-8">
         <Feather name="shopping-cart" size={44} color="#cbd5e1" />
-        <Text className="mt-3 font-display text-xl font-bold text-ink">Your cart is empty</Text>
+        <Text className="mt-3 font-display text-xl font-bold text-ink">
+          Your cart is empty
+        </Text>
         <Text className="mt-1 text-center text-sm text-muted">
           Add products from the shop to start your build list.
         </Text>
@@ -120,7 +125,10 @@ export function CartScreen() {
             <View className="ml-3 min-w-0 flex-1">
               {/* R5 overflow fix: min-w-0 so long product names ellipsize
                   instead of pushing the qty controls past the card edge. */}
-              <Text numberOfLines={2} className="text-sm font-bold leading-tight text-ink">
+              <Text
+                numberOfLines={2}
+                className="text-sm font-bold leading-tight text-ink"
+              >
                 {item.product.name}
               </Text>
               <Text className="mt-0.5 text-xs font-black text-navy">
@@ -128,15 +136,21 @@ export function CartScreen() {
               </Text>
               <View className="mt-2 flex-row items-center">
                 <Pressable
-                  onPress={() => updateQty(item.line.productId, item.line.quantity - 1)}
+                  onPress={() =>
+                    updateQty(item.line.productId, item.line.quantity - 1)
+                  }
                   className="rounded-full border border-line px-2 py-1"
                   accessibilityLabel="Decrease quantity"
                 >
                   <Feather name="minus" size={13} color="#1e3a8a" />
                 </Pressable>
-                <Text className="mx-3 text-sm font-bold text-ink">{item.line.quantity}</Text>
+                <Text className="mx-3 text-sm font-bold text-ink">
+                  {item.line.quantity}
+                </Text>
                 <Pressable
-                  onPress={() => updateQty(item.line.productId, item.line.quantity + 1)}
+                  onPress={() =>
+                    updateQty(item.line.productId, item.line.quantity + 1)
+                  }
                   className="rounded-full border border-line px-2 py-1"
                   accessibilityLabel="Increase quantity"
                 >
@@ -152,7 +166,7 @@ export function CartScreen() {
         <View className="flex-row items-center justify-between">
           <Text className="text-sm text-muted">Total</Text>
           <Text className="font-display text-lg font-bold tracking-tight text-ink">
-            NPR {(total || 0).toLocaleString('en-IN')}
+            NPR {(total || 0).toLocaleString("en-IN")}
           </Text>
         </View>
         <View className="mt-2 flex-row items-center gap-2 text-xs text-muted">
@@ -160,7 +174,7 @@ export function CartScreen() {
           <Text>Changes save instantly to your cart</Text>
         </View>
         <Pressable
-          onPress={() => navigation.push('Checkout')}
+          onPress={() => navigation.push("Checkout")}
           className="mt-3 items-center rounded-full bg-navy py-3"
         >
           <Text className="font-bold text-white">Checkout</Text>

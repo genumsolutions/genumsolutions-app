@@ -7,17 +7,17 @@
 // app-update + theme controls (previously on the Account screen). Nothing
 // here requires a sign-in: updates and theme work for guests too.
 // =====================================================================
-import React from 'react';
-import { ScrollView, Text, View, Pressable, Switch } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Feather } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
-import { useApp } from '../context/AppContext';
-import type { RootStackParamList } from '../navigation/types';
+import React from "react";
+import { ScrollView, Text, View, Pressable, Switch } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
+import { useApp } from "../context/AppContext";
+import type { RootStackParamList } from "../navigation/types";
 
-type RootNav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
-type IconName = ComponentProps<typeof Feather>['name'];
+type RootNav = NativeStackNavigationProp<RootStackParamList, "Main">;
+type IconName = ComponentProps<typeof Feather>["name"];
 
 type Dest = {
   icon: IconName;
@@ -26,17 +26,17 @@ type Dest = {
 };
 
 const EXPLORE: Dest[] = [
-  { icon: 'briefcase', label: 'Services', screen: 'Services' },
-  { icon: 'layers', label: 'Projects', screen: 'Projects' },
-  { icon: 'book-open', label: 'Journal', screen: 'Journal' },
-  { icon: 'corner-down-left', label: '3D Printing', screen: 'Printing' },
-  { icon: 'tool', label: 'Open Tools', screen: 'OpenTools' },
+  { icon: "briefcase", label: "Services", screen: "Services" },
+  { icon: "layers", label: "Projects", screen: "Projects" },
+  { icon: "book-open", label: "Journal", screen: "Journal" },
+  { icon: "corner-down-left", label: "3D Printing", screen: "Printing" },
+  { icon: "tool", label: "Open Tools", screen: "OpenTools" },
 ];
 
 const COMPANY: Dest[] = [
-  { icon: 'cpu', label: 'Control Panel', screen: 'Tools' },
-  { icon: 'info', label: 'About', screen: 'About' },
-  { icon: 'phone', label: 'Contact', screen: 'Contact' },
+  { icon: "cpu", label: "Control Panel", screen: "Tools" },
+  { icon: "info", label: "About", screen: "About" },
+  { icon: "phone", label: "Contact", screen: "Contact" },
 ];
 
 export function MenuScreen() {
@@ -44,26 +44,39 @@ export function MenuScreen() {
   const { isStaff, isPro, themeMode, setThemeMode } = useApp();
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingVertical: 12 }}>
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ paddingVertical: 12 }}
+    >
       <MenuGroup title="Explore">
         {EXPLORE.map((d) => (
-          <MenuItem key={d.label} icon={d.icon} label={d.label} onPress={() => navigation.push(d.screen)} />
+          <MenuItem
+            key={d.label}
+            icon={d.icon}
+            label={d.label}
+            onPress={() => navigation.push(d.screen)}
+          />
         ))}
       </MenuGroup>
 
       <MenuGroup title="Company">
         {COMPANY.map((d) => (
-          <MenuItem key={d.label} icon={d.icon} label={d.label} onPress={() => navigation.push(d.screen)} />
+          <MenuItem
+            key={d.label}
+            icon={d.icon}
+            label={d.label}
+            onPress={() => navigation.push(d.screen)}
+          />
         ))}
         <MenuItem
           icon="shield"
           label="Privacy Policy"
-          onPress={() => navigation.push('Legal', { doc: 'privacy' })}
+          onPress={() => navigation.push("Legal", { doc: "privacy" })}
         />
         <MenuItem
           icon="file-text"
           label="Terms of Service"
-          onPress={() => navigation.push('Legal', { doc: 'terms' })}
+          onPress={() => navigation.push("Legal", { doc: "terms" })}
         />
       </MenuGroup>
 
@@ -75,7 +88,7 @@ export function MenuScreen() {
         <MenuItem
           icon="download"
           label="App Updates"
-          onPress={() => navigation.push('Update')}
+          onPress={() => navigation.push("Update")}
         />
       </MenuGroup>
 
@@ -87,11 +100,13 @@ export function MenuScreen() {
           <MenuItem
             icon="sliders"
             label="Robot preferences"
-            onPress={() => navigation.push('RobotPreferences')}
+            onPress={() => navigation.push("RobotPreferences")}
           />
           {!isPro ? (
             <View className="rounded-full bg-slate-200 px-2 py-0.5">
-              <Text className="text-[10px] font-black uppercase tracking-wide text-slate-500">Pro</Text>
+              <Text className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+                Pro
+              </Text>
             </View>
           ) : null}
         </View>
@@ -101,15 +116,19 @@ export function MenuScreen() {
       <MenuGroup title="Appearance">
         <View className="mx-3 flex-row items-center justify-between rounded-xl px-4 py-3.5">
           <View className="flex-row items-center">
-            <Feather name={themeMode === 'dark' ? 'moon' : 'sun'} size={20} color="#64748b" />
+            <Feather
+              name={themeMode === "dark" ? "moon" : "sun"}
+              size={20}
+              color="#64748b"
+            />
             <Text className="ml-3.5 text-base font-semibold text-ink">
               Dark theme
             </Text>
           </View>
           <Switch
-            value={themeMode === 'dark'}
-            onValueChange={(on) => setThemeMode(on ? 'dark' : 'light')}
-            trackColor={{ false: '#cbd5e1', true: '#1e3a8a' }}
+            value={themeMode === "dark"}
+            onValueChange={(on) => setThemeMode(on ? "dark" : "light")}
+            trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
             thumbColor="#ffffff"
             accessibilityLabel="Toggle dark theme"
           />
@@ -118,14 +137,24 @@ export function MenuScreen() {
 
       {isStaff ? (
         <MenuGroup title="Admin">
-          <MenuItem icon="settings" label="Admin Dashboard" onPress={() => navigation.push('Admin')} />
+          <MenuItem
+            icon="settings"
+            label="Admin Dashboard"
+            onPress={() => navigation.push("Admin")}
+          />
         </MenuGroup>
       ) : null}
     </ScrollView>
   );
 }
 
-function MenuGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function MenuGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <View className="pt-4">
       <Text className="px-5 pb-2 text-xs font-black uppercase tracking-widest text-border">
@@ -153,7 +182,12 @@ function MenuItem({
       <Feather name={icon} size={20} color="#64748b" />
       {/* R5 overflow fix: min-w-0 + flex-1 + numberOfLines so long labels
           never push past the card's right edge. */}
-      <Text numberOfLines={1} className="ml-3.5 min-w-0 flex-1 text-base font-semibold text-ink">{label}</Text>
+      <Text
+        numberOfLines={1}
+        className="ml-3.5 min-w-0 flex-1 text-base font-semibold text-ink"
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

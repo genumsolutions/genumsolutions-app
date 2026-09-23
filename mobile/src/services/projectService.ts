@@ -4,8 +4,8 @@
 // Robot Cars from the SAME products table (see website's ProjectsCatalog),
 // so the app shows the same data.
 // =====================================================================
-import { getProductsFromSupabase } from './productService';
-import type { Product } from '../types';
+import { getProductsFromSupabase } from "./productService";
+import type { Product } from "../types";
 
 export interface Project {
   id: string;
@@ -13,7 +13,7 @@ export interface Project {
   description: string;
   mode_name: string;
   category: string;
-  inventoryType?: 'Inhouse' | 'Catalog' | 'Supplier';
+  inventoryType?: "Inhouse" | "Catalog" | "Supplier";
   technologies: string[];
   difficulty: string;
   image?: string;
@@ -21,29 +21,30 @@ export interface Project {
   specs: string[];
 }
 
-export function isProjectPackage(p: { productType?: string | null; category?: string | null }): boolean {
+export function isProjectPackage(p: {
+  productType?: string | null;
+  category?: string | null;
+}): boolean {
   return (
-    p.productType === 'Project package' ||
-    p.category === 'Robot Cars' ||
-    p.category === 'Pre-packaged Kits'
+    p.productType === "Project package" ||
+    p.category === "Robot Cars" ||
+    p.category === "Pre-packaged Kits"
   );
 }
 
 export async function getProjects(): Promise<Project[]> {
   const products = await getProductsFromSupabase();
-  return products
-    .filter(isProjectPackage)
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      mode_name: p.category,
-      category: p.category,
-      inventoryType: p.inventoryType,
-      technologies: p.specs,
-      difficulty: p.difficulty,
-      image: p.image,
-      priceLabel: p.priceLabel,
-      specs: p.specs,
-    }));
+  return products.filter(isProjectPackage).map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    mode_name: p.category,
+    category: p.category,
+    inventoryType: p.inventoryType,
+    technologies: p.specs,
+    difficulty: p.difficulty,
+    image: p.image,
+    priceLabel: p.priceLabel,
+    specs: p.specs,
+  }));
 }

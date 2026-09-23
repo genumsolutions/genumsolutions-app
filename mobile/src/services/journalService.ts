@@ -7,18 +7,18 @@
 // RLS: journal_posts has a public-read policy, so the app's anon key can
 // SELECT without a session.
 // =====================================================================
-import { supabase, supabaseConfigured } from '../config/supabase';
-import { LOCAL_JOURNAL_POSTS, type JournalPost } from '../config/journal';
+import { supabase, supabaseConfigured } from "../config/supabase";
+import { LOCAL_JOURNAL_POSTS, type JournalPost } from "../config/journal";
 
 export async function getJournalPosts(): Promise<JournalPost[]> {
   if (!supabaseConfigured) return LOCAL_JOURNAL_POSTS;
   try {
     const { data, error } = await supabase
-      .from('journal_posts')
-      .select('id, tag, title, text')
-      .eq('active', true)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true });
+      .from("journal_posts")
+      .select("id, tag, title, text")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
     if (error) throw error;
     if (!data || data.length === 0) return LOCAL_JOURNAL_POSTS;
     return data.map((row) => ({

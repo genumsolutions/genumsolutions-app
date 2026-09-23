@@ -9,7 +9,7 @@
  * system mode) restyles every screen that uses a semantic token.
  */
 :root,
-html[data-theme='light'] {
+html[data-theme="light"] {
   --color-ink: 15 23 42; /* slate-900       */
   --color-navy: 30 58 138; /* blue-900        */
   --color-navy-dark: 23 37 84; /* blue-950        */
@@ -54,7 +54,7 @@ html[data-theme='light'] {
   }
 }
 
-html[data-theme='dark'] {
+html[data-theme="dark"] {
   --color-ink: 228 234 243; /* #e4eaf3 (brightened) */
   --color-navy: 37 99 235; /* blue-600 (buttons + labels stay legible) */
   --color-navy-dark: 29 78 216; /* blue-700        */

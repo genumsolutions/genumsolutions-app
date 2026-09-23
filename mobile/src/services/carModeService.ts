@@ -13,13 +13,13 @@
 // RLS: robo_car_modes has a public-read policy, so the app's anon key can
 // SELECT without a session.
 // =====================================================================
-import { supabase, supabaseConfigured } from '../config/supabase';
+import { supabase, supabaseConfigured } from "../config/supabase";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
   type CarModeId,
   type ControlKind,
-} from '../config/roboCarCatalog';
+} from "../config/roboCarCatalog";
 
 type CarModeRow = {
   id: string;
@@ -37,20 +37,20 @@ type CarModeRow = {
   blurb: string | null;
 };
 
-const TRANSPORTS = ['ble', 'wifi', 'classic-bt', 'rf'] as const;
+const TRANSPORTS = ["ble", "wifi", "classic-bt", "rf"] as const;
 const CONTROL_KINDS: ControlKind[] = [
-  'drive-tank',
-  'drive-2wd1m',
-  'pid-auto',
-  'start-stop',
-  'tuning',
-  'weblink',
+  "drive-tank",
+  "drive-2wd1m",
+  "pid-auto",
+  "start-stop",
+  "tuning",
+  "weblink",
 ];
 
 /** sensors/transport/controls are TEXT columns holding JSON arrays. */
 function parseList(value: unknown): string[] {
   if (Array.isArray(value)) return value as string[];
-  if (typeof value === 'string' && value.trim()) {
+  if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [];
@@ -68,19 +68,20 @@ function mapRow(row: CarModeRow): CarMode | null {
     name: row.name,
     token: row.token,
     deviceIndex: Number(row.device_index ?? 0),
-    car: row.car ?? '',
-    wheel: row.wheel ?? '',
-    steering: row.steering ?? '',
+    car: row.car ?? "",
+    wheel: row.wheel ?? "",
+    steering: row.steering ?? "",
     sensors: parseList(row.sensors),
     transport: parseList(row.transport).filter(
-      (t): t is (typeof TRANSPORTS)[number] => (TRANSPORTS as readonly string[]).includes(t)
+      (t): t is (typeof TRANSPORTS)[number] =>
+        (TRANSPORTS as readonly string[]).includes(t),
     ),
-    remoteWith: row.remote_with ?? '',
-    controls: parseList(row.controls).filter(
-      (c): c is ControlKind => (CONTROL_KINDS as string[]).includes(c)
+    remoteWith: row.remote_with ?? "",
+    controls: parseList(row.controls).filter((c): c is ControlKind =>
+      (CONTROL_KINDS as string[]).includes(c),
     ),
     requiresConnection: row.requires_connection !== false,
-    blurb: row.blurb ?? '',
+    blurb: row.blurb ?? "",
   };
 }
 
@@ -89,11 +90,11 @@ export async function getCarModes(): Promise<CarMode[]> {
   if (!supabaseConfigured) return LOCAL_CAR_MODES;
   try {
     const { data, error } = await supabase
-      .from('robo_car_modes')
+      .from("robo_car_modes")
       .select(
-        'id,name,token,device_index,car,wheel,steering,sensors,transport,remote_with,controls,requires_connection,blurb'
+        "id,name,token,device_index,car,wheel,steering,sensors,transport,remote_with,controls,requires_connection,blurb",
       )
-      .order('sort_order', { ascending: true });
+      .order("sort_order", { ascending: true });
     if (error) throw error;
     if (!data || data.length === 0) return LOCAL_CAR_MODES;
     const modes = data
@@ -105,14 +106,12 @@ export async function getCarModes(): Promise<CarMode[]> {
     // row has null id/name/token and was dropped. X-8: `4WD4M` is the
     // canonical token (legacy `BT` no longer a shipped mode); all 9 firmware
     // tokens are selectable in the controllers (owner decision 2026-09-15).
-    const FIRMWARE_TOKENS = ['4WD4M', 'AUTO', '2WD1M'] as const;
+    const FIRMWARE_TOKENS = ["4WD4M", "AUTO", "2WD1M"] as const;
     for (const token of FIRMWARE_TOKENS) {
-      const hasToken = modes.some(
-        (m) => m.token.toUpperCase() === token
-      );
+      const hasToken = modes.some((m) => m.token.toUpperCase() === token);
       if (!hasToken) {
         const fallback = LOCAL_CAR_MODES.find(
-          (m) => m.token.toUpperCase() === token
+          (m) => m.token.toUpperCase() === token,
         );
         if (fallback) modes.push(fallback);
       }

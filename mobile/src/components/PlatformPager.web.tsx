@@ -5,11 +5,13 @@
 // per-tab state. It mirrors the native API so callers don't change:
 //   ref.setPage(index)  ->  onPageSelected({ nativeEvent: { position } })
 // =====================================================================
-import React, { forwardRef, useImperativeHandle, useState } from 'react';
-import { View } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useState } from "react";
+import { View } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 
-export type PagerViewOnPageSelectedEvent = { nativeEvent: { position: number } };
+export type PagerViewOnPageSelectedEvent = {
+  nativeEvent: { position: number };
+};
 export type PlatformPagerRef = { setPage: (index: number) => void };
 
 type PlatformPagerProps = {
@@ -23,7 +25,10 @@ type PlatformPagerProps = {
 };
 
 export const PlatformPager = forwardRef<PlatformPagerRef, PlatformPagerProps>(
-  function PlatformPager({ initialPage = 0, onPageSelected, style, children }, ref) {
+  function PlatformPager(
+    { initialPage = 0, onPageSelected, style, children },
+    ref,
+  ) {
     const [page, setPage] = useState(initialPage);
 
     useImperativeHandle(
@@ -41,7 +46,10 @@ export const PlatformPager = forwardRef<PlatformPagerRef, PlatformPagerProps>(
     return (
       <View style={style}>
         {pages.map((child, index) => (
-          <View key={index} style={{ flex: 1, display: index === page ? 'flex' : 'none' }}>
+          <View
+            key={index}
+            style={{ flex: 1, display: index === page ? "flex" : "none" }}
+          >
             {child}
           </View>
         ))}
