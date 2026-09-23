@@ -487,6 +487,7 @@ export function AdminScreen() {
         ...blankProduct('Retail kit', preview?.categoryHint || '3D Models'),
         name: preview?.title || '',
         description: preview?.description || '',
+        specs: preview?.specs ?? [],
         image: preview?.images?.[0] || '',
         documentationUrl: link,
         id: preview?.title ? String(preview.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) : '',
