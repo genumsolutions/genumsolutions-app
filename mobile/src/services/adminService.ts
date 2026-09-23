@@ -10,8 +10,6 @@
 // =====================================================================
 import { supabase } from '../config/supabase'
 
-const EDGE_BASE = 'https://bkylfnlybtsujwzropru.supabase.co/functions/v1'
-
 export type AdminOrder = {
   id: string
   items: { name: string; quantity: number; price: number }[]
@@ -407,6 +405,13 @@ export async function createLinkImport(url: string, product: Partial<AdminProduc
 }
 
 // --- Services ---
+// Service writes MUST go through the `admin-services` edge function, exactly
+// like products: the function re-verifies the caller's role server-side
+// (staff+ for write, admin+ for delete) and writes with the service role.
+// The previous raw-fetch + direct anon-key fallback hit an UNGATED function
+// (anyone could write services) and, before that, silently dropped failures
+// under RLS. functions.invoke attaches the user's JWT automatically and
+// surfaces real errors to the UI.
 
 export async function listAdminServices(): Promise<AdminService[]> {
   const { data, error } = await supabase.from('services').select('*').order('sort_order', { ascending: true })
@@ -415,22 +420,31 @@ export async function listAdminServices(): Promise<AdminService[]> {
 }
 
 export async function upsertAdminService(service: AdminService) {
-  const res = await fetch(`${EDGE_BASE}/admin-services`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'create', service: toServiceRow(service) }),
+  const { data, error } = await supabase.functions.invoke('admin-services', {
+    body: { action: 'create', service: toServiceRow(service) },
   })
-  if (!res.ok) {
-    const { data, error } = await supabase.from('services').upsert(toServiceRow(service)).select()
-    if (error) throw error
-    return data[0]
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not save the service.'
+    throw new Error(message)
   }
-  return res.json()
+  return data
 }
 
 export async function deleteAdminService(id: string) {
-  const { error } = await supabase.from('services').delete().eq('id', id)
-  if (error) throw error
+  const { data, error } = await supabase.functions.invoke('admin-services', {
+    body: { action: 'delete', id },
+  })
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context?.message ||
+      (error instanceof Error ? error.message : '') ||
+      'Could not delete the service.'
+    throw new Error(message)
+  }
+  return data
 }
 
 // --- Users ---
