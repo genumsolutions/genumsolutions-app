@@ -746,6 +746,7 @@ export function AdminScreen() {
             onDelete={handleDeleteProduct}
             onToggleActive={(p) => void handleToggleProductActive(p)}
             onImportCancel={() => setPendingImportUrl(null)}
+            fromLink={pendingImportUrl != null}
           />
         )
       case 'Projects':
@@ -1134,11 +1135,11 @@ function OrdersTab({ orders, total, page, totalPages, onPage, onStatusChange, qu
   )
 }
 
-function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onNew, onImportLink, importBusy, onImportCancel, onSave, canDelete, onDelete, onToggleActive }: {
+function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit, onNew, onImportLink, importBusy, onImportCancel, onSave, canDelete, onDelete, onToggleActive, fromLink }: {
   products: AdminProduct[]; query: string; onQueryChange: (q: string) => void;
   editing: AdminProduct | null; onChange: (p: AdminProduct) => void; onEdit: (p: AdminProduct | null) => void;
   onNew: () => void; onImportLink: () => void; importBusy: boolean; onSave: () => void; canDelete: boolean; onDelete: (id: string) => void; onToggleActive: (p: AdminProduct) => void;
-  onImportCancel: () => void;
+  onImportCancel: () => void; fromLink: boolean;
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null)
   const [page, setPage] = useState(1)
@@ -1157,7 +1158,7 @@ function ProductsTab({ products, query, onQueryChange, editing, onChange, onEdit
   if (editing) {
     return (
       <View className="flex-1">
-        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => { onEdit(null); onImportCancel() }} isNew={!products.some((p) => p.id === editing.id)} categoryOptions={categories.filter((c) => c !== 'All')} />
+        <ProductEditor product={editing} onChange={onChange} onSave={onSave} onCancel={() => { onEdit(null); onImportCancel() }} isNew={!products.some((p) => p.id === editing.id)} categoryOptions={categories.filter((c) => c !== 'All')} fromLink={fromLink} />
       </View>
     )
   }
@@ -1322,13 +1323,14 @@ function ProjectTab({ title, products, editing, onChange, onEdit, onNew, onSaveP
   )
 }
 
-function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOptions }: {
+function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOptions, fromLink }: {
   product: AdminProduct
   onChange: (next: AdminProduct) => void
   onSave: () => void
   onCancel: () => void
   isNew: boolean
   categoryOptions: string[]
+  fromLink?: boolean
 }) {
   function patch(patchPart: Partial<AdminProduct>) {
     onChange({ ...product, ...patchPart })
@@ -1383,6 +1385,7 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOpt
         <Text className="mb-1 text-xs font-bold text-muted">Specs (one per line)</Text>
         <TextInput value={product.specs.join('\n')} onChangeText={(specs) => patch({ specs: specs.split('\n') })} multiline style={{ textAlignVertical: 'top' }} className={`mb-3 min-h-20 ${inputClass}`} placeholder={'1.3-inch OLED\nI2C interface'} />
         <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
+        {product.image ? <Image source={{ uri: product.image }} className="mb-2 h-16 w-16 rounded-lg bg-mist" resizeMode="cover" accessibilityLabel="Extracted product image" /> : null}
         <TextInput value={product.image} onChangeText={(image) => patch({ image })} className={`mb-3 ${inputClass}`} placeholder="https://…" autoCapitalize="none" />
 
         <Text className="mb-1 text-xs font-bold text-muted">Product type</Text>
@@ -1450,7 +1453,7 @@ function ProductEditor({ product, onChange, onSave, onCancel, isNew, categoryOpt
 
         <View className="flex-row gap-3">
           <Pressable onPress={onSave} className="rounded-full bg-gold px-5 py-2">
-            <Text className="text-xs font-black text-ink">{isNew ? 'Create product' : 'Save'}</Text>
+            <Text className="text-xs font-black text-ink">{fromLink ? 'Save imported product' : isNew ? 'Create product' : 'Save'}</Text>
           </Pressable>
           <Pressable onPress={onCancel} className="rounded-full border border-line px-5 py-2">
             <Text className="text-xs font-black text-ink">Cancel</Text>
