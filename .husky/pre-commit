@@ -1,0 +1,2 @@
+#!/bin/sh
+npx --prefix mobile lint-staged

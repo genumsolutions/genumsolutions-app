@@ -49,7 +49,10 @@
   "devDependencies": {
     "@types/react": "~19.1.10",
     "autoprefixer": "^10.5.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
     "postcss": "^8.5.26",
+    "prettier": "^3.9.9",
     "typescript": "~5.9.2",
     "vitest": "^4.1.11"
   },
@@ -60,9 +63,13 @@
     "doctor": "npx expo-doctor",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "lint:check": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "private": true,
   "expo": {
