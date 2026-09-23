@@ -1,5 +1,21 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **link-based product import round
+(arrived with website U-14).** The app admin Products tab now has **"Import by link"** next
+to "+ New product": prompt → paste any product URL → the shared `link-import` edge function
+extracts details (MakerWorld via anonymous Bambu design API; OpenGraph/JSON-LD fallback for
+other shops) → the editor opens pre-seeded (name/description/image/category hint) → staff
+fine-tunes → **Save routes through the same create flow** (image downloaded SSRF-safe →
+uploaded to the `product-images` bucket → products upsert with `documentation_url` = source
+link). Also this round: product writes go through `supabase.functions.invoke('admin-products')`
+with real error surfacing + `Alert` toasts into `handleSaveProduct`/`handleDeleteProduct` —
+the old raw-fetch + silent anon-key fallback was the root cause of the "saved product never
+showed" bug (the edge fn was never deployed). New service functions in `adminService.ts`:
+`previewLinkImport`, `createLinkImport`. Related deploy docs: `genumsolutions-website`
+SUPABASE_ACCESS_TOKEN restored by owner for 1 week (2026-09-23) for the U-14 edge-fn deploys
+(`admin-products` + `link-import` both ACTIVE and live-verified 9/9 + 15/15). App vitest
+**140/140**, app tsc clean, web vitest 71/71 + tsc + lint all green.
+
 **Current state:** **3.2.5 / versionCode 58** (`5fd10b1`) — **RELEASED 2026-09-22 via CI**
 (bump push → `release.yml` run `35688360720` built + uploaded the APK; `release.json` =
 3.2.5/58 live, website fallback synced by bot `7bb6cb5`). This native build carries the
