@@ -1,5 +1,16 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-23, rides the next OTA — JS-only):** **C2 — SHOP SORT + PRICE/STOCK
+FILTERS (website U-18, app parity `f058200`).** The Shop tab now has: sort (Featured /
+Price low-high / Price high-low / Name A–Z), a max-price ceiling picker (500–10,000 NPR
+buckets; quote-only rows never match a ceiling), and an in-stock-only toggle — mirroring
+the website's `/products` 1:1 (shared helper names/behavior in `productService.ts`:
+`sortProducts`/`withinPrice`/`inStockOnly`, tests in `catalogFilters.test.ts`). UI reuses
+`CategoryDropdown` for both pickers + a checkbox-style toggle; empty state gains a
+"Clear filters" button. Web side: URL-shareable state (`?sort=&maxPrice=&inStock=`) and
+the same params accepted by `GET /api/products`. Gates: web tsc 0 · lint 0 · vitest
+**101/101** · build green; app tsc 0 · vitest **150/150**.
+
 **LATEST (2026-09-23, rides the next OTA — JS-only):** **C1 — STOCK DECREMENT ON PAID
 ORDERS (website U-17).** Stock now leaves the shelf exactly once per order, at the
 pending→paid moment, and comes back on cancel — enforced in the DATABASE, not the
