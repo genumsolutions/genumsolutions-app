@@ -10,7 +10,7 @@
 // the file is missing the plugin keeps the stock debug signing so the project
 // still builds on machines that don't hold the release keystore.
 // =====================================================================
-const { withAppBuildGradle } = require('expo/config-plugins');
+const { withAppBuildGradle } = require("expo/config-plugins");
 
 // These lines must sit directly above `android {` in the generated build.gradle.
 const PREAMBLE_ABOVE_ANDROID = `
@@ -84,14 +84,11 @@ module.exports = function withReleaseSigning(config) {
     let src = cfg.modResults.contents;
 
     // Idempotent: never double-apply if prebuild runs twice.
-    if (!src.includes('keystorePropertiesFile = rootProject.file')) {
-      src = src.replace(
-        /^android \{/m,
-        PREAMBLE_ABOVE_ANDROID + '\nandroid {'
-      );
+    if (!src.includes("keystorePropertiesFile = rootProject.file")) {
+      src = src.replace(/^android \{/m, PREAMBLE_ABOVE_ANDROID + "\nandroid {");
     }
 
-    if (!src.includes('compileSdk rootProject.ext.compileSdkVersion')) {
+    if (!src.includes("compileSdk rootProject.ext.compileSdkVersion")) {
       return cfg;
     }
 
@@ -99,22 +96,30 @@ module.exports = function withReleaseSigning(config) {
     if (!src.includes('include "arm64-v8a"')) {
       src = src.replace(
         /(^[ \t]*compileSdk rootProject\.ext\.compileSdkVersion\r?\n)/m,
-        '$1' + ABI_SPLITS_BLOCK
+        "$1" + ABI_SPLITS_BLOCK,
       );
     }
 
-    if (!src.includes('signingConfigs.release') && src.includes('compileSdk rootProject.ext.compileSdkVersion')) {
+    if (
+      !src.includes("signingConfigs.release") &&
+      src.includes("compileSdk rootProject.ext.compileSdkVersion")
+    ) {
       // Replace the existing signingConfigs block (which only has debug) with one that also has release.
       src = src.replace(
         /signingConfigs \{[\s\S]*?\n    \}/m,
-        SIGNING_CONFIGS_BLOCK.trim()
+        SIGNING_CONFIGS_BLOCK.trim(),
       );
     }
 
-    if (!src.includes('Uses the release keystore when present, otherwise the debug key') && src.includes('proguardFiles getDefaultProguardFile')) {
+    if (
+      !src.includes(
+        "Uses the release keystore when present, otherwise the debug key",
+      ) &&
+      src.includes("proguardFiles getDefaultProguardFile")
+    ) {
       src = src.replace(
         /(^.*minifyEnabled enableMinifyInReleaseBuilds\r?\n)/m,
-        RELEASE_SIGNING_CONFIG + '$1'
+        RELEASE_SIGNING_CONFIG + "$1",
       );
     }
 

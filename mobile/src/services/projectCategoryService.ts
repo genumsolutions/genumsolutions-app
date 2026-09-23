@@ -7,12 +7,12 @@
 // RLS: project_categories has a public-read policy, so the app's anon
 // key can SELECT without a session.
 // =====================================================================
-import { supabase, supabaseConfigured } from '../config/supabase';
+import { supabase, supabaseConfigured } from "../config/supabase";
 import {
   PROJECT_CATEGORIES,
   type ProjectCategory,
   type ControlCapability,
-} from '../config/project-catalog';
+} from "../config/project-catalog";
 
 type ProjectCategoryRow = {
   id: string;
@@ -28,21 +28,21 @@ type ProjectCategoryRow = {
 };
 
 const CAPABILITY_KINDS: ControlCapability[] = [
-  'directional',
-  'servo',
-  'pid',
-  'start-stop',
-  'relay',
-  'sensor',
-  'weblink',
-  'slider',
-  'gimbal',
-  'altitude',
+  "directional",
+  "servo",
+  "pid",
+  "start-stop",
+  "relay",
+  "sensor",
+  "weblink",
+  "slider",
+  "gimbal",
+  "altitude",
 ];
 
 function parseList(value: unknown): string[] {
   if (Array.isArray(value)) return value as string[];
-  if (typeof value === 'string' && value.trim()) {
+  if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [];
@@ -54,13 +54,13 @@ function parseList(value: unknown): string[] {
 }
 
 function parseRecord(value: unknown): Record<string, string> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, string>;
   }
-  if (typeof value === 'string' && value.trim()) {
+  if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, string>;
       }
     } catch {
@@ -75,8 +75,8 @@ function mapRow(row: ProjectCategoryRow): ProjectCategory | null {
   return {
     slug: row.id,
     name: row.name,
-    tagline: '', // DB doesn't store tagline; use hardcoded fallback if needed
-    description: '',
+    tagline: "", // DB doesn't store tagline; use hardcoded fallback if needed
+    description: "",
     // DB rows store hardware/capabilities entries that may be plain strings
     // OR structured objects ({name, role}) managed by the website admin. The
     // app renders these as text lines, so object entries are flattened to
@@ -85,9 +85,8 @@ function mapRow(row: ProjectCategoryRow): ProjectCategory | null {
     hardware: parseList(row.hardware).map(flattenEntry),
     capabilities: parseList(row.capabilities)
       .map(flattenEntry)
-      .filter(
-        (c): c is ControlCapability =>
-          (CAPABILITY_KINDS as readonly string[]).includes(c)
+      .filter((c): c is ControlCapability =>
+        (CAPABILITY_KINDS as readonly string[]).includes(c),
       ),
     carType: row.car_type ?? undefined,
   };
@@ -95,17 +94,17 @@ function mapRow(row: ProjectCategoryRow): ProjectCategory | null {
 
 /** Flatten a string OR {name, role}-style object entry to display text. */
 function flattenEntry(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
     const rec = value as Record<string, unknown>;
-    const name = typeof rec.name === 'string' ? rec.name : '';
-    const role = typeof rec.role === 'string' ? rec.role : '';
+    const name = typeof rec.name === "string" ? rec.name : "";
+    const role = typeof rec.role === "string" ? rec.role : "";
     if (name && role) return `${name} — ${role}`;
     if (name) return name;
     if (role) return role;
-    return '';
+    return "";
   }
-  return value == null ? '' : String(value);
+  return value == null ? "" : String(value);
 }
 
 /** Fetch project categories DB-first with the bundled list as fallback. */
@@ -113,9 +112,11 @@ export async function getProjectCategories(): Promise<ProjectCategory[]> {
   if (!supabaseConfigured) return PROJECT_CATEGORIES;
   try {
     const { data, error } = await supabase
-      .from('project_categories')
-      .select('id,name,icon,car_type,hardware,capabilities,capability_labels,capability_notes,car_mode_ids')
-      .order('sort_order', { ascending: true });
+      .from("project_categories")
+      .select(
+        "id,name,icon,car_type,hardware,capabilities,capability_labels,capability_notes,car_mode_ids",
+      )
+      .order("sort_order", { ascending: true });
     if (error) throw error;
     if (!data || data.length === 0) return PROJECT_CATEGORIES;
     const categories = data

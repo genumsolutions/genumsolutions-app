@@ -9,32 +9,36 @@
 // between the brand header and the bottom tab bar like the other three.
 // The tab bar, param-sync and focus re-sync logic mirror MainTabPager.tsx.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import type { RouteProp } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
-import { useApp } from '../context/AppContext';
-import { BrandHeader } from '../components/BrandHeader';
-import type { MainTabParamList, RootStackParamList } from './types';
+import React, { useCallback, useEffect, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import type { RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
+import { useApp } from "../context/AppContext";
+import { BrandHeader } from "../components/BrandHeader";
+import type { MainTabParamList, RootStackParamList } from "./types";
 
 type TabKey = keyof MainTabParamList;
 
-const TAB_ORDER: TabKey[] = ['Home', 'Shop', 'Cart', 'Menu'];
+const TAB_ORDER: TabKey[] = ["Home", "Shop", "Cart", "Menu"];
 
-type IconName = ComponentProps<typeof Feather>['name'];
+type IconName = ComponentProps<typeof Feather>["name"];
 const TAB_ICONS: Record<TabKey, IconName> = {
-  Home: 'home',
-  Shop: 'grid',
-  Cart: 'shopping-bag',
-  Menu: 'menu',
+  Home: "home",
+  Shop: "grid",
+  Cart: "shopping-bag",
+  Menu: "menu",
 };
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
-type MainRoute = RouteProp<RootStackParamList, 'Main'>;
+type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
+type MainRoute = RouteProp<RootStackParamList, "Main">;
 
 type MainTabPagerProps = {
   screens: { [K in TabKey]: React.ComponentType };
@@ -45,7 +49,9 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   const route = useRoute<MainRoute>();
   const insets = useSafeAreaInsets();
   const { cartCount } = useApp();
-  const [page, setPage] = useState<TabKey>(() => initialTab(route.params?.screen));
+  const [page, setPage] = useState<TabKey>(() =>
+    initialTab(route.params?.screen),
+  );
 
   // Derive the page from the `screen` param so external tab switches land.
   const syncToParam = useCallback(() => {
@@ -69,7 +75,9 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
     (key: TabKey) => {
       setPage(key);
       if (route.params?.screen !== key) {
-        (navigation.setParams as (p: { screen?: TabKey }) => void)({ screen: key });
+        (navigation.setParams as (p: { screen?: TabKey }) => void)({
+          screen: key,
+        });
       }
     },
     [navigation, route.params?.screen],
@@ -81,7 +89,11 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
       {TAB_ORDER.map((key) => {
         const Screen = screens[key];
         return (
-          <View key={key} className="flex-1 bg-white" style={key === page ? undefined : { display: 'none' }}>
+          <View
+            key={key}
+            className="flex-1 bg-white"
+            style={key === page ? undefined : { display: "none" }}
+          >
             <Screen />
           </View>
         );
@@ -93,7 +105,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
       >
         {TAB_ORDER.map((key) => {
           const active = key === page;
-          const color = active ? '#1e3a8a' : '#64748b';
+          const color = active ? "#1e3a8a" : "#64748b";
           return (
             <Pressable
               key={key}
@@ -105,15 +117,17 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
             >
               <View className="relative">
                 <Feather name={TAB_ICONS[key]} size={22} color={color} />
-                {key === 'Cart' && cartCount > 0 && (
+                {key === "Cart" && cartCount > 0 && (
                   <View className="absolute -right-2 -top-1.5 min-w-[16px] items-center justify-center rounded-full bg-gold px-1">
                     <Text className="text-[10px] font-black text-ink">
-                      {cartCount > 99 ? '99+' : cartCount}
+                      {cartCount > 99 ? "99+" : cartCount}
                     </Text>
                   </View>
                 )}
               </View>
-              <Text className={`mt-1 text-[10px] font-bold ${active ? 'text-navy' : 'text-slate-500'}`}>
+              <Text
+                className={`mt-1 text-[10px] font-bold ${active ? "text-navy" : "text-slate-500"}`}
+              >
                 {key}
               </Text>
             </Pressable>
@@ -125,5 +139,5 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
 }
 
 function initialTab(screen: TabKey | undefined): TabKey {
-  return screen && TAB_ORDER.includes(screen) ? screen : 'Home';
+  return screen && TAB_ORDER.includes(screen) ? screen : "Home";
 }

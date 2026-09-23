@@ -13,17 +13,19 @@ The app previously rendered every text element in the **platform default font**
 labels all looked identical — a "uniform" wall of text with no hierarchy.
 
 Phase B fixes the foundation:
+
 1. **Fonts are now embedded natively** via the `expo-font` config plugin in
    `app.json` (`Inter` 400/500/600/700/900 + `Sora` 400/600/700). On Android the
    plugin writes per-weight XML font definitions, so `fontFamily: 'Inter'` +
    `fontWeight: '700'` (what NativeWind emits for `font-sans font-bold`) resolves to
    the correct embedded weight. **This takes effect in the next native rebuild**
    (regenerate `android/` with `npx expo prebuild -p android` before `gradlew
-   assembleRelease`).
+assembleRelease`).
 2. **This document fixes the role → utility mapping** so every screen picks the same
    size/family/weight/tracking for the same role.
 
 Rules of thumb:
+
 - Headings and headline numbers → **Sora** (`font-display`).
 - Everything else (body, UI labels, buttons, inputs) → **Inter** (`font-sans`).
 - A text without any family class keeps the platform default font. When you add a
@@ -35,20 +37,20 @@ Rules of thumb:
 
 ## Text roles
 
-| Role | Utilities | Use for |
-|---|---|---|
-| **Kicker / eyebrow** (page + section level) | `text-xs font-black uppercase tracking-[0.24em]` | The small over-line above a hero/section (e.g. "What GENUM does"). Gold on navy, navy on light. |
-| **Hero / page title** (1 per screen) | `font-display text-3xl font-bold leading-tight` (+`tracking-tight` optional) | Home hero, Journal/Legal/Printing/OpenTools page heroes. |
-| **Section heading** | `font-display text-2xl font-bold tracking-tight` | Statement headings inside content (pilot-cost total, "A useful loop…"). |
-| **Card / sub heading** | `font-display text-xl font-bold tracking-tight` | Training-program cards, CTA panel titles, admin dashboard headings. |
-| **Dense / small display heading** | `font-display text-lg font-bold` | Website-mirrored panel headings, price figures, brand wordmark "GENUM". |
-| **Item title (lists, sans)** | `font-sans text-base font-bold leading-snug` | Service rows, cart line names, list item names. Grid product names may stay `text-[13px]` (2-up cards). |
-| **Body paragraph** | `font-sans text-sm leading-6 text-muted` | Descriptions under titles. Ink instead of muted for primary copy. |
-| **Compact body** | `text-sm leading-5` | Dense card copy (services list, journal excerpts). |
-| **Meta / caption** | `font-sans text-xs text-muted` | Dates, emails, secondary rows, app-version line. |
-| **Strong meta / status** | `text-xs font-bold` (+`text-navy`/`emerald`/`red`/`gold` per meaning) | Status labels, prices-in-context, "View all" style links at `text-sm`. |
-| **Micro label (dense UI)** | `text-[10px]` | Chart axis dates, tiny overlay labels. Keep `tracking-widest` for inline micro-labels inside admin/tools cards (matches website admin). |
-| **Button label** | `text-sm font-bold` (solid emphasis `text-sm font-black`) | Pressable labels; input/field labels above fields `text-sm font-bold text-ink`. |
+| Role                                        | Utilities                                                                    | Use for                                                                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kicker / eyebrow** (page + section level) | `text-xs font-black uppercase tracking-[0.24em]`                             | The small over-line above a hero/section (e.g. "What GENUM does"). Gold on navy, navy on light.                                         |
+| **Hero / page title** (1 per screen)        | `font-display text-3xl font-bold leading-tight` (+`tracking-tight` optional) | Home hero, Journal/Legal/Printing/OpenTools page heroes.                                                                                |
+| **Section heading**                         | `font-display text-2xl font-bold tracking-tight`                             | Statement headings inside content (pilot-cost total, "A useful loop…").                                                                 |
+| **Card / sub heading**                      | `font-display text-xl font-bold tracking-tight`                              | Training-program cards, CTA panel titles, admin dashboard headings.                                                                     |
+| **Dense / small display heading**           | `font-display text-lg font-bold`                                             | Website-mirrored panel headings, price figures, brand wordmark "GENUM".                                                                 |
+| **Item title (lists, sans)**                | `font-sans text-base font-bold leading-snug`                                 | Service rows, cart line names, list item names. Grid product names may stay `text-[13px]` (2-up cards).                                 |
+| **Body paragraph**                          | `font-sans text-sm leading-6 text-muted`                                     | Descriptions under titles. Ink instead of muted for primary copy.                                                                       |
+| **Compact body**                            | `text-sm leading-5`                                                          | Dense card copy (services list, journal excerpts).                                                                                      |
+| **Meta / caption**                          | `font-sans text-xs text-muted`                                               | Dates, emails, secondary rows, app-version line.                                                                                        |
+| **Strong meta / status**                    | `text-xs font-bold` (+`text-navy`/`emerald`/`red`/`gold` per meaning)        | Status labels, prices-in-context, "View all" style links at `text-sm`.                                                                  |
+| **Micro label (dense UI)**                  | `text-[10px]`                                                                | Chart axis dates, tiny overlay labels. Keep `tracking-widest` for inline micro-labels inside admin/tools cards (matches website admin). |
+| **Button label**                            | `text-sm font-bold` (solid emphasis `text-sm font-black`)                    | Pressable labels; input/field labels above fields `text-sm font-bold text-ink`.                                                         |
 
 > **Kicker tracking:** 0.24em is the app-wide kicker standard (mirrors website
 > `.24em` page eyebrows). `tracking-widest` remains only for **inline micro-labels**

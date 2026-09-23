@@ -2,8 +2,8 @@
 // SignInSheet - native sign-in / sign-up / forgot-password bottom sheet.
 // All auth goes directly to Supabase (no WebView involved).
 // =====================================================================
-import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { Feather } from "@expo/vector-icons";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,28 +15,34 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabaseConfigured, googleConfigured } from '../config/supabase';
-import { useApp } from '../context/AppContext';
-import { GoogleLogo } from './GoogleLogo';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { supabaseConfigured, googleConfigured } from "../config/supabase";
+import { useApp } from "../context/AppContext";
+import { GoogleLogo } from "./GoogleLogo";
 
 type Props = {
   visible: boolean;
   onRequestClose: () => void;
 };
 
-type Mode = 'signin' | 'signup' | 'forgot';
+type Mode = "signin" | "signup" | "forgot";
 
 export function SignInSheet({ visible, onRequestClose }: Props) {
   const insets = useSafeAreaInsets();
-  const { authBusy, authError, signInWithPassword, signUp, signInWithGoogle, resetPassword } =
-    useApp();
+  const {
+    authBusy,
+    authError,
+    signInWithPassword,
+    signUp,
+    signInWithGoogle,
+    resetPassword,
+  } = useApp();
 
-  const [mode, setMode] = useState<Mode>('signin');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<Mode>("signin");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -49,12 +55,12 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
   };
 
   const resetForm = () => {
-    setName('');
-    setEmail('');
-    setPassword('');
+    setName("");
+    setEmail("");
+    setPassword("");
     setShowPassword(false);
     setNotice(null);
-    setMode('signin');
+    setMode("signin");
   };
 
   const switchMode = (next: Mode) => {
@@ -63,40 +69,41 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
   };
 
   const canSubmit =
-    mode === 'forgot'
+    mode === "forgot"
       ? email.trim().length > 0 && !authBusy
       : email.trim().length > 0 && password.length > 0 && !authBusy;
 
   const handlePrimary = async () => {
-    if (mode === 'signin') {
+    if (mode === "signin") {
       const ok = await signInWithPassword(email, password);
       if (ok) resetForm();
-    } else if (mode === 'signup') {
+    } else if (mode === "signup") {
       const result = await signUp(name, email, password);
-      if (result === 'ok') resetForm();
-      else if (result === 'confirm') setNotice('Check your email to confirm your account.');
+      if (result === "ok") resetForm();
+      else if (result === "confirm")
+        setNotice("Check your email to confirm your account.");
     } else {
       const ok = await resetPassword(email);
       if (ok) {
-        setNotice('If that email exists, a reset link has been sent.');
-        switchMode('signin');
+        setNotice("If that email exists, a reset link has been sent.");
+        switchMode("signin");
       }
     }
   };
 
   const title =
-    mode === 'signin'
-      ? 'Welcome back'
-      : mode === 'signup'
-        ? 'Create account'
-        : 'Reset password';
+    mode === "signin"
+      ? "Welcome back"
+      : mode === "signup"
+        ? "Create account"
+        : "Reset password";
 
   const subtitle =
-    mode === 'signin'
-      ? 'Sign in to sync your build list and orders.'
-      : mode === 'signup'
-        ? 'Create an account to place orders.'
-        : 'We’ll email you a link to reset your password.';
+    mode === "signin"
+      ? "Sign in to sync your build list and orders."
+      : mode === "signup"
+        ? "Create an account to place orders."
+        : "We’ll email you a link to reset your password.";
 
   return (
     <Modal
@@ -108,9 +115,13 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
       <KeyboardAvoidingView
         style={styles.root}
         behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 40}
       >
-        <Pressable style={styles.backdrop} onPress={handleClose} disabled={closeDisabled} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={handleClose}
+          disabled={closeDisabled}
+        />
 
         <View
           style={{ paddingBottom: Math.max(insets.bottom, 12), paddingTop: 18 }}
@@ -120,7 +131,9 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
 
           <View className="flex-row items-start justify-between px-5">
             <View className="flex-1 pr-4">
-              <Text className="font-display text-xl font-bold tracking-tight text-navy">{title}</Text>
+              <Text className="font-display text-xl font-bold tracking-tight text-navy">
+                {title}
+              </Text>
               <Text className="mt-0.5 text-sm text-muted">{subtitle}</Text>
             </View>
             <Pressable
@@ -137,9 +150,9 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
           <View className="mx-5 mt-4 flex-row rounded-full bg-mist p-1">
             {(
               [
-                ['signin', 'Sign in'],
-                ['signup', 'Create'],
-                ['forgot', 'Reset'],
+                ["signin", "Sign in"],
+                ["signup", "Create"],
+                ["forgot", "Reset"],
               ] as [Mode, string][]
             ).map(([m, label]) => {
               const active = mode === m;
@@ -148,9 +161,11 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   key={m}
                   onPress={() => switchMode(m)}
                   disabled={closeDisabled}
-                  className={`flex-1 items-center rounded-full py-2 ${active ? 'bg-card' : ''}`}
+                  className={`flex-1 items-center rounded-full py-2 ${active ? "bg-card" : ""}`}
                 >
-                  <Text className={`text-xs font-bold ${active ? 'text-navy' : 'text-muted'}`}>
+                  <Text
+                    className={`text-xs font-bold ${active ? "text-navy" : "text-muted"}`}
+                  >
                     {label}
                   </Text>
                 </Pressable>
@@ -170,7 +185,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
               </View>
             ) : null}
 
-            {mode === 'signup' ? (
+            {mode === "signup" ? (
               <>
                 <Text className="mb-1 text-xs font-bold uppercase tracking-wide text-border">
                   Full name
@@ -203,7 +218,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
               className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
             />
 
-            {mode !== 'forgot' ? (
+            {mode !== "forgot" ? (
               <>
                 <Text className="mb-1 mt-3 text-xs font-bold uppercase tracking-wide text-border">
                   Password
@@ -216,17 +231,25 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                     placeholderTextColor="#94a3b8"
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
-                    textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                    textContentType={
+                      mode === "signup" ? "newPassword" : "password"
+                    }
                     accessibilityLabel="Password"
                     onSubmitEditing={() => void handlePrimary()}
                     className="flex-1 px-4 py-3 text-sm text-ink"
                   />
                   <Pressable
                     onPress={() => setShowPassword((v) => !v)}
-                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                    accessibilityLabel={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     className="px-3 py-3"
                   >
-                    <Feather name={showPassword ? 'eye-off' : 'eye'} size={17} color="#64748b" />
+                    <Feather
+                      name={showPassword ? "eye-off" : "eye"}
+                      size={17}
+                      color="#64748b"
+                    />
                   </Pressable>
                 </View>
               </>
@@ -234,14 +257,18 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
 
             {notice ? (
               <View className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <Text className="text-xs font-medium text-emerald-700">{notice}</Text>
+                <Text className="text-xs font-medium text-emerald-700">
+                  {notice}
+                </Text>
               </View>
             ) : null}
 
             {authError ? (
               <View className="mt-3 flex-row items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
                 <Feather name="alert-circle" size={15} color="#dc2626" />
-                <Text className="flex-1 text-xs font-medium text-red-600">{authError}</Text>
+                <Text className="flex-1 text-xs font-medium text-red-600">
+                  {authError}
+                </Text>
               </View>
             ) : null}
 
@@ -249,22 +276,28 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
               onPress={() => void handlePrimary()}
               disabled={!canSubmit}
               accessibilityRole="button"
-              className={`mt-4 flex-row items-center justify-center rounded-xl py-3.5 ${canSubmit ? 'bg-navy' : 'bg-navy/40'}`}
+              className={`mt-4 flex-row items-center justify-center rounded-xl py-3.5 ${canSubmit ? "bg-navy" : "bg-navy/40"}`}
             >
               {authBusy ? (
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <Text className="text-sm font-bold text-white">
-                  {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
+                  {mode === "signin"
+                    ? "Sign in"
+                    : mode === "signup"
+                      ? "Create account"
+                      : "Send reset link"}
                 </Text>
               )}
             </Pressable>
 
-            {mode === 'signin' && supabaseConfigured && googleConfigured ? (
+            {mode === "signin" && supabaseConfigured && googleConfigured ? (
               <>
                 <View className="mt-5 flex-row items-center gap-3">
                   <View className="h-px flex-1 bg-line" />
-                  <Text className="text-xs font-bold uppercase tracking-widest text-border">or</Text>
+                  <Text className="text-xs font-bold uppercase tracking-widest text-border">
+                    or
+                  </Text>
                   <View className="h-px flex-1 bg-line" />
                 </View>
                 <Pressable
@@ -280,7 +313,9 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                       <View className="h-5 w-5 items-center justify-center">
                         <GoogleLogo size={20} />
                       </View>
-                      <Text className="ml-2.5 text-sm font-bold text-ink">Continue with Google</Text>
+                      <Text className="ml-2.5 text-sm font-bold text-ink">
+                        Continue with Google
+                      </Text>
                     </>
                   )}
                 </Pressable>
@@ -296,10 +331,10 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
   },
 });

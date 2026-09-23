@@ -2,8 +2,8 @@
 // serviceService - reads the shared `services` Supabase table (same data
 // the website's lib/services.ts serves). RLS: public read on active rows.
 // =====================================================================
-import { supabase } from '../config/supabase';
-import type { Service } from '../types';
+import { supabase } from "../config/supabase";
+import type { Service } from "../types";
 
 type ServiceRow = {
   id: string;
@@ -32,10 +32,10 @@ function rowToService(row: ServiceRow): Service {
 /** List active services from Supabase (shared with the website). */
 export async function getServices(): Promise<Service[]> {
   const { data, error } = await supabase
-    .from('services')
-    .select('*')
-    .eq('active', true)
-    .order('sort_order', { ascending: true });
+    .from("services")
+    .select("*")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
 
   if (error) throw error;
   return ((data as ServiceRow[]) ?? []).map(rowToService);

@@ -6,10 +6,10 @@
 // in the top bar like the website's header account icon and is a stack screen
 // (website /account parity).
 // =====================================================================
-import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { CompositeNavigationProp } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { NavigatorScreenParams } from "@react-navigation/native";
+import type { CompositeNavigationProp } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 export type MainTabParamList = {
   Home: undefined;
@@ -21,7 +21,8 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   ProductDetail: { productId: string };
-  Checkout: { provider?: 'cod' | 'esewa' | 'khalti'; status?: string } | undefined;
+  Checkout:
+    { provider?: "cod" | "esewa" | "khalti"; status?: string } | undefined;
   Services: undefined;
   Projects: undefined;
   Contact: undefined;
@@ -38,7 +39,7 @@ export type RootStackParamList = {
   Journal: undefined;
   Printing: undefined;
   OpenTools: undefined;
-  Legal: { doc: 'privacy' | 'terms' };
+  Legal: { doc: "privacy" | "terms" };
   OrderSuccess: { orderId?: string; provider?: string; paid?: boolean };
   Account: undefined;
   Update: undefined;
@@ -48,4 +49,4 @@ export type RootStackParamList = {
 export type TabNav<T extends keyof MainTabParamList> = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, T>,
   NativeStackNavigationProp<RootStackParamList>
->;
+>;

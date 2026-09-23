@@ -11,19 +11,19 @@
 // platforms) the calls resolve to a no-op instead of throwing, so the rest
 // of the app is unaffected. See src/config/push.ts for activation steps.
 // =====================================================================
-import { Platform } from 'react-native'
-import { logger } from './logger'
-import * as Notifications from 'expo-notifications'
-import * as Device from 'expo-device'
-import { supabase, supabaseConfigured } from '../config/supabase'
+import { Platform } from "react-native";
+import { logger } from "./logger";
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
+import { supabase, supabaseConfigured } from "../config/supabase";
 import {
   PUSH_PROJECT_ID,
   PUSH_CHANNEL_ID,
   PUSH_CHANNEL_NAME,
   PUSH_CHANNEL_DESCRIPTION,
-} from '../config/push'
+} from "../config/push";
 
-if (Platform.OS !== 'web') {
+if (Platform.OS !== "web") {
   // expo-notifications has no web handler module; a module-scope call throws
   // UnavailabilityError on web and white-screens the app. Native-only.
   Notifications.setNotificationHandler({
@@ -33,20 +33,20 @@ if (Platform.OS !== 'web') {
       shouldPlaySound: true,
       shouldSetBadge: false,
     }),
-  })
+  });
 }
 
 /** Android channel for order updates (safe no-op elsewhere / when missing). */
 async function ensureChannel(): Promise<void> {
-  if (Platform.OS !== 'android') return
+  if (Platform.OS !== "android") return;
   try {
     await Notifications.setNotificationChannelAsync(PUSH_CHANNEL_ID, {
       name: PUSH_CHANNEL_NAME,
       description: PUSH_CHANNEL_DESCRIPTION,
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      sound: 'default',
-    })
+      sound: "default",
+    });
   } catch {
     /* channel API unavailable — ignore */
   }
@@ -61,16 +61,16 @@ export async function pushPermissionGranted(): Promise<boolean> {
     if (!Device.isDevice) {
       // Simulators can't receive remote push (Android emulators can via a
       // special FCM setup, but we don't support that here).
-      return false
+      return false;
     }
-    await ensureChannel()
-    const existing = await Notifications.getPermissionsAsync()
-    if (existing.granted) return true
-    if (!existing.canAskAgain) return false
-    const asked = await Notifications.requestPermissionsAsync()
-    return asked.granted
+    await ensureChannel();
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.granted) return true;
+    if (!existing.canAskAgain) return false;
+    const asked = await Notifications.requestPermissionsAsync();
+    return asked.granted;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -82,20 +82,24 @@ export async function getExpoPushToken(): Promise<string | null> {
   try {
     if (!PUSH_PROJECT_ID) {
       logger.warn(
-        'push',
-        'inactive: no Expo project id. Set EXPO_PUBLIC_EAS_PROJECT_ID or app.json extra.eas.projectId (see src/config/push.ts).',
-      )
-      return null
+        "push",
+        "inactive: no Expo project id. Set EXPO_PUBLIC_EAS_PROJECT_ID or app.json extra.eas.projectId (see src/config/push.ts).",
+      );
+      return null;
     }
-    const granted = await pushPermissionGranted()
-    if (!granted) return null
+    const granted = await pushPermissionGranted();
+    if (!granted) return null;
     const token = await Notifications.getExpoPushTokenAsync({
       projectId: PUSH_PROJECT_ID,
-    })
-    return token?.data ?? null
+    });
+    return token?.data ?? null;
   } catch (e) {
-    logger.warn('push', 'token request skipped:', e instanceof Error ? e.message : e)
-    return null
+    logger.warn(
+      "push",
+      "token request skipped:",
+      e instanceof Error ? e.message : e,
+    );
+    return null;
   }
 }
 
@@ -104,29 +108,33 @@ export async function getExpoPushToken(): Promise<string | null> {
  * user+token). No-op when push is unconfigured or the store is unreachable.
  */
 export async function registerPushToken(userId: string): Promise<void> {
-  if (!supabaseConfigured || !userId) return
+  if (!supabaseConfigured || !userId) return;
   try {
-    const token = await getExpoPushToken()
-    if (!token) return
-    await supabase.from('push_tokens').upsert(
+    const token = await getExpoPushToken();
+    if (!token) return;
+    await supabase.from("push_tokens").upsert(
       {
         user_id: userId,
         token,
         platform: Platform.OS,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,token' },
-    )
+      { onConflict: "user_id,token" },
+    );
   } catch (e) {
-    logger.warn('push', 'register skipped:', e instanceof Error ? e.message : e)
+    logger.warn(
+      "push",
+      "register skipped:",
+      e instanceof Error ? e.message : e,
+    );
   }
 }
 
 /** Removes every stored token for `userId` (called on sign-out). */
 export async function removePushTokens(userId: string): Promise<void> {
-  if (!supabaseConfigured || !userId) return
+  if (!supabaseConfigured || !userId) return;
   try {
-    await supabase.from('push_tokens').delete().eq('user_id', userId)
+    await supabase.from("push_tokens").delete().eq("user_id", userId);
   } catch {
     /* best-effort */
   }

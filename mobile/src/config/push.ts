@@ -24,10 +24,9 @@
 // will still register its token row so the activation gap is visible.
 // =====================================================================
 
-import Constants from 'expo-constants';
+import Constants from "expo-constants";
 
-const EAS_PROJECT_ID =
-  Constants.expoConfig?.extra?.eas?.projectId ?? '';
+const EAS_PROJECT_ID = Constants.expoConfig?.extra?.eas?.projectId ?? "";
 
 /** Env var wins; otherwise fall back to the app.json declared project id. */
 export function resolvePushProjectId(
@@ -37,12 +36,14 @@ export function resolvePushProjectId(
   return envProjectId || appJsonProjectId;
 }
 
-export const PUSH_PROJECT_ID =
-  resolvePushProjectId(process.env.EXPO_PUBLIC_EAS_PROJECT_ID, EAS_PROJECT_ID)
+export const PUSH_PROJECT_ID = resolvePushProjectId(
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
+  EAS_PROJECT_ID,
+);
 
 // Android notification channel used for order updates. Keep in sync with
 // the channelId the push-order-status edge function sends with.
-export const PUSH_CHANNEL_ID = 'order-updates'
-export const PUSH_CHANNEL_NAME = 'Order updates'
+export const PUSH_CHANNEL_ID = "order-updates";
+export const PUSH_CHANNEL_NAME = "Order updates";
 export const PUSH_CHANNEL_DESCRIPTION =
-  'Notifications when your order status changes (paid, shipped, cancelled).'
+  "Notifications when your order status changes (paid, shipped, cancelled).";

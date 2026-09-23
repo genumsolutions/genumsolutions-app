@@ -3,8 +3,8 @@
 // ErrorBoundary. Use at module scope (not inline in JSX) so the wrapped
 // component identity stays stable across renders.
 // =====================================================================
-import React from 'react'
-import { ErrorBoundary } from './ErrorBoundary'
+import React from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 export function withErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
@@ -14,7 +14,7 @@ export function withErrorBoundary<P extends object>(
     <ErrorBoundary label={label ?? Component.displayName ?? Component.name}>
       <Component {...props} />
     </ErrorBoundary>
-  )
-  Wrapped.displayName = `withErrorBoundary(${label ?? Component.displayName ?? Component.name})`
-  return Wrapped
+  );
+  Wrapped.displayName = `withErrorBoundary(${label ?? Component.displayName ?? Component.name})`;
+  return Wrapped;
 }

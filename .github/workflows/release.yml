@@ -51,11 +51,11 @@ on:
     # 0 jobs). See https://docs.github.com/actions/using-workflows/workflow-syntax
     # for the "workflow runs if ANY changed file matches paths" rule.
     paths:
-      - 'mobile/app.json'
-      - 'mobile/package.json'
-      - 'mobile/package-lock.json'
-      - 'mobile/plugins/**'
-      - 'mobile/keystores/**'
+      - "mobile/app.json"
+      - "mobile/package.json"
+      - "mobile/package-lock.json"
+      - "mobile/plugins/**"
+      - "mobile/keystores/**"
   workflow_dispatch: # Allow manual trigger
 
 concurrency:
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       # The project targets compileSdk 36 / targetSdk 36. GitHub's ubuntu
       # runner ships a default Android SDK, but not necessarily platform 36

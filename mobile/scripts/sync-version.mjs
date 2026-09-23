@@ -22,33 +22,33 @@
 //   SUPABASE_URL              e.g. https://xxxx.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY Supabase -> Settings -> API (service_role)
 // =====================================================================
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadSupabaseEnv } from './supabase-env.mjs';
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadSupabaseEnv } from "./supabase-env.mjs";
 
-const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // ── Read version from app.json (single source of truth) ─────────────
-const appJson = JSON.parse(readFileSync(resolve(rootDir, 'app.json'), 'utf8'));
+const appJson = JSON.parse(readFileSync(resolve(rootDir, "app.json"), "utf8"));
 const expo = appJson.expo;
 const VERSION = expo.version;
 const VERSION_CODE = expo.android?.versionCode;
 if (!VERSION || !VERSION_CODE) {
-  console.error('Error: Could not read version/versionCode from app.json');
+  console.error("Error: Could not read version/versionCode from app.json");
   process.exit(1);
 }
 
 // ── Supabase config ─────────────────────────────────────────────────
-const BUCKET = 'app-releases';
-const APK_FILE = 'genum-solutions-latest.apk';
-const MANIFEST_FILE = 'release.json';
+const BUCKET = "app-releases";
+const APK_FILE = "genum-solutions-latest.apk";
+const MANIFEST_FILE = "release.json";
 
 function parseArgs(argv) {
   const args = { dryRun: false, force: false };
   for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--dry-run') args.dryRun = true;
-    if (argv[i] === '--force') args.force = true;
+    if (argv[i] === "--dry-run") args.dryRun = true;
+    if (argv[i] === "--force") args.force = true;
   }
   return args;
 }
@@ -62,22 +62,28 @@ async function ensureBucket(url, key) {
     if (buckets.some((b) => b.name === BUCKET)) return;
   }
   const create = await fetch(`${url}/storage/v1/bucket`, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ name: BUCKET, public: true }),
   });
   if (!create.ok && create.status !== 400) {
-    const text = await create.text().catch(() => '');
-    throw new Error(`Failed to create bucket "${BUCKET}": ${create.status} ${text}`);
+    const text = await create.text().catch(() => "");
+    throw new Error(
+      `Failed to create bucket "${BUCKET}": ${create.status} ${text}`,
+    );
   }
 }
 
 async function main() {
   const { dryRun, force } = parseArgs(process.argv);
-  const { baseUrl: url, serviceRoleKey: serviceKey, urlError } = loadSupabaseEnv();
+  const {
+    baseUrl: url,
+    serviceRoleKey: serviceKey,
+    urlError,
+  } = loadSupabaseEnv();
   if (urlError) throw new Error(urlError);
 
   const publicApkUrl = `${url}/storage/v1/object/public/${BUCKET}/${APK_FILE}`;
@@ -93,13 +99,18 @@ async function main() {
   let apkExists = false;
   if (url) {
     try {
-      const head = await fetch(versionedApkUrl, { method: 'HEAD', redirect: 'follow' });
+      const head = await fetch(versionedApkUrl, {
+        method: "HEAD",
+        redirect: "follow",
+      });
       apkExists = head.ok;
     } catch {
       apkExists = false;
     }
   }
-  console.log(`  Versioned APK published?: ${apkExists ? 'yes' : 'NO'}  ${versionedApkUrl}`);
+  console.log(
+    `  Versioned APK published?: ${apkExists ? "yes" : "NO"}  ${versionedApkUrl}`,
+  );
   if (!apkExists && !force && !dryRun) {
     throw new Error(
       `genum-solutions-${VERSION}.apk was NOT found at ${versionedApkUrl}. ` +
@@ -114,53 +125,60 @@ async function main() {
     version: VERSION,
     version_code: VERSION_CODE,
     apkUrl: publicApkUrl,
-    size_mb: null,   // Will be filled by upload-release.mjs after APK upload
-    sizeLabel: null,  // Will be filled by upload-release.mjs after APK upload
+    size_mb: null, // Will be filled by upload-release.mjs after APK upload
+    sizeLabel: null, // Will be filled by upload-release.mjs after APK upload
     releaseUrl: publicManifestUrl,
-    appsPagePath: '/app',
+    appsPagePath: "/app",
     notes: `Released from app.json (version ${VERSION}, versionCode ${VERSION_CODE}).`,
     updated_at: new Date().toISOString(),
   };
 
-  console.log('─'.repeat(56));
+  console.log("─".repeat(56));
   console.log(`  Syncing version from app.json`);
   console.log(`  Version:     ${manifest.version}`);
   console.log(`  VersionCode: ${manifest.version_code}`);
   console.log(`  Manifest:    ${publicManifestUrl}`);
-  console.log('─'.repeat(56));
+  console.log("─".repeat(56));
 
   if (dryRun) {
-    console.log('\nManifest content (dry run — not uploaded):\n');
+    console.log("\nManifest content (dry run — not uploaded):\n");
     console.log(JSON.stringify(manifest, null, 2));
     return;
   }
 
   if (!url || !serviceKey) {
-    console.error('\nError: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
-    console.error('Set them as env vars or in mobile/.env.local');
+    console.error(
+      "\nError: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.",
+    );
+    console.error("Set them as env vars or in mobile/.env.local");
     process.exit(1);
   }
 
   await ensureBucket(url, serviceKey);
 
   const body = JSON.stringify(manifest, null, 2);
-  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${MANIFEST_FILE}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serviceKey}`,
-      'Content-Type': 'application/json',
-      'x-upsert': 'true',
-      'cache-control': '0',  // No cache — website must always get fresh
+  const res = await fetch(
+    `${url}/storage/v1/object/${BUCKET}/${MANIFEST_FILE}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        "x-upsert": "true",
+        "cache-control": "0", // No cache — website must always get fresh
+      },
+      body,
     },
-    body,
-  });
+  );
 
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
+    const text = await res.text().catch(() => "");
     throw new Error(`Manifest upload failed: ${res.status} ${text}`);
   }
 
-  console.log(`\n✅ Manifest uploaded! Website and app will now show v${VERSION}`);
+  console.log(
+    `\n✅ Manifest uploaded! Website and app will now show v${VERSION}`,
+  );
   console.log(`   URL: ${publicManifestUrl}`);
 }
 

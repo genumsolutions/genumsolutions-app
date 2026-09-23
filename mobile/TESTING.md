@@ -16,21 +16,25 @@
 > NO native bump — v2.0.6/49 stays. Gates: **tsc clean + vitest 54/54 + expo-doctor 18/18**.
 
 ### A-48 — theme token refresh (whole app, subtle)
+
 - [ ] Remote screen, **light**: background no longer pure white — screens/panels separate clearly
 - [ ] Remote screen, **dark**: soft navy midnight (not pitch black); text/cards readable
 - [ ] Home/Shop/Account/Menu/Tools still look consistent with the refresh
 
 ### A-49 — OLED data font standardized + fit
+
 - [ ] Compact OLED mirror (Remote): every readout in ONE consistent mono scale (no mixed sizes)
 - [ ] AUTO rows (Angle / P / D / OUT / I / OFF) fit the 160×80 slot with no clipping
 - [ ] Long mode names/directions truncate cleanly (no overflow)
 
 ### A-50 — "Hide" → "Telemetry" control pill
+
 - [ ] Third pill reads **Telemetry**, SAME row as D-pad and Joystick
 - [ ] Webserver mode + Telemetry → WiFi & Router panel; PID-auto + Telemetry → balance controls
 - [ ] Any OTHER robocar mode + Telemetry → useful telemetry (full OLED mirror), NOT "Pad hidden"
 
 ### A-51 — add-router card overflow
+
 - [ ] "Add a router" card: helper sentences stay INSIDE the rounded card (light AND dark)
 - [ ] "No saved routers yet…" and the Active-connection helper text also stay inside
 
@@ -44,6 +48,7 @@
 > expo-doctor 18/18** (2026-09-17). **Pushed `aa560bd` on the owner go; the `OTA Only`
 > workflow (`ota-only.yml`) publishes the bundle on main — close + reopen the app to
 > receive it.**
+>
 > - **A-40/A-41** `carProtocol.ts` `buildRouterCommand('CLEAR', …)` → `ROUTERS;CLEAR`;
 >   `useControlHub.routerClearAll()` broadcasts on every live link, optimistically clears
 >   `carNetworks`, persists `savedRouters: []` and reports "All routers cleared".
@@ -86,6 +91,7 @@
 > round-8 push (`OTA Only` workflow run `35197115585` = success). **Owner device verify
 > 2026-09-17 (after app close+reopen): round "worked out all fine for most of the things"** —
 > A-38a/A-39a exercised OK; per-check result not itemized, any residual item logged next session.
+>
 > - **A-38** `RemoteControlScreen.tsx` `friendlyBtName()` no longer invents a car name: a
 >   MAC-shaped scan result (or a 1–2 char fragment) now returns `''` instead of `'ESP32 Car'`.
 >   Callers already render `<name> || 'Connected'`, so the header shows the neutral state label
@@ -106,6 +112,7 @@
 > matrix, §4 A-35..A-37 rationale). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7
 > roll into one same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18**
 > (2026-09-17). Code status: all A-35..A-37 implemented, push PENDING.
+>
 > - **A-36** the top-bar IP chip (`RemoteControlScreen.tsx`) is **ALWAYS tappable** — no
 >   `disabled={!wifiConnected}`, and `handleOpenWebPage()` no longer early-returns when
 >   telemetry is missing: with a reachable STA IP it opens `http://<ip>`, otherwise it opens
@@ -135,6 +142,7 @@
 > App half of round-6. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-6-2026-09-17.md`.
 > Checklist: `guide/SESSION-NOTES.md` → "Round-6 device tests". NO native bump — v2.0.6/49
 > stays, JS OTA (rounds 5+6 rolled into one same-version bundle). tsc clean + **50/50 tests**.
+>
 > - **A-29** RouterPanel shown only in the ESP32 (Webserver) mode; other hidden-pad modes → "Pad hidden" placeholder.
 > - **A-30** Saved routers + device name persist across a forced app restart (global `genum.lastDevice` spill + `savedNetworksRef`).
 > - **A-31** Constant-height sub-header band for every robocar mode — the deck never shifts; IP chip only in webserver mode.
@@ -148,6 +156,7 @@
 > NO native bump — v2.0.6/49 stays, JS OTA. tsc clean + **50/50 tests**.
 
 ### A-25 — friendly BT name in header
+
 - [ ] Header shows the car's friendly BT name right of "Remote" (`_` → space,
       e.g. `WIRELESS_CAR` → `WIRELESS CAR`)
 - [ ] Never a raw hex MAC — a MAC-shaped scan name renders as `ESP32 Car`
@@ -157,6 +166,7 @@
 - [ ] `192.168.4.1 (AP)` shown when the car is in its own AP mode
 
 ### A-26 — single "WiFi & Router" panel
+
 - [ ] Hide hides BOTH drives (D-pad + joystick) and shows the WiFi & Router panel
 - [ ] The old WeblinkControls card and the "Pad hidden" placeholder are gone
 - [ ] The Settings gear no longer contains a WiFi provisioning card
@@ -164,6 +174,7 @@
       list, and the Add form
 
 ### A-27 — saved-router add / switch / delete over WS
+
 - [ ] RouterPanel list entries re-sync from the car's `networks` (WS JSON) within
       ~1-2 s after any change
 - [ ] Add: saves on the car (`ROUTERS;ADD;<ssid>;<pass>`), appears in the list,
@@ -175,6 +186,7 @@
 - [ ] Passwords are NEVER sent by the app back to the hub/panel (W-14)
 
 ### A-28 — keyboard never covers inputs
+
 - [ ] Add-form inputs sit above the soft keyboard (resize + KeyboardAvoidingView)
 - [ ] Focused input scrolls into view; no obscured TextInput
 
@@ -229,14 +241,14 @@
 > physical car and states the Genum asset line.
 
 - [x] **A-17 — work-in-progress wording (badge + OLED preview):** `ModeChooser` badge →
-  `Work in progress` (renders `WORK IN PROGRESS`), row mark `· work in progress on
-  this car`; `OledDisplay` preview body now renders the mode's own mark (`COMING SOON`
-  or `WORK IN PROGRESS`) instead of hardcoding `COMING SOON...`; comments synced
-  (`carProtocol.ts`, `types.ts`, `useControlHub.ts`).
+      `Work in progress` (renders `WORK IN PROGRESS`), row mark `· work in progress on
+this car`; `OledDisplay` preview body now renders the mode's own mark (`COMING SOON`
+      or `WORK IN PROGRESS`) instead of hardcoding `COMING SOON...`; comments synced
+      (`carProtocol.ts`, `types.ts`, `useControlHub.ts`).
 - [x] **A-18 — project names + Genum asset line:** `ProjectInfo` shows the physical
-  car per mode (`Wireless Car` for 4WD4M/ESP_SER/ESP_CLI, `2WD1M Car`, `Self Balance
-  Car`) and a footer `Asset of GENUM SOLUTIONS PVT. LTD.` on both the robocar and
-  category cards.
+      car per mode (`Wireless Car` for 4WD4M/ESP_SER/ESP_CLI, `2WD1M Car`, `Self Balance
+Car`) and a footer `Asset of GENUM SOLUTIONS PVT. LTD.` on both the robocar and
+      category cards.
 
 ---
 
@@ -252,32 +264,32 @@
 > below. Owner directive: keep ALL cars/bots consistent in UI/UX (fleet pass).
 
 - [x] **R14-1 — broadcast IP always shown in ESP_SER (A-11):** the IP row renders in
-  `isServer` mode even before the WebSocket connects; value = `telemetry.ip` else
-  `192.168.4.1 (AP fallback)` (fixes the hidden-IP-just-when-you-need-it gate at
-  `WeblinkControls.tsx`).
+      `isServer` mode even before the WebSocket connects; value = `telemetry.ip` else
+      `192.168.4.1 (AP fallback)` (fixes the hidden-IP-just-when-you-need-it gate at
+      `WeblinkControls.tsx`).
 - [x] **R14-2 — dead "Enter ESP_SER" button removed (A-12):** no control claims to
-  "enter" an already-active mode; show a passive hint instead (it sent the active
-  token and was no-op — the owner reported it "does nothing").
-  New: `Mode active · drive below` chip in the Weblink card header.
+      "enter" an already-active mode; show a passive hint instead (it sent the active
+      token and was no-op — the owner reported it "does nothing").
+      New: `Mode active · drive below` chip in the Weblink card header.
 - [x] **R14-3 — webserver screen fits the Remote window (A-13):** the Weblink overlay
-  wrapper gets `min-h-0` and the duplicated border/padding is stripped — one chrome
-  level, no horizontal overflow.
+      wrapper gets `min-h-0` and the duplicated border/padding is stripped — one chrome
+      level, no horizontal overflow.
 - [x] **R14-4 — no connection flicker (A-14):** steady drive → no live-updating
-  indicator/state churn; the chrome link indicator stays mounted and only swaps
-  text/colour; REQ_STATE interval deps are stable (focus-only via ref).
+      indicator/state churn; the chrome link indicator stays mounted and only swaps
+      text/colour; REQ_STATE interval deps are stable (focus-only via ref).
 - [x] **R14-5 — SSID shows the just-sent network instantly (A-15):** `handleWifiProvision`
-  optimistically updates the deck's SSID (car T-35 now confirms anyway).
+      optimistically updates the deck's SSID (car T-35 now confirms anyway).
 - [x] **R14-6 — status line dedupes (A-16):** `setDriveStatus` only fires on actual
-  change (kills the 4WD4M flooding).
+      change (kills the 4WD4M flooding).
 - [x] **R14-7 — fleet UI consistency (round-3, 2026-09-16):** label color token is
-  `text-muted` everywhere in the control panels (`text-border` misuse removed from
-  `DriveControls`, `DroneControls`, `SensorGrid` → they were rendering the border
-  slate-400/lighter instead of the muted label color); ProjectInfo tab badge now uses
-  the fleet badge family (`font-black`, wording `COMING SOON`-consistent) instead of
-  the "Soon" variant. Panel cards stay the canonical `rounded-2xl border-line bg-card
-  shadow-card` + `text-xs font-black uppercase tracking-widest text-navy` header;
-  detail cards `rounded-xl border-line bg-surface`. Dark Remote-deck tokens unchanged
-  (those are the immersive deck's own family).
+      `text-muted` everywhere in the control panels (`text-border` misuse removed from
+      `DriveControls`, `DroneControls`, `SensorGrid` → they were rendering the border
+      slate-400/lighter instead of the muted label color); ProjectInfo tab badge now uses
+      the fleet badge family (`font-black`, wording `COMING SOON`-consistent) instead of
+      the "Soon" variant. Panel cards stay the canonical `rounded-2xl border-line bg-card
+shadow-card` + `text-xs font-black uppercase tracking-widest text-navy` header;
+      detail cards `rounded-xl border-line bg-surface`. Dark Remote-deck tokens unchanged
+      (those are the immersive deck's own family).
 
 ---
 
@@ -350,6 +362,7 @@
 > Design record: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2c (A-7, A-8).
 
 **If something goes wrong (recovery):**
+
 - **Revert path:** `git checkout main && git reset --hard backup` is the fleet
   full-revert (see `guide/REBUILD-FAILSAFE.md`); for a surgical revert use
   `git revert <commit>` — the allow-all batch is one commit on `main`.
@@ -395,6 +408,7 @@
 > alike. No PASS boxes ticked from the partial run; the full round re-runs against
 > car v1.5.0 + remote v1.2.0 (R12 checklist above folds in — R12-1's three-way check
 > covers the rename on hardware).
+
 - [ ] **R10-8 — WiFi provisioning over BT (ESP_SER deck):** connect BT → open ESP_SER deck → enter SSID/password → "Send WiFi to car" → car OLED shows mode change to ESP32(WEBSERVER) → car joins the router (IP on OLED) → app "Car WiFi: <ssid>" appears in the deck.
 - [ ] **R10-9 — AP fallback broadcast id:** provision a wrong SSID on purpose → car falls back to AP mode → deck shows "Fallback AP: ESP32_Car_<mac>"; connect the phone to that AP → ws://192.168.4.1:81 still connects.
 - [ ] **R10-10 — no drive from stub modes on the car:** switch the car into a coming-soon mode by its own button → F/B/L/R and SPD<n> show "Coming soon" on the car OLED; motors never spin; S always stops.
@@ -440,22 +454,26 @@
 > Install v2.0.6 APK (41.4 MB) from `/app` or the OTA. The remote screen was rebuilt from scratch.
 
 ### A. Remote screen — basic controls
+
 - [ ] **Joystick:** left stick drives (up = forward, down = reverse), right stick steers in 2WD1M mode. Both sticks track fingers 1:1, re-grab re-centers, release snaps back and stops.
 - [ ] **D-pad:** all 5 cells visible in standard 3x3 cross shape on both pads. Left pad: F/B + center stop. Right pad: L/R + center stop.
 - [ ] **Both controls work simultaneously:** joystick and d-pad can be used interchangeably without conflict.
 - [ ] **E-stop:** red floating FAB stops car immediately with haptic feedback.
 
 ### B. Chrome row
+
 - [ ] **Back/Select/Mode/Speed all functional:** Back exits, Select enters NAV, mode cycles, speed slider works.
 - [ ] **Settings:** steer limit + trim adjust correctly for 2WD1M; opens as in-window panel.
 - [ ] **Disconnect:** confirmation dialog appears, safe stop sent before dropping link.
 
 ### C. OLED + mode sync
+
 - [ ] **OLED:** shows mode | speed/steer, body direction word, status bar. Size matches compact 160×80 layout.
 - [ ] **Mode from car button reflects in app immediately** (REQ_STATE polling for SPP + WiFi).
 - [ ] **Mode change from app reaches car** and car confirms via STATE telemetry.
 
 ### D. Carry-overs from rounds 3-7
+
 - [ ] **R3-B1:** landscape lock works, restores on exit.
 - [ ] **R3-B2:** single screen, no scroll in remote.
 - [ ] **R3-C1-C4:** account dropdown, latest orders, My Profile, sign out.
@@ -495,6 +513,7 @@
 - [ ] **R6-6 — About this project:** the Control Panel card is titled "About this project" (project/build info per category) — not "About this mode".
 
 ### Carry-overs to re-check in the same pass (rounds 4+5)
+
 - [ ] R4-3 single chrome row · R4-4 uniform d-pad cells · R4-7 bigger Exit/⚙/toggle
 - [ ] R5-3 single App Updates row (no bordered duplicate) · R5-4 no text overflow on card edges
 
@@ -517,6 +536,7 @@
 **Pass criteria:** all boxes tick on device; drive/steer/E-stop behaviour unchanged from round 3.
 
 ---
+
 > **Historical note:** the v1.5.14-era status line below is outdated; current state lives in GUIDE.md.
 > Status: **v1.5.14 code complete + committed + pushed to `main`** (both repos; version bumped 1.5.14/22; typecheck + lint + 33/33 tests + production build + expo-doctor 18/18 all green). Physical-device pass pending; APK not yet built.
 
@@ -527,12 +547,14 @@
 > Report snags by ID (e.g. "R3-A3 fails"). Scope: everything shipped since v2.0.1 — remote overhaul (v2.0.2), joystick-first OTA remaster, version-accurate update detection (v2.0.4).
 
 ### A. Update & OTA (the v2.0.4 headline features)
+
 - [x] **R3-A1 — OTA pickup at same version:** open the app → it checks on load → gold "update available" pill appears when a newer bundle exists (or "App updated" chip after one just applied).
 - [x] **R3-A2 — version-accurate detection:** Update screen shows the correct live version (2.0.4/47) — not a display-version guess.
 - [x] **R3-A3 — reload banner:** after an OTA applies, the "Update applied — reload" banner offers a reload that lands you on the new bundle.
 - [x] **R3-A4 — no false prompt:** when fully up to date, NO update pill/banner appears.
 
 ### B. Remote window (landscape gaming remote)
+
 - [x] **R3-B1 — landscape lock:** remote opens landscape and stays landscape; on exit the rest of the app returns to normal orientation.
 - [x] **R3-B2 — single screen, no scroll:** HUD + compact 2:1 OLED + mode chooser + drive deck + E-stop all fit without scrolling; nothing overflows in landscape.
 - [x] **R3-B3 — joystick feel:** big pro sticks (drive left / steer right), right stick dims + "UNUSED" on non-2WD1M modes; D-pad layout works via the toggle.
@@ -541,12 +563,14 @@
 - [x] **R3-B6 — settings dropdown:** steer limit + trim steppers work for 2WD1M; on other modes it opens with a note instead of controls; outside-tap closes.
 
 ### C. Account dropdown + screens
+
 - [x] **R3-C1 — dropdown:** top-bar avatar opens the anchored card (initials, name, gold Admin chip if admin, email) — backdrop tap closes it.
 - [x] **R3-C2 — latest orders:** up to 3 orders with correct status pills + provider + total NPR; loading/empty/error states look right.
 - [x] **R3-C3 — My Profile:** opens the full Account screen (order status pills, details form, messages).
 - [x] **R3-C4 — sign out:** inline confirm works; admin-only "Admin Panel" row hidden for customers.
 
 ### D. General regression
+
 - [x] **R3-D1 — cold start:** no crash, sign-in (email + Google) works.
 - [x] **R3-D2 — shop + cart:** browse, add to cart, quantity edit, checkout flow intact.
 - [x] **R3-D3 — admin:** dashboard cards don't overflow right-edge (Messages card), tabs function.
@@ -712,10 +736,10 @@ Every step behaves as described above. No app crash or permanently dead control;
 
 ## Test log
 
-| Date | Device / Android | Build installed | Result | Notes |
-|------|------------------|-----------------|--------|-------|
-| 2026-09-03 | — (no device) | v1.5.5 | ✅ Pre-flight PASS | SHA-256 match, release signature, `1.5.5`+`sizeLabel` in bundle, manifest live. Hardware steps A–H pending. |
-| 2026-09-03 | Owner phone | v1.5.8-admin-fixes QA (`0dc84b44…`) | ✅ PASS (admin scope) | All 12 admin tabs scroll with no dead bottom band; Orders/Messages/Activity no longer clip; Journal Edit/New lands on the fields; ProjectPackages/RobotCarProjects edit in place with filter/page kept; product images load from Supabase only (works in airplane mode). |
-| 2026-09-03 | — (no device) | v1.5.9 | ✅ Pre-flight PASS | sha256 `efe58825…`, bundle contains `1.5.9` + **0** website-URL refs + admin-fix marker, manifest live 1.5.9/17, remote Content-Length == local. v1.5.9 = the QA-passed code + version bump. |
-| 2026-09-03 | — (no device) | v1.5.10 | ✅ Pre-flight PASS | sha256 `789fb692…`, bundle contains `1.5.10` + **0** website-URL refs + `grow-0`/`shrink-0` strip-fix markers, manifest live 1.5.10/18, remote Content-Length == local. v1.5.10 = v1.5.9 + tab-strip gap fix; visual device pass for the strip fix still pending. |
-| 2026-09-04 | — (no device) | v1.5.11 | ✅ Build + manifest PASS | `gradlew assembleRelease` BUILD SUCCESSFUL (36,024,345 B / 34.4 MB); uploaded versioned + latest; fresh manifest 1.5.11/19/34.4 MB (cache-busted GET). Device pass for the AppMenu modal / back-nav / pager re-sync / swipe pager still pending. |
+| Date       | Device / Android | Build installed                     | Result                   | Notes                                                                                                                                                                                                                                                                    |
+| ---------- | ---------------- | ----------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-03 | — (no device)    | v1.5.5                              | ✅ Pre-flight PASS       | SHA-256 match, release signature, `1.5.5`+`sizeLabel` in bundle, manifest live. Hardware steps A–H pending.                                                                                                                                                              |
+| 2026-09-03 | Owner phone      | v1.5.8-admin-fixes QA (`0dc84b44…`) | ✅ PASS (admin scope)    | All 12 admin tabs scroll with no dead bottom band; Orders/Messages/Activity no longer clip; Journal Edit/New lands on the fields; ProjectPackages/RobotCarProjects edit in place with filter/page kept; product images load from Supabase only (works in airplane mode). |
+| 2026-09-03 | — (no device)    | v1.5.9                              | ✅ Pre-flight PASS       | sha256 `efe58825…`, bundle contains `1.5.9` + **0** website-URL refs + admin-fix marker, manifest live 1.5.9/17, remote Content-Length == local. v1.5.9 = the QA-passed code + version bump.                                                                             |
+| 2026-09-03 | — (no device)    | v1.5.10                             | ✅ Pre-flight PASS       | sha256 `789fb692…`, bundle contains `1.5.10` + **0** website-URL refs + `grow-0`/`shrink-0` strip-fix markers, manifest live 1.5.10/18, remote Content-Length == local. v1.5.10 = v1.5.9 + tab-strip gap fix; visual device pass for the strip fix still pending.        |
+| 2026-09-04 | — (no device)    | v1.5.11                             | ✅ Build + manifest PASS | `gradlew assembleRelease` BUILD SUCCESSFUL (36,024,345 B / 34.4 MB); uploaded versioned + latest; fresh manifest 1.5.11/19/34.4 MB (cache-busted GET). Device pass for the AppMenu modal / back-nav / pager re-sync / swipe pager still pending.                         |

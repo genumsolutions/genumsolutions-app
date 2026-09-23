@@ -9,18 +9,18 @@
 // =====================================================================
 
 export const ADMIN_TABS = [
-  'Dashboard',
-  'Orders',
-  'Products',
-  'Projects',
-  'Services',
-  'Journal',
-  'Users',
-  'Messages',
-  'Finance',
-  'Activity',
-  'Content',
-  'Settings',
-] as const
+  "Dashboard",
+  "Orders",
+  "Products",
+  "Projects",
+  "Services",
+  "Journal",
+  "Users",
+  "Messages",
+  "Finance",
+  "Activity",
+  "Content",
+  "Settings",
+] as const;
 
-export type AdminTab = (typeof ADMIN_TABS)[number]
+export type AdminTab = (typeof ADMIN_TABS)[number];

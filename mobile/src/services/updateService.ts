@@ -12,27 +12,27 @@
 //   2. If no OTA update, check for APK update (native changes).
 //   3. Download and guide user through APK install.
 // =====================================================================
-import { File, Paths } from 'expo-file-system';
-import * as IntentLauncher from 'expo-intent-launcher';
-import * as Updates from 'expo-updates';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
-import { APP_VERSION } from '../config/site';
+import { File, Paths } from "expo-file-system";
+import * as IntentLauncher from "expo-intent-launcher";
+import * as Updates from "expo-updates";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
+import { APP_VERSION } from "../config/site";
 import {
   APK_URL,
   RELEASE_MANIFEST_URL,
   type ReleaseManifest,
-} from '../config/update';
+} from "../config/update";
 
 export type UpdateStatus =
-  | 'unknown'
-  | 'checking'
-  | 'up-to-date'
-  | 'update-available'
-  | 'error'
-  | 'downloading'
-  | 'downloaded'
-  | 'installing';
+  | "unknown"
+  | "checking"
+  | "up-to-date"
+  | "update-available"
+  | "error"
+  | "downloading"
+  | "downloaded"
+  | "installing";
 
 export type UpdateState = {
   status: UpdateStatus;
@@ -53,8 +53,8 @@ export function compareVersions(current: string, latest: string): number {
   const parse = (v: string) =>
     v
       .trim()
-      .split('.')
-      .map((part) => parseInt(part.replace(/\D/g, ''), 10) || 0);
+      .split(".")
+      .map((part) => parseInt(part.replace(/\D/g, ""), 10) || 0);
   const a = parse(current);
   const b = parse(latest);
   const len = Math.max(a.length, b.length);
@@ -80,7 +80,7 @@ export function isVersionNewer(current: string, latest: string): boolean {
 // successful install.
 export function installedAppVersion(): string {
   const native = Constants.expoConfig?.version;
-  if (typeof native === 'string' && native.trim()) return native.trim();
+  if (typeof native === "string" && native.trim()) return native.trim();
   return APP_VERSION;
 }
 
@@ -96,7 +96,7 @@ export async function checkForOtaUpdate(): Promise<{
   error?: string;
 }> {
   // OTA only works on native (Android/iOS), not web
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     return { applied: false };
   }
   try {
@@ -126,14 +126,20 @@ export async function checkForUpdate(
   manifestUrl: string = RELEASE_MANIFEST_URL,
 ): Promise<UpdateState> {
   try {
-    const res = await fetchImpl(manifestUrl, { cache: 'no-store' });
+    const res = await fetchImpl(manifestUrl, { cache: "no-store" });
     if (!res.ok) {
-      return { status: 'error', error: `Release check failed (${res.status}).` };
+      return {
+        status: "error",
+        error: `Release check failed (${res.status}).`,
+      };
     }
     const data = (await res.json()) as ReleaseManifest;
-    const latest = (data.version || '').trim();
+    const latest = (data.version || "").trim();
     if (!latest) {
-      return { status: 'error', error: 'Release manifest is missing a version.' };
+      return {
+        status: "error",
+        error: "Release manifest is missing a version.",
+      };
     }
     const apkUrl = data.apkUrl || APK_URL;
     const size = data.sizeLabel || data.size;
@@ -147,11 +153,12 @@ export async function checkForUpdate(
     // self-reports the new version and the version-string check returns false.
     const nativeCode = Constants.expoConfig?.android?.versionCode ?? 0;
     const manifestCode = data.version_code ?? 0;
-    const codeNewer = nativeCode > 0 && manifestCode > 0 && nativeCode < manifestCode;
+    const codeNewer =
+      nativeCode > 0 && manifestCode > 0 && nativeCode < manifestCode;
 
     if (versionNewer || codeNewer) {
       return {
-        status: 'update-available',
+        status: "update-available",
         latestVersion: latest,
         apkUrl,
         size,
@@ -160,13 +167,13 @@ export async function checkForUpdate(
       };
     }
     return {
-      status: 'up-to-date',
+      status: "up-to-date",
       latestVersion: latest,
       size,
       updatedAt: data.updated_at,
     };
   } catch {
-    return { status: 'error', error: 'Could not reach the update server.' };
+    return { status: "error", error: "Could not reach the update server." };
   }
 }
 
@@ -185,13 +192,13 @@ export async function checkForAnyUpdate(
   // 2. APK check always runs so a newer native release still surfaces a pill
   //    on the same launch where an OTA bundle happens to be available.
   const apk = await checkForUpdate(fetchImpl, manifestUrl);
-  if (apk.status === 'update-available' || apk.status === 'error') {
+  if (apk.status === "update-available" || apk.status === "error") {
     return { ...apk, otaApplied: ota.applied };
   }
   if (ota.applied) {
     return {
-      status: 'up-to-date',
-      notes: 'A UI update was applied. Restart the app to see changes.',
+      status: "up-to-date",
+      notes: "A UI update was applied. Restart the app to see changes.",
       otaApplied: true,
       updatedAt: apk.updatedAt,
     };
@@ -208,8 +215,8 @@ export async function checkForAnyUpdate(
 // original cache-poisoning bug), and URL-unsafe characters are flattened for
 // the filesystem. Unit-tested in updateService.test.ts.
 export function cacheFileNameFor(apkUrl: string): string {
-  const urlName = apkUrl.split('/').pop() || 'genum-update.apk';
-  return urlName.replace(/[^A-Za-z0-9._-]/g, '_');
+  const urlName = apkUrl.split("/").pop() || "genum-update.apk";
+  return urlName.replace(/[^A-Za-z0-9._-]/g, "_");
 }
 export async function downloadAndInstall(
   apkUrl: string,
@@ -239,9 +246,9 @@ export async function downloadAndInstall(
     file = await File.downloadFileAsync(apkUrl, target);
   } catch (e) {
     throw new Error(
-      'Download failed. Check your connection or storage, then try again. (download: ' +
+      "Download failed. Check your connection or storage, then try again. (download: " +
         (e instanceof Error ? e.message : String(e)) +
-        ')',
+        ")",
     );
   }
 
@@ -252,9 +259,9 @@ export async function downloadAndInstall(
   // REQUEST_INSTALL_PACKAGES (added via the with-install-permission plugin)
   // is required on Android 8+ for this intent to be allowed.
   try {
-    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+    await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
       data: file.contentUri,
-      type: 'application/vnd.android.package-archive',
+      type: "application/vnd.android.package-archive",
       // FLAG_GRANT_READ_URI_PERMISSION so the installer can read our cached file.
       flags: 1,
     });
@@ -262,7 +269,7 @@ export async function downloadAndInstall(
     throw new Error(
       'Could not open the installer. Enable "Install unknown apps" for GENUM and try again. (install: ' +
         (e instanceof Error ? e.message : String(e)) +
-        ')',
+        ")",
     );
   }
 }

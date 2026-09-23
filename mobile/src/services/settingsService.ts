@@ -20,30 +20,35 @@
 // values are adopted opportunistically on sign-in (cloud wins only
 // when the user has actually saved a preference there).
 // =====================================================================
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../config/supabase';
-import type { ThemeMode } from '../context/AppContext';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../config/supabase";
+import type { ThemeMode } from "../context/AppContext";
 
-const THEME_CACHE_KEY = 'genum-theme-mode'; // existing AppContext cache key
-const SETTINGS_CACHE_KEY = 'genum-user-settings';
+const THEME_CACHE_KEY = "genum-theme-mode"; // existing AppContext cache key
+const SETTINGS_CACHE_KEY = "genum-user-settings";
 
 /** App ThemeMode -> canonical DB value (2-mode: 'dark' → 'dim', 'system' never stored). */
-export function themeModeToPreference(mode: ThemeMode): 'light' | 'dim' {
-  return mode === 'light' ? 'light' : 'dim';
+export function themeModeToPreference(mode: ThemeMode): "light" | "dim" {
+  return mode === "light" ? "light" : "dim";
 }
 
 /** Canonical DB value -> app ThemeMode (legacy 'system' → 'dark'; unknown → 'light'). */
 export function preferenceToThemeMode(value: unknown): ThemeMode {
-  if (value === 'light') return 'light';
-  if (value === 'dark') return 'dark';
-  if (value === 'dim' || value === 'system') return 'dark';
-  return 'light';
+  if (value === "light") return "light";
+  if (value === "dark") return "dark";
+  if (value === "dim" || value === "system") return "dark";
+  return "light";
 }
 
-export type UserSettings = Record<string, string | number | boolean | (string | number | boolean)[]>;
+export type UserSettings = Record<
+  string,
+  string | number | boolean | (string | number | boolean)[]
+>;
 
 function cacheSettings(value: UserSettings) {
-  void AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(value)).catch(() => undefined);
+  void AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(value)).catch(
+    () => undefined,
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -52,9 +57,9 @@ function cacheSettings(value: UserSettings) {
 
 export async function fetchThemePreference(): Promise<ThemeMode | null> {
   const { data, error } = await supabase
-    .from('profiles')
-    .select('theme_preference')
-    .eq('id', (await supabase.auth.getUser()).data.user?.id ?? '')
+    .from("profiles")
+    .select("theme_preference")
+    .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
     .maybeSingle();
   if (error) return null;
   const stored = preferenceToThemeMode(data?.theme_preference);
@@ -69,9 +74,12 @@ export async function saveThemePreference(mode: ThemeMode): Promise<boolean> {
   await AsyncStorage.setItem(THEME_CACHE_KEY, mode);
   try {
     const { error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .update({ theme_preference: themeModeToPreference(mode) })
-      .eq('id', (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? '');
+      .eq(
+        "id",
+        (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? "",
+      );
     return !error;
   } catch {
     return false;
@@ -97,17 +105,32 @@ export async function saveSettings(settings: UserSettings): Promise<boolean> {
   const clean: UserSettings = {};
   for (const [key, value] of Object.entries(settings)) {
     if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(key)) continue;
-    if (value == null || ['string', 'number', 'boolean'].includes(typeof value)) {
+    if (
+      value == null ||
+      ["string", "number", "boolean"].includes(typeof value)
+    ) {
       clean[key] = value;
-    } else if (Array.isArray(value) && value.length <= 100 && value.every((item) => ['string', 'number', 'boolean'].includes(typeof item))) {
+    } else if (
+      Array.isArray(value) &&
+      value.length <= 100 &&
+      value.every((item) =>
+        ["string", "number", "boolean"].includes(typeof item),
+      )
+    ) {
       clean[key] = value;
     }
   }
   cacheSettings(clean);
   try {
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert({ user_id: (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? '', settings: clean, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    const { error } = await supabase.from("user_settings").upsert(
+      {
+        user_id:
+          (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? "",
+        settings: clean,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
     return !error;
   } catch {
     return false;
@@ -121,7 +144,10 @@ export async function updateSettings(patch: UserSettings): Promise<boolean> {
 }
 
 /** Read one typed value from the local cache (fast, offline-safe). */
-export async function readSetting<T extends string | number | boolean>(key: string, fallback: T): Promise<T> {
+export async function readSetting<T extends string | number | boolean>(
+  key: string,
+  fallback: T,
+): Promise<T> {
   const settings = await fetchSettings();
   const value = settings[key];
   return typeof value === typeof fallback ? (value as T) : fallback;
@@ -132,25 +158,30 @@ export async function readSetting<T extends string | number | boolean>(key: stri
  * and cache. Cloud wins only when the user has actually saved something
  * there — an absent profile value falls back to the local choice.
  */
-export async function syncOnSignIn(applyTheme: (mode: ThemeMode) => void): Promise<void> {
+export async function syncOnSignIn(
+  applyTheme: (mode: ThemeMode) => void,
+): Promise<void> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('theme_preference')
-      .eq('id', (await supabase.auth.getUser()).data.user?.id ?? '')
+      .from("profiles")
+      .select("theme_preference")
+      .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
       .maybeSingle();
     if (error || !data) return;
     const stored = data.theme_preference;
     // Unknown or absent cloud value — the local choice stays authoritative.
     // Legacy 'system' rows are accepted and read as 'dark' (= 'dim').
-    if (stored !== 'system' && stored !== 'light' && stored !== 'dim') return;
+    if (stored !== "system" && stored !== "light" && stored !== "dim") return;
     const mode = preferenceToThemeMode(stored);
     await AsyncStorage.setItem(THEME_CACHE_KEY, mode);
     applyTheme(mode);
     const settingsResult = await supabase
-      .from('user_settings')
-      .select('settings')
-      .eq('user_id', (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? '')
+      .from("user_settings")
+      .select("settings")
+      .eq(
+        "user_id",
+        (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? "",
+      )
       .maybeSingle();
     if (settingsResult.error || !settingsResult.data?.settings) return;
     cacheSettings(settingsResult.data.settings as UserSettings);

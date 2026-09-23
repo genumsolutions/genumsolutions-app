@@ -15,14 +15,14 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
 
 ## Items
 
-| ID | Change | Status |
-|---|---|---|
-| B1 | `mobile/src/config/roboCarCatalog.ts:55` `4wd4m` label → `'4WD4M'` | DONE |
-| B2 | Root `README.md` + `.gitleaks.toml` header (drop stale WebView/mobile/shared/supabase.ts refs) | DONE |
-| B3 | `.github/workflows/ci.yml` triggers `[dev]` → `[main]` (+PRs to `main`) | DONE |
-| B4 | Parity tests (APP_VERSION vs app.json · 9-mode fixture · update.ts URLs) | DONE |
-| C1 | README shared-contract section | DONE |
-| C2 | Verify `typecheck` / `test` / `doctor` green | DONE |
+| ID  | Change                                                                                         | Status |
+| --- | ---------------------------------------------------------------------------------------------- | ------ |
+| B1  | `mobile/src/config/roboCarCatalog.ts:55` `4wd4m` label → `'4WD4M'`                             | DONE   |
+| B2  | Root `README.md` + `.gitleaks.toml` header (drop stale WebView/mobile/shared/supabase.ts refs) | DONE   |
+| B3  | `.github/workflows/ci.yml` triggers `[dev]` → `[main]` (+PRs to `main`)                        | DONE   |
+| B4  | Parity tests (APP_VERSION vs app.json · 9-mode fixture · update.ts URLs)                       | DONE   |
+| C1  | README shared-contract section                                                                 | DONE   |
+| C2  | Verify `typecheck` / `test` / `doctor` green                                                   | DONE   |
 
 ## Notes
 
@@ -41,7 +41,7 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
   service-role key stays in env only. Never print secrets.
 - Env copies: `mobile/.env.local`, `C:\bs\.env.local` (build mirror — `E:\` LongPaths disabled).
 
-*Created 2026-09-18. Update status column on every change; never delete without owner OK.*
+_Created 2026-09-18. Update status column on every change; never delete without owner OK._
 
 **2026-09-23 · push config project-id fallback (`71f1855`).** `config/push.ts` resolved `PUSH_PROJECT_ID` ONLY from `process.env.EXPO_PUBLIC_EAS_PROJECT_ID` (unset) so push stayed permanently dormant — no device could register a `push_tokens` row even after Firebase is added. Now falls back to the `extra.eas.projectId` declared in `app.json` (`f09b820e-…`, single source of truth), via exported pure `resolvePushProjectId(env, appJson)`. New `config/push.test.ts` (3 cases). Gates: tsc clean · vitest **140/140** (137+3). Behavior-neutral JS fix — rides `ci.yml` + `ota-only.yml` (no version bump). Push delivery still blocked on Firebase (owner decision) until `google-services.json` + rebuild.
 

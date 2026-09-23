@@ -24,8 +24,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'mobile/src/**'
-      - 'mobile/assets/**'
+      - "mobile/src/**"
+      - "mobile/assets/**"
   workflow_dispatch:
 
 concurrency:

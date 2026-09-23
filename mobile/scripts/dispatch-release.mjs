@@ -26,18 +26,21 @@
 // bug that swallowed the 2.0.3 bump) or for a manual rebuild.
 // =====================================================================
 
-const OWNER = 'genumsolutions';
-const REPO = 'genumsolutions-app';
+const OWNER = "genumsolutions";
+const REPO = "genumsolutions-app";
 const API = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows`;
 
 async function loadEnv() {
   const out = {};
   try {
-    const { readFileSync } = await import('node:fs');
-    const lines = readFileSync(new URL('../.env.local', import.meta.url), 'utf8').split(/\r?\n/);
+    const { readFileSync } = await import("node:fs");
+    const lines = readFileSync(
+      new URL("../.env.local", import.meta.url),
+      "utf8",
+    ).split(/\r?\n/);
     for (const line of lines) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "");
     }
   } catch {
     /* .env.local missing - GH_TOKEN env var only */
@@ -46,12 +49,12 @@ async function loadEnv() {
 }
 
 function parseArgs() {
-  const args = { workflow: 'release.yml', ref: 'main', dryRun: false };
+  const args = { workflow: "release.yml", ref: "main", dryRun: false };
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--workflow' && argv[i + 1]) args.workflow = argv[++i];
-    else if (argv[i] === '--ref' && argv[i + 1]) args.ref = argv[++i];
-    else if (argv[i] === '--dry-run') args.dryRun = true;
+    if (argv[i] === "--workflow" && argv[i + 1]) args.workflow = argv[++i];
+    else if (argv[i] === "--ref" && argv[i + 1]) args.ref = argv[++i];
+    else if (argv[i] === "--dry-run") args.dryRun = true;
     else console.warn(`Unknown arg: ${argv[i]}`);
   }
   return args;
@@ -62,8 +65,12 @@ const env = await loadEnv();
 const token = process.env.GH_TOKEN || env.GH_TOKEN;
 
 if (!token) {
-  console.error('Missing GH_TOKEN. Set it as an env var or add GH_TOKEN=... to mobile/.env.local (gitignored).');
-  console.error('  $env:GH_TOKEN = "ghp_..."   then:  node scripts/dispatch-release.mjs');
+  console.error(
+    "Missing GH_TOKEN. Set it as an env var or add GH_TOKEN=... to mobile/.env.local (gitignored).",
+  );
+  console.error(
+    '  $env:GH_TOKEN = "ghp_..."   then:  node scripts/dispatch-release.mjs',
+  );
   process.exit(1);
 }
 
@@ -73,23 +80,25 @@ console.log(`POST ${url}`);
 console.log(`  body: ${JSON.stringify(body)}`);
 
 if (args.dryRun) {
-  console.log('--dry-run: no request sent.');
+  console.log("--dry-run: no request sent.");
   process.exit(0);
 }
 
 const res = await fetch(url, {
-  method: 'POST',
+  method: "POST",
   headers: {
-    Accept: 'application/vnd.github+json',
+    Accept: "application/vnd.github+json",
     Authorization: `Bearer ${token}`,
-    'X-GitHub-Api-Version': '2022-11-28',
+    "X-GitHub-Api-Version": "2022-11-28",
   },
   body: JSON.stringify(body),
 });
 
 if (res.status === 204) {
   console.log(`✔ Dispatched ${args.workflow} on ref ${args.ref}. Watch it at:`);
-  console.log(`  https://github.com/${OWNER}/${REPO}/actions/workflows/${args.workflow}`);
+  console.log(
+    `  https://github.com/${OWNER}/${REPO}/actions/workflows/${args.workflow}`,
+  );
 } else {
   const text = await res.text();
   console.error(`✘ HTTP ${res.status}: ${text}`);

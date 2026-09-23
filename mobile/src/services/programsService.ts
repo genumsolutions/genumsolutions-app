@@ -9,98 +9,104 @@
 // RLS: all three tables have a public-read policy, so the app's anon key
 // can SELECT without a session.
 // =====================================================================
-import { supabase, supabaseConfigured } from '../config/supabase'
+import { supabase, supabaseConfigured } from "../config/supabase";
 import {
   pilotCosts as fallbackPilotCosts,
   stemProjectHighlights as fallbackHighlights,
   trainingPrograms as fallbackPrograms,
-} from '../config/programs'
+} from "../config/programs";
 
 export type TrainingProgram = {
-  title: string
-  audience: string
-  description: string
-  duration: string
-  outcome: string
-}
+  title: string;
+  audience: string;
+  description: string;
+  duration: string;
+  outcome: string;
+};
 
-export type PilotCostLine = [item: string, cost: string, note: string]
+export type PilotCostLine = [item: string, cost: string, note: string];
 
-export type CurriculumHighlights = Record<string, string[]>
+export type CurriculumHighlights = Record<string, string[]>;
 
 export type ProgramsContent = {
-  trainingPrograms: TrainingProgram[]
-  pilotCosts: PilotCostLine[]
-  stemProjectHighlights: CurriculumHighlights
-}
+  trainingPrograms: TrainingProgram[];
+  pilotCosts: PilotCostLine[];
+  stemProjectHighlights: CurriculumHighlights;
+};
 
 async function fetchTrainingPrograms(): Promise<TrainingProgram[]> {
-  if (!supabaseConfigured) return fallbackPrograms
+  if (!supabaseConfigured) return fallbackPrograms;
   try {
     const { data, error } = await supabase
-      .from('training_programs')
-      .select('title, audience, description, duration, outcome')
-      .eq('active', true)
-      .order('sort_order', { ascending: true })
-      .order('title', { ascending: true })
-    if (error) throw error
-    if (!data || data.length === 0) return fallbackPrograms
+      .from("training_programs")
+      .select("title, audience, description, duration, outcome")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("title", { ascending: true });
+    if (error) throw error;
+    if (!data || data.length === 0) return fallbackPrograms;
     return data.map((row) => ({
       title: row.title,
-      audience: row.audience ?? '',
-      description: row.description ?? '',
-      duration: row.duration ?? '',
-      outcome: row.outcome ?? '',
-    }))
+      audience: row.audience ?? "",
+      description: row.description ?? "",
+      duration: row.duration ?? "",
+      outcome: row.outcome ?? "",
+    }));
   } catch {
-    return fallbackPrograms
+    return fallbackPrograms;
   }
 }
 
 async function fetchPilotCosts(): Promise<PilotCostLine[]> {
   // The bundled config is an array of 3-element rows; narrow it to the tuple type.
-  const fallback = fallbackPilotCosts as PilotCostLine[]
-  if (!supabaseConfigured) return fallback
+  const fallback = fallbackPilotCosts as PilotCostLine[];
+  if (!supabaseConfigured) return fallback;
   try {
     const { data, error } = await supabase
-      .from('pilot_cost_lines')
-      .select('item, cost, note')
-      .eq('active', true)
-      .order('sort_order', { ascending: true })
-    if (error) throw error
-    if (!data || data.length === 0) return fallback
-    return data.map((row) => [row.item, row.cost ?? '', row.note ?? ''] as PilotCostLine)
+      .from("pilot_cost_lines")
+      .select("item, cost, note")
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    if (!data || data.length === 0) return fallback;
+    return data.map(
+      (row) => [row.item, row.cost ?? "", row.note ?? ""] as PilotCostLine,
+    );
   } catch {
-    return fallback
+    return fallback;
   }
 }
 
 async function fetchHighlights(): Promise<CurriculumHighlights> {
-  if (!supabaseConfigured) return fallbackHighlights
+  if (!supabaseConfigured) return fallbackHighlights;
   try {
     const { data, error } = await supabase
-      .from('curriculum_highlights')
-      .select('age_band, items')
-      .eq('active', true)
-      .order('sort_order', { ascending: true })
-    if (error) throw error
-    if (!data || data.length === 0) return fallbackHighlights
-    const highlights: CurriculumHighlights = {}
+      .from("curriculum_highlights")
+      .select("age_band, items")
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    if (!data || data.length === 0) return fallbackHighlights;
+    const highlights: CurriculumHighlights = {};
     for (const row of data) {
-      if (row.age_band) highlights[row.age_band] = Array.isArray(row.items) ? (row.items as string[]) : []
+      if (row.age_band)
+        highlights[row.age_band] = Array.isArray(row.items)
+          ? (row.items as string[])
+          : [];
     }
-    return Object.keys(highlights).length > 0 ? highlights : fallbackHighlights
+    return Object.keys(highlights).length > 0 ? highlights : fallbackHighlights;
   } catch {
-    return fallbackHighlights
+    return fallbackHighlights;
   }
 }
 
 /** Fetch all programs content DB-first (per-list fallback to bundled config). */
 export async function getProgramsContent(): Promise<ProgramsContent> {
-  const [trainingPrograms, pilotCosts, stemProjectHighlights] = await Promise.all([
-    fetchTrainingPrograms(),
-    fetchPilotCosts(),
-    fetchHighlights(),
-  ])
-  return { trainingPrograms, pilotCosts, stemProjectHighlights }
+  const [trainingPrograms, pilotCosts, stemProjectHighlights] =
+    await Promise.all([
+      fetchTrainingPrograms(),
+      fetchPilotCosts(),
+      fetchHighlights(),
+    ]);
+  return { trainingPrograms, pilotCosts, stemProjectHighlights };
 }

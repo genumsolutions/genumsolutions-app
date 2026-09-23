@@ -1,4 +1,4 @@
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path } from "react-native-svg";
 
 // Official Google "G" symbol (Google Identity / "Sign in with Google" glyph).
 // Paths are the four-color brand mark on a 20x20 viewBox.

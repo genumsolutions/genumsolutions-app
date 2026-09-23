@@ -13,27 +13,32 @@
 // ('spp', 'wifi', 'push', 'admin', …) so log lines stay greppable.
 // =====================================================================
 
-type LogLevel = 'error' | 'warn'
+type LogLevel = "error" | "warn";
 
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__
+const isDev = typeof __DEV__ !== "undefined" && __DEV__;
 
-function log(level: LogLevel, scope: string, message: string, detail?: unknown): void {
-  if (level === 'warn' && !isDev) return
-  const emit = level === 'error' ? console.error : console.warn
+function log(
+  level: LogLevel,
+  scope: string,
+  message: string,
+  detail?: unknown,
+): void {
+  if (level === "warn" && !isDev) return;
+  const emit = level === "error" ? console.error : console.warn;
   if (detail === undefined) {
-    emit(`[${scope}] ${message}`)
-    return
+    emit(`[${scope}] ${message}`);
+    return;
   }
-  emit(`[${scope}] ${message}`, detail)
+  emit(`[${scope}] ${message}`, detail);
 }
 
 export const logger = {
   /** Errors print in development AND release — real failures stay visible. */
   error(scope: string, message: string, detail?: unknown): void {
-    log('error', scope, message, detail)
+    log("error", scope, message, detail);
   },
   /** Warnings print in development only (silent in release builds). */
   warn(scope: string, message: string, detail?: unknown): void {
-    log('warn', scope, message, detail)
+    log("warn", scope, message, detail);
   },
-}
+};

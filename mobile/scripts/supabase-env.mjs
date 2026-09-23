@@ -16,36 +16,40 @@
 //   serviceRoleKey trimmed service-role key (may be '')
 //   urlError      non-null when SUPABASE_URL is set but not a valid URL
 // =====================================================================
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export function loadSupabaseEnv() {
-  const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
   // Minimal .env.local parsing (matching the project's existing scripts).
   const env = {};
-  const envFile = resolve(rootDir, '.env.local');
+  const envFile = resolve(rootDir, ".env.local");
   if (existsSync(envFile)) {
-    for (const raw of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+    for (const raw of readFileSync(envFile, "utf8").split(/\r?\n/)) {
       const line = raw.trim();
-      if (!line || line.startsWith('#') || !line.includes('=')) continue;
-      const idx = line.indexOf('=');
+      if (!line || line.startsWith("#") || !line.includes("=")) continue;
+      const idx = line.indexOf("=");
       env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
     }
   }
 
-  const url = (process.env.SUPABASE_URL || env.SUPABASE_URL || '').trim();
-  const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const url = (process.env.SUPABASE_URL || env.SUPABASE_URL || "").trim();
+  const serviceRoleKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  ).trim();
 
-  let baseUrl = url.replace(/\/+$/, '');
+  let baseUrl = url.replace(/\/+$/, "");
   let urlError = null;
   if (url) {
     try {
       baseUrl = new URL(url).origin;
     } catch {
       urlError =
-        `SUPABASE_URL is not a valid URL${url ? `: "${url}"` : ''} — ` +
+        `SUPABASE_URL is not a valid URL${url ? `: "${url}"` : ""} — ` +
         `check the value for leading/trailing spaces or newlines in the Actions secret / .env.local.`;
     }
   }
