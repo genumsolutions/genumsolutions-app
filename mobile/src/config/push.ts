@@ -13,18 +13,32 @@
 //      mobile/google-services.json and add to app.json:
 //        "android": { ..., "googleServicesFile": "./google-services.json" }
 //      The APK must then be rebuilt (expo prebuild + gradlew assembleRelease).
-//   2. An EAS/Expo project id for token minting. Provide it here (or via
-//      the EXPO_PUBLIC_EAS_PROJECT_ID env var), matching the Expo account
-//      used to send. Get it from expo.dev → project → Settings.
+//   2. An EAS/Expo project id for token minting. The project id is read
+//      from the EXPO_PUBLIC_EAS_PROJECT_ID env var, falling back to the
+//      `extra.eas.projectId` declared in app.json (the single source of
+//      truth per AGENTS.md). Get it from expo.dev → project → Settings.
 //   3. Set the edge function secrets EXPO_ACCESS_TOKEN (and optionally
 //      PUSH_TRIGGER_SECRET) in the Supabase dashboard.
 //
-// Until step 2 is configured, getExpoPushToken() below returns null and
-// the app simply skips registration — no crash, push stays dormant.
+// Until Firebase (step 1) is configured, delivery stays dormant; the app
+// will still register its token row so the activation gap is visible.
 // =====================================================================
 
+import Constants from 'expo-constants';
+
+const EAS_PROJECT_ID =
+  Constants.expoConfig?.extra?.eas?.projectId ?? '';
+
+/** Env var wins; otherwise fall back to the app.json declared project id. */
+export function resolvePushProjectId(
+  envProjectId: string | undefined,
+  appJsonProjectId: string,
+): string {
+  return envProjectId || appJsonProjectId;
+}
+
 export const PUSH_PROJECT_ID =
-  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? ''
+  resolvePushProjectId(process.env.EXPO_PUBLIC_EAS_PROJECT_ID, EAS_PROJECT_ID)
 
 // Android notification channel used for order updates. Keep in sync with
 // the channelId the push-order-status edge function sends with.
