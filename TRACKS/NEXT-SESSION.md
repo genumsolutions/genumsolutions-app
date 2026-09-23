@@ -133,3 +133,15 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
 - NEW (2026-09-22): tier checks live in AppContext (`isPro`) — never read
   `profiles.tier` ad hoc from screens; the pro gate on RemoteControlScreen is an
   early return BEFORE any transport UI mounts.
+
+## 2026-09-23 — advanced round (Phases A/B/C)
+
+**Commits:** app `87ff579` (C9 hygiene).
+
+**Phase A:** app `ProductsTab` gains `fromLink` prop; `ProductEditor` label becomes **"Save imported product"** while `pendingImportUrl` set; extracted-image thumbnail shown above the Image URL input; `createLinkImport` path unchanged (edge `action: create` still supported).
+
+**Phase B:** app admin mirrors web admin anatomy (parity test `tests/admin-parity.test.ts` pins `TABS` order+IDs — web tab strip grouped with icons + ARIA). App side: no structural change needed beyond the Phase A `fromLink` support.
+
+**Phase C9:** `mobile/package.json` gains `lint:check` (`tsc --noEmit`), `format`/`format:check` (`prettier`) scripts; `prettier`/`husky`/`lint-staged` added to devDeps; `.husky/pre-commit` (`npx --prefix mobile lint-staged`) + `.lintstagedrc` at repo root; `mobile/package.json` has `"prepare": "husky"` so `npm install` creates `.git/hooks/pre-commit` for new contributors; stale `mobile/.husky/pre-commit` removed. Keystore (`mobile/keystores/keystore.properties`, `genum-release.jks`) confirmed gitignored (`/keystores/`) with `plugins/with-release-signing.js` reading from `../keystores/keystore.properties` and falling back to debug signing.
+
+**Gates:** app tsc 0 · vitest 140/140. Live harnesses green.
