@@ -7,16 +7,22 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   Text,
   View,
   Pressable,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LOCAL_JOURNAL_POSTS, type JournalPost } from "../config/journal";
 import { getJournalPosts } from "../services/journalService";
+import type { RootStackParamList } from "../navigation/types";
 
 export function JournalScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList, "Journal">>();
   const [posts, setPosts] = useState<JournalPost[]>(LOCAL_JOURNAL_POSTS);
   const [loading, setLoading] = useState(true);
 
@@ -79,7 +85,8 @@ export function JournalScreen() {
                 {post.text}
               </Text>
               <Pressable
-                onPress={() => {}}
+                onPress={() => navigation.push("Contact")}
+                accessibilityRole="link"
                 className="mt-5 flex-row items-center gap-1.5"
               >
                 <Text className="text-sm font-bold text-navy underline">
@@ -108,15 +115,35 @@ export function JournalScreen() {
           center of AI learning. That is the standard we are building toward.
         </Text>
         <View className="mt-4 flex-row flex-wrap gap-4">
-          <Text className="text-xs font-bold text-navy underline">
-            WEF Future of Jobs 2025
-          </Text>
-          <Text className="text-xs font-bold text-navy underline">
-            IFR robotics research
-          </Text>
-          <Text className="text-xs font-bold text-navy underline">
-            UNESCO digital education
-          </Text>
+          {/* R6 parity: web renders these as real links — mirror 1:1 instead
+              of inert underlined text. */}
+          {(
+            [
+              [
+                "WEF Future of Jobs 2025",
+                "https://www.weforum.org/publications/the-future-of-jobs-report-2025/",
+              ],
+              [
+                "IFR robotics research",
+                "https://ifr.org/ifr-press-releases/news/world-robotics-2025-report-asia-leads-global-robotics-growth",
+              ],
+              [
+                "UNESCO digital education",
+                "https://www.unesco.org/en/digital-education",
+              ],
+            ] as const
+          ).map(([label, url]) => (
+            <Pressable
+              key={label}
+              onPress={() => void Linking.openURL(url)}
+              accessibilityRole="link"
+              accessibilityLabel={label}
+            >
+              <Text className="text-xs font-bold text-navy underline">
+                {label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </View>
     </ScrollView>

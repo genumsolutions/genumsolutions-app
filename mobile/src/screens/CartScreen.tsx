@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { getProducts } from "../services/productService";
+import { getProductsWithSource } from "../services/productService";
 import { resolveCart, setQuantity } from "../services/cartService";
 import { useApp } from "../context/AppContext";
 import type { Product } from "../types";
@@ -38,16 +38,24 @@ export function CartScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [lines, setLines] = useState<CartEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    getProducts()
-      .then((prods) => {
-        if (active) setProducts(prods);
+    getProductsWithSource()
+      .then(({ products: prods, source }) => {
+        if (!active) return;
+        setProducts(prods);
+        // R6: an empty catalog from cache = the live fetch failed. Show the
+        // offline badge instead of a bare cart (data-failure masqueraded as
+        // "your cart is empty" before).
+        setOffline(source === "cache" && prods.length === 0);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (active) setOffline(true);
+      })
       .finally(() => {
         if (active) setLoading(false);
       });
@@ -87,13 +95,28 @@ export function CartScreen() {
   if (lines.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-surface px-8">
-        <Feather name="shopping-cart" size={44} color="#cbd5e1" />
-        <Text className="mt-3 font-display text-xl font-bold text-ink">
-          Your cart is empty
-        </Text>
-        <Text className="mt-1 text-center text-sm text-muted">
-          Add products from the shop to start your build list.
-        </Text>
+        {offline ? (
+          <>
+            <Feather name="wifi-off" size={44} color="#cbd5e1" />
+            <Text className="mt-3 font-display text-xl font-bold text-ink">
+              Can't reach the catalog
+            </Text>
+            <Text className="mt-1 text-center text-sm text-muted">
+              We can't verify your build list right now. Check your connection
+              and try again.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Feather name="shopping-cart" size={44} color="#cbd5e1" />
+            <Text className="mt-3 font-display text-xl font-bold text-ink">
+              Your cart is empty
+            </Text>
+            <Text className="mt-1 text-center text-sm text-muted">
+              Add products from the shop to start your build list.
+            </Text>
+          </>
+        )}
       </View>
     );
   }
