@@ -268,3 +268,23 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
 **Phase C9:** `mobile/package.json` gains `lint:check` (`tsc --noEmit`), `format`/`format:check` (`prettier`) scripts; `prettier`/`husky`/`lint-staged` added to devDeps; `.husky/pre-commit` (`npx --prefix mobile lint-staged`) + `.lintstagedrc` at repo root; `mobile/package.json` has `"prepare": "husky"` so `npm install` creates `.git/hooks/pre-commit` for new contributors; stale `mobile/.husky/pre-commit` removed. Keystore (`mobile/keystores/keystore.properties`, `genum-release.jks`) confirmed gitignored (`/keystores/`) with `plugins/with-release-signing.js` reading from `../keystores/keystore.properties` and falling back to debug signing.
 
 **Gates:** app tsc 0 · vitest 140/140. Live harnesses green.
+
+## 2026-09-24 — R6 UX audit round (code-path walkthrough)
+
+**Fixed:** Journal "Get in touch about this" was a dead button (`onPress={}`) —
+now pushes Contact (mirrors web `/contact` CTA); trend-brief WEF/IFR/UNESCO
+links were inert text — now open via Linking (mirrors web). CartScreen no
+longer shows "Your cart is empty" when the catalog fetch fails — honest
+offline/can't-verify state instead.
+
+**Fixed (deployed edge fns, shared with web):** `contact` + `site-content` were
+never deployed (404) and then crashed on `NEXT_PUBLIC_*` env names — app
+contact submissions now persist + succeed; home hero loads from `site_content`
+DB row with bundled fallback. Lesson (repeat of C1): edge functions must fall
+back to standard `SUPABASE_URL`/`SUPABASE_ANON_KEY` names AND must be in the
+deploy list for every release.
+
+**Verified:** navigation graph covers every web destination; cart→checkout→
+success guards sound; payment deep-link states present.
+
+**Gates:** tsc 0 · vitest 180/180 · prettier clean.
