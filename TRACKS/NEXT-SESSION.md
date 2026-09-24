@@ -17,7 +17,10 @@ full-access verified. Edge `link-import` re-deployed + schema (`gallery`/`import
 applied live by the website side. Gates: app tsc 0 · vitest **185/185** · prettier
 clean; web tsc · lint · vitest **123/123** · `npm run build` ✓ · prettier clean; live
 harnesses 40/40 + 9/9 + 10/10 + 15/15 + 11/11 + staff-access-e2e **28/28** (new
-disposable-owner path). **NOT committed — awaiting owner go.**
+disposable-owner path). **COMMITTED + PUSHED 2026-09-24 (`f101b06`, main) — CI ✓ · OTA
+Only ✓ (bundle published, v3.2.5, no version bump/APK).** This commit also landed the
+U-22 unification-round app work that was still "awaiting owner go" (C7/C5/A-screens).
+Web side `536ab13`; post-push prod re-verify 27 PASS · 0 SNAG · 0 FAIL · 2 DEFER.
 
 **PLANNED 2026-09-24 — U-23 GALLERY · PROJECTS RESTORE · ADMIN STANDARDIZATION · UX
 (planned scope — executed above).** Owner-agreed plan in
