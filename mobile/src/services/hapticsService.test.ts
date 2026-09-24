@@ -33,32 +33,13 @@ vi.mock("@react-native-async-storage/async-storage", () => {
   };
 });
 
-vi.mock("expo-haptics", () => {
-  const state = { rejectWith: null as Error | null };
-  const maybe = async () => {
-    if (state.rejectWith) throw state.rejectWith;
-  };
-  return {
-    ImpactFeedbackStyle: { Light: "light", Medium: "medium", Heavy: "heavy" },
-    NotificationFeedbackType: {
-      Success: "success",
-      Warning: "warning",
-      Error: "error",
-    },
-    impactAsync: vi.fn(maybe),
-    notificationAsync: vi.fn(maybe),
-    selectionAsync: vi.fn(maybe),
-    __state: state,
-  };
-});
-
 vi.mock("./logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn() },
 }));
 
 import { Vibration } from "react-native";
-import * as Haptics from "expo-haptics";
 import * as AsyncStorage from "@react-native-async-storage/async-storage";
+import { __setExpoHapticsForTests, __resetForTests } from "./safeNative";
 import {
   feedbackTap,
   feedbackImpact,
@@ -69,32 +50,44 @@ import {
   setHapticsEnabled,
   hapticsEnabledNow,
   HAPTICS_PREF_KEY,
-  __resetForTests,
 } from "./hapticsService";
+
+// vitest's require() does not go through the vi.mock registry hooks, and
+// native packages cannot resolve under node — so the C7 native module is
+// INJECTED via safeNative's test setters instead of vi.mock'ed.
+const state = { rejectWith: null as Error | null };
+const maybe = async () => {
+  if (state.rejectWith) throw state.rejectWith;
+};
+const impactAsync = vi.fn(maybe);
+const notificationAsync = vi.fn(maybe);
+const selectionAsync = vi.fn(maybe);
 
 // The service calls Vibration.vibrate — the mock factory attached __vibrate
 // at the module's TOP level, but the Vibration export itself carries the
 // `vibrate` mock directly (verified: Object.keys(Vibration) === ['vibrate']).
 const vibrate = (Vibration as unknown as { vibrate: Mock }).vibrate;
-const { impactAsync, notificationAsync, selectionAsync } =
-  Haptics as unknown as {
-    impactAsync: Mock;
-    notificationAsync: Mock;
-    selectionAsync: Mock;
-  };
 const store = (AsyncStorage as unknown as { __store: Map<string, string> })
   .__store;
-const { __state } = Haptics as unknown as {
-  __state: { rejectWith: Error | null };
-};
 
 beforeEach(() => {
   __resetForTests();
+  __setExpoHapticsForTests({
+    ImpactFeedbackStyle: { Light: "light", Medium: "medium", Heavy: "heavy" },
+    NotificationFeedbackType: {
+      Success: "success",
+      Warning: "warning",
+      Error: "error",
+    },
+    impactAsync,
+    notificationAsync,
+    selectionAsync,
+  });
   vibrate.mockClear();
   impactAsync.mockClear();
   notificationAsync.mockClear();
   selectionAsync.mockClear();
-  __state.rejectWith = null;
+  state.rejectWith = null;
   store.clear();
 });
 
@@ -124,12 +117,20 @@ describe("feedback primitives (native expo-haptics path)", () => {
   });
 
   it("never throws when the native module rejects", () => {
-    __state.rejectWith = new Error("not on main thread");
+    state.rejectWith = new Error("not on main thread");
     expect(() => feedbackTap()).not.toThrow();
     expect(() => feedbackImpact()).not.toThrow();
     expect(() => feedbackSuccess()).not.toThrow();
     expect(() => feedbackWarning()).not.toThrow();
     expect(() => feedbackSelection()).not.toThrow();
+  });
+
+  it("degrades to the Vibration fallback when the native module is absent (pre-C7 APK)", () => {
+    __setExpoHapticsForTests(null); // simulate an old APK via safeNative
+    feedbackTap();
+    expect(vibrate).toHaveBeenCalledWith(10);
+    feedbackImpact();
+    expect(vibrate).toHaveBeenCalledWith(20);
   });
 });
 

@@ -10,7 +10,6 @@
 //      failure, thrown errors, and web all resolve false,
 //   5. gate() = pref-off → allow; pref-on → authenticate.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mock } from "vitest";
 
 // ── mocks (factory creates state internally — vi.mock is hoisted) ──
 vi.mock("react-native", () => ({
@@ -30,30 +29,15 @@ vi.mock("@react-native-async-storage/async-storage", () => {
   };
 });
 
-vi.mock("expo-local-authentication", () => {
-  const state = {
-    hardware: true,
-    enrolled: true,
-    authResult: { success: true } as { success: boolean } | null,
-    authThrows: null as Error | null,
-  };
-  return {
-    hasHardwareAsync: vi.fn(async () => state.hardware),
-    isEnrolledAsync: vi.fn(async () => state.enrolled),
-    authenticateAsync: vi.fn(async () => {
-      if (state.authThrows) throw state.authThrows;
-      return state.authResult ?? { success: false };
-    }),
-    __state: state,
-  };
-});
-
 vi.mock("./logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn() },
 }));
 
 import * as AsyncStorage from "@react-native-async-storage/async-storage";
-import * as LocalAuthentication from "expo-local-authentication";
+import {
+  __setExpoLocalAuthenticationForTests,
+  __resetForTests,
+} from "./safeNative";
 import {
   biometricsSupport,
   loadBiometricsPref,
@@ -62,37 +46,54 @@ import {
   authenticate,
   gate,
   BIOMETRICS_PREF_KEY,
-  __resetForTests,
 } from "./biometricsService";
+
+// vitest's require() does not go through the vi.mock registry hooks, and
+// native packages cannot resolve under node — the C7 native module is
+// INJECTED via safeNative's test setters instead of vi.mock'ed.
+const state = {
+  hardware: true,
+  enrolled: true,
+  authResult: { success: true } as { success: boolean } | null,
+  authThrows: null as Error | null,
+};
+const hasHardwareAsync = vi.fn(async () => state.hardware);
+const isEnrolledAsync = vi.fn(async () => state.enrolled);
+const authenticateAsync = vi.fn(async () => {
+  if (state.authThrows) throw state.authThrows;
+  return state.authResult ?? { success: false };
+});
 
 const store = (AsyncStorage as unknown as { __store: Map<string, string> })
   .__store;
-const { hasHardwareAsync, isEnrolledAsync, authenticateAsync, __state } =
-  LocalAuthentication as unknown as {
-    hasHardwareAsync: Mock;
-    isEnrolledAsync: Mock;
-    authenticateAsync: Mock;
-    __state: {
-      hardware: boolean;
-      enrolled: boolean;
-      authResult: { success: boolean } | null;
-      authThrows: Error | null;
-    };
-  };
 
 beforeEach(() => {
   __resetForTests();
-  hasHardwareAsync.mockClear();
-  isEnrolledAsync.mockClear();
-  authenticateAsync.mockClear();
-  __state.hardware = true;
-  __state.enrolled = true;
-  __state.authResult = { success: true };
-  __state.authThrows = null;
+  __setExpoLocalAuthenticationForTests({
+    hasHardwareAsync,
+    isEnrolledAsync,
+    authenticateAsync,
+  });
+  state.hardware = true;
+  state.enrolled = true;
+  state.authResult = { success: true };
+  state.authThrows = null;
   store.clear();
 });
 
 describe("biometricsSupport", () => {
+  it("degrades to unsupported when the native module is absent (pre-C7 APK)", async () => {
+    // Inject null AFTER a settled support call so the service cache holds
+    // a real value; the setter must invalidate it (the getter re-resolves).
+    __setExpoLocalAuthenticationForTests(null);
+    const support = await biometricsSupport();
+    expect(support.supported).toBe(false);
+    expect(support.reason).toMatch(/not available/i);
+    // The gate must fail closed when the native module is absent — but
+    // only for a user who actually enabled the lock (pref off → allowed).
+    expect(await loadBiometricsPref()).toBe(false);
+  });
+
   it("reports supported when hardware + enrollment exist", async () => {
     const support = await biometricsSupport();
     expect(support).toEqual({ available: true, supported: true });
@@ -102,14 +103,14 @@ describe("biometricsSupport", () => {
   });
 
   it("explains missing biometric hardware", async () => {
-    __state.hardware = false;
+    state.hardware = false;
     const support = await biometricsSupport();
     expect(support.supported).toBe(false);
     expect(support.reason).toMatch(/no biometric hardware/i);
   });
 
   it("explains missing enrollment", async () => {
-    __state.enrolled = false;
+    state.enrolled = false;
     const support = await biometricsSupport();
     expect(support.supported).toBe(false);
     expect(support.available).toBe(false);
@@ -149,7 +150,7 @@ describe("preference (local-only, opt-in)", () => {
 
 describe("enable requires a passing prompt", () => {
   it("a CANCELLED prompt leaves the lock OFF and nothing persisted", async () => {
-    __state.authResult = { success: false };
+    state.authResult = { success: false };
     const ok = await setBiometricsEnabled(true);
     expect(ok).toBe(false);
     expect(store.has(BIOMETRICS_PREF_KEY)).toBe(false);
@@ -157,7 +158,7 @@ describe("enable requires a passing prompt", () => {
   });
 
   it("a FAILED (thrown) prompt leaves the lock OFF", async () => {
-    __state.authThrows = new Error("lockout");
+    state.authThrows = new Error("lockout");
     const ok = await setBiometricsEnabled(true);
     expect(ok).toBe(false);
     expect(store.has(BIOMETRICS_PREF_KEY)).toBe(false);
@@ -167,13 +168,14 @@ describe("enable requires a passing prompt", () => {
 describe("authenticate + gate", () => {
   it("authenticate resolves true only on explicit success", async () => {
     expect(await authenticate()).toBe(true);
-    __state.authResult = { success: false };
+    state.authResult = { success: false };
     expect(await authenticate()).toBe(false);
-    __state.authThrows = new Error("bad");
+    state.authThrows = new Error("bad");
     expect(await authenticate()).toBe(false);
   });
 
   it("gate() allows silently when the pref is off", async () => {
+    authenticateAsync.mockClear(); // earlier tests in this file prompt
     expect(await gate()).toBe(true);
     expect(authenticateAsync).not.toHaveBeenCalled();
   });
