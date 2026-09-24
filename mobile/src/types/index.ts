@@ -18,6 +18,10 @@ export interface ProductImportMeta {
   designId?: string;
   tags?: string[];
   sourceUrl?: string;
+  subcategory?: string;
+  structuredSpecs?: { key: string; value: string }[];
+  stats?: Record<string, number>;
+  pricing?: Record<string, unknown>;
 }
 
 export interface Product {

@@ -290,6 +290,12 @@ export function AdminScreen() {
   // (uploads the extracted image into product-images + records documentationUrl).
   const [pendingImportUrl, setPendingImportUrl] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  // U-24 (2026-09-24): import-by-link used Alert.prompt, which is iOS-only —
+  // on Android the promise NEVER resolves, so the flow silently died after
+  // Cancel and "import is not working anywhere". This owned modal gives both
+  // platforms a real paste-and-look-up dialog.
+  const [importLinkOpen, setImportLinkOpen] = useState(false);
+  const [importLinkDraft, setImportLinkDraft] = useState("");
   // Settings editors (company inputs, training programs, pilot costs,
   // curriculum highlights) report their editing state through this flag —
   // it is owned here so the admin pager can disable swiping while ANY
@@ -664,26 +670,22 @@ export function AdminScreen() {
     setEditingService(null);
   }
 
-  /** Prompt for a product link, preview it via the shared edge function,
-   *  and seed the editor so staff can review/fine-tune before saving. */
-  async function handleImportFromLink() {
-    const url = await new Promise<string | null>((resolve) => {
-      Alert.prompt(
-        "Import product by link",
-        "Paste any product page URL (makerworld.com, a shop listing, etc.). We extract the details; you review before saving.",
-        [
-          { text: "Cancel", style: "cancel", onPress: () => resolve(null) },
-          {
-            text: "Look up",
-            onPress: (text?: string) => resolve(text ?? null),
-          },
-        ],
-        "plain-text",
-        "",
-      );
-    });
-    if (!url?.trim()) return;
-    const link = url.trim();
+  /** Open the "Import product by link" dialog (see importLinkOpen state). */
+  function handleImportFromLink() {
+    setImportLinkDraft("");
+    setImportLinkOpen(true);
+  }
+
+  function dismissImportLink() {
+    setImportLinkOpen(false);
+  }
+
+  /** Preview a pasted link via the shared edge function and seed the editor
+   *  so staff can review/fine-tune before saving. */
+  async function confirmImportLink() {
+    const link = importLinkDraft.trim();
+    if (!link) return;
+    setImportLinkOpen(false);
     setImportBusy(true);
     try {
       const preview = await previewLinkImport(link);
@@ -1243,6 +1245,73 @@ export function AdminScreen() {
           </View>
         ))}
       </PlatformPager>
+
+      {/* U-24 (2026-09-24): cross-platform import-by-link dialog. Alert.prompt
+          is iOS-only, so Android never even got to the lookup — this modal is
+          the one place both platforms paste a product URL. */}
+      {importLinkOpen && (
+        <Modal
+          transparent
+          visible
+          animationType="fade"
+          onRequestClose={dismissImportLink}
+        >
+          <Pressable
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(15, 23, 42, 0.7)",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 20,
+            }}
+            onPress={dismissImportLink}
+            accessibilityLabel="Close import by link dialog"
+          >
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-line bg-card p-5"
+            >
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                Import product by link
+              </Text>
+              <Text className="mt-2 text-sm leading-5 text-muted">
+                Paste a product page URL (makerworld.com, a shop listing, …). We
+                extract the standard details — you review them in the editor
+                before saving.
+              </Text>
+              <TextInput
+                value={importLinkDraft}
+                onChangeText={setImportLinkDraft}
+                placeholder="https://makerworld.com/en/models/..."
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="go"
+                onSubmitEditing={() => void confirmImportLink()}
+                className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink"
+              />
+              <View className="mt-4 flex-row items-center justify-end gap-2">
+                <Pressable
+                  onPress={dismissImportLink}
+                  className="rounded-full border border-line px-4 py-2"
+                >
+                  <Text className="text-xs font-black text-ink">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void confirmImportLink()}
+                  disabled={!importLinkDraft.trim()}
+                  className={`rounded-full px-4 py-2 ${importLinkDraft.trim() ? "bg-navy" : "bg-slate-300"}`}
+                >
+                  <Text className="text-xs font-black text-white">
+                    Look up product
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }

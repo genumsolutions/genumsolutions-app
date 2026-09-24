@@ -140,6 +140,24 @@ export function ProductDetailScreen() {
 
   const images = galleryImages(product);
 
+  // U-24 (2026-09-24): canonical specs as rows — structured when the import
+  // carried them, else parsed from the plain `specs` chip lines.
+  const specRows: { key: string; value: string }[] = product.importMeta
+    ?.structuredSpecs?.length
+    ? product.importMeta.structuredSpecs
+    : product.specs
+        .filter(Boolean)
+        .map((line) => {
+          const idx = line.indexOf(":");
+          return idx > 0
+            ? {
+                key: line.slice(0, idx).trim(),
+                value: line.slice(idx + 1).trim(),
+              }
+            : { key: "", value: line };
+        })
+        .filter((row) => row.key);
+
   return (
     <View className="flex-1 bg-surface">
       <ScrollView
@@ -205,28 +223,60 @@ export function ProductDetailScreen() {
           <Text className="mt-3 text-sm leading-6 text-muted">
             {product.description}
           </Text>
-          {product.importMeta?.sourceSite || product.documentationUrl ? (
-            <View className="mt-2 flex-row flex-wrap">
-              <Text className="text-xs leading-5 text-muted">Source: </Text>
-              {product.documentationUrl ? (
-                <Pressable
-                  onPress={() =>
-                    void Linking.openURL(product.documentationUrl!)
-                  }
-                  accessibilityRole="link"
-                >
-                  <Text className="text-xs font-bold text-navy">
-                    {product.importMeta?.sourceSite || "Original"}
-                    {product.importMeta?.creator
-                      ? ` · ${String(product.importMeta.creator).slice(0, 40)}`
-                      : ""}
+          {product.importMeta?.creator ||
+          product.importMeta?.license ||
+          product.importMeta?.sourceSite ||
+          product.documentationUrl ? (
+            <View className="mt-3 overflow-hidden rounded-xl border border-line bg-mist/60">
+              {product.importMeta?.creator ? (
+                <View className="flex-row items-center justify-between gap-4 px-4 py-2">
+                  <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                    Design by
                   </Text>
-                </Pressable>
-              ) : (
-                <Text className="text-xs text-muted">
-                  {product.importMeta?.sourceSite}
-                </Text>
-              )}
+                  <Text className="max-w-[70%] text-sm text-ink">
+                    {String(product.importMeta.creator)}
+                  </Text>
+                </View>
+              ) : null}
+              {product.importMeta?.license ? (
+                <View className="flex-row items-center justify-between gap-4 border-t border-line px-4 py-2">
+                  <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                    License
+                  </Text>
+                  <Text
+                    className="max-w-[70%] text-sm text-ink"
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {String(product.importMeta.license)}
+                  </Text>
+                </View>
+              ) : null}
+              {product.importMeta?.sourceSite || product.documentationUrl ? (
+                <View className="flex-row items-center justify-between gap-4 border-t border-line px-4 py-2">
+                  <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                    Source
+                  </Text>
+                  {product.documentationUrl ? (
+                    <Pressable
+                      onPress={() =>
+                        void Linking.openURL(product.documentationUrl!)
+                      }
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open ${product.importMeta?.sourceSite || "source link"}`}
+                      hitSlop={8}
+                    >
+                      <Text className="text-sm font-bold text-navy underline">
+                        {product.importMeta?.sourceSite || "Original"} ↗
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text className="text-sm text-ink">
+                      {product.importMeta?.sourceSite}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
             </View>
           ) : null}
 
@@ -304,16 +354,20 @@ export function ProductDetailScreen() {
             </View>
           </View>
 
-          {product.specs.length > 0 && (
+          {specRows.length > 0 && (
             <View className="mt-4">
               <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-                Specs
+                Specifications
               </Text>
-              {product.specs.map((spec, i) => (
-                <View key={i} className="mt-2 flex-row items-start">
+              {specRows.map((row, i) => (
+                <View
+                  key={`${row.key}-${i}`}
+                  className="mt-2 flex-row items-start"
+                >
                   <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-gold" />
                   <Text className="flex-1 text-sm leading-5 text-muted">
-                    {spec}
+                    <Text className="font-bold text-ink">{row.key}:</Text>{" "}
+                    {row.value}
                   </Text>
                 </View>
               ))}

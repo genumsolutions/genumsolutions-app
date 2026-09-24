@@ -21,6 +21,7 @@ import * as auth from "../services/authService";
 import * as push from "../services/pushService";
 import * as settings from "../services/settingsService";
 import * as cart from "../services/cartService";
+import * as productService from "../services/productService";
 import { logger } from "../services/logger";
 import type { CartLine } from "../types";
 import type { CarMode } from "../config/roboCarCatalog";
@@ -274,9 +275,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   // --- load the cart badge on launch + keep it current ---
+  // U-24 (2026-09-24): the badge must match CartScreen, which only renders
+  // lines that resolve to ACTIVE catalog products. Prune orphan lines (stale
+  // product ids from deactivated/removed items, or a persisted server cart
+  // after a wipe) against the active id list, and persist the pruned cart so
+  // the phantom count disappears permanently — not just for this session.
   const refreshCartCount = useCallback(async () => {
     const lines = await cart.getLocalCart();
-    setCartCount(cart.totalCount(lines));
+    let counted = lines;
+    try {
+      const validIds = await productService.listActiveProductIds();
+      const pruned = cart.pruneOrphanLines(lines, validIds);
+      if (pruned.length !== lines.length) {
+        counted = pruned;
+        await cart.replaceLocalCart(pruned);
+      }
+    } catch {
+      // offline / no id cache yet -> keep unverified lines as-is
+    }
+    setCartCount(cart.totalCount(counted));
   }, []);
 
   useEffect(() => {
@@ -318,11 +335,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ]);
         if (cancelled) return;
         const merged = cart.mergeCarts(serverLines, localLines);
-        await cart.replaceLocalCart(merged);
+        let clean = merged;
+        try {
+          const validIds = await productService.listActiveProductIds();
+          clean = cart.pruneOrphanLines(merged, validIds);
+        } catch {
+          // keep merged as-is when the id list is unavailable
+        }
+        await cart.replaceLocalCart(clean);
         if (cancelled) return;
         // DB sticks with the merged cart so both clients start from the same state.
-        pushCartToServer(userId, merged);
-        setCartCount(cart.totalCount(merged));
+        pushCartToServer(userId, clean);
+        setCartCount(cart.totalCount(clean));
       } catch (e) {
         logger.error("cart", "cart merge on sign-in failed", e);
         if (!cancelled) void refreshCartCount();
@@ -434,8 +458,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void auth.signOut();
     setUser(null);
     setAuthSheetOpen(false);
-    void refreshCartCount();
-  }, [refreshCartCount]);
+    // U-24 (2026-09-24): signing out starts a clean guest cart — the previous
+    // session's lines stay safely in the DB `carts` table and return on the
+    // next sign-in. This removes the "6 items while logged out" phantom. The
+    // cart badge clears immediately without waiting for the storage write.
+    void cart.clearCart().then(() => setCartCount(0));
+  }, []);
 
   const value = useMemo<AppContextValue>(
     () => ({
