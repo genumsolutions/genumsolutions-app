@@ -21,11 +21,25 @@
 // =====================================================================
 import { Platform, Vibration } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
+import { getExpoHaptics, type ExpoHapticsModule } from "./safeNative";
 import { logger } from "./logger";
 
 /** AsyncStorage key holding "on" | "off" (absent = ON, the old behavior). */
 export const HAPTICS_PREF_KEY = "genum-haptics";
+
+/**
+ * Enum stand-ins resolved lazily through safeNative (the static
+ * `Haptics.ImpactFeedbackStyle` import would crash an OTA bundle running
+ * inside a pre-C7 APK). String values match the real enums.
+ */
+const HAPTICS = {
+  ImpactFeedbackStyle: { Light: "light", Medium: "medium", Heavy: "heavy" },
+  NotificationFeedbackType: {
+    Success: "success",
+    Warning: "warning",
+    Error: "error",
+  },
+} as const;
 
 // --- preference (read-through cache; best-effort persistence) ---------
 let hapticsEnabled = true;
@@ -67,7 +81,7 @@ export function hapticsEnabledNow(): boolean {
 
 /** Short tick for taps/presses (replaces `Vibration.vibrate(10)`). */
 export function feedbackTap(): void {
-  impact(Haptics.ImpactFeedbackStyle.Light, 10);
+  impact(HAPTICS.ImpactFeedbackStyle.Light, 10);
 }
 
 /**
@@ -75,22 +89,24 @@ export function feedbackTap(): void {
  * 50ms vibrate on e.g. the drone Emergency Stop).
  */
 export function feedbackImpact(): void {
-  impact(Haptics.ImpactFeedbackStyle.Medium, 20);
+  impact(HAPTICS.ImpactFeedbackStyle.Medium, 20);
 }
 
 /** Success notification (order placed, save succeeded, …). */
 export function feedbackSuccess(): void {
-  notify(Haptics.NotificationFeedbackType.Success);
+  notify(HAPTICS.NotificationFeedbackType.Success);
 }
 
 /** Warning notification (validation issues, connection lost, …). */
 export function feedbackWarning(): void {
-  notify(Haptics.NotificationFeedbackType.Warning);
+  notify(HAPTICS.NotificationFeedbackType.Warning);
 }
 
 /** Subtle selection change (pickers, segmented toggles). */
 export function feedbackSelection(): void {
+  const Haptics = getExpoHaptics() as ExpoHapticsModule | null;
   if (!hapticsEnabled || Platform.OS === "web") return;
+  if (!Haptics) return;
   try {
     void Haptics.selectionAsync().catch(() => undefined);
   } catch {
@@ -100,9 +116,10 @@ export function feedbackSelection(): void {
 
 // --- internals ---------------------------------------------------------
 
-function impact(style: Haptics.ImpactFeedbackStyle, fallbackMs: number): void {
+function impact(style: string, fallbackMs: number): void {
+  const Haptics = getExpoHaptics() as ExpoHapticsModule | null;
   if (!hapticsEnabled) return;
-  if (Platform.OS !== "web") {
+  if (Haptics && Platform.OS !== "web") {
     try {
       void Haptics.impactAsync(style).catch(() => undefined);
       return;
@@ -111,7 +128,8 @@ function impact(style: Haptics.ImpactFeedbackStyle, fallbackMs: number): void {
     }
   }
   // Fallback: the pre-C7 behavior (also covers web, where Vibration is a
-  // no-op, and any exotic runtime where the native side rejects at call).
+  // no-op, and APKs from before the native module was added — the lazy
+  // require in safeNative resolves null there instead of crashing).
   try {
     Vibration.vibrate(fallbackMs);
   } catch {
@@ -119,9 +137,10 @@ function impact(style: Haptics.ImpactFeedbackStyle, fallbackMs: number): void {
   }
 }
 
-function notify(type: Haptics.NotificationFeedbackType): void {
+function notify(type: string): void {
+  const Haptics = getExpoHaptics() as ExpoHapticsModule | null;
   if (!hapticsEnabled) return;
-  if (Platform.OS !== "web") {
+  if (Haptics && Platform.OS !== "web") {
     try {
       void Haptics.notificationAsync(type).catch(() => undefined);
       return;

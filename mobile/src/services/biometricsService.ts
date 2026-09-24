@@ -20,7 +20,11 @@
 // =====================================================================
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as LocalAuthentication from "expo-local-authentication";
+import {
+  getExpoLocalAuthentication,
+  __onNativeModuleChanged,
+  type ExpoLocalAuthModule,
+} from "./safeNative";
 import { logger } from "./logger";
 
 /** AsyncStorage key holding "on" | "off" (absent = OFF — opt-in). */
@@ -39,9 +43,19 @@ export type BiometricsSupport = {
 
 /** Probe the device once per session; never throws. */
 let supportCache: BiometricsSupport | undefined;
+// Test-injection hook: when safeNative's module handle is (re)set, drop the
+// cached probe so the next call re-evaluates against the new module.
+__onNativeModuleChanged(() => {
+  supportCache = undefined;
+});
 export async function biometricsSupport(): Promise<BiometricsSupport> {
   if (supportCache) return supportCache;
-  if (Platform.OS === "web") {
+  // Lazy require via safeNative: an OTA bundle inside a pre-C7 APK has no
+  // native module — degrade to "unsupported" (feature hidden) instead of
+  // crashing at import time.
+  const LocalAuthentication =
+    getExpoLocalAuthentication() as ExpoLocalAuthModule | null;
+  if (Platform.OS === "web" || !LocalAuthentication) {
     supportCache = {
       available: false,
       supported: false,
@@ -140,7 +154,9 @@ export function biometricsEnabledNow(): boolean {
 export async function authenticate(
   promptMessage = "Unlock the admin console",
 ): Promise<boolean> {
-  if (Platform.OS === "web") return false;
+  const LocalAuthentication =
+    getExpoLocalAuthentication() as ExpoLocalAuthModule | null;
+  if (Platform.OS === "web" || !LocalAuthentication) return false;
   try {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage,

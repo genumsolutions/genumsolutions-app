@@ -20,7 +20,23 @@ verified complete — WhatsApp/socials are admin-editable in the SHARED company_
 ToolsScreen renders them directly; fix = bundled-catalog fallback by slug + thread DB
 capability_labels. Gates: app tsc 0 · vitest **178/178** · prettier clean.
 
-**UPDATE 2026-09-24 (later same session) — round COMPLETED.** Full detail in
+**UPDATE 2026-09-24 (later same session) — round COMPLETED + C7 SAFETY REVISION.**
+⚠️ **Do-not-regress lesson (native deps + OTA):** release.yml's paths filter watches
+`mobile/package.json`/`package-lock.json`, so adding expo-haptics +
+expo-local-authentication (C7) correctly triggered an APK rebuild — same 3.2.5/58
+labels, new bytes. The CI OTA bundle (runtime 3.2.5) can therefore run on devices with
+the PREVIOUS 3.2.5 APK that lacks those native modules. Fix shipped: `safeNative.ts`
+(cached lazy require + test injection); haptics degrades to the raw Vibration API and
+biometrics reports "unsupported" (Menu row hidden, gate fails closed) when the native
+side is absent — static imports of the native modules are gone. **Rule: any new native
+dep must degrade gracefully in JS until its first APK ships.** App vitest now
+**180/180** (native-absent degrade paths pinned). CI after the pushes: app CI ✓ · OTA
+Only ✓ (bundle published for 3.2.5) · Release APK ✓; web CI ✓ · Sync app fallback ✓.
+W1 live probe `scripts/web-save-image-parity.mjs` **6/6 vs prod** (staff save with a
+foreign image URL → storage URL stored → next/image serves it → public catalog carries
+it), committed `1935bad` → rebased over bot `7dd7c04` → pushed `dd7a5e6`.
+
+**UPDATE 2026-09-24 (earlier) — round COMPLETED.** Full detail in
 `guide/SESSION-2026-09-24-UNIFICATION.md`; parity matrix
 `guide/UNIFICATION-AUDIT-2026-09-24.md`. **A1 fixed:** mapRow falls back to the bundled
 catalog's tagline/description by slug (DB columns don't exist), and DB
