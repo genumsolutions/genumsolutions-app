@@ -47,6 +47,22 @@ export function sanitizeLines(lines: unknown): CartLine[] {
     }));
 }
 
+/**
+ * U-24 (2026-09-24): drop lines whose productId is no longer in the ACTIVE
+ * catalog, so the badge matches `CartScreen` (which only renders resolved,
+ * active products). When `validIds` is empty (offline / first run with no
+ * cache) the lines are returned UNCHANGED — we never delete a cart we cannot
+ * verify. Call `sanitizeLines` first; this helper assumes already-clean lines.
+ */
+export function pruneOrphanLines(
+  lines: CartLine[],
+  validIds: string[],
+): CartLine[] {
+  if (!Array.isArray(validIds) || validIds.length === 0) return lines;
+  const valid = new Set(validIds);
+  return lines.filter((line) => valid.has(line.productId));
+}
+
 export async function getLocalCart(): Promise<CartLine[]> {
   try {
     const raw = await AsyncStorage.getItem(CART_KEY);

@@ -172,6 +172,36 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
   return (data as ProductRow[]).map(rowToProduct);
 }
 
+// U-24 (2026-09-24): cheap id-only catalog read used to prune orphan cart
+// lines (badge vs CartScreen parity). One in-flight fetch is shared across
+// callers; the memo refreshes on a short debounce so new/deactivated products
+// are picked up without extra load during a single navigation burst.
+let activeIdsPromise: Promise<string[]> | null = null;
+
+/** Ids of every ACTIVE product (best-effort; cache fallback, never throws). */
+export function listActiveProductIds(): Promise<string[]> {
+  if (activeIdsPromise) return activeIdsPromise;
+  activeIdsPromise = (async () => {
+    try {
+      const { data } = await supabase
+        .from("products")
+        .select("id")
+        .eq("active", true);
+      return (data ?? []).map((row) => String((row as { id: unknown }).id));
+    } catch (e) {
+      logger.error("catalog", "active id fetch failed, using cache", e);
+      const cached = await cachedProducts();
+      return cached ? cached.map((p) => p.id) : [];
+    } finally {
+      const timer = setTimeout(() => {
+        activeIdsPromise = null;
+      }, 30_000);
+      timer.unref?.();
+    }
+  })();
+  return activeIdsPromise;
+}
+
 /** Best-effort catalog: try Supabase, fall back to a local cache. */
 export async function getProducts(): Promise<Product[]> {
   try {

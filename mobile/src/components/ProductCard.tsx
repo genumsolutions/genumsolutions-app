@@ -47,7 +47,9 @@ export function ProductCard({
           <Image
             source={{ uri: media }}
             className="h-full w-full"
-            resizeMode="cover"
+            // U-24 (2026-09-24): whole-image card — contain so the full
+            // photo is always visible on the mist tray (matches the web card).
+            resizeMode="contain"
           />
         ) : (
           <Feather name="box" size={28} color="#94a3b8" />

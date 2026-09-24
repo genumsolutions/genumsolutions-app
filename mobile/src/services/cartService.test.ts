@@ -57,6 +57,7 @@ import {
   clearCart,
   fetchServerCart,
   pushCartToServer,
+  pruneOrphanLines,
 } from "./cartService";
 
 const { __getItem, __setItem } = AsyncStorage as unknown as {
@@ -155,6 +156,39 @@ describe("setCartSyncHandler", () => {
 
   it("accepts null to unregister", () => {
     setCartSyncHandler(null);
+  });
+});
+
+// ── pruneOrphanLines ────────────────────────────────
+describe("pruneOrphanLines", () => {
+  it("keeps lines whose productId is in the active catalog", () => {
+    const lines = [
+      { productId: "p1", quantity: 2 },
+      { productId: "p2", quantity: 1 },
+    ];
+    expect(pruneOrphanLines(lines, ["p1", "p2"])).toEqual(lines);
+  });
+
+  it("drops lines whose productId is no longer active", () => {
+    const lines = [
+      { productId: "p1", quantity: 2 },
+      { productId: "gone", quantity: 3 },
+      { productId: "p2", quantity: 1 },
+    ];
+    expect(pruneOrphanLines(lines, ["p1", "p2"])).toEqual([
+      { productId: "p1", quantity: 2 },
+      { productId: "p2", quantity: 1 },
+    ]);
+  });
+
+  it("leaves lines unchanged when the id list is empty (offline first run)", () => {
+    const lines = [{ productId: "mystery", quantity: 4 }];
+    expect(pruneOrphanLines(lines, [])).toEqual(lines);
+  });
+
+  it("keeps all lines when everything is valid", () => {
+    const lines = [{ productId: "p1", quantity: 1 }];
+    expect(pruneOrphanLines(lines, ["p1", "p2"])).toEqual(lines);
   });
 });
 
