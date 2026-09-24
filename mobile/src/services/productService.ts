@@ -72,6 +72,8 @@ type ProductRow = {
   badge: string | null;
   supplier: string | null;
   image_url: string | null;
+  gallery: string[] | null;
+  import_meta: Record<string, unknown> | null;
 };
 
 export function rowToProduct(row: ProductRow): Product {
@@ -126,6 +128,12 @@ export function rowToProduct(row: ProductRow): Product {
     ...(row.badge ? { badge: row.badge } : {}),
     ...(row.supplier ? { supplier: row.supplier } : {}),
     image: normalizeImageUrl(row.image_url),
+    ...(Array.isArray(row.gallery)
+      ? { gallery: row.gallery.filter(Boolean) }
+      : {}),
+    ...(row.import_meta && typeof row.import_meta === "object"
+      ? { importMeta: row.import_meta as Product["importMeta"] }
+      : {}),
   };
 }
 

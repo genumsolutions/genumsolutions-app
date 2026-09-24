@@ -20,11 +20,11 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
       "Projects",
       "Services",
       "Journal",
+      "Content",
       "Users",
       "Messages",
       "Finance",
       "Activity",
-      "Content",
       "Settings",
     ]);
   });

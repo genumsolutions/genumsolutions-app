@@ -57,6 +57,8 @@ export type AdminProduct = {
   audience: string;
   difficulty: string;
   warranty: string;
+  gallery: string[];
+  importMeta: Record<string, unknown>;
 };
 
 export type AdminService = {
@@ -175,6 +177,11 @@ export function mapProductRow(row: RawRow): AdminProduct {
     audience: String(row.audience ?? ""),
     difficulty: String(row.difficulty ?? "Beginner"),
     warranty: String(row.warranty ?? ""),
+    gallery: toStringArray(row.gallery),
+    importMeta:
+      row.import_meta && typeof row.import_meta === "object"
+        ? (row.import_meta as Record<string, unknown>)
+        : {},
   };
 }
 
@@ -214,6 +221,8 @@ export function toProductRow(product: AdminProduct): RawRow {
     audience: product.audience,
     difficulty: product.difficulty,
     warranty: product.warranty,
+    gallery: product.gallery,
+    import_meta: product.importMeta,
     updated_at: new Date().toISOString(),
   };
 }
@@ -490,6 +499,12 @@ export async function createLinkImport(
       priceLabel: product.priceLabel || "Request quote",
       stock: Number(product.stock) || 0,
       specs: Array.isArray(product.specs) ? product.specs : [],
+      // U-23 (2026-09-24): send the previewed gallery so the saved import
+      // keeps every extracted photo ("last link sticks").
+      image: product.image || "",
+      gallery: Array.isArray(product.gallery)
+        ? product.gallery.slice(0, 8)
+        : [],
     },
   });
   return mapProductRow((data.product as RawRow) ?? {});
