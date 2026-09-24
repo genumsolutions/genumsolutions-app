@@ -22,12 +22,13 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { PanResponder, Pressable, Text, View, Vibration } from "react-native";
+import { PanResponder, Pressable, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import Slider from "@react-native-community/slider";
 import type { DriveControlsProps, SafetyLimits } from "./types";
 import { DRIVE_CMD_MIN_INTERVAL_MS } from "./controlConstants";
+import { feedbackTap } from "../../services/hapticsService";
 
 type IconName = ComponentProps<typeof Feather>["name"];
 
@@ -915,8 +916,10 @@ export function DriveControls({
     [onDirection],
   );
 
+  // C7: haptic tap routes through hapticsService (respects the Menu →
+  // Feedback toggle; expo-haptics impact when available, Vibration fallback).
   const hapticTap = useCallback(() => {
-    Vibration.vibrate(10);
+    feedbackTap();
   }, []);
 
   const maxSteer = steerLimit != null ? steerLimit : limits.maxSteerDeviation;

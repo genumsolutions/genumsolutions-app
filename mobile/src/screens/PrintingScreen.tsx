@@ -2,13 +2,26 @@
 // PrintingScreen - 3D printing services and fabrication (native).
 // Mirrors the website's /3d-printing page: offers + workflow + a model
 // library (external links) + CTAs that route to the inquiry form.
+//
+// A6 (2026-09-24): now also renders the LIVE "Models we print" grid —
+// the same products with category "3D Models" from the shared products
+// table that the website's /3d-printing page shows (unification parity).
 // =====================================================================
-import React from "react";
-import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import type { RootStackParamList } from "../navigation/types";
+import { getProductsFromSupabase } from "../services/productService";
+import type { Product } from "../types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Printing">;
 
@@ -72,6 +85,27 @@ const modelSites = [
 export function PrintingScreen() {
   const navigation = useNavigation<Nav>();
 
+  // A6: live 3D Models from the shared products table (same rows the
+  // website's "Models we print" section renders). Best-effort: offline or
+  // unconfigured Supabase simply hides the section.
+  const [models, setModels] = useState<Product[]>([]);
+  useEffect(() => {
+    let active = true;
+    getProductsFromSupabase()
+      .then((products) => {
+        if (!active) return;
+        setModels(
+          products.filter(
+            (p) => p.category === "3D Models" && p.active !== false,
+          ),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <ScrollView
       className="flex-1 bg-surface"
@@ -120,6 +154,63 @@ export function PrintingScreen() {
           ))}
         </View>
       </View>
+
+      {/* A6: Models we print — live parity with the website's /3d-printing
+          section; hidden entirely when the table has no such rows. */}
+      {models.length > 0 && (
+        <View className="mx-5 mb-8">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Models we print
+          </Text>
+          <Text className="mt-2 font-display text-2xl font-bold text-ink">
+            Printed in-house, on request.
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-4"
+            contentContainerStyle={{ gap: 12 }}
+          >
+            {models.map((model) => (
+              <Pressable
+                key={model.id}
+                onPress={() =>
+                  navigation.push("ProductDetail", { productId: model.id })
+                }
+                className="w-40 overflow-hidden rounded-2xl border border-line bg-card"
+                accessibilityRole="button"
+                accessibilityLabel={`View ${model.name}`}
+              >
+                {model.image ? (
+                  <Image
+                    source={{ uri: model.image }}
+                    className="h-28 w-full bg-ink"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View className="h-28 w-full items-center justify-center bg-ink">
+                    <Feather name="box" size={24} color="#94a3b8" />
+                  </View>
+                )}
+                <View className="p-3">
+                  <Text
+                    numberOfLines={2}
+                    className="text-sm font-bold leading-5 text-ink"
+                  >
+                    {model.name}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    className="mt-1 text-xs font-black uppercase tracking-wide text-navy"
+                  >
+                    {model.priceLabel || "Request quote"}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View className="mx-5 mb-8">
         <View className="gap-6 border-t border-b border-line py-8">

@@ -1,9 +1,11 @@
 // DroneControls — altitude slider, gimbal pan/tilt, takeoff/land/emergency.
+// C7: haptics via hapticsService (respects the Menu → Feedback toggle).
 import React from "react";
-import { Pressable, Text, Vibration, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import type { DroneControlsProps } from "./types";
+import { feedbackTap, feedbackImpact } from "../../services/hapticsService";
 
 export function DroneControls({
   canControl,
@@ -45,7 +47,7 @@ export function DroneControls({
         <View className="mt-2 flex-row gap-2">
           <Pressable
             onPress={() => {
-              Vibration.vibrate(10);
+              feedbackTap();
               onCommand("TAKEOFF");
             }}
             disabled={!canControl}
@@ -55,7 +57,7 @@ export function DroneControls({
           </Pressable>
           <Pressable
             onPress={() => {
-              Vibration.vibrate(10);
+              feedbackTap();
               onCommand("LAND");
             }}
             disabled={!canControl}
@@ -65,7 +67,7 @@ export function DroneControls({
           </Pressable>
           <Pressable
             onPress={() => {
-              Vibration.vibrate(50);
+              feedbackImpact();
               onSetAltitude(0);
               onCommand("EMERGENCY");
             }}

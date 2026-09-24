@@ -13,18 +13,13 @@
 //     that stays put navigates instead.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Dimensions,
-  PanResponder,
-  StyleSheet,
-  Vibration,
-  View,
-} from "react-native";
+import { Dimensions, PanResponder, StyleSheet, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sppService } from "../services/sppService";
 import { bleService } from "../services/bleService";
 import { wifiService } from "../services/wifiService";
+import { feedbackTap } from "../services/hapticsService";
 import { navigationRef, navigate } from "../navigation/navigationRef";
 
 const FAB_SIZE = 56;
@@ -206,7 +201,7 @@ export function FloatingRemoteButton() {
           Math.abs(gesture.dx) < DRAG_THRESHOLD &&
           Math.abs(gesture.dy) < DRAG_THRESHOLD
         ) {
-          Vibration.vibrate(12);
+          feedbackTap();
           openRemote();
         }
       },

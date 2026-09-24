@@ -8,7 +8,6 @@ import {
   ScrollView,
   Text,
   View,
-  Vibration,
   useWindowDimensions,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -20,6 +19,7 @@ import {
 } from "../../config/roboCarCatalog";
 import { modeAvailStatus } from "../../services/carProtocol";
 import { useApp } from "../../context/AppContext";
+import { feedbackTap } from "../../services/hapticsService";
 import type { ModeChooserProps } from "./types";
 
 // Scroll/display order = the SINGLE shared fleet order (roboCarCatalog
@@ -129,7 +129,7 @@ export function ModeChooser({
       {/* Cycle button — walks the remote's mode order like the physical remote */}
       <Pressable
         onPress={() => {
-          Vibration.vibrate(10);
+          feedbackTap();
           onCycle();
         }}
         disabled={!canControl || locked}
@@ -200,7 +200,7 @@ export function ModeChooser({
                     key={m.id}
                     onPress={() => {
                       if (locked) return;
-                      Vibration.vibrate(10);
+                      feedbackTap();
                       onSelect(m);
                       closeDropdown();
                     }}

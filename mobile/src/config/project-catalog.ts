@@ -22,6 +22,9 @@ export type ProjectCategory = {
   name: string;
   tagline: string;
   description: string;
+  /** A1 (2026-09-24): per-category admin labels from project_categories.capability_labels
+   *  (e.g. relay → "Pump control"). Screens fall back to their static maps when absent. */
+  capabilityLabels?: Record<string, string>;
   hardware: string[];
   capabilities: ControlCapability[];
   carType?: string;

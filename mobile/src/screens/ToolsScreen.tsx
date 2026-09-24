@@ -13,7 +13,6 @@ import {
   ScrollView,
   Text,
   TextInput,
-  Vibration,
   View,
 } from "react-native";
 import {
@@ -27,6 +26,7 @@ import type { ComponentProps } from "react";
 import type { RootStackParamList } from "../navigation/types";
 import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
+import { feedbackTap } from "../services/hapticsService";
 import {
   PROJECT_CATEGORIES,
   PRODUCT_CATEGORY_TO_SLUG,
@@ -123,13 +123,21 @@ export function ToolsScreen() {
       ? "Flight deck"
       : "Relay & sensor deck";
 
+  // A1 (2026-09-24): DB capability_labels (admin-editable per category) win;
+  // unknown keys fall back to the static map, then the raw key.
+  const capabilityLabel = useCallback(
+    (cap: string) =>
+      category.capabilityLabels?.[cap] ?? CAPABILITY_LABELS[cap] ?? cap,
+    [category.capabilityLabels],
+  );
+
   // Connection tab: iOS-style segmented toggle
   const [connTab, setConnTab] = useState<"bluetooth" | "wifi">("bluetooth");
 
   // Disconnect confirmation
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const confirmDisconnect = useCallback(() => {
-    Vibration.vibrate(10);
+    feedbackTap();
     setShowDisconnectConfirm(false);
     handleDisconnect();
   }, [handleDisconnect]);
@@ -228,7 +236,7 @@ export function ToolsScreen() {
             <View key={cap} className="flex-row items-center gap-1.5">
               <Feather name="check-circle" size={12} color="#059669" />
               <Text className="text-xs font-semibold text-ink">
-                {CAPABILITY_LABELS[cap] ?? cap}
+                {capabilityLabel(cap)}
               </Text>
             </View>
           ))}
@@ -277,7 +285,7 @@ export function ToolsScreen() {
           {(sppStatus === "connected" || wifiConnected) && (
             <Pressable
               onPress={() => {
-                Vibration.vibrate(10);
+                feedbackTap();
                 setShowDisconnectConfirm(true);
               }}
               className="shrink-0"
@@ -319,7 +327,7 @@ export function ToolsScreen() {
             <View className="mt-2 flex-row gap-2">
               <Pressable
                 onPress={() => {
-                  Vibration.vibrate(10);
+                  feedbackTap();
                   void handleSppsRetry();
                 }}
                 className="rounded-full bg-gold px-4 py-1.5"
@@ -329,7 +337,7 @@ export function ToolsScreen() {
               </Pressable>
               <Pressable
                 onPress={() => {
-                  Vibration.vibrate(10);
+                  feedbackTap();
                   handleReconnectPromptCancel();
                 }}
                 className="rounded-full border border-slate-300 bg-white px-4 py-1.5"

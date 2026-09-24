@@ -12,11 +12,13 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   BackHandler,
   FlatList,
   Image,
   Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -34,6 +36,10 @@ import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { isProjectPackage } from "../services/projectService";
 import { logger } from "../services/logger";
+import {
+  loadBiometricsPref,
+  authenticate as biometricAuthenticate,
+} from "../services/biometricsService";
 import { fetchSiteContent, upsertSiteContent } from "../services/orderService";
 import {
   listAdminOrders,
@@ -134,6 +140,46 @@ export function AdminScreen() {
   const [loading, setLoading] = useState(false);
   const [backHandlerRef, setBackHandlerRef] =
     useState<BackHandlerRemove | null>(null);
+
+  // ── C7: biometric admin lock (local opt-in from Menu → Security) ──
+  // When the user enabled the lock on this device, the console stays
+  // blurred + inert until the Face ID / fingerprint prompt passes. The
+  // gate re-arms whenever the app returns to the foreground, so a phone
+  // parked mid-session is protected too. This is a convenience lock:
+  // every admin action is still authorized server-side.
+  const [bioLocked, setBioLocked] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const enabled = await loadBiometricsPref();
+      if (active && enabled) setBioLocked(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!bioLocked) return;
+    let cancelled = false;
+    void (async () => {
+      const ok = await biometricAuthenticate("Unlock the admin console");
+      if (!cancelled && ok) setBioLocked(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bioLocked]);
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void loadBiometricsPref().then((enabled) => {
+          if (enabled) setBioLocked(true);
+        });
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // Keep the horizontal tab strip scrolled so the active tab stays visible.
   // Use useLayoutEffect so the scroll happens before the screen paints the
@@ -1104,6 +1150,35 @@ export function AdminScreen() {
 
   return (
     <View className="flex-1 bg-mist">
+      {/* C7 biometric lock overlay — while locked, the console is blurred
+          and inert (no tab switches, no data actions); the OS biometric
+          prompt is up automatically (bioLocked effect above). Cancel/fail
+          leaves this screen locked with an explicit retry button. */}
+      {bioLocked ? (
+        <>
+          <Pressable
+            className="absolute inset-0 z-40 bg-mist/95 items-center justify-center px-8"
+            accessibilityLabel="Admin locked — tap to unlock"
+            onPress={() => setBioLocked(true)} // re-triggers the auth effect
+          >
+            <View className="w-full max-w-sm items-center rounded-2xl border border-line bg-card p-6">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-navy">
+                <Feather name="lock" size={24} color="#ffffff" />
+              </View>
+              <Text className="mt-4 text-center text-base font-black text-ink">
+                Admin locked
+              </Text>
+              <Text className="mt-1 text-center text-xs leading-4 text-muted">
+                Unlock with your fingerprint or face to continue. This device
+                lock is separate from your staff sign-in.
+              </Text>
+              <View className="mt-4 rounded-full bg-navy px-6 py-2.5">
+                <Text className="text-sm font-bold text-white">Unlock</Text>
+              </View>
+            </View>
+          </Pressable>
+        </>
+      ) : null}
       {/* Tab bar — grow-0 keeps the strip at its own height: RN ScrollViews
           default to flexGrow:1, so without it the strip stretches into a huge
           empty band under the tabs whenever the tab content is shorter than

@@ -1,5 +1,47 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**LATEST (2026-09-24, rides the next OTA — JS-only):** **C5 CLOSED + C7 + UNIFICATION
+ROUND PLANNED (owner: "mirror everything except Remote, through Supabase").** Read
+`guide/SESSION-2026-09-24-UNIFICATION.md` FIRST — it is the authoritative log for this
+round. Done 2026-09-24: ① **C7 — biometrics + haptics:** `expo-local-authentication` +
+`expo-haptics` (SDK-54), `services/biometricsService.ts` (local opt-in
+`genum-biometrics-admin`, default OFF, enable-requires-passing-prompt, PIN fallback kept),
+`services/hapticsService.ts` (tap/impact/success/warning/selection; toggle
+`genum-haptics` default ON; never throws; Vibration fallback) replacing ~20 raw
+`Vibration.vibrate` call sites (Remote ×7, Tools ×4, Drive/Drone/ModeChooser,
+AccountSheet, FloatingRemoteButton); Menu → Security (staff-only biometric admin-lock
+switch) + Menu → Feedback (haptics); AdminScreen biometric lock overlay re-arms on every
+foreground via AppState. +20 tests. ② **C5 app surface:** `config/socials.ts` (pure
+helper mirroring web lib/socials 1:1) + `components/SocialsRow.tsx` (Feather chip row,
+empty=hidden) in ContactScreen; scaffolding (schema cols, helpers, editors both clients)
+verified complete — WhatsApp/socials are admin-editable in the SHARED company_info row.
+③ **A1 PENDING (bug):** Control Panel category tagline/description render EMPTY —
+`projectCategoryService.mapRow()` hardcodes "" (DB has no such columns, live-probed) and
+ToolsScreen renders them directly; fix = bundled-catalog fallback by slug + thread DB
+capability_labels. Gates: app tsc 0 · vitest **178/178** · prettier clean.
+
+**UPDATE 2026-09-24 (later same session) — round COMPLETED.** Full detail in
+`guide/SESSION-2026-09-24-UNIFICATION.md`; parity matrix
+`guide/UNIFICATION-AUDIT-2026-09-24.md`. **A1 fixed:** mapRow falls back to the bundled
+catalog's tagline/description by slug (DB columns don't exist), and DB
+`capability_labels` now thread through `ProjectCategory.capabilityLabels` with
+ToolsScreen rendering admin labels → static map → raw key. **A3 done:**
+`services/newsletterService.ts` + Account Newsletter card (required-consent checkbox,
+same wording as web) → new edge `newsletter-subscribe` (deployed + live-verified:
+validation, 20/min rate limit, idempotent upsert with source refresh, staff/admin
+gated GET/DELETE; uses the service role after root-causing that the anon upsert
+violates the staff-only RLS UPDATE policy on conflict). **A6 done:** PrintingScreen now
+renders the live "Models we print" strip (category `3D Models` from the shared products
+table — same rows as the website) routing to ProductDetail. **A7 done:**
+OrderSuccessScreen gained the WhatsApp nudge ("I just placed an order.") + SocialsRow
+from the shared company row, mirroring web checkout-success. Parity status: every
+customer/admin surface is mirrored through Supabase except the documented intentional
+divergences (web-push settings card = web-only; app update screen = app-only; Remote =
+app-only per owner D-1). Gates: app tsc 0 · vitest **178/178** · prettier clean; web
+tsc 0 · lint 0 · vitest **118/118** · build green; harnesses 9/9 + 27/27 (link-import
+extended) + 10/10 + staff-e2e ALL + stock 15/15 + newsletter 11/11. **Nothing committed
+yet — owner go needed.**
+
 **LATEST (2026-09-23, rides the next OTA — JS-only):** **C3 — RELATED PRODUCTS +
 RECENTLY VIEWED (website U-20).** Both clients now share the same discovery helpers,
 mirrored 1:1 (`productService.ts` ← web `lib/catalog.ts`):

@@ -22,6 +22,7 @@ import { company as fallbackCompany, whatsappLink } from "../config/company";
 import { getCompany } from "../services/companyService";
 import { sendContactInquiry } from "../services/orderService";
 import { logger } from "../services/logger";
+import { SocialsRow } from "../components/SocialsRow";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
@@ -148,6 +149,11 @@ export function ContactScreen() {
             />
           ) : null}
         </View>
+
+        {/* C5 (2026-09-23): social pill chips — the app mirror of the
+            website's footer/contact socials. Reads the same shared
+            company_info row; hides itself while every URL is empty. */}
+        <SocialsRow company={company} />
 
         {/* Inquiry form */}
         <View className="mt-6 rounded-2xl border border-line bg-card p-5 shadow-card">

@@ -24,7 +24,6 @@ import {
   ScrollView,
   Switch,
   Text,
-  Vibration,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -57,6 +56,7 @@ import {
   canonicalCarToken,
   modeAvailStatus,
 } from "../services/carProtocol";
+import { feedbackTap } from "../services/hapticsService";
 import type { SafetyLimits } from "../components/tools/types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "RemoteControl">;
@@ -394,7 +394,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   );
 
   const handleSelect = useCallback(() => {
-    Vibration.vibrate(10);
+    feedbackTap();
     if (!navActive) {
       setNavActive(true);
       setPreviewMode(activeMode);
@@ -431,7 +431,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   ]);
 
   const handleBack = useCallback(() => {
-    Vibration.vibrate(10);
+    feedbackTap();
     if (navActive) {
       setPreviewMode(null);
       setNavActive(false);
@@ -740,7 +740,7 @@ export function RemoteControlScreen({ navigation }: Props) {
           <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
             <Pressable
               onPress={() => {
-                Vibration.vibrate(10);
+                feedbackTap();
                 setShowJoystick(true);
                 setUseJoystick(false);
               }}
@@ -754,7 +754,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             </Pressable>
             <Pressable
               onPress={() => {
-                Vibration.vibrate(10);
+                feedbackTap();
                 setShowJoystick(true);
                 setUseJoystick(true);
               }}
@@ -771,7 +771,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 / full OLED mirror) instead of a pointless "Pad hidden" card. */}
             <Pressable
               onPress={() => {
-                Vibration.vibrate(10);
+                feedbackTap();
                 setShowJoystick(false);
               }}
               className={`rounded-full px-3 py-1 ${!showJoystick ? "bg-navy" : "border border-line bg-card"}`}
@@ -1118,7 +1118,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             <View className="flex-row gap-2">
               <Pressable
                 onPress={() => {
-                  Vibration.vibrate(10);
+                  feedbackTap();
                   void handleSppsRetry();
                 }}
                 className="rounded-full bg-gold px-3 py-1"
@@ -1130,7 +1130,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               </Pressable>
               <Pressable
                 onPress={() => {
-                  Vibration.vibrate(10);
+                  feedbackTap();
                   handleReconnectPromptCancel();
                 }}
                 className="rounded-full border border-slate-300 bg-white px-3 py-1"
