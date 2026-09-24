@@ -35,6 +35,7 @@ import type {
 import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { isProjectPackage } from "../services/projectService";
+import { galleryImages } from "../types";
 import { logger } from "../services/logger";
 import {
   loadBiometricsPref,
@@ -109,6 +110,8 @@ type Tab =
   | "Content"
   | "Settings";
 
+// U-23 (2026-09-24): grouped tab order (owner decision) — mirrors
+// config/adminTabs.ts + the website admin-types.ts (B-6 parity).
 const TABS: Tab[] = [
   "Dashboard",
   "Orders",
@@ -116,11 +119,11 @@ const TABS: Tab[] = [
   "Projects",
   "Services",
   "Journal",
+  "Content",
   "Users",
   "Messages",
   "Finance",
   "Activity",
-  "Content",
   "Settings",
 ];
 
@@ -602,6 +605,8 @@ export function AdminScreen() {
       stock: 0,
       delivery: "Ships in 1-2 working days",
       image: "",
+      gallery: [],
+      importMeta: {},
       badge: null,
       active: true,
       sortOrder: 1000,
@@ -694,6 +699,9 @@ export function AdminScreen() {
         description: preview?.description || "",
         specs: preview?.specs ?? [],
         image: preview?.images?.[0] || "",
+        // U-23 (2026-09-24): seed the FULL gallery so a saved import persists
+        // every extracted photo (not just the cover) — "last link sticks".
+        gallery: (preview?.images ?? []).slice(0, 8),
         documentationUrl: link,
         id: preview?.title
           ? String(preview.title)
@@ -1266,6 +1274,8 @@ function blankProjectProduct(): AdminProduct {
     stock: 0,
     delivery: "Ships in 1-2 working days",
     image: "",
+    gallery: [],
+    importMeta: {},
     badge: null,
     active: true,
     sortOrder: 1000,
@@ -1739,9 +1749,9 @@ function ProductsTab({
         renderItem={({ item }) => (
           <View className="mb-3 rounded-xl border border-line bg-card p-4">
             <View className="flex-row items-start">
-              {item.image ? (
+              {galleryImages(item)[0] ? (
                 <Image
-                  source={{ uri: item.image }}
+                  source={{ uri: galleryImages(item)[0] }}
                   className="mr-3 h-14 w-14 rounded-lg bg-mist"
                   resizeMode="cover"
                 />
@@ -1932,9 +1942,9 @@ function ProjectTab({
         }
         renderItem={({ item }) => (
           <View className="mb-3 overflow-hidden rounded-xl border border-line bg-card">
-            {item.image ? (
+            {galleryImages(item)[0] ? (
               <Image
-                source={{ uri: item.image }}
+                source={{ uri: galleryImages(item)[0] }}
                 className="h-36 w-full bg-mist"
                 resizeMode="cover"
               />
@@ -2161,6 +2171,41 @@ function ProductEditor({
           onChangeText={(image) => patch({ image })}
           className={`mb-3 ${inputClass}`}
           placeholder="https://…"
+          autoCapitalize="none"
+        />
+        <Text className="mb-1 text-xs font-bold text-muted">
+          Gallery (one URL per line, max 8)
+        </Text>
+        {Array.isArray(product.gallery) && product.gallery.length > 0 && (
+          <View className="mb-2 flex-row flex-wrap gap-2">
+            {product.gallery.slice(0, 8).map((uri, i) => (
+              <Image
+                key={`${uri}-${i}`}
+                source={{ uri }}
+                className="h-14 w-14 rounded-lg bg-mist"
+                resizeMode="cover"
+                accessibilityLabel={`Gallery ${i + 1}`}
+              />
+            ))}
+          </View>
+        )}
+        <TextInput
+          value={
+            Array.isArray(product.gallery) ? product.gallery.join("\n") : ""
+          }
+          onChangeText={(gallery) =>
+            patch({
+              gallery: gallery
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .slice(0, 8),
+            })
+          }
+          multiline
+          style={{ textAlignVertical: "top" }}
+          className={`mb-3 min-h-20 ${inputClass}`}
+          placeholder={"https://…\nhttps://…"}
           autoCapitalize="none"
         />
 

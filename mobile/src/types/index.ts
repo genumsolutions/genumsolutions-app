@@ -11,6 +11,15 @@ export type ProductType =
 export type Difficulty =
   "Beginner" | "Intermediate" | "Advanced" | "Professional";
 
+export interface ProductImportMeta {
+  sourceSite?: string;
+  creator?: string;
+  license?: string;
+  designId?: string;
+  tags?: string[];
+  sourceUrl?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -46,6 +55,20 @@ export interface Product {
   badge?: string;
   supplier?: string;
   image?: string;
+  gallery?: string[];
+  importMeta?: ProductImportMeta;
+}
+
+/** Flattened gallery order: primary image first, then the remaining gallery. */
+export function galleryImages(product: {
+  image?: string;
+  gallery?: string[];
+}): string[] {
+  const gallery = (product.gallery ?? []).filter(Boolean);
+  if (product.image && !gallery.includes(product.image)) {
+    return [product.image, ...gallery];
+  }
+  return gallery;
 }
 
 export interface Service {

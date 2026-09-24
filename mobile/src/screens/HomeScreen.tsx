@@ -24,7 +24,7 @@ import {
   stemProjectHighlights as fallbackHighlights,
   trainingPrograms as fallbackPrograms,
 } from "../config/programs";
-import type { Product, Service } from "../types";
+import { galleryImages, type Product, type Service } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
@@ -270,9 +270,9 @@ export function HomeScreen() {
                     className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-line bg-card p-3"
                   >
                     <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
-                      {p.image ? (
+                      {galleryImages(p)[0] ? (
                         <Image
-                          source={{ uri: p.image }}
+                          source={{ uri: galleryImages(p)[0] }}
                           className="h-full w-full"
                           resizeMode="cover"
                         />

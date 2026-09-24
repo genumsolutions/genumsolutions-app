@@ -1,5 +1,40 @@
 # NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
 
+**DONE 2026-09-24 — U-23 GALLERY · PROJECTS RESTORE · ADMIN STANDARDIZATION · UX,
+executed (rides the next JS-only OTA — no version bump).** Full plan + decisions in
+`guide/PLAN-2026-09-24-GALLERY-PROJECTS-ADMIN.md`; web-side ledger: web TRACKS/INDEX
+`U-23`. App work executed + gated: **MenuScreen redesign** (unified `MenuItem` row for
+nav + toggle variants, `MenuGroup` cards, 48pt rows, icon chips, hints, Pro chip, Dark
+theme / biometric admin lock / haptics switches), **ProductDetail sticky CTA bar**
+(pinned bottom bar with safe-area padding; qty stepper now 44pt buttons +
+`accessibilityRole`; keeps Control-this-car + Request-quote), Shop/Projects/Home/admin
+consume the shared `ProductCard` (gallery-aware covers, spec chips), ProductEditor +
+ProjectsScreen gallery-aware media, restored 5 firmware projects editable in admin
+(`4wd4m-basic` / `2wd1m-basic` / `self-balancing-basic` / `esp32-remote` /
+`smart-dustbin`, `productType:'Project package'`, category `Robot Cars`, quote-only),
+adminTabs reordered to the grouped contract (12 tabs — parity pinned), owner
+full-access verified. Edge `link-import` re-deployed + schema (`gallery`/`import_meta`)
+applied live by the website side. Gates: app tsc 0 · vitest **185/185** · prettier
+clean; web tsc · lint · vitest **123/123** · `npm run build` ✓ · prettier clean; live
+harnesses 40/40 + 9/9 + 10/10 + 15/15 + 11/11 + staff-access-e2e **28/28** (new
+disposable-owner path). **NOT committed — awaiting owner go.**
+
+**PLANNED 2026-09-24 — U-23 GALLERY · PROJECTS RESTORE · ADMIN STANDARDIZATION · UX
+(planned scope — executed above).** Owner-agreed plan in
+`guide/PLAN-2026-09-24-GALLERY-PROJECTS-ADMIN.md` (Q&A answered 2026-09-24); decisions:
+① restore ONLY the 5 GENUM firmware projects from the workspace root — skip Robo Cars/
+tutorials; ② admin tabs grouped (Dashboard/Orders/Products/Projects/Services | Journal/
+Content | Users/Messages | Finance | Activity | Settings) + parity; ③ full gallery cap ~8 +
+backfill existing products from saved source links; ④ image-led taller cards + spec chips;
+⑤ light/non-invasive staff extras; ⑥ source credit line. App work: `MenuScreen.tsx` redesign
+(single MenuItem row for nav+toggles, professional grouping, kill double-padded row),
+ProductDetail gallery + sticky CTA + get quantity buttons, Shop card/touch pass,
+app import-by-link MUST send the previewed image + gallery on save (fix "extraction not
+working / no photo after save"), Projects restore surfacing (`ProjectsScreen.tsx:82-90`,
+`projectService.ts:29-32`), adminTabs reorder (`src/config/adminTabs.ts`) + parity test,
+owner full-access verification. Rides the next JS-only OTA — no version bump. Execution
+starts in a later session on owner go.
+
 **LATEST (2026-09-24, rides the next OTA — JS-only):** **C5 CLOSED + C7 + UNIFICATION
 ROUND PLANNED (owner: "mirror everything except Remote, through Supabase").** Read
 `guide/SESSION-2026-09-24-UNIFICATION.md` FIRST — it is the authoritative log for this

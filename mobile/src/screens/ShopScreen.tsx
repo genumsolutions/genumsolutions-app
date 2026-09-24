@@ -6,14 +6,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import {
   distinctCategories,
@@ -30,18 +27,15 @@ import {
 import { OfflineBadge } from "../components/OfflineBadge";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { ShopSkeletonGrid } from "../components/SkeletonCard";
+import { ProductCard } from "../components/ProductCard";
 import {
   loadRecentlyViewed,
   resolveRecentlyViewed,
 } from "../services/productService";
 import { useFocusEffect } from "@react-navigation/native";
 import type { Product } from "../types";
-import type { RootStackParamList } from "../navigation/types";
-
-type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
 
 export function ShopScreen() {
-  const navigation = useNavigation<Nav>();
   const [products, setProducts] = useState<Product[]>([]);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -226,34 +220,7 @@ export function ShopScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
                 renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() =>
-                      navigation.push("ProductDetail", { productId: item.id })
-                    }
-                    className="mt-2 w-36 overflow-hidden rounded-2xl border border-line bg-card p-3"
-                    accessibilityLabel={`View ${item.name}`}
-                  >
-                    <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
-                      {item.image ? (
-                        <Image
-                          source={{ uri: item.image }}
-                          className="h-full w-full"
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Feather name="box" size={24} color="#94a3b8" />
-                      )}
-                    </View>
-                    <Text
-                      numberOfLines={2}
-                      className="mt-2 text-[13px] font-bold leading-tight text-ink"
-                    >
-                      {item.name}
-                    </Text>
-                    <Text className="mt-1 text-xs font-black text-navy">
-                      {item.priceLabel}
-                    </Text>
-                  </Pressable>
+                  <ProductCard product={item} compact />
                 )}
               />
             </View>
@@ -310,42 +277,7 @@ export function ShopScreen() {
             </View>
           ) : null
         }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() =>
-              navigation.push("ProductDetail", { productId: item.id })
-            }
-            className="mb-4 w-[48%] flex-1 rounded-2xl border border-line bg-card p-3"
-          >
-            <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
-              {item.image ? (
-                <Image
-                  source={{ uri: item.image }}
-                  className="h-full w-full"
-                  resizeMode="cover"
-                />
-              ) : (
-                <Feather name="box" size={28} color="#94a3b8" />
-              )}
-            </View>
-            {/* R5 overflow fix: numberOfLines so long product names
-                ellipsize inside the 2-col card instead of clipping. */}
-            <Text
-              numberOfLines={2}
-              className="mt-2 text-[13px] font-bold leading-tight text-ink"
-            >
-              {item.name}
-            </Text>
-            {item.badge ? (
-              <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
-                {item.badge}
-              </Text>
-            ) : null}
-            <Text className="mt-1 text-xs font-black text-navy">
-              {item.priceLabel}
-            </Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => <ProductCard product={item} chips />}
       />
     </View>
   );

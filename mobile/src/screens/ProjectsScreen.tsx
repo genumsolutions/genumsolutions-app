@@ -22,7 +22,7 @@ import { filterProducts, getProducts } from "../services/productService";
 import { resolveModeForProduct } from "../config/roboCarCatalog";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { useApp } from "../context/AppContext";
-import type { Product } from "../types";
+import { galleryImages, type Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Projects">;
@@ -272,16 +272,16 @@ export function ProjectsScreen() {
               className="mb-4 w-[48%] flex-1 overflow-hidden rounded-2xl border border-line bg-card"
             >
               <View className="h-24 items-center justify-center overflow-hidden bg-ink">
-                {item.image ? (
+                {item.image || galleryImages(item)[0] ? (
                   <Image
-                    source={{ uri: item.image }}
+                    source={{ uri: galleryImages(item)[0] || item.image }}
                     className="h-full w-full"
                     resizeMode="cover"
                   />
                 ) : (
                   <Feather name="box" size={28} color="#94a3b8" />
                 )}
-                {item.image ? (
+                {item.image || galleryImages(item)[0] ? (
                   <View className="absolute inset-0 bg-ink/40">
                     <Text className="absolute bottom-2 left-3 text-xs font-black uppercase tracking-widest text-white">
                       {item.category}

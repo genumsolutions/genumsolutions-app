@@ -15,11 +15,11 @@ export const ADMIN_TABS = [
   "Projects",
   "Services",
   "Journal",
+  "Content",
   "Users",
   "Messages",
   "Finance",
   "Activity",
-  "Content",
   "Settings",
 ] as const;
 
