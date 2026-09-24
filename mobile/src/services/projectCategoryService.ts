@@ -14,6 +14,13 @@ import {
   type ControlCapability,
 } from "../config/project-catalog";
 
+// A1 (2026-09-24): the DB table has NO tagline/description columns (live
+// probe: column does not exist) — but ToolsScreen renders both directly.
+// With DB rows resolving, that rendered EMPTY text blocks (owner: "some
+// text are missing"). Copy lives ONLY in the bundled catalog today, so DB
+// rows fall back to the bundled category's copy by slug; a future DB
+// migration that adds real columns will win automatically.
+
 type ProjectCategoryRow = {
   id: string;
   name: string | null;
@@ -72,11 +79,17 @@ function parseRecord(value: unknown): Record<string, string> {
 
 function mapRow(row: ProjectCategoryRow): ProjectCategory | null {
   if (!row.id || !row.name) return null;
+  // Bundled copy fallback by slug (see the A1 note above): tagline and
+  // description render on the Control Panel; empty strings would render
+  // blank text blocks. Admin-created slugs without a bundled twin keep
+  // empty copy — callers render nothing rather than a blank gap.
+  const bundled = PROJECT_CATEGORIES.find((c) => c.slug === row.id);
+  const capabilityLabels = parseRecord(row.capability_labels);
   return {
     slug: row.id,
     name: row.name,
-    tagline: "", // DB doesn't store tagline; use hardcoded fallback if needed
-    description: "",
+    tagline: bundled?.tagline ?? "",
+    description: bundled?.description ?? "",
     // DB rows store hardware/capabilities entries that may be plain strings
     // OR structured objects ({name, role}) managed by the website admin. The
     // app renders these as text lines, so object entries are flattened to
@@ -88,6 +101,10 @@ function mapRow(row: ProjectCategoryRow): ProjectCategory | null {
       .filter((c): c is ControlCapability =>
         (CAPABILITY_KINDS as readonly string[]).includes(c),
       ),
+    // A1: per-category admin labels (e.g. relay → "Pump control") now
+    // surface; screens fall back to their static map when a label is absent.
+    capabilityLabels:
+      Object.keys(capabilityLabels).length > 0 ? capabilityLabels : undefined,
     carType: row.car_type ?? undefined,
   };
 }

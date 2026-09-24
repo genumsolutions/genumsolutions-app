@@ -12,7 +12,6 @@ import {
   ScrollView,
   Text,
   View,
-  Vibration,
   useWindowDimensions,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -20,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useApp } from "../context/AppContext";
 import { getMyOrders } from "../services/orderService";
+import { feedbackTap } from "../services/hapticsService";
 import type { Order } from "../types";
 
 type Props = {
@@ -61,7 +61,7 @@ function MenuRow({
   return (
     <Pressable
       onPress={() => {
-        Vibration.vibrate(10);
+        feedbackTap();
         onPress();
       }}
       accessibilityRole="button"
@@ -316,7 +316,7 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
                   sub="Sign out of this device"
                   danger
                   onPress={() => {
-                    Vibration.vibrate(10);
+                    feedbackTap();
                     setShowSignOutConfirm(true);
                   }}
                 />

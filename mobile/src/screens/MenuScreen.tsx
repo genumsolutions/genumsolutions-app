@@ -6,8 +6,13 @@
 // It carries the destinations that have no tab of their own, plus the
 // app-update + theme controls (previously on the Account screen). Nothing
 // here requires a sign-in: updates and theme work for guests too.
+//
+// C7 (2026-09-23): adds the Security + haptics preferences. Haptic
+// feedback is a global toggle (default ON). The biometric admin lock is
+// staff-only — it gates the Admin screen on this device — and enabling
+// it requires a successful biometric prompt first.
 // =====================================================================
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View, Pressable, Switch } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -15,6 +20,13 @@ import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { useApp } from "../context/AppContext";
 import type { RootStackParamList } from "../navigation/types";
+import {
+  biometricsSupport,
+  loadBiometricsPref,
+  setBiometricsEnabled,
+  type BiometricsSupport,
+} from "../services/biometricsService";
+import { loadHapticsPref, setHapticsEnabled } from "../services/hapticsService";
 
 type RootNav = NativeStackNavigationProp<RootStackParamList, "Main">;
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -42,6 +54,41 @@ const COMPANY: Dest[] = [
 export function MenuScreen() {
   const navigation = useNavigation<any>();
   const { isStaff, isPro, themeMode, setThemeMode } = useApp();
+
+  // C7: haptics toggle (everyone). Default ON, hydrated once on mount.
+  const [hapticsOn, setHapticsOn] = useState(true);
+  useEffect(() => {
+    void loadHapticsPref().then(setHapticsOn);
+  }, []);
+
+  // C7: biometric admin lock (staff only). The support probe decides
+  // whether the row renders at all; unsupported devices show nothing.
+  const [bioSupport, setBioSupport] = useState<BiometricsSupport | null>(null);
+  const [bioOn, setBioOn] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  useEffect(() => {
+    if (!isStaff) return;
+    void (async () => {
+      const support = await biometricsSupport();
+      setBioSupport(support);
+      if (support.supported) {
+        setBioOn(await loadBiometricsPref());
+      }
+    })();
+  }, [isStaff]);
+
+  const toggleBiometrics = async (on: boolean) => {
+    if (bioBusy) return;
+    setBioBusy(true);
+    try {
+      const ok = await setBiometricsEnabled(on);
+      // Enabling is rejected when the biometric prompt fails/cancelled —
+      // the switch stays off in that case.
+      setBioOn(ok);
+    } finally {
+      setBioBusy(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -131,6 +178,63 @@ export function MenuScreen() {
             trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
             thumbColor="#ffffff"
             accessibilityLabel="Toggle dark theme"
+          />
+        </View>
+      </MenuGroup>
+
+      {/* C7: Security — the biometric admin lock, offered only to staff
+          with biometrics available on the device. */}
+      {isStaff && bioSupport?.supported ? (
+        <MenuGroup title="Security">
+          <View className="mx-3 flex-row items-center justify-between rounded-xl px-4 py-3.5">
+            <View className="flex-row items-center">
+              <Feather name="lock" size={20} color="#64748b" />
+              <View className="ml-3.5 min-w-0 flex-1">
+                <Text className="text-base font-semibold text-ink">
+                  Biometric admin lock
+                </Text>
+                <Text numberOfLines={2} className="text-xs text-muted">
+                  Ask for Face ID / fingerprint before opening the Admin screen
+                  on this device.
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={bioOn}
+              disabled={bioBusy}
+              onValueChange={(on) => void toggleBiometrics(on)}
+              trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+              thumbColor="#ffffff"
+              accessibilityLabel="Toggle biometric admin lock"
+            />
+          </View>
+        </MenuGroup>
+      ) : null}
+
+      {/* C7: haptics on/off (everyone). Default ON — matches the previous
+          always-vibrate behavior of the raw Vibration calls. */}
+      <MenuGroup title="Feedback">
+        <View className="mx-3 flex-row items-center justify-between rounded-xl px-4 py-3.5">
+          <View className="flex-row items-center">
+            <Feather name="zap" size={20} color="#64748b" />
+            <View className="ml-3.5 min-w-0 flex-1">
+              <Text className="text-base font-semibold text-ink">
+                Haptic feedback
+              </Text>
+              <Text numberOfLines={1} className="text-xs text-muted">
+                Vibrate on taps, mode changes, and confirmations.
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={hapticsOn}
+            onValueChange={(on) => {
+              setHapticsOn(on);
+              void setHapticsEnabled(on);
+            }}
+            trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+            thumbColor="#ffffff"
+            accessibilityLabel="Toggle haptic feedback"
           />
         </View>
       </MenuGroup>

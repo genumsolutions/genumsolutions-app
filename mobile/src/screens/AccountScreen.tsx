@@ -28,6 +28,7 @@ import {
   updateProfile,
 } from "../services/orderService";
 import { logger } from "../services/logger";
+import { subscribeToNewsletter } from "../services/newsletterService";
 import type { Order } from "../types";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -82,6 +83,16 @@ export function AccountScreen() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // A3 (2026-09-24): newsletter opt-in — the app mirror of the website's
+  // footer/checkout capture (same newsletter_subscribers table + edge
+  // guardrails). Consent checkbox is REQUIRED, same wording as the web.
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
+  const [newsletterBusy, setNewsletterBusy] = useState(false);
+  const [newsletterStatus, setNewsletterStatus] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
 
   // C8 (2026-09-23): shared loader so pull-to-refresh can re-run both fetches.
   const reload = useCallback(() => {
@@ -378,6 +389,88 @@ export function AccountScreen() {
                 )}
               </View>
             </View>
+          )}
+        </View>
+
+        {/* A3: newsletter opt-in — mirrors the website's capture with the
+            same required-consent wording; stored in the shared table. */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <Text className="font-display text-lg font-bold text-ink">
+            Newsletter
+          </Text>
+          <Text className="mt-1 text-sm leading-5 text-muted">
+            One email when something worth building ships. No spam.
+          </Text>
+          <TextInput
+            value={newsletterEmail}
+            onChangeText={setNewsletterEmail}
+            placeholder="you@example.com"
+            placeholderTextColor="#94a3b8"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            maxLength={254}
+            accessibilityLabel="Newsletter email"
+            className="mt-3 rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          />
+          <Pressable
+            onPress={() => setNewsletterConsent((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: newsletterConsent }}
+            className="mt-3 flex-row items-start gap-2"
+          >
+            <View
+              className={`mt-0.5 h-5 w-5 items-center justify-center rounded border ${newsletterConsent ? "border-navy bg-navy" : "border-line bg-surface"}`}
+            >
+              {newsletterConsent ? (
+                <Feather name="check" size={13} color="#ffffff" />
+              ) : null}
+            </View>
+            <Text className="flex-1 text-xs leading-5 text-muted">
+              Email me news about new kits, projects, and training. I can
+              unsubscribe anytime.
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={async () => {
+              if (newsletterBusy) return;
+              setNewsletterStatus(null);
+              if (!newsletterConsent) {
+                setNewsletterStatus({
+                  text: "Please tick the consent box first.",
+                  isError: true,
+                });
+                return;
+              }
+              setNewsletterBusy(true);
+              const result = await subscribeToNewsletter(
+                newsletterEmail,
+                "app-account",
+              );
+              setNewsletterBusy(false);
+              if (result.ok) {
+                setNewsletterEmail("");
+                setNewsletterConsent(false);
+                setNewsletterStatus({
+                  text: "Subscribed — welcome aboard!",
+                  isError: false,
+                });
+              } else {
+                setNewsletterStatus({ text: result.error, isError: true });
+              }
+            }}
+            disabled={newsletterBusy}
+            className="mt-3 items-center rounded-full bg-navy py-2.5 disabled:opacity-60"
+          >
+            <Text className="text-sm font-bold text-white">
+              {newsletterBusy ? "Subscribing…" : "Subscribe"}
+            </Text>
+          </Pressable>
+          {newsletterStatus && (
+            <Text
+              className={`mt-2 text-xs font-semibold ${newsletterStatus.isError ? "text-red-600" : "text-emerald-700"}`}
+            >
+              {newsletterStatus.text}
+            </Text>
           )}
         </View>
 
