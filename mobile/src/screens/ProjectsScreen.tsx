@@ -1,8 +1,14 @@
 // =====================================================================
 // ProjectsScreen - native two-tab catalog (Project Packages / Robot Car
 // Projects) backed by the shared Supabase `products` table, matching the
-// website's ProjectsCatalog. Supports search, category chips, pagination,
-// and "Add to build list" with quote-only routing to product details.
+// website's ProjectsCatalog (U-40, 2026-09-26 parity rewrite):
+//   - grouping is by products.project_category (NOT the general category
+//     field): Robot Car tab = the 3 actual cars; Project Packages tab =
+//     every other package (Remote Controller, Smart Dustbin, …).
+//   - the category filter works on project_category and includes the
+//     canonical project_categories entries; categories with no products
+//     are shown as "coming soon" (owner decision, mirrors the website).
+//   - pagination kept (page-size 8) — U-43 keeps the bottom pager.
 // =====================================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -19,8 +25,10 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { addToCart } from "../services/cartService";
 import { filterProducts, getProducts } from "../services/productService";
+import { getProjectCategories } from "../services/projectCategoryService";
 import { resolveModeForProduct } from "../config/roboCarCatalog";
 import { CategoryDropdown } from "../components/CategoryDropdown";
+import { PagePager } from "../components/PagePager";
 import { useApp } from "../context/AppContext";
 import { galleryImages, type Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
@@ -39,10 +47,13 @@ const SECTION_COPY: Record<ProjectTab, string> = {
     "Assembled robot-car projects separated from components and materials.",
 };
 
+type CategoryEntry = { id: string; name: string };
+
 export function ProjectsScreen() {
   const navigation = useNavigation<Nav>();
   const { setCart } = useApp();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<CategoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<ProjectTab>("packages");
@@ -56,7 +67,12 @@ export function ProjectsScreen() {
   const load = useCallback(async (asRefresh = false) => {
     if (asRefresh) setRefreshing(true);
     try {
-      setProducts(await getProducts());
+      const [prods, cats] = await Promise.all([
+        getProducts(),
+        getProjectCategories(),
+      ]);
+      setProducts(prods);
+      setCategories(cats.map((c) => ({ id: c.slug, name: c.name })));
     } catch {
       // keep previous data
     } finally {
@@ -79,28 +95,74 @@ export function ProjectsScreen() {
     return () => clearTimeout(timer);
   }, [addedId]);
 
-  const tabProducts = useMemo(() => {
-    return products.filter(
-      (p) =>
-        p.active !== false &&
-        (tab === "packages"
-          ? p.productType === "Project package"
-          : p.category === "Robot Cars"),
-    );
-  }, [products, tab]);
-
-  const categories = useMemo(() => {
-    const present: string[] = [];
-    for (const p of tabProducts) {
-      if (!present.includes(p.category)) present.push(p.category);
-    }
-    return present;
-  }, [tabProducts]);
-
-  const visible = useMemo(
-    () => filterProducts(tabProducts, category, query),
-    [tabProducts, category, query],
+  // U-40: group by project_category exactly like the website's catalog.
+  // "Robo Car" tab = the actual cars; every OTHER project package lands in
+  // Project Packages regardless of its general category.
+  const robotCars = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          p.active !== false &&
+          p.productType === "Project package" &&
+          p.projectCategory === "Robo Car",
+      ),
+    [products],
   );
+
+  const otherPackages = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          p.active !== false &&
+          p.productType === "Project package" &&
+          p.projectCategory !== "Robo Car",
+      ),
+    [products],
+  );
+
+  const tabProducts = tab === "packages" ? otherPackages : robotCars;
+
+  // Filter over project_category; include canonical categories that have no
+  // products yet as "coming soon" entries (owner decision, mirrors web).
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return tabProducts.filter((p) => {
+      if (category !== "All" && p.projectCategory !== category) return false;
+      if (!needle) return true;
+      return `${p.name} ${p.note} ${p.description}`
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [tabProducts, category, query]);
+
+  const categoryOptions = useMemo(() => {
+    const present = new Set(
+      tabProducts.map((p) => p.projectCategory).filter(Boolean),
+    );
+    const fromDb = categories.filter(
+      (c) => tabProducts.some(() => true) || true,
+    );
+    const all = [
+      ...fromDb,
+      ...tabProducts
+        .map((p) => p.projectCategory)
+        .filter((c): c is string => Boolean(c))
+        .map((id) => ({ id, name: id })),
+    ];
+    // dedupe by id keeping first occurrence (DB order wins)
+    const seen = new Set<string>();
+    const merged: CategoryEntry[] = [];
+    for (const entry of all) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      merged.push(entry);
+    }
+    return merged.map((c) => ({
+      ...c,
+      comingSoon: !present.has(c.id),
+    }));
+  }, [categories, tabProducts]);
+
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
 
@@ -145,14 +207,7 @@ export function ProjectsScreen() {
           {TABS.map((item, index) => {
             const active = tab === item.key;
             const count =
-              item.key === "packages"
-                ? products.filter(
-                    (p) =>
-                      p.productType === "Project package" && p.active !== false,
-                  ).length
-                : products.filter(
-                    (p) => p.category === "Robot Cars" && p.active !== false,
-                  ).length;
+              item.key === "packages" ? otherPackages.length : robotCars.length;
             return (
               <Pressable
                 key={item.key}
@@ -201,15 +256,33 @@ export function ProjectsScreen() {
         </Text>
       </View>
 
-      {/* Category filter */}
-      {categories.length > 1 && (
+      {/* Project-category filter (over project_category; coming-soon marked) */}
+      {categoryOptions.length > 0 && (
         <View className="px-4 pb-2">
           <CategoryDropdown
-            value={category}
-            options={["All", ...categories]}
-            onChange={setCategory}
+            value={
+              category === "All"
+                ? `All categories (${visible.length})`
+                : (categoryOptions.find((c) => c.id === category)?.name ??
+                  category)
+            }
+            options={[
+              `All categories (${visible.length})`,
+              ...categoryOptions.map(
+                (c) => `${c.name}${c.comingSoon ? " — coming soon" : ""}`,
+              ),
+            ]}
+            onChange={(label) => {
+              if (label.startsWith("All categories")) {
+                setCategory("All");
+                return;
+              }
+              const name = label.replace(" — coming soon", "");
+              const match = categoryOptions.find((c) => c.name === name);
+              if (match) setCategory(match.id);
+            }}
             placeholder="All categories"
-            title="Filter by category"
+            title="Filter by project category"
           />
         </View>
       )}
@@ -232,32 +305,14 @@ export function ProjectsScreen() {
           </View>
         }
         ListFooterComponent={
-          totalPages > 1 ? (
-            <View className="mt-1 flex-row items-center justify-between px-4">
-              <Pressable
-                onPress={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page === 1}
-                accessibilityLabel="Previous projects page"
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-              >
-                <Feather name="chevron-left" size={18} color="#1e3a8a" />
-              </Pressable>
-              <Text className="text-xs font-bold text-muted">
-                Page {page} of {totalPages} · {visible.length} listing
-                {visible.length === 1 ? "" : "s"}
-              </Text>
-              <Pressable
-                onPress={() =>
-                  setPage((current) => Math.min(totalPages, current + 1))
-                }
-                disabled={page === totalPages}
-                accessibilityLabel="Next projects page"
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-              >
-                <Feather name="chevron-right" size={18} color="#1e3a8a" />
-              </Pressable>
-            </View>
-          ) : null
+          // U-43: numbered page buttons for fast navigation.
+          <PagePager
+            page={page}
+            totalPages={totalPages}
+            onPage={setPage}
+            label="listing"
+            totalItems={visible.length}
+          />
         }
         renderItem={({ item }) => {
           const quoteOnly =
@@ -284,14 +339,14 @@ export function ProjectsScreen() {
                 {item.image || galleryImages(item)[0] ? (
                   <View className="absolute inset-0 bg-ink/40">
                     <Text className="absolute bottom-2 left-3 text-xs font-black uppercase tracking-widest text-white">
-                      {item.category}
+                      {item.projectCategory ?? item.category}
                     </Text>
                   </View>
                 ) : null}
               </View>
               <View className="p-3">
                 <Text className="text-xs font-black uppercase tracking-widest text-navy">
-                  {tab === "robot-cars" ? "Robot Car" : item.productType}
+                  {item.projectCategory ?? item.productType}
                 </Text>
                 <Text className="mt-1 text-[13px] font-bold leading-tight text-ink">
                   {item.name}
@@ -319,20 +374,6 @@ export function ProjectsScreen() {
                         </Text>
                       </Pressable>
                       {carMode ? (
-                        <Pressable
-                          onPress={() =>
-                            navigation.push("Tools", {
-                              category: item.category,
-                            })
-                          }
-                          accessibilityLabel={`Control ${item.name}`}
-                          className="rounded-full bg-gold px-2.5 py-1.5"
-                        >
-                          <Text className="text-xs font-black text-ink">
-                            Control
-                          </Text>
-                        </Pressable>
-                      ) : item.productType === "Project package" ? (
                         <Pressable
                           onPress={() =>
                             navigation.push("Tools", {

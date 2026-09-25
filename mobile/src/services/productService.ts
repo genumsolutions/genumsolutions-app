@@ -41,6 +41,7 @@ type ProductRow = {
   id: string;
   name: string;
   category: string;
+  project_category: string | null;
   price: number | null;
   price_label: string | null;
   sku: string | null;
@@ -82,6 +83,8 @@ export function rowToProduct(row: ProductRow): Product {
     id: row.id,
     name: row.name,
     category: row.category,
+    // U-40: project classification for the Projects screen (mirrors website).
+    projectCategory: row.project_category || undefined,
     price,
     priceLabel: priceLabelFrom(price, row.price_label),
     sku: row.sku || "",

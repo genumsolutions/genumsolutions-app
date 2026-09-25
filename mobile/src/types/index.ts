@@ -28,6 +28,12 @@ export interface Product {
   id: string;
   name: string;
   category: string;
+  /** U-40 (2026-09-26): project-specific classification ("Robo Car" ×3,
+   *  "Remote Controller", "Smart Dustbin", …) — mirrors the website's
+   *  products.project_category. The general `category` stays "Robot Cars"
+   *  (it is load-bearing for the Shop scope); this is the one the Projects
+   *  screen groups by. */
+  projectCategory?: string;
   price: number;
   priceLabel: string;
   sku: string;

@@ -33,6 +33,10 @@ export function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const [services, setServices] = useState<Service[]>([]);
   const [featured, setFeatured] = useState<Product[]>([]);
+  // U-41 (2026-09-26): home 3D-printing band — mirrors the website's home
+  // section (offers + "Models we print" strip from the same `3D Models`
+  // catalog rows the /3d-printing page shows).
+  const [printModels, setPrintModels] = useState<Product[]>([]);
   const [heroTitle, setHeroTitle] = useState(
     "Technology you can touch, test, and trust.",
   );
@@ -67,6 +71,16 @@ export function HomeScreen() {
       .then((prods) => {
         if (!active) return;
         setFeatured(prods.filter((p) => p.stock > 0).slice(0, 6));
+        // U-41: same `3D Models` rows the /3d-printing page renders.
+        setPrintModels(
+          prods
+            .filter(
+              (p) =>
+                p.active !== false &&
+                p.category?.trim().toLowerCase() === "3d models",
+            )
+            .slice(0, 4),
+        );
         setFeaturedReady(true);
       })
       .catch(() => {
@@ -170,6 +184,71 @@ export function HomeScreen() {
                   </Pressable>
                 ))}
               </View>
+            </View>
+          )}
+
+          {/* 3D printing band (U-41 parity with the website home) */}
+          {featuredReady && printModels.length > 0 && (
+            <View className="px-5 pt-6">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  3D & 2D printing
+                </Text>
+                <Pressable onPress={() => navigation.push("Printing")}>
+                  <Text className="text-sm font-bold text-navy underline">
+                    Printing services
+                  </Text>
+                </Pressable>
+              </View>
+              <Text className="mt-1 text-sm leading-6 text-muted">
+                Print-to-order fabrication — start with a file, a reference
+                object, or a rough idea.
+              </Text>
+              <Text className="mt-4 text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Models we print
+              </Text>
+              <View className="mt-3 flex-row flex-wrap justify-between">
+                {printModels.map((model) => (
+                  <Pressable
+                    key={model.id}
+                    onPress={() =>
+                      navigation.push("ProductDetail", { productId: model.id })
+                    }
+                    className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-line bg-card p-3"
+                  >
+                    <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
+                      {galleryImages(model)[0] || model.image ? (
+                        <Image
+                          source={{
+                            uri: galleryImages(model)[0] || model.image,
+                          }}
+                          className="h-full w-full"
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Feather name="box" size={24} color="#94a3b8" />
+                      )}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      className="mt-2 text-[13px] font-bold text-ink"
+                    >
+                      {model.name}
+                    </Text>
+                    <Text className="mt-1 text-xs font-black text-navy">
+                      {model.priceLabel}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable
+                onPress={() => navigation.push("Contact")}
+                className="rounded-full bg-navy px-5 py-3"
+              >
+                <Text className="text-center text-sm font-black text-white">
+                  Send a file for a print review
+                </Text>
+              </Pressable>
             </View>
           )}
 

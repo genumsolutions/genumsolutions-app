@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { CategoryDropdown } from "../components/CategoryDropdown";
+import { PagePager } from "../components/PagePager";
 import { getServices } from "../services/serviceService";
 import type { Service } from "../types";
 
@@ -159,31 +160,8 @@ export function ServicesScreen() {
         </View>
       )}
       ListFooterComponent={
-        totalPages > 1 ? (
-          <View className="mt-1 flex-row items-center justify-between">
-            <Pressable
-              onPress={() => setPage((value) => Math.max(1, value - 1))}
-              disabled={page === 1}
-              accessibilityLabel="Previous services page"
-              className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-            >
-              <Feather name="chevron-left" size={18} color="#1e3a8a" />
-            </Pressable>
-            <Text className="text-xs font-bold text-muted">
-              Page {page} of {totalPages}
-            </Text>
-            <Pressable
-              onPress={() =>
-                setPage((value) => Math.min(totalPages, value + 1))
-              }
-              disabled={page === totalPages}
-              accessibilityLabel="Next services page"
-              className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-            >
-              <Feather name="chevron-right" size={18} color="#1e3a8a" />
-            </Pressable>
-          </View>
-        ) : null
+        // U-43: numbered page buttons for fast navigation.
+        <PagePager page={page} totalPages={totalPages} onPage={setPage} />
       }
     />
   );

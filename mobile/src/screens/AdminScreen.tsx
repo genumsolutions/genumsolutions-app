@@ -34,6 +34,7 @@ import type {
 } from "../components/PlatformPager";
 import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
+import { PagePager } from "../components/PagePager";
 import { isProjectPackage } from "../services/projectService";
 import { galleryImages } from "../types";
 import { logger } from "../services/logger";
@@ -3623,7 +3624,8 @@ function ActivityTab({
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
     >
       {activities.length === 0 ? (
-        <View className="items-center py-16">
+        // U-42: compact empty state — py-8, no tall dead space inside the pager page.
+        <View className="items-center py-8">
           <Feather name="clock" size={32} color="#cbd5e1" />
           <Text className="mt-3 text-sm text-muted">
             No activity recorded yet.
@@ -3668,31 +3670,14 @@ function ActivityTab({
             );
           })}
 
-          {/* Pager */}
-          {totalPages > 1 && (
-            <View className="mt-3 flex-row items-center justify-between">
-              <Pressable
-                onPress={() => onLoadMore(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-              >
-                <Feather name="chevron-left" size={18} color="#1e3a8a" />
-              </Pressable>
-              <Text className="text-xs font-bold text-muted">
-                Page {page} of {totalPages}
-              </Text>
-              <Pressable
-                onPress={() => onLoadMore(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-              >
-                <Feather name="chevron-right" size={18} color="#1e3a8a" />
-              </Pressable>
-            </View>
-          )}
-          <Text className="mt-2 text-center text-xs text-muted">
-            {total} total event{total === 1 ? "" : "s"}
-          </Text>
+          {/* U-43: numbered pager for fast navigation */}
+          <PagePager
+            page={page}
+            totalPages={totalPages}
+            onPage={onLoadMore}
+            label="event"
+            totalItems={total}
+          />
         </>
       )}
     </ScrollView>
@@ -4834,6 +4819,9 @@ function CurriculumManager({
 
 // ─── Shared admin list helpers ───────────────────────────────────────
 
+// U-43 (2026-09-26): AdminPager now delegates to the shared PagePager so
+// every admin list gets NUMBERED page buttons (fast navigation) instead of
+// prev/next-only stepping. Same props, same placement — zero call-site churn.
 function AdminPager({
   page,
   totalPages,
@@ -4843,28 +4831,9 @@ function AdminPager({
   totalPages: number;
   onPage: (page: number) => void;
 }) {
-  if (totalPages <= 1) return null;
   return (
-    <View className="mt-2 flex-row items-center justify-between">
-      <Pressable
-        onPress={() => onPage(Math.max(1, page - 1))}
-        disabled={page === 1}
-        accessibilityLabel="Previous page"
-        className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-      >
-        <Feather name="chevron-left" size={18} color="#1e3a8a" />
-      </Pressable>
-      <Text className="text-xs font-bold text-muted">
-        Page {page} of {totalPages}
-      </Text>
-      <Pressable
-        onPress={() => onPage(Math.min(totalPages, page + 1))}
-        disabled={page === totalPages}
-        accessibilityLabel="Next page"
-        className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-      >
-        <Feather name="chevron-right" size={18} color="#1e3a8a" />
-      </Pressable>
+    <View className="mt-2">
+      <PagePager page={page} totalPages={totalPages} onPage={onPage} />
     </View>
   );
 }
