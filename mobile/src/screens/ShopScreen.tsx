@@ -26,6 +26,7 @@ import {
 } from "../services/productService";
 import { OfflineBadge } from "../components/OfflineBadge";
 import { CategoryDropdown } from "../components/CategoryDropdown";
+import { PagePager } from "../components/PagePager";
 import { ShopSkeletonGrid } from "../components/SkeletonCard";
 import { ProductCard } from "../components/ProductCard";
 import {
@@ -248,34 +249,14 @@ export function ShopScreen() {
           </View>
         }
         ListFooterComponent={
-          totalPages > 1 ? (
-            <View className="mt-1 flex-row items-center justify-between px-4">
-              <Pressable
-                onPress={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page === 1}
-                accessibilityLabel="Previous products page"
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-              >
-                <Feather name="chevron-left" size={18} color="#1e3a8a" />
-              </Pressable>
-              <Text className="text-xs font-bold text-muted">
-                Page {page} of {totalPages}
-                {visible.length > 0
-                  ? ` · ${visible.length} item${visible.length === 1 ? "" : "s"}`
-                  : ""}
-              </Text>
-              <Pressable
-                onPress={() =>
-                  setPage((current) => Math.min(totalPages, current + 1))
-                }
-                disabled={page === totalPages}
-                accessibilityLabel="Next products page"
-                className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
-              >
-                <Feather name="chevron-right" size={18} color="#1e3a8a" />
-              </Pressable>
-            </View>
-          ) : null
+          // U-43: numbered page buttons for fast navigation.
+          <PagePager
+            page={page}
+            totalPages={totalPages}
+            onPage={setPage}
+            label="item"
+            totalItems={visible.length}
+          />
         }
         renderItem={({ item }) => <ProductCard product={item} chips />}
       />
