@@ -1,4 +1,29 @@
-# NEXT SESSION — genumsolutions-app (2026-09-22: tiers + robot preferences round, released 3.2.5/58)
+# NEXT SESSION — genumsolutions-app (2026-09-24: U-24 owner multi-front revision round; current release 3.2.5/58)
+
+**DONE 2026-09-24 — U-24 OWNER MULTI-FRONT REVISION ✓ COMMITTED + PUSHED (app `4e3e5fd` ·
+web `b0aacfc`; CI + OTA green).** Full plan/root-causes/progress in
+`guide/SESSION-2026-09-24-OWNER-REVIEW.md`; web ledger: web TRACKS `U-24`. **P1** owner admin
+access (web role plumbing — owner role no longer collapses to customer; app unchanged).
+**P2 GHOST-CART FIX (app):** `cartService.pruneOrphanLines(lines, validIds)` keeps only
+active-product ids (no-op offline), memoized `productService.listActiveProductIds()`,
+`refreshCartCount` prunes + re-persists, sign-in merge prunes merged lines, `signOut` →
+`cart.clearCart()` + badge 0 → the "6 items while logged out" phantom is gone; cartService
+tests extended (prune block; **31/31**, suite **189/189**). **P3 import/extract:** app
+`AdminScreen` import-by-link now uses a real cross-platform URL Modal
+(`importLinkOpen`/`importLinkDraft`, confirm→preview→seed editor→Products tab) — replaces the
+iOS-only `Alert.prompt` that silently died on Android; web AdminProducts save/toggle try/catch;
+edge link-import honors reviewed image/gallery overrides. **P4** MakerWorld-standard extraction:
+canonical `makerworldStructuredSpecs` (Compatible / Dimensions W×D×H mm / Weight / Materials /
+Filament types by name / Print time — instance titles dropped), description cap 420 + stat-noise
+strip, category hint → live 10-category taxonomy, `import_meta.structuredSpecs`/`subcategory`;
+credit UI: app ProductDetail credit block (Design by / License / Source) + **Specifications**
+section from `structuredSpecs` (fallback: parsed specs). **P5** whole-image cards (app
+`resizeMode="contain"`). **P8** organized detail sections app-side (Description → credit →
+price/CTA → info grid → Audience/Warranty → Color/Delivery → Specifications → Project info →
+related). **P7** app admin parity verified (import modal compiles, tab parity test green).
+Gates: app tsc 0 · vitest **189/189** · prettier clean; web tsc 0 · lint 0 · vitest **123/123**
+· build green. Live: `verify-link-import` **40/40 ×2**; post-deploy UX audit 60 loads ·
+**0 hard failures** at 320/360/768/1440. JS-only round — rides the next OTA, no version bump.
 
 **DONE 2026-09-24 — U-23 GALLERY · PROJECTS RESTORE · ADMIN STANDARDIZATION · UX,
 executed (rides the next JS-only OTA — no version bump).** Full plan + decisions in
