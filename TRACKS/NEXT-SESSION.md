@@ -351,3 +351,24 @@ deploy list for every release.
 success guards sound; payment deep-link states present.
 
 **Gates:** tsc 0 · vitest 180/180 · prettier clean.
+
+## U-25 audit (2026-09-25) �?" today's work: app cleanup (from both-repo audit)
+
+Read-only audits done. App-side actions for today:
+
+**DEAD (remove, 0 importers verified by audit):**
+  src/components/AppUpdateCard.tsx ; src/components/tools/Joystick.tsx
+  src/services/orderService.ts:196/208/220/232 (admin fns dup of adminService
+  394/403/522/531 �?" delete dup set, keep adminService)
+  src/services/settingsService.ts:58/93/104/141/147 orphans
+  Dead env EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID refs; unused
+  EXPO_PUBLIC_EAS_PROJECT_ID refs.
+
+**PARITY (align with web card a9dd8b5):** ProductCard media root was already
+square (aspect-[] / aspect-square, pushed 76a2327) �?" no rework needed; price
+label/CTS unchanged this round.
+
+**Keep hermetic:** no UI/dispatch changes until owner signs off batch.
+
+**Gates each batch:** tsc --noEmit + prettier + vitest �?" update this ledger + app
+INDEX per step.

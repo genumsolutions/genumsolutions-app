@@ -158,18 +158,41 @@ async function cachedProducts(): Promise<Product[] | null> {
   }
 }
 
+// U-26 (2026-09-25): one-flight shared catalog. Products is the SAME table the
+// website admin edits; eight screens (Home/Shop/Cart/Detail/Printing/Checkout/
+// Projects + AppContext launch scan) were each re-downloading the FULL catalog
+// (select "*" incl. JSONB) on every mount/focus -> cold-open lag + mount jank.
+// A single module-level flight is shared for a short TTL; concurrent callers
+// await the SAME promise (no duplicated network work).
+let catalogFlight: { promise: Promise<Product[]>; at: number } | null = null;
+const CATALOG_TTL_MS = 10_000;
+
 /** Fetch the full catalog from Supabase (shared with the website). */
 export async function getProductsFromSupabase(): Promise<Product[]> {
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order", { ascending: true })
-    .order("name", { ascending: true });
+  const now = Date.now();
+  if (catalogFlight && now - catalogFlight.at < CATALOG_TTL_MS)
+    return catalogFlight.promise;
 
-  if (error) throw error;
-  if (!data || data.length === 0) return [];
-  return (data as ProductRow[]).map(rowToProduct);
+  const flight = (async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+    return (data as ProductRow[]).map(rowToProduct);
+  })();
+
+  catalogFlight = { promise: flight, at: now };
+  try {
+    return await flight;
+  } catch (e) {
+    catalogFlight = null;
+    throw e;
+  }
 }
 
 // U-24 (2026-09-24): cheap id-only catalog read used to prune orphan cart
