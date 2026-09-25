@@ -454,16 +454,39 @@ async function invokeLinkImport(body: {
   url: string;
   product?: Record<string, unknown>;
 }) {
+  // U-39 (2026-09-26): pre-flight session check. With persistSession:false the
+  // in-memory access token can be stale after the app resumes in the
+  // background past the token TTL; getSession() makes the client validate and
+  // auto-refresh it before the JWT sails out to the edge fn (otherwise the
+  // import 401s as "Sign in to import products" while the admin UI looks
+  // perfectly signed-in).
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
   const { data, error } = await supabase.functions.invoke("link-import", {
     body,
   });
   if (error) {
-    const message =
-      (error as unknown as { context?: { message?: string } })?.context
-        ?.message ||
-      (error instanceof Error ? error.message : "") ||
-      "Could not import from that link.";
-    throw new Error(message);
+    // U-39: supabase-js v2 wraps non-2xx responses in FunctionsHttpError where
+    // `error.context` is the raw Response (NOT a {message} object). Read the
+    // body to surface the edge fn's real reason (e.g. "Only staff members can
+    // import products.") instead of a generic fallback.
+    let message = "";
+    const ctx = (error as unknown as { context?: unknown }).context;
+    if (ctx && typeof (ctx as Response).json === "function") {
+      try {
+        const bodyJson = (await (ctx as Response).json()) as Record<
+          string,
+          unknown
+        >;
+        message = String(bodyJson.error ?? bodyJson.message ?? "");
+      } catch {
+        /* body unreadable — fall through */
+      }
+    }
+    if (!message) message = error instanceof Error ? error.message : "";
+    throw new Error(message || "Could not import from that link.");
   }
   return data as Record<string, unknown>;
 }
