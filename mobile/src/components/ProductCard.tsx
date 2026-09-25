@@ -13,7 +13,11 @@ import { galleryImages, type Product } from "../types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
 
-export function ProductCard({
+// PERF (2026-09-25): memoized — the Shop FlatList re-renders on every keystroke
+// (search query state), page flip, and focus-triggered refresh; a card only
+// needs to re-render when ITS product (or layout props) actually change.
+// Primitives compare by value, so the default shallow props check is enough.
+function ProductCardBase({
   product,
   compact = false,
   chips = false,
@@ -89,3 +93,5 @@ export function ProductCard({
     </Pressable>
   );
 }
+
+export const ProductCard = React.memo(ProductCardBase);

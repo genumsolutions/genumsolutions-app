@@ -239,12 +239,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Checks OTA first (silent JS/asset update, applied on next launch) then
   // falls back to the APK manifest. A NEWER APK exists → show the top-bar
   // "vX available" pill; an OTA was fetched → offer "App updated · reload".
+  // PERF (2026-09-25): ONE check per app launch, module-level. The effect
+  // re-fires on every AppContext remount (error-boundary recoveries, StrictMode
+  // double-invoke in dev) and each run hits BOTH the OTA server and the
+  // release manifest — a shared promise makes remounts await the same flight
+  // and keeps the network cost at exactly one check per launch.
+  let launchUpdateFlight: Promise<void> | null = null;
   const runLaunchUpdateCheck = useCallback(async () => {
-    const result = await checkForAnyUpdate();
-    if (result.status === "update-available" && result.latestVersion) {
-      setUpdatePill({ version: result.latestVersion });
+    if (launchUpdateFlight) return launchUpdateFlight;
+    launchUpdateFlight = (async () => {
+      const result = await checkForAnyUpdate();
+      if (result.status === "update-available" && result.latestVersion) {
+        setUpdatePill({ version: result.latestVersion });
+      }
+      if (result.otaApplied) setAppUpdated(true);
+    })();
+    try {
+      await launchUpdateFlight;
+    } finally {
+      launchUpdateFlight = null;
     }
-    if (result.otaApplied) setAppUpdated(true);
   }, []);
 
   useEffect(() => {

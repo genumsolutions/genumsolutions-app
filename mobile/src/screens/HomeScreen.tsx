@@ -3,7 +3,7 @@
 // programs/curriculum from Supabase (shared tables), with the bundled
 // config as offline fallback.
 // =====================================================================
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -43,33 +43,56 @@ export function HomeScreen() {
   const [pilotCosts, setPilotCosts] = useState(fallbackPilotCosts);
   const [stemProjectHighlights, setStemProjectHighlights] =
     useState(fallbackHighlights);
-  const [loading, setLoading] = useState(true);
+  // PERF (2026-09-25): the old render gated EVERY band behind a full-screen
+  // spinner until the SLOWEST of four fetches settled (services + catalog +
+  // site content + programs). The hero now paints instantly on the bundled
+  // fallbacks and each band re-renders as its own promise resolves — the
+  // screen is usable while slower reads are still in flight.
+  const [servicesReady, setServicesReady] = useState(false);
+  const [featuredReady, setFeaturedReady] = useState(false);
+  const [programsReady, setProgramsReady] = useState(false);
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      try {
-        const [svcs, prods, content, programContent] = await Promise.all([
-          getServices(),
-          getProducts(),
-          fetchSiteContent().catch(() => null),
-          getProgramsContent(),
-        ]);
+    void getServices()
+      .then((svcs) => {
         if (!active) return;
         setServices(svcs.slice(0, 4));
+        setServicesReady(true);
+      })
+      .catch(() => {
+        if (active) setServicesReady(true); // nothing to add — hide the band
+      });
+    void getProducts()
+      .then((prods) => {
+        if (!active) return;
         setFeatured(prods.filter((p) => p.stock > 0).slice(0, 6));
+        setFeaturedReady(true);
+      })
+      .catch(() => {
+        if (active) setFeaturedReady(true);
+      });
+    void fetchSiteContent()
+      .then((content) => {
+        if (!active) return;
         if (content?.content?.home_title)
           setHeroTitle(content.content.home_title);
         if (content?.content?.home_body) setHeroBody(content.content.home_body);
+      })
+      .catch(() => {
+        /* hero keeps the bundled copy */
+      });
+    void getProgramsContent()
+      .then((programContent) => {
+        if (!active) return;
         setTrainingPrograms(programContent.trainingPrograms);
         setPilotCosts(programContent.pilotCosts);
         setStemProjectHighlights(programContent.stemProjectHighlights);
-      } catch {
-        /* no-op */
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+        setProgramsReady(true);
+      })
+      .catch(() => {
+        if (active) setProgramsReady(true); // bundled fallbacks already set
+      });
     return () => {
       active = false;
     };
@@ -91,14 +114,26 @@ export function HomeScreen() {
         <Text className="mt-3 text-sm leading-6 text-white/80">{heroBody}</Text>
       </View>
 
-      {loading ? (
+      {/* PERF: no full-screen gate — the hero paints instantly and each band
+          appears as its own read resolves. One small spinner covers the first
+          paint window before the earliest band lands. */}
+      {!servicesReady && !featuredReady && !programsReady && (
         <View className="items-center py-16">
           <ActivityIndicator size="large" color="#1e3a8a" />
         </View>
-      ) : (
+      )}
+      {
         <>
+          {/* PERF: hero + bands paint progressively — each band shows a quiet
+              inline placeholder only while ITS OWN read is still in flight,
+              so one slow fetch can never blank the whole screen again. */}
+          {!servicesReady && (
+            <View className="items-center py-6">
+              <ActivityIndicator size="small" color="#1e3a8a" />
+            </View>
+          )}
           {/* Services */}
-          {services.length > 0 && (
+          {servicesReady && services.length > 0 && (
             <View className="px-5 pt-6">
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
@@ -138,113 +173,125 @@ export function HomeScreen() {
             </View>
           )}
 
-          {/* Curriculum */}
-          <View className="px-5 pt-6">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-                100+ project curriculum
-              </Text>
-              <Pressable onPress={() => navigation.push("Contact")}>
-                <Text className="text-sm font-bold text-navy underline">
-                  Request the full catalog
+          {/* Curriculum + training + pilot costing share one programs read —
+              PERF: they render only once that read settles (bundled fallbacks
+              mean it is ALWAYS populated by then; nothing to gate per-band). */}
+          {programsReady && (
+            <>
+              {/* Curriculum */}
+              <View className="px-5 pt-6">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                    100+ project curriculum
+                  </Text>
+                  <Pressable onPress={() => navigation.push("Contact")}>
+                    <Text className="text-sm font-bold text-navy underline">
+                      Request the full catalog
+                    </Text>
+                  </Pressable>
+                </View>
+                <View className="mt-4 space-y-3">
+                  {Object.entries(stemProjectHighlights).map(
+                    ([ages, projects]) => (
+                      <View
+                        key={ages}
+                        className="rounded-2xl border border-line bg-card p-4"
+                      >
+                        <Text className="text-xs font-black uppercase tracking-widest text-gold">
+                          {ages}
+                        </Text>
+                        <View className="mt-2 flex-row flex-wrap gap-x-4 gap-y-1">
+                          {projects.map((p) => (
+                            <Text
+                              key={p}
+                              className="text-sm leading-6 text-muted"
+                            >
+                              • {p}
+                            </Text>
+                          ))}
+                        </View>
+                      </View>
+                    ),
+                  )}
+                </View>
+              </View>
+
+              {/* Training programs */}
+              <View className="px-5 pt-6">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Training programs
                 </Text>
-              </Pressable>
-            </View>
-            <View className="mt-4 space-y-3">
-              {Object.entries(stemProjectHighlights).map(([ages, projects]) => (
-                <View
-                  key={ages}
-                  className="rounded-2xl border border-line bg-card p-4"
-                >
-                  <Text className="text-xs font-black uppercase tracking-widest text-gold">
-                    {ages}
-                  </Text>
-                  <View className="mt-2 flex-row flex-wrap gap-x-4 gap-y-1">
-                    {projects.map((p) => (
-                      <Text key={p} className="text-sm leading-6 text-muted">
-                        • {p}
-                      </Text>
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Training programs */}
-          <View className="px-5 pt-6">
-            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-              Training programs
-            </Text>
-            <View className="mt-4 space-y-3">
-              {trainingPrograms.map((prog) => (
-                <View
-                  key={prog.title}
-                  className="rounded-2xl border border-line bg-card p-4"
-                >
-                  <View className="flex-row items-center justify-between gap-2">
-                    <Text
-                      numberOfLines={1}
-                      className="min-w-0 flex-1 font-display text-lg font-bold text-ink"
+                <View className="mt-4 space-y-3">
+                  {trainingPrograms.map((prog) => (
+                    <View
+                      key={prog.title}
+                      className="rounded-2xl border border-line bg-card p-4"
                     >
-                      {prog.title}
-                    </Text>
-                    <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">
-                      {prog.duration}
-                    </Text>
-                  </View>
-                  <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
-                    {prog.audience}
-                  </Text>
-                  <Text className="mt-2 text-sm leading-6 text-muted">
-                    {prog.description}
-                  </Text>
-                  <Text className="mt-2 text-xs leading-5 text-muted">
-                    <Text className="text-ink font-bold">Outcome:</Text>{" "}
-                    {prog.outcome}
-                  </Text>
+                      <View className="flex-row items-center justify-between gap-2">
+                        <Text
+                          numberOfLines={1}
+                          className="min-w-0 flex-1 font-display text-lg font-bold text-ink"
+                        >
+                          {prog.title}
+                        </Text>
+                        <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">
+                          {prog.duration}
+                        </Text>
+                      </View>
+                      <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
+                        {prog.audience}
+                      </Text>
+                      <Text className="mt-2 text-sm leading-6 text-muted">
+                        {prog.description}
+                      </Text>
+                      <Text className="mt-2 text-xs leading-5 text-muted">
+                        <Text className="text-ink font-bold">Outcome:</Text>{" "}
+                        {prog.outcome}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          </View>
+              </View>
 
-          {/* Pilot costing */}
-          <View className="px-5 pt-6">
-            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-              Illustrative pilot costing
-            </Text>
-            <Text className="mt-2 font-display text-2xl font-bold text-navy">
-              NPR 8,40,000{" "}
-              <Text className="font-sans text-sm font-normal text-muted">
-                illustrative total
-              </Text>
-            </Text>
-            <View className="mt-4">
-              {pilotCosts.map(([item, cost, note]) => (
-                <View
-                  key={item}
-                  className="flex-row items-center justify-between border-b border-line py-2"
-                >
-                  <Text
-                    numberOfLines={1}
-                    className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink"
-                  >
-                    {item}
-                    <Text className="text-xs font-normal text-muted">
-                      {" "}
-                      — {note}
-                    </Text>
+              {/* Pilot costing */}
+              <View className="px-5 pt-6">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Illustrative pilot costing
+                </Text>
+                <Text className="mt-2 font-display text-2xl font-bold text-navy">
+                  NPR 8,40,000{" "}
+                  <Text className="font-sans text-sm font-normal text-muted">
+                    illustrative total
                   </Text>
-                  <Text className="shrink-0 font-display text-base font-bold text-navy">
-                    {cost}
-                  </Text>
+                </Text>
+                <View className="mt-4">
+                  {pilotCosts.map(([item, cost, note]) => (
+                    <View
+                      key={item}
+                      className="flex-row items-center justify-between border-b border-line py-2"
+                    >
+                      <Text
+                        numberOfLines={1}
+                        className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink"
+                      >
+                        {item}
+                        <Text className="text-xs font-normal text-muted">
+                          {" "}
+                          — {note}
+                        </Text>
+                      </Text>
+                      <Text className="shrink-0 font-display text-base font-bold text-navy">
+                        {cost}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          </View>
+              </View>
+            </>
+          )}
 
           {/* Featured products */}
-          {featured.length > 0 && (
+          {featuredReady && featured.length > 0 && (
             <View className="px-5 pt-6">
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
@@ -325,7 +372,7 @@ export function HomeScreen() {
             </View>
           </View>
         </>
-      )}
+      }
     </ScrollView>
   );
 }

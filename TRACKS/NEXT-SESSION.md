@@ -1,5 +1,52 @@
 # NEXT SESSION — genumsolutions-app (2026-09-24: U-24 owner multi-front revision round; current release 3.2.5/58)
 
+**DONE 2026-09-25 — PERF BATCH (JS-only → rides the next OTA, no version bump).**
+Queued at the end of U-31 and executed after the U-37 mirror:
+
+- **HomeScreen progressive render** (`screens/HomeScreen.tsx`): the old render
+  gated EVERY band behind a full-screen spinner until the SLOWEST of four
+  fetches settled (services + catalog + site content + programs). The hero now
+  paints instantly on the bundled fallbacks; services / featured products /
+  programs+curriculum+pilot bands each appear as their OWN promise resolves
+  (`servicesReady` / `featuredReady` / `programsReady`), with one small inline
+  spinner while a band is in flight. One slow read can no longer blank the
+  whole home screen. Bands sharing one read (curriculum + training + pilot)
+  gate together on `programsReady` — the bundled fallbacks mean they are
+  always populated by the time it flips.
+- **CartScreen focus re-resolve dedupe** (`screens/CartScreen.tsx`):
+  `resolveCart` still runs on catalog change / qty edit / focus, but the
+  `setLines` update is skipped when the resolved lines are identical
+  (productId+quantity sequence). Tab swipes through the pager previously
+  re-rendered the whole list on every focus with zero changes.
+- **Single launch OTA check** (`context/AppContext.tsx`):
+  `runLaunchUpdateCheck` is now a one-flight-per-launch shared promise. The
+  effect re-fires on every AppContext remount (error-boundary recoveries,
+  dev StrictMode double-invoke) and each run hits BOTH the OTA server and
+  the release manifest — remounts now await the same flight (one network
+  check per launch, not N).
+- **Memoized ProductCard** (`components/ProductCard.tsx`): wrapped in
+  `React.memo` (primitives-only props → default shallow compare). The Shop
+  FlatList re-renders on every search keystroke, page flip, and focus
+  refresh; individual cards now skip re-render unless their product or
+  layout props changed. Used by Shop/Projects/Home/related/recently-viewed
+  rows, so all of them benefit.
+
+Gates: app tsc 0 · vitest **189/189** · prettier clean on all four touched
+files. No behavior changes beyond render timing; no version bump.
+
+**DONE 2026-09-25 — U-37 MIRROR + WEBSITE ROUND CLOSED (app-side bookkeeping).**
+The website's 2026-09-25 owner UX revision round (`guide/SESSION-2026-09-25-UX-REVISION.md`)
+is fully executed + live-verified: U-35 link-import (edge redeployed,
+`verify-link-import.mjs` **40/40**), U-36 project categories, U-37 admin 12→6 tabs
+(web `b592627`/`15a0192`; **app mirror = `8b9b8c9`** — adminTabs, parity test,
+AdminScreen merged panels), U-38a–d public design (fonts/density/5-up cards/footer),
+U-38e home printing + pilot showcase (web `7f877dd`), `staff-access-e2e.mjs`
+**ALL PASSED (31)**, web TRACKS U-34 flipped **DONE** (`4dc8a97`), final prod
+ux-audit 60 loads · **0 hard** (only pre-existing 32px "View" pill softs on
+/3d-printing + /tools — candidate min-h-9 bump next snag round). App side needs
+nothing further this round; owner's app-side + mobile-browser snag lists arrive
+in the next round.
+
 **DONE 2026-09-24 — U-24 OWNER MULTI-FRONT REVISION ✓ COMMITTED + PUSHED (app `4e3e5fd` ·
 web `b0aacfc`; CI + OTA green).** Full plan/root-causes/progress in
 `guide/SESSION-2026-09-24-OWNER-REVIEW.md`; web ledger: web TRACKS `U-24`. **P1** owner admin
