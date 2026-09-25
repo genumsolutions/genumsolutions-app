@@ -469,6 +469,9 @@ export function AdminScreen() {
         );
         setEditingProduct(null);
         setPendingImportUrl(null);
+        // U-39b (2026-09-26): the pasted link stuck in the import dialog for
+        // the next run — clear the draft so every import starts fresh.
+        setImportLinkDraft("");
         void loadTab();
         Alert.alert("Imported", `"${created.name}" was saved.`);
         return;
@@ -2198,12 +2201,23 @@ function ProductEditor({
         />
         <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
         {product.image ? (
-          <Image
-            source={{ uri: product.image }}
-            className="mb-2 h-16 w-16 rounded-lg bg-mist"
-            resizeMode="cover"
-            accessibilityLabel="Extracted product image"
-          />
+          // U-39b (2026-09-26): remove-cross on the cover thumbnail.
+          <View className="mb-2 h-16 w-16">
+            <Image
+              source={{ uri: product.image }}
+              className="h-16 w-16 rounded-lg bg-mist"
+              resizeMode="cover"
+              accessibilityLabel="Extracted product image"
+            />
+            <Pressable
+              onPress={() => patch({ image: "" })}
+              accessibilityRole="button"
+              accessibilityLabel="Remove product image"
+              className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full border border-line bg-card"
+            >
+              <Text className="text-xs font-black text-ink">×</Text>
+            </Pressable>
+          </View>
         ) : null}
         <TextInput
           value={product.image}
@@ -2218,13 +2232,30 @@ function ProductEditor({
         {Array.isArray(product.gallery) && product.gallery.length > 0 && (
           <View className="mb-2 flex-row flex-wrap gap-2">
             {product.gallery.slice(0, 8).map((uri, i) => (
-              <Image
-                key={`${uri}-${i}`}
-                source={{ uri }}
-                className="h-14 w-14 rounded-lg bg-mist"
-                resizeMode="cover"
-                accessibilityLabel={`Gallery ${i + 1}`}
-              />
+              // U-39b (2026-09-26): per-image remove cross so staff can drop
+              // unwanted extraction photos before saving.
+              <View key={`${uri}-${i}`} className="h-14 w-14">
+                <Image
+                  source={{ uri }}
+                  className="h-14 w-14 rounded-lg bg-mist"
+                  resizeMode="cover"
+                  accessibilityLabel={`Gallery ${i + 1}`}
+                />
+                <Pressable
+                  onPress={() =>
+                    patch({
+                      gallery: (product.gallery as string[]).filter(
+                        (_, j) => j !== i,
+                      ),
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove gallery image ${i + 1}`}
+                  className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full border border-line bg-card"
+                >
+                  <Text className="text-xs font-black text-ink">×</Text>
+                </Pressable>
+              </View>
             ))}
           </View>
         )}
