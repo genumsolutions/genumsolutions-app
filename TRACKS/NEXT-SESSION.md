@@ -33,6 +33,17 @@ Queued at the end of U-31 and executed after the U-37 mirror:
 
 Gates: app tsc 0 · vitest **189/189** · prettier clean on all four touched
 files. No behavior changes beyond render timing; no version bump.
+**COMMITTED + PUSHED 2026-09-25 (`f569b0a`)** — CI ✓ (run 36155292738) ·
+OTA Only ✓ (run 36155292713, bundle **published**, update group
+`f50d69aa-d955-4b71-aa92-fe4867f9e935`) → device-verify checklist below.
+
+**DEVICE-VERIFY (owner, next app open on a 3.2.5/58 device):** ① cold-open
+Home: hero paints immediately (no full-screen spinner), bands fill in
+progressively; ② Shop: typing in search stays smooth (memoized cards);
+③ Cart: swipe Home→Shop→Cart repeatedly — list stays put (no re-render
+flicker) and badge still matches; ④ no spurious "update available" pill on
+launch (the single-check guard must not change update UX); ⑤ Menu →
+Update screen still reports the correct 3.2.5 (58).
 
 **DONE 2026-09-25 — U-37 MIRROR + WEBSITE ROUND CLOSED (app-side bookkeeping).**
 The website's 2026-09-25 owner UX revision round (`guide/SESSION-2026-09-25-UX-REVISION.md`)
