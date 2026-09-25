@@ -8,18 +8,15 @@
 // same session.
 // =====================================================================
 
+// U-37 (2026-09-25): 12→6 tabs, group names removed.
+// Merged: Dashboard+Activity · Orders+Finance · Products+Projects ·
+// Services+Journal+Content · Users+Messages+Robots · Settings.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",
-  "Products",
-  "Projects",
-  "Services",
-  "Journal",
+  "Catalog",
   "Content",
   "Users",
-  "Messages",
-  "Finance",
-  "Activity",
   "Settings",
 ] as const;
 

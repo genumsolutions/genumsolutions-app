@@ -1,6 +1,6 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs: Dashboard, Orders, Products, Services, Users, Messages, Content.
+// Tabs: Dashboard · Orders · Catalog · Content · Users · Settings.
 // =====================================================================
 import React, {
   useCallback,
@@ -97,33 +97,17 @@ import {
 
 type BackHandlerRemove = () => void;
 type Tab =
-  | "Dashboard"
-  | "Orders"
-  | "Products"
-  | "Projects"
-  | "Services"
-  | "Journal"
-  | "Users"
-  | "Messages"
-  | "Finance"
-  | "Activity"
-  | "Content"
-  | "Settings";
+  "Dashboard" | "Orders" | "Catalog" | "Content" | "Users" | "Settings";
 
-// U-23 (2026-09-24): grouped tab order (owner decision) — mirrors
-// config/adminTabs.ts + the website admin-types.ts (B-6 parity).
+// U-37 (2026-09-25): 12→6 tabs, group names removed.
+// Merged: Dashboard+Activity · Orders+Finance · Products+Projects ·
+// Services+Journal+Content · Users+Messages+Robots · Settings.
 const TABS: Tab[] = [
   "Dashboard",
   "Orders",
-  "Products",
-  "Projects",
-  "Services",
-  "Journal",
+  "Catalog",
   "Content",
   "Users",
-  "Messages",
-  "Finance",
-  "Activity",
   "Settings",
 ];
 
@@ -314,11 +298,9 @@ export function AdminScreen() {
   // current tab — once an editor is up, the user is "deep" in the tab and a
   // swipe must not flip to another tab until the editor is closed.
   const editorOnCurrentTab =
-    (tab === "Products" && editingProduct != null) ||
-    (tab === "Services" && editingService != null) ||
-    (tab === "Projects" && editingProject != null) ||
-    (tab === "Settings" && settingsEditing) ||
-    (tab === "Journal" && journalOpen);
+    (tab === "Catalog" && editingProduct != null) ||
+    (tab === "Content" && (editingService != null || journalOpen)) ||
+    (tab === "Settings" && settingsEditing);
 
   useEffect(() => {
     if (!editorOnCurrentTab) {
@@ -329,19 +311,12 @@ export function AdminScreen() {
       return;
     }
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (tab === "Products" && editingProduct != null) {
+      if (tab === "Catalog" && editingProduct != null) {
         setEditingProduct(null);
         return true; // consumed
       }
-      if (tab === "Services" && editingService != null) {
+      if (tab === "Content" && (editingService != null || journalOpen)) {
         setEditingService(null);
-        return true; // consumed
-      }
-      if (tab === "Projects" && editingProject != null) {
-        setEditingProject(null);
-        return true; // consumed
-      }
-      if (tab === "Journal" && journalOpen) {
         setJournalOpen(false);
         return true; // consumed
       }
@@ -386,22 +361,12 @@ export function AdminScreen() {
         }
       } else if (tab === "Orders") {
         void loadOrders(1);
-      } else if (tab === "Products" || tab === "Projects") {
-        setProducts(await listAdminProducts());
-      } else if (tab === "Services") {
-        setServices(await listAdminServices());
-      } else if (tab === "Journal") {
-        setJournals(await listAdminJournalPosts());
-      } else if (tab === "Users") {
-        void loadUsers(1);
-      } else if (tab === "Messages") {
-        void loadMessages(1);
-      } else if (tab === "Finance") {
-        // Finance uses the same stats as Dashboard
         if (!stats) setStats(await fetchDashboardStats());
-      } else if (tab === "Activity") {
-        void loadActivity(1);
+      } else if (tab === "Catalog") {
+        setProducts(await listAdminProducts());
       } else if (tab === "Content") {
+        setServices(await listAdminServices());
+        setJournals(await listAdminJournalPosts());
         const result = await fetchSiteContent();
         const content = result?.content;
         if (content) {
@@ -409,6 +374,9 @@ export function AdminScreen() {
           setContentTitle(content.home_title || "");
           setContentBody(content.home_body || "");
         }
+      } else if (tab === "Users") {
+        void loadUsers(1);
+        void loadMessages(1);
       } else if (tab === "Settings") {
         setCompanyInfo(await getCompanyInfo());
         setTrainingPrograms(await listAdminTrainingPrograms());
@@ -715,7 +683,7 @@ export function AdminScreen() {
       };
       setEditingProduct(seeded);
       setPendingImportUrl(link);
-      goToTab("Products");
+      goToTab("Catalog");
       if (preview?.found && preview?.title) {
         Alert.alert(
           `Found: ${preview.provider}`,
@@ -945,202 +913,203 @@ export function AdminScreen() {
   }, []);
 
   function renderTabContent(t: Tab) {
+    const Sub = ({ children }: { children: React.ReactNode }) => (
+      <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
+    );
     switch (t) {
       case "Dashboard":
-        return <DashboardTab stats={stats} analytics={analytics} />;
+        return (
+          <Sub>
+            <DashboardTab stats={stats} analytics={analytics} />
+            <ActivityTab
+              activities={activities}
+              page={activityPage}
+              totalPages={activityTotalPages}
+              total={activityTotal}
+              onLoadMore={(p) => loadActivity(p)}
+            />
+          </Sub>
+        );
       case "Orders":
         return (
-          <OrdersTab
-            orders={orders}
-            total={ordersTotal}
-            page={ordersPage}
-            totalPages={ordersTotalPages}
-            onPage={(p) => void loadOrders(p)}
-            onStatusChange={handleUpdateOrderStatus}
-            query={orderQuery}
-            onQueryChange={setOrderQuery}
-            status={statusFilter}
-            onStatusFilter={(s) => {
-              setStatusFilter(s);
-              void loadOrders(1);
-            }}
-            onApply={() => void loadOrders(1)}
-          />
+          <Sub>
+            <OrdersTab
+              orders={orders}
+              total={ordersTotal}
+              page={ordersPage}
+              totalPages={ordersTotalPages}
+              onPage={(p) => void loadOrders(p)}
+              onStatusChange={handleUpdateOrderStatus}
+              query={orderQuery}
+              onQueryChange={setOrderQuery}
+              status={statusFilter}
+              onStatusFilter={(s) => {
+                setStatusFilter(s);
+                void loadOrders(1);
+              }}
+              onApply={() => void loadOrders(1)}
+            />
+            <FinanceTab stats={stats} />
+          </Sub>
         );
-      case "Products":
+      case "Catalog":
         return (
-          <ProductsTab
-            products={products}
-            query={productQuery}
-            onQueryChange={setProductQuery}
-            editing={editingProduct}
-            onChange={setEditingProduct}
-            onEdit={(product) => {
-              setEditingProduct(product);
-              if (product) goToTab("Products");
-            }}
-            onNew={handleNewProduct}
-            onImportLink={() => void handleImportFromLink()}
-            importBusy={importBusy}
-            onSave={handleSaveProduct}
-            canDelete={canDelete}
-            onDelete={handleDeleteProduct}
-            onToggleActive={(p) => void handleToggleProductActive(p)}
-            onImportCancel={() => setPendingImportUrl(null)}
-            fromLink={pendingImportUrl != null}
-          />
-        );
-      case "Projects":
-        return (
-          <ProjectTab
-            title="Projects"
-            products={products.filter(isProjectPackage)}
-            editing={editingProject}
-            onChange={setEditingProject}
-            onEdit={setEditingProject}
-            onNew={() => setEditingProject(blankProjectProduct())}
-            onSaveProduct={saveProduct}
-            canDelete={canDelete}
-            onDelete={handleDeleteProduct}
-            onToggleActive={(p) => void handleToggleProductActive(p)}
-          />
-        );
-      case "Services":
-        return (
-          <ServicesTab
-            services={services}
-            editing={editingService}
-            onChange={setEditingService}
-            onEdit={setEditingService}
-            onNew={handleNewService}
-            onSave={handleSaveService}
-            canDelete={canDelete}
-            onDelete={handleDeleteService}
-            onToggleActive={(s) => void handleToggleServiceActive(s)}
-          />
-        );
-      case "Journal":
-        return (
-          <JournalTab
-            journals={journals}
-            editorOpen={journalOpen}
-            editId={journalEditId}
-            tag={journalTag}
-            title={journalTitle}
-            text={journalText}
-            sort={journalSort}
-            active={journalActive}
-            onNew={() => startEditJournal(null)}
-            onEdit={(post) => startEditJournal(post)}
-            onTogglePublish={(post) => void handleToggleJournalPublished(post)}
-            canDelete={canDelete}
-            onDelete={handleDeleteJournal}
-            onEditIdChange={setJournalEditId}
-            onTagChange={setJournalTag}
-            onTitleChange={setJournalTitle}
-            onTextChange={setJournalText}
-            onSortChange={setJournalSort}
-            onActiveChange={setJournalActive}
-            onSave={() => void handleSaveJournal()}
-            onCancel={() => setJournalOpen(false)}
-          />
-        );
-      case "Users":
-        return (
-          <UsersTab
-            users={users}
-            total={usersTotal}
-            page={usersPage}
-            totalPages={usersTotalPages}
-            query={userQuery}
-            onQueryChange={setUserQuery}
-            onApply={() => void loadUsers(1)}
-            onPage={(p) => void loadUsers(p)}
-            canDelete={canDelete}
-            isOwner={isOwner}
-            onToggleRole={handleToggleUserRole}
-            onToggleTier={handleToggleUserTier}
-            onDeleteUser={handleDeleteUser}
-            currentUserId={currentUser?.id ?? ""}
-          />
-        );
-      case "Messages":
-        return (
-          <MessagesTab
-            messages={messages}
-            total={messagesTotal}
-            page={messagesPage}
-            totalPages={messagesTotalPages}
-            onPage={(p) => void loadMessages(p)}
-            status={messageStatus}
-            onStatusFilter={(s) => {
-              setMessageStatus(s);
-              void loadMessages(1);
-            }}
-            onMarkReplied={handleMarkReplied}
-          />
-        );
-      case "Finance":
-        return <FinanceTab stats={stats} />;
-      case "Activity":
-        return (
-          <ActivityTab
-            activities={activities}
-            page={activityPage}
-            totalPages={activityTotalPages}
-            total={activityTotal}
-            onLoadMore={(p) => loadActivity(p)}
-          />
+          <Sub>
+            <ProductsTab
+              products={products}
+              query={productQuery}
+              onQueryChange={setProductQuery}
+              editing={editingProduct}
+              onChange={setEditingProduct}
+              onEdit={(product) => {
+                setEditingProduct(product);
+                if (product) goToTab("Catalog");
+              }}
+              onNew={handleNewProduct}
+              onImportLink={() => void handleImportFromLink()}
+              importBusy={importBusy}
+              onSave={handleSaveProduct}
+              canDelete={canDelete}
+              onDelete={handleDeleteProduct}
+              onToggleActive={(p) => void handleToggleProductActive(p)}
+              onImportCancel={() => setPendingImportUrl(null)}
+              fromLink={pendingImportUrl != null}
+            />
+            <ProjectTab
+              title="Projects"
+              products={products.filter(isProjectPackage)}
+              editing={editingProject}
+              onChange={setEditingProject}
+              onEdit={setEditingProject}
+              onNew={() => setEditingProject(blankProjectProduct())}
+              onSaveProduct={saveProduct}
+              canDelete={canDelete}
+              onDelete={handleDeleteProduct}
+              onToggleActive={(p) => void handleToggleProductActive(p)}
+            />
+          </Sub>
         );
       case "Content":
         return (
-          <ContentTab
-            siteContent={siteContent}
-            contentTitle={contentTitle}
-            contentBody={contentBody}
-            onTitleChange={setContentTitle}
-            onBodyChange={setContentBody}
-            onSave={async () => {
-              if (!siteContent) return;
-              setContentSaved(false);
-              try {
-                await upsertSiteContent({
-                  id: siteContent.id,
-                  home_title: contentTitle,
-                  home_body: contentBody,
-                });
-                setContentSaved(true);
-              } catch (e) {
-                logger.error("admin", "Site content save error:", e);
+          <Sub>
+            <ServicesTab
+              services={services}
+              editing={editingService}
+              onChange={setEditingService}
+              onEdit={setEditingService}
+              onNew={handleNewService}
+              onSave={handleSaveService}
+              canDelete={canDelete}
+              onDelete={handleDeleteService}
+              onToggleActive={(s) => void handleToggleServiceActive(s)}
+            />
+            <JournalTab
+              journals={journals}
+              editorOpen={journalOpen}
+              editId={journalEditId}
+              tag={journalTag}
+              title={journalTitle}
+              text={journalText}
+              sort={journalSort}
+              active={journalActive}
+              onNew={() => startEditJournal(null)}
+              onEdit={(post) => startEditJournal(post)}
+              onTogglePublish={(post) =>
+                void handleToggleJournalPublished(post)
               }
-            }}
-            saved={contentSaved}
-            trainingPrograms={trainingPrograms}
-            setTrainingPrograms={setTrainingPrograms}
-            onSaveProgram={async (program, isNew) => {
-              await upsertAdminTrainingProgram(program);
-            }}
-            onDeleteProgram={async (id) => {
-              await deleteAdminTrainingProgram(id);
-            }}
-            pilotCostLines={pilotCostLines}
-            setPilotCostLines={setPilotCostLines}
-            onSavePilotLine={async (line, isNew) => {
-              await upsertAdminPilotCostLine(line);
-            }}
-            onDeletePilotLine={async (id) => {
-              await deleteAdminPilotCostLine(id);
-            }}
-            curriculumHighlights={curriculumHighlights}
-            setCurriculumHighlights={setCurriculumHighlights}
-            onSaveCurriculum={async (highlight, isNew) => {
-              await upsertAdminCurriculumHighlight(highlight);
-            }}
-            onDeleteCurriculum={async (id) => {
-              await deleteAdminCurriculumHighlight(id);
-            }}
-            canDelete={canDelete}
-          />
+              canDelete={canDelete}
+              onDelete={handleDeleteJournal}
+              onEditIdChange={setJournalEditId}
+              onTagChange={setJournalTag}
+              onTitleChange={setJournalTitle}
+              onTextChange={setJournalText}
+              onSortChange={setJournalSort}
+              onActiveChange={setJournalActive}
+              onSave={() => void handleSaveJournal()}
+              onCancel={() => setJournalOpen(false)}
+            />
+            <ContentTab
+              siteContent={siteContent}
+              contentTitle={contentTitle}
+              contentBody={contentBody}
+              onTitleChange={setContentTitle}
+              onBodyChange={setContentBody}
+              onSave={async () => {
+                if (!siteContent) return;
+                setContentSaved(false);
+                try {
+                  await upsertSiteContent({
+                    id: siteContent.id,
+                    home_title: contentTitle,
+                    home_body: contentBody,
+                  });
+                  setContentSaved(true);
+                } catch (e) {
+                  logger.error("admin", "Site content save error:", e);
+                }
+              }}
+              saved={contentSaved}
+              trainingPrograms={trainingPrograms}
+              setTrainingPrograms={setTrainingPrograms}
+              onSaveProgram={async (program, isNew) => {
+                await upsertAdminTrainingProgram(program);
+              }}
+              onDeleteProgram={async (id) => {
+                await deleteAdminTrainingProgram(id);
+              }}
+              pilotCostLines={pilotCostLines}
+              setPilotCostLines={setPilotCostLines}
+              onSavePilotLine={async (line, isNew) => {
+                await upsertAdminPilotCostLine(line);
+              }}
+              onDeletePilotLine={async (id) => {
+                await deleteAdminPilotCostLine(id);
+              }}
+              curriculumHighlights={curriculumHighlights}
+              setCurriculumHighlights={setCurriculumHighlights}
+              onSaveCurriculum={async (highlight, isNew) => {
+                await upsertAdminCurriculumHighlight(highlight);
+              }}
+              onDeleteCurriculum={async (id) => {
+                await deleteAdminCurriculumHighlight(id);
+              }}
+              canDelete={canDelete}
+            />
+          </Sub>
+        );
+      case "Users":
+        return (
+          <Sub>
+            <UsersTab
+              users={users}
+              total={usersTotal}
+              page={usersPage}
+              totalPages={usersTotalPages}
+              query={userQuery}
+              onQueryChange={setUserQuery}
+              onApply={() => void loadUsers(1)}
+              onPage={(p) => void loadUsers(p)}
+              canDelete={canDelete}
+              isOwner={isOwner}
+              onToggleRole={handleToggleUserRole}
+              onToggleTier={handleToggleUserTier}
+              onDeleteUser={handleDeleteUser}
+              currentUserId={currentUser?.id ?? ""}
+            />
+            <MessagesTab
+              messages={messages}
+              total={messagesTotal}
+              page={messagesPage}
+              totalPages={messagesTotalPages}
+              onPage={(p) => void loadMessages(p)}
+              status={messageStatus}
+              onStatusFilter={(s) => {
+                setMessageStatus(s);
+                void loadMessages(1);
+              }}
+              onMarkReplied={handleMarkReplied}
+            />
+          </Sub>
         );
       case "Settings":
         return (
@@ -1226,11 +1195,11 @@ export function AdminScreen() {
         <ActivityIndicator size="small" color="#1e3a8a" className="py-1.5" />
       ) : null}
 
-      {/* Swipeable tab content — each of the 12 tabs is a pager page synced
-          with the tab strip above (swipe -> onPageSelected -> setTab; tab tap
-          -> goToTab -> setPage). Pages mount lazily on first visit so the
-          admin doesn't fire all 12 data loads at once, then stay mounted so
-          per-tab state (search, category, page) survives swiping away. */}
+      {/* Swipeable tab content — each of the 6 merged tabs is a pager
+           page synced with the tab strip above (swipe -> onPageSelected
+           -> setTab; tab tap -> goToTab -> setPage). Pages mount lazily
+           on first visit so the admin doesn't fire all 6 data loads at
+           once, then stay mounted so per-tab state survives swiping away. */}
       <PlatformPager
         ref={pagerRef}
         style={{ flex: 1 }}

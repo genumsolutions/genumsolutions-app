@@ -12,19 +12,13 @@ import { ADMIN_TABS } from "./adminTabs";
 // =====================================================================
 
 describe("admin tab inventory (website <-> app mirror, B-6)", () => {
-  it("exposes the 12 canonical tabs in the canonical order", () => {
+  it("exposes the 6 canonical tabs in the canonical order", () => {
     expect(ADMIN_TABS).toEqual([
       "Dashboard",
       "Orders",
-      "Products",
-      "Projects",
-      "Services",
-      "Journal",
+      "Catalog",
       "Content",
       "Users",
-      "Messages",
-      "Finance",
-      "Activity",
       "Settings",
     ]);
   });
