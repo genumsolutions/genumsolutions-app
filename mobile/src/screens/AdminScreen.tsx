@@ -638,6 +638,9 @@ export function AdminScreen() {
   }
 
   function handleNewProduct() {
+    // U-39b follow-up (2026-09-26): a leftover pendingImportUrl would turn
+    // this plain "new product" save into a silent re-import of the old link.
+    setPendingImportUrl(null);
     setEditingProduct(blankProduct("Retail kit"));
     setEditingService(null);
   }
@@ -966,6 +969,10 @@ export function AdminScreen() {
               editing={editingProduct}
               onChange={setEditingProduct}
               onEdit={(product) => {
+                // U-39b follow-up (2026-09-26): row-edit is a normal edit —
+                // drop any stale pending import link so saving can't re-import
+                // the old URL into this product.
+                setPendingImportUrl(null);
                 setEditingProduct(product);
                 if (product) goToTab("Catalog");
               }}
