@@ -372,3 +372,15 @@ label/CTS unchanged this round.
 
 **Gates each batch:** tsc --noEmit + prettier + vitest �?" update this ledger + app
 INDEX per step.
+
+## U-30a (2026-09-25) — shared-Supabase ledger (mirror of web U-30; see web TRACKS for full read-only audit)
+
+DB audit ran READ-ONLY against the SHARED project via SUPABASE_DB_URL
+(24 public tables / 45 indexes / RLS on all; page_views = 15k rows / 2.8MB
+is the only MB-scale grower, no retention). Storage census on the same
+project: product-images bucket = 634 MB (329 objects), app-releases =
+1,576 MB (44 objects) — combined ~2.2 GB against the free-tier 1 GB
+storage cap ⇒ that is what the Supabase "limit" email is about. NO
+mutations performed. Cleanup is QUEUED (page_views retention batch +
+confirmed-orphan image deletion after backup) and needs owner go — see
+web TRACKS/INDEX.md U-30 for the exact safe-ordered plan + SQL.
