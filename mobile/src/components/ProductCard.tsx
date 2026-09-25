@@ -40,7 +40,7 @@ export function ProductCard({
     >
       <View
         className={`items-center justify-center overflow-hidden rounded-xl bg-mist ${
-          compact ? "h-20" : "h-32"
+          compact ? "aspect-[4/3]" : "aspect-square"
         }`}
       >
         {media ? (
