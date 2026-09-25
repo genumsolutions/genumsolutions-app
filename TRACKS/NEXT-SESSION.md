@@ -43,7 +43,10 @@ progressively; ② Shop: typing in search stays smooth (memoized cards);
 ③ Cart: swipe Home→Shop→Cart repeatedly — list stays put (no re-render
 flicker) and badge still matches; ④ no spurious "update available" pill on
 launch (the single-check guard must not change update UX); ⑤ Menu →
-Update screen still reports the correct 3.2.5 (58).
+Update screen still reports the correct 3.2.5 (58). **Full sheet:
+`guide/DEVICE-RERUN-PERF-OTA-2026-09-25.md`** (pre-flight server-side
+checks pre-verified: manifest live, update group `f50d69aa…` = newest on
+branch `main`, runtime 3.2.5, android+ios).
 
 **DONE 2026-09-25 — U-37 MIRROR + WEBSITE ROUND CLOSED (app-side bookkeeping).**
 The website's 2026-09-25 owner UX revision round (`guide/SESSION-2026-09-25-UX-REVISION.md`)
