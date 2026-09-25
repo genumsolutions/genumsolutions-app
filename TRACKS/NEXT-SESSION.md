@@ -384,3 +384,35 @@ storage cap ⇒ that is what the Supabase "limit" email is about. NO
 mutations performed. Cleanup is QUEUED (page_views retention batch +
 confirmed-orphan image deletion after backup) and needs owner go — see
 web TRACKS/INDEX.md U-30 for the exact safe-ordered plan + SQL.
+
+## U-31 (2026-09-25) — storage cleanup EXECUTED + release-path prune so it can't rebuild
+
+Owner authorized the queued cleanup. Executed against the shared project
+(full detail + per-bucket numbers in web TRACKS/INDEX.md U-31):
+app-releases 44 -> 5 objects (1,576 -> 162 MB) and product-images 329 -> 72
+(634 -> 104 MB); total 2,210 -> 266 MB, i.e. back under the free-tier 1 GB
+storage cap that triggered the Supabase limit email. page_views needed no
+retention: all 16,229 rows are dated within 2026-08-25..2026-09-25 (2.8 MB),
+and `created_at` was already `NOT NULL DEFAULT now()` — no schema bug.
+
+CODE (this repo) — `mobile/scripts/upload-release.mjs` now prunes superseded
+versioned APKs after the manifest is published, so the 1.5 GB cannot silently
+rebuild with every release:
+
+- New `--keep <n>` flag (default 3). `pruneOldReleases()` lists the bucket via
+  the Storage REST API (plain fetch, no new dependency — the script is
+  self-contained by design), keeps the newest N `genum-solutions-<semver>.apk`
+  by `created_at`, and removes the rest in one batched DELETE.
+- SAFETY: `release.json`, `genum-solutions-latest.apk` and the CURRENT
+  `genum-solutions-<version>.apk` are in a protected set and can never be
+  pruned at any `--keep` value, so the manifest, the website `/app` page and
+  the in-app updater can never be pointed at a deleted APK.
+- A prune failure only warns — it never fails an already-published release.
+- Verified: 10/10 assertions on the real function (mocked fetch, no live
+  calls) covering the no-op case, correct oldest-first removal, and the
+  protected-set guarantees at keep=3 and keep=1; REST list+delete shapes
+  probed against the live bucket; prettier + `tsc --noEmit` clean; vitest
+  189/189.
+
+NEXT: perf batch (HomeScreen progressive render, CartScreen/ShopScreen mount
+dedupe, single OTA check, memoized list items) and the admin dashboard uplift.

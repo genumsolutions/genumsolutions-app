@@ -13,6 +13,7 @@
 // Usage:
 //   node scripts/upload-release.mjs                       (default APK path)
 //   node scripts/upload-release.mjs --apk <path>          (custom APK path)
+//   node scripts/upload-release.mjs --keep <n>            (versioned APKs to keep)
 // =====================================================================
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -43,11 +44,67 @@ const MANIFEST_NAME = "release.json";
 const CONTENT_TYPE = "application/vnd.android.package-archive";
 
 function parseArgs(argv) {
-  const args = { apk: null };
+  const args = { apk: null, keep: 3 };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--apk" && argv[i + 1]) args.apk = argv[i + 1];
+    if (argv[i] === "--keep" && argv[i + 1]) {
+      const n = Number.parseInt(argv[i + 1], 10);
+      if (Number.isFinite(n) && n >= 1) args.keep = n;
+    }
   }
   return args;
+}
+
+const VERSIONED_RE = /^genum-solutions-\d+\.\d+\.\d+\.apk$/;
+
+async function listBucketObjects(url, key) {
+  const res = await fetch(`${url}/storage/v1/object/list/${BUCKET}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prefix: "", limit: 1000 }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Bucket list failed: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+async function pruneOldReleases(url, key, keep) {
+  const objects = await listBucketObjects(url, key);
+  const versioned = objects
+    .filter((o) => VERSIONED_RE.test(o.name))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const protectedNames = new Set([MANIFEST_NAME, LATEST_FILE, VERSIONED_FILE]);
+  const doomed = versioned
+    .slice(keep)
+    .map((o) => o.name)
+    .filter((name) => !protectedNames.has(name));
+  if (!doomed.length) {
+    console.log(
+      `Prune: nothing to remove (${versioned.length} versioned APK(s), keeping newest ${keep}).`,
+    );
+    return;
+  }
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prefixes: doomed }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Prune failed: ${res.status} ${text}`);
+  }
+  console.log(
+    `Prune: removed ${doomed.length} superseded APK(s) beyond newest ${keep}: ${doomed.join(", ")}`,
+  );
 }
 
 async function ensureBucket(url, key) {
@@ -189,6 +246,14 @@ async function main() {
   console.log(
     `Released v${VERSION}. Manifest: ${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
   );
+
+  try {
+    await pruneOldReleases(url, serviceKey, args.keep);
+  } catch (pruneErr) {
+    console.warn(
+      `Prune: skipped (${pruneErr.message}). The release itself is live; re-run with --keep to retry.`,
+    );
+  }
 }
 
 main().catch((err) => {
