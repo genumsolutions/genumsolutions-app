@@ -9,7 +9,7 @@
 // so the badge (AppContext cartCount) and the list can never drift apart
 // from each other.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -66,8 +66,32 @@ export function CartScreen() {
 
   // Re-resolve the cart whenever the products catalog changes, after a
   // quantity edit, or when the tab regains focus.
+  // PERF (2026-09-25): the resolve is cheap but setState isn't — skip the
+  // update when the resolved lines are identical to what's already rendered
+  // (same product ids + quantities in the same order). Focus-triggered
+  // re-resolves (tab swipes through the pager) previously re-rendered the
+  // whole list even when nothing changed.
+  const linesRef = useRef<CartEntry[]>([]);
   useEffect(() => {
-    void resolveCart(products).then(setLines);
+    let active = true;
+    void resolveCart(products).then((resolved) => {
+      if (!active) return;
+      const prev = linesRef.current;
+      const same =
+        prev.length === resolved.length &&
+        prev.every(
+          (entry, i) =>
+            entry.line.productId === resolved[i].line.productId &&
+            entry.line.quantity === resolved[i].line.quantity,
+        );
+      if (!same) {
+        linesRef.current = resolved;
+        setLines(resolved);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, [products, refreshKey]);
 
   useFocusEffect(
