@@ -11,7 +11,11 @@ import { logger } from "./logger";
 import { supabase } from "../config/supabase";
 import type { Product, ProductType, Difficulty } from "../types";
 
-const CATALOG_CACHE_KEY = "genum_products_v1";
+// U-47v2: bumped from v1 to v2 to invalidate every device's pre-fix cached
+// catalog (cached lists still mixed 3D Models into Electronic Products —
+// reported as "the database still mixes 3d products"). ALWAYS bump this key
+// when the scope or shape of the catalog changes.
+const CATALOG_CACHE_KEY = "genum_products_v2";
 
 // Product images are stored as absolute public URLs (Supabase Storage) in the
 // shared `products.image_url` column. The native app renders that value as-is

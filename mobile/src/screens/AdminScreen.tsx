@@ -42,6 +42,8 @@ import { logger } from "../services/logger";
 import {
   loadBiometricsPref,
   authenticate as biometricAuthenticate,
+  biometricsSupport,
+  setBiometricsEnabled,
 } from "../services/biometricsService";
 import { fetchSiteContent, upsertSiteContent } from "../services/orderService";
 import {
@@ -172,6 +174,19 @@ export function AdminScreen() {
     if (!bioLocked) return;
     let cancelled = false;
     void (async () => {
+      // U-47v3 fix (owner: lock "doesn't turn off" + flicker on resume):
+      // when biometrics became UNAVAILABLE after the pref was enabled (OTA on
+      // an older APK, sensor removal), the prompt can never succeed and the
+      // screen would stay blurred forever. In that case auto-unlock AND
+      // clear the stale pref so the lock stops re-arming.
+      const support = await biometricsSupport();
+      if (!support.supported || !support.available) {
+        if (!cancelled) {
+          setBioLocked(false);
+          await setBiometricsEnabled(false).catch(() => undefined);
+        }
+        return;
+      }
       const ok = await biometricAuthenticate("Unlock the admin console");
       if (!cancelled && ok) setBioLocked(false);
     })();
@@ -183,9 +198,18 @@ export function AdminScreen() {
     if (Platform.OS === "web") return;
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        void loadBiometricsPref().then((enabled) => {
-          if (enabled) setBioLocked(true);
-        });
+        // U-47v3 fix: only re-arm when the pref is on AND the device can
+        // actually prompt (previously an unavailable module still locked,
+        // and the re-arm fired the blur/prompt on EVERY foreground — the
+        // owner's millisecond card-deflect when returning to the app).
+        void (async () => {
+          const [support, enabled] = await Promise.all([
+            biometricsSupport(),
+            loadBiometricsPref(),
+          ]);
+          if (support.supported && support.available && enabled)
+            setBioLocked(true);
+        })();
       }
     });
     return () => sub.remove();
@@ -1601,17 +1625,30 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <View className="w-[47%] overflow-hidden rounded-xl border border-line bg-card p-4">
-      <Text className="text-xs font-black uppercase tracking-widest text-muted">
+    // U-47v3: min-w instead of fixed w-[47%] — cards flex with the row
+    // instead of overflowing the wrap container on narrow screens.
+    <View
+      className="min-w-[45%] flex-1 overflow-hidden rounded-xl border border-line bg-card p-4"
+      style={{ maxWidth: "100%" }}
+    >
+      <Text
+        numberOfLines={1}
+        className="text-xs font-black uppercase tracking-widest text-muted"
+      >
         {label}
       </Text>
       <Text
         numberOfLines={1}
+        adjustsFontSizeToFit
         className="mt-2 font-display text-xl font-bold text-ink"
       >
         {value}
       </Text>
-      {sub && <Text className="mt-1 text-xs text-muted">{sub}</Text>}
+      {sub && (
+        <Text numberOfLines={2} className="mt-1 text-xs text-muted">
+          {sub}
+        </Text>
+      )}
     </View>
   );
 }

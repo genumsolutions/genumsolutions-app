@@ -2,7 +2,7 @@
 // ShopScreen - native product catalog backed by the shared Supabase
 // `products` table. Supports category chips + search.
 // =====================================================================
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -29,12 +29,7 @@ import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
 import { ShopSkeletonGrid } from "../components/SkeletonCard";
 import { ProductCard } from "../components/ProductCard";
-import {
-  applyComponentsScope,
-  loadRecentlyViewed,
-  resolveRecentlyViewed,
-} from "../services/productService";
-import { useFocusEffect } from "@react-navigation/native";
+import { applyComponentsScope } from "../services/productService";
 import type { Product } from "../types";
 
 export function ShopScreen() {
@@ -48,7 +43,6 @@ export function ShopScreen() {
   const [maxPrice, setMaxPrice] = useState(0);
   const [inStock, setInStock] = useState(false);
   const [page, setPage] = useState(1);
-  const [recent, setRecent] = useState<Product[]>([]);
   const pageSize = 8;
 
   // U-47: scope to Electronic Products — 3D Models / kits / project
@@ -90,20 +84,8 @@ export function ShopScreen() {
     void load();
   }, []);
 
-  // C3 (2026-09-23): "Recently viewed" strip above the grid. Re-read on every
-  // focus — navigation.push to ProductDetail keeps this screen mounted, so a
-  // mount-only effect would go stale after returning from a detail page.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      void loadRecentlyViewed().then((ids) => {
-        if (active) setRecent(resolveRecentlyViewed(products, ids));
-      });
-      return () => {
-        active = false;
-      };
-    }, [products]),
-  );
+  // U-47 (owner): the Recently-viewed strip is REMOVED — replaced by the
+  // per-user Collection (hearts). No focus-effect re-read remains.
 
   useEffect(() => {
     setPage(1);
@@ -215,25 +197,7 @@ export function ShopScreen() {
         contentContainerStyle={{ paddingBottom: 24 }}
         refreshing={refreshing}
         onRefresh={() => load(true)}
-        ListHeaderComponent={
-          recent.length > 0 ? (
-            <View className="pb-2">
-              <Text className="px-4 text-xs font-black uppercase tracking-[0.24em] text-navy">
-                Recently viewed
-              </Text>
-              <FlatList
-                horizontal
-                data={recent.slice(0, 8)}
-                keyExtractor={(p) => p.id}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
-                renderItem={({ item }) => (
-                  <ProductCard product={item} compact />
-                )}
-              />
-            </View>
-          ) : null
-        }
+        ListHeaderComponent={null}
         ListEmptyComponent={
           <View className="items-center py-16">
             <Feather name="inbox" size={40} color="#cbd5e1" />

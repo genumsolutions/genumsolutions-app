@@ -196,7 +196,7 @@ export function ProjectsScreen() {
           />
         }
         renderItem={({ item }) => (
-          <View className="mb-3 w-[48%] flex-1">
+          <View className="mb-3 flex-1">
             <ProductCard product={item} />
           </View>
         )}

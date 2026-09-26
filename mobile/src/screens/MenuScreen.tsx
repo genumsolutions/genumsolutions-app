@@ -167,18 +167,27 @@ export function MenuScreen() {
         />
       </MenuGroup>
 
-      {/* C7: Security — the biometric admin lock, offered only to staff
-          with biometrics available on the device. */}
-      {isStaff && bioSupport?.supported ? (
+      {/* C7/U-47v3 fix: the Security group ALWAYS renders for staff. When
+          the device cannot prompt (OTA inside an old APK, no sensor), the
+          switch shows WHY instead of hiding the row — previously a stale
+          "on" pref with no switch left the admin lock permanently engaged
+          with no way to turn it off (owner report). */}
+      {isStaff ? (
         <MenuGroup title="Security">
           <MenuItem
             icon="lock"
             label="Biometric admin lock"
-            hint="Face ID / fingerprint before opening the Admin screen"
+            hint={
+              bioSupport && !bioSupport.supported
+                ? "Not available on this device — the lock is disabled"
+                : "Face ID / fingerprint before opening the Admin screen"
+            }
             right={
               <Switch
-                value={bioOn}
-                disabled={bioBusy}
+                value={bioOn && Boolean(bioSupport?.supported)}
+                disabled={
+                  bioBusy || Boolean(bioSupport && !bioSupport.supported)
+                }
                 onValueChange={(on) => void toggleBiometrics(on)}
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
