@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -21,7 +22,15 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../navigation/types";
 import { useApp } from "../context/AppContext";
+import { getProducts } from "../services/productService";
+import {
+  listCollection,
+  type CollectionItem,
+} from "../services/collectionService";
 import {
   getMyMessages,
   getMyOrders,
@@ -29,7 +38,7 @@ import {
 } from "../services/orderService";
 import { logger } from "../services/logger";
 import { subscribeToNewsletter } from "../services/newsletterService";
-import type { Order } from "../types";
+import { galleryImages, type Order, type Product } from "../types";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -60,6 +69,8 @@ function formatNPR(amount: number): string {
 }
 
 export function AccountScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {
     user,
     isSignedIn,
@@ -89,6 +100,10 @@ export function AccountScreen() {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [newsletterBusy, setNewsletterBusy] = useState(false);
+  // U-47: per-user collection (hearts) + catalog lookup for card display.
+  const [collection, setCollection] = useState<CollectionItem[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionProducts, setCollectionProducts] = useState<Product[]>([]);
   const [newsletterStatus, setNewsletterStatus] = useState<{
     text: string;
     isError: boolean;
@@ -114,6 +129,19 @@ export function AccountScreen() {
           logger.error("account", "load messages failed", e);
           setMessages([]);
         }),
+      // U-47: the collection rides the same refresh cycle.
+      setCollectionLoading(true),
+      listCollection()
+        .then(async (items) => {
+          setCollection(items);
+          const all = await getProducts().catch(() => [] as Product[]);
+          setCollectionProducts(all);
+        })
+        .catch((e: unknown) => {
+          logger.error("account", "load collection failed", e);
+          setCollection([]);
+        })
+        .finally(() => setCollectionLoading(false)),
     ]).finally(() => {
       setOrdersLoading(false);
       setMessagesLoading(false);
@@ -264,6 +292,89 @@ export function AccountScreen() {
               Support message{messages.length === 1 ? "" : "s"}
             </Text>
           </View>
+        </View>
+
+        {/* U-47: My collection — every card the user hearted (products,
+            projects, services), straight from user_collection (RLS own-rows). */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="font-display text-lg font-bold text-ink">
+              My collection
+            </Text>
+            <Text className="text-xs font-semibold text-muted">
+              {collectionLoading ? "…" : `${collection.length} saved`}
+            </Text>
+          </View>
+          {collectionLoading ? (
+            <View className="mt-4 items-center py-4">
+              <ActivityIndicator color="#1e3a8a" />
+            </View>
+          ) : collection.length === 0 ? (
+            <Text className="mt-3 text-sm text-muted">
+              Nothing saved yet — tap the ♥ on any card to keep it here.
+            </Text>
+          ) : (
+            <View
+              className="mt-3 flex-row flex-wrap"
+              style={{ marginHorizontal: -6 }}
+            >
+              {collection.map((item) => {
+                const product = collectionProducts.find(
+                  (p) => p.id === item.itemId,
+                );
+                const openItem = () => {
+                  if (product) {
+                    navigation.push("ProductDetail", { productId: product.id });
+                  }
+                };
+                return (
+                  <View
+                    key={`${item.itemKind}-${item.itemId}`}
+                    className="mb-3 w-[31%]"
+                    style={{ marginHorizontal: 6 }}
+                  >
+                    <Pressable
+                      onPress={openItem}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${product?.name ?? item.itemId}`}
+                      className="overflow-hidden rounded-xl border border-line bg-surface"
+                    >
+                      <View className="aspect-square w-full items-center justify-center bg-mist">
+                        {product && galleryImages(product)[0] ? (
+                          <Image
+                            source={{ uri: galleryImages(product)[0] }}
+                            className="h-full w-full"
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Feather
+                            name={
+                              item.itemKind === "service" ? "tool" : "heart"
+                            }
+                            size={22}
+                            color="#94a3b8"
+                          />
+                        )}
+                      </View>
+                      <View className="px-2 pb-2 pt-1.5">
+                        <Text
+                          numberOfLines={1}
+                          className="text-[12px] font-bold text-ink"
+                        >
+                          {product?.name ?? item.itemId}
+                        </Text>
+                        {product ? (
+                          <Text className="mt-0.5 text-[11px] font-black text-navy">
+                            {product.priceLabel}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Your orders — status pill + provider + total + line items */}

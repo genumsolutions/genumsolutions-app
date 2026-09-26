@@ -83,6 +83,33 @@ export function SensorGrid({
               />
             </>
           )}
+          {/* U-47: Smart Dustbin gets its own tiles (fill level + lid angle). */}
+          {activeCategory === "smart-dustbin" && (
+            <>
+              <SensorCard
+                icon="trash-2"
+                label="Fill Level"
+                value={`${sensorData.distance}%`}
+                color="#22c55e"
+              />
+              <SensorCard
+                icon="disc"
+                label="Lid Angle"
+                value={`${Math.round(
+                  ((sensorData.distance ?? 0) / 180) * 90 + 45,
+                )}°`}
+                color="#06b6d4"
+              />
+            </>
+          )}
+          {activeCategory === "remote-controller" && (
+            <SensorCard
+              icon="radio"
+              label="Signal (RSSI)"
+              value={`${sensorData.airQuality}dBm`}
+              color="#8b5cf6"
+            />
+          )}
           {(activeCategory === "home-automation" ||
             activeCategory === "smart-city") && (
             <SensorCard

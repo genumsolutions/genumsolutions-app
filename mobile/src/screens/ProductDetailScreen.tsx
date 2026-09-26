@@ -24,8 +24,6 @@ import {
   getProducts,
   recordProductView,
   relatedProducts,
-  resolveRecentlyViewed,
-  loadRecentlyViewed,
 } from "../services/productService";
 import { resolveModeForProduct } from "../config/roboCarCatalog";
 import { OfflineBadge } from "../components/OfflineBadge";
@@ -53,10 +51,9 @@ export function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
-  // C3 (2026-09-23): related (same category → same type) + recently-viewed
-  // rows resolved against the full catalog once it loads.
+  // C3 (2026-09-23): related (same category → same type) rows resolved
+  // against the full catalog once it loads. (Recently-viewed removed U-47.)
   const [related, setRelated] = useState<Product[]>([]);
-  const [recent, setRecent] = useState<Product[]>([]);
   // U-23 (2026-09-24): gallery pagination (primary + thumbnails).
   const [activeImage, setActiveImage] = useState(0);
   // U-45 Phase 2 (2026-09-27): project↔component links for THIS product —
@@ -106,10 +103,6 @@ export function ProductDetailScreen() {
                 if (!active) return;
                 setCatalogAll(all);
                 setRelated(relatedProducts(all, product));
-                return loadRecentlyViewed().then((ids) => {
-                  if (active)
-                    setRecent(resolveRecentlyViewed(all, ids, product.id));
-                });
               })
               .catch(() => undefined);
           }
@@ -586,26 +579,8 @@ export function ProductDetailScreen() {
           </View>
         )}
 
-        {/* C3: Recently viewed — view order, excluding this product. */}
-        {recent.length > 0 && (
-          <View className="mt-5 border-t border-line pt-4">
-            <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
-              Recently viewed
-            </Text>
-            <FlatList
-              horizontal
-              data={recent.slice(0, 8)}
-              keyExtractor={(p) => p.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingHorizontal: 20,
-                paddingTop: 10,
-                gap: 10,
-              }}
-              renderItem={({ item }) => <ProductCard product={item} compact />}
-            />
-          </View>
-        )}
+        {/* U-47 (2026-09-27, owner): the Recently-viewed strip is REMOVED —
+            replaced by the per-user Collection (hearts) on the profile. */}
 
         {/* U-23 (2026-09-24): pinned CTA bar — quantity + add/quote stays
           reachable without scrolling to the end of a long product page. */}
