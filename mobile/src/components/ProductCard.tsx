@@ -14,6 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { galleryImages, type Product } from "../types";
+import { getProductMedia } from "../lib/productMedia";
 import type { RootStackParamList } from "../navigation/types";
 import { useCollection } from "../context/CollectionContext";
 
@@ -31,7 +32,11 @@ function ProductCardBase({
   chips?: boolean;
 }) {
   const navigation = useNavigation<Nav>();
-  const media = galleryImages(product)[0];
+  // U-47v4 (car-parity): fall back to the themed category photo like the
+  // website's ProductCard — cars/kits without photos no longer render as a
+  // gray box icon in the grid.
+  const media =
+    galleryImages(product)[0] ?? getProductMedia(product.category).src;
   const { has, toggle } = useCollection();
   const saved = has(product.id);
 
@@ -47,15 +52,11 @@ function ProductCardBase({
       }`}
     >
       <View className="aspect-square w-full items-center justify-center bg-mist">
-        {media ? (
-          <Image
-            source={{ uri: media }}
-            className="h-full w-full"
-            resizeMode="contain"
-          />
-        ) : (
-          <Feather name="box" size={28} color="#94a3b8" />
-        )}
+        <Image
+          source={{ uri: media }}
+          className="h-full w-full"
+          resizeMode="contain"
+        />
       </View>
       <View className="px-2 pb-2 pt-1.5">
         <Text

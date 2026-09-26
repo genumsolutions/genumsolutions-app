@@ -37,6 +37,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { trackHabit } from "../services/collectionService";
 import { galleryImages, type Product } from "../types";
+import { getProductMedia } from "../lib/productMedia";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
@@ -187,7 +188,12 @@ export function ProductDetailScreen() {
       ? product.color
       : "Standard finish";
 
-  const images = galleryImages(product);
+  // U-47v4 (car-parity): when the product has no photos at all, show the
+  // themed category photo (same mapping as the website) instead of an
+  // empty gray hero.
+  const gallery = galleryImages(product);
+  const images =
+    gallery.length > 0 ? gallery : [getProductMedia(product.category).src];
 
   // U-24 (2026-09-24): canonical specs as rows — structured when the import
   // carried them, else parsed from the plain `specs` chip lines.
@@ -234,6 +240,8 @@ export function ProductDetailScreen() {
               <Feather name="box" size={56} color="#64748b" />
             )}
           </View>
+          {/* (images.length > 0 is guaranteed by the fallback; thumbnails
+              only render when there are 2+ real/derived sources.) */}
           {images.length > 1 && (
             <View className="flex-row gap-2 px-4 pb-3">
               {images.map((src, i) => (

@@ -128,3 +128,39 @@ export async function trackHabit(kind: HabitKind): Promise<void> {
     // best-effort by design
   }
 }
+
+export type UserHabits = {
+  viewed_count: number;
+  search_count: number;
+  cart_adds: number;
+  orders_placed: number;
+};
+
+/**
+ * U-47v4 — read the signed-in user's habit counters for the Account
+ * screen's "Your activity" block (mirror of the website's GET /api/habits).
+ * Guests/failures resolve to null so the block hides itself.
+ */
+export async function getMyHabits(): Promise<UserHabits | null> {
+  if (!supabaseConfigured) return null;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) return null;
+    const { data, error } = await supabase
+      .from("user_habits")
+      .select("viewed_count, search_count, cart_adds, orders_placed")
+      .eq("user_id", sessionData.session.user.id)
+      .maybeSingle();
+    if (error) return null;
+    return (
+      data ?? {
+        viewed_count: 0,
+        search_count: 0,
+        cart_adds: 0,
+        orders_placed: 0,
+      }
+    );
+  } catch {
+    return null;
+  }
+}
