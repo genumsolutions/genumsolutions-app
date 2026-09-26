@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { applyComponentsScope } from "./productService";
 import {
   inStockOnly,
   isPriceCeiling,
@@ -203,5 +204,31 @@ describe("relatedProducts + recently viewed (C3)", () => {
     const snapshot = [...catalog];
     resolveRecentlyViewed(catalog, ["s1"]);
     expect(catalog).toEqual(snapshot);
+  });
+});
+
+// U-47v2 regression (owner report): the Electronic Products scope must
+// exclude 3D Models / kits / project packages — the admin tab previously
+// tokenized "3D Models" by spaces, so the whole category leaked through.
+describe("applyComponentsScope (U-47 regression)", () => {
+  type ScopeRow = { id: string; category: string; productType: string };
+  const rows: ScopeRow[] = [
+    { id: "relay", category: "Sensors & Modules", productType: "Retail kit" },
+    { id: "car", category: "Robot Cars", productType: "Project package" },
+    { id: "kit", category: "Pre-packaged Kits", productType: "Retail kit" },
+    { id: "model", category: "3D Models", productType: "Retail kit" },
+    { id: "pkg", category: "Project Packages", productType: "Project package" },
+  ];
+
+  it("keeps ordinary electronic rows", () => {
+    const out = applyComponentsScope(rows);
+    expect(out.map((p) => p.id)).toEqual(["relay"]);
+  });
+
+  it("excludes 3D Models even with surrounding whitespace", () => {
+    const out = applyComponentsScope<ScopeRow>([
+      { id: "m", category: " 3D Models ", productType: "Retail kit" },
+    ]);
+    expect(out).toHaveLength(0);
   });
 });
