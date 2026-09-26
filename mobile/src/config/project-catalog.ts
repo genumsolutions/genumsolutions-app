@@ -56,7 +56,8 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
   },
   {
     slug: "home-automation",
-    name: "Home Automation",
+    // U-47 (owner): renamed from "Home Automation" — slug kept for routing.
+    name: "Smart Home",
     tagline: "Flip relays, switches, and read sensors around the home.",
     description:
       "Control lights, fans, relays, and sensors using ESP32/ESP8266.",
@@ -97,7 +98,8 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
   },
   {
     slug: "drones",
-    name: "Drones & Aerial",
+    // U-47 (owner): renamed to match the projects-page category.
+    name: "Aerial Drones",
     tagline: "Flight-controller and telemetry builds.",
     description:
       "Flight-controller setup, motor/ESC integration, and telemetry links.",
@@ -109,6 +111,26 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
     ],
     capabilities: ["sensor", "slider", "gimbal", "altitude"],
     carType: "drone",
+  },
+  // U-47 (owner, 2026-09-27): the two single-project categories join the
+  // Control Panel so EVERY project category has its own remote window.
+  {
+    slug: "smart-dustbin",
+    name: "Smart Dustbin",
+    tagline: "Open the lid, watch the fill level.",
+    description:
+      "Ultrasonic lid control, fill-level telemetry, and compactor switching.",
+    hardware: ["ESP32", "Ultrasonic sensor", "Servo lid", "Relay compactor"],
+    capabilities: ["relay", "sensor", "slider"],
+  },
+  {
+    slug: "remote-controller",
+    name: "Remote Controller",
+    tagline: "The ESP32 hand-held, mirrored on screen.",
+    description:
+      "Battery and signal readouts, output channels, and throttle/steer curves.",
+    hardware: ["ESP32", "NRF24L01", "Joystick module"],
+    capabilities: ["relay", "sensor", "slider"],
   },
 ];
 
@@ -126,4 +148,9 @@ export const PRODUCT_CATEGORY_TO_SLUG: Record<string, string> = {
   "Drones & Aerial": "drones",
   Drones: "drones",
   "Pre-packaged Kits": "robocar",
+  // U-47: the new single-project categories (project_category NAME → slug).
+  "Smart Dustbin": "smart-dustbin",
+  "Remote Controller": "remote-controller",
+  "Smart Home": "home-automation",
+  "Aerial Drones": "drones",
 };

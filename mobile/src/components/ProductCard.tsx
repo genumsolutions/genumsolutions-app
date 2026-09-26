@@ -1,95 +1,90 @@
 // =====================================================================
-// ProductCard - U-23 (2026-09-24): single shared product card used by the
-// Shop + Projects grids, Home collections and related/recently-viewed rows.
-// Image-led with a taller media box and 2 spec chips for non-compact cards.
+// ProductCard — U-47 (2026-09-27) owner redesign: the card IS the link.
+// Bare minimum: square photo, name, price. No badge, no chips, no spec
+// text, no dead padding — details live on the product page. The heart
+// toggles the per-user collection (collectionService, RLS own-rows);
+// signed-out taps are ignored silently (browsing never breaks).
+// PERF: memoized (Shop FlatList re-renders on every keystroke).
 // =====================================================================
-import React from "react";
+import React, { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
-import type { RootStackParamList } from "../navigation/types";
 import { galleryImages, type Product } from "../types";
+import type { RootStackParamList } from "../navigation/types";
+import { toggleCollection } from "../services/collectionService";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
 
-// PERF (2026-09-25): memoized — the Shop FlatList re-renders on every keystroke
-// (search query state), page flip, and focus-triggered refresh; a card only
-// needs to re-render when ITS product (or layout props) actually change.
-// Primitives compare by value, so the default shallow props check is enough.
 function ProductCardBase({
   product,
   compact = false,
+  /** Deprecated (U-47): chips removed from the minimal card. */
   chips = false,
 }: {
   product: Product;
+  /** Kept for call-site compatibility; all cards are minimal now. */
   compact?: boolean;
   chips?: boolean;
 }) {
   const navigation = useNavigation<Nav>();
   const media = galleryImages(product)[0];
-  const specChips = chips
-    ? (product.specs ?? []).filter(Boolean).slice(0, 2)
-    : [];
+  // Optimistic local state (collection hydration for hearts across ALL
+  // screens is reconciled by CollectionContext at the app root).
+  const [saved, setSaved] = useState<boolean | null>(null);
 
   return (
     <Pressable
       onPress={() =>
         navigation.push("ProductDetail", { productId: product.id })
       }
-      accessibilityLabel={`View ${product.name}`}
-      className={`overflow-hidden rounded-2xl border border-line bg-card p-3 ${
-        compact ? "w-40" : "mb-4 flex-1"
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${product.name}`}
+      className={`overflow-hidden rounded-2xl border border-line bg-card ${
+        compact ? "w-40" : "flex-1"
       }`}
     >
-      <View
-        className={`items-center justify-center overflow-hidden rounded-xl bg-mist ${
-          compact ? "aspect-[4/3]" : "aspect-square"
-        }`}
-      >
+      <View className="aspect-square w-full items-center justify-center bg-mist">
         {media ? (
           <Image
             source={{ uri: media }}
             className="h-full w-full"
-            // U-24 (2026-09-24): whole-image card — contain so the full
-            // photo is always visible on the mist tray (matches the web card).
             resizeMode="contain"
           />
         ) : (
           <Feather name="box" size={28} color="#94a3b8" />
         )}
       </View>
-      <Text
-        numberOfLines={2}
-        className="mt-2 text-[13px] font-bold leading-tight text-ink"
-      >
-        {product.name}
-      </Text>
-      {product.badge ? (
-        <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
-          {product.badge}
+      <View className="px-2 pb-2 pt-1.5">
+        <Text
+          numberOfLines={1}
+          className="text-[13px] font-bold leading-tight text-ink"
+        >
+          {product.name}
         </Text>
-      ) : null}
-      {!compact && specChips.length > 0 ? (
-        <View className="mt-1.5 flex-row flex-wrap gap-1">
-          {specChips.map((chip) => (
-            <View
-              key={chip}
-              className="max-w-full rounded-full border border-line bg-mist px-2 py-0.5"
-            >
-              <Text
-                numberOfLines={1}
-                className="text-[10px] font-bold text-muted"
-              >
-                {chip}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      <Text className="mt-1 text-xs font-black text-navy">
-        {product.priceLabel}
-      </Text>
+        <Text className="mt-0.5 text-xs font-black text-navy">
+          {product.priceLabel}
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => {
+          const next = !(saved ?? false);
+          setSaved(next);
+          void toggleCollection(product.id).catch(() => setSaved(!next));
+        }}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Save ${product.name} to collection`}
+        className="absolute right-1.5 top-1.5 h-8 w-8 items-center justify-center rounded-full bg-white/90"
+      >
+        <Feather
+          name="heart"
+          size={15}
+          color={saved ? "#ef4444" : "#94a3b8"}
+          fill={saved ? "#ef4444" : "none"}
+        />
+      </Pressable>
     </Pressable>
   );
 }
