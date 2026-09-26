@@ -19,14 +19,17 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { getProductsWithSource } from "../services/productService";
 import { resolveCart, setQuantity } from "../services/cartService";
 import { useApp } from "../context/AppContext";
 import type { Product } from "../types";
-import type { TabNav } from "../navigation/types";
+import type { RootStackParamList } from "../navigation/types";
 
-type Nav = TabNav<"Cart">;
+// U-44 (2026-09-26): Cart is a RootStack screen now (pushed from the header
+// bag icon), not a Main tab — so its nav prop is the stack navigator.
+type Nav = NativeStackNavigationProp<RootStackParamList, "Cart">;
 type CartEntry = {
   line: { productId: string; quantity: number };
   product: Product;

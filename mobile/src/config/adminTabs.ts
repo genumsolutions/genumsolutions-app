@@ -8,13 +8,16 @@
 // same session.
 // =====================================================================
 
-// U-37 (2026-09-25): 12→6 tabs, group names removed.
-// Merged: Dashboard+Activity · Orders+Finance · Products+Projects ·
-// Services+Journal+Content · Users+Messages+Robots · Settings.
+// U-44 (2026-09-26, owner): Catalog split into THREE catalog tabs mirroring
+// the customer storefront — Electronic Products (/products), 3D Products
+// (/3d-printing), Projects (/projects, + Pre-packaged Kits). Must match the
+// website's tests/admin-parity.test.ts ADMIN_TABS exactly.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",
-  "Catalog",
+  "Electronic Products",
+  "3D Products",
+  "Projects",
   "Content",
   "Users",
   "Settings",

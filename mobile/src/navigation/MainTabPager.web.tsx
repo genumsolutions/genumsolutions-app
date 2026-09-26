@@ -27,13 +27,22 @@ import type { MainTabParamList, RootStackParamList } from "./types";
 
 type TabKey = keyof MainTabParamList;
 
-const TAB_ORDER: TabKey[] = ["Home", "Shop", "Cart", "Menu"];
+// U-44 (2026-09-26, owner): 4-tab strip — Cart is not a tab (top-right bag
+// icon is the cart entry); "Printing" renders the 3D Products store.
+const TAB_ORDER: TabKey[] = ["Home", "Printing", "Shop", "Menu"];
+
+const TAB_LABELS: Record<TabKey, string> = {
+  Home: "Home",
+  Printing: "3D Products",
+  Shop: "Electronic Products",
+  Menu: "Menu",
+};
 
 type IconName = ComponentProps<typeof Feather>["name"];
 const TAB_ICONS: Record<TabKey, IconName> = {
   Home: "home",
+  Printing: "printer",
   Shop: "grid",
-  Cart: "shopping-bag",
   Menu: "menu",
 };
 
@@ -112,23 +121,16 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
               onPress={() => goToTab(key)}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={key}
+              accessibilityLabel={TAB_LABELS[key]}
               className="flex-1 items-center justify-center pb-2 pt-2.5"
             >
               <View className="relative">
                 <Feather name={TAB_ICONS[key]} size={22} color={color} />
-                {key === "Cart" && cartCount > 0 && (
-                  <View className="absolute -right-2 -top-1.5 min-w-[16px] items-center justify-center rounded-full bg-gold px-1">
-                    <Text className="text-[10px] font-black text-ink">
-                      {cartCount > 99 ? "99+" : cartCount}
-                    </Text>
-                  </View>
-                )}
               </View>
               <Text
                 className={`mt-1 text-[10px] font-bold ${active ? "text-navy" : "text-slate-500"}`}
               >
-                {key}
+                {TAB_LABELS[key]}
               </Text>
             </Pressable>
           );

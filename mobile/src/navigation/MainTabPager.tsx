@@ -43,13 +43,26 @@ import type { MainTabParamList, RootStackParamList } from "./types";
 
 type TabKey = keyof MainTabParamList;
 
-const TAB_ORDER: TabKey[] = ["Home", "Shop", "Cart", "Menu"];
+// U-44 (2026-09-26, owner): 4-tab bottom nav — Cart is NOT a tab anymore
+// (the BrandHeader bag icon, top right, is the cart entry point). The Cart
+// screen stays mounted in the pager (unpaged, unreachable by swipe) so every
+// existing `navigate('Main', { screen: 'Cart' })` call site still works — it
+// maps to the pager index of -1... instead we render it hidden and route
+// navigation to it via the same param mechanism.
+const TAB_ORDER: TabKey[] = ["Home", "Printing", "Shop", "Menu"];
 
 type IconName = ComponentProps<typeof Feather>["name"];
+// Bottom-strip labels (U-44): the tabs are named like the customer website.
+const TAB_LABELS: Record<TabKey, string> = {
+  Home: "Home",
+  Printing: "3D Products",
+  Shop: "Electronic Products",
+  Menu: "Menu",
+};
 const TAB_ICONS: Record<TabKey, IconName> = {
   Home: "home",
+  Printing: "printer",
   Shop: "grid",
-  Cart: "shopping-bag",
   Menu: "menu",
 };
 
@@ -64,7 +77,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   const navigation = useNavigation<Nav>();
   const route = useRoute<MainRoute>();
   const insets = useSafeAreaInsets();
-  const { cartCount } = useApp();
+  const { cartCount: _cartCount } = useApp(); // U-44: cart badge lives on the header icon now
   const pagerRef = useRef<PagerView>(null);
   const currentPageRef = useRef<number>(0);
   const [page, setPage] = useState<TabKey>(() =>
@@ -187,18 +200,11 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
             >
               <View className="relative">
                 <Feather name={TAB_ICONS[key]} size={22} color={color} />
-                {key === "Cart" && cartCount > 0 && (
-                  <View className="absolute -right-2 -top-1.5 min-w-[16px] items-center justify-center rounded-full bg-gold px-1">
-                    <Text className="text-[10px] font-black text-ink">
-                      {cartCount > 99 ? "99+" : cartCount}
-                    </Text>
-                  </View>
-                )}
               </View>
               <Text
                 className={`mt-1 text-[10px] font-bold ${active ? "text-navy" : "text-slate-500"}`}
               >
-                {key}
+                {TAB_LABELS[key]}
               </Text>
             </Pressable>
           );
