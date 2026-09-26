@@ -340,20 +340,20 @@ export function ToolsScreen() {
                   feedbackTap();
                   handleReconnectPromptCancel();
                 }}
-                className="rounded-full border border-slate-300 bg-white px-4 py-1.5"
+                className="rounded-full border border-line bg-card px-4 py-1.5"
                 hitSlop={6}
               >
-                <Text className="text-xs font-bold text-slate-500">Cancel</Text>
+                <Text className="text-xs font-bold text-muted">Cancel</Text>
               </Pressable>
             </View>
           </View>
         )}
 
         <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
-          <View className="flex-row rounded-xl bg-slate-100 p-0.5">
+          <View className="flex-row rounded-xl bg-mist p-0.5">
             <Pressable
               onPress={() => setConnTab("bluetooth")}
-              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5 ${connTab === "bluetooth" ? "bg-white shadow-sm" : ""}`}
+              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5 ${connTab === "bluetooth" ? "bg-card shadow-sm" : ""}`}
             >
               <Feather
                 name="bluetooth"
@@ -361,14 +361,14 @@ export function ToolsScreen() {
                 color={connTab === "bluetooth" ? "#1e3a8a" : "#94a3b8"}
               />
               <Text
-                className={`text-xs font-bold ${connTab === "bluetooth" ? "text-navy" : "text-slate-400"}`}
+                className={`text-xs font-bold ${connTab === "bluetooth" ? "text-navy" : "text-muted"}`}
               >
                 Bluetooth
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setConnTab("wifi")}
-              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5 ${connTab === "wifi" ? "bg-white shadow-sm" : ""}`}
+              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5 ${connTab === "wifi" ? "bg-card shadow-sm" : ""}`}
             >
               <Feather
                 name="wifi"
@@ -376,7 +376,7 @@ export function ToolsScreen() {
                 color={connTab === "wifi" ? "#1e3a8a" : "#94a3b8"}
               />
               <Text
-                className={`text-xs font-bold ${connTab === "wifi" ? "text-navy" : "text-slate-400"}`}
+                className={`text-xs font-bold ${connTab === "wifi" ? "text-navy" : "text-muted"}`}
               >
                 WiFi
               </Text>

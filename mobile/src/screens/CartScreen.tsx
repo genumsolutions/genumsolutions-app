@@ -24,12 +24,17 @@ import { Feather } from "@expo/vector-icons";
 import { getProductsWithSource } from "../services/productService";
 import { resolveCart, setQuantity } from "../services/cartService";
 import { useApp } from "../context/AppContext";
+import { trackHabit } from "../services/collectionService";
 import type { Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
 // U-44 (2026-09-26): Cart is a RootStack screen now (pushed from the header
 // bag icon), not a Main tab — so its nav prop is the stack navigator.
 type Nav = NativeStackNavigationProp<RootStackParamList, "Cart">;
+
+function formatNPR(amount: number): string {
+  return `NPR ${(amount || 0).toLocaleString("en-IN")}`;
+}
 type CartEntry = {
   line: { productId: string; quantity: number };
   product: Product;
@@ -107,6 +112,8 @@ export function CartScreen() {
     // Update the local cart + badge immediately (no waiting for the DB).
     // The DB sync runs in the background via the AppContext handler.
     const count = await setQuantity(productId, qty);
+    // U-47v4: 'Remove' is qty 0 — count it as a cart-change habit event.
+    if (qty === 0) void trackHabit("cart");
     setCart({ count, size: count });
     setRefreshKey((k) => k + 1);
   };
@@ -160,74 +167,119 @@ export function CartScreen() {
         keyExtractor={({ line }) => line.productId}
         contentContainerStyle={{ padding: 16 }}
         renderItem={({ item }) => (
-          <View className="mb-3 flex-row rounded-2xl border border-line bg-card p-3">
-            <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-mist">
-              {item.product.image ? (
-                <Image
-                  source={{ uri: item.product.image }}
-                  className="h-full w-full"
-                  resizeMode="cover"
-                />
-              ) : (
-                <Feather name="box" size={22} color="#94a3b8" />
-              )}
-            </View>
-            <View className="ml-3 min-w-0 flex-1">
-              {/* R5 overflow fix: min-w-0 so long product names ellipsize
-                  instead of pushing the qty controls past the card edge. */}
-              <Text
-                numberOfLines={2}
-                className="text-sm font-bold leading-tight text-ink"
-              >
-                {item.product.name}
-              </Text>
-              <Text className="mt-0.5 text-xs font-black text-navy">
-                {item.product.priceLabel}
-              </Text>
-              <View className="mt-2 flex-row items-center">
-                <Pressable
-                  onPress={() =>
-                    updateQty(item.line.productId, item.line.quantity - 1)
-                  }
-                  className="rounded-full border border-line px-2 py-1"
-                  accessibilityLabel="Decrease quantity"
+          // U-47v4 (owner: cart "shitty and poorly displayed"): web-parity
+          // row — photo, name, per-unit price, line total, bordered qty
+          // stepper, and a Remove action. Nothing overflows: the info column
+          // is min-w-0 flex-1 and the stepper is fixed-width.
+          <View className="mb-3 rounded-2xl border border-line bg-card p-3">
+            <View className="flex-row">
+              <View className="h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-mist">
+                {item.product.image ? (
+                  <Image
+                    source={{ uri: item.product.image }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Feather name="box" size={22} color="#94a3b8" />
+                )}
+              </View>
+              <View className="ml-3 min-w-0 flex-1">
+                <Text
+                  numberOfLines={2}
+                  className="text-sm font-bold leading-tight text-ink"
                 >
-                  <Feather name="minus" size={13} color="#1e3a8a" />
-                </Pressable>
-                <Text className="mx-3 text-sm font-bold text-ink">
-                  {item.line.quantity}
+                  {item.product.name}
                 </Text>
-                <Pressable
-                  onPress={() =>
-                    updateQty(item.line.productId, item.line.quantity + 1)
-                  }
-                  className="rounded-full border border-line px-2 py-1"
-                  accessibilityLabel="Increase quantity"
-                >
-                  <Feather name="plus" size={13} color="#1e3a8a" />
-                </Pressable>
+                <Text className="mt-0.5 text-xs text-muted">
+                  {formatNPR(item.product.price)} each
+                </Text>
+                <View className="mt-2 flex-row items-center justify-between">
+                  <View className="flex-row items-center">
+                    <Pressable
+                      onPress={() =>
+                        updateQty(item.line.productId, item.line.quantity - 1)
+                      }
+                      className="h-8 w-8 items-center justify-center rounded-lg border border-line"
+                      accessibilityLabel={`Reduce ${item.product.name} quantity`}
+                    >
+                      <Feather name="minus" size={13} color="#1e3a8a" />
+                    </Pressable>
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      className="mx-2.5 min-w-5 text-center text-sm font-bold text-ink"
+                    >
+                      {item.line.quantity}
+                    </Text>
+                    <Pressable
+                      onPress={() =>
+                        updateQty(item.line.productId, item.line.quantity + 1)
+                      }
+                      className="h-8 w-8 items-center justify-center rounded-lg border border-line"
+                      accessibilityLabel={`Add another ${item.product.name}`}
+                    >
+                      <Feather name="plus" size={13} color="#1e3a8a" />
+                    </Pressable>
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    className="ml-2 shrink text-sm font-black text-ink"
+                  >
+                    {formatNPR(item.product.price * item.line.quantity)}
+                  </Text>
+                </View>
               </View>
             </View>
+            <Pressable
+              onPress={() => updateQty(item.line.productId, 0)}
+              className="mt-2 self-start"
+              accessibilityLabel={`Remove ${item.product.name} from cart`}
+            >
+              <Text className="text-xs font-bold text-red-500 underline">
+                Remove
+              </Text>
+            </Pressable>
           </View>
         )}
       />
 
-      <View className="border-t border-line bg-card px-5 py-4">
+      <View
+        className="border-t border-line bg-card px-5 pb-6 pt-4"
+        style={{ elevation: 8 }}
+      >
         <View className="flex-row items-center justify-between">
-          <Text className="text-sm text-muted">Total</Text>
-          <Text className="font-display text-lg font-bold tracking-tight text-ink">
-            NPR {(total || 0).toLocaleString("en-IN")}
+          <Text className="text-sm text-muted">Subtotal</Text>
+          <Text className="text-sm font-bold text-ink">{formatNPR(total)}</Text>
+        </View>
+        <View className="mt-2 flex-row items-center justify-between border-t border-line pt-2">
+          <Text className="font-display text-base font-black text-ink">
+            Total
+          </Text>
+          <Text className="font-display text-lg font-black text-ink">
+            {formatNPR(total)}
           </Text>
         </View>
-        <View className="mt-2 flex-row items-center gap-2 text-xs text-muted">
-          <Feather name="zap" size={12} color="#94a3b8" />
-          <Text>Changes save instantly to your cart</Text>
-        </View>
+        <Text className="mt-1.5 text-[11px] text-muted">
+          Delivery is calculated at checkout. Changes save instantly.
+        </Text>
         <Pressable
           onPress={() => navigation.push("Checkout")}
-          className="mt-3 items-center rounded-full bg-navy py-3"
+          className="mt-3 items-center rounded-full bg-navy py-3.5"
+          accessibilityRole="button"
+          accessibilityLabel="Proceed to checkout"
         >
-          <Text className="font-bold text-white">Checkout</Text>
+          <Text className="text-sm font-black text-white">
+            Checkout · {formatNPR(total)}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          className="mt-2 items-center py-2"
+          accessibilityLabel="Continue shopping"
+        >
+          <Text className="text-xs font-bold text-navy underline">
+            Continue shopping
+          </Text>
         </Pressable>
       </View>
     </View>

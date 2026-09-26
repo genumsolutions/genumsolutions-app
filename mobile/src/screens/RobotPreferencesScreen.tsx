@@ -180,10 +180,10 @@ export function RobotPreferencesScreen() {
           </Text>
         </View>
         <View
-          className={`ml-2 shrink-0 rounded-full px-2.5 py-1 ${isPro ? "bg-navy" : "bg-slate-200"}`}
+          className={`ml-2 shrink-0 rounded-full px-2.5 py-1 ${isPro ? "bg-navy" : "bg-mist"}`}
         >
           <Text
-            className={`text-[10px] font-black uppercase tracking-wide ${isPro ? "text-white" : "text-slate-500"}`}
+            className={`text-[10px] font-black uppercase tracking-wide ${isPro ? "text-white" : "text-muted"}`}
           >
             {isPro ? "Pro" : "Free"}
           </Text>

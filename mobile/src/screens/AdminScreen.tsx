@@ -1891,7 +1891,7 @@ function ProductsTab({
                 {kind === "models" ? "3D Products" : "Electronic Products"} (
                 {products.length})
               </Text>
-              <View className="flex-row items-center gap-2">
+              <View className="flex-row flex-wrap items-center gap-2">
                 <Pressable
                   onPress={onImportLink}
                   disabled={importBusy}
@@ -1913,7 +1913,7 @@ function ProductsTab({
                 </Pressable>
               </View>
             </View>
-            <View className="mt-3 flex-row items-center gap-2">
+            <View className="mt-3 flex-row flex-wrap items-center gap-2">
               <View className="flex-1">
                 <CategoryDropdown
                   value={category}
@@ -2406,7 +2406,7 @@ function ComponentLinkerCard({
                 </Text>
               </Pressable>
             </View>
-            <View className="mt-1.5 flex-row items-center gap-2">
+            <View className="mt-1.5 flex-row flex-wrap items-center gap-2">
               <Text className="text-xs font-black text-muted">Qty</Text>
               <TextInput
                 value={String(link.quantity)}
@@ -3028,7 +3028,7 @@ function ServicesTab({
                 </Text>
               </Pressable>
             </View>
-            <View className="mt-3 flex-row items-center gap-2">
+            <View className="mt-3 flex-row flex-wrap items-center gap-2">
               <View className="flex-1">
                 <CategoryDropdown
                   value={category}
@@ -3079,7 +3079,7 @@ function ServicesTab({
             >
               {item.description}
             </Text>
-            <View className="mt-2 flex-row items-center gap-2">
+            <View className="mt-2 flex-row flex-wrap items-center gap-2">
               <AdminAction
                 onPress={() => onEdit(item)}
                 label="Edit"
@@ -3415,7 +3415,7 @@ function UserRobotSettingsManager({
         style={{ textAlignVertical: "top" }}
         className="mt-1 min-h-16 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink"
       />
-      <View className="mt-2 flex-row items-center gap-2">
+      <View className="mt-2 flex-row flex-wrap items-center gap-2">
         <Pressable
           onPress={() => void handleSave()}
           disabled={busy}
@@ -3458,7 +3458,11 @@ function UserCard({
   const [expanded, setExpanded] = useState<boolean>(false);
   return (
     <View className="mb-3 rounded-xl border border-line bg-card p-4">
-      <View className="flex-row items-center justify-between gap-2">
+      {/* U-47v4 (owner: admin buttons overflow the screen on phones): the
+          user row used to be a single flex-row with a shrink-0 stacked
+          action column — on narrow phones the pills pushed past the right
+          edge. Info and actions now stack, and the action row wraps. */}
+      <View className="gap-2">
         <View className="min-w-0 flex-1">
           <Text className="text-sm font-bold text-ink" numberOfLines={1}>
             {item.name || "—"}{" "}
@@ -3487,13 +3491,13 @@ function UserCard({
               {item.role}
             </Text>
             <Text
-              className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.tier === "pro" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+              className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.tier === "pro" ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted"}`}
             >
               {item.tier}
             </Text>
           </View>
         </View>
-        <View className="shrink-0 items-end gap-1">
+        <View className="flex-row flex-wrap justify-end gap-1.5">
           {canDelete && item.role !== "owner" && (
             <Pressable
               onPress={() => onToggleRole(item)}

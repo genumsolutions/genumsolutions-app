@@ -105,7 +105,7 @@ export function PidInputModal({
             <Text className="text-center text-sm font-black uppercase tracking-wide text-white">
               Set {label}
             </Text>
-            <Text className="mt-1 text-center text-[10px] text-slate-500">
+            <Text className="mt-1 text-center text-[10px] text-slate-400">
               {min} — {max} · step {step}
             </Text>
 

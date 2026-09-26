@@ -105,7 +105,7 @@ export function DroneControls({
               maximumTrackTintColor="#cbd5e1"
               thumbTintColor="#1e3a8a"
             />
-            <Text className="text-center text-[9px] text-slate-400">
+            <Text className="text-center text-[9px] text-muted">
               90° center
             </Text>
           </View>
@@ -124,7 +124,7 @@ export function DroneControls({
               maximumTrackTintColor="#cbd5e1"
               thumbTintColor="#1e3a8a"
             />
-            <Text className="text-center text-[9px] text-slate-400">
+            <Text className="text-center text-[9px] text-muted">
               90° center
             </Text>
           </View>

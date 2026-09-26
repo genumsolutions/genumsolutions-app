@@ -246,7 +246,7 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
 
           {/* Latest orders — status shown elegantly with colored pills */}
           <View className="p-4">
-            <Text className="text-xs font-black uppercase tracking-wider text-slate-400">
+            <Text className="text-xs font-black uppercase tracking-wider text-muted">
               Latest orders
             </Text>
             {loading ? (
@@ -254,7 +254,7 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
                 <ActivityIndicator color="#1e3a8a" />
               </View>
             ) : ordersError ? (
-              <Text className="mt-2 text-xs text-slate-400">
+              <Text className="mt-2 text-xs text-muted">
                 Couldn't load your orders.
               </Text>
             ) : orders.length === 0 ? (

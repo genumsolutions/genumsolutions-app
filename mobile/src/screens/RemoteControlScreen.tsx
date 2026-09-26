@@ -1133,12 +1133,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                   feedbackTap();
                   handleReconnectPromptCancel();
                 }}
-                className="rounded-full border border-slate-300 bg-white px-3 py-1"
+                className="rounded-full border border-line bg-card px-3 py-1"
                 hitSlop={6}
               >
-                <Text className="text-[10px] font-bold text-slate-500">
-                  Cancel
-                </Text>
+                <Text className="text-[10px] font-bold text-muted">Cancel</Text>
               </Pressable>
             </View>
           </View>

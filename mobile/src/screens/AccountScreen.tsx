@@ -27,6 +27,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { useApp } from "../context/AppContext";
 import { useCollection } from "../context/CollectionContext";
+import { getMyHabits, type UserHabits } from "../services/collectionService";
 import { getProducts } from "../services/productService";
 import {
   getMyMessages,
@@ -80,6 +81,8 @@ export function AccountScreen() {
   } = useApp();
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  // U-47v4: habit counters for the "Your activity" block (null hides it).
+  const [habits, setHabits] = useState<UserHabits | null>(null);
   const [messages, setMessages] = useState<
     { message: string; status: string; createdAt: string }[]
   >([]);
@@ -135,6 +138,11 @@ export function AccountScreen() {
           logger.error("account", "load orders failed", e);
           setOrders([]);
         }),
+      // U-47v4: activity counters ride the same refresh cycle; failure
+      // just leaves the block hidden (getMyHabits resolves null).
+      getMyHabits()
+        .then(setHabits)
+        .catch(() => setHabits(null)),
       getMyMessages()
         .then(setMessages)
         .catch((e: unknown) => {
@@ -390,6 +398,46 @@ export function AccountScreen() {
           )}
         </View>
 
+        {/* U-47v4: "Your activity" — the habit counters the app has been
+            silently recording since v2 (views, searches, cart adds, orders).
+            Hidden entirely when counters are all zero or the fetch failed. */}
+        {habits &&
+          (habits.viewed_count > 0 ||
+            habits.search_count > 0 ||
+            habits.cart_adds > 0 ||
+            habits.orders_placed > 0) && (
+            <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+              <Text className="font-display text-lg font-bold text-ink">
+                Your activity
+              </Text>
+              <Text className="mt-1 text-xs text-muted">
+                A private tally of how you use GENUM — only you can see this.
+              </Text>
+              <View className="mt-3 flex-row flex-wrap gap-2">
+                {(
+                  [
+                    { label: "Viewed", count: habits.viewed_count },
+                    { label: "Searches", count: habits.search_count },
+                    { label: "Cart adds", count: habits.cart_adds },
+                    { label: "Orders", count: habits.orders_placed },
+                  ] as const
+                ).map(({ label, count }) => (
+                  <View
+                    key={label}
+                    className="min-w-[46%] flex-1 rounded-xl border border-line bg-mist px-3 py-2.5"
+                  >
+                    <Text className="text-[10px] font-black uppercase tracking-wide text-muted">
+                      {label}
+                    </Text>
+                    <Text className="mt-0.5 font-display text-xl font-bold text-ink">
+                      {count}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
         {/* Your orders — status pill + provider + total + line items */}
         <View className="mt-5 rounded-2xl border border-line bg-card p-4">
           <Text className="font-display text-lg font-bold text-ink">
@@ -422,7 +470,7 @@ export function AccountScreen() {
                     </View>
                     <View className="flex-row items-center gap-3">
                       <Text
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${STATUS_STYLES[statusLabel(o.status)] || "bg-slate-100 text-slate-700"}`}
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${STATUS_STYLES[statusLabel(o.status)] || "bg-mist text-ink"}`}
                       >
                         {statusLabel(o.status)}
                       </Text>
