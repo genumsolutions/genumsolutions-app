@@ -1321,8 +1321,16 @@ export function AdminScreen() {
         </ScrollView>
       </View>
 
+      {/* U-47v5 (owner: the refresh spinner shifted every tab's content
+          down/up as it appeared): the loader is now an absolutely-positioned
+          pill floating below the tab strip — it reserves NO layout space, so
+          content never moves when a refresh starts or ends. */}
       {loading ? (
-        <ActivityIndicator size="small" color="#1e3a8a" className="py-1.5" />
+        <View className="absolute left-0 right-0 top-16 z-10 items-center">
+          <View className="rounded-full border border-line bg-card px-3 py-1 shadow-card">
+            <ActivityIndicator size="small" color="#1e3a8a" />
+          </View>
+        </View>
       ) : null}
 
       {/* Swipeable tab content — each of the 6 merged tabs is a pager
@@ -1886,32 +1894,39 @@ function ProductsTab({
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         ListHeaderComponent={
           <View className="mb-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-display text-xl font-bold text-ink">
+            {/* U-47v5 (owner: toolbar overflowed the right edge): the title
+                and the Import/+New pills shared one flex-row — on phones the
+                pills pushed past the screen. Title and actions now stack,
+                actions wrap on their own full-width row. */}
+            <View className="flex-row items-center justify-between gap-2">
+              <Text
+                numberOfLines={1}
+                className="min-w-0 flex-1 font-display text-xl font-bold text-ink"
+              >
                 {kind === "models" ? "3D Products" : "Electronic Products"} (
                 {products.length})
               </Text>
-              <View className="flex-row flex-wrap items-center gap-2">
-                <Pressable
-                  onPress={onImportLink}
-                  disabled={importBusy}
-                  className="rounded-full bg-gold px-4 py-2"
-                  accessibilityRole="button"
-                  accessibilityLabel={`Import into ${kind === "models" ? "3D Products" : "Electronic Products"} by link`}
-                >
-                  <Text className="text-xs font-black text-ink">
-                    {importBusy ? "Importing..." : "Import by link"}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={onNew}
-                  className="rounded-full bg-navy px-4 py-2"
-                >
-                  <Text className="text-xs font-black text-white">
-                    + New product
-                  </Text>
-                </Pressable>
-              </View>
+            </View>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              <Pressable
+                onPress={onImportLink}
+                disabled={importBusy}
+                className="self-start rounded-full bg-gold px-4 py-2"
+                accessibilityRole="button"
+                accessibilityLabel={`Import into ${kind === "models" ? "3D Products" : "Electronic Products"} by link`}
+              >
+                <Text className="text-xs font-black text-ink">
+                  {importBusy ? "Importing..." : "Import by link"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={onNew}
+                className="self-start rounded-full bg-navy px-4 py-2"
+              >
+                <Text className="text-xs font-black text-white">
+                  + New product
+                </Text>
+              </Pressable>
             </View>
             <View className="mt-3 flex-row flex-wrap items-center gap-2">
               <View className="flex-1">

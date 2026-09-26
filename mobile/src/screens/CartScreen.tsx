@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { getProductsWithSource } from "../services/productService";
@@ -42,6 +43,7 @@ type CartEntry = {
 
 export function CartScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { setCart } = useApp();
   const [products, setProducts] = useState<Product[]>([]);
   const [lines, setLines] = useState<CartEntry[]>([]);
@@ -126,31 +128,66 @@ export function CartScreen() {
     );
   }
 
+  // U-47v5 (owner: cart "doesn't contain the top bar and the heading and
+  // starts the item directly over the camera position"): the Cart is a
+  // PUSHED stack screen with no nav header, so it draws its own — back
+  // chevron, title, subtitle, padded below the status/camera area via
+  // safe-area insets. Same pattern as Checkout's screen header.
+  function CartHeader() {
+    return (
+      <View
+        className="border-b border-line bg-card px-4 pb-3"
+        style={{ paddingTop: insets.top + 8 }}
+      >
+        <View className="flex-row items-center justify-between gap-2">
+          <Pressable
+            onPress={() => navigation.goBack()}
+            hitSlop={8}
+            className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card"
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Feather name="arrow-left" size={18} color="#1e3a8a" />
+          </Pressable>
+          <Text className="flex-1 text-right font-display text-lg font-bold text-ink">
+            Your build list
+          </Text>
+        </View>
+        <Text className="mt-1 text-xs text-muted">
+          Quantities sync to your account instantly.
+        </Text>
+      </View>
+    );
+  }
+
   if (lines.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-surface px-8">
-        {offline ? (
-          <>
-            <Feather name="wifi-off" size={44} color="#cbd5e1" />
-            <Text className="mt-3 font-display text-xl font-bold text-ink">
-              Can't reach the catalog
-            </Text>
-            <Text className="mt-1 text-center text-sm text-muted">
-              We can't verify your build list right now. Check your connection
-              and try again.
-            </Text>
-          </>
-        ) : (
-          <>
-            <Feather name="shopping-cart" size={44} color="#cbd5e1" />
-            <Text className="mt-3 font-display text-xl font-bold text-ink">
-              Your cart is empty
-            </Text>
-            <Text className="mt-1 text-center text-sm text-muted">
-              Add products from the shop to start your build list.
-            </Text>
-          </>
-        )}
+      <View className="flex-1 bg-surface">
+        <CartHeader />
+        <View className="flex-1 items-center justify-center px-8">
+          {offline ? (
+            <>
+              <Feather name="wifi-off" size={44} color="#cbd5e1" />
+              <Text className="mt-3 font-display text-xl font-bold text-ink">
+                Can't reach the catalog
+              </Text>
+              <Text className="mt-1 text-center text-sm text-muted">
+                We can't verify your build list right now. Check your connection
+                and try again.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Feather name="shopping-cart" size={44} color="#cbd5e1" />
+              <Text className="mt-3 font-display text-xl font-bold text-ink">
+                Your cart is empty
+              </Text>
+              <Text className="mt-1 text-center text-sm text-muted">
+                Add products from the shop to start your build list.
+              </Text>
+            </>
+          )}
+        </View>
       </View>
     );
   }
@@ -162,6 +199,7 @@ export function CartScreen() {
 
   return (
     <View className="flex-1 bg-surface">
+      <CartHeader />
       <FlatList
         data={lines}
         keyExtractor={({ line }) => line.productId}
