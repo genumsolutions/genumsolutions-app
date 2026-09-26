@@ -2,18 +2,20 @@
 // ProductCard — U-47 (2026-09-27) owner redesign: the card IS the link.
 // Bare minimum: square photo, name, price. No badge, no chips, no spec
 // text, no dead padding — details live on the product page. The heart
-// toggles the per-user collection (collectionService, RLS own-rows);
-// signed-out taps are ignored silently (browsing never breaks).
+// reads/writes the APP-WIDE CollectionContext (hydrated once per
+// sign-in, shared by every screen — a heart on Shop shows on Projects
+// and in the profile instantly). Guest taps throw; the context flags
+// guestAttempt so hosts can prompt sign-in.
 // PERF: memoized (Shop FlatList re-renders on every keystroke).
 // =====================================================================
-import React, { useState } from "react";
+import React from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { galleryImages, type Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
-import { toggleCollection } from "../services/collectionService";
+import { useCollection } from "../context/CollectionContext";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
 
@@ -30,9 +32,8 @@ function ProductCardBase({
 }) {
   const navigation = useNavigation<Nav>();
   const media = galleryImages(product)[0];
-  // Optimistic local state (collection hydration for hearts across ALL
-  // screens is reconciled by CollectionContext at the app root).
-  const [saved, setSaved] = useState<boolean | null>(null);
+  const { has, toggle } = useCollection();
+  const saved = has(product.id);
 
   return (
     <Pressable
@@ -69,9 +70,7 @@ function ProductCardBase({
       </View>
       <Pressable
         onPress={() => {
-          const next = !(saved ?? false);
-          setSaved(next);
-          void toggleCollection(product.id).catch(() => setSaved(!next));
+          void toggle(product.id).catch(() => undefined);
         }}
         hitSlop={8}
         accessibilityRole="button"
