@@ -36,6 +36,7 @@ import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
 import { isProjectPackage } from "../services/projectService";
+import { applyComponentsScope } from "../services/productService";
 import { galleryImages } from "../types";
 import { logger } from "../services/logger";
 import {
@@ -1033,15 +1034,16 @@ export function AdminScreen() {
       case "Electronic Products":
       case "3D Products": {
         const kind = tab === "3D Products" ? "models" : "electronic";
-        const catalog = products.filter((p) =>
+        // U-47v2 fix: the old string-split exclusion tokenized "3D Models"
+        // into "3d" + "models", so the whole category leaked into the
+        // Electronic tab. Use the shared components scope (same contract as
+        // the storefront screen + the web applyScope).
+        const catalog =
           kind === "models"
-            ? p.category?.trim().toLowerCase() === "3d models"
-            : !"Robot Cars Pre-packaged Kits 3D Models"
-                .split(" ")
-                .map((c) => c.toLowerCase())
-                .includes((p.category ?? "").toLowerCase()) &&
-              p.productType !== "Project package",
-        );
+            ? products.filter(
+                (p) => p.category?.trim().toLowerCase() === "3d models",
+              )
+            : applyComponentsScope(products);
         return (
           <Sub>
             <ProductsTab
@@ -1262,34 +1264,38 @@ export function AdminScreen() {
           default to flexGrow:1, so without it the strip stretches into a huge
           empty band under the tabs whenever the tab content is shorter than
           the screen.
-          Each tab is given a fixed 96px width so the scroll-to calculation
-          (index * 96 - 40) always lands on the correct tab, regardless of the
-          tab name's text length. */}
-      <ScrollView
-        ref={tabScrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="grow-0 shrink-0 border-b border-line bg-card"
-      >
-        <View className="flex-row">
-          {TABS.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => goToTab(t)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === t }}
-              accessibilityLabel={t}
-              className={`w-[96px] shrink-0 px-4 py-3 border-b-2 ${tab === t ? "border-navy" : "border-transparent"}`}
-            >
-              <Text
-                className={`text-sm font-bold ${tab === t ? "text-navy" : "text-muted"}`}
+          U-47v2 (owner): the strip must be ONE ROW on every device — tabs get
+          a minimum width and nowrap text so nothing wraps to a second row; the
+          strip scrolls horizontally instead (layout measurz from the ref, no
+          fixed 96px assumption). */}
+      <View className="grow-0 shrink-0 border-b border-line bg-card">
+        <ScrollView
+          ref={tabScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
+          <View className="flex-row">
+            {TABS.map((t) => (
+              <Pressable
+                key={t}
+                onPress={() => goToTab(t)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === t }}
+                accessibilityLabel={t}
+                className={`shrink-0 border-b-2 px-4 py-3 ${tab === t ? "border-navy" : "border-transparent"}`}
+                style={{ minWidth: 88 }}
               >
-                {t}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
+                <Text
+                  numberOfLines={1}
+                  className={`text-xs font-bold ${tab === t ? "text-navy" : "text-muted"}`}
+                >
+                  {t}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
 
       {loading ? (
         <ActivityIndicator size="small" color="#1e3a8a" className="py-1.5" />

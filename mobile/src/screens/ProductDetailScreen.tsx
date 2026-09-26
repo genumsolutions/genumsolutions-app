@@ -35,6 +35,7 @@ import {
   type ProjectComponentLink,
 } from "../services/adminService";
 import { useApp } from "../context/AppContext";
+import { trackHabit } from "../services/collectionService";
 import { galleryImages, type Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 
@@ -82,6 +83,8 @@ export function ProductDetailScreen() {
             // C3: record the view BEFORE resolving the strip so this product
             // lands at the front of "Recently viewed" on the next screen.
             void recordProductView(product.id);
+            // U-47v2: habit counter (fire-and-forget; guests ignored).
+            void trackHabit("view");
             // U-45 Phase 2: fetch the link rows alongside the catalog —
             // public-read join table, so no auth and failures stay silent
             // (sections vanish, the page never breaks).
@@ -150,6 +153,8 @@ export function ProductDetailScreen() {
       product.id,
       Math.min(qty, Math.max(1, product.stock)),
     );
+    // U-47v2: habit counter (fire-and-forget).
+    void trackHabit("cart");
     setCart({ count, size: count });
     setAdded(true);
   };

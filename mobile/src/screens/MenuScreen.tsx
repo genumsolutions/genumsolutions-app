@@ -35,7 +35,8 @@ const EXPLORE: Dest[] = [
   { icon: "briefcase", label: "Services", screen: "Services" },
   { icon: "layers", label: "Projects", screen: "Projects" },
   { icon: "book-open", label: "Journal", screen: "Journal" },
-  { icon: "corner-down-left", label: "3D Printing", screen: "Printing" },
+  // U-47v2 (owner): "3D Printing" removed — the 3D Products bottom-tab
+  // (PrintingScreen) IS the 3D store; the menu entry duplicated it.
   { icon: "tool", label: "Open Tools", screen: "OpenTools" },
 ];
 

@@ -30,6 +30,7 @@ import { PagePager } from "../components/PagePager";
 import { ShopSkeletonGrid } from "../components/SkeletonCard";
 import { ProductCard } from "../components/ProductCard";
 import {
+  applyComponentsScope,
   loadRecentlyViewed,
   resolveRecentlyViewed,
 } from "../services/productService";
@@ -50,17 +51,23 @@ export function ShopScreen() {
   const [recent, setRecent] = useState<Product[]>([]);
   const pageSize = 8;
 
-  const categories = useMemo(() => distinctCategories(products), [products]);
+  // U-47: scope to Electronic Products — 3D Models / kits / project
+  // packages are excluded here (they duplicate the 3D Products screen).
+  const electronic = useMemo(() => applyComponentsScope(products), [products]);
+  const categories = useMemo(
+    () => distinctCategories(electronic),
+    [electronic],
+  );
   const visible = useMemo(
     () =>
       inStockOnly(
         withinPrice(
-          sortProducts(filterProducts(products, category, query), sort),
+          sortProducts(filterProducts(electronic, category, query), sort),
           maxPrice,
         ),
         inStock,
       ),
-    [products, category, query, sort, maxPrice, inStock],
+    [electronic, category, query, sort, maxPrice, inStock],
   );
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);

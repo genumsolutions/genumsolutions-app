@@ -323,6 +323,26 @@ export function distinctCategories(products: Product[]): string[] {
   }
   return out;
 }
+
+/**
+ * U-47 (owner bug report): the app's Electronic Products screen showed 3D
+ * models too — duplicating the 3D Products screen. This mirrors the web
+ * `applyScope(all, "components")` branch (web lib/catalog.ts): exclude
+ * Robot Cars, Pre-packaged Kits, 3D Models, and project packages. Keep the
+ * two clients in sync — one scope change must land on BOTH sides.
+ * Generic over the row type so the admin screens (AdminProduct) can share
+ * the same scope predicate as the storefront (Product).
+ */
+export function applyComponentsScope<
+  T extends { category?: string | null; productType?: string | null },
+>(products: T[]): T[] {
+  return products.filter(
+    (p) =>
+      !["Robot Cars", "Pre-packaged Kits"].includes(p.category ?? "") &&
+      (p.category ?? "").trim().toLowerCase() !== "3d models" &&
+      p.productType !== "Project package",
+  );
+}
 export function filterProducts(
   list: Product[],
   category: string,

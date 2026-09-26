@@ -21,6 +21,7 @@ import "./global.css";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { SignInSheet } from "./src/components/SignInSheet";
 import { AppProvider, useApp } from "./src/context/AppContext";
+import { CollectionProvider } from "./src/context/CollectionContext";
 import { navigationRef, navigate } from "./src/navigation/navigationRef";
 import { clearCart } from "./src/services/cartService";
 import { recordScreenView } from "./src/services/analyticsService";
@@ -151,7 +152,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppProvider>
-        <Shell />
+        {/* U-47: app-wide heart sync — mounts INSIDE AppProvider so it can
+            react to sign-in/sign-out; cards across every screen read it. */}
+        <CollectionProvider>
+          <Shell />
+        </CollectionProvider>
       </AppProvider>
     </SafeAreaProvider>
   );

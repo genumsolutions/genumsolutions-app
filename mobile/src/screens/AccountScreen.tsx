@@ -10,7 +10,7 @@
 // App updates + theme toggles now live on the Menu tab (visible without
 // signing in); nothing here gates updates behind an account.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -26,11 +26,8 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { useApp } from "../context/AppContext";
+import { useCollection } from "../context/CollectionContext";
 import { getProducts } from "../services/productService";
-import {
-  listCollection,
-  type CollectionItem,
-} from "../services/collectionService";
 import {
   getMyMessages,
   getMyOrders,
@@ -100,10 +97,25 @@ export function AccountScreen() {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [newsletterBusy, setNewsletterBusy] = useState(false);
-  // U-47: per-user collection (hearts) + catalog lookup for card display.
-  const [collection, setCollection] = useState<CollectionItem[]>([]);
-  const [collectionLoading, setCollectionLoading] = useState(false);
+  // U-47: per-user collection — read from the APP-WIDE CollectionContext
+  // (same state the hearts on every card write), plus a local catalog
+  // snapshot to resolve saved ids into displayable cards.
+  const { savedIds, refresh: refreshCollection } = useCollection();
   const [collectionProducts, setCollectionProducts] = useState<Product[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const collection: {
+    itemId: string;
+    itemKind: "product";
+    createdAt: string;
+  }[] = useMemo(
+    () =>
+      Array.from(savedIds).map((itemId) => ({
+        itemId,
+        itemKind: "product" as const,
+        createdAt: "",
+      })),
+    [savedIds],
+  );
   const [newsletterStatus, setNewsletterStatus] = useState<{
     text: string;
     isError: boolean;
@@ -129,23 +141,26 @@ export function AccountScreen() {
           logger.error("account", "load messages failed", e);
           setMessages([]);
         }),
-      // U-47: the collection rides the same refresh cycle.
-      setCollectionLoading(true),
-      listCollection()
-        .then(async (items) => {
-          setCollection(items);
-          const all = await getProducts().catch(() => [] as Product[]);
-          setCollectionProducts(all);
-        })
-        .catch((e: unknown) => {
+      // U-47: the collection rides the same refresh cycle — re-pull the
+      // shared context state + keep the catalog snapshot fresh.
+      (async () => {
+        setCollectionLoading(true);
+        try {
+          await refreshCollection();
+          setCollectionProducts(
+            await getProducts().catch(() => [] as Product[]),
+          );
+        } catch (e) {
           logger.error("account", "load collection failed", e);
-          setCollection([]);
-        })
-        .finally(() => setCollectionLoading(false)),
+        } finally {
+          setCollectionLoading(false);
+        }
+      })(),
     ]).finally(() => {
       setOrdersLoading(false);
       setMessagesLoading(false);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
   useEffect(() => {
@@ -348,9 +363,7 @@ export function AccountScreen() {
                           />
                         ) : (
                           <Feather
-                            name={
-                              item.itemKind === "service" ? "tool" : "heart"
-                            }
+                            name={product ? "image" : "heart"}
                             size={22}
                             color="#94a3b8"
                           />
