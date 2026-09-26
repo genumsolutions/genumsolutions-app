@@ -13,6 +13,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useColorScheme,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -41,6 +42,14 @@ export function CategoryDropdown({
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
   const opts = Array.from(new Set(options.filter(Boolean)));
+  // U-47v5 (owner: text merging with the background in the category
+  // selector's dark mode): the sheet was hard bg-white while text tokens
+  // flip light in dark mode (light-on-white), and the Feather icons were
+  // hardcoded navy which never flips. Semantic surfaces + scheme-aware
+  // icon colors fix both themes.
+  const isDark = useColorScheme() === "dark";
+  const iconMuted = isDark ? "#9eaec5" : "#64748b";
+  const iconAccent = isDark ? "#60a5fa" : "#1e3a8a";
 
   return (
     <>
@@ -60,7 +69,7 @@ export function CategoryDropdown({
         <Feather
           name="chevron-down"
           size={16}
-          color="#64748b"
+          color={iconMuted}
           style={{ marginLeft: 8 }}
         />
       </Pressable>
@@ -71,9 +80,15 @@ export function CategoryDropdown({
         animationType="slide"
         onRequestClose={() => setOpen(false)}
       >
-        <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)}>
+        {/* Dim scrim gives the sheet separation in BOTH themes (previously
+            transparent — in dark mode the sheet blended into the page). */}
+        <Pressable
+          style={{ flex: 1 }}
+          className="bg-ink/50"
+          onPress={() => setOpen(false)}
+        >
           <Pressable
-            className="mt-auto rounded-t-2xl border-t border-line bg-white pb-8"
+            className="mt-auto rounded-t-2xl border-t border-line bg-card pb-8"
             onPress={(e) => e.stopPropagation()}
           >
             <View className="flex-row items-center justify-between border-b border-line px-4 py-3">
@@ -85,7 +100,7 @@ export function CategoryDropdown({
                 className="h-8 w-8 items-center justify-center rounded-full bg-mist"
                 accessibilityLabel="Close selector"
               >
-                <Feather name="x" size={16} color="#1e3a8a" />
+                <Feather name="x" size={16} color={iconAccent} />
               </Pressable>
             </View>
             <ScrollView
@@ -113,7 +128,7 @@ export function CategoryDropdown({
                     {o}
                   </Text>
                   {o === value && (
-                    <Feather name="check" size={16} color="#1e3a8a" />
+                    <Feather name="check" size={16} color={iconAccent} />
                   )}
                 </Pressable>
               ))}

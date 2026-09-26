@@ -9,18 +9,33 @@
 // =====================================================================
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Linking,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import type { RootStackParamList } from "../navigation/types";
-import { getProductsFromSupabase } from "../services/productService";
+import {
+  getProductsWithSource,
+  distinctCategories,
+  filterProducts,
+  inStockOnly,
+  PRICE_CEILINGS,
+  priceCeilingLabel,
+  SORT_LABELS,
+  sortProducts,
+  withinPrice,
+  type SortOption,
+} from "../services/productService";
+import { OfflineBadge } from "../components/OfflineBadge";
+import { CategoryDropdown } from "../components/CategoryDropdown";
 import { ProductCard } from "../components/ProductCard";
 import { PagePager } from "../components/PagePager";
 import type { Product } from "../types";
@@ -94,12 +109,24 @@ export function PrintingScreen() {
   // A6: live 3D Models from the shared products table (same rows the
   // website's "Models we print" section renders). Best-effort: offline or
   // unconfigured Supabase simply hides the section.
+  // U-47v5 (owner: "use the search and the filters just like the electronic
+  // product tabs page"): the model library is now a first-class catalog —
+  // search + category + sort + price ceiling + in-stock, exactly like
+  // ShopScreen, and the store grid sits at the TOP of the tab (offers,
+  // workflow, and library links moved below it).
   const [models, setModels] = useState<Product[]>([]);
+  const [offline, setOffline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const [sort, setSort] = useState<SortOption>("featured");
+  const [maxPrice, setMaxPrice] = useState(0);
+  const [inStock, setInStock] = useState(false);
   const [page, setPage] = useState(1);
   useEffect(() => {
     let active = true;
-    getProductsFromSupabase()
-      .then((products) => {
+    getProductsWithSource()
+      .then(({ products, source }) => {
         if (!active) return;
         setModels(
           products.filter(
@@ -108,17 +135,36 @@ export function PrintingScreen() {
               p.active !== false,
           ),
         );
+        setOffline(source === "cache");
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
   }, []);
-  const totalPages = Math.max(1, Math.ceil(models.length / PAGE_SIZE));
+  const categories = useMemo(() => distinctCategories(models), [models]);
+  const visible = useMemo(
+    () =>
+      inStockOnly(
+        withinPrice(
+          sortProducts(filterProducts(models, category, query), sort),
+          maxPrice,
+        ),
+        inStock,
+      ),
+    [models, category, query, sort, maxPrice, inStock],
+  );
+  useEffect(() => {
+    setPage(1);
+  }, [category, query, sort, maxPrice, inStock]);
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageItems = useMemo(
-    () => models.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [models, safePage],
+    () => visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [visible, safePage],
   );
 
   return (
@@ -126,6 +172,144 @@ export function PrintingScreen() {
       className="flex-1 bg-surface"
       contentContainerStyle={{ paddingBottom: 32 }}
     >
+      {/* ── The 3D Products store FIRST (owner: "include all the product
+          thing at the top … other things down below those") ── */}
+      <View className="px-5 pt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          3D Products
+        </Text>
+        <Text className="mt-2 font-display text-2xl font-bold text-ink">
+          Printed in-house, on request.
+        </Text>
+      </View>
+
+      {/* Search — same control as the Electronic Products tab */}
+      <View className="px-5 pt-4">
+        <View className="flex-row items-center rounded-xl border border-line bg-card px-3">
+          <Feather name="search" size={16} color="#64748b" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search 3D products…"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+            className="flex-1 px-2 py-2.5 text-sm text-ink"
+          />
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => setQuery("")}
+              accessibilityLabel="Clear search"
+            >
+              <Feather name="x" size={16} color="#64748b" />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {offline && (
+        <View className="px-5 pt-2">
+          <OfflineBadge />
+        </View>
+      )}
+
+      {/* Filters — same stack as the Electronic Products tab */}
+      <View className="gap-2 px-5 pt-3">
+        <CategoryDropdown
+          value={category}
+          options={["All", ...categories]}
+          onChange={setCategory}
+          placeholder="All categories"
+          title="Filter by category"
+        />
+        <View className="flex-row gap-2">
+          <CategoryDropdown
+            value={SORT_LABELS[sort]}
+            options={Object.values(SORT_LABELS)}
+            onChange={(label) => {
+              const entry = (
+                Object.entries(SORT_LABELS) as [SortOption, string][]
+              ).find(([, l]) => l === label);
+              if (entry) setSort(entry[0]);
+            }}
+            placeholder="Sort: Featured"
+            title="Sort products"
+            buttonClassName="flex-1"
+          />
+          <CategoryDropdown
+            value={priceCeilingLabel(maxPrice)}
+            options={PRICE_CEILINGS.map(priceCeilingLabel)}
+            onChange={(label) => {
+              const entry = PRICE_CEILINGS.find(
+                (c) => priceCeilingLabel(c) === label,
+              );
+              if (entry != null) setMaxPrice(entry);
+            }}
+            placeholder="Any price"
+            title="Maximum price"
+            buttonClassName="flex-1"
+          />
+        </View>
+        <Pressable
+          onPress={() => setInStock((current) => !current)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: inStock }}
+          className="flex-row items-center self-start rounded-lg border border-line bg-card px-3 py-2"
+        >
+          <Feather
+            name={inStock ? "check-square" : "square"}
+            size={16}
+            color={inStock ? "#1e3a8a" : "#94a3b8"}
+          />
+          <Text className="ml-2 text-sm text-ink">In stock only</Text>
+        </Pressable>
+      </View>
+
+      {/* Store grid — 2 per row, same ProductCard as every other catalog */}
+      {loading ? (
+        <View className="items-center py-10">
+          <ActivityIndicator size="large" color="#1e3a8a" />
+        </View>
+      ) : (
+        <View className="mt-4 px-5">
+          <View className="flex-row flex-wrap" style={{ marginHorizontal: -6 }}>
+            {pageItems.map((model) => (
+              <View key={model.id} style={{ width: "50%", padding: 6 }}>
+                <ProductCard product={model} />
+              </View>
+            ))}
+          </View>
+          {visible.length === 0 && (
+            <View className="items-center py-10">
+              <Feather name="inbox" size={40} color="#cbd5e1" />
+              <Text className="mt-3 text-sm text-muted">
+                No 3D products match your filters.
+              </Text>
+              {(maxPrice > 0 || inStock || category !== "All" || query) && (
+                <Pressable
+                  onPress={() => {
+                    setMaxPrice(0);
+                    setInStock(false);
+                    setCategory("All");
+                    setQuery("");
+                  }}
+                  className="mt-4 rounded-full border border-navy px-5 py-2"
+                  accessibilityLabel="Clear filters"
+                >
+                  <Text className="text-xs font-black text-navy">
+                    Clear filters
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+          <PagePager
+            page={safePage}
+            totalPages={totalPages}
+            onPage={setPage}
+            totalItems={visible.length}
+          />
+        </View>
+      )}
       <View className="px-5 pt-6">
         <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
           3D printing · new vertical
@@ -170,39 +354,9 @@ export function PrintingScreen() {
         </View>
       </View>
 
-      {/* U-44 (2026-09-26): this tab IS the 3D Products store now — a full
-          paginated catalog (20/page, PagePager) of the same rows the
-          website's /3d-printing ModelsCatalog shows. Replaces the old
-          8-item horizontal strip. */}
-      <View className="mx-5 mb-8">
-        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-          3D Products
-        </Text>
-        <Text className="mt-2 font-display text-2xl font-bold text-ink">
-          Printed in-house, on request.
-        </Text>
-        <View
-          className="mt-4 flex-row flex-wrap"
-          style={{ marginHorizontal: -6 }}
-        >
-          {pageItems.map((model) => (
-            <View key={model.id} style={{ width: "50%", padding: 6 }}>
-              <ProductCard product={model} chips />
-            </View>
-          ))}
-        </View>
-        {models.length === 0 && (
-          <Text className="mt-4 text-sm text-muted">
-            No 3D products listed yet — check back soon, or send us a link.
-          </Text>
-        )}
-        <PagePager
-          page={page}
-          totalPages={totalPages}
-          onPage={setPage}
-          totalItems={models.length}
-        />
-      </View>
+      {/* U-47v5: the store grid now lives at the TOP of the tab with the
+          full search/filter stack (owner request) — the old duplicate
+          section that sat here was removed; offers continue below. */}
 
       <View className="mx-5 mb-8">
         <View className="gap-6 border-t border-b border-line py-8">

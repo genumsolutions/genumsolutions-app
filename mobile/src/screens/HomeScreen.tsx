@@ -6,7 +6,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
+  Dimensions,
+  FlatList,
   Pressable,
   ScrollView,
   Text,
@@ -23,11 +24,19 @@ import {
   stemProjectHighlights as fallbackHighlights,
   trainingPrograms as fallbackPrograms,
 } from "../config/programs";
-import { galleryImages, type Product, type Service } from "../types";
+import { type Product, type Service } from "../types";
+import { ProductCard } from "../components/ProductCard";
 import { getProductMedia } from "../lib/productMedia";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
+
+// U-47v5 (owner: home shop items "stacked 5 in a row and elongated" — the
+// flex-wrap row squeezed 6 cards across the phone width): the home strips
+// are now snap carousels showing TWO cards per viewport width, like the
+// website's home shelves and the app's 3D Products tab grid.
+const HOME_CARD_W = (Dimensions.get("window").width - 40 - 12) / 2;
+const HOME_CARD_GAP = 12;
 
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -207,41 +216,32 @@ export function HomeScreen() {
               <Text className="mt-4 text-xs font-black uppercase tracking-[0.24em] text-navy">
                 Models we print
               </Text>
-              <View className="mt-3 flex-row flex-wrap justify-between">
-                {printModels.map((model) => (
-                  <Pressable
-                    key={model.id}
-                    onPress={() =>
-                      navigation.push("ProductDetail", { productId: model.id })
-                    }
-                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card shadow-card p-3"
-                  >
+              <FlatList
+                horizontal
+                data={printModels}
+                keyExtractor={(model) => model.id}
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={HOME_CARD_W + HOME_CARD_GAP}
+                decelerationRate="fast"
+                contentContainerStyle={{
+                  paddingTop: 12,
+                  paddingBottom: 4,
+                  paddingHorizontal: 20,
+                  gap: HOME_CARD_GAP,
+                }}
+                renderItem={({ item: model }) => (
+                  <View style={{ width: HOME_CARD_W }}>
                     {/* U-47v4b (card parity): themed category fallback like
                         the website — no more gray box icons. */}
-                    <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
-                      <Image
-                        source={{
-                          uri:
-                            galleryImages(model)[0] ||
-                            model.image ||
-                            getProductMedia(model.category).src,
-                        }}
-                        className="h-full w-full"
-                        resizeMode="contain"
-                      />
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      className="mt-2 text-[13px] font-bold text-ink"
-                    >
-                      {model.name}
-                    </Text>
-                    <Text className="mt-1 text-xs font-black text-navy">
-                      {model.priceLabel}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+                    <ProductCard product={model} />
+                  </View>
+                )}
+                ListEmptyComponent={
+                  <Text className="py-4 text-sm text-muted">
+                    No models listed yet.
+                  </Text>
+                }
+              />
               <Pressable
                 onPress={() => navigation.push("Contact")}
                 className="rounded-full bg-navy px-5 py-3"
@@ -387,41 +387,32 @@ export function HomeScreen() {
                   </Text>
                 </Pressable>
               </View>
-              <View className="mt-3 flex-row flex-wrap justify-between">
-                {featured.map((p) => (
-                  <Pressable
-                    key={p.id}
-                    onPress={() =>
-                      navigation.push("ProductDetail", { productId: p.id })
-                    }
-                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card shadow-card p-3"
-                  >
-                    {/* U-47v4b (card parity): contain-fit (never crop the
-                        product) + themed category fallback, matching the
-                        catalog cards. */}
-                    <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
-                      <Image
-                        source={{
-                          uri:
-                            galleryImages(p)[0] ||
-                            p.image ||
-                            getProductMedia(p.category).src,
-                        }}
-                        className="h-full w-full"
-                        resizeMode="contain"
-                      />
+              <View className="mt-3">
+                <FlatList
+                  horizontal
+                  data={featured}
+                  keyExtractor={(p) => p.id}
+                  showsHorizontalScrollIndicator={false}
+                  snapToInterval={HOME_CARD_W + HOME_CARD_GAP}
+                  decelerationRate="fast"
+                  contentContainerStyle={{
+                    paddingBottom: 4,
+                    gap: HOME_CARD_GAP,
+                  }}
+                  renderItem={({ item: p }) => (
+                    <View style={{ width: HOME_CARD_W }}>
+                      {/* U-47v4b/v5: real ProductCard (themed fallback,
+                          contain-fit, elevation) instead of the squashed
+                          custom tile — matches the 3D Products display. */}
+                      <ProductCard product={p} />
                     </View>
-                    <Text
-                      numberOfLines={2}
-                      className="mt-2 text-[13px] font-bold leading-tight text-ink"
-                    >
-                      {p.name}
+                  )}
+                  ListEmptyComponent={
+                    <Text className="py-4 text-sm text-muted">
+                      Nothing on the shelf right now.
                     </Text>
-                    <Text className="mt-1 text-xs font-black text-navy">
-                      {p.priceLabel}
-                    </Text>
-                  </Pressable>
-                ))}
+                  }
+                />
               </View>
             </View>
           )}

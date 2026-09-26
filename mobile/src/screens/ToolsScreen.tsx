@@ -13,6 +13,7 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useColorScheme,
   View,
 } from "react-native";
 import {
@@ -61,6 +62,12 @@ const CAPABILITY_LABELS: Record<string, string> = {
 
 export function ToolsScreen() {
   const route = useRoute<Route>();
+  // U-47v5 (dark contrast): the connection-tab icons were hardcoded navy
+  // (#1e3a8a) — invisible on dark cards. Scheme-aware accents fix both
+  // themes without touching the sim-panel aesthetics.
+  const isDark = useColorScheme() === "dark";
+  const iconAccent = isDark ? "#60a5fa" : "#1e3a8a";
+  const iconMuted = isDark ? "#9eaec5" : "#94a3b8";
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -358,7 +365,7 @@ export function ToolsScreen() {
               <Feather
                 name="bluetooth"
                 size={13}
-                color={connTab === "bluetooth" ? "#1e3a8a" : "#94a3b8"}
+                color={connTab === "bluetooth" ? iconAccent : iconMuted}
               />
               <Text
                 className={`text-xs font-bold ${connTab === "bluetooth" ? "text-navy" : "text-muted"}`}
@@ -373,7 +380,7 @@ export function ToolsScreen() {
               <Feather
                 name="wifi"
                 size={13}
-                color={connTab === "wifi" ? "#1e3a8a" : "#94a3b8"}
+                color={connTab === "wifi" ? iconAccent : iconMuted}
               />
               <Text
                 className={`text-xs font-bold ${connTab === "wifi" ? "text-navy" : "text-muted"}`}
