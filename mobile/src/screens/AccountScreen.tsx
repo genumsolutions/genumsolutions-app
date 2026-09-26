@@ -345,7 +345,7 @@ export function AccountScreen() {
                 return (
                   <View
                     key={`${item.itemKind}-${item.itemId}`}
-                    className="mb-3 w-[31%]"
+                    className="mb-3 w-[31%] max-w-[31%]"
                     style={{ marginHorizontal: 6 }}
                   >
                     <Pressable

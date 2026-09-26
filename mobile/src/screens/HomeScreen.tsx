@@ -214,7 +214,7 @@ export function HomeScreen() {
                     onPress={() =>
                       navigation.push("ProductDetail", { productId: model.id })
                     }
-                    className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-line bg-card p-3"
+                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card p-3"
                   >
                     <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
                       {galleryImages(model)[0] || model.image ? (
@@ -393,7 +393,7 @@ export function HomeScreen() {
                     onPress={() =>
                       navigation.push("ProductDetail", { productId: p.id })
                     }
-                    className="mb-3 w-[48%] overflow-hidden rounded-2xl border border-line bg-card p-3"
+                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card p-3"
                   >
                     <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
                       {galleryImages(p)[0] ? (
