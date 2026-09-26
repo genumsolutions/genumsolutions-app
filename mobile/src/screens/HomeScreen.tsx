@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
 import { getProducts } from "../services/productService";
 import { getServices } from "../services/serviceService";
 import { fetchSiteContent } from "../services/orderService";
@@ -25,6 +24,7 @@ import {
   trainingPrograms as fallbackPrograms,
 } from "../config/programs";
 import { galleryImages, type Product, type Service } from "../types";
+import { getProductMedia } from "../lib/productMedia";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
@@ -214,20 +214,21 @@ export function HomeScreen() {
                     onPress={() =>
                       navigation.push("ProductDetail", { productId: model.id })
                     }
-                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card p-3"
+                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card shadow-card p-3"
                   >
+                    {/* U-47v4b (card parity): themed category fallback like
+                        the website — no more gray box icons. */}
                     <View className="h-20 items-center justify-center overflow-hidden rounded-xl bg-mist">
-                      {galleryImages(model)[0] || model.image ? (
-                        <Image
-                          source={{
-                            uri: galleryImages(model)[0] || model.image,
-                          }}
-                          className="h-full w-full"
-                          resizeMode="contain"
-                        />
-                      ) : (
-                        <Feather name="box" size={24} color="#94a3b8" />
-                      )}
+                      <Image
+                        source={{
+                          uri:
+                            galleryImages(model)[0] ||
+                            model.image ||
+                            getProductMedia(model.category).src,
+                        }}
+                        className="h-full w-full"
+                        resizeMode="contain"
+                      />
                     </View>
                     <Text
                       numberOfLines={1}
@@ -393,18 +394,22 @@ export function HomeScreen() {
                     onPress={() =>
                       navigation.push("ProductDetail", { productId: p.id })
                     }
-                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card p-3"
+                    className="mb-3 flex-1 overflow-hidden rounded-2xl border border-line bg-card shadow-card p-3"
                   >
+                    {/* U-47v4b (card parity): contain-fit (never crop the
+                        product) + themed category fallback, matching the
+                        catalog cards. */}
                     <View className="h-24 items-center justify-center overflow-hidden rounded-xl bg-mist">
-                      {galleryImages(p)[0] ? (
-                        <Image
-                          source={{ uri: galleryImages(p)[0] }}
-                          className="h-full w-full"
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Feather name="box" size={28} color="#94a3b8" />
-                      )}
+                      <Image
+                        source={{
+                          uri:
+                            galleryImages(p)[0] ||
+                            p.image ||
+                            getProductMedia(p.category).src,
+                        }}
+                        className="h-full w-full"
+                        resizeMode="contain"
+                      />
                     </View>
                     <Text
                       numberOfLines={2}

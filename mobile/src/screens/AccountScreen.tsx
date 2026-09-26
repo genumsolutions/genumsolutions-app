@@ -28,6 +28,7 @@ import type { RootStackParamList } from "../navigation/types";
 import { useApp } from "../context/AppContext";
 import { useCollection } from "../context/CollectionContext";
 import { getMyHabits, type UserHabits } from "../services/collectionService";
+import { getProductMedia } from "../lib/productMedia";
 import { getProducts } from "../services/productService";
 import {
   getMyMessages,
@@ -363,18 +364,21 @@ export function AccountScreen() {
                       className="overflow-hidden rounded-xl border border-line bg-surface"
                     >
                       <View className="aspect-square w-full items-center justify-center bg-mist">
-                        {product && galleryImages(product)[0] ? (
+                        {/* U-47v4b (card parity): themed fallback for
+                            photoless saved cards, same as the website. */}
+                        {product ? (
                           <Image
-                            source={{ uri: galleryImages(product)[0] }}
+                            source={{
+                              uri:
+                                galleryImages(product)[0] ||
+                                product.image ||
+                                getProductMedia(product.category).src,
+                            }}
                             className="h-full w-full"
                             resizeMode="contain"
                           />
                         ) : (
-                          <Feather
-                            name={product ? "image" : "heart"}
-                            size={22}
-                            color="#94a3b8"
-                          />
+                          <Feather name="heart" size={22} color="#94a3b8" />
                         )}
                       </View>
                       <View className="px-2 pb-2 pt-1.5">
