@@ -229,7 +229,7 @@ export function ShopScreen() {
             totalItems={visible.length}
           />
         }
-        renderItem={({ item }) => <ProductCard product={item} chips />}
+        renderItem={({ item }) => <ProductCard product={item} />}
       />
     </View>
   );

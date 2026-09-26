@@ -47,7 +47,7 @@ function ProductCardBase({
       }
       accessibilityRole="button"
       accessibilityLabel={`Open ${product.name}`}
-      className={`overflow-hidden rounded-2xl border border-line bg-card ${
+      className={`overflow-hidden rounded-2xl border border-line bg-card shadow-card ${
         compact ? "w-40" : "flex-1"
       }`}
     >
@@ -76,11 +76,11 @@ function ProductCardBase({
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={`Save ${product.name} to collection`}
-        className="absolute right-1.5 top-1.5 h-8 w-8 items-center justify-center rounded-full bg-white/90"
+        className="absolute right-2 top-2 h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm"
       >
         <Feather
           name="heart"
-          size={15}
+          size={16}
           color={saved ? "#ef4444" : "#94a3b8"}
           fill={saved ? "#ef4444" : "none"}
         />
