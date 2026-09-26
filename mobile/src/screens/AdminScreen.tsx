@@ -94,7 +94,17 @@ import {
   type DashboardStats,
   type AdminAnalytics,
   type ActivityEntry,
+  type ProjectComponentLink,
+  listProjectComponents,
+  saveProjectComponents,
 } from "../services/adminService";
+import {
+  dedupeSuggestions,
+  isComponentsCatalogRow,
+  suggestComponents,
+  type CatalogCandidate,
+  type ProjectComponentSuggestion,
+} from "../lib/project-components";
 
 type BackHandlerRemove = () => void;
 type Tab =
@@ -1067,6 +1077,7 @@ export function AdminScreen() {
             <ProjectTab
               title="Projects"
               products={products.filter(isProjectPackage)}
+              catalogProducts={products}
               editing={editingProject}
               onChange={setEditingProject}
               onEdit={setEditingProject}
@@ -1964,6 +1975,7 @@ function ProductsTab({
 function ProjectTab({
   title,
   products,
+  catalogProducts,
   editing,
   onChange,
   onEdit,
@@ -1975,6 +1987,9 @@ function ProjectTab({
 }: {
   title: string;
   products: AdminProduct[];
+  /** U-45 Phase 2: FULL admin catalog snapshot for the component linker's
+      suggestions + product-name resolution (this tab's list is project-scoped). */
+  catalogProducts: AdminProduct[];
   editing: AdminProduct | null;
   onChange: (p: AdminProduct | null) => void;
   onEdit: (p: AdminProduct) => void;
@@ -2009,9 +2024,115 @@ function ProjectTab({
     setPage(1);
   }, [category, query]);
 
+  // ── U-45 Phase 2 (2026-09-27): component linker for the OPEN project —
+  // mirror of the website's AdminProjectPackages linker. Suggestions run the
+  // SAME matcher as the website (src/lib/project-components.ts) locally over
+  // the Electronic Products catalog; links save through the staff-gated
+  // save_project_components RPC (replace-all, same contract as the web PUT).
+  const [linkerLinks, setLinkerLinks] = useState<ProjectComponentLink[]>([]);
+  const [linkerSuggestions, setLinkerSuggestions] = useState<
+    ProjectComponentSuggestion[]
+  >([]);
+  const [linkerBusy, setLinkerBusy] = useState(false);
+  const [linkerLoadedId, setLinkerLoadedId] = useState<string | null>(null);
+  const linkerProjectId =
+    editing?.productType === "Project package" ? editing.id : null;
+
+  // Load saved links + compute fresh suggestions whenever a (saved) project
+  // opens in the editor. Keyed on the project ID — not the whole editing
+  // object — so staff edits to other fields while the linker is open can't
+  // wipe the in-progress link list.
+  React.useEffect(() => {
+    if (!linkerProjectId) {
+      setLinkerLinks([]);
+      setLinkerSuggestions([]);
+      return;
+    }
+    let active = true;
+    setLinkerBusy(true);
+    void listProjectComponents(linkerProjectId)
+      .then((saved) => {
+        if (!active) return;
+        if (saved.length > 0) {
+          setLinkerLinks(saved);
+        }
+        // With no saved links the prefill effect (below) fills from the
+        // matcher's confident suggestions once they exist.
+        setLinkerLoadedId(linkerProjectId);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLinkerBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkerProjectId]);
+
+  // Suggestions: match the project's materials_required against the
+  // Electronic Products catalog. ProjectTab's own list is project-scoped,
+  // so the FULL catalog snapshot comes in via a separate prop (same rows
+  // the website matcher's endpoint queries).
+  const linkerCatalog: CatalogCandidate[] = catalogProducts
+    .filter(
+      (p) =>
+        p.id !== editing?.id && p.active !== false && isComponentsCatalogRow(p),
+    )
+    .map((p) => ({ id: p.id, name: p.name, sku: p.sku }));
+  React.useEffect(() => {
+    if (!linkerProjectId || !editing) return;
+    setLinkerSuggestions(
+      dedupeSuggestions(
+        suggestComponents(editing.materialsRequired, linkerCatalog),
+      ),
+    );
+    // Recompute when the project (its materials) or the catalog changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkerProjectId, editing?.materialsRequired.join("\n"), catalogProducts]);
+
+  // Auto-prefill ONCE per project when nothing is saved yet: first confident
+  // matcher suggestions become the editable starting list (web parity).
+  React.useEffect(() => {
+    if (
+      linkerLoadedId &&
+      linkerLoadedId === linkerProjectId &&
+      linkerLinks.length === 0 &&
+      linkerSuggestions.some((s) => s.productId)
+    ) {
+      setLinkerLinks(
+        linkerSuggestions
+          .filter((s) => s.productId)
+          .map((s) => ({
+            productId: s.productId as string,
+            quantity: s.quantity,
+          })),
+      );
+      setLinkerLoadedId(null); // never re-prefill after a staff removal
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkerLoadedId, linkerProjectId, linkerLinks, linkerSuggestions]);
+
+  async function saveComponentLinks() {
+    if (!linkerProjectId) return;
+    setLinkerBusy(true);
+    try {
+      const savedCount = await saveProjectComponents(
+        linkerProjectId,
+        linkerLinks,
+      );
+      Alert.alert("Saved", `Component links saved (${savedCount}).`);
+    } catch (e) {
+      Alert.alert(
+        "Save failed",
+        e instanceof Error ? e.message : "Could not save component links.",
+      );
+    } finally {
+      setLinkerBusy(false);
+    }
+  }
+
   if (editing) {
-    // Edit stays in this tab: the editor replaces the list (no tab jump), and
-    // returning to the list keeps the chosen category/search/page intact.
     return (
       <View className="flex-1">
         <ProductEditor
@@ -2026,6 +2147,20 @@ function ProjectTab({
           isNew={isNew}
           categoryOptions={categories.filter((c) => c !== "All")}
         />
+        {/* U-45 Phase 2: the linker card — only meaningful for a SAVED
+            project row (links hang off its id). Mirrors the website's
+            AdminProjectPackages linker: pre-filled list, qty editing,
+            remove, suggestion chips, explicit save. */}
+        {editing.productType === "Project package" && editing.id ? (
+          <ComponentLinkerCard
+            links={linkerLinks}
+            suggestions={linkerSuggestions}
+            busy={linkerBusy}
+            products={catalogProducts}
+            onLinksChange={setLinkerLinks}
+            onSave={() => void saveComponentLinks()}
+          />
+        ) : null}
       </View>
     );
   }
@@ -2145,6 +2280,164 @@ function ProjectTab({
           product={preview}
           onClose={() => setPreview(null)}
         />
+      )}
+    </View>
+  );
+}
+
+// ─── U-45 Phase 2 (2026-09-27): project ↔ component linker card ──────
+// Mirror of the website's AdminProjectPackages linker card: the editable
+// link list (name + qty + remove), the matcher suggestion chips (tap to
+// add; "no match" materials render disabled), and the explicit Save. All
+// reads/writes ride the public-read join table + save_project_components
+// RPC (see adminService).
+function ComponentLinkerCard({
+  links,
+  suggestions,
+  busy,
+  products,
+  onLinksChange,
+  onSave,
+}: {
+  links: ProjectComponentLink[];
+  suggestions: ProjectComponentSuggestion[];
+  busy: boolean;
+  products: AdminProduct[];
+  onLinksChange: (next: ProjectComponentLink[]) => void;
+  onSave: () => void;
+}) {
+  return (
+    <View className="mx-4 mb-6 mt-3 rounded-xl border border-line bg-card p-4">
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className="flex-1 font-display text-base font-bold text-ink">
+          Components used in this project
+        </Text>
+        <Pressable
+          onPress={onSave}
+          disabled={busy}
+          className="rounded-full bg-navy px-4 py-2 disabled:opacity-60"
+          accessibilityRole="button"
+          accessibilityLabel="Save component links"
+        >
+          <Text className="text-xs font-black text-white">
+            {busy ? "Saving…" : "Save links"}
+          </Text>
+        </Pressable>
+      </View>
+      <Text className="mt-1 text-xs leading-5 text-muted">
+        Pre-filled from the project's materials list where the catalog matched.
+        Link the exact Electronic Products a builder needs — they appear (with
+        quantities) on the project's page.
+      </Text>
+
+      {links.length === 0 && !busy && (
+        <Text className="mt-3 text-sm text-muted">
+          No components linked yet — add from the suggestions below.
+        </Text>
+      )}
+      {links.map((link) => {
+        const linked = products.find((p) => p.id === link.productId);
+        return (
+          <View
+            key={link.productId}
+            className="mt-2 rounded-lg border border-line px-3 py-2"
+          >
+            <View className="flex-row items-center justify-between gap-2">
+              <Text
+                className="min-w-0 flex-1 text-sm font-bold text-ink"
+                numberOfLines={1}
+              >
+                {linked?.name ?? link.productId}
+              </Text>
+              <Pressable
+                onPress={() =>
+                  onLinksChange(
+                    links.filter((l) => l.productId !== link.productId),
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${linked?.name ?? link.productId}`}
+              >
+                <Text className="text-xs font-bold text-red-500 underline">
+                  Remove
+                </Text>
+              </Pressable>
+            </View>
+            <View className="mt-1.5 flex-row items-center gap-2">
+              <Text className="text-xs font-black text-muted">Qty</Text>
+              <TextInput
+                value={String(link.quantity)}
+                onChangeText={(raw) => {
+                  const parsed = Math.max(
+                    1,
+                    Math.min(99, Math.round(Number(raw) || 1)),
+                  );
+                  onLinksChange(
+                    links.map((l) =>
+                      l.productId === link.productId
+                        ? { ...l, quantity: parsed }
+                        : l,
+                    ),
+                  );
+                }}
+                keyboardType="number-pad"
+                className="w-16 rounded-md border border-line bg-surface px-2 py-1 text-right text-sm text-ink"
+                accessibilityLabel={`Quantity for ${linked?.name ?? link.productId}`}
+              />
+            </View>
+          </View>
+        );
+      })}
+
+      {suggestions.length > 0 && (
+        <View className="mt-4 border-t border-line pt-3">
+          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+            Matcher suggestions
+          </Text>
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            {suggestions.map((s) => {
+              const already =
+                s.productId != null &&
+                links.some((l) => l.productId === s.productId);
+              return (
+                <Pressable
+                  key={s.label}
+                  onPress={() => {
+                    if (!s.productId || already) return;
+                    onLinksChange([
+                      ...links,
+                      { productId: s.productId, quantity: s.quantity },
+                    ]);
+                  }}
+                  disabled={!s.productId || already}
+                  className={`rounded-full border px-3 py-1.5 ${
+                    already
+                      ? "border-line bg-mist"
+                      : s.productId
+                        ? "border-navy bg-surface"
+                        : "border-dashed border-line"
+                  }`}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    s.productId
+                      ? `Add ${s.label}${s.quantity > 1 ? ` (×${s.quantity})` : ""}`
+                      : `${s.label} — no catalog match`
+                  }
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      already || !s.productId ? "text-muted" : "text-navy"
+                    }`}
+                  >
+                    {already ? "✓ " : "+ "}
+                    {s.label}
+                    {s.quantity > 1 ? ` (×${s.quantity})` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
       )}
     </View>
   );
