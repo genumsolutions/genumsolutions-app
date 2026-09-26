@@ -31,6 +31,11 @@ import { resolveModeForProduct } from "../config/roboCarCatalog";
 import { OfflineBadge } from "../components/OfflineBadge";
 import { ProductCard } from "../components/ProductCard";
 import { addToCart } from "../services/cartService";
+import {
+  listProjectComponents,
+  listProjectUsage,
+  type ProjectComponentLink,
+} from "../services/adminService";
 import { useApp } from "../context/AppContext";
 import { galleryImages, type Product } from "../types";
 import type { RootStackParamList } from "../navigation/types";
@@ -54,6 +59,16 @@ export function ProductDetailScreen() {
   const [recent, setRecent] = useState<Product[]>([]);
   // U-23 (2026-09-24): gallery pagination (primary + thumbnails).
   const [activeImage, setActiveImage] = useState(0);
+  // U-45 Phase 2 (2026-09-27): project↔component links for THIS product —
+  // for a project the catalog components it needs (with qty), for a
+  // component the ACTIVE projects that use it. Same data as the website's
+  // detail sections. The full catalog snapshot resolves the link ids into
+  // product cards; rows with an unknown/hidden id just vanish (never stubs).
+  const [catalogAll, setCatalogAll] = useState<Product[]>([]);
+  const [componentRows, setComponentRows] = useState<ProjectComponentLink[]>(
+    [],
+  );
+  const [usedInRows, setUsedInRows] = useState<{ projectId: string }[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -70,9 +85,26 @@ export function ProductDetailScreen() {
             // C3: record the view BEFORE resolving the strip so this product
             // lands at the front of "Recently viewed" on the next screen.
             void recordProductView(product.id);
+            // U-45 Phase 2: fetch the link rows alongside the catalog —
+            // public-read join table, so no auth and failures stay silent
+            // (sections vanish, the page never breaks).
+            if (product.productType === "Project package") {
+              void listProjectComponents(product.id)
+                .then((rows) => {
+                  if (active) setComponentRows(rows);
+                })
+                .catch(() => undefined);
+            } else {
+              void listProjectUsage(product.id)
+                .then((rows) => {
+                  if (active) setUsedInRows(rows);
+                })
+                .catch(() => undefined);
+            }
             void getProducts()
               .then((all) => {
                 if (!active) return;
+                setCatalogAll(all);
                 setRelated(relatedProducts(all, product));
                 return loadRecentlyViewed().then((ids) => {
                   if (active)
@@ -132,6 +164,25 @@ export function ProductDetailScreen() {
   const handleQuote = () => {
     navigation.push("Contact");
   };
+
+  // U-45 Phase 2: resolve link rows into catalog cards (drop unknown/hidden
+  // ids). Direct links are staff-curated — no scope re-filtering here, same
+  // as the website's detail sections.
+  const componentProducts = componentRows
+    .map((row) => ({
+      qty: row.quantity,
+      product: catalogAll.find(
+        (p) => p.id === row.productId && p.active !== false,
+      ),
+    }))
+    .filter((entry): entry is { qty: number; product: Product } =>
+      Boolean(entry.product),
+    );
+  const usedInProjects = usedInRows
+    .map((row) =>
+      catalogAll.find((p) => p.id === row.projectId && p.active !== false),
+    )
+    .filter((p): p is Product => Boolean(p));
 
   const colorLabel =
     product.color && !/from-\[.*?\]\s*to-\[.*?\]/.test(product.color)
@@ -453,6 +504,66 @@ export function ProductDetailScreen() {
             {product.delivery} · {product.warranty}
           </Text>
         </View>
+
+        {/* U-45 Phase 2: project detail shows the catalog components its
+            build needs; component detail shows the projects that use it.
+            Both hidden when the join table has no rows for this product —
+            same contract as the website's detail sections. */}
+        {product.productType === "Project package" &&
+          componentProducts.length > 0 && (
+            <View className="mt-6 border-t-2 border-line pt-5">
+              <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Components used in this project
+              </Text>
+              <Text className="mt-1 px-5 text-xs leading-5 text-muted">
+                Every part below is a real catalog component — check specs,
+                availability, and add spares to your build list.
+              </Text>
+              <FlatList
+                horizontal
+                data={componentProducts}
+                keyExtractor={(entry) => entry.product.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingTop: 10,
+                  gap: 10,
+                }}
+                renderItem={({ item }) => (
+                  <View>
+                    <View className="absolute -top-1 right-2 z-10 rounded-full bg-gold px-1.5 py-0.5">
+                      <Text className="text-[10px] font-black text-ink">
+                        ×{item.qty}
+                      </Text>
+                    </View>
+                    <ProductCard product={item.product} compact />
+                  </View>
+                )}
+              />
+            </View>
+          )}
+        {product.productType !== "Project package" &&
+          usedInProjects.length > 0 && (
+            <View className="mt-6 border-t-2 border-line pt-5">
+              <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Used in these projects
+              </Text>
+              <FlatList
+                horizontal
+                data={usedInProjects}
+                keyExtractor={(p) => p.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingTop: 10,
+                  gap: 10,
+                }}
+                renderItem={({ item }) => (
+                  <ProductCard product={item} compact />
+                )}
+              />
+            </View>
+          )}
 
         {/* C3: Related products — same category (closest price) → same type. */}
         {related.length > 0 && (

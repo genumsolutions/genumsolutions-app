@@ -591,6 +591,85 @@ export async function deleteAdminService(id: string) {
   return data;
 }
 
+// --- Project ↔ component links (U-45 Phase 2, 2026-09-27) -------------
+// The website's /api/admin/project-components gate reads the WEBSITE's
+// session cookie, so an app JWT cannot authorize on it. Reads go direct to
+// the join table (RLS is public-read); the write rides the staff-gated
+// SECURITY DEFINER RPC save_project_components — the app's established
+// pattern (mark_order_paid, admin_user_last_seen). The website PUT and this
+// RPC share the replace-all contract (validate + clamp 1..99, drop dupes).
+
+export type ProjectComponentLink = { productId: string; quantity: number };
+
+export async function listProjectComponents(
+  projectId: string,
+): Promise<ProjectComponentLink[]> {
+  const { data, error } = await supabase
+    .from("project_components")
+    .select("product_id, quantity, sort_order")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    productId: String(row.product_id ?? ""),
+    quantity: Number(row.quantity ?? 1),
+  }));
+}
+
+/** PUBLIC reverse lookup: which ACTIVE projects use this component. */
+export async function listProjectUsage(
+  productId: string,
+): Promise<{ projectId: string }[]> {
+  const { data, error } = await supabase
+    .from("project_components")
+    .select(
+      "project_id, products!project_components_project_id_fkey(product_type, active)",
+    )
+    .eq("product_id", productId);
+  if (error) throw error;
+  type UsageRow = {
+    project_id: string;
+    products: { product_type: string; active: boolean }[] | null;
+  };
+  return ((data ?? []) as unknown as UsageRow[])
+    .filter(
+      (row) =>
+        row.products?.[0]?.product_type === "Project package" &&
+        row.products?.[0]?.active !== false,
+    )
+    .map((row) => ({ projectId: row.project_id }));
+}
+
+/**
+ * Staff+ gated replace-all save (same contract as the website's PUT). Sends
+ * the FULL list; the RPC validates, clamps, drops dupes/unknown ids, and
+ * returns the saved count.
+ */
+export async function saveProjectComponents(
+  projectId: string,
+  components: ProjectComponentLink[],
+): Promise<number> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  const { data, error } = await supabase.rpc("save_project_components", {
+    p_project_id: projectId,
+    p_components: components.map((c) => ({
+      productId: c.productId,
+      quantity: Math.max(1, Math.min(99, Math.round(Number(c.quantity) || 1))),
+    })),
+  });
+  if (error) {
+    const message =
+      (error as unknown as { message?: string })?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not save component links.";
+    throw new Error(message);
+  }
+  return Number(data ?? 0);
+}
+
 // --- Users ---
 
 export async function listAdminUsers(
