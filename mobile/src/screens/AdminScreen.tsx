@@ -98,15 +98,26 @@ import {
 
 type BackHandlerRemove = () => void;
 type Tab =
-  "Dashboard" | "Orders" | "Catalog" | "Content" | "Users" | "Settings";
+  | "Dashboard"
+  | "Orders"
+  | "Electronic Products"
+  | "3D Products"
+  | "Projects"
+  | "Content"
+  | "Users"
+  | "Settings";
 
-// U-37 (2026-09-25): 12→6 tabs, group names removed.
-// Merged: Dashboard+Activity · Orders+Finance · Products+Projects ·
-// Services+Journal+Content · Users+Messages+Robots · Settings.
+// U-44 (2026-09-26, owner): the Catalog tab becomes THREE tabs mirroring the
+// customer storefront — Electronic Products (/products), 3D Products
+// (/3d-printing), Projects (/projects, + Pre-packaged Kits). Each tab carries
+// its OWN import section preset to its catalog. Must match the website's
+// tests/admin-parity.test.ts ADMIN_TABS exactly.
 const TABS: Tab[] = [
   "Dashboard",
   "Orders",
-  "Catalog",
+  "Electronic Products",
+  "3D Products",
+  "Projects",
   "Content",
   "Users",
   "Settings",
@@ -274,6 +285,12 @@ export function AdminScreen() {
   // product seeded from a link is saved through the shared link-import flow
   // (uploads the extracted image into product-images + records documentationUrl).
   const [pendingImportUrl, setPendingImportUrl] = useState<string | null>(null);
+  // U-44: which catalog the import dialog will seed (set by the tab that
+  // opened it). "projects" imports from the Projects tab keep their
+  // project type; product tabs force Retail kit + their default category.
+  const [importDest, setImportDest] = useState<
+    "electronic" | "models" | "projects"
+  >("electronic");
   const [importBusy, setImportBusy] = useState(false);
   // U-24 (2026-09-24): import-by-link used Alert.prompt, which is iOS-only —
   // on Android the promise NEVER resolves, so the flow silently died after
@@ -299,7 +316,9 @@ export function AdminScreen() {
   // current tab — once an editor is up, the user is "deep" in the tab and a
   // swipe must not flip to another tab until the editor is closed.
   const editorOnCurrentTab =
-    (tab === "Catalog" && editingProduct != null) ||
+    ((tab === "Electronic Products" || tab === "3D Products") &&
+      editingProduct != null) ||
+    (tab === "Projects" && editingProject != null) ||
     (tab === "Content" && (editingService != null || journalOpen)) ||
     (tab === "Settings" && settingsEditing);
 
@@ -312,8 +331,15 @@ export function AdminScreen() {
       return;
     }
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (tab === "Catalog" && editingProduct != null) {
+      if (
+        (tab === "Electronic Products" || tab === "3D Products") &&
+        editingProduct != null
+      ) {
         setEditingProduct(null);
+        return true; // consumed
+      }
+      if (tab === "Projects" && editingProject != null) {
+        setEditingProject(null);
         return true; // consumed
       }
       if (tab === "Content" && (editingService != null || journalOpen)) {
@@ -363,7 +389,9 @@ export function AdminScreen() {
       } else if (tab === "Orders") {
         void loadOrders(1);
         if (!stats) setStats(await fetchDashboardStats());
-      } else if (tab === "Catalog") {
+      } else if (tab === "Electronic Products" || tab === "3D Products") {
+        setProducts(await listAdminProducts());
+      } else if (tab === "Projects") {
         setProducts(await listAdminProducts());
       } else if (tab === "Content") {
         setServices(await listAdminServices());
@@ -572,6 +600,7 @@ export function AdminScreen() {
       id: "",
       name: "",
       category,
+      projectCategory: null,
       price: 0,
       priceLabel: "Request quote",
       sku: "",
@@ -637,16 +666,23 @@ export function AdminScreen() {
     }
   }
 
-  function handleNewProduct() {
+  function handleNewProduct(kind: "electronic" | "models" = "electronic") {
     // U-39b follow-up (2026-09-26): a leftover pendingImportUrl would turn
     // this plain "new product" save into a silent re-import of the old link.
     setPendingImportUrl(null);
-    setEditingProduct(blankProduct("Retail kit"));
+    setEditingProduct(
+      blankProduct(
+        "Retail kit",
+        kind === "models" ? "3D Models" : "Controllers & Boards",
+      ),
+    );
     setEditingService(null);
   }
 
-  /** Open the "Import product by link" dialog (see importLinkOpen state). */
-  function handleImportFromLink() {
+  /** Open the "Import product by link" dialog (see importLinkOpen state).
+   *  U-44: the destination is preset from the tab that opened the dialog. */
+  function handleImportFromLink(kind: "electronic" | "models" = "electronic") {
+    setImportDest(kind);
     setImportLinkDraft("");
     setImportLinkOpen(true);
   }
@@ -670,8 +706,27 @@ export function AdminScreen() {
           "That page blocked the scan. The editor will open empty — fill the name, image, and details manually, then save.",
         );
       }
+      // U-44: the destination was chosen by the tab that opened this dialog
+      // (importDest). Product tabs force Retail kit + their own category so a
+      // project-family hint can never strand a row outside its catalog; the
+      // Projects tab keeps the project-package shape.
+      const seedingProjects = importDest === "projects";
+      const seedCategory = seedingProjects
+        ? "Project Packages"
+        : importDest === "models"
+          ? "3D Models"
+          : preview?.categoryHint &&
+              !/^(robot cars|pre-packaged kits)$/i.test(preview.categoryHint)
+            ? preview.categoryHint
+            : "Controllers & Boards";
       const seeded = {
-        ...blankProduct("Retail kit", preview?.categoryHint || "3D Models"),
+        ...blankProduct(
+          seedingProjects ? "Project package" : "Retail kit",
+          seedCategory,
+        ),
+        ...(seedingProjects
+          ? { projectCategory: "Robo Car" as string | null }
+          : {}),
         name: preview?.title || "",
         description: preview?.description || "",
         specs: preview?.specs ?? [],
@@ -690,7 +745,13 @@ export function AdminScreen() {
       };
       setEditingProduct(seeded);
       setPendingImportUrl(link);
-      goToTab("Catalog");
+      goToTab(
+        importDest === "projects"
+          ? "Projects"
+          : importDest === "models"
+            ? "3D Products"
+            : "Electronic Products",
+      );
       if (preview?.found && preview?.title) {
         Alert.alert(
           `Found: ${preview.provider}`,
@@ -959,11 +1020,23 @@ export function AdminScreen() {
             <FinanceTab stats={stats} />
           </Sub>
         );
-      case "Catalog":
+      case "Electronic Products":
+      case "3D Products": {
+        const kind = tab === "3D Products" ? "models" : "electronic";
+        const catalog = products.filter((p) =>
+          kind === "models"
+            ? p.category?.trim().toLowerCase() === "3d models"
+            : !"Robot Cars Pre-packaged Kits 3D Models"
+                .split(" ")
+                .map((c) => c.toLowerCase())
+                .includes((p.category ?? "").toLowerCase()) &&
+              p.productType !== "Project package",
+        );
         return (
           <Sub>
             <ProductsTab
-              products={products}
+              kind={kind}
+              products={catalog}
               query={productQuery}
               onQueryChange={setProductQuery}
               editing={editingProduct}
@@ -974,10 +1047,9 @@ export function AdminScreen() {
                 // the old URL into this product.
                 setPendingImportUrl(null);
                 setEditingProduct(product);
-                if (product) goToTab("Catalog");
               }}
-              onNew={handleNewProduct}
-              onImportLink={() => void handleImportFromLink()}
+              onNew={() => handleNewProduct(kind)}
+              onImportLink={() => void handleImportFromLink(kind)}
               importBusy={importBusy}
               onSave={handleSaveProduct}
               canDelete={canDelete}
@@ -986,6 +1058,12 @@ export function AdminScreen() {
               onImportCancel={() => setPendingImportUrl(null)}
               fromLink={pendingImportUrl != null}
             />
+          </Sub>
+        );
+      }
+      case "Projects":
+        return (
+          <Sub>
             <ProjectTab
               title="Projects"
               products={products.filter(isProjectPackage)}
@@ -1252,12 +1330,22 @@ export function AdminScreen() {
               className="w-full max-w-sm rounded-2xl border border-line bg-card p-5"
             >
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
-                Import product by link
+                Import into{" "}
+                {importDest === "models"
+                  ? "3D Products"
+                  : importDest === "projects"
+                    ? "Projects"
+                    : "Electronic Products"}
               </Text>
               <Text className="mt-2 text-sm leading-5 text-muted">
                 Paste a product page URL (makerworld.com, a shop listing, …). We
-                extract the standard details — you review them in the editor
-                before saving.
+                extract the standard details — everything saves into{" "}
+                {importDest === "models"
+                  ? "the 3D Products catalog (/3d-printing)"
+                  : importDest === "projects"
+                    ? "the Projects catalog (/projects)"
+                    : "the Electronic Products catalog (/products)"}
+                . Review them in the editor before saving.
               </Text>
               <TextInput
                 value={importLinkDraft}
@@ -1312,6 +1400,7 @@ function blankProjectProduct(): AdminProduct {
     id: "",
     name: "",
     category: "Project Packages",
+    projectCategory: "Robo Car",
     price: 0,
     priceLabel: "Request quote",
     sku: "",
@@ -1657,6 +1746,7 @@ function OrdersTab({
 }
 
 function ProductsTab({
+  kind,
   products,
   query,
   onQueryChange,
@@ -1673,6 +1763,8 @@ function ProductsTab({
   onToggleActive,
   fromLink,
 }: {
+  /** U-44: which catalog this tab manages (drives copy + import preset). */
+  kind: "electronic" | "models";
   products: AdminProduct[];
   query: string;
   onQueryChange: (q: string) => void;
@@ -1742,7 +1834,8 @@ function ProductsTab({
           <View className="mb-3">
             <View className="flex-row items-center justify-between">
               <Text className="font-display text-xl font-bold text-ink">
-                Products ({products.length})
+                {kind === "models" ? "3D Products" : "Electronic Products"} (
+                {products.length})
               </Text>
               <View className="flex-row items-center gap-2">
                 <Pressable
@@ -1750,7 +1843,7 @@ function ProductsTab({
                   disabled={importBusy}
                   className="rounded-full bg-gold px-4 py-2"
                   accessibilityRole="button"
-                  accessibilityLabel="Import product by link"
+                  accessibilityLabel={`Import into ${kind === "models" ? "3D Products" : "Electronic Products"} by link`}
                 >
                   <Text className="text-xs font-black text-ink">
                     {importBusy ? "Importing..." : "Import by link"}

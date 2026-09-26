@@ -88,8 +88,8 @@ function MainTabs() {
     <MainTabPager
       screens={{
         Home: HomeScreenSafe,
+        Printing: PrintingScreenSafe,
         Shop: ShopScreenSafe,
-        Cart: CartScreenSafe,
         Menu: MenuScreenSafe,
       }}
     />
@@ -106,6 +106,14 @@ export function RootNavigator() {
         }}
       >
         <Stack.Screen name="Main" component={MainTabsSafe} />
+        {/* U-44 (2026-09-26, owner): Cart is no longer a bottom tab — the
+            BrandHeader bag icon pushes it as a stack screen; Back returns to
+            wherever the user was. */}
+        <Stack.Screen
+          name="Cart"
+          component={CartScreenSafe}
+          options={{ title: "Cart" }}
+        />
         <Stack.Screen
           name="Account"
           component={AccountScreenSafe}

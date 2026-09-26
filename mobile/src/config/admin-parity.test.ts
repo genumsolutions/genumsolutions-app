@@ -12,11 +12,16 @@ import { ADMIN_TABS } from "./adminTabs";
 // =====================================================================
 
 describe("admin tab inventory (website <-> app mirror, B-6)", () => {
-  it("exposes the 6 canonical tabs in the canonical order", () => {
+  it("exposes the 8 canonical tabs in the canonical order", () => {
+    // U-44 (2026-09-26, owner): Catalog split into three catalog tabs that
+    // mirror the customer storefront (Electronic Products / 3D Products /
+    // Projects).
     expect(ADMIN_TABS).toEqual([
       "Dashboard",
       "Orders",
-      "Catalog",
+      "Electronic Products",
+      "3D Products",
+      "Projects",
       "Content",
       "Users",
       "Settings",

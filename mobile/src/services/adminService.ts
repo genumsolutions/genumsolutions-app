@@ -26,6 +26,8 @@ export type AdminProduct = {
   id: string;
   name: string;
   category: string;
+  /** U-44: the Projects-page grouping column (products.project_category). */
+  projectCategory: string | null;
   price: number;
   priceLabel: string;
   sku: string;
@@ -150,6 +152,8 @@ export function mapProductRow(row: RawRow): AdminProduct {
     priceLabel: String(row.price_label ?? ""),
     sku: String(row.sku ?? ""),
     productType: String(row.product_type ?? "Retail kit"),
+    projectCategory:
+      row.project_category != null ? String(row.project_category) : null,
     inventoryType:
       row.inventory_type != null ? String(row.inventory_type) : null,
     note: String(row.note ?? ""),
@@ -195,6 +199,7 @@ export function toProductRow(product: AdminProduct): RawRow {
     price_label: product.priceLabel,
     sku: product.sku,
     product_type: product.productType,
+    project_category: product.projectCategory ?? null,
     inventory_type: product.inventoryType,
     note: product.note,
     description: product.description,
@@ -517,6 +522,11 @@ export async function createLinkImport(
     product: {
       name: product.name ?? "",
       category: product.category ?? "",
+      // U-44: destination fields — the edge persists product_type and
+      // project_category from these so a Projects-destined import creates a
+      // real 'Project package' row (never a stranded Retail kit).
+      productType: product.productType ?? "Retail kit",
+      projectCategory: product.projectCategory ?? null,
       description: product.description ?? "",
       price: Number(product.price) || 0,
       priceLabel: product.priceLabel || "Request quote",

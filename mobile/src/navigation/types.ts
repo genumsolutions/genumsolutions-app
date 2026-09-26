@@ -13,13 +13,16 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 export type MainTabParamList = {
   Home: undefined;
-  Shop: undefined;
-  Cart: undefined;
+  Printing: undefined; // "3D Products" tab (bottom-nav label)
+  Shop: undefined; // "Electronic Products" tab (bottom-nav label)
   Menu: undefined;
+  // U-44 (2026-09-26, owner): Cart is NOT a bottom tab anymore — the
+  // BrandHeader bag icon (top right) pushes the Cart STACK route instead.
 };
 
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
+  Cart: undefined; // U-44: pushed from the header bag icon (no longer a tab)
   ProductDetail: { productId: string };
   Checkout:
     { provider?: "cod" | "esewa" | "khalti"; status?: string } | undefined;

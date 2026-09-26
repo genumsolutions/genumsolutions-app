@@ -103,7 +103,7 @@ export function BrandHeader() {
             onRequestClose={() => setAccountSheetOpen(false)}
           />
           <Pressable
-            onPress={() => nav.navigate("Main", { screen: "Cart" })}
+            onPress={() => nav.push("Cart")} // U-44: Cart is a stack screen now
             accessibilityRole="button"
             accessibilityLabel={
               cartCount > 0 ? `Open cart, ${cartCount} items` : "Open cart"
