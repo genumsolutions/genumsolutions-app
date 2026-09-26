@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { getProducts } from "../services/productService";
+import { applyComponentsScope, getProducts } from "../services/productService";
 import { getServices } from "../services/serviceService";
 import { fetchSiteContent } from "../services/orderService";
 import { getProgramsContent } from "../services/programsService";
@@ -79,7 +79,14 @@ export function HomeScreen() {
     void getProducts()
       .then((prods) => {
         if (!active) return;
-        setFeatured(prods.filter((p) => p.stock > 0).slice(0, 6));
+        // U-47v6 parity (owner removed 3D residue from the WEBSITE home
+        // shelves): the app's home Shop strip is ELECTRONIC-ONLY too —
+        // same applyComponentsScope as ShopScreen; 3D keeps its own band.
+        setFeatured(
+          applyComponentsScope(prods)
+            .filter((p) => p.stock > 0)
+            .slice(0, 6),
+        );
         // U-41: same `3D Models` rows the /3d-printing page renders.
         setPrintModels(
           prods
