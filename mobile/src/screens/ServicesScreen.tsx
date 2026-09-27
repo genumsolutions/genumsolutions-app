@@ -100,6 +100,7 @@ export function ServicesScreen() {
               <Pressable
                 onPress={() => setQuery("")}
                 accessibilityLabel="Clear search"
+                className="p-1 active:opacity-60"
               >
                 <Feather name="x" size={16} color="#64748b" />
               </Pressable>

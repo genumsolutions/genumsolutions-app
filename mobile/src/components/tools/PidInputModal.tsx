@@ -137,7 +137,7 @@ export function PidInputModal({
                   <Pressable
                     key={v}
                     onPress={() => handleQuickSet(v)}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 active:opacity-60"
                   >
                     <Text className="font-mono text-[11px] text-slate-300">
                       {v.toFixed(decimals)}
@@ -149,13 +149,13 @@ export function PidInputModal({
             <View className="mt-4 flex-row justify-center gap-3">
               <Pressable
                 onPress={onCancel}
-                className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5"
+                className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5 active:opacity-60"
               >
                 <Text className="text-xs font-bold text-white">Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleConfirm}
-                className="rounded-full bg-navy px-6 py-2.5"
+                className="rounded-full bg-navy px-6 py-2.5 active:opacity-70"
               >
                 <Text className="text-xs font-black text-white">Set</Text>
               </Pressable>

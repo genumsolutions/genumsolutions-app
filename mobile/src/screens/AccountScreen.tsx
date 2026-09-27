@@ -618,11 +618,20 @@ export function AccountScreen() {
                 return;
               }
               setNewsletterBusy(true);
-              const result = await subscribeToNewsletter(
-                newsletterEmail,
-                "app-account",
-              );
-              setNewsletterBusy(false);
+              let result: Awaited<ReturnType<typeof subscribeToNewsletter>>;
+              try {
+                result = await subscribeToNewsletter(
+                  newsletterEmail,
+                  "app-account",
+                );
+              } catch {
+                result = {
+                  ok: false,
+                  error: "Subscription failed. Try again.",
+                };
+              } finally {
+                setNewsletterBusy(false);
+              }
               if (result.ok) {
                 setNewsletterEmail("");
                 setNewsletterConsent(false);

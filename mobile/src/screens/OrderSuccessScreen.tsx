@@ -112,7 +112,7 @@ export function OrderSuccessScreen() {
           // could skip screens when OrderSuccess was reached via a deep link.
           if (navigation.canGoBack()) navigation.goBack();
         }}
-        className="mt-8 w-full max-w-xs items-center rounded-full bg-navy py-3"
+        className="mt-8 w-full max-w-xs items-center rounded-full bg-navy py-3 active:opacity-80"
       >
         <Text className="font-bold text-white">Back</Text>
       </Pressable>

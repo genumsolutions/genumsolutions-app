@@ -243,7 +243,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                     accessibilityLabel={
                       showPassword ? "Hide password" : "Show password"
                     }
-                    className="px-3 py-3"
+                    className="px-3 py-3 active:opacity-60"
                   >
                     <Feather
                       name={showPassword ? "eye-off" : "eye"}

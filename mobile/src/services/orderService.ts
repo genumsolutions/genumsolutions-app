@@ -176,68 +176,30 @@ export async function fetchSiteContent() {
   return res.json();
 }
 
-/** Upsert site content (home hero title/body) - admin only. */
+/** Upsert site content (home hero title/body) - admin only.
+ *
+ * U-48 (2026-09-27): the edge function's `upsert` action is now caller-gated
+ * (it previously ran on the service role with NO auth, so anyone could
+ * rewrite the home hero). It must be called through the Supabase client so the
+ * signed-in admin's JWT rides along in the Authorization header - a raw fetch
+ * sends no token and would 401.
+ */
 export async function upsertSiteContent(content: {
   id: number;
   home_title: string;
   home_body: string;
 }) {
-  const res = await fetch(edgeUrls.siteContent, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "upsert", content }),
+  // U-39 pattern: refresh/validate the session before the JWT sails out,
+  // otherwise a stale in-memory token fails as a bogus 401.
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired - sign in again, then retry.");
+  }
+  const { data, error } = await supabase.functions.invoke("site-content", {
+    body: { action: "upsert", content },
   });
-
-  if (!res.ok) throw new Error("Failed to upsert site content");
-  return res.json();
-}
-
-/** List products via Edge Function (admin). */
-export async function listProductsAdmin() {
-  const res = await fetch(edgeUrls.adminProducts, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "list" }),
-  });
-
-  if (!res.ok) throw new Error("Failed to list products");
-  return res.json();
-}
-
-/** Create/update product via Edge Function (admin). */
-export async function upsertProductAdmin(product: any) {
-  const res = await fetch(edgeUrls.adminProducts, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "create", product }),
-  });
-
-  if (!res.ok) throw new Error("Failed to create product");
-  return res.json();
-}
-
-/** List services via Edge Function (admin). */
-export async function listServicesAdmin() {
-  const res = await fetch(edgeUrls.adminServices, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "list" }),
-  });
-
-  if (!res.ok) throw new Error("Failed to list services");
-  return res.json();
-}
-
-/** Create/update service via Edge Function (admin). */
-export async function upsertServiceAdmin(service: any) {
-  const res = await fetch(edgeUrls.adminServices, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "create", service }),
-  });
-
-  if (!res.ok) throw new Error("Failed to create service");
-  return res.json();
+  if (error) throw new Error("Failed to upsert site content");
+  return data;
 }
 
 /** Update the signed-in user's profile (name, phone, address). */

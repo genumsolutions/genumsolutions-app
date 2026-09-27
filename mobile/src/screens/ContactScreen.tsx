@@ -259,7 +259,7 @@ function Row({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-start rounded-2xl border border-line bg-card p-4"
+      className="flex-row items-start rounded-2xl border border-line bg-card p-4 active:opacity-70"
     >
       <View className="h-10 w-10 items-center justify-center rounded-full bg-navy-light">
         <Feather name={icon} size={18} color="#1e3a8a" />

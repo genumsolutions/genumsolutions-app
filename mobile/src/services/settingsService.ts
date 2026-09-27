@@ -55,18 +55,6 @@ function cacheSettings(value: UserSettings) {
 // Theme preference (profiles.theme_preference)
 // ---------------------------------------------------------------------
 
-export async function fetchThemePreference(): Promise<ThemeMode | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("theme_preference")
-    .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
-    .maybeSingle();
-  if (error) return null;
-  const stored = preferenceToThemeMode(data?.theme_preference);
-  await AsyncStorage.setItem(THEME_CACHE_KEY, stored);
-  return stored;
-}
-
 export async function saveThemePreference(mode: ThemeMode): Promise<boolean> {
   // Cache holds the app's own ThemeMode (light/dark) — NOT the canonical
   // DB value — so a restart restores the same look (was writing 'dim' here,
@@ -84,73 +72,6 @@ export async function saveThemePreference(mode: ThemeMode): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-// ---------------------------------------------------------------------
-// Generic settings (user_settings.settings JSONB)
-// ---------------------------------------------------------------------
-
-export async function fetchSettings(): Promise<UserSettings> {
-  try {
-    const cached = await AsyncStorage.getItem(SETTINGS_CACHE_KEY);
-    if (cached) return JSON.parse(cached) as UserSettings;
-  } catch {
-    /* ignore cache read failures */
-  }
-  return {};
-}
-
-/** Overwrite the whole settings bag (simple scalar/array values only). */
-export async function saveSettings(settings: UserSettings): Promise<boolean> {
-  const clean: UserSettings = {};
-  for (const [key, value] of Object.entries(settings)) {
-    if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(key)) continue;
-    if (
-      value == null ||
-      ["string", "number", "boolean"].includes(typeof value)
-    ) {
-      clean[key] = value;
-    } else if (
-      Array.isArray(value) &&
-      value.length <= 100 &&
-      value.every((item) =>
-        ["string", "number", "boolean"].includes(typeof item),
-      )
-    ) {
-      clean[key] = value;
-    }
-  }
-  cacheSettings(clean);
-  try {
-    const { error } = await supabase.from("user_settings").upsert(
-      {
-        user_id:
-          (await supabase.auth.getUser().then((r) => r.data.user?.id)) ?? "",
-        settings: clean,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-/** Merge one or many keys into the settings bag (last write wins per key). */
-export async function updateSettings(patch: UserSettings): Promise<boolean> {
-  const current = await fetchSettings();
-  return saveSettings({ ...current, ...patch });
-}
-
-/** Read one typed value from the local cache (fast, offline-safe). */
-export async function readSetting<T extends string | number | boolean>(
-  key: string,
-  fallback: T,
-): Promise<T> {
-  const settings = await fetchSettings();
-  const value = settings[key];
-  return typeof value === typeof fallback ? (value as T) : fallback;
 }
 
 /**
