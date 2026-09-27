@@ -1,13 +1,23 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
-> 🚨 **2026-09-27 — U-48 FINAL SNAG ROUND: code complete + all gates green (tsc 0, vitest 205/205,
-> prettier clean), but UNCOMMITTED and not pushed.** App-side wins: admin save-busy +
-> re-entrancy guards (`saveSaving`/`contentSaving`), pull-to-refresh on Home/Printing/Tools,
-> pressed feedback + `finally`-safe busy guards on the three real async-write gaps
-> (Add-to-cart, cart qty, newsletter), and deletion of the U-25 dead list. No version bump —
-> JS-only, so this rides an OTA. ⚠ The `site-content` admin save now needs the redeployed edge
-> function or it 401s. Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 and
+> ✅ **2026-09-27 — U-48 FINAL SNAG ROUND: COMMITTED + PUSHED (`d148457`), CI GREEN, and the OTA
+> bundle is PUBLISHED.** App-side wins: admin save-busy + re-entrancy guards
+> (`saveSaving`/`contentSaving`), pull-to-refresh on Home/Printing/Tools, pressed feedback +
+> `finally`-safe busy guards on the three real async-write gaps (Add-to-cart, cart qty, newsletter),
+> and deletion of the U-25 dead list. Gates: tsc 0 · vitest 205/205 · prettier clean.
+> No version bump — JS-only, so it shipped as a same-version OTA. `ota-only.yml` auto-triggered on
+> the push (it watches `mobile/src/**`) and **succeeded**, and `release.json` now reads
+> `"OTA — Short update (d148457…)"` with `updated_at 2026-09-27T16:43Z`; app stays 3.2.6 / 59, no APK
+> rebuild. Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 and
 > `guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`. Resume point: `NEXT-SESSION.md` in this folder.
+
+> ✅ **The `site-content` dependency is satisfied — admin content save now works end to end.** The
+> website's `site-content` edge function is deployed (v4) and verified live: public `get` → 200,
+> admin `upsert` without a token → 401, with a bad token → 401. `upsertSiteContent()` here goes
+> through `supabase.functions.invoke`, so the signed-in admin's JWT reaches the function and the
+> role check passes. Note the function is deployed with `--no-verify-jwt` on purpose (it has a
+> public `get` plus a privileged `upsert`); see the website `TRACKS/INDEX.md` for the full note.
+> Only owner device-pass verification remains.
 
 > 🔁 **2026-09-19 — R-20/R-20a shipped (fixed-speed drive, Speed strip, STEER limit;
 > updater stale-cache repair; native version display; runtimeVersion appVersion policy).**

@@ -1,15 +1,22 @@
 # NEXT SESSION — genumsolutions-app (2026-09-27: U-48 final snags; current release 3.2.6/59)
 
-**START HERE — U-48 FINAL SNAG ROUND: CODE IS DONE AND GREEN, BUT UNCOMMITTED.**
-Three things in order:
-1. `supabase functions deploy site-content payment-khalti` (run from the **website** repo). Two
-   production security fixes are inert until this happens; until then the app's admin
-   "save site content" will 401.
-2. Review + commit + push `genumsolutions-app` and `genumsolutions-website`. No version bump —
-   JS-only changes, so the app ships via OTA.
-3. Owner device pass, now also covering: pull-to-refresh on Home/Printing/Tools · double-tap on
-   "Add to build list" adds exactly once · cart "+" lands on the right quantity · admin
-   site-content save succeeds.
+**U-48 FINAL SNAG ROUND: COMMITTED (`d148457`), PUSHED, CI GREEN, OTA PUBLISHED. One owner
+action left — the device pass.**
+1. ~~`supabase functions deploy site-content`~~ — **DONE.** Deployed to v4 and verified live
+   (`get` no auth → 200, `upsert` no auth → 401, `upsert` bad token → 401), so the app's admin
+   "save site content" works end to end. **Must use `--no-verify-jwt`** (public `get` + privileged
+   `upsert` in one function; a plain deploy resets `verify_jwt` to true and breaks the app's
+   unauthenticated hero read). Full note in the website `TRACKS/INDEX.md`.
+   `payment-khalti` is committed but **intentionally NOT deployed** — the owner owns the payment
+   side, so it was left alone on purpose; it must also keep `--no-verify-jwt`.
+2. ~~Review + commit + push both repos~~ — **DONE.** app `d148457`, website `9b23f8b`, both on
+   `main`, both CI green, no version bump (JS-only).
+3. `ota-only.yml` auto-fired on the `mobile/src/**` push and **published the bundle** (run
+   36334108319, 2m40s). `release.json` shows `"OTA — Short update (d148457…)"`, `updated_at`
+   2026-09-27T16:43Z. App stays **3.2.6 / 59** — no APK rebuild needed.
+4. **Owner device pass** (the only remaining item): pull-to-refresh on Home/Printing/Tools ·
+   double-tap on "Add to build list" adds exactly once · cart "+" lands on the right quantity ·
+   admin site-content save succeeds.
 Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 + `guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`.
 Gates at handoff: app tsc 0 · vitest 205/205 · prettier clean · web tsc/lint/vitest 151/151/build.
 
