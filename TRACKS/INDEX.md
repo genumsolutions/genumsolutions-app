@@ -32,7 +32,10 @@
 Per-project tracker for the **APP + WEBSITE SYNC / UNIFICATION (2026-09-18)** effort.
 Master plan + recovery: `(workspace) guide/APP-WEBSITE-SYNC-PLAN-2026-09-18.md`.
 
-Branches: `main` (only push target) · `dev` (owner backup — never push).
+Branches: `main` (the working branch — all new work lands here; only push target) · `dev` (owner
+backup **snapshot**, fast-forwarded to `main` on owner instruction 2026-09-27; it is a point-in-time
+restore, NOT a mirror, so it will fall behind `main` as new work lands — re-sync it with
+`git push origin main:dev` whenever the owner wants a fresh restore point).
 Workflows: `ci.yml` · `ota-only.yml` · `release.yml` · `sync-version.yml`.
 App root: `mobile/`. Release chain: `bump-version.mjs → gradlew assembleRelease →
 upload-release.mjs → (website) sync-app-fallback.mjs`.
