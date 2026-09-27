@@ -1,9 +1,23 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> 🚨 **2026-09-27 — U-48 FINAL SNAG ROUND: code complete + all gates green (tsc 0, vitest 205/205,
+> prettier clean), but UNCOMMITTED and not pushed.** App-side wins: admin save-busy +
+> re-entrancy guards (`saveSaving`/`contentSaving`), pull-to-refresh on Home/Printing/Tools,
+> pressed feedback + `finally`-safe busy guards on the three real async-write gaps
+> (Add-to-cart, cart qty, newsletter), and deletion of the U-25 dead list. No version bump —
+> JS-only, so this rides an OTA. ⚠ The `site-content` admin save now needs the redeployed edge
+> function or it 401s. Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 and
+> `guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`. Resume point: `NEXT-SESSION.md` in this folder.
+
 > 🔁 **2026-09-19 — R-20/R-20a shipped (fixed-speed drive, Speed strip, STEER limit;
 > updater stale-cache repair; native version display; runtimeVersion appVersion policy).**
 > App is now **3.2.3 / versionCode 56**, all pushed + pipelines verified. Resume point:
 > `NEXT-SESSION.md` in this folder + `guide/SESSION-HANDOFF-2026-09-19-R20.md`.
+
+> 🔁 **2026-09-27 — U-45 linker + U-47 owner rounds v1→v7 shipped. App is now
+> 3.2.6 / versionCode 59 (`4f8ed03`), all pushed + pipelines verified (vitest 205/205).
+> Resume point: `NEXT-SESSION.md` in this folder + `guide/SESSION-2026-09-27-U47-OWNER-ROUND.md`.
+> The 09-19/09-23 notes below are historical.
 
 Per-project tracker for the **APP + WEBSITE SYNC / UNIFICATION (2026-09-18)** effort.
 Master plan + recovery: `(workspace) guide/APP-WEBSITE-SYNC-PLAN-2026-09-18.md`.
@@ -70,3 +84,12 @@ old code passed `undefined` on Android), `PidInputModal` anchored above the keyb
 telemetry view = OLED + live readout column (no scroll, uses the space). tsc clean ·
 62/62. ⚠️ Do NOT push until owner verifies on device — push auto-publishes JS OTA
 (`ota-only.yml`) to every 3.2.1/54 install.
+
+---
+
+**2026-09-27 — state refresh.** App HEAD = **3.2.6/59** (`4f8ed03`) after U-45 Phase 2
+(linker mirror) + U-47 v1→v7 (six-category Control Panel + remotes, CollectionContext,
+minimal cards, cart rebuild, admin sweeps, biometric fix) — all pushed, CI + OTA green,
+vitest 205/205. Resume point: `TRACKS/NEXT-SESSION.md` (top block) +
+`guide/SESSION-2026-09-27-U47-OWNER-ROUND.md`. FIN-36 re-stage + tags wait on the owner
+device pass.

@@ -9,6 +9,7 @@ import {
   Dimensions,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -64,74 +65,87 @@ export function HomeScreen() {
   const [servicesReady, setServicesReady] = useState(false);
   const [featuredReady, setFeaturedReady] = useState(false);
   const [programsReady, setProgramsReady] = useState(false);
+  // U-48: pull-to-refresh — re-run every home read, then repaint the bands.
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    await Promise.allSettled([
+      getServices()
+        .then((svcs) => {
+          setServices(svcs.slice(0, 4));
+          setServicesReady(true);
+        })
+        .catch(() => {
+          setServicesReady(true); // nothing to add — hide the band
+        }),
+      getProducts()
+        .then((prods) => {
+          // U-47v6 parity (owner removed 3D residue from the WEBSITE home
+          // shelves): the app's home Shop strip is ELECTRONIC-ONLY too —
+          // same applyComponentsScope as ShopScreen; 3D keeps its own band.
+          setFeatured(
+            applyComponentsScope(prods)
+              .filter((p) => p.stock > 0)
+              .slice(0, 6),
+          );
+          // U-41: same `3D Models` rows the /3d-printing page renders.
+          setPrintModels(
+            prods
+              .filter(
+                (p) =>
+                  p.active !== false &&
+                  p.category?.trim().toLowerCase() === "3d models",
+              )
+              .slice(0, 4),
+          );
+          setFeaturedReady(true);
+        })
+        .catch(() => {
+          setFeaturedReady(true);
+        }),
+      fetchSiteContent()
+        .then((content) => {
+          if (content?.content?.home_title)
+            setHeroTitle(content.content.home_title);
+          if (content?.content?.home_body)
+            setHeroBody(content.content.home_body);
+        })
+        .catch(() => {
+          /* hero keeps the bundled copy */
+        }),
+      getProgramsContent()
+        .then((programContent) => {
+          setTrainingPrograms(programContent.trainingPrograms);
+          setPilotCosts(programContent.pilotCosts);
+          setStemProjectHighlights(programContent.stemProjectHighlights);
+          setProgramsReady(true);
+        })
+        .catch(() => {
+          setProgramsReady(true); // bundled fallbacks already set
+        }),
+    ]);
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    void getServices()
-      .then((svcs) => {
-        if (!active) return;
-        setServices(svcs.slice(0, 4));
-        setServicesReady(true);
-      })
-      .catch(() => {
-        if (active) setServicesReady(true); // nothing to add — hide the band
-      });
-    void getProducts()
-      .then((prods) => {
-        if (!active) return;
-        // U-47v6 parity (owner removed 3D residue from the WEBSITE home
-        // shelves): the app's home Shop strip is ELECTRONIC-ONLY too —
-        // same applyComponentsScope as ShopScreen; 3D keeps its own band.
-        setFeatured(
-          applyComponentsScope(prods)
-            .filter((p) => p.stock > 0)
-            .slice(0, 6),
-        );
-        // U-41: same `3D Models` rows the /3d-printing page renders.
-        setPrintModels(
-          prods
-            .filter(
-              (p) =>
-                p.active !== false &&
-                p.category?.trim().toLowerCase() === "3d models",
-            )
-            .slice(0, 4),
-        );
-        setFeaturedReady(true);
-      })
-      .catch(() => {
-        if (active) setFeaturedReady(true);
-      });
-    void fetchSiteContent()
-      .then((content) => {
-        if (!active) return;
-        if (content?.content?.home_title)
-          setHeroTitle(content.content.home_title);
-        if (content?.content?.home_body) setHeroBody(content.content.home_body);
-      })
-      .catch(() => {
-        /* hero keeps the bundled copy */
-      });
-    void getProgramsContent()
-      .then((programContent) => {
-        if (!active) return;
-        setTrainingPrograms(programContent.trainingPrograms);
-        setPilotCosts(programContent.pilotCosts);
-        setStemProjectHighlights(programContent.stemProjectHighlights);
-        setProgramsReady(true);
-      })
-      .catch(() => {
-        if (active) setProgramsReady(true); // bundled fallbacks already set
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+    void load();
+  }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   return (
     <ScrollView
       className="flex-1 bg-surface"
       contentContainerStyle={{ paddingBottom: 32 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* Hero */}
       <View className="bg-navy px-5 pb-8 pt-6">
@@ -436,7 +450,7 @@ export function HomeScreen() {
               <View className="mt-4 flex-row flex-wrap gap-3">
                 <Pressable
                   onPress={() => navigation.push("Tools")}
-                  className="rounded-full bg-card px-5 py-3"
+                  className="rounded-full bg-card px-5 py-3 active:opacity-70"
                 >
                   <Text className="text-sm font-black text-ink">
                     Open tools

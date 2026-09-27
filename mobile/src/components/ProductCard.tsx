@@ -47,7 +47,7 @@ function ProductCardBase({
       }
       accessibilityRole="button"
       accessibilityLabel={`Open ${product.name}`}
-      className={`overflow-hidden rounded-2xl border border-line bg-card shadow-card ${
+      className={`overflow-hidden rounded-2xl border border-line bg-card shadow-card active:opacity-70 ${
         compact ? "w-40" : "flex-1"
       }`}
     >

@@ -110,14 +110,23 @@ export function CartScreen() {
     }, []),
   );
 
+  // One in-flight qty write at a time: a fast double-tap on "+" used to run two
+  // read-modify-write cycles concurrently and land on a wrong quantity.
+  const qtyBusyRef = useRef<string | null>(null);
   const updateQty = async (productId: string, qty: number) => {
-    // Update the local cart + badge immediately (no waiting for the DB).
-    // The DB sync runs in the background via the AppContext handler.
-    const count = await setQuantity(productId, qty);
-    // U-47v4: 'Remove' is qty 0 — count it as a cart-change habit event.
-    if (qty === 0) void trackHabit("cart");
-    setCart({ count, size: count });
-    setRefreshKey((k) => k + 1);
+    if (qtyBusyRef.current === productId) return;
+    qtyBusyRef.current = productId;
+    try {
+      // Update the local cart + badge immediately (no waiting for the DB).
+      // The DB sync runs in the background via the AppContext handler.
+      const count = await setQuantity(productId, qty);
+      // U-47v4: 'Remove' is qty 0 — count it as a cart-change habit event.
+      if (qty === 0) void trackHabit("cart");
+      setCart({ count, size: count });
+      setRefreshKey((k) => k + 1);
+    } finally {
+      qtyBusyRef.current = null;
+    }
   };
 
   if (loading) {
@@ -312,7 +321,7 @@ export function CartScreen() {
         </Pressable>
         <Pressable
           onPress={() => navigation.goBack()}
-          className="mt-2 items-center py-2"
+          className="mt-2 items-center py-2 active:opacity-60"
           accessibilityLabel="Continue shopping"
         >
           <Text className="text-xs font-bold text-navy underline">

@@ -10,6 +10,65 @@
 
 ---
 
+## U-48 round — final snags: save feedback, refresh, pressed state (2026-09-27, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> App half of the U-48 final snag round. Plan: `../../../guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md`
+> (§6 = what changed, §7 = what was deliberately not changed) + full log
+> `../../../guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`.
+> NO native bump — 3.2.6/59 stays, this rides an OTA. Gates: **tsc 0 + vitest 205/205 + prettier clean**.
+> ⚠ **Run `supabase functions deploy site-content payment-khalti` (website repo) BEFORE the admin
+> content-save row below**, or that row will fail with 401 by design.
+
+### U-48-1 — admin save shows a response, and cannot be double-submitted
+
+- [ ] Admin → edit a product → Save: button shows "Saving…", is disabled while in flight, then
+      confirms. Double-tapping rapidly still creates exactly ONE product row.
+- [ ] Admin → product editor → **link import** (the owner's original complaint: "save doesn't show
+      proper response after clicking, hence user clicks more than once"): preview then create shows
+      its own busy state, and a rapid double-tap creates exactly one product.
+- [ ] Admin → Services, Journal, Project tabs: same "Saving…" + disabled behaviour; a forced error
+      still re-enables the button (no permanently-stuck busy state).
+- [ ] Admin → content tab: saving home hero shows busy, and **succeeds** (needs the redeployed
+      `site-content` function). A non-admin signed-in user cannot reach an admin save.
+
+### U-48-2 — pull-to-refresh
+
+- [ ] Home: pull down → spinner appears, catalog reloads, spinner dismisses.
+- [ ] Printing: pull down → reloads, filters preserved.
+- [ ] Tools: pull down → reloads, current selection preserved.
+- [ ] Projects: pull down → reloads (this one already worked; confirm no regression).
+- [ ] Shop and Account: still refresh (pre-existing) — confirm no regression.
+
+### U-48-3 — buttons respond instantly + busy states
+
+- [ ] Product detail → "Add to build list": shows "Adding…" while in flight, disables, and a fast
+      double-tap adds the quantity **once** (not twice).
+- [ ] Cart → tap "+" quickly several times: the final quantity is exactly what you tapped (no lost
+      or doubled increments from overlapping writes).
+- [ ] Account → newsletter subscribe: shows "Subscribing…", and if the network fails the button
+      re-enables and shows an error instead of staying dead.
+- [ ] Buttons now dim slightly on press: product cards, Shop filter chips + checkout provider rows,
+      Cart "Continue shopping", Contact cards, Home "Open tools", Order-success "Back",
+      Projects/Services clear-search, sign-in show/hide password, PID modal quick-set/Cancel/Set.
+
+### U-48-4 — no double catalog fetch on open (perf)
+
+- [ ] Cold-open the app: no visible stall/jank while Home + Shop both mount (one shared catalog
+      fetch, not two).
+- [ ] Swipe through the tab pager: switching tabs does NOT re-download the catalog, and the cart
+      list does not re-render when nothing changed.
+- [ ] Offline: the cached catalog still renders with the offline badge (dedupe must not break the
+      cache fallback).
+
+### U-48-5 — regression sweep (must still work)
+
+- [ ] Add to cart → cart badge, quantities, totals, checkout placement all unchanged.
+- [ ] Collection hearts + admin tabs single-row + biometric lock re-arm: unchanged.
+- [ ] Push notification permission + subscribe/unsubscribe: unchanged (the U-25 cleanup deliberately
+      KEPT the `EXPO_PUBLIC_EAS_PROJECT_ID` fallback).
+
+---
+
 ## device-round-12 — theme tokens + OLED font + Telemetry pill + overflow (2026-09-17, IMPLEMENTED — A-48..A-51; JS OTA — DEVICE VERIFY PENDING)
 
 > App half of round-12. Full run sheet: `../../guide/DEVICE-ROUND-12-2026-09-17.md`.

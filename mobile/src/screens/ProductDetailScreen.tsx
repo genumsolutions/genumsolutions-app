@@ -53,6 +53,7 @@ export function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
   // C3 (2026-09-23): related (same category → same type) rows resolved
   // against the full catalog once it loads. (Recently-viewed removed U-47.)
   const [related, setRelated] = useState<Product[]>([]);
@@ -149,15 +150,20 @@ export function ProductDetailScreen() {
   ];
 
   const handleAdd = async () => {
-    if (isQuote) return;
-    const count = await addToCart(
-      product.id,
-      Math.min(qty, Math.max(1, product.stock)),
-    );
-    // U-47v2: habit counter (fire-and-forget).
-    void trackHabit("cart");
-    setCart({ count, size: count });
-    setAdded(true);
+    if (isQuote || adding) return;
+    setAdding(true);
+    try {
+      const count = await addToCart(
+        product.id,
+        Math.min(qty, Math.max(1, product.stock)),
+      );
+      // U-47v2: habit counter (fire-and-forget).
+      void trackHabit("cart");
+      setCart({ count, size: count });
+      setAdded(true);
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleQuote = () => {
@@ -644,20 +650,24 @@ export function ProductDetailScreen() {
           )}
           <Pressable
             onPress={isQuote ? handleQuote : () => void handleAdd()}
+            disabled={adding}
             accessibilityRole="button"
+            accessibilityState={{ busy: adding, disabled: adding }}
             accessibilityLabel={
               isQuote ? "Request a scoped quote" : "Add to build list"
             }
-            className={`flex-1 flex-row items-center justify-center gap-2 rounded-full py-3.5 disabled:opacity-50 ${
+            className={`flex-1 flex-row items-center justify-center gap-2 rounded-full py-3.5 active:opacity-80 disabled:opacity-50 ${
               added && !isQuote ? "bg-emerald-600" : "bg-navy"
             }`}
           >
             <Text className="font-bold text-white">
               {isQuote
                 ? "Request a scoped quote"
-                : added
-                  ? "Added to build list"
-                  : "Add to build list"}
+                : adding
+                  ? "Adding…"
+                  : added
+                    ? "Added to build list"
+                    : "Add to build list"}
             </Text>
             <Feather
               name={

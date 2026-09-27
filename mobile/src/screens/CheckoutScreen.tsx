@@ -267,7 +267,7 @@ export function CheckoutScreen() {
             <Pressable
               key={value}
               onPress={() => setProvider(value)}
-              className={`border-b border-line px-4 py-3.5 last:border-b-0 ${selected ? "bg-navy-light" : "bg-card"}`}
+              className={`border-b border-line px-4 py-3.5 last:border-b-0 active:opacity-70 ${selected ? "bg-navy-light" : "bg-card"}`}
             >
               <View className="flex-row items-center justify-between">
                 <Text

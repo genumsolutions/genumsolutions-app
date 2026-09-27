@@ -177,7 +177,7 @@ export function ShopScreen() {
           onPress={() => setInStock((current) => !current)}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: inStock }}
-          className="flex-row items-center self-start rounded-lg border border-line bg-card px-3 py-2"
+          className="flex-row items-center self-start rounded-lg border border-line bg-card px-3 py-2 active:opacity-70"
         >
           <Feather
             name={inStock ? "check-square" : "square"}

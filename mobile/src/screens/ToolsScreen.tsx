@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -74,9 +75,26 @@ export function ToolsScreen() {
   // DB-driven categories with hardcoded fallback
   const [categories, setCategories] =
     useState<ProjectCategory[]>(PROJECT_CATEGORIES);
-  useEffect(() => {
-    getProjectCategories().then(setCategories);
+  // U-48: pull-to-refresh — re-read the admin-editable category list.
+  const [refreshing, setRefreshing] = useState(false);
+  const loadCategories = useCallback(async () => {
+    try {
+      setCategories(await getProjectCategories());
+    } catch {
+      // keep the bundled fallback
+    }
   }, []);
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadCategories();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCategories]);
 
   const routeCategory = (() => {
     const raw = route.params?.category;
@@ -153,6 +171,9 @@ export function ToolsScreen() {
     <ScrollView
       className="flex-1 bg-mist"
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* Header */}
       <View className="flex-row items-center justify-between">

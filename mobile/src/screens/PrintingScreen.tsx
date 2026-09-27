@@ -7,12 +7,13 @@
 // the same products with category "3D Models" from the shared products
 // table that the website's /3d-printing page shows (unification parity).
 // =====================================================================
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
   Linking,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -123,28 +124,36 @@ export function PrintingScreen() {
   const [maxPrice, setMaxPrice] = useState(0);
   const [inStock, setInStock] = useState(false);
   const [page, setPage] = useState(1);
-  useEffect(() => {
-    let active = true;
-    getProductsWithSource()
-      .then(({ products, source }) => {
-        if (!active) return;
-        setModels(
-          products.filter(
-            (p) =>
-              p.category?.trim().toLowerCase() === "3d models" &&
-              p.active !== false,
-          ),
-        );
-        setOffline(source === "cache");
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+  // U-48: pull-to-refresh — re-run the catalog read; spinner tracks it.
+  const [refreshing, setRefreshing] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const { products, source } = await getProductsWithSource();
+      setModels(
+        products.filter(
+          (p) =>
+            p.category?.trim().toLowerCase() === "3d models" &&
+            p.active !== false,
+        ),
+      );
+      setOffline(source === "cache");
+    } catch {
+      // keep previous data
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
   const categories = useMemo(() => distinctCategories(models), [models]);
   const visible = useMemo(
     () =>
@@ -171,6 +180,9 @@ export function PrintingScreen() {
     <ScrollView
       className="flex-1 bg-surface"
       contentContainerStyle={{ paddingBottom: 32 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* ── The 3D Products store FIRST (owner: "include all the product
           thing at the top … other things down below those") ── */}

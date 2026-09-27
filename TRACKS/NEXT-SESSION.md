@@ -1,4 +1,37 @@
-# NEXT SESSION — genumsolutions-app (2026-09-24: U-24 owner multi-front revision round; current release 3.2.5/58)
+# NEXT SESSION — genumsolutions-app (2026-09-27: U-48 final snags; current release 3.2.6/59)
+
+**START HERE — U-48 FINAL SNAG ROUND: CODE IS DONE AND GREEN, BUT UNCOMMITTED.**
+Three things in order:
+1. `supabase functions deploy site-content payment-khalti` (run from the **website** repo). Two
+   production security fixes are inert until this happens; until then the app's admin
+   "save site content" will 401.
+2. Review + commit + push `genumsolutions-app` and `genumsolutions-website`. No version bump —
+   JS-only changes, so the app ships via OTA.
+3. Owner device pass, now also covering: pull-to-refresh on Home/Printing/Tools · double-tap on
+   "Add to build list" adds exactly once · cart "+" lands on the right quantity · admin
+   site-content save succeeds.
+Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 + `guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`.
+Gates at handoff: app tsc 0 · vitest 205/205 · prettier clean · web tsc/lint/vitest 151/151/build.
+
+**DONE 2026-09-27 — U-45 PHASE 2 APP LINKER + U-47 OWNER ROUNDS v1→v7 (app `fb3d118` → `4f8ed03`; all pushed).**
+Full logs: `guide/SESSION-2026-09-27-U47-OWNER-ROUND.md` (per-version detail + do-not-regress list)
++ `guide/NEXT-SESSION-2026-09-27.md` (carry-over queue). Shipped app-side: project↔component linker
+mirror (detail strips + ProjectTab linker card via the `save_project_components` RPC, vitest 203/203
+at that point); U-47 six-category Control Panel + remotes (Smart Dustbin Fill/Lid, Remote Controller
+RSSI — placeholder sensorData until a real firmware protocol exists), app-wide CollectionContext +
+collectionService hearts, minimal square ProductCards + `productMedia` fallback imagery, shared
+`applyComponentsScope` (+ regression tests), admin single-row tabs + swipe-sync guard + overflow
+sweeps, home snap carousels + electronic-only Shop strip, PrintingScreen store + filter stack,
+CartHeader + cart web-parity rebuild, menu cleanup, biometric re-arm guard + auto-heal (v7) with the
+Security switch always rendered for staff. Gates every round: tsc 0 · vitest 205/205 · prettier ✓.
+Version 3.2.5→3.2.6 (58→59) bump pushed via release.yml.
+
+**DEVICE-VERIFY (owner — the FIN-36 gate; pairs with the web menu checks):** reopen the app ×2 on
+3.2.6/59: ① biometric toggle switchable + no card deflect on resume; ② admin tabs single-row, no
+flicker; ③ minimal cards + hearts → profile collection sync; ④ six-category Projects filter;
+⑤ Smart Dustbin / Remote Controller remote windows render; ⑥ cart header + qty controls at 320–360px;
+⑦ bottom nav 4 tabs. On PASS → re-stage FIN-36 targets to the 3.2.6/59 release chain
+(`guide/FIN-36-TAGS.sh --dry-run`) → cut tags.
 
 **DONE 2026-09-25 — PERF BATCH (JS-only → rides the next OTA, no version bump).**
 Queued at the end of U-31 and executed after the U-37 mirror:
@@ -289,23 +322,13 @@ adminService (it was only used by that one call). Service ops UX now mirrors pro
 save/delete/show-hide failures surface an alert, never silently drop. App tsc clean, vitest
 **140/140**. Related: website has `scripts/verify-admin-services.mjs` (**10/10** live).
 
-**Current state:** **3.2.5 / versionCode 58** (`5fd10b1`) — **RELEASED 2026-09-22 via CI**
-(bump push → `release.yml` run `35688360720` built + uploaded the APK; `release.json` =
-3.2.5/58 live, website fallback synced by bot `7bb6cb5`). This native build carries the
-**2026-09-22 tiers + robot-preferences round**: **`isPro` in AppContext** (session tier),
-**pro-gated Remote window** (free/guest users get a locked explainer before any drive
-control mounts; the Control Panel stays open to everyone), **Robot Preferences screen**
-(Menu → Pro-only: per-robot code values, tuning parameters, telemetry channels via
-`robotSettingsService` → the dedicated `robot_user_settings` table — completely separate
-from carts/orders, mirrored on the website, admin-manageable per user from the web Users
-tab), plus the **2026-09-22 residue cleanup** (`AutonomousControls`, `WeblinkControls`,
-`ModeInfo`, `deviceMemoryService`, `carModeStorage` deleted — all zero-inbound; dead prop
-types removed from `tools/types.ts`). Also inside: the entire P6 round (role-revoke via
-`admin-set-role`, settingsService cloud-theme adoption, company-stamp icon — icons ship
-only with a native APK) and the FIN-50/R-20 line. 3.2.4/57 shipped 2026-09-21 and is
-superseded; 3.2.3/56 after one day. Vitest **137/137** (M3 test-repair round
-2026-09-23 closed the 3 failing cartService/roboCarCatalog tests + added the tsc-fix
-for the same files — see TRACKS/INDEX.md), CI green.
+**Current state (2026-09-27):** **3.2.6 / versionCode 59** (`4f8ed03`) — released via CI
+(bump push → release.yml built + uploaded the APK; website fallback synced by bot).
+3.2.6 carries the U-47 v1→v7 app line (see the DONE block at the top of this file) on top of
+the 3.2.5/58 round (tiers + robot preferences, isPro, pro-gated Remote, residue cleanup,
+P6 role-revoke/icon) — historical release chain: 3.2.3/56 → 3.2.4/57 (2026-09-21) →
+3.2.5/58 (`5fd10b1`, 2026-09-22) → 3.2.6/59 (2026-09-27). Vitest **205/205**, CI green.
+Owner device pass pending — the FIN-36 gate.
 
 **Theme parity pushed 2026-09-22 (`78e10f9`, rides the next OTA — JS-only):** the owner's
 2-mode decision (website theme → Light/Dim, System removed). The app's **shared**
@@ -343,11 +366,11 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
    - Then run `guide/DEVICE-RERUN-2026-09-21.md` (retargeted to 3.2.5/58 2026-09-22).
 2. ✅ **RELEASE-NOTES-DRAFT.md** (FIN-35) — refreshed to the released **3.2.5/58**
    2026-09-22 (tier + robot-preference bullets added on top of the P6 bullets).
-3. 🔜 **FIN-36:** version-defining commits — app **`v3.2.5` → `5fd10b1`** (the bump
-   commit), website **`website-v3.2.5` → `7bb6cb5`** (bot fallback-sync commit).
-   **Re-staged twice 2026-09-22** (3.2.4 → 3.2.5 the same day, before any tag was cut);
-   `guide/FIN-36-TAGS.sh --dry-run` re-passed all six 2026-09-22. Firmware targets
-   unchanged (v1.6.6 / v1.0.10 / v1.8.3 / v1.2.5). Cut ONLY after the device gate passes.
+3. 🔜 **FIN-36:** version-defining commits — **STALE at 3.2.5 (2026-09-22 staging); re-stage
+   after the U-47 device pass:** app **`v3.2.6` → `4f8ed03`** (the bump commit), website
+   **`website-v3.2.6` → the current fallback-sync bot commit**, then `guide/FIN-36-TAGS.sh
+   --dry-run` before cutting. Firmware targets unchanged (v1.6.6 / v1.0.10 / v1.8.3 / v1.2.5).
+   Cut ONLY after the device gate passes.
 4. 🌉 **ECOSYSTEM UNIFICATION:** P1–P5 DONE + pushed (see guide/ARCHITECTURE.md);
    W-6 + W-3 live; P3 machine review 27 PASS · 0 SNAG · 0 FAIL · 2 DEFER (owner visual
    pass still open — `guide/P3-REVIEW-CHECKLIST-2026-09-21.md`). **2026-09-22 adds the
@@ -424,6 +447,16 @@ Read-only audits done. App-side actions for today:
   src/services/settingsService.ts:58/93/104/141/147 orphans
   Dead env EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID refs; unused
   EXPO_PUBLIC_EAS_PROJECT_ID refs.
+
+> **✅ CLOSED by U-48 (2026-09-27).** Every item above was re-verified to have zero references
+> (tests included) immediately before deletion, then deleted. Gates after: tsc 0 · vitest 205/205 ·
+> prettier clean. One correction to the original audit:
+>
+> **⚠ `EXPO_PUBLIC_EAS_PROJECT_ID` was listed as an unused ref but is NOT dead** — it is a live
+> documented fallback in `src/config/push.ts` (alongside `app.json` `extra.eas.projectId`) and is
+> named in the error text in `src/services/pushService.ts`. It was deliberately **kept**; removing
+> it would break push on builds where the env var is the only source. The other two env items are
+> genuinely gone (`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` has no reference anywhere).
 
 **PARITY (align with web card a9dd8b5):** ProductCard media root was already
 square (aspect-[] / aspect-square, pushed 76a2327) �?" no rework needed; price

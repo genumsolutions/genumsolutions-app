@@ -327,6 +327,10 @@ export function AdminScreen() {
     "electronic" | "models" | "projects"
   >("electronic");
   const [importBusy, setImportBusy] = useState(false);
+  // U-48: set while ANY editor save (product / import / service / journal /
+  // project) is in flight — the editor's Save button disables + shows
+  // "Saving…" so a slow write can never be double-submitted.
+  const [saveSaving, setSaveSaving] = useState(false);
   // U-24 (2026-09-24): import-by-link used Alert.prompt, which is iOS-only —
   // on Android the promise NEVER resolves, so the flow silently died after
   // Cancel and "import is not working anywhere". This owned modal gives both
@@ -338,6 +342,8 @@ export function AdminScreen() {
   // it is owned here so the admin pager can disable swiping while ANY
   // Settings item is being edited.
   const [settingsEditing, setSettingsEditing] = useState(false);
+  // U-48: Content tab hero save is async — guard + disable its Save button.
+  const [contentSaving, setContentSaving] = useState(false);
 
   // Admin editor BackHandler: when an inline editor is open (product/service/
   // journal) on the CURRENT tab, Android Back should close the editor instead
@@ -516,7 +522,8 @@ export function AdminScreen() {
   }
 
   async function handleSaveProduct() {
-    if (!editingProduct) return;
+    if (!editingProduct || saveSaving) return;
+    setSaveSaving(true);
     try {
       if (pendingImportUrl) {
         if (!editingProduct.name.trim()) {
@@ -545,6 +552,8 @@ export function AdminScreen() {
         "Save failed",
         e instanceof Error ? e.message : "Could not save the product.",
       );
+    } finally {
+      setSaveSaving(false);
     }
   }
 
@@ -576,7 +585,8 @@ export function AdminScreen() {
   }
 
   async function handleSaveService() {
-    if (!editingService) return;
+    if (!editingService || saveSaving) return;
+    setSaveSaving(true);
     const normalized = {
       ...editingService,
       id: editingService.id.trim().toLowerCase().replace(/\s+/g, "-"),
@@ -597,6 +607,8 @@ export function AdminScreen() {
         "Save failed",
         e instanceof Error ? e.message : "Could not save the service.",
       );
+    } finally {
+      setSaveSaving(false);
     }
   }
 
@@ -833,6 +845,8 @@ export function AdminScreen() {
       Alert.alert("Missing title", "A journal post needs a title.");
       return;
     }
+    if (saveSaving) return;
+    setSaveSaving(true);
     try {
       await upsertAdminJournalPost({
         id: journalEditId.trim()
@@ -848,6 +862,12 @@ export function AdminScreen() {
       void loadTab();
     } catch (e) {
       logger.error("admin", "Journal save error:", e);
+      Alert.alert(
+        "Save failed",
+        e instanceof Error ? e.message : "Could not save the journal post.",
+      );
+    } finally {
+      setSaveSaving(false);
     }
   }
 
@@ -1093,6 +1113,7 @@ export function AdminScreen() {
               onToggleActive={(p) => void handleToggleProductActive(p)}
               onImportCancel={() => setPendingImportUrl(null)}
               fromLink={pendingImportUrl != null}
+              saveSaving={saveSaving}
             />
           </Sub>
         );
@@ -1109,6 +1130,7 @@ export function AdminScreen() {
               onEdit={setEditingProject}
               onNew={() => setEditingProject(blankProjectProduct())}
               onSaveProduct={saveProduct}
+              saveSaving={saveSaving}
               canDelete={canDelete}
               onDelete={handleDeleteProduct}
               onToggleActive={(p) => void handleToggleProductActive(p)}
@@ -1125,6 +1147,7 @@ export function AdminScreen() {
               onEdit={setEditingService}
               onNew={handleNewService}
               onSave={handleSaveService}
+              saveSaving={saveSaving}
               canDelete={canDelete}
               onDelete={handleDeleteService}
               onToggleActive={(s) => void handleToggleServiceActive(s)}
@@ -1152,6 +1175,7 @@ export function AdminScreen() {
               onSortChange={setJournalSort}
               onActiveChange={setJournalActive}
               onSave={() => void handleSaveJournal()}
+              saving={saveSaving}
               onCancel={() => setJournalOpen(false)}
             />
             <ContentTab
@@ -1161,7 +1185,8 @@ export function AdminScreen() {
               onTitleChange={setContentTitle}
               onBodyChange={setContentBody}
               onSave={async () => {
-                if (!siteContent) return;
+                if (!siteContent || contentSaving) return;
+                setContentSaving(true);
                 setContentSaved(false);
                 try {
                   await upsertSiteContent({
@@ -1172,9 +1197,18 @@ export function AdminScreen() {
                   setContentSaved(true);
                 } catch (e) {
                   logger.error("admin", "Site content save error:", e);
+                  Alert.alert(
+                    "Save failed",
+                    e instanceof Error
+                      ? e.message
+                      : "Could not save the content.",
+                  );
+                } finally {
+                  setContentSaving(false);
                 }
               }}
               saved={contentSaved}
+              saving={contentSaving}
               trainingPrograms={trainingPrograms}
               setTrainingPrograms={setTrainingPrograms}
               onSaveProgram={async (program, isNew) => {
@@ -1824,6 +1858,7 @@ function ProductsTab({
   onDelete,
   onToggleActive,
   fromLink,
+  saveSaving,
 }: {
   /** U-44: which catalog this tab manages (drives copy + import preset). */
   kind: "electronic" | "models";
@@ -1842,6 +1877,7 @@ function ProductsTab({
   onToggleActive: (p: AdminProduct) => void;
   onImportCancel: () => void;
   fromLink: boolean;
+  saveSaving: boolean;
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null);
   const [page, setPage] = useState(1);
@@ -1880,6 +1916,7 @@ function ProductsTab({
           isNew={!products.some((p) => p.id === editing.id)}
           categoryOptions={categories.filter((c) => c !== "All")}
           fromLink={fromLink}
+          saving={saveSaving}
         />
       </View>
     );
@@ -2042,6 +2079,7 @@ function ProjectTab({
   canDelete,
   onDelete,
   onToggleActive,
+  saveSaving,
 }: {
   title: string;
   products: AdminProduct[];
@@ -2053,6 +2091,7 @@ function ProjectTab({
   onEdit: (p: AdminProduct) => void;
   onNew: () => void;
   onSaveProduct: (p: AdminProduct) => Promise<boolean>;
+  saveSaving: boolean;
   canDelete: boolean;
   onDelete: (id: string) => void;
   onToggleActive: (p: AdminProduct) => void;
@@ -2060,6 +2099,9 @@ function ProjectTab({
   const isNew = editing ? !products.some((p) => p.id === editing.id) : false;
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
+  // U-48: this tab saves through onSaveProduct directly (not the guarded
+  // parent handler), so it owns its saving flag for the Save button.
+  const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<AdminProduct | null>(null);
   const PAGE_SIZE = 6;
@@ -2196,10 +2238,15 @@ function ProjectTab({
         <ProductEditor
           product={editing}
           onChange={onChange}
+          saving={saving}
           onSave={() => {
-            void onSaveProduct(editing).then((saved) => {
-              if (saved) onChange(null);
-            });
+            if (saving) return;
+            setSaving(true);
+            void onSaveProduct(editing)
+              .then((saved) => {
+                if (saved) onChange(null);
+              })
+              .finally(() => setSaving(false));
           }}
           onCancel={() => onChange(null)}
           isNew={isNew}
@@ -2509,6 +2556,7 @@ function ProductEditor({
   isNew,
   categoryOptions,
   fromLink,
+  saving,
 }: {
   product: AdminProduct;
   onChange: (next: AdminProduct) => void;
@@ -2517,6 +2565,7 @@ function ProductEditor({
   isNew: boolean;
   categoryOptions: string[];
   fromLink?: boolean;
+  saving?: boolean;
 }) {
   function patch(patchPart: Partial<AdminProduct>) {
     onChange({ ...product, ...patchPart });
@@ -2939,14 +2988,17 @@ function ProductEditor({
         <View className="flex-row gap-3">
           <Pressable
             onPress={onSave}
-            className="rounded-full bg-gold px-5 py-2"
+            disabled={saving}
+            className={`rounded-full bg-gold px-5 py-2 ${saving ? "opacity-60" : ""}`}
           >
             <Text className="text-xs font-black text-ink">
-              {fromLink
-                ? "Save imported product"
-                : isNew
-                  ? "Create product"
-                  : "Save"}
+              {saving
+                ? "Saving…"
+                : fromLink
+                  ? "Save imported product"
+                  : isNew
+                    ? "Create product"
+                    : "Save"}
             </Text>
           </Pressable>
           <Pressable
@@ -2971,6 +3023,7 @@ function ServicesTab({
   canDelete,
   onDelete,
   onToggleActive,
+  saveSaving,
 }: {
   services: AdminService[];
   editing: AdminService | null;
@@ -2981,6 +3034,7 @@ function ServicesTab({
   canDelete: boolean;
   onDelete: (id: string) => void;
   onToggleActive: (s: AdminService) => void;
+  saveSaving: boolean;
 }) {
   const [preview, setPreview] = useState<AdminService | null>(null);
   const [query, setQuery] = useState("");
@@ -3016,6 +3070,7 @@ function ServicesTab({
           onCancel={() => onEdit(null)}
           isNew={!services.some((s) => s.id === editing.id)}
           categoryOptions={categories.filter((c) => c !== "All")}
+          saving={saveSaving}
         />
       </View>
     );
@@ -3148,6 +3203,7 @@ function ServiceEditor({
   onCancel,
   isNew,
   categoryOptions,
+  saving,
 }: {
   service: AdminService;
   onChange: (next: AdminService) => void;
@@ -3155,6 +3211,7 @@ function ServiceEditor({
   onCancel: () => void;
   isNew: boolean;
   categoryOptions: string[];
+  saving?: boolean;
 }) {
   function patch(patchPart: Partial<AdminService>) {
     onChange({ ...service, ...patchPart });
@@ -3249,10 +3306,11 @@ function ServiceEditor({
         <View className="flex-row gap-3">
           <Pressable
             onPress={onSave}
-            className="rounded-full bg-gold px-5 py-2"
+            disabled={saving}
+            className={`rounded-full bg-gold px-5 py-2 ${saving ? "opacity-60" : ""}`}
           >
             <Text className="text-xs font-black text-ink">
-              {isNew ? "Create service" : "Save"}
+              {saving ? "Saving…" : isNew ? "Create service" : "Save"}
             </Text>
           </Pressable>
           <Pressable
@@ -3667,6 +3725,7 @@ function ContentTab({
   onBodyChange,
   onSave,
   saved,
+  saving,
   trainingPrograms,
   setTrainingPrograms,
   onSaveProgram,
@@ -3688,6 +3747,7 @@ function ContentTab({
   onBodyChange: (b: string) => void;
   onSave: () => void;
   saved: boolean;
+  saving: boolean;
   trainingPrograms: AdminTrainingProgram[];
   setTrainingPrograms: (p: AdminTrainingProgram[]) => void;
   onSaveProgram: (p: AdminTrainingProgram, isNew: boolean) => void;
@@ -3742,9 +3802,12 @@ function ContentTab({
       </View>
       <Pressable
         onPress={onSave}
-        className="mt-4 items-center rounded-full bg-navy py-3"
+        disabled={saving}
+        className={`mt-4 items-center rounded-full bg-navy py-3 ${saving ? "opacity-60" : ""}`}
       >
-        <Text className="text-sm font-black text-white">Save changes</Text>
+        <Text className="text-sm font-black text-white">
+          {saving ? "Saving…" : "Save changes"}
+        </Text>
       </Pressable>
       {saved && (
         <Text className="mt-3 text-center text-sm font-semibold text-emerald-700">
@@ -3823,6 +3886,7 @@ function JournalTab({
   onActiveChange,
   onSave,
   onCancel,
+  saving,
 }: {
   journals: AdminJournalPost[];
   editorOpen: boolean;
@@ -3845,6 +3909,7 @@ function JournalTab({
   onActiveChange: (v: boolean) => void;
   onSave: () => void;
   onCancel: () => void;
+  saving: boolean;
 }) {
   const [preview, setPreview] = useState<AdminJournalPost | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -3939,9 +4004,12 @@ function JournalTab({
             <View className="flex-row gap-3">
               <Pressable
                 onPress={onSave}
-                className="rounded-full bg-gold px-5 py-2"
+                disabled={saving}
+                className={`rounded-full bg-gold px-5 py-2 ${saving ? "opacity-60" : ""}`}
               >
-                <Text className="text-xs font-black text-ink">Save</Text>
+                <Text className="text-xs font-black text-ink">
+                  {saving ? "Saving…" : "Save"}
+                </Text>
               </Pressable>
               <Pressable
                 onPress={onCancel}
