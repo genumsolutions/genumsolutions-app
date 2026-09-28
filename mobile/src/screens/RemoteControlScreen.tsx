@@ -44,6 +44,7 @@ import { OledDisplay } from "../components/tools/OledDisplay";
 import { SensorGrid } from "../components/tools/SensorGrid";
 import { DroneControls } from "../components/tools/DroneControls";
 import { RouterPanel } from "../components/tools/RouterPanel";
+import { DEFAULT_AP_IP } from "../services/carProtocol";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
@@ -446,10 +447,13 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // ── Weblink handlers ──
   // A-36: the IP chip is ALWAYS tappable — with a reachable STA IP we open the
-  // car's web page directly; offline/AP-fallback we open http://192.168.4.1
-  // (the car's own AP page), so "nothing happens" is gone even unconnected.
+  // car's web page directly; offline/AP-fallback we open the car's own AP page
+  // (v2 default: the 4WD4M car's 192.168.245.1; donor cars use .244), so
+  // "nothing happens" is gone even unconnected.
   const handleOpenWebPage = useCallback(() => {
-    const url = telemetry.ip ? `http://${telemetry.ip}` : "http://192.168.4.1";
+    const url = telemetry.ip
+      ? `http://${telemetry.ip}`
+      : `http://${DEFAULT_AP_IP}`;
     void Linking.openURL(url).catch(() => undefined);
   }, [telemetry.ip]);
 
@@ -693,7 +697,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Pressable
                 onPress={handleOpenWebPage}
                 accessibilityRole="link"
-                accessibilityLabel={`Open car web page at ${telemetry.ip || "192.168.4.1"}`}
+                accessibilityLabel={`Open car web page at ${telemetry.ip || DEFAULT_AP_IP}`}
                 hitSlop={6}
                 className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
               >
@@ -706,7 +710,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
                   numberOfLines={1}
                 >
-                  {telemetry.ip || "192.168.4.1"}
+                  {telemetry.ip || DEFAULT_AP_IP}
                   {!telemetry.ip ? " (AP)" : ""}
                 </Text>
               </Pressable>
@@ -980,7 +984,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                         numberOfLines={1}
                         className="font-mono text-base font-bold text-ink dark:text-white"
                       >
-                        {telemetry.ip || "192.168.4.1"}
+                        {telemetry.ip || DEFAULT_AP_IP}
                       </Text>
                     </View>
                   )}

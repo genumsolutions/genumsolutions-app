@@ -46,7 +46,8 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { RouterPanelProps } from "./types";
-import { OWN_AP_NAME } from "../../services/carProtocol";
+import { isOwnApName } from "../../services/carProtocol";
+import { DEFAULT_AP_IP } from "../../services/carProtocol";
 
 export function RouterPanel({
   canControl,
@@ -65,7 +66,9 @@ export function RouterPanel({
   const [pass, setPass] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const activeName = carSsid ?? carApName ?? null;
-  const ipOut = ip || (linked ? "192.168.4.1" : null);
+  // v2: AP-fallback IP is per-car truth (the new 4WD4M car owns .245; the
+  // donor owns .244; 192.168.4.x is forbidden fleet-wide).
+  const ipOut = ip || (linked ? DEFAULT_AP_IP : null);
   const { width } = useWindowDimensions();
   // R-15: medium+ widths (landscape phones / tablets) share one row;
   // narrow portrait stacks the cards full-width.
@@ -73,7 +76,7 @@ export function RouterPanel({
 
   // A-46 (round-9): the car's OWN network is pinned as a non-deletable
   // Default row and never enters the saved-list delete/switch path.
-  const userNetworks = networks.filter((n) => n !== OWN_AP_NAME);
+  const userNetworks = networks.filter((n) => !isOwnApName(n));
 
   const confirmClearAll = () => {
     // A-42: destructive — confirm before wiping every saved router (car NVS +
@@ -81,7 +84,7 @@ export function RouterPanel({
     // the protected default (car T-62/T-66).
     Alert.alert(
       "Clear all routers?",
-      `Removes every saved router from the car and the remote. The car keeps only its own ${OWN_AP_NAME} as the default.`,
+      `Removes every saved router from the car and the remote. The car keeps only its own access-point network as the default.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -96,7 +99,7 @@ export function RouterPanel({
   };
 
   const handleDelete = (name: string) => {
-    if (name === OWN_AP_NAME) return;
+    if (isOwnApName(name)) return;
     onDelete(name);
   };
 
@@ -240,7 +243,7 @@ export function RouterPanel({
                   numberOfLines={1}
                   ellipsizeMode="middle"
                 >
-                  {OWN_AP_NAME}
+                  {carApName ?? "Car's own network"}
                 </Text>
                 <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">
                   Default

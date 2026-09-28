@@ -35,6 +35,7 @@ import {
   type ProjectCategory,
 } from "../config/project-catalog";
 import { getProjectCategories } from "../services/projectCategoryService";
+import { DEFAULT_WS_URL } from "../services/carProtocol";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
 
@@ -499,7 +500,7 @@ export function ToolsScreen() {
                   value={wifiUrl}
                   onChangeText={setWifiUrl}
                   editable={!connected && !wifiConnected}
-                  placeholder="ws://192.168.4.1:81"
+                  placeholder={DEFAULT_WS_URL}
                   autoCapitalize="none"
                   className="mt-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
                 />

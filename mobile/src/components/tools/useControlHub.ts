@@ -97,6 +97,7 @@ const EVERY_LINK_COMMANDS = new Set([
 ]);
 import { deviceMemory } from "./types";
 import type { CarTelemetry } from "../../services/carProtocol";
+import { DEFAULT_WS_URL } from "../../services/carProtocol";
 import type { SensorData } from "./types";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
@@ -119,7 +120,10 @@ export function useControlHub(routeCategory?: string) {
     null,
   );
   const [wifiConnected, setWifiConnected] = useState(false);
-  const [wifiUrl, setWifiUrl] = useState("ws://192.168.4.1:81");
+  // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
+  // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
+  // user-editable and the remembered per-device URL wins when present.
+  const [wifiUrl, setWifiUrl] = useState(DEFAULT_WS_URL);
   // v1.4.0 provisioning: the WiFi network the CAR should join (its own AP
   // broadcast id + IP ride the car's status JSON for display).
   const [wifiSsid, setWifiSsid] = useState("");
@@ -933,7 +937,7 @@ export function useControlHub(routeCategory?: string) {
   const handleWifiConnect = useCallback(() => {
     setError(null);
     if (!wifiUrl) {
-      setError("Enter the car WiFi address (e.g. ws://192.168.4.1:81)");
+      setError(`Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`);
       return;
     }
     const wsUrl =
@@ -1022,11 +1026,13 @@ export function useControlHub(routeCategory?: string) {
         // the car stored) and remember it per car so the card pre-fills next
         // session. The password is cleared â€” it must never linger in the UI.
         persistPrefs({ lastWifiSsid: ssid });
-        // The car joins the router and gets a DHCP IP; default to its AP
-        // address until the user reads the real IP off the OLED/deck.
-        setWifiUrl("ws://192.168.4.1:81");
+        // The car joins the router and gets a DHCP IP; default to the car's
+        // AP address until the user reads the real IP off the OLED/deck.
+        // v2: the new 4WD4M car's own AP is 192.168.245.1 (donor owns .244;
+        // SDK-default .4.x is forbidden fleet-wide).
+        setWifiUrl(DEFAULT_WS_URL);
         showConnectionMessage(
-          `Car stored WiFi "${ssid}" â€” switched to Webserver mode.`,
+          `Car stored WiFi "${ssid}" â€” switched to Webserver/join mode (v2 cars keep every transport live).`,
           "success",
         );
       } else if (reply.startsWith("WIFICFG;ERROR")) {

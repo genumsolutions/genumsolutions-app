@@ -219,11 +219,36 @@ export const REQ_STATE_LINE = "REQ_STATE";
 
 /**
  * A-46 (round-9): the car's OWN network — its default + protected entry.
- * In ESP_SER the car broadcasts this name first on every list (NETW; /
- * `networks` JSON), and DEL/CLEAR/ADD refuse it (car T-66). The app pins it
- * as a non-deletable "Default" row and never sends it to ROUTERS;DEL.
+ * The car broadcasts this name first on every list (NETW; / `networks` JSON),
+ * and DEL/CLEAR/ADD refuse it (car T-66). The app pins it as a non-deletable
+ * "Default" row and never sends it to ROUTERS;DEL.
+ *
+ * v2 (Genum_4WD4M_CAR, owner plan 2026-09-28): on-air names are UNIQUE per
+ * car — the donor broadcasts `WirelessCar_Wifi`, the new 4WD4M car broadcasts
+ * `4WDCar_Wifi`. The list below is the fleet registry of own-AP names; use
+ * `isOwnApName()` everywhere the app must treat a car's own network specially
+ * (never a bare constant).
  */
 export const OWN_AP_NAME = "WirelessCar_Wifi";
+export const OWN_AP_NAMES: readonly string[] = [
+  "WirelessCar_Wifi",
+  "4WDCar_Wifi",
+];
+
+/** True when `name` is ANY car's own AP (protected, never deletable). */
+export function isOwnApName(name: string): boolean {
+  return OWN_AP_NAMES.includes(name.trim());
+}
+
+/**
+ * v2 defaults for the new 4WD4M car: its own AP sits on 192.168.245.1/24
+ * (subnet .245 — the donor owns .244; 192.168.4.x is forbidden fleet-wide
+ * after the FIN-48 phone-side collision). These are the URL/IP the app
+ * suggests when no live IP is known (raw-URL field placeholder, AP fallback
+ * chip, post-provision default).
+ */
+export const DEFAULT_AP_IP = "192.168.245.1";
+export const DEFAULT_WS_URL = `ws://${DEFAULT_AP_IP}:81`;
 
 /**
  * Build a T-48 router-registry line for the wireless car (v1.7.1), sent over
@@ -249,9 +274,11 @@ export function buildRouterCommand(
 
 /**
  * Build the v1.4.0 WiFi provisioning line: WIFICFG;<ssid>;<password>.
- * Sent over the Bluetooth SPP link; the car stores the pair in Preferences
- * and switches itself to ESP_SER (router join + web page). An empty password
- * provisions an open network. The password must never be logged.
+ * Sent over ANY live link (BT SPP or the car's WS): the car stores the pair
+ * in Preferences and joins the router. v2 cars (Genum_4WD4M_CAR) stay in
+ * 4WD4M and keep every transport live while joining; donor-firmware cars
+ * still switch themselves to ESP_SER. An empty password provisions an open
+ * network. The password must never be logged.
  */
 export function buildWifiConfigLine(ssid: string, password: string): string {
   return `WIFICFG;${ssid};${password}`;
