@@ -44,7 +44,7 @@ import { OledDisplay } from "../components/tools/OledDisplay";
 import { SensorGrid } from "../components/tools/SensorGrid";
 import { DroneControls } from "../components/tools/DroneControls";
 import { RouterPanel } from "../components/tools/RouterPanel";
-import { DEFAULT_AP_IP } from "../services/carProtocol";
+import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
