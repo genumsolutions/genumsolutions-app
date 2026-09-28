@@ -30,12 +30,27 @@
 //     different shapes for the same field.
 // =====================================================================
 
-/** Stable ids for every link the app can drive the car over. */
+/**
+ * Stable ids for every link the app can drive the car over.
+ *
+ * Implemented today: bt-classic, wifi-ap-ws, wifi-sta-ws, http (REST).
+ * Registered placeholders (the full "what if every possible comm method"
+ * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md §3):
+ * bt-ble (needs firmware GATT-UART), mdns, mqtt, usb-serial, cloud-relay.
+ */
 export type TransportId =
-  "bt-classic" | "bt-ble" | "wifi-ap-ws" | "wifi-sta-ws" | "http";
+  | "bt-classic"
+  | "bt-ble"
+  | "wifi-ap-ws"
+  | "wifi-sta-ws"
+  | "http"
+  | "mdns"
+  | "mqtt"
+  | "usb-serial"
+  | "cloud-relay";
 
 /** The radio a transport rides on — what the picker groups by. */
-export type TransportRadio = "bluetooth" | "wifi";
+export type TransportRadio = "bluetooth" | "wifi" | "internet" | "wired";
 
 /**
  * What a link can do. The UI hides or disables anything absent here,
@@ -84,6 +99,24 @@ export type DiscoveredDevice = {
 };
 
 /**
+ * User-facing explanation of HOW a comm method works — the teaching text
+ * the Control Panel renders under the row and under "About this project".
+ * Written for a person, so a roadmap method reads as whole and honest as a
+ * live one (owner round: "register every possible comm method and write the
+ * details of each below the About section").
+ */
+export type TransportTeaching = {
+  /** One-paragraph plain-language "what this is". */
+  intro: string;
+  /** What the user must have (radio, network, firmware build) to use it. */
+  needs: string;
+  /** When this method is the right choice. */
+  when: string;
+  /** Concrete steps to connect + verify (numbered lines). */
+  steps: string[];
+};
+
+/**
  * The contract. Every method is optional except the state getters and
  * `sendLine` — a transport that cannot scan (e.g. a fixed-URL WebSocket)
  * simply omits it rather than implementing a fake list.
@@ -95,6 +128,14 @@ export type Transport = {
   /** Short line for the picker row, e.g. "Car access point · ws://…". */
   readonly blurb: string;
   readonly capabilities: readonly TransportCapability[];
+  /** Optional: what this method is / requires / when / how (teaching). */
+  readonly teaching?: TransportTeaching;
+  /**
+   * Optional: shown when `isSupported()` is false. Explains WHY a registered
+   * method is not actionable on this build (roadmap / firmware gap) so the
+   * row is informative instead of dead.
+   */
+  readonly roadmapNote?: string;
 
   /** False when the platform/native side is missing (web, old APK). */
   isSupported(): boolean;
