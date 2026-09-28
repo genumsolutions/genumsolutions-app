@@ -611,12 +611,19 @@ export function RemoteControlScreen({ navigation }: Props) {
           {/* A-25: friendly BT name right of "Remote" — NEVER a raw hex
               address (sppService falls back to the MAC when a scan reports
               no name). Underscores prettify to spaces: WIRELESS_CAR →
-              WIRELESS CAR. */}
+              WIRELESS CAR. Over WiFi there is no BT name: tag the transport
+              + live address so the deck always identifies which link it is
+              on (a stale BT name from a former session must never label a
+              WiFi link). */}
           <Text
             numberOfLines={1}
             className="max-w-[120px] shrink-0 text-[11px] font-bold text-navy dark:text-sky-300"
           >
-            {linked ? friendlyBtName(deviceName) || "Connected" : "No link"}
+            {connected
+              ? friendlyBtName(deviceName) || "Connected"
+              : wifiConnected
+                ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
+                : "No link"}
           </Text>
 
           {isRobocar && (
@@ -690,10 +697,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                 ellipsizeMode="middle"
                 className="min-w-0 flex-1 text-[10px] font-bold text-muted dark:text-slate-300"
               >
-                {linked ? friendlyBtName(deviceName) || "Connected" : "No link"}
+                {connected
+                  ? friendlyBtName(deviceName) || "Connected"
+                  : wifiConnected
+                    ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
+                    : "No link"}
               </Text>
             </View>
-            {activeMode.id === "website-server" ? (
+            {activeMode.id === "website-server" || wifiConnected ? (
               <Pressable
                 onPress={handleOpenWebPage}
                 accessibilityRole="link"
