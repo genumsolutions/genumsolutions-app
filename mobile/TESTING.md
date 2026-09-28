@@ -805,16 +805,24 @@ Every step behaves as described above. No app crash or permanently dead control;
 
 ---
 
-## U-49 round - transport picker + the WiFi that never worked (2026-09-28, IMPLEMENTED -> APK + DEVICE VERIFY PENDING)
+## U-49 round - transport picker + the WiFi that never worked (2026-09-28, SHIPPED in 3.2.7/60 -> DEVICE VERIFY PENDING)
 
 > Owner report: _"the car is working perfect on bluetooth connection but that app and car doesn't
 > connect at all in the wifi connection. I don't know what going on."_ Root cause + rules:
 > ../../../guide/FAILSAFES.md **F-30**/**F-31**. Design + WiFi playbook:
 > ../../../guide/TRANSPORTS-WIFI-GUIDE.md.
 > Gates: **tsc 0 + vitest 243/243 (16 files)**.
-> **NO OTA CAN FIX THIS.** The manifest lacks WiFi permissions and cleartext, so a **native APK
-> build is required** (AGENTS.md release flow from C:\bs). Rows U-49-0 and U-49-1 can be run
-> _today_ on the current build and are the ones that tell us what is really wrong.
+> **OK SHIPPED: app `5c99357` = v3.2.6/59 -> v3.2.7/60.** CI `36436791234` green; Release
+> `36436791172` green -> `genum-solutions-3.2.7.apk` (42.9 MB) + `latest` + `release.json`
+> published; `ota-only` correctly skipped by its release-guard.
+> **U-49-1 IS DONE** - F-8 verified in the _published_ APK with `aapt`: `versionCode=60` / `3.2.7`,
+> `ACCESS_WIFI_STATE` / `CHANGE_WIFI_STATE` / `ACCESS_NETWORK_STATE` / `NEARBY_WIFI_DEVICES` all
+> present (the last with `neverForLocation` = `usesPermissionFlags 0x10000`), and
+> `android:usesCleartextTraffic=0xffffffff` (true).
+> **So rows U-49-0 and U-49-2..6 are now the owner's, on a real phone.** Install **3.2.7** first
+> (Menu -> App Updates, or the website `/app` page). It is a **new APK, not an OTA** - an OTA would
+> NOT bring the manifest fix. U-49-0 (the browser check) is still worth running first: it proves
+> the car is healthy before you judge anything the app does.
 
 ### U-49-0 - do this FIRST, on the current build (30 seconds, no new APK)
 
@@ -829,15 +837,24 @@ Every step behaves as described above. No app crash or permanently dead control;
 - [ ] Leave the phone on the car AP. Android may auto-switch to mobile data because the AP has no
       internet - that is expected and is diagnosed as layer B, not a failure.
 
-### U-49-1 - APK build + manifest gate (do before U-49-2)
+### U-49-1 - APK build + manifest gate (DONE 2026-09-28 by the AI - do not re-run)
 
-- [ ] Build the native APK through the normal release flow (C:\bs; AGENTS.md).
-- [ ] **F-8 manifest proof** - do not trust the build log, inspect the APK:
-      `aapt dump xmltree app-release.apk AndroidManifest.xml` and confirm all four of
-      ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, ACCESS_NETWORK_STATE, NEARBY_WIFI_DEVICES
-      (with `neverForLocation`) **plus** `android:usesCleartextTraffic="true"`.
-- [ ] If a permission is missing -> the config plugin did not apply. Clear the Expo/prebuild cache
-      and re-run; a cached AndroidManifest.xml is the usual cause.
+- [x] Build the native APK through the normal release flow -> **app `5c99357`, v3.2.7/60, CI
+      `36436791234` green, Release `36436791172` green**, `genum-solutions-3.2.7.apk` (42.9 MB) +
+      `latest` + `release.json` published to `app-releases`.
+- [x] **F-8 manifest proof** - the _published_ APK was downloaded and dumped with `aapt`
+      (`build-tools/36.0.0/aapt.exe dump badging` + `dump xmltree`), NOT trusted from the build log:
+      `versionCode='60' versionName='3.2.7'`; `ACCESS_WIFI_STATE`, `CHANGE_WIFI_STATE`,
+      `ACCESS_NETWORK_STATE`, `NEARBY_WIFI_DEVICES` all present; `NEARBY_WIFI_DEVICES` carries
+      `usesPermissionFlags=0x10000` (`neverForLocation`); `android:usesCleartextTraffic=0xffffffff`
+      (true). This is why F-8 exists - prebuild caches `mobile/android/`, so a clean-looking build
+      can still ship a stale manifest.
+- [x] **Version bump was mandatory, not cosmetic.** `app.json` + `plugins/**` trigger `release.yml`,
+      and `upload-release.mjs` derives the filename from `app.json`. Without 59 -> 60 the push would
+      have overwritten the live 3.2.6 APK at the _same_ versionCode, which Android never offers as
+      an update - the fix would have shipped to nobody.
+- [x] `ota-only.yml` **skipped** itself via its release-guard ("app.json versionCode 60 is newer
+      than published manifest 59"), so no stale-OTA/suppressed-update-pill state.
 
 ### U-49-2 - Control Panel, transport picker (new surface, sits above the old card)
 

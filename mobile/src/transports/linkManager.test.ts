@@ -206,6 +206,68 @@ describe("LinkManager — one active transport at a time", () => {
   });
 });
 
+describe("LinkManager — F-32 referentially stable snapshot", () => {
+  it("returns the SAME object until something actually changes", () => {
+    const m = new LinkManager();
+    m.register(fakeTransport("wifi-ap-ws"));
+
+    // useSyncExternalStore calls getSnapshot() many times per render and
+    // after every notification. A fresh object per call made React believe
+    // the store changed every time -> "Maximum update depth exceeded".
+    const a = m.getState();
+    const b = m.getState();
+    expect(b).toBe(a);
+  });
+
+  it("produces a NEW snapshot exactly when the manager's truth changes", async () => {
+    const m = new LinkManager();
+    const wifi = fakeTransport("wifi-ap-ws");
+    m.register(wifi);
+
+    const idle = m.getState();
+    await m.activate("wifi-ap-ws");
+    const active = m.getState();
+    expect(active).not.toBe(idle);
+    expect(active.id).toBe("wifi-ap-ws");
+    expect(active.status).toBe("connected"); // fake connect() completes at once
+    expect(active.verified).toBe(false);
+
+    wifi.fireTelemetry({ mode: "4WD4M" });
+    const verified = m.getState();
+    expect(verified).not.toBe(active);
+    expect(verified.verified).toBe(true);
+
+    await m.deactivate();
+    const after = m.getState();
+    expect(after).not.toBe(verified);
+    expect(after.id).toBeNull();
+  });
+
+  it("keeps the snapshot correct after a forwarded status event", async () => {
+    const m = new LinkManager();
+    const wifi = fakeTransport("wifi-ap-ws");
+    m.register(wifi);
+    await m.activate("wifi-ap-ws");
+
+    // A real adapter mutates its own status, THEN emits the event. The
+    // manager reads getStatus() for the snapshot, so this also covers a
+    // transport that forgets to emit.
+    const before = m.getState();
+    wifi.setStatus("connecting");
+    wifi.fireStatus({ kind: "connecting" });
+    const reconnecting = m.getState();
+    expect(reconnecting).not.toBe(before);
+    expect(reconnecting.status).toBe("connecting");
+
+    wifi.setStatus("idle");
+    wifi.fireStatus({ kind: "error", message: "boom" });
+    const errored = m.getState();
+    expect(errored).not.toBe(reconnecting);
+    expect(errored.status).toBe("error");
+    expect(errored.error).toBe("boom");
+  });
+});
+
 describe("LinkManager — F-16 bounded connect", () => {
   it("never leaves the manager stuck in 'connecting' on a hung transport", async () => {
     vi.useFakeTimers();
