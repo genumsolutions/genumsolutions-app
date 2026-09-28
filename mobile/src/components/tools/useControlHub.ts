@@ -294,6 +294,14 @@ export function useControlHub(routeCategory?: string) {
 
   // ---- SPP auto-reconnect (ESP remote parity: 4 silent tries â†’ prompt) ----
   const sppReconnectAttemptsRef = useRef(0);
+  // R1 flicker fix (owner round 1, 2026-09-28): re-arm guard. The status
+  // handler called startSppReconnect() on EVERY emitted error while this
+  // scheduler's own .catch ALSO chained the next attempt - duelling timers:
+  // each failed retry emitted more statuses, which scheduled more retries,
+  // and the Control Panel flickered continuously until the user pressed
+  // Disconnect. startSppReconnect() is now the ONLY scheduler (idempotent:
+  // a running burst returns early) and every exit path de-arms the flag.
+  const sppReconnectActiveRef = useRef(false);
   // FIN-44: last status message seen by the dedupe gate (see onStatus below).
   const sppStatusMsgRef = useRef<string | null>(null);
   const sppReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -897,6 +905,7 @@ export function useControlHub(routeCategory?: string) {
         await sppService.connect(device.address);
         sppLastAddressRef.current = device.address;
         sppReconnectAttemptsRef.current = 0;
+        sppReconnectActiveRef.current = false; // fresh manual link: re-arm the scheduler
         setConnected(true);
         setDeviceName(device.name);
         setConnecting(false);
@@ -925,6 +934,7 @@ export function useControlHub(routeCategory?: string) {
     setError(null);
     manualCloseRef.current = false;
     sppReconnectAttemptsRef.current = 0;
+    sppReconnectActiveRef.current = false; // explicit user retry: re-arm
     try {
       await sppService.retryConnect();
     } catch (e) {
@@ -1472,6 +1482,12 @@ export function useControlHub(routeCategory?: string) {
   // ---- SPP auto-reconnect â€” silent exponential backoff ----
   // Delays: 1s â†’ 2s â†’ 4s â†’ 8s â†’ give up â†’ show the reconnect banner.
   const startSppReconnect = useCallback(() => {
+    // R1 flicker fix: idempotent re-arm guard (see sppReconnectActiveRef).
+    // The status handler fires on every error; without this guard each error
+    // started a SECOND scheduler alongside the .catch chain below, and the
+    // multiplying retry loops flickered the Control Panel until Disconnect.
+    if (sppReconnectActiveRef.current) return;
+    sppReconnectActiveRef.current = true;
     if (sppReconnectTimerRef.current) {
       clearTimeout(sppReconnectTimerRef.current);
       sppReconnectTimerRef.current = null;
@@ -1481,25 +1497,30 @@ export function useControlHub(routeCategory?: string) {
         !mountedRef.current ||
         manualCloseRef.current ||
         !sppLastAddressRef.current
-      )
+      ) {
+        sppReconnectActiveRef.current = false;
         return;
+      }
       const n = sppReconnectAttemptsRef.current;
       if (n >= SPP_RECONNECT_DELAYS_MS.length) {
         // All attempts exhausted â€” surface the banner so the user can decide.
         // (Previously this path gave up silently: the â€œconnection lostâ€ UI
         // never appeared and only a manual reconnect could recover.)
         sppReconnectAttemptsRef.current = 0;
+        sppReconnectActiveRef.current = false;
         setShowSppsRetry(true);
         return;
       }
       sppReconnectAttemptsRef.current += 1;
       sppService.retryConnect().catch(() => {
-        if (mountedRef.current) {
-          const delay =
-            SPP_RECONNECT_DELAYS_MS[sppReconnectAttemptsRef.current] ??
-            SPP_RECONNECT_DELAYS_MS[SPP_RECONNECT_DELAYS_MS.length - 1];
-          sppReconnectTimerRef.current = setTimeout(attempt, delay);
+        if (!mountedRef.current || manualCloseRef.current) {
+          sppReconnectActiveRef.current = false;
+          return;
         }
+        const delay =
+          SPP_RECONNECT_DELAYS_MS[sppReconnectAttemptsRef.current] ??
+          SPP_RECONNECT_DELAYS_MS[SPP_RECONNECT_DELAYS_MS.length - 1];
+        sppReconnectTimerRef.current = setTimeout(attempt, delay);
       });
     };
     sppReconnectTimerRef.current = setTimeout(
