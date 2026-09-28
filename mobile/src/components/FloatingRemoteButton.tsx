@@ -13,7 +13,14 @@
 //     that stays put navigates instead.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, PanResponder, StyleSheet, View } from "react-native";
+import {
+  Dimensions,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { sppService } from "../services/sppService";
@@ -29,6 +36,11 @@ const DRAG_THRESHOLD = 12;
 
 const SLOT_KEY = "genum.remote.fabSlot";
 const CATEGORY_KEY = "genum.remote.lastCategory";
+/** Owner-approved dismiss: the FAB stays hidden until a NEW link session. */
+const DISMISSED_KEY = "genum.remote.fabDismissed";
+/** Drag-to-bottom-center hides the FAB (drop-zone dismiss, owner-approved). */
+const DROP_ZONE_BOTTOM = 110;
+const DROP_ZONE_CENTER_HALF = 72;
 
 type Slot = { x: number; y: number };
 
@@ -88,14 +100,27 @@ export function FloatingRemoteButton() {
   const [linked, setLinked] = useState(anyLinked);
   const [remoteInFront, setRemoteInFront] = useState(isRemoteInFront);
   const [slot, setSlot] = useState<Slot | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [inDropZone, setInDropZone] = useState(false);
   const slotRef = useRef<Slot | null>(null);
   const dragStart = useRef<Slot | null>(null);
   const movedRef = useRef(false);
+  const wasLinkedRef = useRef(anyLinked());
   const lastCategoryRef = useRef<string | undefined>(undefined);
 
-  // Link state: live refresh from every transport's status stream.
+  // Link state: live refresh from every transport's status stream. A FRESH
+  // connect while dismissed re-arms the FAB (owner-approved re-arm rule).
   useEffect(() => {
-    const update = () => setLinked(anyLinked());
+    const update = () => {
+      const nowLinked = anyLinked();
+      setLinked(nowLinked);
+      if (nowLinked && !wasLinkedRef.current && dismissedRef.current) {
+        setDismissed(false);
+        dismissedRef.current = false;
+        void AsyncStorage.removeItem(DISMISSED_KEY).catch(() => undefined);
+      }
+      wasLinkedRef.current = nowLinked;
+    };
     const offSpp = sppService.onStatus(update);
     const offBle = bleService.onStatus(update);
     const offWifi = wifiService.onStatus(update);
@@ -104,6 +129,24 @@ export function FloatingRemoteButton() {
       offBle();
       offWifi();
     };
+  }, []);
+
+  // Live mirror so the subscription above reads the freshest dismissed value
+  // without re-subscribing (the effect has empty deps on purpose).
+  const dismissedRef = useRef(false);
+  dismissedRef.current = dismissed;
+
+  function isDropZone(s: Slot): boolean {
+    const { width, height } = Dimensions.get("window");
+    const centerBottom =
+      s.y >= height - DROP_ZONE_BOTTOM &&
+      Math.abs(s.x + FAB_SIZE / 2 - width / 2) <= DROP_ZONE_CENTER_HALF;
+    return centerBottom;
+  }
+
+  const dismissFab = useCallback(() => {
+    setDismissed(true);
+    void AsyncStorage.setItem(DISMISSED_KEY, "1").catch(() => undefined);
   }, []);
 
   // Persisted position + last category; and track navigation so we know when
@@ -137,6 +180,14 @@ export function FloatingRemoteButton() {
     void loadSlot().then((s) => {
       if (mounted) setSlot(s);
     });
+    void AsyncStorage.getItem(DISMISSED_KEY)
+      .then((v) => {
+        if (mounted && v === "1") {
+          setDismissed(true);
+          dismissedRef.current = true;
+        }
+      })
+      .catch(() => undefined);
     void loadLastCategory().then((c) => {
       if (mounted && c) lastCategoryRef.current = c;
     });
@@ -176,7 +227,7 @@ export function FloatingRemoteButton() {
         }
         if (!movedRef.current) return;
         const { width, height } = Dimensions.get("window");
-        setSlot({
+        const next = {
           x: clamp(
             dragStart.current.x + gesture.dx,
             EDGE,
@@ -187,14 +238,24 @@ export function FloatingRemoteButton() {
             EDGE,
             height - FAB_SIZE - EDGE,
           ),
-        });
+        };
+        setSlot(next);
+        setInDropZone(isDropZone(next));
       },
       onPanResponderRelease: (_evt, gesture) => {
         const wasDrag = movedRef.current;
+        const last = slotRef.current;
         dragStart.current = null;
         movedRef.current = false;
+        setInDropZone(false);
         if (wasDrag) {
-          if (slotRef.current) void persistSlot(slotRef.current);
+          if (last && isDropZone(last)) {
+            // Dropped in the bottom-center zone → hide the FAB (dismiss).
+            feedbackTap();
+            dismissFab();
+            return;
+          }
+          if (last) void persistSlot(last);
           return;
         }
         if (
@@ -214,18 +275,35 @@ export function FloatingRemoteButton() {
 
   slotRef.current = slot;
 
-  if (!linked || remoteInFront || !slot) return null;
+  if (dismissed || !linked || remoteInFront || !slot) return null;
 
   return (
-    <View
-      {...pan.panHandlers}
-      style={[styles.fab, { left: slot.x, top: slot.y }]}
-      accessibilityRole="button"
-      accessibilityLabel="Open Remote window"
-      testID="floating-remote-button"
-    >
-      <Feather name="target" size={24} color="#fff" />
-    </View>
+    <>
+      {inDropZone && (
+        <View pointerEvents="none" style={styles.dropHint}>
+          <Text style={styles.dropHintText}>Release to hide</Text>
+        </View>
+      )}
+      <View
+        {...pan.panHandlers}
+        style={[styles.fab, { left: slot.x, top: slot.y }]}
+        accessibilityRole="button"
+        accessibilityLabel="Open Remote window"
+        testID="floating-remote-button"
+      >
+        <Feather name="target" size={24} color="#fff" />
+        <Pressable
+          onPress={dismissFab}
+          hitSlop={10}
+          style={styles.close}
+          accessibilityRole="button"
+          accessibilityLabel="Hide floating Remote button"
+          testID="floating-remote-dismiss"
+        >
+          <Feather name="x" size={10} color="#fff" />
+        </Pressable>
+      </View>
+    </>
   );
 }
 
@@ -244,5 +322,36 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 8,
+  },
+  close: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#172554",
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropHint: {
+    position: "absolute",
+    zIndex: 998,
+    bottom: DROP_ZONE_BOTTOM - 44,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  dropHintText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1e3a8a",
+    backgroundColor: "rgba(226, 232, 240, 0.92)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: "hidden",
   },
 });
