@@ -69,6 +69,24 @@ export type DevicePrefs = {
       WiFi & Router panel restores instantly while the car is unpaired.
       The car remains the source of truth; passwords are never stored here. */
   savedRouters: string[] | null;
+  /**
+   * Connections-Hub round (per-device profiles): the board-unique id from
+   * firmware (`ESP.getEfuseMac()` last 6 hex) when the car reports it. The
+   * STABLE profile key: `fw:<id>` beats the WiFi identity/AP fallback.
+   */
+  uniqueId?: string | null;
+  /** Connections-Hub round: every BT MAC this car has presented under
+      (deduped, capped) so a car can be re-found across renames. */
+  btIds?: string[] | null;
+  /** Connections-Hub round: per-car Wi-Fi history (SSID → last seen ms,
+      newest first, capped ~50) so a picked car recalls which routers it has
+      been on. Names only — passwords never leave the phone/car. */
+  wifiHistory?: Array<{ ssid: string; lastSeen: number }> | null;
+  /** Connections-Hub round: last verified WS url used for THIS car. */
+  lastWifiUrl?: string | null;
+  /** Connections-Hub round: auto-join saved router on connect (smart-link),
+      else go straight to the car's own AP. Default true. */
+  autoJoinRouter?: boolean;
 };
 
 /** Per-device storage key prefix. */
