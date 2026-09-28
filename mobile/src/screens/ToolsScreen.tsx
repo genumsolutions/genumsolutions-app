@@ -28,6 +28,9 @@ import type { ComponentProps } from "react";
 import type { RootStackParamList } from "../navigation/types";
 import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
+import { TransportPicker } from "../components/tools/TransportPicker";
+import { linkManager } from "../transports/linkManager";
+import type { TransportConnectOptions, TransportId } from "../transports/types";
 import { feedbackTap } from "../services/hapticsService";
 import {
   PROJECT_CATEGORIES,
@@ -132,6 +135,51 @@ export function ToolsScreen() {
     handleSppsRetry,
     handleReconnectPromptCancel,
   } = hub;
+
+  // ---------------------------------------------------------------------
+  // Transport picker bridge (F-17 — one owner for connection side effects).
+  //
+  // The picker chooses the METHOD; this screen still performs the connect,
+  // because `useControlHub` owns the authoritative `connected` /
+  // `wifiConnected` / `linkVerified` state that the status dot, the banners
+  // and the RemoteControl gating all read. Connecting from the picker
+  // straight into the services would bring a link up while that state
+  // stayed false — "connected but the UI says no". Classic Bluetooth and
+  // the two WiFi shapes therefore route through the EXACT handlers the
+  // legacy cards used; only the new transports fall through to the manager.
+  // ---------------------------------------------------------------------
+  const onTransportActivate = useCallback(
+    async (id: TransportId, options: TransportConnectOptions) => {
+      if (id === "bt-classic") {
+        if (!options.address) {
+          throw new Error("Scan for the car first, then pick it.");
+        }
+        // The hub's handler takes the scanned SppDevice, not a bare address
+        // (it needs id/name/bonded), so resolve it from the scan results.
+        const device = sppDevices.find((d) => d.address === options.address);
+        if (!device) {
+          throw new Error("That car is no longer in the scan list. Rescan.");
+        }
+        await handleConnect(device);
+        return;
+      }
+      if (id === "wifi-ap-ws" || id === "wifi-sta-ws") {
+        // The hub reads the address from its own state, so mirror it first.
+        if (options.url) setWifiUrl(options.url);
+        await handleWifiConnect();
+        return;
+      }
+      // bt-ble has no hub bookkeeping yet — the manager owns it.
+      await linkManager.activate(id, options);
+    },
+    [handleConnect, handleWifiConnect, setWifiUrl, sppDevices],
+  );
+
+  const onTransportDeactivate = useCallback(async () => {
+    if (connected) await handleDisconnect();
+    else if (wifiConnected) await handleWifiDisconnect();
+    else await linkManager.deactivate();
+  }, [connected, wifiConnected, handleDisconnect, handleWifiDisconnect]);
 
   // Category organizer
   const [selectedSlug, setSelectedSlug] = useState<string>(
@@ -377,6 +425,13 @@ export function ToolsScreen() {
             </View>
           </View>
         )}
+
+        <View className="mt-4">
+          <TransportPicker
+            onActivate={onTransportActivate}
+            onDeactivate={onTransportDeactivate}
+          />
+        </View>
 
         <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
           <View className="flex-row rounded-xl bg-mist p-0.5">

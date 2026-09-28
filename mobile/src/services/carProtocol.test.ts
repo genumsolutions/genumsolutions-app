@@ -24,6 +24,7 @@ import {
   isTokenComingSoon,
   modeAvailStatus,
   parseTelemetryLine,
+  parseCapsBody,
   quantizeSpeedToStep,
   REQ_STATE_LINE,
   statusToDirection,
@@ -382,7 +383,8 @@ describe("parseTelemetryLine", () => {
     expect(parseTelemetryLine("CAPS;")).toEqual({});
   });
 
-  it("parses the caps table inside the WS JSON status", () => {
+  it("parses the caps table inside the WS JSON status (object form)", () => {
+    // The donor car (Genum_WIRELESS_CAR) emits the object form.
     const line =
       '{"status":"OK","mode":"ESP_SER","caps":{"4WD4M":"LIVE","MAN":"CS"}}';
     expect(parseTelemetryLine(line)).toEqual({
@@ -390,6 +392,54 @@ describe("parseTelemetryLine", () => {
       mode: "ESP_SER",
       caps: { "4WD4M": "LIVE", MAN: "CS" },
     });
+  });
+
+  it("parses the caps table from the 4WD4M car's REAL string payload", () => {
+    // REGRESSION (the bug this test now pins): Genum_4WD4M_CAR's
+    // WebServerComm::buildStatusJson emits `caps` as a `;`-delimited STRING,
+    // not an object. The old test only fed the object form, so it passed
+    // while the car on the bench produced NO availability table — which made
+    // every mode look available over WiFi and let the chooser send a `CS`
+    // token the car accepts AND persists to NVS.
+    const line =
+      '{"status":"OK","mode":"4WD4M","caps":"4WD4M:LIVE;ESP_SER:CS;PATH:CS;OBS_US:CS;OBS_IR:CS;MAN:CS;AUTO:CS;ESP_CLI:CS;2WD1M:CS"}';
+    const t = parseTelemetryLine(line);
+    expect(t.status).toBe("OK");
+    expect(t.mode).toBe("4WD4M");
+    expect(t.caps).toEqual({
+      "4WD4M": "LIVE",
+      ESP_SER: "CS",
+      PATH: "CS",
+      OBS_US: "CS",
+      OBS_IR: "CS",
+      MAN: "CS",
+      AUTO: "CS",
+      ESP_CLI: "CS",
+      "2WD1M": "CS",
+    });
+    // The safety-relevant assertion: a Coming-Soon token is now detectable,
+    // so the mode chooser can mark it instead of silently offering it.
+    expect(isTokenComingSoon("2WD1M", {}, t.caps!)).toBe(true);
+    expect(isTokenComingSoon("ESP_SER", {}, t.caps!)).toBe(true);
+    expect(isTokenComingSoon("4WD4M", {}, t.caps!)).toBe(false);
+  });
+
+  it("tolerates a string caps body with = separators and a trailing ;", () => {
+    const t = parseTelemetryLine('{"caps":"4WD4M=LIVE;ESP_CLI=CS;"}');
+    expect(t.caps).toEqual({ "4WD4M": "LIVE", ESP_CLI: "CS" });
+  });
+
+  it("parses a string caps body that still carries a leading CAPS element", () => {
+    const t = parseTelemetryLine('{"caps":"CAPS;4WD4M:LIVE;MAN:CS"}');
+    expect(t.caps).toEqual({ "4WD4M": "LIVE", MAN: "CS" });
+  });
+
+  it("parseCapsBody is shared by both carriers (same grammar)", () => {
+    const body = "4WD4M:LIVE;MAN:CS";
+    // The text carrier and the JSON string carrier must agree exactly.
+    expect(parseCapsBody(body)).toEqual(
+      parseTelemetryLine(`CAPS;${body}`).caps,
+    );
   });
 
   // ---- R-4 (app half): fleet NACK line from the car ----

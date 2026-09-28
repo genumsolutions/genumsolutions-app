@@ -59,7 +59,12 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     wheel: "4 × BO/brushed motors",
     steering: "Skid-steer (differential)",
     sensors: [],
-    transport: ["ble", "classic-bt"],
+    // v2 architecture: the 4WD4M car runs its WiFi access point up for the
+    // WHOLE uptime as a connection/setup channel and accepts drive over it
+    // directly in 4WD4M. Listing WiFi here is a factual correction — the
+    // previous ["ble","classic-bt"] described pre-v2 donor behaviour and is
+    // what made WiFi look unsupported in the mode chooser.
+    transport: ["ble", "classic-bt", "wifi"],
     remoteWith: "ESP REMOTE or app",
     controls: ["drive-tank"],
     requiresConnection: true,

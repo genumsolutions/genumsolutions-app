@@ -392,6 +392,44 @@ export function buildCalibration(p: {
  *   TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
  *   SPD<value> / SPD:<value> / SPD=<value>
  */
+/**
+ * Parse one availability table body — the `;`-separated `TOKEN:STATUS`
+ * grammar the car uses in BOTH carriers:
+ *
+ *   • STATE text:  `CAPS;4WD4M:LIVE;ESP_SER:CS;2WD1M:CS`
+ *   • WS JSON:     `"caps":"4WD4M:LIVE;ESP_SER:CS;2WD1M:CS"`
+ *
+ * These were parsed by two separate blocks with near-identical logic, and
+ * only the text form was ever handled. The firmware (WebServerComm
+ * buildStatusJson) emits the STRING form, so over WiFi the app silently
+ * produced no availability table at all: every mode looked available, and
+ * the mode chooser would happily send a `CS` token that the car accepts
+ * and persists (ModeManager::setMode + saveBootState) — parking the car in
+ * a COMING SOON stub that survives a reboot.
+ *
+ * One grammar, one parser, both carriers. `;`-tolerant so a body that
+ * still carries a leading "CAPS" element parses correctly either way.
+ */
+export function parseCapsBody(body: string): Record<string, string> {
+  const caps: Record<string, string> = {};
+  for (const raw of body.split(";")) {
+    const part = raw.trim();
+    if (!part) continue;
+    // Tolerate a leading "CAPS" element.
+    if (part.toUpperCase() === "CAPS") continue;
+    const eqIdx = part.indexOf("=");
+    const sep = eqIdx >= 0 ? eqIdx : part.indexOf(":");
+    if (sep <= 0) continue;
+    const tok = canonicalCarToken(part.slice(0, sep));
+    const val = part
+      .slice(sep + 1)
+      .trim()
+      .toUpperCase();
+    if (tok && val) caps[tok] = val;
+  }
+  return caps;
+}
+
 export function parseTelemetryLine(line: string): CarTelemetry {
   const l = line.trim();
   if (!l) return {};
@@ -465,21 +503,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   // '=' separators (remote comms.cpp applyCapsMap). Keyed canonical so a
   // legacy `CAPS;BT:LIVE` resolves onto the 4WD4M row.
   if (up.startsWith("CAPS")) {
-    const body = l.split(";");
-    const caps: Record<string, string> = {};
-    for (let i = 1; i < body.length; i++) {
-      const part = body[i].trim();
-      if (!part) continue;
-      const eqIdx = part.indexOf("=");
-      const sep = eqIdx >= 0 ? eqIdx : part.indexOf(":");
-      if (sep <= 0) continue;
-      const tok = canonicalCarToken(part.slice(0, sep));
-      const val = part
-        .slice(sep + 1)
-        .trim()
-        .toUpperCase();
-      if (tok && val) caps[tok] = val;
-    }
+    const caps = parseCapsBody(l);
     if (Object.keys(caps).length > 0) telemetry.caps = caps;
     return telemetry;
   }
@@ -528,9 +552,14 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.ssid === "string") telemetry.ssid = j.ssid;
       if (typeof j.ap === "string") telemetry.ap = j.ap;
       if (typeof j.stub === "boolean") telemetry.stub = j.stub;
-      // R-10: WS JSON carries the full availability table as `"caps":
-      // {"4WD4M":"LIVE", "ESP_SER":"LIVE", …, "2WD1M":"CS"}`.
-      if (j.caps && typeof j.caps === "object") {
+      // R-10: WS JSON carries the full availability table. The 4WD4M car
+      // emits it as a `;`-delimited STRING (WebServerComm buildStatusJson);
+      // the donor emits an OBJECT. Accept both through the one shared
+      // parser so a carrier change can never silently blank the table.
+      if (typeof j.caps === "string") {
+        const caps = parseCapsBody(j.caps);
+        if (Object.keys(caps).length > 0) telemetry.caps = caps;
+      } else if (j.caps && typeof j.caps === "object") {
         const caps: Record<string, string> = {};
         for (const [k, v] of Object.entries(
           j.caps as Record<string, unknown>,
