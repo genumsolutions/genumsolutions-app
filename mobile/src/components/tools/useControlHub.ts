@@ -23,6 +23,7 @@ import { sppService, type SppDevice } from "../../services/sppService";
 import { bleService } from "../../services/bleService";
 import { wifiService } from "../../services/wifiService";
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
+import { addBtId, upsertWifiHistory } from "../../services/carProfileService";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
@@ -264,6 +265,14 @@ export function useControlHub(routeCategory?: string) {
   // Mode from car (mode sync)
   const [carModeId, setCarModeId] = useState<string | null>(null);
   const carModeIdRef = useRef<string | null>(null);
+  // Connections-Hub: the board-unique id from firmware (`<ID=last6hex>` /
+  // JSON `id`). STABLE profile identity — beats the BT MAC / WiFi identity
+  // in the memory key, so a car keeps one profile across renames and links.
+  const carFwIdRef = useRef<string | null>(null);
+  // Connections-Hub: per-car auto-join toggle (smart-link). Default on.
+  const [autoJoinRouter, setAutoJoinRouter] = useState<boolean>(true);
+  // One write per join guard for the wifi-history recorder.
+  const wifiJoinKeyRef = useRef<string>("");
   // A-37: user mode-commit grace (ESP remote R-33 parity) — remember the token
   // the USER chose plus the car-truth mode at commit time so the stale in-flight
   // echo (still the pre-commit mode) cannot undo the optimistic pick (that was
@@ -343,19 +352,23 @@ export function useControlHub(routeCategory?: string) {
     };
   }, []);
 
-  // Restore remembered device prefs when a device address becomes available.
+  const carFwId = carFwIdRef.current;
+  // Restore remembered device prefs when a device identity becomes available.
   // WiFi-only links have no BT MAC, so the remembered-key falls back to the
-  // car's wifi identity (`wifi:<ssid|ap|url>`): a WiFi car keeps its mode /
-  // speed / settings across sessions AND across power cycles (bug report
-  // 2026-09-15: "remember state"). BT links keep using the MAC (primary).
+  // car's wifi identity (`wifi:<ssid|ap|url>`). BT links keep using the MAC.
+  // The firmware board id (`fw:<id>`) is preferred above both when present.
   const wifiIdentity =
     wifiConnected && wifiUrl.trim()
       ? carSsid || carApName || wifiUrl.trim()
       : null;
-  const addressForMemory =
+  const legacyMemoryKey =
     sppService.currentAddress ??
     sppService.getConnectionInfo().address ??
     (wifiIdentity ? `wifi:${wifiIdentity}` : null);
+  // Connections-Hub: prefer the firmware board id (`fw:<id>`) — stable + unique.
+  // The previous key is kept as `legacyMemoryKey` so a first link under the
+  // new key migrates the stored prefs instead of starting from factory.
+  const addressForMemory = carFwId ? `fw:${carFwId}` : legacyMemoryKey;
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
   useFocusEffect(
     React.useCallback(() => {
@@ -389,28 +402,50 @@ export function useControlHub(routeCategory?: string) {
         };
       }
       let active = true;
-      void deviceMemory.read(addressForMemory).then((prefs) => {
+      void deviceMemory.read(addressForMemory).then(async (prefs) => {
         if (!active) return;
-        setSavedPrefs(prefs);
-        if (prefs) {
-          if (prefs.modeId && carModes.some((m) => m.id === prefs.modeId)) {
-            setActiveMode(carModes.find((m) => m.id === prefs.modeId)!);
+        // Connections-Hub (profiles): the first link under the STABLE
+        // `fw:<id>` key migrates the old key's prefs (formely BT MAC or
+        // `wifi:<ssid>`) so nothing stored under the old identity is lost.
+        let resolved = prefs;
+        if (
+          !resolved &&
+          legacyMemoryKey &&
+          legacyMemoryKey !== addressForMemory
+        ) {
+          const legacy = await deviceMemory.read(legacyMemoryKey);
+          if (legacy) {
+            resolved = legacy;
+            void deviceMemory.write(addressForMemory, legacy);
           }
-          if (prefs.speed != null) setSpeed(prefs.speed);
-          if (prefs.servo != null) setServo(prefs.servo);
-          if (prefs.steerLimit != null) setSteerLimit(prefs.steerLimit);
-          if (prefs.trim != null) setTrim(prefs.trim);
-          if (prefs.useJoystick != null) setUseJoystick(prefs.useJoystick);
+        }
+        if (!active) return;
+        setSavedPrefs(resolved);
+        if (resolved) {
+          if (
+            resolved.modeId &&
+            carModes.some((m) => m.id === resolved.modeId)
+          ) {
+            setActiveMode(carModes.find((m) => m.id === resolved.modeId)!);
+          }
+          if (resolved.speed != null) setSpeed(resolved.speed);
+          if (resolved.servo != null) setServo(resolved.servo);
+          if (resolved.steerLimit != null) setSteerLimit(resolved.steerLimit);
+          if (resolved.trim != null) setTrim(resolved.trim);
+          if (resolved.useJoystick != null)
+            setUseJoystick(resolved.useJoystick);
+          if (resolved.autoJoinRouter != null)
+            setAutoJoinRouter(resolved.autoJoinRouter);
           // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
           // (never the password â€” that lives only in flight + the car's NVS).
-          if (prefs.lastWifiSsid)
-            setWifiSsid((cur) => cur || prefs.lastWifiSsid!);
+          if (resolved.lastWifiSsid)
+            setWifiSsid((cur) => cur || resolved.lastWifiSsid!);
           // A-27: restore the per-device saved-router mirror so the WiFi &
           // Router panel renders before the car links (names only). The
           // car's next `networks` echo re-syncs it to car truth.
-          if (prefs.savedRouters && prefs.savedRouters.length > 0) {
+          if (resolved.savedRouters && resolved.savedRouters.length > 0) {
             setCarNetworks((cur) =>
-              cur.length > 0 ? cur : (prefs.savedRouters ?? []),
+              cur.length > 0 ? cur : (resolved.savedRouters ?? []),
             );
           }
         }
@@ -418,7 +453,7 @@ export function useControlHub(routeCategory?: string) {
       return () => {
         active = false;
       };
-    }, [addressForMemory, carModes]),
+    }, [addressForMemory, legacyMemoryKey, carModes]),
   );
 
   // Persist device prefs whenever the user changes a remembered value.
@@ -450,6 +485,16 @@ export function useControlHub(routeCategory?: string) {
         // (never a stale-captured base), so router additions survive later
         // speed/steer persists AND a device power cycle.
         savedRouters: savedNetworksRef.current.slice(),
+        // Connections-Hub (profiles): stable board id + every MAC this car
+        // has presented + the smart-link auto-join toggle.
+        uniqueId: carFwIdRef.current || null,
+        btIds: addBtId(
+          savedPrefs?.btIds ?? ([] as string[]),
+          sppService.currentAddress ??
+            sppService.getConnectionInfo().address ??
+            "",
+        ),
+        autoJoinRouter,
         ...patch,
       } as DevicePrefs;
       void deviceMemory.write(addressForMemory, next);
@@ -477,6 +522,9 @@ export function useControlHub(routeCategory?: string) {
       useJoystick,
       joystickLayoutId,
       savedPrefs?.lastWifiSsid,
+      carFwIdRef.current,
+      savedPrefs?.btIds,
+      autoJoinRouter,
     ],
   );
 
@@ -484,6 +532,25 @@ export function useControlHub(routeCategory?: string) {
   // (and without stale captures) when called from deep in the input chain.
   const persistPrefsRef = useRef(persistPrefs);
   persistPrefsRef.current = persistPrefs;
+
+  // Connections-Hub (profiles): record a Wi-Fi join into the per-car history
+  // (names only) once per join, and remember the last verified router URL.
+  // `telemetry.connected === true` is the STA-joined signal from firmware;
+  // the join-key guard keeps the steady 1s status frames from re-writing.
+  useEffect(() => {
+    const joined = telemetry.connected === true && linkVerified && !!carSsid;
+    const key = joined ? `${carSsid}:on` : "";
+    if (joined) {
+      if (wifiJoinKeyRef.current === key) return;
+      wifiJoinKeyRef.current = key;
+      persistPrefsRef.current?.({
+        wifiHistory: upsertWifiHistory(savedPrefs?.wifiHistory, carSsid!),
+        lastWifiUrl: wifiUrl || null,
+      });
+    } else {
+      wifiJoinKeyRef.current = "";
+    }
+  }, [telemetry.connected, carSsid, linkVerified, wifiUrl, savedPrefs]);
 
   // Provisioning-reply handler mirror (defined below with useState deps).
   const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(
@@ -577,6 +644,10 @@ export function useControlHub(routeCategory?: string) {
     const applyTelemetry = (t: CarTelemetry) => {
       if (!mountedRef.current) return;
       setTelemetry((prev) => ({ ...prev, ...t }));
+      // Connections-Hub (profiles): remember the board-unique id. It changes
+      // the stable memory key to `fw:<id>` (see addressForMemory) and lands
+      // in the persisted profile as uniqueId.
+      if (t.id) carFwIdRef.current = t.id.trim() || null;
       // Mode: always mirror (applyRemoteState parity). X-8: incoming tokens
       // are canonicalized so old cars' MODE=BT still mirrors the 4WD4M row.
       // A-37: R-33 parity — within MODE_CHANGE_GRACE_MS of selectMode, an echo
@@ -1757,6 +1828,11 @@ export function useControlHub(routeCategory?: string) {
     savedPrefs,
     persistPrefs,
     addressForMemory,
+    // Connections-Hub (per-device profiles)
+    profileKey: addressForMemory,
+    carUniqueId: carFwIdRef.current,
+    autoJoinRouter,
+    setAutoJoinRouter,
     // derived
     isDrone,
     isNonRobocar,
