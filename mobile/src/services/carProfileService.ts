@@ -69,8 +69,67 @@ export function addBtId(
   return [...clean.slice(0, BT_IDS_CAP - 1), address];
 }
 
-// ----- cloud shape (only what is safe to sync; nothing secret ever lives
-// here — passwords were already never stored. history/routers are names). ---
+export type PickRouterInput = {
+  /** Routers the CAR has stored (the `networks` echo / savedRouters mirror). */
+  saved: string[];
+  /** Car-side scan result (ROUTERS;SCAN) with signal strengths. */
+  scan?: Array<{ ssid: string; rssi?: number | null }> | null;
+  /** Wi-Fi history, newest first. */
+  history?: WifiHistoryEntry[] | null;
+  /** Last SSID sent to this car. */
+  lastSsid?: string | null;
+};
+
+/**
+ * Pick the router the car should auto-join (smart-link). Rule (owner ③):
+ * "use it if available WITH STRENGTH, else fall back to the car's own AP."
+ * Strategy: prefer a saved router the car's own antenna currently hears
+ * (scan rssi, strongest wins, recency breaks ties); when no scan overlap,
+ * fall back to the most recently used saved router. Returns null when there
+ * is nothing to join (stay on the car's own AP). Pure.
+ */
+export function pickBestRouter(input: PickRouterInput): string | null {
+  const saved = (input.saved ?? [])
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+  if (saved.length === 0) return null;
+
+  const history = (input.history ?? []).filter(
+    (h) => typeof h?.ssid === "string" && h.ssid.length > 0,
+  );
+  const last = input.lastSsid?.trim() || null;
+  const recency = (ssid: string): number => {
+    const inHistory =
+      history.findIndex((h) => h.ssid === ssid) + 1 || Number.MAX_SAFE_INTEGER;
+    const isLast = ssid === last ? 0 : Number.MAX_SAFE_INTEGER;
+    return Math.min(inHistory, isLast);
+  };
+
+  const hearable = (input.scan ?? [])
+    .map((n) => ({
+      ssid: typeof n?.ssid === "string" ? n.ssid.trim() : "",
+      rssi:
+        typeof n?.rssi === "number" && Number.isFinite(n.rssi) ? n.rssi : null,
+    }))
+    .filter((n) => n.ssid.length > 0);
+
+  const heard = hearable.filter((n) => saved.includes(n.ssid));
+  if (heard.length > 0) {
+    const byRssi = heard.some((n) => n.rssi != null)
+      ? heard
+          .filter((n) => n.rssi != null)
+          .sort(
+            (a, b) =>
+              (b.rssi ?? -Infinity) - (a.rssi ?? -Infinity) ||
+              recency(a.ssid) - recency(b.ssid),
+          )
+      : heard.slice().sort((a, b) => recency(a.ssid) - recency(b.ssid));
+    return byRssi[0].ssid;
+  }
+
+  const byRecency = saved.slice().sort((a, b) => recency(a) - recency(b));
+  return byRecency[0] || null;
+}
 
 export type CarProfileCloudRecord = {
   profile_key: string;
@@ -80,6 +139,9 @@ export type CarProfileCloudRecord = {
   wifi_history: WifiHistoryEntry[];
   updated_at: string;
 };
+
+// ----- cloud shape (only what is safe to sync; nothing secret ever lives
+// here — passwords were already never stored. history/routers are names). ---
 
 /** Map a local prefs record to the cloud row shape. */
 export function toCloudRecord(

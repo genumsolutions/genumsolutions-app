@@ -23,7 +23,11 @@ import { sppService, type SppDevice } from "../../services/sppService";
 import { bleService } from "../../services/bleService";
 import { wifiService } from "../../services/wifiService";
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
-import { addBtId, upsertWifiHistory } from "../../services/carProfileService";
+import {
+  addBtId,
+  pickBestRouter,
+  upsertWifiHistory,
+} from "../../services/carProfileService";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
@@ -51,6 +55,7 @@ import {
   STEER_LIMIT_MIN,
   STEER_LIMIT_MAX,
   buildSteer,
+  type ScanNetwork,
 } from "../../services/carProtocol";
 import { MODE_NAMES as ESP_MODE_NAMES } from "../../config/roboCarCatalog";
 
@@ -273,6 +278,18 @@ export function useControlHub(routeCategory?: string) {
   const [autoJoinRouter, setAutoJoinRouter] = useState<boolean>(true);
   // One write per join guard for the wifi-history recorder.
   const wifiJoinKeyRef = useRef<string>("");
+  // Connections-Hub (smart-link): the car-side scan result (ROUTERS;SCAN),
+  // carried as telemetry.scan. Strength-aware auto-join reads it.
+  const [carScan, setCarScan] = useState<ScanNetwork[] | null>(null);
+  // Smart-link session state: which profile has been offered a router join in
+  // the CURRENT link session (reset when the link drops), plus the pending
+  // scan timer so the app waits ≤ SMART_LINK_SCAN_MS for strength data before
+  // falling back to a recency pick.
+  const smartLinkFiredRef = useRef<string | null>(null);
+  const smartLinkScanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const SMART_LINK_SCAN_MS = 6000;
   // A-37: user mode-commit grace (ESP remote R-33 parity) — remember the token
   // the USER chose plus the car-truth mode at commit time so the stale in-flight
   // echo (still the pre-commit mode) cannot undo the optimistic pick (that was
@@ -369,6 +386,12 @@ export function useControlHub(routeCategory?: string) {
   // The previous key is kept as `legacyMemoryKey` so a first link under the
   // new key migrates the stored prefs instead of starting from factory.
   const addressForMemory = carFwId ? `fw:${carFwId}` : legacyMemoryKey;
+  // Refs mirroring the live profile key + scan so timer callbacks (smart-link
+  // fallback) read through without re-creating.
+  const profileKeyRef = useRef<string | null>(null);
+  profileKeyRef.current = addressForMemory;
+  const profileKey = addressForMemory;
+  const carScanRef = useRef<ScanNetwork[] | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
   useFocusEffect(
     React.useCallback(() => {
@@ -712,6 +735,16 @@ export function useControlHub(routeCategory?: string) {
       if (t.reply) handleWifiProvisionReplyRef.current?.(t.reply);
       if (t.ap !== undefined) setCarApName(t.ap || null);
       if (t.ssid !== undefined) setCarSsid(t.ssid || null);
+      // Connections-Hub (smart-link): the car-side scan answer to ROUTERS;SCAN
+      // (firmware v2). Change-guarded so steady frames don't thrash.
+      if (t.scan !== undefined) {
+        setCarScan((prev) =>
+          prev && prev.length === t.scan!.length
+            ? prev
+            : (t.scan ?? []).slice(),
+        );
+      }
+      if (t.scan !== undefined) carScanRef.current = (t.scan ?? []).slice();
       // A-27: sync the saved-router mirror from the car's `networks` JSON
       // (broadcast on every WS status frame + REQ_STATE). Change-guarded to
       // skip identical arrays (steady 1 s broadcasts don't thrash the panel).
@@ -1391,6 +1424,152 @@ export function useControlHub(routeCategory?: string) {
     persistPrefsRef.current?.({ savedRouters: [] });
     setDriveStatusOnce("All routers cleared");
   }, [sendCommand]);
+
+  // ---- Smart-link (owner ③): auto-join a saved router ON CAR SELECTION. ----
+  // When the link verifies, if the car is sitting on its OWN access point and
+  // THIS car has saved routers, offer the best one: a saved router the car's
+  // OWN antenna hears with strength (ROUTERS;SCAN → scan.rssi, strongest
+  // wins), else the most recently used saved router. Asked for the scan first
+  // and wait ≤ SMART_LINK_SCAN_MS for strength before the recency fallback —
+  // that IS the owner's "use if available with strength, else own AP" rule.
+  // User-controlled via autoJoinRouter (per-car profile toggle). Fires once
+  // per link session; a fresh link re-arms it.
+  const fireRouterUse = useCallback(
+    (ssid: string) => {
+      if (smartLinkFiredRef.current) return;
+      smartLinkFiredRef.current = profileKeyRef.current;
+      routerUse(ssid);
+      showConnectionMessage(
+        `Smart-link: joining saved router "${ssid}" — connect your phone to it to drive.`,
+        "success",
+      );
+    },
+    [routerUse, showConnectionMessage],
+  );
+  const smartLinkFallbackTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  useEffect(() => {
+    // Re-arm on every fresh link session.
+    if (!linkVerified || !profileKey || !autoJoinRouter) {
+      smartLinkFiredRef.current = null;
+      if (smartLinkFallbackTimerRef.current) {
+        clearTimeout(smartLinkFallbackTimerRef.current);
+        smartLinkFallbackTimerRef.current = null;
+      }
+      return;
+    }
+    if (smartLinkFiredRef.current === profileKey) return;
+    // Router-capable car only (own AP + ROUTERS;* vocabulary).
+    const routerCapable = !!carApName || carNetworks.length > 0 || !!carSsid;
+    if (!routerCapable) return;
+    const saved = savedPrefs?.savedRouters ?? [];
+    if (saved.length === 0) return;
+    // Already satisfied: the car is on a saved router right now.
+    if (carSsid && saved.includes(carSsid)) {
+      smartLinkFiredRef.current = profileKey;
+      return;
+    }
+    // Never kick a car off a router we don't know about.
+    if (carSsid) return;
+    // Ask the car for a strength scan; fall back to recency if it never answers.
+    if (!smartLinkFallbackTimerRef.current) {
+      sendCommand(buildRouterCommand("SCAN", ""));
+      smartLinkFallbackTimerRef.current = setTimeout(() => {
+        smartLinkFallbackTimerRef.current = null;
+        const fallback = pickBestRouter({
+          saved,
+          scan: carScanRef.current,
+          history: savedPrefs?.wifiHistory,
+          lastSsid: savedPrefs?.lastWifiSsid,
+        });
+        if (fallback) fireRouterUse(fallback);
+      }, SMART_LINK_SCAN_MS);
+    }
+  }, [
+    linkVerified,
+    profileKey,
+    autoJoinRouter,
+    carApName,
+    carSsid,
+    carNetworks,
+    savedPrefs,
+    carScan,
+    sendCommand,
+    fireRouterUse,
+  ]);
+
+  // A scan answer with a live router HEARD with strength beats the timer:
+  // fire the join the moment strength data arrives (before the fallback).
+  useEffect(() => {
+    if (!linkVerified || !profileKey || !autoJoinRouter) return;
+    if (smartLinkFiredRef.current === profileKey) return;
+    if (!smartLinkFallbackTimerRef.current) return; // no pending offer
+    const saved = savedPrefs?.savedRouters ?? [];
+    if (saved.length === 0) return;
+    const best = pickBestRouter({
+      saved,
+      scan: carScan,
+      history: savedPrefs?.wifiHistory,
+      lastSsid: savedPrefs?.lastWifiSsid,
+    });
+    if (!best) return;
+    if (smartLinkFallbackTimerRef.current) {
+      clearTimeout(smartLinkFallbackTimerRef.current);
+      smartLinkFallbackTimerRef.current = null;
+    }
+    fireRouterUse(best);
+  }, [
+    linkVerified,
+    profileKey,
+    autoJoinRouter,
+    carScan,
+    savedPrefs,
+    fireRouterUse,
+  ]);
+
+  // Auto-dial: when the car announces its new router IP (STATE;IP=<ip>) after
+  // a smart-link USE, pre-fill the WS URL toward the router so the user only
+  // joins that WiFi and taps Connect — no more reading the IP off a 0.96″ OLED.
+  const telemetryIpRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ip = telemetry.ip?.trim();
+    if (ip) telemetryIpRef.current = ip;
+  }, [telemetry.ip]);
+  const smartLinkDialedRef = useRef(false);
+  useEffect(() => {
+    if (!linkVerified) {
+      smartLinkDialedRef.current = false;
+      return;
+    }
+    if (smartLinkDialedRef.current) return;
+    const ip = telemetryIpRef.current;
+    if (!ip) return;
+    const bare = ip
+      .replace(/^ws:\/\//, "")
+      .replace(/:\d+$/, "")
+      .trim();
+    if (!bare) return;
+    const currentHost = (wifiService.url ?? "").match(/\/\/([^:/]+)/)?.[1];
+    if (bare === currentHost) return;
+    smartLinkDialedRef.current = true;
+    const newUrl = /^\d{1,3}(\.\d{1,3}){3}$/.test(bare)
+      ? `ws://${bare}:81`
+      : ip.startsWith("ws://")
+        ? ip
+        : `ws://${ip}`;
+    setWifiUrl(newUrl);
+    showConnectionMessage(
+      `Car is on router at ${ip} — join that network and tap Connect.`,
+      "success",
+    );
+  }, [
+    linkVerified,
+    profileKey,
+    telemetry.ip,
+    setWifiUrl,
+    showConnectionMessage,
+  ]);
 
   const handleDirection = useCallback(
     (d: "F" | "B" | "L" | "R" | "S") => {
