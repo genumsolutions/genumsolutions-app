@@ -1,4 +1,4 @@
-# TESTING — Physical Device Test Checklist
+﻿# TESTING — Physical Device Test Checklist
 
 > 🆕 **2026-09-18 — RELEASE FINALIZATION (v3.2.0).** Release plan:
 > `../../guide/RELEASE-FINALIZATION-PLAN.md`; checklist `../../guide/FINALIZATION-TODO.md`;
@@ -802,3 +802,89 @@ Every step behaves as described above. No app crash or permanently dead control;
 | 2026-09-03 | — (no device)    | v1.5.9                              | ✅ Pre-flight PASS       | sha256 `efe58825…`, bundle contains `1.5.9` + **0** website-URL refs + admin-fix marker, manifest live 1.5.9/17, remote Content-Length == local. v1.5.9 = the QA-passed code + version bump.                                                                             |
 | 2026-09-03 | — (no device)    | v1.5.10                             | ✅ Pre-flight PASS       | sha256 `789fb692…`, bundle contains `1.5.10` + **0** website-URL refs + `grow-0`/`shrink-0` strip-fix markers, manifest live 1.5.10/18, remote Content-Length == local. v1.5.10 = v1.5.9 + tab-strip gap fix; visual device pass for the strip fix still pending.        |
 | 2026-09-04 | — (no device)    | v1.5.11                             | ✅ Build + manifest PASS | `gradlew assembleRelease` BUILD SUCCESSFUL (36,024,345 B / 34.4 MB); uploaded versioned + latest; fresh manifest 1.5.11/19/34.4 MB (cache-busted GET). Device pass for the AppMenu modal / back-nav / pager re-sync / swipe pager still pending.                         |
+
+---
+
+## U-49 round - transport picker + the WiFi that never worked (2026-09-28, IMPLEMENTED -> APK + DEVICE VERIFY PENDING)
+
+> Owner report: _"the car is working perfect on bluetooth connection but that app and car doesn't
+> connect at all in the wifi connection. I don't know what going on."_ Root cause + rules:
+> ../../../guide/FAILSAFES.md **F-30**/**F-31**. Design + WiFi playbook:
+> ../../../guide/TRANSPORTS-WIFI-GUIDE.md.
+> Gates: **tsc 0 + vitest 243/243 (16 files)**.
+> **NO OTA CAN FIX THIS.** The manifest lacks WiFi permissions and cleartext, so a **native APK
+> build is required** (AGENTS.md release flow from C:\bs). Rows U-49-0 and U-49-1 can be run
+> _today_ on the current build and are the ones that tell us what is really wrong.
+
+### U-49-0 - do this FIRST, on the current build (30 seconds, no new APK)
+
+- [ ] Power the car on, wait for the OLED. Join WiFi network `4WDCar_Wifi` on the phone
+      (password open/none). Confirm the phone's WiFi list shows it as connected.
+- [ ] **Open `http://192.168.245.1` in the phone BROWSER (not the app).**
+- [ ] **Page loads** -> firmware + radio are healthy; the fault was ours (manifest layer D). Stop
+      here, the fix needs the new APK. Note the page contents for later comparison.
+- [ ] **Page does NOT load** -> the fault is the car side, NOT the app: car off / different IP /
+      it is in router mode / another device is on the AP (max 4 clients). Re-read the OLED for the
+      real IP and retry. **Do not file this as an app bug.**
+- [ ] Leave the phone on the car AP. Android may auto-switch to mobile data because the AP has no
+      internet - that is expected and is diagnosed as layer B, not a failure.
+
+### U-49-1 - APK build + manifest gate (do before U-49-2)
+
+- [ ] Build the native APK through the normal release flow (C:\bs; AGENTS.md).
+- [ ] **F-8 manifest proof** - do not trust the build log, inspect the APK:
+      `aapt dump xmltree app-release.apk AndroidManifest.xml` and confirm all four of
+      ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, ACCESS_NETWORK_STATE, NEARBY_WIFI_DEVICES
+      (with `neverForLocation`) **plus** `android:usesCleartextTraffic="true"`.
+- [ ] If a permission is missing -> the config plugin did not apply. Clear the Expo/prebuild cache
+      and re-run; a cached AndroidManifest.xml is the usual cause.
+
+### U-49-2 - Control Panel, transport picker (new surface, sits above the old card)
+
+- [ ] Open **Tools -> 4WD4M**. The **Connection method** card lists 4 rows: Classic Bluetooth,
+      Bluetooth LE, Car WiFi, Home WiFi. Each shows capability chips (Drive / Data / Mode /
+      WiFi setup / **Firmware** - the last one dimmed on every row, because no link pushes firmware).
+- [ ] The **status dot, banners and Drive deck gating all agree** with the picker's state. This is
+      the F-17 check; the picker deliberately asks the screen to own the connect so the hub's state
+      cannot desync.
+- [ ] Connect via **Classic Bluetooth**: scan -> pick the car -> connected. **This is the known-good
+      path - it must not regress.** Confirm the OLED shows CONNECTED and telemetry is live.
+- [ ] With BT connected, pick **Car WiFi** -> BT **actually disconnects** (not just relabels) and the
+      WiFi link comes up. Two links at once is a fail.
+- [ ] **WiFi diagnostics** card: run it while failing and while connected. The verdict must name a
+      layer (A-E) and a fix, not just say "failed".
+- [ ] Enter a wrong IP -> a definite error within ~20 s, **never an endless "Connecting..."** (F-16).
+- [ ] **Disconnect** via the picker -> the status dot, banner and Drive deck all clear together.
+- [ ] **Bluetooth LE** row: it must either connect and report, or say clearly that it is
+      unsupported. It is marked experimental; report what actually happens, do not assume.
+
+### U-49-3 - the actual drive, on BOTH links (remote first, per fleet rule 11)
+
+- [ ] Test the **physical ESP32 remote** FIRST, then the app's remote screen.
+- [ ] Drive over **Bluetooth**: forward/reverse/steer, speed steps, stop.
+- [ ] Drive over **WiFi AP**: same. Car keeps driving, no stutter, telemetry updates.
+- [ ] Mode list now shows LIVE / WIP / COMING SOON correctly (the caps string parser fix). A
+      **CS mode must be visibly marked** - do not tap it while driving.
+- [ ] WIFICFG over Bluetooth -> car joins the home LAN -> try **Home WiFi (STA)** row with the
+      car's new IP. This is the first test of the STA path.
+
+### U-49-4 - safety (unchanged behaviour is the pass condition)
+
+- [ ] Link loss on **either** transport -> motors stop within the firmware's 2 s
+      (FAILSAFE_TIMEOUT_MS). Time it.
+- [ ] No ESTOP button is expected anywhere in the app (removed by directive; the firmware has no
+      ESTOP handler). If one reappeared, **stop and report**.
+- [ ] Safe stop commands (S, SPD0) still work on both links.
+
+### U-49-5 - mode persistence trap (F-31) - only with the car on the bench
+
+- [ ] If the car is ever stuck in a Coming-Soon / no-drive mode, recover with the **live command**
+      MODE_4WD4M (or http://192.168.245.1/mode?val=4WD4M). Confirm that a **power cycle does
+      NOT fix it** - that is the trap this row exists to document.
+
+### U-49-6 - regression on the rest of the app
+
+- [ ] Other projects/categories in Tools still open and their cards render (the picker must not leak
+      state across categories).
+- [ ] Leave the Control Panel mid-connect and come back: no duplicate link, no stuck spinner.
+- [ ] Admin/site-content rounds from U-48: content save + pull-to-refresh still fine.
