@@ -7,14 +7,10 @@
 // =====================================================================
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
-  useColorScheme,
   View,
 } from "react-native";
 import {
@@ -29,6 +25,9 @@ import type { RootStackParamList } from "../navigation/types";
 import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { TransportPicker } from "../components/tools/TransportPicker";
+import { ConnectionBanner } from "../components/tools/ConnectionBanner";
+import { ConnectionsTeaching } from "../components/tools/ConnectionsTeaching";
+import { useActiveTransport } from "../transports/linkManagerHooks";
 import { linkManager } from "../transports/linkManager";
 import type { TransportConnectOptions, TransportId } from "../transports/types";
 import { feedbackTap } from "../services/hapticsService";
@@ -38,7 +37,6 @@ import {
   type ProjectCategory,
 } from "../config/project-catalog";
 import { getProjectCategories } from "../services/projectCategoryService";
-import { DEFAULT_WS_URL } from "../services/carProtocol";
 import { sppService } from "../services/sppService";
 import { wifiService } from "../services/wifiService";
 
@@ -69,12 +67,6 @@ const CAPABILITY_LABELS: Record<string, string> = {
 
 export function ToolsScreen() {
   const route = useRoute<Route>();
-  // U-47v5 (dark contrast): the connection-tab icons were hardcoded navy
-  // (#1e3a8a) — invisible on dark cards. Scheme-aware accents fix both
-  // themes without touching the sim-panel aesthetics.
-  const isDark = useColorScheme() === "dark";
-  const iconAccent = isDark ? "#60a5fa" : "#1e3a8a";
-  const iconMuted = isDark ? "#9eaec5" : "#94a3b8";
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -119,14 +111,9 @@ export function ToolsScreen() {
     deviceName,
     sppSupported,
     sppDevices,
-    scanning,
-    connecting,
-    connectingAddress,
-    handleScan,
     handleConnect,
     handleDisconnect,
     wifiConnected,
-    wifiUrl,
     setWifiUrl,
     handleWifiConnect,
     handleWifiDisconnect,
@@ -136,7 +123,28 @@ export function ToolsScreen() {
     showSppsRetry,
     handleSppsRetry,
     handleReconnectPromptCancel,
+    telemetry,
+    carApName,
+    carSsid,
   } = hub;
+
+  // The banner's "which link" truth comes from the SAME manager the picker
+  // uses (one source — this round's whole point). It is live-subscribed so
+  // it can never claim a link the selection did not actually make.
+  const managerLink = useActiveTransport();
+  const activeLinkLabel = managerLink.id
+    ? (linkManager.get(managerLink.id)?.label ?? null)
+    : null;
+
+  const anyLinked = sppStatus === "connected" || wifiConnected;
+  const linkVerified = hub.linkVerified || sppStatus === "connected";
+  const carIdentityId = telemetry.id ?? null;
+  // STA truth only when the CAR says it joined a router (JSON `connected`).
+  const staSsid =
+    telemetry.connected === true
+      ? telemetry.ssid?.trim() || carSsid || null
+      : null;
+  const apName = staSsid ? null : carApName?.trim() || "4WDCar_Wifi";
 
   // ---------------------------------------------------------------------
   // Transport picker bridge (F-17 — one owner for connection side effects).
@@ -219,10 +227,7 @@ export function ToolsScreen() {
     [category.capabilityLabels],
   );
 
-  // Connection tab: iOS-style segmented toggle
-  const [connTab, setConnTab] = useState<"bluetooth" | "wifi">("bluetooth");
-
-  // Disconnect confirmation
+  // Connection tab:
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const confirmDisconnect = useCallback(() => {
     feedbackTap();
@@ -353,24 +358,15 @@ export function ToolsScreen() {
         </Text>
       </View>
 
-      {/* Connection card */}
+      {/* Connections — the ONE connection surface (owner ①⑥) */}
       <View className="mt-6">
         <View className="flex-row items-center justify-between">
-          <View className="min-w-0 flex-1 flex-row items-center gap-2">
-            <View
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${sppStatus === "connected" || sppStatus === "connecting" || wifiConnected ? "bg-accent" : "bg-border"}`}
-            />
-            <Text
-              numberOfLines={1}
-              className="min-w-0 flex-1 text-sm font-bold text-ink"
-            >
-              {sppStatus === "connected"
-                ? `Connected · ${deviceName}`
-                : wifiConnected
-                  ? `WiFi Connected`
-                  : sppStatus === "connecting"
-                    ? "Connecting…"
-                    : "Not connected"}
+          <View className="min-w-0 flex-1">
+            <Text className="text-xs font-black uppercase tracking-widest text-navy">
+              Connections
+            </Text>
+            <Text className="mt-0.5 text-[11px] leading-4 text-muted">
+              One method at a time — pick it, verify it, drive.
             </Text>
           </View>
           {(sppStatus === "connected" || wifiConnected) && (
@@ -387,6 +383,27 @@ export function ToolsScreen() {
               </Text>
             </Pressable>
           )}
+        </View>
+
+        <View className="mt-3">
+          <ConnectionBanner
+            linked={anyLinked}
+            verified={linkVerified}
+            linkLabel={activeLinkLabel}
+            carLabel={
+              sppStatus === "connected"
+                ? deviceName || null
+                : wifiConnected
+                  ? apName
+                  : null
+            }
+            carId={carIdentityId}
+            staSsid={staSsid}
+            apName={apName}
+            signal={telemetry.signal ?? null}
+            rssi={telemetry.rssi ?? null}
+            error={error || (anyLinked ? null : sppStatusMsg)}
+          />
         </View>
 
         {sppStatusMsg && sppStatus !== "connected" && !wifiConnected && (
@@ -440,178 +457,28 @@ export function ToolsScreen() {
           </View>
         )}
 
-        <View className="mt-4">
+        <View className="mt-3">
           <TransportPicker
             onActivate={onTransportActivate}
             onDeactivate={onTransportDeactivate}
           />
         </View>
 
-        <View className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card">
-          <View className="flex-row rounded-xl bg-mist p-0.5">
-            <Pressable
-              onPress={() => setConnTab("bluetooth")}
-              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5 ${connTab === "bluetooth" ? "bg-card shadow-sm" : ""}`}
-            >
-              <Feather
-                name="bluetooth"
-                size={13}
-                color={connTab === "bluetooth" ? iconAccent : iconMuted}
-              />
-              <Text
-                className={`text-xs font-bold ${connTab === "bluetooth" ? "text-navy" : "text-muted"}`}
-              >
-                Bluetooth
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setConnTab("wifi")}
-              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5 ${connTab === "wifi" ? "bg-card shadow-sm" : ""}`}
-            >
-              <Feather
-                name="wifi"
-                size={13}
-                color={connTab === "wifi" ? iconAccent : iconMuted}
-              />
-              <Text
-                className={`text-xs font-bold ${connTab === "wifi" ? "text-navy" : "text-muted"}`}
-              >
-                WiFi
-              </Text>
-            </Pressable>
+        {sppSupported && error && !connected && !wifiConnected && (
+          <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <Text className="text-xs leading-5 text-red-600">{error}</Text>
           </View>
-
-          {connTab === "bluetooth" && (
-            <View className="mt-4">
-              <Text className="text-xs leading-5 text-muted">
-                Scan and connect to your {category.name.toLowerCase()} hardware.
-                Pairs like the hand-held remote. PIN: 1234.
-              </Text>
-              {!sppSupported && (
-                <View className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-                  <Text className="text-xs font-bold text-amber-700">
-                    Bluetooth SPP not supported on this platform.
-                  </Text>
-                </View>
-              )}
-              <View
-                className={sppSupported ? "" : "opacity-40"}
-                pointerEvents={sppSupported ? "auto" : "none"}
-              >
-                {!connected && !wifiConnected && (
-                  <Pressable
-                    onPress={handleScan}
-                    disabled={scanning}
-                    className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy px-5 py-2.5 disabled:opacity-60"
-                  >
-                    {scanning ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Feather name="search" size={14} color="#fff" />
-                    )}
-                    <Text className="text-xs font-black text-white">
-                      {scanning ? "Scanning…" : "Scan devices (SPP)"}
-                    </Text>
-                  </Pressable>
-                )}
-
-                {sppDevices.length > 0 && (
-                  <FlatList
-                    data={sppDevices}
-                    keyExtractor={(d) => d.address}
-                    className="mt-3 max-h-48"
-                    nestedScrollEnabled
-                    renderItem={({ item }) => (
-                      <Pressable
-                        onPress={() => handleConnect(item)}
-                        disabled={connecting}
-                        className="mt-1 flex-row items-center justify-between rounded-lg border border-line px-3 py-2.5"
-                      >
-                        <View className="min-w-0 flex-1 flex-row items-center gap-2">
-                          <Feather
-                            name="smartphone"
-                            size={13}
-                            color="#1e3a8a"
-                          />
-                          <Text
-                            className="min-w-0 flex-1 text-xs font-semibold text-ink"
-                            numberOfLines={1}
-                          >
-                            {item.name}
-                          </Text>
-                          {item.bonded && (
-                            <Text className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-green-600">
-                              Paired
-                            </Text>
-                          )}
-                        </View>
-                        <Text className="ml-2 shrink-0 text-xs font-bold text-navy">
-                          {connectingAddress === item.address
-                            ? "Connecting…"
-                            : "Connect"}
-                        </Text>
-                      </Pressable>
-                    )}
-                  />
-                )}
-              </View>
-            </View>
-          )}
-
-          {connTab === "wifi" && (
-            <View className="mt-4">
-              <Text className="text-xs leading-5 text-muted">
-                Connect to a WiFi-enabled car via WebSocket. Enter the car's
-                URL.
-              </Text>
-              {!wifiConnected && (
-                <TextInput
-                  value={wifiUrl}
-                  onChangeText={setWifiUrl}
-                  editable={!connected && !wifiConnected}
-                  placeholder={DEFAULT_WS_URL}
-                  autoCapitalize="none"
-                  className="mt-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-                />
-              )}
-              <Pressable
-                onPress={
-                  wifiConnected ? handleWifiDisconnect : handleWifiConnect
-                }
-                disabled={connecting}
-                className="mt-3 flex-row items-center justify-center gap-2 rounded-full bg-navy px-5 py-2.5 disabled:opacity-60"
-              >
-                {connecting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Feather
-                    name={wifiConnected ? "wifi-off" : "wifi"}
-                    size={14}
-                    color="#fff"
-                  />
-                )}
-                <Text className="text-xs font-black text-white">
-                  {wifiConnected
-                    ? "Disconnect"
-                    : connecting
-                      ? "Connecting…"
-                      : "Connect WiFi"}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-
-          {sppSupported && error && !connected && !wifiConnected && (
-            <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-              <Text className="text-xs leading-5 text-red-600">{error}</Text>
-            </View>
-          )}
-        </View>
+        )}
       </View>
 
       {/* About this project */}
       <View className="mt-4">
         <ProjectInfo mode={activeMode} categorySlug={category.slug} />
+      </View>
+
+      {/* Every comm method — the teaching registry (owner ⑦), below About */}
+      <View className="mt-4">
+        <ConnectionsTeaching />
       </View>
 
       {/* Disconnect confirmation */}

@@ -62,7 +62,9 @@ export function ProjectInfo({
   mode: CarMode;
   categorySlug: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // Connections-Hub round: the About card is OPEN by default (owner ⑧) so the
+  // per-method teaching below it is seen, not discovered.
+  const [expanded, setExpanded] = useState(true);
   const category = getProjectCategory(categorySlug);
   const isRobocar = categorySlug === "robocar";
 
@@ -88,7 +90,7 @@ export function ProjectInfo({
           </Text>
         </View>
         <Feather
-          name={expanded ? "chevron-down" : "chevron-up"}
+          name={expanded ? "chevron-up" : "chevron-down"}
           size={16}
           color="#64748b"
         />
