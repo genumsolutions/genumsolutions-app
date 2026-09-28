@@ -13,6 +13,10 @@ import {
   buildWifiConfigLine,
   buildRouterCommand,
   OWN_AP_NAME,
+  OWN_AP_NAMES,
+  isOwnApName,
+  DEFAULT_AP_IP,
+  DEFAULT_WS_URL,
   ESTOP_LINE,
   isAllowedDriveStatus,
   isCompleteJsonObject,
@@ -125,6 +129,29 @@ describe("router-registry commands + protected own network (A-40/A-46)", () => {
     expect(OWN_AP_NAME).toBe("WirelessCar_Wifi");
     expect(buildRouterCommand("DEL", OWN_AP_NAME)).toBe(
       "ROUTERS;DEL;WirelessCar_Wifi",
+    );
+  });
+
+  // v2 (Genum_4WD4M_CAR, owner plan 2026-09-28): unique on-air names per car
+  // + per-car AP subnets. The own-AP registry + helpers are the contract.
+  it("v2: own-AP registry covers both car generations and trims input", () => {
+    expect(OWN_AP_NAMES).toContain("WirelessCar_Wifi");
+    expect(OWN_AP_NAMES).toContain("4WDCar_Wifi");
+    expect(isOwnApName("WirelessCar_Wifi")).toBe(true);
+    expect(isOwnApName(" 4WDCar_Wifi ")).toBe(true);
+    expect(isOwnApName("HomeNet")).toBe(false);
+    expect(isOwnApName("")).toBe(false);
+  });
+
+  it("v2: AP defaults point at the NEW car subnet (.245), never .4.x or .244", () => {
+    expect(DEFAULT_AP_IP).toBe("192.168.245.1");
+    expect(DEFAULT_WS_URL).toBe("ws://192.168.245.1:81");
+    expect(DEFAULT_AP_IP.startsWith("192.168.4.")).toBe(false);
+  });
+
+  it("v2: WIFICFG line grammar unchanged (compat with donor firmware)", () => {
+    expect(buildWifiConfigLine("HomeNet", "secret")).toBe(
+      "WIFICFG;HomeNet;secret",
     );
   });
 });
