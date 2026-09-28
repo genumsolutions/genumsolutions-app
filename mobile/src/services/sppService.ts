@@ -80,6 +80,13 @@ export class SppService {
   private disconnectSubscription: { remove: () => void } | null = null;
   private telemetryCallbacks: Set<TelemetryCallback> = new Set();
   private statusCallbacks: Set<StatusCallback> = new Set();
+  /**
+   * TRUE after an EXPLICIT disconnect() from any screen, FALSE again on the
+   * next connect(). Shared reconnect gate: every useControlHub instance
+   * refuses to silently auto-re-dial while this is set, so a disconnect taken
+   * in the Drive Deck is not undone by the still-mounted Control Panel.
+   */
+  manualClose = false;
 
   /** True on Android when the classic-BT native module is present. */
   get supported(): boolean {
@@ -304,6 +311,10 @@ export class SppService {
       this.connectedName = null;
     }
 
+    // A new dial is the opposite of a manual close: unexpected losses from
+    // here on must be able to trigger the hub's silent auto-reconnect again.
+    this.manualClose = false;
+
     // Immediate: show connecting status
     this.connectingAddress = address;
     this.lastAddress = address;
@@ -414,8 +425,17 @@ export class SppService {
   }
 
   /** Force disconnect and reset state. */ /** Disconnect and tear down the read subscription.
+   *
+   * The disconnect is EXPLICIT (by the user, from any screen). `manualClose`
+   * is the module-level signal for that: every useControlHub instance guards
+   * its SPP auto-reconnect on it, so a disconnect taken in the Drive Deck
+   * cannot be silently undone 1 s later by the still-mounted Control Panel,
+   * whose OWN manualCloseRef is false (it never disconnected). This was the
+   * "it takes two times to disconnect" bug: first disconnect, then
+   * "unexpected lost link" -> silent re-dial.
    */
   async disconnect(): Promise<void> {
+    this.manualClose = true;
     if (this.connectedAddress) {
       try {
         const mod = await this.getModule();
