@@ -676,6 +676,7 @@ export function useControlHub(routeCategory?: string) {
       // 'disconnected') and the exhausted-attempts banner are unaffected.
       const reconnecting =
         !manualCloseRef.current &&
+        !sppService.manualClose &&
         !!sppLastAddressRef.current &&
         sppReconnectAttemptsRef.current > 0;
       const burst = reconnecting && (kind === "connecting" || kind === "error");
@@ -730,7 +731,11 @@ export function useControlHub(routeCategory?: string) {
           setDriveDirOnce("S");
           // Auto-reconnect on unexpected disconnect (ESP remote parity):
           // silent exponential backoff; the banner appears when exhausted.
-          if (!manualCloseRef.current && sppLastAddressRef.current) {
+          if (
+            !manualCloseRef.current &&
+            !sppService.manualClose &&
+            sppLastAddressRef.current
+          ) {
             startSppReconnect();
           } else {
             setShowSppsRetry(false);
@@ -742,7 +747,11 @@ export function useControlHub(routeCategory?: string) {
           setDeviceName("");
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
-          if (!manualCloseRef.current && sppLastAddressRef.current) {
+          if (
+            !manualCloseRef.current &&
+            !sppService.manualClose &&
+            sppLastAddressRef.current
+          ) {
             startSppReconnect();
           } else {
             setShowSppsRetry(false);
@@ -1536,6 +1545,7 @@ export function useControlHub(routeCategory?: string) {
       if (
         !mountedRef.current ||
         manualCloseRef.current ||
+        sppService.manualClose ||
         !sppLastAddressRef.current
       ) {
         // R1 flicker fix: on failure, de-arm so the next retry does not
@@ -1556,7 +1566,11 @@ export function useControlHub(routeCategory?: string) {
       }
       sppReconnectAttemptsRef.current += 1;
       sppService.retryConnect().catch(() => {
-        if (!mountedRef.current || manualCloseRef.current) {
+        if (
+          !mountedRef.current ||
+          manualCloseRef.current ||
+          sppService.manualClose
+        ) {
           sppReconnectActiveRef.current = false;
           return;
         }
