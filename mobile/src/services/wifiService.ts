@@ -33,6 +33,11 @@ type StatusCallback = (
 
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECTS = 5;
+// R1 fix (owner round 1, 2026-09-28): a WebSocket to an unreachable car can
+// hang in CONNECTING forever (RN does not always fire onclose promptly), so
+// "Connecting…" never resolved. Hard cap: if the socket is not OPEN within
+// CONNECT_TIMEOUT_MS, tear it down and surface a real, actionable error.
+const CONNECT_TIMEOUT_MS = 8000;
 
 export class WifiService {
   private socket: WebSocket | null = null;
@@ -147,7 +152,30 @@ export class WifiService {
     }
     this.socket = socket;
 
+    // R1: hard connect timeout — never hang on "Connecting…".
+    let connectTimedOut = false;
+    const connectTimer = setTimeout(() => {
+      if (this.socket !== socket) return; // a newer dial replaced us
+      if (socket.readyState === WebSocket.OPEN) return;
+      connectTimedOut = true;
+      try {
+        socket.close();
+      } catch {
+        /* ignore */
+      }
+      this.connectingMarker = false;
+      if (this.socket === socket) {
+        this.socket = null;
+        this.socketUrl = null;
+      }
+      this.emitStatus(
+        "error",
+        `Car not reachable at ${url} within ${CONNECT_TIMEOUT_MS / 1000}s. Check: phone joined the car's Wi-Fi (4WDCar_Wifi), the car is powered, and the IP/port are correct.`,
+      );
+    }, CONNECT_TIMEOUT_MS);
+
     socket.onopen = () => {
+      clearTimeout(connectTimer);
       this.connectingMarker = false;
       this.reconnectAttempts = 0;
       if (this.socket !== socket) return;
@@ -166,6 +194,7 @@ export class WifiService {
     };
 
     socket.onclose = () => {
+      clearTimeout(connectTimer);
       const isCurrent = this.socket === socket;
       if (isCurrent) {
         this.socket = null;
@@ -173,8 +202,9 @@ export class WifiService {
       }
       this.connectingMarker = false;
       // A NEWER socket replaced us (connect() closed this one to re-dial) —
-      // this stale close must not emit or schedule anything.
-      if (!isCurrent) return;
+      // this stale close must not emit or schedule anything. Same for the
+      // timeout teardown: it already surfaced its own error.
+      if (!isCurrent || connectTimedOut) return;
       if (this.manualClose) {
         this.emitStatus("disconnected");
         return;
