@@ -45,6 +45,11 @@ export type RootStackParamList = {
   Legal: { doc: "privacy" | "terms" };
   OrderSuccess: { orderId?: string; provider?: string; paid?: boolean };
   Account: undefined;
+  /** U-49 (2026-09-28): the connection wizard — every link method gets a row
+   *  here (BT SPP, own-AP and STA are built; BLE / ESP remote are placeholders),
+   *  then hands off to DeviceConnection for the chosen kind. */
+  DeviceSetup: undefined;
+  DeviceConnection: { kind: string; deviceName: string };
   Update: undefined;
 };
 

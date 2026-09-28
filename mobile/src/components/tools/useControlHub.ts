@@ -116,6 +116,7 @@ export function useControlHub(routeCategory?: string) {
   const [deviceName, setDeviceName] = useState(sppService.deviceName ?? "");
   const [scanning, setScanning] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [linkVerified, setLinkVerified] = useState(false);
   const [connectingAddress, setConnectingAddress] = useState<string | null>(
     null,
   );
@@ -608,6 +609,10 @@ export function useControlHub(routeCategory?: string) {
         if (d) setDriveDirOnce(d);
       }
       // v1.4.0: provisioning replies ride STATE as REPLY=â€¦ (car â†’ app).
+      // V2: provisioning moves the car to its own AP or a STA join; the
+      // app must give up the AP dial so the drive socket is not stuck on the
+      // car's own AP. The car keeps every transport live; the next
+      // STATE;IP= broadcasts the router IP for the user to dial.
       if (t.reply) handleWifiProvisionReplyRef.current?.(t.reply);
       if (t.ap !== undefined) setCarApName(t.ap || null);
       if (t.ssid !== undefined) setCarSsid(t.ssid || null);
@@ -946,7 +951,7 @@ export function useControlHub(routeCategory?: string) {
     }
   }, []);
 
-  const handleWifiConnect = useCallback(() => {
+  const handleWifiConnect = useCallback(async () => {
     setError(null);
     if (!wifiUrl) {
       setError(`Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`);
@@ -957,14 +962,40 @@ export function useControlHub(routeCategory?: string) {
         ? wifiUrl
         : `ws://${wifiUrl}`;
     manualCloseRef.current = false;
-    // Delegated to the shared singleton (the ONE socket every hub reads);
-    // status events (connecting/connected/disconnected) drive the UI.
-    wifiService.connect(wsUrl).catch((e) => {
+    setConnecting(true);
+    setLinkVerified(false);
+    // Deliver over the ONE shared socket every hub reads — the SAME
+    // WebSocket the website page (http://192.168.245.1) uses for drive.
+    // R1: connect() only proves the socket opened, so wait for the car to
+    // actually answer before claiming a working link.
+    try {
+      await wifiService.connect(wsUrl);
+      const answered = await wifiService.waitForCarAnswer();
+      if (!mountedRef.current) return;
+      setLinkVerified(answered);
+      if (answered) {
+        setWifiConnected(true);
+        setError(null);
+        showConnectionMessage(`Connected to car via WiFi`, "success");
+        setTimeout(() => {
+          wifiService.requestState().catch(() => {});
+        }, 200);
+      } else {
+        setWifiConnected(false);
+        setError(
+          "WiFi link opened but the car did not answer STATE/REPLY. Check the car is powered and the WebSocket port (81) is reachable.",
+        );
+      }
+    } catch (e) {
       if (mountedRef.current) {
         setError(e instanceof Error ? e.message : "WiFi connect failed");
+        setWifiConnected(false);
+        setLinkVerified(false);
       }
-    });
-  }, [wifiUrl]);
+    } finally {
+      if (mountedRef.current) setConnecting(false);
+    }
+  }, [wifiUrl, showConnectionMessage]);
 
   const handleWifiDisconnect = useCallback(async () => {
     manualCloseRef.current = true;
@@ -1010,10 +1041,13 @@ export function useControlHub(routeCategory?: string) {
       // just-sent network immediately instead of waiting for the car's
       // REPLY (the stale default-SSID bug). The car's T-35 confirm
       // (sendStateOn → REPLY=WIFICFG;STORED;<ssid>) re-confirms anyway.
-      setCarSsid(ssid);
-      persistPrefs({ lastWifiSsid: ssid });
+      // V2: provisioning moves the car to its own AP or a STA join; the
+      // app must give up the AP dial so the drive socket is not stuck on the
+      // car's own AP. The car keeps every transport live; the next
+      // STATE;IP= broadcasts the router IP for the user to dial.
+      wifiService.disconnect().catch(() => {});
       showConnectionMessage(
-        `Sent WiFi "${ssid}" to the car — it is switching to Webserver mode.`,
+        `Sent WiFi "${ssid}" to the car — it is switching to Webserver/join mode.`,
         "success",
       );
     } catch (e) {
@@ -1042,6 +1076,10 @@ export function useControlHub(routeCategory?: string) {
         // AP address until the user reads the real IP off the OLED/deck.
         // v2: the new 4WD4M car's own AP is 192.168.245.1 (donor owns .244;
         // SDK-default .4.x is forbidden fleet-wide).
+        // V2: drop the AP socket on provisioning so the dial is not stuck
+        // on the car's own AP; the car keeps every transport live and the
+        // next STATE;IP= broadcasts the router IP for the user to dial.
+        wifiService.disconnect().catch(() => {});
         setWifiUrl(DEFAULT_WS_URL);
         showConnectionMessage(
           `Car stored WiFi "${ssid}" â€” switched to Webserver/join mode (v2 cars keep every transport live).`,
@@ -1574,6 +1612,10 @@ export function useControlHub(routeCategory?: string) {
     connecting,
     connectingAddress,
     wifiConnected,
+    // R1: the WiFi socket is open AND the car has answered on it. Distinct
+    // from wifiConnected's transport-only truth so the UI can say "linked,
+    // but the car is not answering" instead of a plain false.
+    linkVerified,
     wifiUrl,
     error,
     connectionMessage,

@@ -39,12 +39,19 @@ const MAX_RECONNECTS = 5;
 // within CONNECT_TIMEOUT_MS, tear it down and surface a real, actionable
 // error.
 const CONNECT_TIMEOUT_MS = 8000;
+// R1 fix (owner round 1, 2026-09-28): a WebSocket can OPEN while nothing is
+// really there — the phone is on the right network but the car's web layer is
+// dead, so the car never answers. Transport-up is NOT car-up. After the socket
+// opens we wait this long for the first inbound frame that proves the car is
+// alive (STATE / CAPS / REPLY / TEL), and report the difference to the user.
+const CAR_ANSWER_TIMEOUT_MS = 5000;
 
 export class WifiService {
   private socket: WebSocket | null = null;
   private socketUrl: string | null = null;
   private connectingMarker = false;
   private manualClose = true;
+  private verified = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private telemetryCallbacks: Set<TelemetryCallback> = new Set();
@@ -56,6 +63,14 @@ export class WifiService {
 
   get isConnecting(): boolean {
     return this.connectingMarker;
+  }
+
+  /**
+   * True once the car has actually answered on the current socket — i.e. a
+   * frame came back, not merely that the TCP/WS handshake completed.
+   */
+  get linkVerified(): boolean {
+    return this.verified;
   }
 
   get url(): string | null {
@@ -136,6 +151,8 @@ export class WifiService {
     this.socketUrl = url;
     this.reconnectAttempts = 0;
     this.connectingMarker = true;
+    // A fresh dial must re-prove the car: drop the previous verification.
+    this.verified = false;
     this.emitStatus("connecting", url);
 
     let socket: WebSocket;
@@ -188,7 +205,12 @@ export class WifiService {
         const raw = typeof event.data === "string" ? event.data : "";
         if (!raw) return;
         const telemetry = parseTelemetryLine(raw);
-        if (Object.keys(telemetry).length > 0) this.emitTelemetry(telemetry);
+        if (Object.keys(telemetry).length > 0) {
+          // First real frame on this socket: the car is alive, not just
+          // reachable. This is what makes `linkVerified` true.
+          if (this.socket === socket) this.verified = true;
+          this.emitTelemetry(telemetry);
+        }
       } catch (e) {
         if (__DEV__) logger.warn("wifi", "read handler error:", e);
       }
@@ -242,6 +264,7 @@ export class WifiService {
     this.socket = null;
     this.socketUrl = null;
     this.connectingMarker = false;
+    this.verified = false;
     if (s) {
       try {
         s.close();
@@ -250,6 +273,33 @@ export class WifiService {
       }
     }
     this.emitStatus("disconnected");
+  }
+
+  /**
+   * Resolve once the car proves it is alive on this socket, or false after
+   * `timeoutMs`. Call it right after `connect()` resolves: `connect()` only
+   * proves the socket opened, this proves a car is on the other end.
+   */
+  waitForCarAnswer(
+    timeoutMs: number = CAR_ANSWER_TIMEOUT_MS,
+  ): Promise<boolean> {
+    if (this.linkVerified) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let off: () => void = () => undefined;
+      const done = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        off();
+        resolve(ok);
+      };
+      // Subscribe BEFORE arming the timer so a frame that lands in this tick
+      // can't slip through the gap.
+      off = this.onTelemetry(() => done(true));
+      timer = setTimeout(() => done(false), timeoutMs);
+    });
   }
 
   /** Send one GENUM command line to the car (newline terminated). */

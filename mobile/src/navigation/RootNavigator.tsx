@@ -24,6 +24,8 @@ import { ContactScreen } from "../screens/ContactScreen";
 import { AboutScreen } from "../screens/AboutScreen";
 import { ToolsScreen } from "../screens/ToolsScreen";
 import { RemoteControlScreen } from "../screens/RemoteControlScreen";
+import { DeviceSetupScreen } from "../screens/DeviceSetupScreen";
+import { DeviceConnectionScreen } from "../screens/DeviceConnectionScreen";
 import { RobotPreferencesScreen } from "../screens/RobotPreferencesScreen";
 import { UpdateScreen } from "../screens/UpdateScreen";
 import { JournalScreen } from "../screens/JournalScreen";
@@ -63,6 +65,17 @@ const ToolsScreenSafe = withErrorBoundary(ToolsScreen, "Tools");
 const RemoteControlScreenSafe = withErrorBoundary(
   RemoteControlScreen,
   "RemoteControl",
+);
+// U-49 (2026-09-28): the connection wizard — every link method gets a row
+// (BT SPP built; BLE / ESP remote / own-AP / STA placeholders), then hands
+// off to the per-kind connection screen.
+const DeviceSetupScreenSafe = withErrorBoundary(
+  DeviceSetupScreen,
+  "DeviceSetup",
+);
+const DeviceConnectionScreenSafe = withErrorBoundary(
+  DeviceConnectionScreen,
+  "DeviceConnection",
 );
 const AdminScreenSafe = withErrorBoundary(AdminScreen, "Admin");
 const JournalScreenSafe = withErrorBoundary(JournalScreen, "Journal");
@@ -205,6 +218,26 @@ export function RootNavigator() {
           options={{
             headerShown: false,
             title: "Remote",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
+        />
+        <Stack.Screen
+          name="DeviceSetup"
+          component={DeviceSetupScreenSafe}
+          options={{
+            headerShown: true,
+            title: "Device setup",
+            headerTintColor: "#1e3a8a",
+            headerBackTitle: "Back",
+          }}
+        />
+        <Stack.Screen
+          name="DeviceConnection"
+          component={DeviceConnectionScreenSafe}
+          options={{
+            headerShown: true,
+            title: "Connect device",
             headerTintColor: "#1e3a8a",
             headerBackTitle: "Back",
           }}
