@@ -268,6 +268,52 @@ describe("LinkManager — F-32 referentially stable snapshot", () => {
   });
 });
 
+describe("LinkManager — adopt() (F-17 bridge: hub already dialed, no re-dial)", () => {
+  it("records the active link WITHOUT calling connect()", async () => {
+    const m = new LinkManager();
+    const wifi = fakeTransport("wifi-ap-ws");
+    m.register(wifi);
+
+    await m.adopt("wifi-ap-ws");
+
+    expect(wifi.connects).toBe(0); // the hub handler dialed, not the manager
+    expect(m.getActive()?.id).toBe("wifi-ap-ws");
+    expect(m.getState().id).toBe("wifi-ap-ws");
+  });
+
+  it("evicts a previous explicit link when adopting a new one", async () => {
+    const m = new LinkManager();
+    const bt = fakeTransport("bt-classic");
+    const wifi = fakeTransport("wifi-ap-ws");
+    m.register(bt);
+    m.register(wifi);
+
+    await m.activate("bt-classic"); // manager dialed this one
+    await m.adopt("wifi-ap-ws"); // bridge brought WiFi up
+
+    expect(bt.disconnects).toBe(1);
+    expect(m.getActive()?.id).toBe("wifi-ap-ws");
+  });
+
+  it("un-verifies and shows disconnected when the adopted link drops", async () => {
+    const m = new LinkManager();
+    const wifi = fakeTransport("wifi-ap-ws");
+    m.register(wifi);
+
+    await m.adopt("wifi-ap-ws");
+    wifi.fireTelemetry({ mode: "4WD4M" });
+    expect(m.getState().verified).toBe(true);
+
+    wifi.setStatus("idle");
+    wifi.fireStatus({ kind: "disconnected" });
+    expect(m.getState().verified).toBe(false);
+    // The manager derives status from the TRANSPORT's live getStatus()
+    // (idle once the link drops), plus the remembered selection.
+    expect(m.getState().status).toBe("idle");
+    expect(m.getState().id).toBe("wifi-ap-ws");
+  });
+});
+
 describe("LinkManager — F-16 bounded connect", () => {
   it("never leaves the manager stuck in 'connecting' on a hung transport", async () => {
     vi.useFakeTimers();

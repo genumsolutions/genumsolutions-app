@@ -39,6 +39,8 @@ import {
 } from "../config/project-catalog";
 import { getProjectCategories } from "../services/projectCategoryService";
 import { DEFAULT_WS_URL } from "../services/carProtocol";
+import { sppService } from "../services/sppService";
+import { wifiService } from "../services/wifiService";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
 
@@ -161,12 +163,21 @@ export function ToolsScreen() {
           throw new Error("That car is no longer in the scan list. Rescan.");
         }
         await handleConnect(device);
+        // F-34b: tell the manager (no re-dial) so the picker's selection,
+        // active chip and Disconnect capsule match the live link.
+        if (sppService.isConnected) {
+          await linkManager.adopt("bt-classic", { address: device.address });
+        }
         return;
       }
       if (id === "wifi-ap-ws" || id === "wifi-sta-ws") {
         // The hub reads the address from its own state, so mirror it first.
         if (options.url) setWifiUrl(options.url);
         await handleWifiConnect();
+        // Only record an actually-verified link (socket + car answered).
+        if (wifiService.isConnected && wifiService.linkVerified) {
+          await linkManager.adopt(id, { url: options.url || undefined });
+        }
         return;
       }
       // bt-ble has no hub bookkeeping yet — the manager owns it.
@@ -178,7 +189,10 @@ export function ToolsScreen() {
   const onTransportDeactivate = useCallback(async () => {
     if (connected) await handleDisconnect();
     else if (wifiConnected) await handleWifiDisconnect();
-    else await linkManager.deactivate();
+    // Always clear the manager too: adopted links have no dial to undo, and
+    // deactivate() on an idle manager is a no-op. Keeps the picker's active
+    // chip in step with the teardown that just happened.
+    await linkManager.deactivate();
   }, [connected, wifiConnected, handleDisconnect, handleWifiDisconnect]);
 
   // Category organizer

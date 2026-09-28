@@ -522,6 +522,31 @@ export function useControlHub(routeCategory?: string) {
     setActiveCategory(slug);
   }, []);
 
+  // F-34: a hub instance that MOUNTS after a link is already up must show it.
+  // Status events never replay, so the Drive Deck opened while the Control
+  // Panel is already WiFi-connected kept wifiConnected=false forever ->
+  // canControl=false -> the whole drive deck rendered dim/disabled ("as if
+  // connection is not made") even though traffic still flowed (sendCommand
+  // reads wifiService.isConnected live, which is also why the mode dropdown
+  // kept working over WiFi). Reconcile THIS instance with the LIVE singleton
+  // truth exactly once, at mount; after that the status subscriptions drive
+  // the state as before.
+  useEffect(() => {
+    if (wifiService.isConnected) {
+      setWifiConnected(true);
+      setConnected(true);
+    }
+    if (sppService.isConnected) {
+      setConnected(true);
+      setDeviceName(sppService.deviceName ?? "");
+    } else if (bleService.isConnected) {
+      setConnected(true);
+      setDeviceName(bleService.deviceName ?? "");
+    }
+    if (wifiService.linkVerified) setLinkVerified(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Cleanup on unmount â€” do NOT disconnect the singleton services; the
   // BLE/SPP/WiFi connection must survive navigation between screens (and
   // between ToolsScreen and the Remote window). Only explicit user action
