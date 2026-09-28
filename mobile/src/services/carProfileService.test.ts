@@ -48,6 +48,7 @@ import {
   fetchCarProfiles,
   saveCarProfile,
   deleteCarProfile,
+  pickBestRouter,
   WIFI_HISTORY_CAP,
 } from "./carProfileService";
 
@@ -191,6 +192,79 @@ describe("toCloudRecord", () => {
     expect(record.settings.saved_routers).toEqual(["Home", "Office"]);
     expect(record.settings.bt_ids).toEqual(["AA:00:00:00:00:01"]);
     expect(record.updated_at).toBeTruthy();
+  });
+});
+
+describe("pickBestRouter (smart-link)", () => {
+  it("picks the STRONGEST saved router the car currently hears (scan)", () => {
+    const best = pickBestRouter({
+      saved: ["Home", "Office", "Cafe"],
+      scan: [
+        { ssid: "Office", rssi: -62 },
+        { ssid: "Home", rssi: -45 },
+        { ssid: "Cafe", rssi: -80 },
+      ],
+    });
+    expect(best).toBe("Home");
+  });
+
+  it("never picks a router the car has not stored", () => {
+    const best = pickBestRouter({
+      saved: ["Home"],
+      scan: [
+        { ssid: "NeighborWifi", rssi: -30 },
+        { ssid: "Home", rssi: -70 },
+      ],
+    });
+    expect(best).toBe("Home");
+  });
+
+  it("uses recency to break rssi ties", () => {
+    const best = pickBestRouter({
+      saved: ["Office", "Home"],
+      scan: [
+        { ssid: "Home", rssi: -55 },
+        { ssid: "Office", rssi: -55 },
+      ],
+      history: [{ ssid: "Office", lastSeen: 2 }],
+      lastSsid: "Office",
+    });
+    expect(best).toBe("Office");
+  });
+
+  it("ignores hearable-but-unknowable strength and still prefers most recent", () => {
+    const best = pickBestRouter({
+      saved: ["Cafe", "Office"],
+      scan: [{ ssid: "Office" }, { ssid: "Cafe" }],
+      history: [{ ssid: "Cafe", lastSeen: 9 }],
+    });
+    expect(best).toBe("Cafe");
+  });
+
+  it("falls back to the most recently used saved router when nothing is heard", () => {
+    const best = pickBestRouter({
+      saved: ["Home", "Office"],
+      scan: [],
+      history: [{ ssid: "Home", lastSeen: 100 }],
+      lastSsid: "Home",
+    });
+    expect(best).toBe("Home");
+  });
+
+  it("returns null when there is nowhere to join (stay on the car's AP)", () => {
+    expect(pickBestRouter({ saved: [] })).toBeNull();
+    expect(pickBestRouter({ saved: ["Home"], scan: [{ ssid: "Other" }] })).toBe(
+      "Home",
+    );
+  });
+
+  it("trims whitespace and tolerates null scan entries", () => {
+    const best = pickBestRouter({
+      saved: [" Home ", "Cafe"],
+      scan: [{ ssid: "  Home  ", rssi: -40 }, null] as never,
+      lastSsid: "Home",
+    });
+    expect(best).toBe("Home");
   });
 });
 

@@ -27,6 +27,7 @@ import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { TransportPicker } from "../components/tools/TransportPicker";
 import { ConnectionBanner } from "../components/tools/ConnectionBanner";
 import { ConnectionsTeaching } from "../components/tools/ConnectionsTeaching";
+import { CarProfileCard } from "../components/tools/CarProfileCard";
 import { useActiveTransport } from "../transports/linkManagerHooks";
 import { linkManager } from "../transports/linkManager";
 import type { TransportConnectOptions, TransportId } from "../transports/types";
@@ -461,6 +462,28 @@ export function ToolsScreen() {
           <TransportPicker
             onActivate={onTransportActivate}
             onDeactivate={onTransportDeactivate}
+          />
+        </View>
+
+        <View className="mt-3">
+          <CarProfileCard
+            profileKey={hub.profileKey}
+            savedPrefs={hub.savedPrefs}
+            autoJoinRouter={hub.autoJoinRouter}
+            setAutoJoinRouter={(v) => {
+              feedbackTap();
+              hub.setAutoJoinRouter(v);
+            }}
+            carLabel={
+              sppStatus === "connected"
+                ? deviceName || null
+                : wifiConnected
+                  ? apName
+                  : null
+            }
+            carId={carIdentityId}
+            staSsid={staSsid}
+            apName={apName}
           />
         </View>
 
