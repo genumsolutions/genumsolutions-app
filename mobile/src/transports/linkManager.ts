@@ -239,6 +239,32 @@ export class LinkManager {
     id: TransportId,
     options: TransportConnectOptions = {},
   ): Promise<void> {
+    return this.activateWith(id, options, true);
+  }
+
+  /**
+   * Record a link that a SIDE-EFFECT owner already brought up, WITHOUT
+   * dialing it again. The Control Panel bridge (F-17) connects through the
+   * hub handlers (handleConnect / handleWifiConnect) so the legacy services
+   * and the hub's authoritative connected/wifiConnected stay the truth;
+   * adopt() then tells the manager about the now-live link so the picker's
+   * selection, active chip, details and Disconnect capsule agree with
+   * reality instead of showing a ghost idle row next to a connected one.
+   * Verification still needs a real frame (F-16: transport-up is NOT
+   * car-up) — the car's STATE poll delivers it within ~2 s.
+   */
+  async adopt(
+    id: TransportId,
+    options: TransportConnectOptions = {},
+  ): Promise<void> {
+    return this.activateWith(id, options, false);
+  }
+
+  private async activateWith(
+    id: TransportId,
+    options: TransportConnectOptions,
+    dial: boolean,
+  ): Promise<void> {
     const next = this.transports.get(id);
     if (!next) throw new Error(`Unknown transport: ${id}`);
 
@@ -295,31 +321,34 @@ export class LinkManager {
     }
 
     // F-16: bounded connect with a definite fallback state. Without this a
-    // hung native connect leaves the picker spinning forever.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () =>
-          reject(
-            new Error(
-              `${next.label} did not finish connecting within ${
-                CONNECT_TIMEOUT_MS / 1000
-              }s.`,
+    // hung native connect leaves the picker spinning forever. adopt() skips
+    // the dial — the hub handler already brought the link up.
+    if (dial) {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `${next.label} did not finish connecting within ${
+                  CONNECT_TIMEOUT_MS / 1000
+                }s.`,
+              ),
             ),
-          ),
-        CONNECT_TIMEOUT_MS,
-      );
-    });
+          CONNECT_TIMEOUT_MS,
+        );
+      });
 
-    try {
-      await Promise.race([next.connect(merged), timeout]);
-    } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
-      this.verified = false;
-      this.emitState();
-      throw e;
-    } finally {
-      if (timer !== null) clearTimeout(timer);
+      try {
+        await Promise.race([next.connect(merged), timeout]);
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : String(e);
+        this.verified = false;
+        this.emitState();
+        throw e;
+      } finally {
+        if (timer !== null) clearTimeout(timer);
+      }
     }
     this.emitState();
   }
