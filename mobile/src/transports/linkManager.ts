@@ -98,6 +98,9 @@ export class LinkManager {
   private telemetryListeners = new Set<TelemetryListener>();
   private statusListeners = new Set<StatusListener>();
 
+  // F-32: stable snapshot handed to useSyncExternalStore (see getState()).
+  private cachedState: ActiveLinkState | null = null;
+
   // Per-transport unsubscribers, torn down when a link stops being active.
   private unsubs: Array<() => void> = [];
 
@@ -119,6 +122,20 @@ export class LinkManager {
   }
 
   getState(): ActiveLinkState {
+    // MUST return a referentially STABLE object between changes.
+    //
+    // This is the contract of useSyncExternalStore: React calls getSnapshot()
+    // after every render and after every notification, and re-renders whenever
+    // the result is not `Object.is`-equal to the last one. Returning a fresh
+    // object literal here made every call look like a change, so React
+    // re-rendered forever and the Control Panel died with
+    // "Maximum update depth exceeded" (shipped in 3.2.7, incident F-32).
+    //
+    // Correctness does not depend on notification timing: `status` is derived
+    // from the transport's live getStatus(), so even a transport that mutated
+    // its status without emitting an event is picked up by the cheap field
+    // comparison below. emitState() additionally clears the cache, so a normal
+    // notify returns the freshly-rebuilt snapshot.
     const active = this.getActive();
     // F-16: a recorded error is TERMINAL for the status. Without this the
     // status keeps deriving "connecting" from a transport whose own connect
@@ -129,12 +146,25 @@ export class LinkManager {
       : active
         ? active.getStatus()
         : "idle";
-    return {
+
+    const cached = this.cachedState;
+    if (
+      cached &&
+      cached.id === this.activeId &&
+      cached.status === status &&
+      cached.error === this.error &&
+      cached.verified === this.verified
+    ) {
+      return cached;
+    }
+
+    this.cachedState = {
       id: this.activeId,
       status,
       error: this.error,
       verified: this.verified,
     };
+    return this.cachedState;
   }
 
   subscribe = (cb: Listener): (() => void) => {
@@ -153,6 +183,10 @@ export class LinkManager {
   };
 
   private emitState(): void {
+    // Any notification may correspond to a real change, so the next getState()
+    // must rebuild the snapshot. This keeps it fresh exactly when truth can
+    // have changed while staying referentially stable in between.
+    this.cachedState = null;
     for (const cb of this.stateListeners) {
       try {
         cb();
