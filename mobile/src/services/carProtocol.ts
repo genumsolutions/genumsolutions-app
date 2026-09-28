@@ -94,6 +94,29 @@ export type CarTelemetry = {
    * passwords (the car never sends them off-device — W-14).
    */
   networks?: string[];
+  /**
+   * Connections-Hub round: the car's BOARD-unique id, derived from
+   * `ESP.getEfuseMac()` (last 6 hex, uppercase) — `STATE;…;ID=…` and JSON
+   * `"id"`. The stable identity behind per-device profiles for WiFi-only
+   * cars (no BT MAC to key on). Firmware v2 only.
+   */
+  id?: string;
+  /**
+   * Connections-Hub round: the car-side WiFi scan result (answering
+   * `ROUTERS;SCAN`). `STATE`-free: carried as WS JSON `"scan":[…]` (fields
+   * `ssid`, `rssi` dBm, `open`) and as an SPP line `SCAN;<ssid>,<rssi>,<1|0>;…`
+   * (`SCAN;NONE` when empty). Lets the app show "router available + strength"
+   * from the CAR's antenna (not the phone's). Firmware v2 only.
+   */
+  scan?: ScanNetwork[];
+};
+
+export type ScanNetwork = {
+  ssid: string;
+  /** Signal in dBm (−100..0), car-side. */
+  rssi: number;
+  /** True when the network has no password. */
+  open: boolean;
 };
 
 /** Neutral commands sent on disconnect / stale telemetry (safe stop). */
@@ -259,13 +282,16 @@ export const DEFAULT_WS_URL = `ws://${DEFAULT_AP_IP}:81`;
  * Semicolons are stripped from SSID/password (the protocol splits on ';').
  */
 export function buildRouterCommand(
-  op: "LIST" | "ADD" | "USE" | "DEL" | "CLEAR",
+  op: "LIST" | "ADD" | "USE" | "DEL" | "CLEAR" | "SCAN",
   ssid: string,
   pass = "",
 ): string {
   // A-40 (round-9): CLEAR wipes every saved router + the active pair on the
   // car and reverts it to its OWN network (ROUTERS;CLEAR, T-62). No ssid/pass.
   if (op === "CLEAR") return "ROUTERS;CLEAR";
+  // Connections-Hub round: SCAN asks the CAR to enumerate nearby networks
+  // (its antenna) and reply with ssid/rssi/open — see CarTelemetry.scan.
+  if (op === "SCAN") return "ROUTERS;SCAN";
   const s = ssid.replace(/;/g, "").trim();
   if (!s) return "ROUTERS;LIST";
   if (op === "ADD") return `ROUTERS;ADD;${s};${pass.replace(/;/g, "")}`;
@@ -493,6 +519,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       } else if (key === "AP") telemetry.ap = val;
       else if (key === "SSID") telemetry.ssid = val;
       else if (key === "IP") telemetry.ip = val;
+      else if (key === "ID") telemetry.id = val;
     }
     return telemetry;
   }
@@ -532,6 +559,28 @@ export function parseTelemetryLine(line: string): CarTelemetry {
     if (num > 0) telemetry.speed = num;
   }
 
+  // Connections-Hub round: car-side scan over SPP —
+  //   SCAN;SSID1,-57,1;SSID2,-72,0     (ssid,rssi dBm,open 1|0)  /  SCAN;NONE
+  // Carried the same shape as the WS JSON `scan`, so ONE consumer works over
+  // whichever link answered ROUTERS;SCAN.
+  if (/^SCAN[:;]/i.test(up)) {
+    const body = l.replace(/^SCAN[:;]/i, "").trim();
+    if (body.toUpperCase() !== "NONE" && body) {
+      telemetry.scan = body
+        .split(";")
+        .map((entry) => {
+          const parts = entry.split(",");
+          if (parts.length < 2) return null;
+          const ssid = parts[0]!.trim();
+          const rssi = Number(parts[1]) || 0;
+          const open = parts[2]?.trim() === "1";
+          return ssid ? { ssid, rssi, open } : null;
+        })
+        .filter((n): n is ScanNetwork => n !== null);
+    }
+    return telemetry;
+  }
+
   // JSON status from the wireless-car WebServerComm (broadcast WITHOUT a
   // trailing newline): {"status":"OK","mode":"ESP_SER","connected":true,
   // "ip":"192.168.4.1","rssi":-45,"signal":62,"uptime_ms":120000,"free_heap":1048576,
@@ -552,6 +601,23 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.ssid === "string") telemetry.ssid = j.ssid;
       if (typeof j.ap === "string") telemetry.ap = j.ap;
       if (typeof j.stub === "boolean") telemetry.stub = j.stub;
+      // Connections-Hub round: board-unique id (ESP.getEfuseMac(), last 6).
+      if (typeof j.id === "string") telemetry.id = j.id;
+      // Connections-Hub round: car-side WiFi scan (reply to ROUTERS;SCAN).
+      if (Array.isArray(j.scan)) {
+        telemetry.scan = (j.scan as unknown[])
+          .filter(
+            (n): n is { ssid: string; rssi?: unknown; open?: unknown } =>
+              typeof n === "object" &&
+              n !== null &&
+              typeof (n as { ssid?: unknown }).ssid === "string",
+          )
+          .map((n) => ({
+            ssid: n.ssid,
+            rssi: typeof n.rssi === "number" ? n.rssi : 0,
+            open: typeof n.open === "boolean" ? n.open : false,
+          }));
+      }
       // R-10: WS JSON carries the full availability table. The 4WD4M car
       // emits it as a `;`-delimited STRING (WebServerComm buildStatusJson);
       // the donor emits an OBJECT. Accept both through the one shared
