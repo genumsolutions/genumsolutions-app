@@ -301,6 +301,8 @@ export function useControlHub(routeCategory?: string) {
   // and the Control Panel flickered continuously until the user pressed
   // Disconnect. startSppReconnect() is now the ONLY scheduler (idempotent:
   // a running burst returns early) and every exit path de-arms the flag.
+  // One scheduler only; a running burst returns early, so repeated errors
+  // cannot start a second scheduler and flicker the panel.
   const sppReconnectActiveRef = useRef(false);
   // FIN-44: last status message seen by the dedupe gate (see onStatus below).
   const sppStatusMsgRef = useRef<string | null>(null);
@@ -934,7 +936,7 @@ export function useControlHub(routeCategory?: string) {
     setError(null);
     manualCloseRef.current = false;
     sppReconnectAttemptsRef.current = 0;
-    sppReconnectActiveRef.current = false; // explicit user retry: re-arm
+    sppReconnectActiveRef.current = false; // explicit user retry: re-arm first (idempotent)
     try {
       await sppService.retryConnect();
     } catch (e) {
@@ -1498,6 +1500,9 @@ export function useControlHub(routeCategory?: string) {
         manualCloseRef.current ||
         !sppLastAddressRef.current
       ) {
+        // R1 flicker fix: on failure, de-arm so the next retry does not
+        // have a contradictory state from a duelling scheduler.        // R1 flicker fix: on failure, de-arm so the next retry does not
+        // have a contradictory state from a duelling scheduler.
         sppReconnectActiveRef.current = false;
         return;
       }

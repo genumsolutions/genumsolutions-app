@@ -1,5 +1,5 @@
 // =====================================================================
-// wifiService — shared WebSocket transport for the IoT Control Panel.
+// wifiService - shared WebSocket transport for the IoT Control Panel.
 //
 // WHY a singleton (owner bug report 2026-09-15): each hub instance
 // (ToolsScreen AND the Remote window) used to own its OWN WebSocket
@@ -35,8 +35,9 @@ const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECTS = 5;
 // R1 fix (owner round 1, 2026-09-28): a WebSocket to an unreachable car can
 // hang in CONNECTING forever (RN does not always fire onclose promptly), so
-// "Connecting…" never resolved. Hard cap: if the socket is not OPEN within
-// CONNECT_TIMEOUT_MS, tear it down and surface a real, actionable error.
+// "Connecting..." never resolved. Hard cap: if the socket is not OPEN
+// within CONNECT_TIMEOUT_MS, tear it down and surface a real, actionable
+// error.
 const CONNECT_TIMEOUT_MS = 8000;
 
 export class WifiService {
