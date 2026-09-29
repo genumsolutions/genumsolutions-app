@@ -206,6 +206,10 @@ export function useControlHub(routeCategory?: string) {
   driveStatusRef.current = driveStatus;
   const driveDirRef = useRef(driveDir);
   driveDirRef.current = driveDir;
+  // Speed mirror (owner round 2026-09-29): fresh value for the telemetry
+  // pipeline so its change-guard reads the CURRENT speed, not a stale closure.
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
   const setDriveStatusOnce = useCallback((s: string) => {
     if (driveStatusRef.current === s) return;
     driveStatusRef.current = s;
@@ -696,10 +700,30 @@ export function useControlHub(routeCategory?: string) {
           if (matched) setActiveMode(matched);
         }
       }
-      // Speed: quantized mirror, NAV-edit-aware (see above).
+      // Speed mirror — car-truth, change-guarded, range-clamped (owner
+      // 2026-09-29: "speed is malicious — mid-drive it shows something else").
+      // Rules, in order:
+      //   • skipped entirely while NAV is editing (state.cpp parity);
+      //   • magnitude only — SPD0 is the stop echo and keeps the display;
+      //   • clamped into the car's accepted 100..255 window BEFORE
+      //     quantizing (the car clamps there too — Config.h MIN/MAX), so an
+      //     out-of-window echo is noise, never a new speed to display;
+      //   • applied ONLY on a state-changing frame (STATUS "Speed set"/mode
+      //     change — the car confirming an actual speed), never on the
+      //     steady STATE echo, which raced the user's in-flight slider edit
+      //     and snapped the strip to a different number mid-drag.
       if (!navActiveRef.current && t.speed != null) {
         const mag = Math.abs(t.speed);
-        if (mag > 0 && mag <= 255) setSpeed(quantizeSpeedToStep(mag));
+        if (mag > 0) {
+          const confirmed = isAllowedDriveStatus(t.status) || t.mode != null;
+          const inWindow = mag >= SPEED_MIN && mag <= SPEED_MAX;
+          if (confirmed || inWindow) {
+            const next = quantizeSpeedToStep(
+              Math.max(SPEED_MIN, Math.min(SPEED_MAX, mag)),
+            );
+            if (next !== speedRef.current) setSpeed(next);
+          }
+        }
       }
       if (t.trim != null) setTrim(t.trim);
       // R-19: car-truth trip metrics (2WD1M family STATE extras)
@@ -1613,8 +1637,14 @@ export function useControlHub(routeCategory?: string) {
   // only edits the PREVIEW (NAV highlight field); commitSpeed â€” called on
   // Select â€” sends SPD<n> once, sets the local "Speed:<n>" status and
   // persists (the .ino TOP_SPEED branch).
+  //
+  // Owner round 2026-09-29 ("speed is malicious"): the slider is LINEAR
+  // 100..255 — exactly the window the car accepts (Config.h MIN/MAX speed).
+  // The number shown IS the number sent as SPD<n>; nothing re-scales,
+  // re-offsets or re-bases it. The old "input is 0..255" comment was wrong
+  // (the strip has always been bounded 100..255); the real mid-drive number
+  // jumps came from the telemetry echo overwriting this state, fixed above.
   const handleSpeed = useCallback((value: number) => {
-    // Slider input is 0..255; snap into the ESP grid for display.
     const q = quantizeSpeedToStep(
       Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(value))),
     );
