@@ -1,5 +1,20 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> 🔁 **2026-09-29 SESSION CLOSE — round 4 QUEUED (owner's last message of the session), nothing
+> built yet.** Owner asks: ① connection-method-aware panel — on the car-AP WiFi link show the
+> CAR's AP truth (name + dBm), never home-router rows; hide sections unrelated to the current
+> method; ② lock the connection-methods dropdown (and similar sections) while connected;
+> ③ unlock the home-router (STA) method; ④ router-profile add/edit/delete with app ↔ car ↔ DB
+> sync (car is source of truth; passwords never leave car/phone); ⑤ car-side persistence of
+> everything the user changes (profile, settings, presets) via the U-52 car_profiles engine;
+> ⑥ wifi-diagnostics UX: match the deck-kit family + auto-collapse when the run finishes.
+> Broken into **R4-1..R4-6** with build notes in `NEXT-SESSION.md` §PLANNED-B. ALSO planned:
+> per-category decks per `guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md` (approved, not built).
+> ⚠️ Next AI: read `NEXT-SESSION.md` §continuity FIRST — verify against git/sed, tool echoes
+> were unreliable late this session. Released this session: car-profiles round (published,
+> manifest `648ed6a…`) + Control Panel round 3 F-46/F-47/F-48 (manifest `f890a2e…`), 3.2.7/60
+> unchanged, no APK. Owner device rows open: U-51, U-52, U-53.
+
 > ✅ **2026-09-29 (latest) — CONTROL PANEL ROUND 3 (`2a8b406`→`f890a2e`, three fixes, JS-only →
 > same-version OTA 3.2.7/60, run `36593994243` green): false `statusCallbacks of undefined`
 > connect error killed (F-46 — adapters passed service methods DETACHED, `this` was undefined;
