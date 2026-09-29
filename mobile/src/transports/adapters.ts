@@ -117,8 +117,16 @@ export function createClassicBtTransport(): Transport {
       await sppService.requestState();
     },
     onTelemetry: (cb) => sppService.onTelemetry((t) => cb(t)),
+    // F-46: the service method MUST be invoked ON its object — passing the
+    // bare reference detached `this`, so `this.statusCallbacks` threw
+    // "Cannot read properties of undefined" on every adopt/activate and the
+    // hub painted it as a red connect error under a perfectly verified link.
     onStatus: (cb) =>
-      forwardStatus(sppService.onStatus, (m) => (lastError = m), cb),
+      forwardStatus(
+        (onCb) => sppService.onStatus(onCb),
+        (m) => (lastError = m),
+        cb,
+      ),
   };
 }
 
@@ -176,8 +184,13 @@ export function createBleTransport(): Transport {
       await bleService.requestState();
     },
     onTelemetry: (cb) => bleService.onTelemetry((t) => cb(t)),
+    // F-46 — same detached-`this` fix as the SPP adapter above.
     onStatus: (cb) =>
-      forwardStatus(bleService.onStatus, (m) => (lastError = m), cb),
+      forwardStatus(
+        (onCb) => bleService.onStatus(onCb),
+        (m) => (lastError = m),
+        cb,
+      ),
   };
 }
 
@@ -247,8 +260,13 @@ function createWifiWsTransport(
       await wifiService.requestState();
     },
     onTelemetry: (cb) => wifiService.onTelemetry((t) => cb(t)),
+    // F-46 — same detached-`this` fix as the SPP adapter above.
     onStatus: (cb) =>
-      forwardStatus(wifiService.onStatus, (m) => (lastError = m), cb),
+      forwardStatus(
+        (onCb) => wifiService.onStatus(onCb),
+        (m) => (lastError = m),
+        cb,
+      ),
   };
 }
 
