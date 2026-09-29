@@ -647,17 +647,19 @@ manifest, vitest-safe). Rollout: kit + SmartHome pilot → owner screenshot appr
 
 Broken into buildable items (each = one commit, one concern, like rounds 2-3):
 
-- **R4-1 — Connection-method-aware panel (F-49 candidate).** While a link is ACTIVE, every
-  router-flavored section must show AP-truth (car AP name `telemetry.ap` / `4WDCar_Wifi`,
-  `telemetry.rssi`/`signal` of the PHONE↔CAR link) — never home-router/STA rows; and STA-only
-  sections hide entirely on an AP link (and vice versa). The ConnectionBanner already models
-  the split (`networkKind === "sta" | "ap"`); extend the SAME truth to CarProfileCard,
-  WifiDiagnosticsPanel, and any hub strings (`hub.carSsid` vs `hub.carApName`).
-- **R4-2 — Locked-while-connected sections (F-50 candidate).** Sections that make no sense
-  mid-link are hidden or disabled while connected: the **connection-methods dropdown**
-  (TransportPicker) collapses to a read-only "Connected via X" chip; method changes require the
-  Disconnect confirm first. Audit every other panel section for the same rule (scan, wifi
-  config, diagnostics).
+- ✅ **R4-1 SHIPPED (`3a9d2c5`).** CarProfileCard: Saved-routers + Wi-Fi history sections now
+  render ONLY while the car is actually on a router (`onRouter`) or nothing is known yet —
+  on an AP/Bluetooth link they no longer show "other router things". Smart-link toggle stays
+  in every state (it controls what the car does NEXT). ConnectionBanner already split
+  `networkKind` correctly; hub strings untouched (carSsid/carApName are car-truth, correctly
+  gated by telemetry.connected).
+- **R4-1b (remaining, folded into R4-3 scope): on an AP link the banner shows the car-AP
+  signal of the PHONE↔CAR link (`telemetry.rssi`/`signal`) — verify this reads as AP signal
+  to the owner, not "home router dBm"; the banner Row copy may need "AP signal" wording.
+- ✅ **R4-2 SHIPPED (`c029b3e`).** TransportPicker: while `link.id` is set the dropdown chip
+  is read-only (press does nothing, combobox→text role, a11y disabled, menu cannot open) and
+  `onSelect` refuses to dial — the Disconnect capsule is the one way to change methods.
+  Remaining audit (scan/wifi-config sections mid-link) queued with R4-3.
 - **R4-3 — Home-router (STA) method unlocked.** F-41's gate opens `wifi-sta-ws` for selection
   once R4-4/5 exist (the transport + adapter already exist in `adapters.ts`/`linkManager`).
 - **R4-4 — Router profile CRUD (app ↔ car ↔ DB sync).** User can add/edit/delete saved-router
@@ -671,10 +673,18 @@ Broken into buildable items (each = one commit, one concern, like rounds 2-3):
   must persist on the CAR (NVS/preferences via firmware) and sync back — extend the U-52
   `car_profiles` engine (profile-key focus pull / push-on-save already exists; add the
   router-profile + presets scopes to the same merge helpers).
-- **R4-6 — Wifi diagnostics UX (F-51 candidate).** The test panel is functionally good but: not
-  properly designed (match the deck-kit card family), and it STAYS OPEN after the run finishes —
-  auto-collapse to a one-line result with a "Details" chip when the run completes; deep-link
-  from the banner instead of a permanent section.
+- ✅ **R4-6 SHIPPED (`fe2e909`).** WifiDiagnosticsPanel: after a run the panel now shows ONE
+  summary row (pass/fail tinted, per-verdict count) + a Details chip; the full verdict list +
+  probe line collapse until tapped; re-running re-collapses. Panel framing already matched the
+  deck family (rounded-xl border-line bg-mist); deep-link from the banner deferred — the panel
+  only mounts for WiFi methods (`isWifi && !compact`), so it no longer appears for BT links.
+
+Order for next session: R4-3→R4-5 (car+DB round; needs firmware/car verify + possibly a new
+  table → F-45 rule: apply DB live and probe 200 before claiming done), then R4-7 (rides the
+  same sync engine once it exists). R4-1/R4-2/R4-6 shipped 2026-09-29, OTA `36603138203` green,
+  manifest → `fe2e909…`, 3.2.7/60 unchanged. Owner device rows for these three fixes: add
+  U-54 checks when the next TESTING.md round is written (AP link hides router sections ·
+  dropdown locked while connected · WiFi test auto-collapses).
 - **R4-7 — Menu: "Robot preferences" → "User preferences" + connected-device hub (owner,
   latest message).** Rename the Menu → Robot Settings group item (MenuScreen.tsx ~line 132:
   currently `label="Robot preferences"`, pushes `RobotPreferences`, Pro chip) to **User
