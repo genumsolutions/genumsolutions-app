@@ -26,7 +26,6 @@ import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { TransportPicker } from "../components/tools/TransportPicker";
 import { ConnectionBanner } from "../components/tools/ConnectionBanner";
-import { ConnectionsTeaching } from "../components/tools/ConnectionsTeaching";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
 import { useActiveTransport } from "../transports/linkManagerHooks";
 import { linkManager } from "../transports/linkManager";
@@ -354,8 +353,8 @@ export function ToolsScreen() {
           <Feather name="arrow-right" size={15} color="#fff" />
         </Pressable>
         <Text className="mt-1.5 text-center text-[11px] text-muted">
-          Drive controls, speed and E-stop live in the Remote window — this page
-          stays a clean organizer.
+          Drive controls and speed live in the Remote window — this page stays a
+          clean organizer.
         </Text>
       </View>
 
@@ -497,11 +496,6 @@ export function ToolsScreen() {
       {/* About this project */}
       <View className="mt-4">
         <ProjectInfo mode={activeMode} categorySlug={category.slug} />
-      </View>
-
-      {/* Every comm method — the teaching registry (owner ⑦), below About */}
-      <View className="mt-4">
-        <ConnectionsTeaching />
       </View>
 
       {/* Disconnect confirmation */}
