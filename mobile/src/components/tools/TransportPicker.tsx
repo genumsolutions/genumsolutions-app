@@ -412,6 +412,12 @@ export function TransportPicker({
   const canScan = Boolean(selected?.scan);
   // The live link is the chosen method only while it is actually up.
   const isActiveLink = Boolean(active && active.id === selected?.id);
+  // R4-2 (owner): a live link LOCKS the method dropdown — changing method is a
+  // teardown decision, so it must go through the Disconnect confirm first (the
+  // picker renders the lock as a read-only "Connected via X" chip; the row
+  // expands only after the link is down). Method rows also never dial while a
+  // link is live (belt-and-braces: the chip does not open, and onSelect
+  // refuses while locked).
 
   // Every method once, in registry order, grouped by radio. The cable group is
   // gone with the USB-serial method. De-duplicated by id on purpose (owner:
@@ -476,6 +482,8 @@ export function TransportPicker({
     (id: TransportId) => {
       const t = transports.find((x) => x.id === id);
       if (!t) return;
+      // R4-2: the dropdown is locked while a link is live — disconnect first.
+      if (link.id) return;
       // PRIMARY-method gate (owner 2026-09-29): only bt-classic + wifi-ap-ws
       // are selectable today. A gated method never becomes the picked method
       // and never dials; its ⓘ window (on the row) stays the way to read
@@ -549,9 +557,13 @@ export function TransportPicker({
 
       {/* --- the single dropdown: all methods, one at a time ------------ */}
       <Pressable
-        onPress={() => setMenuOpen((v) => !v)}
-        accessibilityRole="combobox"
-        accessibilityState={{ expanded: menuOpen }}
+        onPress={() => {
+          // R4-2: locked while a link is live — the chip is read-only until
+          // the user disconnects (the Disconnect capsule is how they change).
+          if (!link.id) setMenuOpen((v) => !v);
+        }}
+        accessibilityRole={link.id ? "text" : "combobox"}
+        accessibilityState={{ expanded: menuOpen, disabled: !!link.id }}
         accessibilityLabel="Connection method"
         className="mt-2.5 flex-row items-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5"
       >
