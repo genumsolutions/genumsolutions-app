@@ -10,6 +10,53 @@
 
 ---
 
+## U-52 round — Car profiles everywhere: DB live, sync-on-connect, account surface (2026-09-29, IMPLEMENTED — needs SIGNED-IN device round)
+
+> Owner round: "car profiles and their data to the database from all app and websites… gets sync
+> with the device as soon as everything gets connected… save the last save things… ready for at
+> least 4wd4m, 2wd1m, selfbalance." DB `car_profiles` **applied live** (`db:apply`, REST probe
+> `200 []`); app sync engine wired (pull-on-link, push-on-save, last-saved-wins); Car Profile card
+> elaborated; website account page gained Car Profiles (read/rename/remove). Failsafes **F-44,
+> F-45**. Gates: mobile vitest **292/292** · website **164/164**. Sign-in required — profiles
+> follow the ACCOUNT; signed-out use still works (local only, amber badge in the card).
+
+### U-52-1 — profile row lands in the cloud account (needs: signed-in phone + one car)
+
+1. Sign in on the app → link any car (BT or WiFi) → change something remembered (speed, mode, or
+   save a router).
+2. Expected: Car Profile card badge shows **"synced to account"** within a few seconds.
+3. Supabase check (owner/SQL): `select profile_key, car_name, settings from car_profiles;` → row
+   with the car's `fw:<id>` (or MAC) key; NO password material anywhere in `settings`.
+
+### U-52-2 — a second device restores the last save on link (the core promise)
+
+1. Same account on another phone (or after clearing app storage) → link the SAME car.
+2. Expected: before touching anything, mode/speed/steer/trim/joystick + saved routers + Wi-Fi
+   history match the first device's last save; card badge shows **"restored from account"**.
+3. Also verify per mode: repeat with the 4WD4M, the 2WD1M, and the self-balance car — each keeps
+   its OWN profile (keys differ per car).
+
+### U-52-3 — newer local save wins (both directions)
+
+1. Device A (offline or airplane-mode BT session) changes speed to 130 → badge flips to
+   **"saved on this phone"** while offline.
+2. Back online, link the car again → A's 130 pushes to cloud (badge → synced). Device B linking
+   the car then receives 130, not the older cloud value.
+
+### U-52-4 — website account page mirrors + manages profiles
+
+1. Sign in on the website with the SAME account → Account → **Car profiles**.
+2. Expected: one card per linked car with a settings summary (mode · speed · routers · updated).
+3. Rename a car → re-open the app → the card shows the new name (next pull).
+4. Remove a profile on the web → the app re-pushes it on the next link (expected: removal is
+   overridden by the device's local copy — by design, the phone is the source of the fleet).
+
+### U-52-5 — signed-out / offline behavior
+
+1. Signed out: profile card shows the amber **"saved on this phone"** state + sign-in hint; drive
+   flow unaffected.
+2. Signed in but offline: badge shows "saved on this phone"; on reconnect the save mirrors.
+
 ## U-51 round — Control Panel snag round 2: SPP false error, method gate, speed linearity, FAB in landscape (2026-09-29, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner round: Control Panel + Drive Deck snags ("go dont wait … make notes of all and push thing

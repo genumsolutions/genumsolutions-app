@@ -1,5 +1,13 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-09-29 (latest) — CAR PROFILES EVERYWHERE (`fb7d1c3`→`a40be3d`, JS-only → same-version
+> OTA 3.2.7/60): `car_profiles` table APPLIED LIVE (probe `200 []`) · app sync engine wired
+> (pull-on-link / push-on-save, last-saved-wins; was dead code) · Car Profile card elaborated
+> (drive readout + sync badge) · website `/api/user/car-profiles` + account Car Profiles panel.
+> F-44 (persist base must carry every field) · F-45 (a committed migration is not applied until
+> the live API proves it). Gates: mobile 292/292 · website 164/164. Owner device round:
+> `mobile/TESTING.md` **U-52-1..5** (+ U-51-1..5 still open). Resume: `NEXT-SESSION.md` here.
+
 > ✅ **2026-09-29 — CONTROL PANEL SNAG ROUND 2 (`cc8f671`→`fdb0941`, six commits, JS-only →
 > same-version OTA 3.2.7/60): teaching card removed · SPP false "no longer in the scan list"
 > killed (F-40) · methods gated to SPP + Car AP, rest "Coming Soon" (F-41) · speed echo
