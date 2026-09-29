@@ -10,6 +10,69 @@
 
 ---
 
+## U-51 round — Control Panel snag round 2: SPP false error, method gate, speed linearity, FAB in landscape (2026-09-29, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner round: Control Panel + Drive Deck snags ("go dont wait … make notes of all and push thing
+> properly"). Six fixes, one concern per commit (`cc8f671` → `fdb0941`), all JS-only → same-version
+> OTA, **version stays 3.2.7/60**. Failsafes **F-40..F-43**. Gates: tsc 0 · vitest **285/285**.
+> Supersedes the U-50 rows that referenced the "Every way the car can be controlled" card (removed).
+
+### U-51-1 — a paired car connects; the false "no longer in the scan list" error is dead (F-40)
+
+- [ ] **BT session.** Pair the car in Android Settings (if not already). Control Panel → Connection
+      method → **Classic Bluetooth (SPP)** → Scan for cars → tap the paired car. It must CONNECT.
+- [ ] Specifically: the error **"That car is no longer in the scan list. Rescan."** must never
+      appear for a car you just tapped in the list — even if you scanned twice, re-opened the page,
+      or the scan list refreshed in between.
+- [ ] The car shows its real scanned name (not the raw MAC) in the Connected banner + Drive deck.
+- [ ] Regression: an out-of-range/unpowered car still fails with the timeout message within ~10 s
+      (no endless "Connecting…").
+
+### U-51-2 — method gate: SPP + Car access point live, everything else Coming Soon (F-41)
+
+- [ ] The dropdown lists all **8** methods (no Cable row, no duplicates).
+- [ ] **Classic Bluetooth (SPP)** and **Car access point** are bright and selectable.
+- [ ] The other six (**BLE, Home router, HTTP / REST, mDNS, MQTT, Internet relay**) are dimmed with
+      a **"Coming Soon"** tag; tapping the row does NOTHING — no connection steps open, no dial,
+      no error, no selection change.
+- [ ] Tapping **ⓘ on a Coming Soon row** still opens its full help window (readable, closable by
+      outside-tap / ✕ / back), with the Coming Soon note inside. Help is never gated.
+- [ ] With BT connected, switching methods still works between the two primary rows only.
+
+### U-51-3 — speed is linear and stops jumping (F-42)
+
+- [ ] **WiFi session** (or BT). Drive Deck: set speed to a distinctive value (e.g. **130**), commit,
+      then drive forward/backward for ~10 s. The speed display must HOLD 130 — it must not snap to
+      another number mid-drive or mid-slider-drag.
+- [ ] Drag the slider slowly without committing: the number follows the thumb exactly (linear
+      100→255, 5-step grid) and never re-bases or jumps to a different value while held.
+- [ ] The number shown before and after commit is identical, and it IS the value the car reports
+      back (`STATE;SPD=`) once it echoes.
+- [ ] Steppers (− / +) move exactly 5 per tap within 100..255; the ends clamp at 100 / 255.
+- [ ] With the car's own buttons: changing speed at the car updates the app display (car truth
+      still mirrors — only the RACE was fixed, not the mirror).
+
+### U-51-4 — the Remote FAB survives rotation (F-43)
+
+- [ ] Connect any link. On a portrait screen (Home, Shop, Control Panel), confirm the FAB is
+      visible where you last dragged it.
+- [ ] Rotate to landscape (outside the Drive deck): the FAB must remain **visible** — pulled back
+      into the window — not vanished. Rotate back to portrait: still visible.
+- [ ] Drag it in landscape, release, rotate again: it stays in bounds and remembers its spot.
+- [ ] Regression: tap still opens the Remote window; drag-to-bottom-center still dismisses; the
+      × still dismisses; a new connect re-arms after dismissal.
+
+### U-51-5 — Control Panel error placement + page rhythm
+
+- [ ] Trigger a connect failure (wrong WiFi address / car off). The red error box appears **with
+      the banner + status messages above the picker**, not detached at the bottom of the section
+      under the profile card.
+- [ ] Below "About this project" the page ENDS (the teaching card is gone; U-50 rows that mention
+      it are superseded).
+- [ ] Pull-to-refresh, category switching, disconnect-confirm overlay: unchanged.
+
+---
+
 ## U-48 round — final snags: save feedback, refresh, pressed state (2026-09-27, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > App half of the U-48 final snag round. Plan: `../../../guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md`
