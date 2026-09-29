@@ -434,6 +434,16 @@ export function ToolsScreen() {
           </View>
         )}
 
+        {/* Hub-level connect errors sit WITH the feedback cluster above the
+            picker (owner 2026-09-29 UI/UX pass) — they used to render at the
+            very bottom of the section, under the profile card, where the
+            failure and its message were never on screen together. */}
+        {sppSupported && error && !connected && !wifiConnected && (
+          <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <Text className="text-xs leading-5 text-red-600">{error}</Text>
+          </View>
+        )}
+
         {/* Reconnect banner — shown when connection drops and auto-reconnect exhausted */}
         {showSppsRetry && (
           <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -496,16 +506,12 @@ export function ToolsScreen() {
             apName={apName}
           />
         </View>
-
-        {sppSupported && error && !connected && !wifiConnected && (
-          <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <Text className="text-xs leading-5 text-red-600">{error}</Text>
-          </View>
-        )}
       </View>
 
-      {/* About this project */}
-      <View className="mt-4">
+      {/* About this project — the page now ENDS here (owner 2026-09-29:
+          the teaching card after it is gone; mt-6 matches the Connections
+          section rhythm). */}
+      <View className="mt-6">
         <ProjectInfo mode={activeMode} categorySlug={category.slug} />
       </View>
 
