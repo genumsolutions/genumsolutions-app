@@ -248,24 +248,22 @@ describe("Registered placeholders and the full registry", () => {
       "http",
       "mdns",
       "mqtt",
-      "usb-serial",
       "cloud-relay",
     ]) {
       expect(ids).toContain(want);
     }
-    expect(linkManager.list().length).toBe(9);
+    // The cable/USB-serial method was removed at the owner's request.
+    expect(ids).not.toContain("usb-serial");
+    expect(linkManager.list().length).toBe(8);
 
     const mdns = linkManager.get("mdns");
     const mqtt = linkManager.get("mqtt");
-    const usb = linkManager.get("usb-serial");
     const cloud = linkManager.get("cloud-relay");
 
     expect(mdns?.isSupported()).toBe(false);
     expect(mdns?.radio).toBe("wifi");
     expect(mqtt?.isSupported()).toBe(false);
     expect(mqtt?.radio).toBe("internet");
-    expect(usb?.isSupported()).toBe(false);
-    expect(usb?.radio).toBe("wired");
     expect(cloud?.isSupported()).toBe(false);
     expect(cloud?.radio).toBe("internet");
 

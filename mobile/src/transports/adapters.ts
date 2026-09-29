@@ -544,28 +544,6 @@ function createMqttTransport(): Transport {
   );
 }
 
-function createUsbTransport(): Transport {
-  return createPlaceholderTransport(
-    "usb-serial",
-    "USB serial (bench)",
-    "wired",
-    "A USB cable straight to the car's serial port — the best bench tool",
-    ["drive", "telemetry", "mode"],
-    {
-      intro:
-        "A USB cable to the car's UART is the simplest, most reliable bench link — no radio at all. Great for firmware bring-up and lab diagnostics.",
-      needs:
-        "A phone or computer with a USB-serial adapter driver; a bench cable.",
-      when: "Purely for the workbench; not for normal driving.",
-      steps: [
-        "Plug the car into the USB-serial port.",
-        "App registers the virtual COM port (needs the USB serial native module), picks it as the active link.",
-      ],
-    },
-    "Roadmap: needs a native USB-serial module and a driver path — the best bench tool once wired.",
-  );
-}
-
 function createCloudRelayTransport(): Transport {
   return createPlaceholderTransport(
     "cloud-relay",
@@ -601,7 +579,6 @@ export function registerAllTransports(): void {
     createHttpTransport(),
     createMdnssTransport(),
     createMqttTransport(),
-    createUsbTransport(),
     createCloudRelayTransport(),
   ];
   for (const t of built) linkManager.register(t);

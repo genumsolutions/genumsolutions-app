@@ -36,7 +36,7 @@
  * Implemented today: bt-classic, wifi-ap-ws, wifi-sta-ws, http (REST).
  * Registered placeholders (the full "what if every possible comm method"
  * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md §3):
- * bt-ble (needs firmware GATT-UART), mdns, mqtt, usb-serial, cloud-relay.
+ * bt-ble (needs firmware GATT-UART), mdns, mqtt, cloud-relay.
  */
 export type TransportId =
   | "bt-classic"
@@ -46,11 +46,15 @@ export type TransportId =
   | "http"
   | "mdns"
   | "mqtt"
-  | "usb-serial"
   | "cloud-relay";
 
-/** The radio a transport rides on — what the picker groups by. */
-export type TransportRadio = "bluetooth" | "wifi" | "internet" | "wired";
+/**
+ * The radio a transport rides on — what the picker groups by.
+ *
+ * `wired` (the cable/USB-serial method) was removed at the owner's request
+ * ("remove the cable ones method too totally"), so it is no longer a radio.
+ */
+export type TransportRadio = "bluetooth" | "wifi" | "internet";
 
 /**
  * What a link can do. The UI hides or disables anything absent here,

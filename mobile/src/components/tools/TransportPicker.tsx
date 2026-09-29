@@ -1,34 +1,23 @@
 // =====================================================================
 // TransportPicker — the "pick your connection method" card.
 //
-// This is the control the owner asked for: "I want this app to be able to
-// communicate and control all the types of wifi and bluetooth
-// communications ... the user gets to choose to select one which they like
-// at a time. The app already has the bluetooth and wifi setup, of which
-// bluetooth set is working fine but doesn't show or allow to choose which
-// type of communications the user is going to select."
+// Owner 2026-09-28: "I want this app to be able to communicate and control
+// all the types of wifi and bluetooth communications ... the user gets to
+// choose to select one which they like at a time." Later the same round: the
+// picker had grown a long repeated list of every method, so the top of the
+// page read as duplicate connection-method content. It is now ONE dropdown
+// ("Connection method") holding every registered method, each with a small
+// ⓘ icon that opens a separate small window with how that method is used.
 //
-// It replaces a 2-way Bluetooth/WiFi segmented toggle that could not
-// express the real choice space. Every possible method is REGISTERED so no
-// option is missing, and each row says whether it is live today:
+// The dropdown replaces a 2-way Bluetooth/WiFi segmented toggle that could
+// not express the real choice space. Every possible method is REGISTERED so
+// no option is missing, and each method has a help icon (ⓘ) that opens
+// a small window with instructions on how to connect and what to expect.
 //
-//   Bluetooth   · Classic SPP   (paired car — the proven working link)
-//   Bluetooth   · BLE GATT       (low power — registered; needs firmware)
-//   WiFi        · Car access pt  (phone joins the car's own hotspot)
-//   WiFi        · Home router    (car + phone on the same LAN)
-//   Internet    · HTTP / REST    (drives the car's own web server)
-//   Internet    · MQTT / cloud   (registered; roadmap — needs a broker)
-//   Cable       · USB serial     (registered; roadmap — best bench tool)
-//   ... plus mDNS, an internet relay and teaching-only items.
-//
-// A row marked "Not available on this build yet" is registered but its
-// `isSupported()` is false, so it can never become the active link; the
-// chevron opens its teaching + roadmap note.
-//
-// Selecting a row is the ONLY way a link becomes active, so "WiFi is
-// selected" now genuinely means traffic goes over WiFi — the old
-// `goBt ?? goWs` priority silently preferred Bluetooth and made a WiFi run
-// impossible without unplugging BT in another screen.
+// Selecting a method is the ONLY way a link becomes active, so the chosen
+// method genuinely controls the link — the old `goBt ?? goWs` priority
+// silently preferred Bluetooth and made a WiFi run impossible without
+// unplugging BT in another screen.
 //
 // F-12: all state is read from the manager on every render; nothing is
 // cached in local state except the scan results and the typed URL, which
@@ -37,6 +26,7 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -87,12 +77,13 @@ export type TransportPickerProps = {
   onDeactivate?: () => Promise<void>;
 };
 
-/** Rows group by radio so the choice reads as "which radio, then which kind". */
+/** The dropdown groups methods by radio so the choice reads as
+ *  "which radio, then which kind". `wired` was removed when the cable/USB
+ *  -serial method was removed at the owner's request. */
 const RADIO_LABEL = {
   bluetooth: "Bluetooth",
   wifi: "WiFi",
   internet: "Internet & cloud",
-  wired: "Cable",
 } as const;
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -101,7 +92,6 @@ const RADIO_ICON: Record<Transport["radio"], FeatherName> = {
   bluetooth: "bluetooth",
   wifi: "wifi",
   internet: "globe",
-  wired: "hard-drive",
 };
 
 /** Capability chips, in a fixed order so the rows line up. */
@@ -129,26 +119,25 @@ function StatusDot({ status }: { status: TransportStatus }) {
   );
 }
 
-function TransportRow({
+function MethodOption({
   transport,
   active,
   status,
   onSelect,
+  onHelp,
 }: {
   transport: Transport;
   active: boolean;
   status: TransportStatus;
   onSelect: (id: TransportId) => void;
+  onHelp: (t: Transport) => void;
 }) {
   const meta = STATUS_META[status];
   const supported = transport.isSupported();
-  const teaching = transport.teaching;
-  const [expanded, setExpanded] = React.useState(false);
-  // Placeholder rows are disabled (connecting would throw) but their chevron
-  // must still open the teaching, so the "details" Pressable is always live.
+  // A compact row inside the dropdown: label, status, and a small ⓘ icon.
   return (
     <View
-      className={`mb-2 rounded-xl border p-3 ${
+      className={`mb-1.5 flex-row items-center gap-2 rounded-lg border px-2.5 py-2 ${
         active ? "border-sky-500 bg-sky-500/10" : "border-line bg-card"
       } ${supported ? "" : "opacity-60"}`}
     >
@@ -158,120 +147,169 @@ function TransportRow({
         accessibilityRole="radio"
         accessibilityState={{ selected: active, disabled: !supported }}
         accessibilityLabel={`${transport.label}. ${meta.label}`}
+        className="min-w-0 flex-1 flex-row items-center gap-2"
       >
-        <View className="flex-row items-center gap-2">
-          <Feather
-            name={RADIO_ICON[transport.radio]}
-            size={15}
-            color={active ? "#0284c7" : "#64748b"}
-          />
-          <Text
-            className={`flex-1 text-[13px] font-black ${
-              active
-                ? "text-sky-700 dark:text-sky-300"
-                : "text-ink dark:text-white"
-            }`}
-          >
-            {transport.label}
-          </Text>
-          <StatusDot status={status} />
-          <Text className="text-[11px] font-bold text-muted">{meta.label}</Text>
-        </View>
-        <Text className="mt-1 text-[11px] leading-4 text-muted">
-          {transport.blurb}
+        <Feather
+          name={RADIO_ICON[transport.radio]}
+          size={14}
+          color={active ? "#0284c7" : "#64748b"}
+        />
+        <Text
+          className={`min-w-0 flex-1 text-[13px] font-black ${
+            active
+              ? "text-sky-700 dark:text-sky-300"
+              : "text-ink dark:text-white"
+          }`}
+          numberOfLines={1}
+        >
+          {transport.label}
         </Text>
-        {/* Capabilities are DECLARED per transport, so the user can see what a
-            method can and cannot do before choosing it (the point of the
-            Transport contract). Notably no link can push firmware today. */}
-        <View className="mt-1.5 flex-row flex-wrap items-center gap-1">
-          {CAPABILITY_LABEL.map(([cap, label]) => {
-            const on = hasCapability(transport, cap);
-            return (
-              <View
-                key={cap}
-                className={`rounded-full px-1.5 py-0.5 ${
-                  on ? "bg-sky-500/15" : "bg-line/40"
-                }`}
-              >
-                <Text
-                  className={`text-[9px] font-black uppercase tracking-wide ${
-                    on ? "text-sky-700 dark:text-sky-300" : "text-muted"
-                  }`}
-                >
-                  {label}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+        {active ? <StatusDot status={status} /> : null}
         {!supported ? (
-          <Text className="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
-            Not available on this build yet
+          <Text className="shrink-0 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+            Roadmap
           </Text>
         ) : null}
       </Pressable>
-      {teaching ? (
-        <>
-          <Pressable
-            onPress={() => setExpanded((v) => !v)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded }}
-            accessibilityLabel={`How ${transport.label} works`}
-            hitSlop={4}
-            className="mt-2 flex-row items-center gap-1 self-start"
-          >
+      {/* Small help icon — opens a separate small window with the details. */}
+      <Pressable
+        onPress={() => onHelp(transport)}
+        accessibilityRole="button"
+        accessibilityLabel={`How ${transport.label} works`}
+        hitSlop={6}
+        className="h-6 w-6 items-center justify-center rounded-full active:opacity-60"
+      >
+        <Feather name="help-circle" size={15} color="#0284c7" />
+      </Pressable>
+    </View>
+  );
+}
+
+/** The per-method help window — a small modal showing what the method is, what
+ *  it needs, when to use it, and how to connect + verify. Reached from the ⓘ
+ *  icon on any dropdown option. */
+function MethodHelpModal({
+  transport,
+  onClose,
+}: {
+  transport: Transport;
+  onClose: () => void;
+}) {
+  const teaching = transport.teaching;
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <Pressable
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close help"
+        className="flex-1 items-center justify-center bg-black/60 px-6"
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          accessibilityViewIsModal
+          className="max-h-[80%] w-full max-w-md rounded-2xl border border-line bg-card p-4"
+        >
+          <View className="flex-row items-center gap-2">
             <Feather
-              name={expanded ? "chevron-up" : "chevron-down"}
-              size={12}
+              name={RADIO_ICON[transport.radio]}
+              size={15}
               color="#0284c7"
             />
-            <Text className="text-[11px] font-black text-sky-700 dark:text-sky-300">
-              {expanded ? "Hide details" : "How this works + what it needs"}
+            <Text className="min-w-0 flex-1 text-[14px] font-black text-ink dark:text-white">
+              {transport.label}
             </Text>
-          </Pressable>
-          {expanded ? (
-            <View className="mt-2 rounded-lg border border-line bg-mist p-2.5">
-              <Text className="text-[12px] leading-4 text-ink dark:text-white">
-                {teaching.intro}
-              </Text>
-              <Text className="mt-2 text-[10px] font-black uppercase tracking-wide text-muted">
-                What you need
-              </Text>
-              <Text className="text-[12px] leading-4 text-muted">
-                {teaching.needs}
-              </Text>
-              <Text className="mt-2 text-[10px] font-black uppercase tracking-wide text-muted">
-                When to use it
-              </Text>
-              <Text className="text-[12px] leading-4 text-muted">
-                {teaching.when}
-              </Text>
-              <Text className="mt-2 text-[10px] font-black uppercase tracking-wide text-muted">
-                Connect + verify
-              </Text>
-              {teaching.steps.map((s, i) => (
-                <View key={i} className="flex-row gap-1.5">
-                  <Text className="text-[12px] leading-4 text-sky-700 dark:text-sky-300">
-                    {i + 1}
-                  </Text>
-                  <Text className="flex-1 text-[12px] leading-4 text-ink dark:text-white">
-                    {s}
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={6}
+              className="h-6 w-6 items-center justify-center rounded-full active:opacity-60"
+            >
+              <Feather name="x" size={16} color="#64748b" />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            className="mt-2"
+            style={{ maxHeight: 420 }}
+            nestedScrollEnabled
+          >
+            <Text className="text-[12px] leading-4 text-muted">
+              {transport.blurb}
+            </Text>
+            {teaching ? (
+              <>
+                <Text className="mt-3 text-[12px] leading-4 text-ink dark:text-white">
+                  {teaching.intro}
+                </Text>
+                <Text className="mt-2.5 text-[10px] font-black uppercase tracking-wide text-muted">
+                  What you need
+                </Text>
+                <Text className="text-[12px] leading-4 text-muted">
+                  {teaching.needs}
+                </Text>
+                <Text className="mt-2.5 text-[10px] font-black uppercase tracking-wide text-muted">
+                  When to use it
+                </Text>
+                <Text className="text-[12px] leading-4 text-muted">
+                  {teaching.when}
+                </Text>
+                <Text className="mt-2.5 text-[10px] font-black uppercase tracking-wide text-muted">
+                  Connect + verify
+                </Text>
+                {teaching.steps.map((s, i) => (
+                  <View key={i} className="flex-row gap-1.5">
+                    <Text className="text-[12px] leading-4 text-sky-700 dark:text-sky-300">
+                      {i + 1}
+                    </Text>
+                    <Text className="flex-1 text-[12px] leading-4 text-ink dark:text-white">
+                      {s}
+                    </Text>
+                  </View>
+                ))}
+              </>
+            ) : null}
+            {!transport.isSupported() ? (
+              <View className="mt-3 flex-row gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2">
+                <Feather name="clock" size={12} color="#d97706" />
+                <Text className="flex-1 text-[11px] font-bold leading-4 text-amber-700 dark:text-amber-400">
+                  {transport.roadmapNote ?? "Not available on this build yet."}
+                </Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          {/* What it can do — declared capabilities, same source as the row. */}
+          <View className="mt-3 flex-row flex-wrap items-center gap-1">
+            {CAPABILITY_LABEL.map(([cap, label]) => {
+              const on = hasCapability(transport, cap);
+              return (
+                <View
+                  key={cap}
+                  className={`rounded-full px-1.5 py-0.5 ${
+                    on ? "bg-sky-500/15" : "bg-line/40"
+                  }`}
+                >
+                  <Text
+                    className={`text-[9px] font-black uppercase tracking-wide ${
+                      on ? "text-sky-700 dark:text-sky-300" : "text-muted"
+                    }`}
+                  >
+                    {label}
                   </Text>
                 </View>
-              ))}
-              {transport.roadmapNote ? (
-                <View className="mt-2 flex-row gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2">
-                  <Feather name="clock" size={12} color="#d97706" />
-                  <Text className="flex-1 text-[11px] font-bold leading-4 text-amber-700 dark:text-amber-400">
-                    {transport.roadmapNote}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-        </>
-      ) : null}
-    </View>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -328,17 +366,46 @@ export function TransportPicker({
   const [devices, setDevices] = React.useState<DiscoveredDevice[] | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // The dropdown is the ONE list of methods; the help window is a modal on top.
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [help, setHelp] = React.useState<Transport | null>(null);
+  // The method the user has CHOSEN in the dropdown. Tracked separately from the
+  // active link on purpose: before the first connect there is no active link,
+  // so deriving the connection UI from it left the scan button and the address
+  // box invisible on a freshly opened Control Panel — the "scanning is missing
+  // from the control page" report. Choosing a method now always shows that
+  // method's own steps, connected or not.
+  const [pickedId, setPickedId] = React.useState<TransportId | null>(null);
 
-  const selected = link.id
+  const active = link.id
     ? (transports.find((t) => t.id === link.id) ?? null)
     : null;
-  const isSelected = (t: Transport) => link.id === t.id;
+  // The chosen method: what the dropdown is set to, falling back to the live
+  // link (so a link that comes up on its own still shows its own steps).
+  const selected =
+    (pickedId ? transports.find((t) => t.id === pickedId) : null) ?? active;
+  const isSelected = (t: Transport) => selected?.id === t.id;
   const isWifi = selected?.radio === "wifi";
   const isBluetooth = selected?.radio === "bluetooth";
   // WiFi and HTTP are the two address-driven methods; the rest dial directly.
   const needsUrl = isWifi || selected?.id === "http";
   // Only a link with a device scan offers one.
   const canScan = Boolean(selected?.scan);
+  // The live link is the chosen method only while it is actually up.
+  const isActiveLink = Boolean(active && active.id === selected?.id);
+
+  // Every method once, in registry order, grouped by radio. The cable group is
+  // gone with the USB-serial method. De-duplicated by id on purpose (owner:
+  // "dont display dublicates") — a transport registered twice must still show
+  // as a single choice.
+  const RADIOS: Array<Transport["radio"]> = ["bluetooth", "wifi", "internet"];
+  const seen = new Set<TransportId>();
+  const methodGroups = RADIOS.map((radio) => ({
+    radio,
+    items: transports.filter(
+      (t) => t.radio === radio && !seen.has(t.id) && !!seen.add(t.id),
+    ),
+  })).filter((g) => g.items.length > 0);
 
   // Keep one typed address per URL-shaped method, so switching WiFi → HTTP
   // never carries a ws:// value into the HTTP box (or vice versa).
@@ -392,7 +459,17 @@ export function TransportPicker({
       if (!t) return;
       setDevices(null);
       setError(null);
-      // WiFi and HTTP need an address; Bluetooth needs a device from a scan.
+      setMenuOpen(false);
+      // Remember the choice first, so its connection steps (address box, scan)
+      // show immediately — the user chose it, so its UI is what they need.
+      setPickedId(id);
+      if (!t.isSupported()) return;
+      // A device-driven method (Bluetooth) is NOT dialled on selection: the car
+      // is only reachable at an address the user has to pick from a scan, and
+      // connecting blind just raised "Pick a car from the Bluetooth list" as if
+      // the method were broken. Pick it, show the scan, connect on the tap.
+      if (t.scan) return;
+      // WiFi and HTTP need an address; the rest dial the car directly.
       if (t.radio === "wifi" || t.id === "http") {
         void run(() =>
           activateTransport(id, url.trim() ? { url: url.trim() } : {}),
@@ -424,19 +501,13 @@ export function TransportPicker({
   );
 
   const onDisconnect = React.useCallback(() => {
+    setPickedId(null);
+    setDevices(null);
     void run(() => (onDeactivate ? onDeactivate() : linkManager.deactivate()));
   }, [onDeactivate, run]);
 
   const statusOf = (t: Transport): TransportStatus =>
-    isSelected(t) ? link.status : t.getStatus();
-
-  // Rows grouped by radio.
-  const radios: Array<Transport["radio"]> = [
-    "bluetooth",
-    "wifi",
-    "internet",
-    "wired",
-  ];
+    t.id === active?.id ? link.status : t.getStatus();
 
   return (
     <View className="rounded-2xl border border-line bg-mist p-3">
@@ -444,27 +515,80 @@ export function TransportPicker({
         Connection method
       </Text>
       <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-        Pick how the app talks to the car. One at a time.
+        Pick how the app talks to the car. One at a time. Tap ⓘ on any method
+        for how it works.
       </Text>
 
-      {radios.map((radio) => (
-        <View key={radio} className="mt-3">
-          <Text className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-muted">
-            {RADIO_LABEL[radio]}
-          </Text>
-          {transports
-            .filter((t) => t.radio === radio)
-            .map((t) => (
-              <TransportRow
-                key={t.id}
-                transport={t}
-                active={isSelected(t)}
-                status={statusOf(t)}
-                onSelect={onSelect}
-              />
-            ))}
+      {/* --- the single dropdown: all methods, one at a time ------------ */}
+      <Pressable
+        onPress={() => setMenuOpen((v) => !v)}
+        accessibilityRole="combobox"
+        accessibilityState={{ expanded: menuOpen }}
+        accessibilityLabel="Connection method"
+        className="mt-2.5 flex-row items-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5"
+      >
+        {selected ? (
+          <>
+            <Feather
+              name={RADIO_ICON[selected.radio]}
+              size={15}
+              color="#0284c7"
+            />
+            <Text
+              className="min-w-0 flex-1 text-[13px] font-black text-ink dark:text-white"
+              numberOfLines={1}
+            >
+              {selected.label}
+            </Text>
+            {isActiveLink ? (
+              <>
+                <StatusDot status={link.status} />
+                <Text className="shrink-0 text-[11px] font-bold text-muted">
+                  {STATUS_META[link.status].label}
+                </Text>
+              </>
+            ) : (
+              <Text className="shrink-0 text-[11px] font-bold text-muted">
+                Not connected
+              </Text>
+            )}
+          </>
+        ) : (
+          <>
+            <Feather name="link" size={15} color="#64748b" />
+            <Text className="min-w-0 flex-1 text-[13px] font-bold text-muted">
+              Choose a method
+            </Text>
+          </>
+        )}
+        <Feather
+          name={menuOpen ? "chevron-up" : "chevron-down"}
+          size={15}
+          color="#64748b"
+        />
+      </Pressable>
+
+      {menuOpen ? (
+        <View className="mt-2 rounded-xl border border-line bg-card p-2">
+          {methodGroups.map((g) => (
+            <View key={g.radio} className="mb-1">
+              <Text className="mb-1 px-1 text-[10px] font-black uppercase tracking-wide text-muted">
+                {RADIO_LABEL[g.radio]}
+              </Text>
+              {g.items.map((t) => (
+                <MethodOption
+                  key={t.id}
+                  transport={t}
+                  active={isSelected(t)}
+                  status={statusOf(t)}
+                  onSelect={onSelect}
+                  onHelp={setHelp}
+                />
+              ))}
+            </View>
+          ))}
         </View>
-      ))}
+      ) : null}
 
       {/* --- per-transport connection details ------------------------- */}
       {needsUrl ? (
@@ -555,7 +679,7 @@ export function TransportPicker({
       ) : null}
 
       {/* --- active-link footer -------------------------------------- */}
-      {selected ? (
+      {active ? (
         <View className="mt-3 flex-row items-center gap-2">
           <StatusDot status={link.status} />
           <Text
@@ -563,9 +687,9 @@ export function TransportPicker({
             numberOfLines={1}
           >
             {link.verified
-              ? `Verified — ${selected.getTargetLabel() ?? selected.label}`
+              ? `Verified — ${active.getTargetLabel() ?? active.label}`
               : (link.error ??
-                `${selected.label} — ${STATUS_META[link.status].label}`)}
+                `${active.label} — ${STATUS_META[link.status].label}`)}
           </Text>
           <Pressable
             onPress={onDisconnect}
@@ -602,6 +726,11 @@ export function TransportPicker({
             }}
           />
         </View>
+      ) : null}
+
+      {/* --- the per-method help window (small, separate) ------------- */}
+      {help ? (
+        <MethodHelpModal transport={help} onClose={() => setHelp(null)} />
       ) : null}
     </View>
   );
