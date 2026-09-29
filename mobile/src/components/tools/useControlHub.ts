@@ -24,6 +24,14 @@ import { bleService } from "../../services/bleService";
 import { wifiService } from "../../services/wifiService";
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
 import {
+  fetchCarProfiles,
+  isFreshDefaultPrefs,
+  mergeCloudProfile,
+  saveCarProfile,
+  type ProfileSyncState,
+  type CarProfileCloudRecord,
+} from "../../services/carProfileService";
+import {
   addBtId,
   pickBestRouter,
   upsertWifiHistory,
@@ -397,6 +405,10 @@ export function useControlHub(routeCategory?: string) {
   const profileKey = addressForMemory;
   const carScanRef = useRef<ScanNetwork[] | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
+  // Profiles-sync: last cloud mirror attempt for the current car profile
+  // ("synced" = pushed to the user's account; "offline" = kept local only;
+  // null = no attempt yet this session).
+  const [profileSync, setProfileSync] = useState<ProfileSyncState | null>(null);
   useFocusEffect(
     React.useCallback(() => {
       if (!addressForMemory) {
@@ -483,6 +495,106 @@ export function useControlHub(routeCategory?: string) {
     }, [addressForMemory, legacyMemoryKey, carModes]),
   );
 
+  // Profiles-sync (owner: "gets sync with the device as soon as everything
+  // gets connected"): once a stable profile key exists, pull THIS user's
+  // cloud car profiles and adopt this car's row when it is newer than what
+  // the phone holds (or the phone holds only factory defaults). Adopting
+  // restores mode/speed/steer/trim/joystick + saved routers + Wi-Fi history
+  // so the car comes up exactly as the user last saved it — on any phone.
+  // Push happens in persistPrefs; pull happens here (last-saved-wins both
+  // ways; nothing secret is in the row — names only, never passwords).
+  const cloudAdoptedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!addressForMemory) return;
+    if (cloudAdoptedRef.current === addressForMemory) return;
+    cloudAdoptedRef.current = addressForMemory;
+    let active = true;
+    void (async () => {
+      const { rows, offline } = await fetchCarProfiles();
+      if (!active || offline) {
+        if (active && offline) setProfileSync({ state: "offline" });
+        return;
+      }
+      const row = rows.find(
+        (r: CarProfileCloudRecord) => r.profile_key === addressForMemory,
+      );
+      if (!row) {
+        // First time this car is known in the cloud — push what we have.
+        const local = await deviceMemory.read(addressForMemory);
+        if (local && !isFreshDefaultPrefs(local)) {
+          void saveCarProfile(local, addressForMemory).then((res) => {
+            setProfileSync(
+              res.ok
+                ? { state: "synced", at: Date.now() }
+                : { state: "offline" },
+            );
+          });
+        }
+        return;
+      }
+      const local = await deviceMemory.read(addressForMemory);
+      if (!isFreshDefaultPrefs(local) && local?.savedAt) {
+        const localTime = local.savedAt;
+        const cloudTime = Date.parse(row.updated_at || "") || 0;
+        if (localTime >= cloudTime) {
+          // The phone holds the newer save — push it instead of adopting.
+          void saveCarProfile(local, addressForMemory).then((res) => {
+            setProfileSync(
+              res.ok
+                ? { state: "synced", at: Date.now() }
+                : { state: "offline" },
+            );
+          });
+          return;
+        }
+      }
+      const base: Omit<DevicePrefs, "address"> = {
+        name: null,
+        modeId: null,
+        speed: 170,
+        servo: 90,
+        steerLimit: 90,
+        trim: 0,
+        useJoystick: false,
+        fullscreen: false,
+        joystickLayout: "dual",
+        lastWifiSsid: null,
+        savedRouters: [],
+      };
+      const merged = mergeCloudProfile(row, local, base);
+      if (!merged.changed) return;
+      await deviceMemory.write(addressForMemory, merged.prefs);
+      if (!active) return;
+      setSavedPrefs(merged.prefs);
+      if (
+        merged.prefs.modeId &&
+        carModes.some((m) => m.id === merged.prefs.modeId)
+      ) {
+        setActiveMode(carModes.find((m) => m.id === merged.prefs.modeId)!);
+      }
+      if (merged.prefs.speed != null) setSpeed(merged.prefs.speed);
+      if (merged.prefs.servo != null) setServo(merged.prefs.servo);
+      if (merged.prefs.steerLimit != null)
+        setSteerLimit(merged.prefs.steerLimit);
+      if (merged.prefs.trim != null) setTrim(merged.prefs.trim);
+      if (merged.prefs.useJoystick != null)
+        setUseJoystick(merged.prefs.useJoystick);
+      if (merged.prefs.joystickLayout)
+        setJoystickLayoutId(merged.prefs.joystickLayout);
+      if (merged.prefs.autoJoinRouter != null)
+        setAutoJoinRouter(merged.prefs.autoJoinRouter);
+      if (merged.prefs.savedRouters && merged.prefs.savedRouters.length > 0) {
+        setCarNetworks((cur) =>
+          cur.length > 0 ? cur : (merged.prefs.savedRouters ?? []),
+        );
+      }
+      setProfileSync({ state: "adopted", at: Date.now() });
+    })();
+    return () => {
+      active = false;
+    };
+  }, [addressForMemory, carModes]);
+
   // Persist device prefs whenever the user changes a remembered value.
   // Round-6 (bug): read the CURRENT saved-router names from a live ref, not
   // from the `savedPrefs` closure — the old closure captured a stale copy of
@@ -522,10 +634,25 @@ export function useControlHub(routeCategory?: string) {
             "",
         ),
         autoJoinRouter,
+        // Profiles-sync round: carry fields a narrow patch must NOT wipe
+        // (previously a speed/mode persist erased wifiHistory + fullscreen
+        // because the base record omitted them entirely).
+        wifiHistory: savedPrefs?.wifiHistory ?? [],
+        fullscreen: savedPrefs?.fullscreen ?? false,
         ...patch,
+        // Last-save stamp: feeds last-saved-wins cloud merging.
+        savedAt: Date.now(),
       } as DevicePrefs;
       void deviceMemory.write(addressForMemory, next);
       setSavedPrefs(next);
+      // Profiles-sync: mirror the save to the user's cloud account so the
+      // same car restores its last-saved state on any device (fire-and-
+      // forget; local write already succeeded so this can never block UX).
+      void saveCarProfile(next, addressForMemory).then((res) => {
+        setProfileSync(
+          res.ok ? { state: "synced", at: Date.now() } : { state: "offline" },
+        );
+      });
       // Round-6: spill the last-touched device globally so a cold start with
       // no live link can still recall the saved-router names (see LAST_DEVICE_KEY).
       const lastDevice = {
@@ -549,6 +676,7 @@ export function useControlHub(routeCategory?: string) {
       useJoystick,
       joystickLayoutId,
       savedPrefs?.lastWifiSsid,
+      savedPrefs?.wifiHistory,
       carFwIdRef.current,
       savedPrefs?.btIds,
       autoJoinRouter,
@@ -2042,6 +2170,8 @@ export function useControlHub(routeCategory?: string) {
     carUniqueId: carFwIdRef.current,
     autoJoinRouter,
     setAutoJoinRouter,
+    // Profiles-sync (cloud mirror state for the current car profile)
+    profileSync,
     // derived
     isDrone,
     isNonRobocar,
