@@ -24,14 +24,12 @@ const RADIO_ICON: Record<
   bluetooth: "bluetooth",
   wifi: "wifi",
   internet: "globe",
-  wired: "hard-drive",
 };
 
 const RADIO_LABEL: Record<TransportRadio, string> = {
   bluetooth: "Bluetooth",
   wifi: "WiFi",
   internet: "Internet & cloud",
-  wired: "Cable",
 };
 
 /** Teaching-only items with NO transport (hardware add-ons, by design). */
@@ -149,7 +147,6 @@ export function ConnectionsTeaching() {
     bluetooth: [],
     wifi: [],
     internet: [],
-    wired: [],
   };
   for (const t of transports) groups[t.radio].push(t);
 
@@ -167,7 +164,7 @@ export function ConnectionsTeaching() {
         and what it would take to enable it.
       </Text>
 
-      {(["bluetooth", "wifi", "internet", "wired"] as const).map((radio) => {
+      {(["bluetooth", "wifi", "internet"] as const).map((radio) => {
         const rows = groups[radio];
         if (rows.length === 0 && radio !== "bluetooth") return null;
         return (
@@ -208,8 +205,7 @@ export function ConnectionsTeaching() {
       <Text className="mt-3 text-[10px] leading-4 text-muted">
         Wiring paths matter too: an ESP32 can be the server (car runs the web
         page, phone connects to it) or the client (car joins your router). Both
-        shapes are covered by the WiFi rows above; USB serial is the bench cable
-        path.
+        shapes are covered by the WiFi rows above.
       </Text>
     </View>
   );

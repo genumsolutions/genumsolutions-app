@@ -905,3 +905,72 @@ Every step behaves as described above. No app crash or permanently dead control;
       state across categories).
 - [ ] Leave the Control Panel mid-connect and come back: no duplicate link, no stuck spinner.
 - [ ] Admin/site-content rounds from U-48: content save + pull-to-refresh still fine.
+
+## U-50 round — connection method dropdown, help windows, cable removed (2026-09-28, SHIPPED as OTA -> DEVICE VERIFY PENDING)
+
+Owner requests this round: (1) the top of the Control Panel had **duplicate content about connection
+methods** — make it ONE dropdown with all methods; (2) each method gets a **small help icon** opening
+a **separate small window** with how to use it; (3) **"the scanning for the device seems to be missing
+from the control page"**; (4) **"also remove the cable ones method too totally"**; (5)
+**"also dont display dublicates"**.
+
+No native change — `app.json` untouched, so this ships on the **OTA Only** channel (same version,
+new JS bundle). Do not expect a new APK or a version bump.
+
+### U-50-1 - the dropdown replaces the method list (F-39)
+
+- [ ] Open **Tools -> 4WD4M**. The top of the page shows a single **"Connection method"** dropdown
+      (a row with a chevron), **not** a long repeated list of method cards. The repeated capability
+      chips / blurb text under every method must be **gone** from the page.
+- [ ] Dropdown closed on a fresh open shows **"Choose a method"** (no method pre-selected).
+- [ ] Tap the dropdown: it lists every registered method, grouped **Bluetooth / WiFi / Internet &
+      cloud**. Count them — there must be **8**:
+      Classic Bluetooth (SPP) · Bluetooth Low Energy (GATT) · Car access point · Home router ·
+      HTTP / REST · mDNS · MQTT · Internet relay.
+- [ ] **No Cable group and no "USB serial" anywhere** in the dropdown, in the "Every way the car can
+      be controlled" list below About, or anywhere else in the app. If a Cable/USB row appears, the
+      removal failed — report it.
+- [ ] No method appears **twice** (scan the list carefully; each is a distinct label).
+- [ ] After picking a method the dropdown collapses and the trigger shows that method's name.
+
+### U-50-2 - the per-method help window (F-39)
+
+- [ ] Each option in the dropdown has a small **ⓘ** icon on the right. Tap it on **Classic
+      Bluetooth**: a small separate window opens over the page (not a full screen, not an inline
+      expansion) with what the method is, what you need, when to use it, connect+verify steps, and
+      the capability chips.
+- [ ] Tap **ⓘ on a roadmap method** (Bluetooth LE, mDNS, MQTT, Internet relay): its window shows an
+      amber roadmap note explaining what is missing. The window must be readable, not truncated.
+- [ ] Close the window by tapping **outside** it, by the **✕**, and by the Android **back** button —
+      all three must dismiss it. The Control Panel must still be usable afterwards.
+- [ ] Tapping **ⓘ must NOT connect anything** and must not change the selected method. It is a help
+      button, not a second select button.
+
+### U-50-3 - the scan is back, and in the right place (F-38) — this is the real bug
+
+- [ ] **Fresh app open, nothing connected.** Open Tools -> 4WD4M, pick **Classic Bluetooth** from the
+      dropdown. The **"Scan for cars"** button and the device list must appear **immediately**,
+      _before_ any successful connection. This is the owner-reported bug: the scan used to be
+      invisible because the panel had no active link yet.
+- [ ] Choosing Classic Bluetooth must **not** show an error and must **not** attempt a blind connect.
+      Previously it failed with "Pick a car from the Bluetooth list" as if the method were broken.
+- [ ] Tap **Scan for cars** -> the paired car appears -> tap it -> connects. **This is the known-good
+      path; it must not regress.** Confirm the OLED shows CONNECTED and telemetry is live.
+- [ ] With no car in range, the scan must say **"No devices found"** (not fail silently, not hang).
+- [ ] Pick **Car access point**: the **Car address** box appears with `ws://192.168.245.1:81`
+      pre-filled and a **Connect** button. Type a wrong IP -> a definite error within ~20 s, never an
+      endless "Connecting…" (F-16).
+- [ ] Switch between Car access point and HTTP / REST: the address box must not carry a `ws://` value
+      into the HTTP box (or vice versa).
+- [ ] A chosen-but-not-connected method shows **"Not connected"**, and the status dot + Disconnect
+      footer must **not** appear until a link is genuinely up. A choice is not a connection.
+
+### U-50-4 - no regressions on the rest of the picker
+
+- [ ] With BT connected, pick a WiFi method -> BT **actually disconnects** (not just relabels). Two
+      links at once is a fail (F-17).
+- [ ] **Disconnect** via the picker -> status dot, banner and Drive deck all clear together.
+- [ ] **WiFi diagnostics** card still appears for a WiFi method and names a layer (A-E) on failure.
+- [ ] Other Tools projects/categories still open — the picker must not leak state across categories.
+- [ ] "Every way the car can be controlled" (below About) still lists the 8 methods with their
+      "How it works" chevrons, and no Cable section.
