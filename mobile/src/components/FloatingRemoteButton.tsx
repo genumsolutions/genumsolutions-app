@@ -11,6 +11,9 @@
 //   - Drag repositions the button; position persists via AsyncStorage.
 //   - A drag is only treated as such past a movement threshold — a tap
 //     that stays put navigates instead.
+//   - Rotation-safe: the slot is re-clamped into the visible window on
+//     every window-size change, so a portrait-dragged position cannot
+//     park the FAB off-screen in landscape (owner round 2026-09-29).
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -19,6 +22,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
@@ -107,6 +111,13 @@ export function FloatingRemoteButton() {
   const movedRef = useRef(false);
   const wasLinkedRef = useRef(anyLinked());
   const lastCategoryRef = useRef<string | undefined>(undefined);
+  // Owner round 2026-09-29 ("FAB disappears in landscape outside the drive
+  // deck"): live window size — the persisted slot is saved in the space of
+  // the orientation it was dragged in (typically portrait), so when the app
+  // rotates the saved y can land BELOW the shorter landscape height and the
+  // button renders off-screen. The re-clamp effect below pulls it back into
+  // the visible window on every size change.
+  const dim = useWindowDimensions();
 
   // Link state: live refresh from every transport's status stream. A FRESH
   // connect while dismissed re-arms the FAB (owner-approved re-arm rule).
@@ -137,7 +148,7 @@ export function FloatingRemoteButton() {
   dismissedRef.current = dismissed;
 
   function isDropZone(s: Slot): boolean {
-    const { width, height } = Dimensions.get("window");
+    const { width, height } = dim;
     const centerBottom =
       s.y >= height - DROP_ZONE_BOTTOM &&
       Math.abs(s.x + FAB_SIZE / 2 - width / 2) <= DROP_ZONE_CENTER_HALF;
@@ -207,6 +218,25 @@ export function FloatingRemoteButton() {
   const openRemote = useCallback(() => {
     navigate("RemoteControl", { category: lastCategoryRef.current });
   }, []);
+
+  // Landscape rescue: whenever the window size changes (rotation, fold,
+  // split-screen), pull the slot back inside the visible window. A slot in
+  // bounds is left untouched (and not re-persisted); an out-of-bounds one is
+  // clamped and persisted so the position is honest for the new shape.
+  useEffect(() => {
+    if (!slot) return;
+    const max = {
+      x: Math.max(EDGE, dim.width - FAB_SIZE - EDGE),
+      y: Math.max(EDGE, dim.height - FAB_SIZE - EDGE),
+    };
+    const next = {
+      x: clamp(slot.x, EDGE, max.x),
+      y: clamp(slot.y, EDGE, max.y),
+    };
+    if (next.x === slot.x && next.y === slot.y) return;
+    setSlot(next);
+    void persistSlot(next);
+  }, [dim.width, dim.height, slot]);
 
   const pan = useRef(
     PanResponder.create({
