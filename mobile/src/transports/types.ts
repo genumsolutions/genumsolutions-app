@@ -87,6 +87,8 @@ export type TransportStatusEvent = {
 export type TransportConnectOptions = {
   /** Classic-BT / BLE device address. */
   address?: string;
+  /** Human-readable device name from the scan row (SPP display name). */
+  name?: string;
   /** WebSocket or HTTP endpoint, e.g. ws://192.168.245.1:81 */
   url?: string;
   /** Seconds to scan for devices (BLE). */

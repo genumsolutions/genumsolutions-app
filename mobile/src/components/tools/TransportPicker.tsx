@@ -495,7 +495,11 @@ export function TransportPicker({
   const onConnectDevice = React.useCallback(
     (d: DiscoveredDevice) => {
       if (!selected) return;
-      void run(() => activateTransport(selected.id, { address: d.id }));
+      // Name rides along so a screen-side connect (SPP bridge) can label the
+      // car without re-reading this mutable scan list.
+      void run(() =>
+        activateTransport(selected.id, { address: d.id, name: d.name }),
+      );
     },
     [activateTransport, run, selected],
   );

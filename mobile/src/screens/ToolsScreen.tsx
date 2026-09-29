@@ -30,6 +30,7 @@ import { CarProfileCard } from "../components/tools/CarProfileCard";
 import { useActiveTransport } from "../transports/linkManagerHooks";
 import { linkManager } from "../transports/linkManager";
 import type { TransportConnectOptions, TransportId } from "../transports/types";
+import type { SppDevice } from "../services/sppService";
 import { feedbackTap } from "../services/hapticsService";
 import {
   PROJECT_CATEGORIES,
@@ -164,12 +165,22 @@ export function ToolsScreen() {
         if (!options.address) {
           throw new Error("Scan for the car first, then pick it.");
         }
-        // The hub's handler takes the scanned SppDevice, not a bare address
-        // (it needs id/name/bonded), so resolve it from the scan results.
-        const device = sppDevices.find((d) => d.address === options.address);
-        if (!device) {
-          throw new Error("That car is no longer in the scan list. Rescan.");
-        }
+        // The hub's handler takes the scanned SppDevice (it needs id/name/
+        // bonded for display). Resolve it from the CURRENT scan results when
+        // they still hold the address — but NEVER fail the connect because a
+        // mutable in-memory list lost the row (owner 2026-09-29: a paired car
+        // that was really in range was refused with "That car is no longer in
+        // the scan list. Rescan." — a false error). A MAC address is all the
+        // dial needs: fall through to a direct SppDevice built from the
+        // scanned row's name (or the address) and let sppService.connect()
+        // validate + bond like the legacy path always did.
+        const scanned = sppDevices.find((d) => d.address === options.address);
+        const device: SppDevice = scanned ?? {
+          id: options.address,
+          name: options.name || options.address,
+          address: options.address,
+          bonded: true,
+        };
         await handleConnect(device);
         // F-34b: tell the manager (no re-dial) so the picker's selection,
         // active chip and Disconnect capsule match the live link.
