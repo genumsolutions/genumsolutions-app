@@ -935,10 +935,7 @@ new JS bundle). Do not expect a new APK or a version bump.
 - [ ] Tap the dropdown: it lists every registered method, grouped **Bluetooth / WiFi / Internet &
       cloud**. Count them — there must be **8**:
       Classic Bluetooth (SPP) · Bluetooth Low Energy (GATT) · Car access point · Home router ·
-      HTTP / REST · mDNS · MQTT · Internet relay.
-- [ ] **No Cable group and no "USB serial" anywhere** in the dropdown, in the "Every way the car can
-      be controlled" list below About, or anywhere else in the app. If a Cable/USB row appears, the
-      removal failed — report it.
+      HTTP / REST · mDNS · MQTT · Internet relay.- [ ] **No Cable group and no "USB serial" anywhere** in the dropdown or anywhere else in the app. If a Cable/USB row appears, the removal failed — report it. (The separate "Every way the car can be controlled" teaching list below About was REMOVED — 2026-09-29 owner round: the per-method ⓘ help windows carry that content now.)
 - [ ] No method appears **twice** (scan the list carefully; each is a distinct label).
 - [ ] After picking a method the dropdown collapses and the trigger shows that method's name.
 
@@ -981,5 +978,7 @@ new JS bundle). Do not expect a new APK or a version bump.
 - [ ] **Disconnect** via the picker -> status dot, banner and Drive deck all clear together.
 - [ ] **WiFi diagnostics** card still appears for a WiFi method and names a layer (A-E) on failure.
 - [ ] Other Tools projects/categories still open — the picker must not leak state across categories.
-- [ ] "Every way the car can be controlled" (below About) still lists the 8 methods with their
-      "How it works" chevrons, and no Cable section.
+- [ ] The "Every way the car can be controlled" card below About is **GONE** — removed in the
+      2026-09-29 round (owner: duplicated the per-method ⓘ windows). Below "About this project" the
+      scroll ends; nothing else renders after it except the disconnect confirmation overlay when
+      invoked.
