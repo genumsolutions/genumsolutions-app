@@ -85,11 +85,17 @@ export function WifiDiagnosticsPanel({
 }: WifiDiagnosticsPanelProps) {
   const [busy, setBusy] = React.useState(false);
   const [report, setReport] = React.useState<WifiDiagnosis | null>(null);
+  // R4-6 (owner): the full report used to STAY OPEN after the run — a tall
+  // block squatting on the panel long after its work was done. The run now
+  // finishes COLLAPSED: the summary row remains (one line, pass/fail tinted)
+  // with a Details chip to re-open the full verdicts. Re-running re-collapses.
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
 
   const run = React.useCallback(async () => {
     setBusy(true);
     try {
       setReport(await runWifiDiagnosis(link, targetIp));
+      setDetailsOpen(false);
     } finally {
       setBusy(false);
     }
@@ -125,12 +131,15 @@ export function WifiDiagnosticsPanel({
       </View>
 
       {report ? (
-        <ScrollView
-          className="mt-1"
-          style={{ maxHeight: 320 }}
-          nestedScrollEnabled
-        >
-          <View
+        <>
+          {/* One-line result — always visible after a run (R4-6). */}
+          <Pressable
+            onPress={() => setDetailsOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: detailsOpen }}
+            accessibilityLabel={
+              detailsOpen ? "Hide test details" : "Show test details"
+            }
             className={`mt-2 flex-row items-center gap-2 rounded-lg border p-2.5 ${
               report.healthy
                 ? "border-emerald-500/40 bg-emerald-500/10"
@@ -145,21 +154,56 @@ export function WifiDiagnosticsPanel({
             <Text className="flex-1 text-[12px] font-black leading-4 text-ink dark:text-white">
               {report.summary}
             </Text>
-          </View>
+            <View className="shrink-0 flex-row items-center gap-1">
+              <Text className="text-[10px] font-black uppercase tracking-wide text-muted">
+                {detailsOpen ? "Hide" : "Details"}
+              </Text>
+              <Feather
+                name={detailsOpen ? "chevron-up" : "chevron-down"}
+                size={13}
+                color="#64748b"
+              />
+            </View>
+          </Pressable>
 
-          {report.verdicts.map((v) => (
-            <VerdictRow key={v.id} v={v} />
-          ))}
+          {detailsOpen ? (
+            <ScrollView
+              className="mt-1"
+              style={{ maxHeight: 320 }}
+              nestedScrollEnabled
+            >
+              <View
+                className={`mt-2 flex-row items-center gap-2 rounded-lg border p-2.5 ${
+                  report.healthy
+                    ? "border-emerald-500/40 bg-emerald-500/10"
+                    : "border-amber-500/40 bg-amber-500/10"
+                }`}
+              >
+                <Feather
+                  name={report.healthy ? "check-circle" : "alert-triangle"}
+                  size={15}
+                  color={report.healthy ? "#059669" : "#d97706"}
+                />
+                <Text className="flex-1 text-[12px] font-black leading-4 text-ink dark:text-white">
+                  {report.summary}
+                </Text>
+              </View>
 
-          {report.probe ? (
-            <Text className="mt-2 text-[11px] leading-4 text-muted">
-              Probe: {report.probe.url} —{" "}
-              {report.probe.ok
-                ? `HTTP ${report.probe.status} in ${report.probe.ms} ms`
-                : `no reply (${report.probe.error ?? "timeout"})`}
-            </Text>
+              {report.verdicts.map((v) => (
+                <VerdictRow key={v.id} v={v} />
+              ))}
+
+              {report.probe ? (
+                <Text className="mt-2 text-[11px] leading-4 text-muted">
+                  Probe: {report.probe.url} —{" "}
+                  {report.probe.ok
+                    ? `HTTP ${report.probe.status} in ${report.probe.ms} ms`
+                    : `no reply (${report.probe.error ?? "timeout"})`}
+                </Text>
+              ) : null}
+            </ScrollView>
           ) : null}
-        </ScrollView>
+        </>
       ) : (
         <Text className="mt-1.5 text-[12px] leading-4 text-muted">
           Run the test before driving over WiFi — it names the exact layer that
