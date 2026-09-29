@@ -860,7 +860,7 @@ Every step behaves as described above. No app crash or permanently dead control;
 
 - [ ] Open **Tools -> 4WD4M**. The **Connection method** card lists 4 rows: Classic Bluetooth,
       Bluetooth LE, Car WiFi, Home WiFi. Each shows capability chips (Drive / Data / Mode /
-      WiFi setup / **Firmware** - the last one dimmed on every row, because no link pushes firmware).
+      WiFi setup / **Firmware** - the last one dimmed on every row, because no link pushes firmware). > ⚠️ **SUPERSEDED by U-50-1 (2026-09-29):** this list is now ONE dropdown, the method count is > **8**, and the capability chips moved into each method's help window. Run **U-50**, not this > row, for the picker layout. The rest of U-49-2 (banner/Drive-deck agreement, both links, > diagnostics, wrong-IP error, Disconnect clearing) still stands.
 - [ ] The **status dot, banners and Drive deck gating all agree** with the picker's state. This is
       the F-17 check; the picker deliberately asks the screen to own the connect so the hub's state
       cannot desync.
@@ -906,7 +906,7 @@ Every step behaves as described above. No app crash or permanently dead control;
 - [ ] Leave the Control Panel mid-connect and come back: no duplicate link, no stuck spinner.
 - [ ] Admin/site-content rounds from U-48: content save + pull-to-refresh still fine.
 
-## U-50 round — connection method dropdown, help windows, cable removed (2026-09-28, SHIPPED as OTA -> DEVICE VERIFY PENDING)
+## U-50 round — connection method dropdown, help windows, cable removed (2026-09-29, SHIPPED as OTA `b0d0e1f` / run `36518703689` -> DEVICE VERIFY PENDING)
 
 Owner requests this round: (1) the top of the Control Panel had **duplicate content about connection
 methods** — make it ONE dropdown with all methods; (2) each method gets a **small help icon** opening
@@ -916,6 +916,15 @@ from the control page"**; (4) **"also remove the cable ones method too totally"*
 
 No native change — `app.json` untouched, so this ships on the **OTA Only** channel (same version,
 new JS bundle). Do not expect a new APK or a version bump.
+
+- [x] **Shipped:** commit `b0d0e1f`, OTA Only run `36518703689` **green**; `release.json` notes now
+      read `OTA · Short update (b0d0e1f…)`, `updated_at 2026-09-29T03:50:10Z`, version still
+      `3.2.7` / `version_code 60`. The release-guard was checked **before** pushing (live manifest
+      `3.2.7`/60 == `app.json`) so the run published instead of skipping.
+- [x] **Gates at ship:** `tsc --noEmit` 0 · `vitest` 285/285 (19 files) · prettier + lint-hook clean.
+- [ ] **On the device:** open the app and let it fetch the OTA (Menu -> App Updates) before running
+      U-50-1..4 below. The U-49 rows still apply; U-49-2's "4 rows with capability chips" is now
+      **obsolete** — those chips moved into the per-method help window (F-39).
 
 ### U-50-1 - the dropdown replaces the method list (F-39)
 
