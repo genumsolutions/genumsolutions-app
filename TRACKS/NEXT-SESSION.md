@@ -1,4 +1,25 @@
-# NEXT SESSION — genumsolutions-app (2026-09-29: Control Panel snag round 2; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-29: car profiles everywhere; current release 3.2.7/60)
+
+**2026-09-29 (LATEST) — CAR PROFILES EVERYWHERE: DB APPLIED LIVE, APP SYNC-ON-CONNECT WIRED,
+WEBSITE ACCOUNT SURFACE (`fb7d1c3` `a2e08cb` `a40be3d`, ALL JS-ONLY → SAME-VERSION OTA
+3.2.7/60).** Owner: "car profiles and their data to the database from all app and websites… gets
+sync with the device as soon as everything gets connected… save the last save things… ready for
+4wd4m, 2wd1m, selfbalance… make note of this session for security." ① The `car_profiles` table
+was committed rounds ago but **never applied** — live probe PGRST205; ran the project's own
+`npm run db:apply` → probe `200 []` (owner RLS verified). ② The app's cloud profile service was
+**dead code** — now wired: `persistPrefs` stamps `savedAt` + mirrors every save to the user's row;
+on profile-key focus the hub pulls and ADOPTS the cloud row when newer (or local factory-fresh),
+else PUSHES the newer local save; merge helpers sanitize + clamp (speed 100..255, servo/steer
+0..180, trim ±100). F-44: narrow persist patches were wiping `wifiHistory`/`fullscreen` — fixed
+(base carries them forward). ③ Car Profile card elaborated: last-saved drive readout (mode name,
+speed n/255, steer°, ±trim, control style), sync badge (synced · restored · saved-on-phone),
+sign-in hint. ④ Website: `/api/user/car-profiles` GET/PATCH/DELETE + account **Car Profiles**
+panel (rename/remove; web never writes drive settings). Security notes in `GUIDE.md` session log
+
+- FAILSAFES **F-44/F-45**. Gates: mobile tsc 0 · vitest **292/292**; website tsc 0 · lint 0 ·
+  vitest **164/164**. **Next: owner device round = `mobile/TESTING.md` U-52-1..5 (sign-in → link →
+  synced badge → second-device restore → web rename/remove) + U-51-1..5 from the earlier round
+  still pending.**
 
 **2026-09-29 — CONTROL PANEL SNAG ROUND 2: SIX FIXES COMMITTED (`cc8f671`→`fdb0941`), ONE
 CONCERN PER COMMIT, ALL JS-ONLY → SAME-VERSION OTA (3.2.7/60 stays, no APK).** Owner snags
