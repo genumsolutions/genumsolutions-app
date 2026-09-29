@@ -1,13 +1,20 @@
 // CarProfileCard — the per-device profile surface for the Connections Hub
-// (owner ⑨⑩): this car's stable identity, saved-router mirror, Wi-Fi history
-// (names only) and the smart-link auto-join toggle (owner ③ — user-controlled).
-// The profile lives in DevicePrefs via useControlHub (persistPrefs); this card
-// renders it read-only-ish except the toggle, which is the user's control knob
-// for "send saved router on car selection (with strength), else own AP".
+// (owner ⑨⑩, elaborated this round): this car's stable identity, the
+// last-saved drive settings the profile will restore (mode / speed / steer /
+// trim / joystick — exactly what syncs to the user's account and comes back
+// on any phone), saved-router mirror, Wi-Fi history (names only) and the
+// smart-link auto-join toggle (owner ③).
+//
+// The profile lives in DevicePrefs via useControlHub (persistPrefs), which
+// now also mirrors every save to the user's cloud `car_profiles` row — the
+// sync badge reports that mirror's state. Values are edited where they
+// belong (drive deck / WiFi panel / Router settings); this card shows what
+// will be restored and carries the user knobs that are not drive inputs.
 import React from "react";
 import { Switch, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { DevicePrefs } from "./types";
+import type { ProfileSyncState } from "../../services/carProfileService";
 
 export type CarProfileCardProps = {
   /** Stable profile key — `fw:<id>` / BT MAC / `wifi:<identity>`. */
@@ -23,7 +30,60 @@ export type CarProfileCardProps = {
   /** Current network the car reports (router ssid or null = own AP). */
   staSsid: string | null;
   apName: string | null;
+  /** Cloud mirror state for this profile (null = no attempt yet). */
+  profileSync?: ProfileSyncState | null;
+  /** Resolved display name of the saved mode (catalogue-resolved). */
+  modeName?: string | null;
 };
+
+function SyncBadge({ sync }: { sync: ProfileSyncState | null | undefined }) {
+  if (!sync) return null;
+  if (sync.state === "synced") {
+    return (
+      <View className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5">
+        <Text className="text-[10px] font-bold text-emerald-700">
+          synced to account
+        </Text>
+      </View>
+    );
+  }
+  if (sync.state === "adopted") {
+    return (
+      <View className="ml-auto rounded-full bg-sky-100 px-2 py-0.5">
+        <Text className="text-[10px] font-bold text-sky-700">
+          restored from account
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View className="ml-auto rounded-full bg-amber-100 px-2 py-0.5">
+      <Text className="text-[10px] font-bold text-amber-700">
+        saved on this phone
+      </Text>
+    </View>
+  );
+}
+
+function SettingRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View className="flex-row items-center gap-2">
+      <Feather name={icon} size={11} color="#64748b" />
+      <Text className="w-16 text-xs font-bold text-navy">{label}</Text>
+      <Text numberOfLines={1} className="flex-1 text-xs text-ink">
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 export function CarProfileCard({
   profileKey,
@@ -34,11 +94,14 @@ export function CarProfileCard({
   carId,
   staSsid,
   apName,
+  profileSync,
+  modeName,
 }: CarProfileCardProps) {
   const routers = savedPrefs?.savedRouters ?? [];
   const history = savedPrefs?.wifiHistory ?? [];
   const onRouter = !!staSsid;
   const networkName = staSsid || apName || null;
+  const signedIn = profileSync?.state !== "offline";
 
   return (
     <View className="mt-3 rounded-xl border border-line bg-surface p-4">
@@ -62,6 +125,7 @@ export function CarProfileCard({
         )}
       </View>
 
+      {/* Identity — stable across renames and across BT/WiFi links. */}
       <View className="mt-3 gap-1.5">
         <View className="flex-row items-start gap-2">
           <Text className="w-20 text-xs font-bold text-navy">Car</Text>
@@ -89,6 +153,68 @@ export function CarProfileCard({
               {networkName}
             </Text>
           </View>
+        )}
+      </View>
+
+      {/* Last-saved drive settings — what sync restores on the next link.
+          Mode-specific: steer/trim rows only render for cars that use them
+          (2WD1M servo steer; 4WD4M trim; self-balance shows mode + speed). */}
+      <View className="mt-3 rounded-lg bg-slate-50 p-2.5">
+        <View className="flex-row items-center gap-1">
+          <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+            Last saved on this car
+          </Text>
+          <View className="ml-auto">
+            <SyncBadge sync={profileSync} />
+          </View>
+        </View>
+        <View className="mt-2 gap-1.5">
+          <SettingRow
+            icon="zap"
+            label="Mode"
+            value={modeName || savedPrefs?.modeId || "—"}
+          />
+          <SettingRow
+            icon="activity"
+            label="Speed"
+            value={
+              savedPrefs?.speed != null ? `${savedPrefs.speed} / 255` : "—"
+            }
+          />
+          {(savedPrefs?.steerLimit != null && savedPrefs.steerLimit !== 90) ||
+          modeName === "2WD1M" ? (
+            <SettingRow
+              icon="move"
+              label="Steer"
+              value={
+                savedPrefs?.steerLimit != null
+                  ? `${savedPrefs.steerLimit}°`
+                  : "—"
+              }
+            />
+          ) : null}
+          {savedPrefs?.trim != null && savedPrefs.trim !== 0 ? (
+            <SettingRow
+              icon="sliders"
+              label="Trim"
+              value={`${savedPrefs.trim > 0 ? "+" : ""}${savedPrefs.trim}`}
+            />
+          ) : null}
+          <SettingRow
+            icon="git-merge"
+            label="Control"
+            value={
+              savedPrefs?.useJoystick
+                ? `Joystick · ${savedPrefs.joystickLayout ?? "dual"}`
+                : "D-pad"
+            }
+          />
+        </View>
+        {!signedIn && (
+          <Text className="mt-2 text-[11px] leading-4 text-amber-700">
+            Sign in to mirror this profile to your account — it then restores
+            automatically on any phone that links this car.
+          </Text>
         )}
       </View>
 
