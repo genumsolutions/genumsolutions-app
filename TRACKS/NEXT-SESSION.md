@@ -1,4 +1,20 @@
-# NEXT SESSION — genumsolutions-app (2026-09-29: car profiles everywhere; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-29: control panel round 3; current release 3.2.7/60)
+**2026-09-29 (LATEST) — CONTROL PANEL ROUND 3: FALSE CONNECT ERROR KILLED, PORTRAIT BANNER
+FIXED, DIALOG CENTERS ON THE PHONE (`2a8b406` `ca5822d` `f890a2e`, JS-only → same-version OTA
+3.2.7/60, run `36593994243` green).** Owner: red `Cannot read properties of undefined (reading
+'statusCallbacks')` under the verified line while the car answered fine on BT + WiFi; the
+Linked / "Network on the car · own access point" lines broken in portrait only; disconnect
+dialog centered on the page not the phone. ① F-46: `adapters.ts` passed `onStatus` as a bare
+method reference — detached `this` threw on every linkManager adopt/activate subscription (the
+direct hub paths always bound, which is why driving worked); arrow wrappers now bind the call.
+② F-48: ConnectionBanner `Row` rendered body text as a second flex column — portrait crushed
+the long lines, landscape masked it; body text lives in the text column, signal bars are a
+`trailing`. ③ F-47: the disconnect confirm rendered INSIDE the ScrollView so `inset-0` covered
+the scrollable PAGE; it is now a sibling of the ScrollView under a screen-wide root.
+Gates: tsc 0 · vitest 292/292 · prettier clean. F-46 regression test skipped (shared-mock
+typing made it brittle) — rule recorded in FAILSAFES F-46. Owner also asked for the Control
+Panel re-organized per project kind (robo cars, smart home, city…) — NOT started; queued as
+the next design round after the device passes. Device rows: `mobile/TESTING.md` **U-53-1..4**.
 
 **2026-09-29 (LATEST) — CAR PROFILES EVERYWHERE: DB APPLIED LIVE, APP SYNC-ON-CONNECT WIRED,
 WEBSITE ACCOUNT SURFACE (`fb7d1c3` `a2e08cb` `a40be3d`, ALL JS-ONLY → SAME-VERSION OTA
