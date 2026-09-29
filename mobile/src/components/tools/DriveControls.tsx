@@ -28,6 +28,7 @@ import type { ComponentProps } from "react";
 import Slider from "@react-native-community/slider";
 import type { DriveControlsProps, SafetyLimits } from "./types";
 import { DRIVE_CMD_MIN_INTERVAL_MS } from "./controlConstants";
+import { SPEED_MIN } from "../../services/carProtocol";
 import { feedbackTap } from "../../services/hapticsService";
 
 type IconName = ComponentProps<typeof Feather>["name"];
@@ -41,7 +42,12 @@ const DEFAULT_LIMITS: SafetyLimits = {
 };
 
 function clampSpeed(v: number, l: SafetyLimits) {
-  return Math.max(100, Math.min(l.maxSpeed, Math.round(v)));
+  // Owner round 2026-09-29: the speed strip is LINEAR over the window the
+  // car actually accepts — SPEED_MIN (100) from the shared car protocol
+  // (same constant the ESP remote's config.h uses), not a magic number.
+  // What the strip shows is exactly what commitSpeed sends as SPD<n>;
+  // nothing re-scales it between here and the car.
+  return Math.max(SPEED_MIN, Math.min(l.maxSpeed, Math.round(v)));
 }
 function clampSigned(v: number, l: SafetyLimits) {
   return Math.max(-l.maxSignedDrive, Math.min(l.maxSignedDrive, Math.round(v)));
@@ -1066,7 +1072,7 @@ export function DriveControls({
           </View>
           <Slider
             value={speed}
-            minimumValue={100}
+            minimumValue={SPEED_MIN}
             maximumValue={255}
             step={5}
             onValueChange={(v: number) => onSpeed(clampSpeed(v, limits))}
