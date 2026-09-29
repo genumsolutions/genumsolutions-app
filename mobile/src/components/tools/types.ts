@@ -87,6 +87,10 @@ export type DevicePrefs = {
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
+  /** Profiles-sync round: when this record was last saved locally
+      (epoch ms). Feeds last-saved-wins merging against the cloud row's
+      updated_at — the user's most recent save wins, wherever it happened. */
+  savedAt?: number | null;
 };
 
 /** Per-device storage key prefix. */

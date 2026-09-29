@@ -16,6 +16,7 @@
 // =====================================================================
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../config/supabase";
+import { SPEED_MAX, SPEED_MIN } from "./carProtocol";
 import type { DevicePrefs } from "../components/tools/types";
 
 export type WifiHistoryEntry = { ssid: string; lastSeen: number };
@@ -154,6 +155,7 @@ export function toCloudRecord(
     servo: prefs.servo ?? null,
     steer_limit: prefs.steerLimit ?? null,
     trim: prefs.trim ?? null,
+    use_joystick: prefs.useJoystick ?? null,
     joystick_layout: prefs.joystickLayout ?? null,
     last_wifi_url: prefs.lastWifiUrl ?? null,
     auto_join_router: prefs.autoJoinRouter ?? true,
@@ -168,6 +170,185 @@ export function toCloudRecord(
     wifi_history: (prefs.wifiHistory ?? []).slice(0, WIFI_HISTORY_CAP),
     updated_at: new Date().toISOString(),
   };
+}
+
+// =====================================================================
+// Sync engine (this session): "everything the user last saved IS the
+// profile" — one merged DevicePrefs per account per car, written back to
+// cloud on every save and adopted on connect. Merge is per-key
+// last-saved-wins with fresh default detection; NOTHING secret ever
+// leaves the phone (no wifi password, no keys — names only).
+// =====================================================================
+
+/** Settings keys eligible for cloud sync + the sanitizer per key. */
+const SYNCABLE_SETTINGS = {
+  mode_id: (v: unknown): string | null =>
+    typeof v === "string" && v.length > 0 && v.length <= 64 ? v : null,
+  speed: (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null,
+  servo: (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null,
+  steer_limit: (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null,
+  trim: (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null,
+  use_joystick: (v: unknown): boolean | null =>
+    typeof v === "boolean" ? v : null,
+  joystick_layout: (v: unknown): string | null =>
+    typeof v === "string" && v.length > 0 && v.length <= 64 ? v : null,
+  last_wifi_url: (v: unknown): string | null =>
+    typeof v === "string" && v.length <= 500 ? v : null,
+  auto_join_router: (v: unknown): boolean | null =>
+    typeof v === "boolean" ? v : null,
+  bt_ids: (v: unknown): string[] | null =>
+    Array.isArray(v) &&
+    v.length <= 20 &&
+    v.every((s) => typeof s === "string" && s.length > 0 && s.length <= 32)
+      ? (v as string[])
+      : null,
+  saved_routers: (v: unknown): string[] | null =>
+    Array.isArray(v) &&
+    v.length <= WIFI_HISTORY_CAP &&
+    v.every((s) => typeof s === "string" && s.length > 0 && s.length <= 64)
+      ? (v as string[])
+      : null,
+} as const;
+
+/**
+ * Rebuild DevicePrefs from a cloud row's sanitized settings, on top of the
+ * app defaults (base). Unknown keys are dropped (forward-compatible); value
+ * types are enforced so a corrupt/foreign row can never poison the app.
+ */
+export function prefsFromCloudSettings(
+  settings: Record<string, unknown> | null | undefined,
+  base: Omit<DevicePrefs, "address">,
+): DevicePrefs {
+  const s = settings ?? {};
+  return {
+    address: null,
+    name: base.name,
+    modeId: SYNCABLE_SETTINGS.mode_id(s.mode_id) ?? base.modeId,
+    speed: SYNCABLE_SETTINGS.speed(s.speed) ?? base.speed,
+    servo: SYNCABLE_SETTINGS.servo(s.servo) ?? base.servo,
+    steerLimit: SYNCABLE_SETTINGS.steer_limit(s.steer_limit) ?? base.steerLimit,
+    trim: SYNCABLE_SETTINGS.trim(s.trim) ?? base.trim,
+    useJoystick:
+      SYNCABLE_SETTINGS.use_joystick(s.use_joystick) ?? base.useJoystick,
+    joystickLayout:
+      SYNCABLE_SETTINGS.joystick_layout(s.joystick_layout) ??
+      base.joystickLayout,
+    fullscreen: base.fullscreen,
+    lastWifiSsid: base.lastWifiSsid ?? null,
+    savedRouters:
+      SYNCABLE_SETTINGS.saved_routers(s.saved_routers) ??
+      base.savedRouters ??
+      [],
+    uniqueId: base.uniqueId ?? null,
+    btIds: SYNCABLE_SETTINGS.bt_ids(s.bt_ids) ?? base.btIds ?? [],
+    wifiHistory: base.wifiHistory ?? [],
+    lastWifiUrl:
+      SYNCABLE_SETTINGS.last_wifi_url(s.last_wifi_url) ??
+      base.lastWifiUrl ??
+      null,
+    autoJoinRouter:
+      SYNCABLE_SETTINGS.auto_join_router(s.auto_join_router) ??
+      base.autoJoinRouter ??
+      true,
+  } as DevicePrefs;
+}
+
+/** True when a local prefs record still carries its fresh defaults — i.e.
+    the user has never meaningfully customized this car on this device.
+    Used to decide whether a cloud profile should adopt over it. Pure. */
+export function isFreshDefaultPrefs(prefs: DevicePrefs | null): boolean {
+  if (!prefs) return true;
+  const meaningfulRouters = (prefs.savedRouters ?? []).length > 0;
+  const meaningfulHistory = (prefs.wifiHistory ?? []).length > 0;
+  const meaningfulBt = (prefs.btIds ?? []).length > 0;
+  return (
+    prefs.speed === 170 &&
+    prefs.servo === 90 &&
+    prefs.steerLimit === 90 &&
+    prefs.trim === 0 &&
+    prefs.useJoystick === false &&
+    prefs.joystickLayout === "dual" &&
+    prefs.modeId == null &&
+    !meaningfulRouters &&
+    !meaningfulHistory &&
+    !meaningfulBt
+  );
+}
+
+export type MergedCarProfile = {
+  /** The merged, applied DevicePrefs (cloud wins per-key when newer). */
+  prefs: DevicePrefs;
+  /** Whether the merged record differs from the local one (needs persist). */
+  changed: boolean;
+  /** "cloud" = cloud row won (newer), "local" = local prefs kept. */
+  source: "cloud" | "local";
+};
+
+/** Last cloud-mirror attempt for the current car profile (UI badge state). */
+export type ProfileSyncState =
+  | { state: "synced"; at: number }
+  | { state: "adopted"; at: number }
+  | { state: "offline" };
+
+/**
+ * Merge one cloud profile into the local prefs record for the same car.
+ * Semantics (owner spec): the user's LAST-SAVED values win per key — the
+ * cloud row's updated_at vs the local record's savedAt decides whose
+ * "last save" is newer; a fresh local default always adopts the cloud
+ * profile (first link on a new phone must restore the car). Values are
+ * clamped into the ranges the car accepts (speed 100..255 linear,
+ * servo/steer 0..180, trim ±100). Pure.
+ */
+export function mergeCloudProfile(
+  cloud: CarProfileCloudRecord,
+  local: DevicePrefs | null,
+  base: Omit<DevicePrefs, "address">,
+): MergedCarProfile {
+  const fromCloud = prefsFromCloudSettings(cloud.settings, base);
+  // Carry local-only display bits the cloud row does not own.
+  fromCloud.name = cloud.car_name || local?.name || base.name;
+  fromCloud.address = local?.address ?? null;
+  fromCloud.lastWifiSsid = local?.lastWifiSsid ?? fromCloud.lastWifiSsid;
+
+  const cloudTime = Date.parse(cloud.updated_at || "") || 0;
+  const localTime = local?.savedAt ?? 0;
+  const fresh = isFreshDefaultPrefs(local);
+  const cloudWins = fresh || cloudTime > localTime;
+
+  const merged = cloudWins ? fromCloud : { ...local! };
+  if (merged.speed != null) {
+    merged.speed = Math.max(
+      SPEED_MIN,
+      Math.min(SPEED_MAX, Math.round(merged.speed)),
+    );
+  }
+  if (merged.servo != null) {
+    merged.servo = Math.max(0, Math.min(180, Math.round(merged.servo)));
+  }
+  if (merged.steerLimit != null) {
+    merged.steerLimit = Math.max(
+      0,
+      Math.min(180, Math.round(merged.steerLimit)),
+    );
+  }
+  if (merged.trim != null) {
+    merged.trim = Math.max(-100, Math.min(100, Math.round(merged.trim)));
+  }
+  if (localTime > 0 && !cloudWins) {
+    merged.savedAt = localTime;
+  } else if (cloudTime > 0) {
+    merged.savedAt = cloudTime;
+  }
+
+  const before: DevicePrefs = local ?? fromCloud;
+  const changed =
+    JSON.stringify({ ...merged, savedAt: 0 }) !==
+    JSON.stringify({ ...before, savedAt: 0 });
+  return { prefs: merged, changed, source: cloudWins ? "cloud" : "local" };
 }
 
 const CACHE_KEY = "genum-car-profiles-v1";
