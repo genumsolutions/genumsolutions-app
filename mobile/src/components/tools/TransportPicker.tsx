@@ -103,6 +103,24 @@ const CAPABILITY_LABEL: Array<[TransportCapability, string]> = [
   ["ota", "Firmware"],
 ];
 
+/**
+ * PRIMARY methods (owner 2026-09-29): only these are selectable today. Every
+ * other registered method renders dimmed with a "Coming Soon" tag — its ⓘ
+ * help window stays fully readable, but picking it can never start a link
+ * and cannot be dialled even where `isSupported()` would say yes. The car
+ * access point + SPP are the two verified paths; the home-router (STA)
+ * shape joins this list only after SPP + AP are confirmed on the device.
+ */
+const PRIMARY_METHODS: ReadonlySet<TransportId> = new Set<TransportId>([
+  "bt-classic",
+  "wifi-ap-ws",
+]);
+
+/** A method the user may actually pick and dial right now. */
+function isSelectable(t: Transport): boolean {
+  return PRIMARY_METHODS.has(t.id) && t.isSupported();
+}
+
 const STATUS_META: Record<TransportStatus, { label: string; tint: string }> = {
   idle: { label: "Not connected", tint: "#64748b" },
   connecting: { label: "Connecting…", tint: "#0284c7" },
@@ -133,19 +151,19 @@ function MethodOption({
   onHelp: (t: Transport) => void;
 }) {
   const meta = STATUS_META[status];
-  const supported = transport.isSupported();
+  const selectable = isSelectable(transport);
   // A compact row inside the dropdown: label, status, and a small ⓘ icon.
   return (
     <View
       className={`mb-1.5 flex-row items-center gap-2 rounded-lg border px-2.5 py-2 ${
         active ? "border-sky-500 bg-sky-500/10" : "border-line bg-card"
-      } ${supported ? "" : "opacity-60"}`}
+      } ${selectable ? "" : "opacity-60"}`}
     >
       <Pressable
         onPress={() => onSelect(transport.id)}
-        disabled={!supported}
+        disabled={!selectable}
         accessibilityRole="radio"
-        accessibilityState={{ selected: active, disabled: !supported }}
+        accessibilityState={{ selected: active, disabled: !selectable }}
         accessibilityLabel={`${transport.label}. ${meta.label}`}
         className="min-w-0 flex-1 flex-row items-center gap-2"
       >
@@ -165,9 +183,9 @@ function MethodOption({
           {transport.label}
         </Text>
         {active ? <StatusDot status={status} /> : null}
-        {!supported ? (
+        {!selectable ? (
           <Text className="shrink-0 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-            Roadmap
+            Coming Soon
           </Text>
         ) : null}
       </Pressable>
@@ -275,11 +293,12 @@ function MethodHelpModal({
                 ))}
               </>
             ) : null}
-            {!transport.isSupported() ? (
+            {!isSelectable(transport) ? (
               <View className="mt-3 flex-row gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2">
                 <Feather name="clock" size={12} color="#d97706" />
                 <Text className="flex-1 text-[11px] font-bold leading-4 text-amber-700 dark:text-amber-400">
-                  {transport.roadmapNote ?? "Not available on this build yet."}
+                  {transport.roadmapNote ??
+                    "Coming Soon — this method is registered but not opened for selection yet. Classic Bluetooth (SPP) and the car's access point are the verified paths; more methods unlock after they are proven on the car."}
                 </Text>
               </View>
             ) : null}
@@ -457,13 +476,18 @@ export function TransportPicker({
     (id: TransportId) => {
       const t = transports.find((x) => x.id === id);
       if (!t) return;
+      // PRIMARY-method gate (owner 2026-09-29): only bt-classic + wifi-ap-ws
+      // are selectable today. A gated method never becomes the picked method
+      // and never dials; its ⓘ window (on the row) stays the way to read
+      // about it. Keeps "Coming Soon" rows from opening half-working
+      // connection steps below the dropdown.
+      if (!isSelectable(t)) return;
       setDevices(null);
       setError(null);
       setMenuOpen(false);
       // Remember the choice first, so its connection steps (address box, scan)
       // show immediately — the user chose it, so its UI is what they need.
       setPickedId(id);
-      if (!t.isSupported()) return;
       // A device-driven method (Bluetooth) is NOT dialled on selection: the car
       // is only reachable at an address the user has to pick from a scan, and
       // connecting blind just raised "Pick a car from the Bluetooth list" as if
@@ -482,7 +506,7 @@ export function TransportPicker({
   );
 
   const onScan = React.useCallback(() => {
-    if (!selected?.scan) return;
+    if (!selected?.scan || !isSelectable(selected)) return;
     void run(async () => {
       const found = await selected.scan!();
       setDevices(found);
@@ -494,7 +518,7 @@ export function TransportPicker({
 
   const onConnectDevice = React.useCallback(
     (d: DiscoveredDevice) => {
-      if (!selected) return;
+      if (!selected || !isSelectable(selected)) return;
       // Name rides along so a screen-side connect (SPP bridge) can label the
       // car without re-reading this mutable scan list.
       void run(() =>
@@ -627,8 +651,11 @@ export function TransportPicker({
           </Text>
           <Pressable
             onPress={() => onSelect(selected ? selected.id : "wifi-ap-ws")}
-            disabled={busy}
+            disabled={busy || (selected ? !isSelectable(selected) : false)}
             accessibilityRole="button"
+            accessibilityState={{
+              disabled: busy || (selected ? !isSelectable(selected) : false),
+            }}
             className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 disabled:opacity-50"
           >
             {busy ? (
