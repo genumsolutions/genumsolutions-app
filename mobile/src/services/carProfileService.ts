@@ -344,7 +344,10 @@ export function mergeCloudProfile(
     merged.savedAt = cloudTime;
   }
 
-  const before: DevicePrefs = local ?? fromCloud;
+  // No local record? Then "changed" means: the cloud row differs from the
+  // app's factory defaults (i.e. adoption actually restores something).
+  const before: DevicePrefs =
+    local ?? prefsFromCloudSettings({} as Record<string, unknown>, base);
   const changed =
     JSON.stringify({ ...merged, savedAt: 0 }) !==
     JSON.stringify({ ...before, savedAt: 0 });
