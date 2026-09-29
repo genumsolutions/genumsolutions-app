@@ -1,5 +1,16 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-09-29 (latest) — CONTROL PANEL ROUND 3 (`2a8b406`→`f890a2e`, three fixes, JS-only →
+> same-version OTA 3.2.7/60, run `36593994243` green): false `statusCallbacks of undefined`
+> connect error killed (F-46 — adapters passed service methods DETACHED, `this` was undefined;
+> direct hub paths always bound, which is why the car drove fine anyway) · ConnectionBanner rows
+> keep body text INSIDE the text column (F-48 — portrait split the Car / Network lines into
+> crushed columns; landscape hid it) · disconnect confirm centers on the PHONE (F-47 — it
+> rendered inside the ScrollView, so inset-0 covered the page). Gates: tsc 0 · vitest 292/292 ·
+> prettier clean. Owner device round: `mobile/TESTING.md` **U-53-1..4** (U-52 + U-51 still
+> open). Queued NEXT design round: re-organize the Control Panel per project KIND (robo cars,
+> smart home, city, …). Resume: `NEXT-SESSION.md` here.
+
 > ✅ **2026-09-29 (latest) — CAR PROFILES EVERYWHERE (`fb7d1c3`→`a40be3d`, JS-only → same-version
 > OTA 3.2.7/60): `car_profiles` table APPLIED LIVE (probe `200 []`) · app sync engine wired
 > (pull-on-link / push-on-save, last-saved-wins; was dead code) · Car Profile card elaborated
