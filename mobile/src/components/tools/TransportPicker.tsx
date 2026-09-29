@@ -107,13 +107,16 @@ const CAPABILITY_LABEL: Array<[TransportCapability, string]> = [
  * PRIMARY methods (owner 2026-09-29): only these are selectable today. Every
  * other registered method renders dimmed with a "Coming Soon" tag — its ⓘ
  * help window stays fully readable, but picking it can never start a link
- * and cannot be dialled even where `isSupported()` would say yes. The car
- * access point + SPP are the two verified paths; the home-router (STA)
- * shape joins this list only after SPP + AP are confirmed on the device.
+ * and cannot be dialled even where `isSupported()` would say yes. SPP + the
+ * car access point are the proven paths; R4-3 (owner go 2026-09-29) adds the
+ * home-router (STA) shape: the transport + adapter already existed and the
+ * U-51 device round verified SPP + AP on the car, which was this gate's
+ * stated condition for unlocking STA. It stays gated on `isSupported()`.
  */
 const PRIMARY_METHODS: ReadonlySet<TransportId> = new Set<TransportId>([
   "bt-classic",
   "wifi-ap-ws",
+  "wifi-sta-ws",
 ]);
 
 /** A method the user may actually pick and dial right now. */
