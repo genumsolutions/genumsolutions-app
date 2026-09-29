@@ -218,35 +218,46 @@ export function CarProfileCard({
         )}
       </View>
 
-      {/* Saved routers — names only; the car stays the source of truth. */}
-      <View className="mt-3">
-        <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
-          Saved routers ({routers.length})
-        </Text>
-        {routers.length === 0 ? (
-          <Text className="mt-1 text-xs text-muted">
-            None stored on this car yet — find one in Router settings.
+      {/* R4-1 (owner): router sections are STA-flavored — on an AP link (or a
+          Bluetooth link) they describe a network shape the car is NOT using,
+          which read as "unrelated things about other routers". They render
+          ONLY when the car is actually on a router (staSsid) or when there is
+          no live method-flavor to show (idle), so the profile card matches the
+          CURRENT connection method exactly. The smart-link toggle below stays
+          visible in every state: it controls what the car does NEXT, not what
+          it is on now. */}
+      {(onRouter || history.length === 0) && (
+        <View className="mt-3">
+          <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+            Saved routers ({routers.length})
           </Text>
-        ) : (
-          <View className="mt-1.5 flex-row flex-wrap gap-1.5">
-            {routers.slice(0, 6).map((n) => (
-              <View key={n} className="rounded-full bg-navy/10 px-2.5 py-1">
-                <Text className="text-[10px] font-semibold text-navy">{n}</Text>
-              </View>
-            ))}
-            {routers.length > 6 && (
-              <View className="rounded-full bg-slate-100 px-2.5 py-1">
-                <Text className="text-[10px] font-semibold text-slate-500">
-                  +{routers.length - 6}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
+          {routers.length === 0 ? (
+            <Text className="mt-1 text-xs text-muted">
+              None stored on this car yet — find one in Router settings.
+            </Text>
+          ) : (
+            <View className="mt-1.5 flex-row flex-wrap gap-1.5">
+              {routers.slice(0, 6).map((n) => (
+                <View key={n} className="rounded-full bg-navy/10 px-2.5 py-1">
+                  <Text className="text-[10px] font-semibold text-navy">
+                    {n}
+                  </Text>
+                </View>
+              ))}
+              {routers.length > 6 && (
+                <View className="rounded-full bg-slate-100 px-2.5 py-1">
+                  <Text className="text-[10px] font-semibold text-slate-500">
+                    +{routers.length - 6}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      )}
 
-      {/* Wi-Fi history — names only, newest first. */}
-      {history.length > 0 && (
+      {/* Wi-Fi history — names only, newest first; same method-aware rule. */}
+      {history.length > 0 && onRouter && (
         <View className="mt-3">
           <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
             Wi-Fi history
