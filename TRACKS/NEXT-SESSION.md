@@ -1,7 +1,30 @@
-# NEXT SESSION — genumsolutions-app (2026-09-27: U-48 final snags; current release 3.2.6/59)
+# NEXT SESSION — genumsolutions-app (2026-09-29: Control Panel snag round 2; current release 3.2.7/60)
 
-**U-48 FINAL SNAG ROUND: COMMITTED (`d148457`), PUSHED, CI GREEN, OTA PUBLISHED. One owner
+**2026-09-29 — CONTROL PANEL SNAG ROUND 2: SIX FIXES COMMITTED (`cc8f671`→`fdb0941`), ONE
+CONCERN PER COMMIT, ALL JS-ONLY → SAME-VERSION OTA (3.2.7/60 stays, no APK).** Owner snags
+fixed: ① "Every way the car can be controlled" teaching card removed (`cc8f671`,
+`ConnectionsTeaching.tsx` deleted — the per-method ⓘ windows carry that content; stale U-50
+rows superseded). ② SPP false-error killed (F-40, `7f3420f`): the bridge no longer throws
+"That car is no longer in the scan list. Rescan." — it resolves the scanned device when still
+listed, else dials directly by MAC with the scanned name (`name?` added to
+`TransportConnectOptions`). ③ Primary-method gate (F-41, `6034eaf`): only **SPP + Car access
+point** selectable; the other six rows dimmed **"Coming Soon"**, dial-proof, ⓘ windows intact;
+STA/home-router unlocks after SPP + AP device-verify. ④ Speed fixed (F-42, `90b29ca`): the
+telemetry STATE echo no longer overwrites the user's speed edit (change-guarded via `speedRef`,
+range-clamped 100..255, NAV-aware); strips linear 100→255, `DriveControls` imports `SPEED_MIN`
+from the shared protocol — shown = sent `SPD<n>`. ⑤ FAB rotation fix (F-43, `a967513`):
+persisted slot re-clamped into the visible window on every `useWindowDimensions()` change — a
+portrait-dragged slot can no longer park the FAB off-screen in landscape. ⑥ Control Panel
+polish (`fdb0941`): hub connect errors render with the connection feedback cluster above the
+picker; About spacing matches section rhythm. Gates: tsc 0 · vitest **285/285** · prettier +
+lint-hook clean. `app.json` untouched. **Next: OTA Only run green (release-guard checked first:
+live manifest 3.2.7/60 == `app.json`) → owner device round = `mobile/TESTING.md` U-51-1..5**
+(paired-car connect · Coming-Soon rows · speed holds mid-drive · FAB survives rotation · error
+placement). U-49/U-50 device rows still open.
+
+**Previous round — U-48 FINAL SNAG ROUND: COMMITTED (`d148457`), PUSHED, CI GREEN, OTA PUBLISHED. One owner
 action left — the device pass.**
+
 1. ~~`supabase functions deploy site-content`~~ — **DONE.** Deployed to v4 and verified live
    (`get` no auth → 200, `upsert` no auth → 401, `upsert` bad token → 401), so the app's admin
    "save site content" works end to end. **Must use `--no-verify-jwt`** (public `get` + privileged
@@ -17,21 +40,22 @@ action left — the device pass.**
 4. **Owner device pass** (the only remaining item): pull-to-refresh on Home/Printing/Tools ·
    double-tap on "Add to build list" adds exactly once · cart "+" lands on the right quantity ·
    admin site-content save succeeds.
-Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 + `guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`.
-Gates at handoff: app tsc 0 · vitest 205/205 · prettier clean · web tsc/lint/vitest 151/151/build.
+   Detail: `guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md` §6–§7 + `guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`.
+   Gates at handoff: app tsc 0 · vitest 205/205 · prettier clean · web tsc/lint/vitest 151/151/build.
 
 **DONE 2026-09-27 — U-45 PHASE 2 APP LINKER + U-47 OWNER ROUNDS v1→v7 (app `fb3d118` → `4f8ed03`; all pushed).**
 Full logs: `guide/SESSION-2026-09-27-U47-OWNER-ROUND.md` (per-version detail + do-not-regress list)
-+ `guide/NEXT-SESSION-2026-09-27.md` (carry-over queue). Shipped app-side: project↔component linker
-mirror (detail strips + ProjectTab linker card via the `save_project_components` RPC, vitest 203/203
-at that point); U-47 six-category Control Panel + remotes (Smart Dustbin Fill/Lid, Remote Controller
-RSSI — placeholder sensorData until a real firmware protocol exists), app-wide CollectionContext +
-collectionService hearts, minimal square ProductCards + `productMedia` fallback imagery, shared
-`applyComponentsScope` (+ regression tests), admin single-row tabs + swipe-sync guard + overflow
-sweeps, home snap carousels + electronic-only Shop strip, PrintingScreen store + filter stack,
-CartHeader + cart web-parity rebuild, menu cleanup, biometric re-arm guard + auto-heal (v7) with the
-Security switch always rendered for staff. Gates every round: tsc 0 · vitest 205/205 · prettier ✓.
-Version 3.2.5→3.2.6 (58→59) bump pushed via release.yml.
+
+- `guide/NEXT-SESSION-2026-09-27.md` (carry-over queue). Shipped app-side: project↔component linker
+  mirror (detail strips + ProjectTab linker card via the `save_project_components` RPC, vitest 203/203
+  at that point); U-47 six-category Control Panel + remotes (Smart Dustbin Fill/Lid, Remote Controller
+  RSSI — placeholder sensorData until a real firmware protocol exists), app-wide CollectionContext +
+  collectionService hearts, minimal square ProductCards + `productMedia` fallback imagery, shared
+  `applyComponentsScope` (+ regression tests), admin single-row tabs + swipe-sync guard + overflow
+  sweeps, home snap carousels + electronic-only Shop strip, PrintingScreen store + filter stack,
+  CartHeader + cart web-parity rebuild, menu cleanup, biometric re-arm guard + auto-heal (v7) with the
+  Security switch always rendered for staff. Gates every round: tsc 0 · vitest 205/205 · prettier ✓.
+  Version 3.2.5→3.2.6 (58→59) bump pushed via release.yml.
 
 **DEVICE-VERIFY (owner — the FIN-36 gate; pairs with the web menu checks):** reopen the app ×2 on
 3.2.6/59: ① biometric toggle switchable + no card deflect on resume; ② admin tabs single-row, no
@@ -376,7 +400,7 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
 3. 🔜 **FIN-36:** version-defining commits — **STALE at 3.2.5 (2026-09-22 staging); re-stage
    after the U-47 device pass:** app **`v3.2.6` → `4f8ed03`** (the bump commit), website
    **`website-v3.2.6` → the current fallback-sync bot commit**, then `guide/FIN-36-TAGS.sh
-   --dry-run` before cutting. Firmware targets unchanged (v1.6.6 / v1.0.10 / v1.8.3 / v1.2.5).
+--dry-run` before cutting. Firmware targets unchanged (v1.6.6 / v1.0.10 / v1.8.3 / v1.2.5).
    Cut ONLY after the device gate passes.
 4. 🌉 **ECOSYSTEM UNIFICATION:** P1–P5 DONE + pushed (see guide/ARCHITECTURE.md);
    W-6 + W-3 live; P3 machine review 27 PASS · 0 SNAG · 0 FAIL · 2 DEFER (owner visual
@@ -448,12 +472,12 @@ success guards sound; payment deep-link states present.
 Read-only audits done. App-side actions for today:
 
 **DEAD (remove, 0 importers verified by audit):**
-  src/components/AppUpdateCard.tsx ; src/components/tools/Joystick.tsx
-  src/services/orderService.ts:196/208/220/232 (admin fns dup of adminService
-  394/403/522/531 �?" delete dup set, keep adminService)
-  src/services/settingsService.ts:58/93/104/141/147 orphans
-  Dead env EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID refs; unused
-  EXPO_PUBLIC_EAS_PROJECT_ID refs.
+src/components/AppUpdateCard.tsx ; src/components/tools/Joystick.tsx
+src/services/orderService.ts:196/208/220/232 (admin fns dup of adminService
+394/403/522/531 �?" delete dup set, keep adminService)
+src/services/settingsService.ts:58/93/104/141/147 orphans
+Dead env EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID refs; unused
+EXPO_PUBLIC_EAS_PROJECT_ID refs.
 
 > **✅ CLOSED by U-48 (2026-09-27).** Every item above was re-verified to have zero references
 > (tests included) immediately before deletion, then deleted. Gates after: tsc 0 · vitest 205/205 ·

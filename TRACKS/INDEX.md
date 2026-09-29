@@ -1,5 +1,12 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-09-29 — CONTROL PANEL SNAG ROUND 2 (`cc8f671`→`fdb0941`, six commits, JS-only →
+> same-version OTA 3.2.7/60): teaching card removed · SPP false "no longer in the scan list"
+> killed (F-40) · methods gated to SPP + Car AP, rest "Coming Soon" (F-41) · speed echo
+> change-guarded + linear 100→255 (F-42) · FAB rotation-safe (F-43) · error-placement polish.
+> Gates: tsc 0 · vitest 285/285. Owner device round: `mobile/TESTING.md` **U-51-1..5**
+> (U-49/U-50 device rows still open). Resume point: `NEXT-SESSION.md` in this folder.
+
 > ✅ **2026-09-27 — U-48 FINAL SNAG ROUND: COMMITTED + PUSHED (`d148457`), CI GREEN, and the OTA
 > bundle is PUBLISHED.** App-side wins: admin save-busy + re-entrancy guards
 > (`saveSaving`/`contentSaving`), pull-to-refresh on Home/Printing/Tools, pressed feedback +
