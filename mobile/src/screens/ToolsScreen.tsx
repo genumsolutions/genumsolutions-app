@@ -494,6 +494,13 @@ export function ToolsScreen() {
               feedbackTap();
               hub.setAutoJoinRouter(v);
             }}
+            profileSync={hub.profileSync}
+            modeName={
+              hub.savedPrefs?.modeId
+                ? (hub.carModes.find((m) => m.id === hub.savedPrefs?.modeId)
+                    ?.name ?? null)
+                : null
+            }
             carLabel={
               sppStatus === "connected"
                 ? deviceName || null
