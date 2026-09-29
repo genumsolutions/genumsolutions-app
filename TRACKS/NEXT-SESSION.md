@@ -1,4 +1,15 @@
 # NEXT SESSION — genumsolutions-app (2026-09-29: control panel round 3; current release 3.2.7/60)
+
+**PLANNED (owner decisions captured 2026-09-29) — CONTROL PANEL PER-CATEGORY DECKS, UI-first.
+Plan: `guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md`.** Owner: the 7 categories stay SEPARATE
+(kinds are visual labels only) · robocar deck untouched (gold standard) · every OTHER category
+gets its OWN landscape-only deck in the Remote window showing only its own things (never the
+shared SensorGrid fallback) · build the full UI/display now, operations later. Design covers:
+kind headers (Vehicles & Controllers / Stations & Environments), five dedicated decks
+(SmartHome/Farm/City/Dustbin/Handheld) on a shared deck kit, honest "Ready for firmware" chips
+for not-yet-wired controls, parity tests pinning zero cross-category leakage. Rollout: deck kit
++ SmartHomeDeck pilot → owner screenshot approval → remaining decks → kind headers. Owner open
+checks in plan §6 (label wording, tile defaults, chip wording). NOT started in code.
 **2026-09-29 (LATEST) — CONTROL PANEL ROUND 3: FALSE CONNECT ERROR KILLED, PORTRAIT BANNER
 FIXED, DIALOG CENTERS ON THE PHONE (`2a8b406` `ca5822d` `f890a2e`, JS-only → same-version OTA
 3.2.7/60, run `36593994243` green).** Owner: red `Cannot read properties of undefined (reading
