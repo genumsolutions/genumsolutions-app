@@ -10,6 +10,52 @@
 
 ---
 
+## U-53 round — Control Panel round 3: false statusCallbacks error, portrait banner rows, dialog on the phone (2026-09-29, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner round: ① red `Cannot read properties of undefined (reading 'statusCallbacks')` just below
+> the verified line when connected (car answered fine on BT + WiFi — the error was a parallel
+> path, not the link); ② the Linked / "Network on the car · own access point" lines broken in
+> PORTRAIT only (lots of dead space); ③ the disconnect dialog centered on the page, not the
+> phone screen. Fixes = FAILSAFES **F-46/F-47/F-48**; commits `2a8b406` · `ca5822d` · `f890a2e`;
+> JS-only → same-version OTA 3.2.7/60 (run `36593994243` green). Gates: tsc 0 · vitest
+> **292/292** · prettier clean.
+
+### U-53-1 — the red statusCallbacks error is dead (F-46)
+
+- [ ] Connect via **SPP** → wait for the car to answer. The banner shows **Linked & verified**
+      with **NO red error line** under it — at any time, including right after connect and after
+      switching methods.
+- [ ] Repeat over the **Car access point (WiFi)** — same: verified, never the red
+      `statusCallbacks` message.
+- [ ] Leave the panel open ~2 min mid-drive: no red line may appear late (the throw used to
+      surface on the manager's re-subscribe too).
+
+### U-53-2 — banner rows are tidy in PORTRAIT (F-48)
+
+- [ ] Connected (BT or WiFi), **portrait**: the **Car** row and the **Network on the car** row
+      each fill the card width — label on top, value below, NO big empty gap, no squeezed text.
+- [ ] The **Signal** row (WiFi link) keeps its bars at the RIGHT edge; the %/dBm text stays in
+      the main column.
+- [ ] **Landscape regression:** everything still reads correctly (the fix must not break the
+      orientation that already looked fine).
+
+### U-53-3 — the disconnect dialog centers on the PHONE (F-47)
+
+- [ ] Connected → tap **Disconnect**: the confirm dialog appears in the MIDDLE of the phone
+      screen — also when the page is scrolled to the top AND to the bottom.
+- [ ] Cancel and Disconnect buttons both work; cancelling leaves the link alive.
+- [ ] **Landscape regression:** dialog still centers and is reachable in both orientations.
+
+### U-53-4 — nothing else moved (owner: panel "not in sync / not organized")
+
+- [ ] The panel's sections still read in order: category → detail card → Connections (banner,
+      picker) → Car Profile → About. No content was removed or re-ordered this round.
+- [ ] The BIGGER request — re-organizing the Control Panel per project kind (robo cars, smart
+      home, city, …) — is NOT in this build; it is queued as its own design round. Do not test
+      for it here.
+
+---
+
 ## U-52 round — Car profiles everywhere: DB live, sync-on-connect, account surface (2026-09-29, IMPLEMENTED — needs SIGNED-IN device round)
 
 > Owner round: "car profiles and their data to the database from all app and websites… gets sync
