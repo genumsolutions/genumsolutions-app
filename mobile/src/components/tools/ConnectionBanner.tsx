@@ -67,14 +67,22 @@ function Row({
   label,
   value,
   sub,
+  trailing,
   children,
 }: {
   icon: React.ComponentProps<typeof Feather>["name"];
   label: string;
   value?: React.ReactNode;
   sub?: React.ReactNode;
+  /** Right-aligned accessory that is NOT body text (e.g. signal bars). */
+  trailing?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  // F-48: body content (children) lives INSIDE the flex-1 text column, not
+  // beside it. As a sibling column the Car/Network lines split the row in
+  // two — in portrait the long line was crushed into a sliver next to a
+  // mostly-empty label column (the "lots of space" the owner saw), while
+  // landscape's extra width accidentally hid the bug.
   return (
     <View className="flex-row items-center gap-3 border-t border-line/70 py-2.5">
       <View className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-mist">
@@ -86,8 +94,9 @@ function Row({
         </Text>
         {value}
         {sub}
+        {children}
       </View>
-      {children}
+      {trailing}
     </View>
   );
 }
@@ -188,9 +197,8 @@ export function ConnectionBanner({
                   {signal}%{rssi !== null ? ` · ${rssi} dBm` : ""}
                 </Text>
               }
-            >
-              <SignalBars signal={signal} />
-            </Row>
+              trailing={<SignalBars signal={signal} />}
+            />
           ) : null}
         </View>
       ) : null}
