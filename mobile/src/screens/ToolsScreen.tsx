@@ -247,282 +247,293 @@ export function ToolsScreen() {
   }, [handleDisconnect]);
 
   return (
-    <ScrollView
-      className="flex-1 bg-mist"
-      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Header */}
-      <View className="flex-row items-center justify-between">
-        <View className="min-w-0 flex-1">
-          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-            Control Panel
-          </Text>
-          <Text className="mt-2 font-display text-2xl font-bold text-ink">
-            Test &amp; control your projects
-          </Text>
-        </View>
-      </View>
-
-      {/* Category selector */}
-      <View className="mt-5 flex-row flex-wrap gap-2">
-        {categories.map((c) => {
-          const active = c.slug === selectedSlug;
-          return (
-            <Pressable
-              key={c.slug}
-              onPress={() => setSelectedSlug(c.slug)}
-              accessibilityRole="button"
-              accessibilityLabel={`Select category ${c.name}`}
-              accessibilityState={{ selected: active }}
-              className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${active ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Feather
-                name={CATEGORY_ICONS[c.slug] ?? "box"}
-                size={13}
-                color={active ? "#fff" : "#1e3a8a"}
-              />
-              <Text
-                numberOfLines={1}
-                className={`text-xs font-bold ${active ? "text-white" : "text-navy"}`}
-              >
-                {c.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Category detail card */}
-      <View
-        key={category.slug}
-        className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card"
+    // F-47: a flex-1 SCREEN-WIDE root wrapping the ScrollView. The disconnect
+    // confirm used to live INSIDE the ScrollView, so its "absolute inset-0"
+    // mapped to the whole scrollable PAGE (taller than the screen) and the
+    // dialog centered on the page — far below the fold in portrait. Rendered
+    // as a SIBLING of the ScrollView under this root, "inset-0" is the
+    // visible screen and the dialog truly centers on the phone.
+    <View className="flex-1 bg-mist">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        <View className="flex-row items-start">
-          <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-light">
-            <Feather
-              name={CATEGORY_ICONS[category.slug] ?? "box"}
-              size={18}
-              color="#1e3a8a"
-            />
-          </View>
-          <View className="ml-3 min-w-0 flex-1">
-            <Text
-              numberOfLines={1}
-              className="font-display text-lg font-bold text-ink"
-            >
-              {category.name}
-            </Text>
-            <Text
-              numberOfLines={1}
-              className="mt-0.5 text-xs font-semibold text-navy"
-            >
-              {category.tagline}
-            </Text>
-          </View>
-        </View>
-        <Text className="mt-3 text-sm leading-5 text-muted">
-          {category.description}
-        </Text>
-
-        <View className="mt-3 flex-row flex-wrap gap-1.5">
-          {category.hardware.map((h) => (
-            <Text
-              key={h}
-              className="rounded-full bg-mist px-2.5 py-1 text-[10px] font-bold text-navy"
-            >
-              {h}
-            </Text>
-          ))}
-        </View>
-
-        <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
-          {category.capabilities.map((cap) => (
-            <View key={cap} className="flex-row items-center gap-1.5">
-              <Feather name="check-circle" size={12} color="#059669" />
-              <Text className="text-xs font-semibold text-ink">
-                {capabilityLabel(cap)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        <Pressable
-          onPress={() =>
-            navigation.navigate("RemoteControl", { category: category.slug })
-          }
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${category.name} remote window`}
-          className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-3"
-        >
-          <Feather name="target" size={15} color="#fff" />
-          <Text className="text-sm font-black text-white">
-            Open {remoteLabel} · {category.name}
-          </Text>
-          <Feather name="arrow-right" size={15} color="#fff" />
-        </Pressable>
-        <Text className="mt-1.5 text-center text-[11px] text-muted">
-          Drive controls and speed live in the Remote window — this page stays a
-          clean organizer.
-        </Text>
-      </View>
-
-      {/* Connections — the ONE connection surface (owner ①⑥) */}
-      <View className="mt-6">
+        {/* Header */}
         <View className="flex-row items-center justify-between">
           <View className="min-w-0 flex-1">
-            <Text className="text-xs font-black uppercase tracking-widest text-navy">
-              Connections
+            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+              Control Panel
             </Text>
-            <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-              One method at a time — pick it, verify it, drive.
+            <Text className="mt-2 font-display text-2xl font-bold text-ink">
+              Test &amp; control your projects
             </Text>
           </View>
-          {(sppStatus === "connected" || wifiConnected) && (
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowDisconnectConfirm(true);
-              }}
-              className="shrink-0"
-              hitSlop={8}
-            >
-              <Text className="text-sm font-bold text-gold underline">
-                Disconnect
+        </View>
+
+        {/* Category selector */}
+        <View className="mt-5 flex-row flex-wrap gap-2">
+          {categories.map((c) => {
+            const active = c.slug === selectedSlug;
+            return (
+              <Pressable
+                key={c.slug}
+                onPress={() => setSelectedSlug(c.slug)}
+                accessibilityRole="button"
+                accessibilityLabel={`Select category ${c.name}`}
+                accessibilityState={{ selected: active }}
+                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${active ? "bg-navy" : "border border-line bg-card"}`}
+              >
+                <Feather
+                  name={CATEGORY_ICONS[c.slug] ?? "box"}
+                  size={13}
+                  color={active ? "#fff" : "#1e3a8a"}
+                />
+                <Text
+                  numberOfLines={1}
+                  className={`text-xs font-bold ${active ? "text-white" : "text-navy"}`}
+                >
+                  {c.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Category detail card */}
+        <View
+          key={category.slug}
+          className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card"
+        >
+          <View className="flex-row items-start">
+            <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-light">
+              <Feather
+                name={CATEGORY_ICONS[category.slug] ?? "box"}
+                size={18}
+                color="#1e3a8a"
+              />
+            </View>
+            <View className="ml-3 min-w-0 flex-1">
+              <Text
+                numberOfLines={1}
+                className="font-display text-lg font-bold text-ink"
+              >
+                {category.name}
               </Text>
-            </Pressable>
-          )}
-        </View>
-
-        <View className="mt-3">
-          <ConnectionBanner
-            linked={anyLinked}
-            verified={linkVerified}
-            linkLabel={activeLinkLabel}
-            carLabel={
-              sppStatus === "connected"
-                ? deviceName || null
-                : wifiConnected
-                  ? apName
-                  : null
-            }
-            carId={carIdentityId}
-            staSsid={staSsid}
-            apName={apName}
-            signal={telemetry.signal ?? null}
-            rssi={telemetry.rssi ?? null}
-            error={error || (anyLinked ? null : sppStatusMsg)}
-          />
-        </View>
-
-        {sppStatusMsg && sppStatus !== "connected" && !wifiConnected && (
-          <View
-            className={`mt-3 rounded-xl px-4 py-3 ${
-              sppStatus === "error" || sppStatus === "disconnected"
-                ? "bg-red-50 border border-red-200"
-                : "bg-navy/10 border border-navy/20"
-            }`}
-          >
-            <Text
-              numberOfLines={2}
-              className={`text-sm font-bold ${sppStatus === "error" || sppStatus === "disconnected" ? "text-red-600" : "text-navy"}`}
-            >
-              {sppStatusMsg}
-            </Text>
+              <Text
+                numberOfLines={1}
+                className="mt-0.5 text-xs font-semibold text-navy"
+              >
+                {category.tagline}
+              </Text>
+            </View>
           </View>
-        )}
+          <Text className="mt-3 text-sm leading-5 text-muted">
+            {category.description}
+          </Text>
 
-        {/* Hub-level connect errors sit WITH the feedback cluster above the
+          <View className="mt-3 flex-row flex-wrap gap-1.5">
+            {category.hardware.map((h) => (
+              <Text
+                key={h}
+                className="rounded-full bg-mist px-2.5 py-1 text-[10px] font-bold text-navy"
+              >
+                {h}
+              </Text>
+            ))}
+          </View>
+
+          <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
+            {category.capabilities.map((cap) => (
+              <View key={cap} className="flex-row items-center gap-1.5">
+                <Feather name="check-circle" size={12} color="#059669" />
+                <Text className="text-xs font-semibold text-ink">
+                  {capabilityLabel(cap)}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            onPress={() =>
+              navigation.navigate("RemoteControl", { category: category.slug })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${category.name} remote window`}
+            className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-3"
+          >
+            <Feather name="target" size={15} color="#fff" />
+            <Text className="text-sm font-black text-white">
+              Open {remoteLabel} · {category.name}
+            </Text>
+            <Feather name="arrow-right" size={15} color="#fff" />
+          </Pressable>
+          <Text className="mt-1.5 text-center text-[11px] text-muted">
+            Drive controls and speed live in the Remote window — this page stays
+            a clean organizer.
+          </Text>
+        </View>
+
+        {/* Connections — the ONE connection surface (owner ①⑥) */}
+        <View className="mt-6">
+          <View className="flex-row items-center justify-between">
+            <View className="min-w-0 flex-1">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                Connections
+              </Text>
+              <Text className="mt-0.5 text-[11px] leading-4 text-muted">
+                One method at a time — pick it, verify it, drive.
+              </Text>
+            </View>
+            {(sppStatus === "connected" || wifiConnected) && (
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowDisconnectConfirm(true);
+                }}
+                className="shrink-0"
+                hitSlop={8}
+              >
+                <Text className="text-sm font-bold text-gold underline">
+                  Disconnect
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View className="mt-3">
+            <ConnectionBanner
+              linked={anyLinked}
+              verified={linkVerified}
+              linkLabel={activeLinkLabel}
+              carLabel={
+                sppStatus === "connected"
+                  ? deviceName || null
+                  : wifiConnected
+                    ? apName
+                    : null
+              }
+              carId={carIdentityId}
+              staSsid={staSsid}
+              apName={apName}
+              signal={telemetry.signal ?? null}
+              rssi={telemetry.rssi ?? null}
+              error={error || (anyLinked ? null : sppStatusMsg)}
+            />
+          </View>
+
+          {sppStatusMsg && sppStatus !== "connected" && !wifiConnected && (
+            <View
+              className={`mt-3 rounded-xl px-4 py-3 ${
+                sppStatus === "error" || sppStatus === "disconnected"
+                  ? "bg-red-50 border border-red-200"
+                  : "bg-navy/10 border border-navy/20"
+              }`}
+            >
+              <Text
+                numberOfLines={2}
+                className={`text-sm font-bold ${sppStatus === "error" || sppStatus === "disconnected" ? "text-red-600" : "text-navy"}`}
+              >
+                {sppStatusMsg}
+              </Text>
+            </View>
+          )}
+
+          {/* Hub-level connect errors sit WITH the feedback cluster above the
             picker (owner 2026-09-29 UI/UX pass) — they used to render at the
             very bottom of the section, under the profile card, where the
             failure and its message were never on screen together. */}
-        {sppSupported && error && !connected && !wifiConnected && (
-          <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <Text className="text-xs leading-5 text-red-600">{error}</Text>
-          </View>
-        )}
-
-        {/* Reconnect banner — shown when connection drops and auto-reconnect exhausted */}
-        {showSppsRetry && (
-          <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <Text className="text-sm font-bold text-amber-800">
-              Connection lost
-            </Text>
-            <Text className="mt-0.5 text-xs text-amber-600">
-              Reconnect to your car?
-            </Text>
-            <View className="mt-2 flex-row gap-2">
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  void handleSppsRetry();
-                }}
-                className="rounded-full bg-gold px-4 py-1.5"
-                hitSlop={6}
-              >
-                <Text className="text-xs font-bold text-white">Reconnect</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  handleReconnectPromptCancel();
-                }}
-                className="rounded-full border border-line bg-card px-4 py-1.5"
-                hitSlop={6}
-              >
-                <Text className="text-xs font-bold text-muted">Cancel</Text>
-              </Pressable>
+          {sppSupported && error && !connected && !wifiConnected && (
+            <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <Text className="text-xs leading-5 text-red-600">{error}</Text>
             </View>
+          )}
+
+          {/* Reconnect banner — shown when connection drops and auto-reconnect exhausted */}
+          {showSppsRetry && (
+            <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <Text className="text-sm font-bold text-amber-800">
+                Connection lost
+              </Text>
+              <Text className="mt-0.5 text-xs text-amber-600">
+                Reconnect to your car?
+              </Text>
+              <View className="mt-2 flex-row gap-2">
+                <Pressable
+                  onPress={() => {
+                    feedbackTap();
+                    void handleSppsRetry();
+                  }}
+                  className="rounded-full bg-gold px-4 py-1.5"
+                  hitSlop={6}
+                >
+                  <Text className="text-xs font-bold text-white">
+                    Reconnect
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    feedbackTap();
+                    handleReconnectPromptCancel();
+                  }}
+                  className="rounded-full border border-line bg-card px-4 py-1.5"
+                  hitSlop={6}
+                >
+                  <Text className="text-xs font-bold text-muted">Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          <View className="mt-3">
+            <TransportPicker
+              onActivate={onTransportActivate}
+              onDeactivate={onTransportDeactivate}
+            />
           </View>
-        )}
 
-        <View className="mt-3">
-          <TransportPicker
-            onActivate={onTransportActivate}
-            onDeactivate={onTransportDeactivate}
-          />
-        </View>
-
-        <View className="mt-3">
-          <CarProfileCard
-            profileKey={hub.profileKey}
-            savedPrefs={hub.savedPrefs}
-            autoJoinRouter={hub.autoJoinRouter}
-            setAutoJoinRouter={(v) => {
-              feedbackTap();
-              hub.setAutoJoinRouter(v);
-            }}
-            profileSync={hub.profileSync}
-            modeName={
-              hub.savedPrefs?.modeId
-                ? (hub.carModes.find((m) => m.id === hub.savedPrefs?.modeId)
-                    ?.name ?? null)
-                : null
-            }
-            carLabel={
-              sppStatus === "connected"
-                ? deviceName || null
-                : wifiConnected
-                  ? apName
+          <View className="mt-3">
+            <CarProfileCard
+              profileKey={hub.profileKey}
+              savedPrefs={hub.savedPrefs}
+              autoJoinRouter={hub.autoJoinRouter}
+              setAutoJoinRouter={(v) => {
+                feedbackTap();
+                hub.setAutoJoinRouter(v);
+              }}
+              profileSync={hub.profileSync}
+              modeName={
+                hub.savedPrefs?.modeId
+                  ? (hub.carModes.find((m) => m.id === hub.savedPrefs?.modeId)
+                      ?.name ?? null)
                   : null
-            }
-            carId={carIdentityId}
-            staSsid={staSsid}
-            apName={apName}
-          />
+              }
+              carLabel={
+                sppStatus === "connected"
+                  ? deviceName || null
+                  : wifiConnected
+                    ? apName
+                    : null
+              }
+              carId={carIdentityId}
+              staSsid={staSsid}
+              apName={apName}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* About this project — the page now ENDS here (owner 2026-09-29:
+        {/* About this project — the page now ENDS here (owner 2026-09-29:
           the teaching card after it is gone; mt-6 matches the Connections
           section rhythm). */}
-      <View className="mt-6">
-        <ProjectInfo mode={activeMode} categorySlug={category.slug} />
-      </View>
+        <View className="mt-6">
+          <ProjectInfo mode={activeMode} categorySlug={category.slug} />
+        </View>
+      </ScrollView>
 
-      {/* Disconnect confirmation */}
+      {/* Disconnect confirmation — OUTSIDE the ScrollView (F-47), so the
+        overlay fills the visible screen and the dialog centers on the phone. */}
       {showDisconnectConfirm && (
         <>
           <Pressable
@@ -567,6 +578,6 @@ export function ToolsScreen() {
           </View>
         </>
       )}
-    </ScrollView>
+    </View>
   );
 }
