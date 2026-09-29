@@ -28,6 +28,8 @@ const serviceMocks = vi.hoisted(() => {
   return { getUser, upsert, del, order, createClient, client };
 });
 
+import type { DevicePrefs } from "../components/tools/types";
+
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: {
     getItem: vi.fn(async () => null),
@@ -49,6 +51,9 @@ import {
   saveCarProfile,
   deleteCarProfile,
   pickBestRouter,
+  prefsFromCloudSettings,
+  isFreshDefaultPrefs,
+  mergeCloudProfile,
   WIFI_HISTORY_CAP,
 } from "./carProfileService";
 
@@ -327,5 +332,161 @@ describe("cloud sync", () => {
     const res = await deleteCarProfile("fw:1A2B3C");
     expect(res.ok).toBe(true);
     expect(serviceMocks.del).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("profiles sync engine (last-saved-wins)", () => {
+  const base = {
+    name: null,
+    modeId: null,
+    speed: 170,
+    servo: 90,
+    steerLimit: 90,
+    trim: 0,
+    useJoystick: false,
+    fullscreen: false,
+    joystickLayout: "dual",
+    lastWifiSsid: null,
+    savedRouters: [],
+  } as Omit<DevicePrefs, "address">;
+
+  it("prefsFromCloudSettings sanitizes values and falls back to base", () => {
+    const prefs = prefsFromCloudSettings(
+      {
+        mode_id: "2wd1m",
+        speed: 200,
+        trim: 5,
+        saved_routers: ["Home", "Shop"],
+        speed_bad: "nope",
+      },
+      base,
+    );
+    expect(prefs.modeId).toBe("2wd1m");
+    expect(prefs.speed).toBe(200);
+    expect(prefs.trim).toBe(5);
+    expect(prefs.savedRouters).toEqual(["Home", "Shop"]);
+  });
+
+  it("prefsFromCloudSettings drops corrupt/foreign values", () => {
+    const prefs = prefsFromCloudSettings(
+      {
+        mode_id: 42,
+        speed: "fast",
+        saved_routers: "not-an-array",
+        bt_ids: [1, 2],
+      },
+      base,
+    );
+    expect(prefs.modeId).toBe(base.modeId);
+    expect(prefs.speed).toBe(base.speed);
+    expect(prefs.savedRouters).toEqual([]);
+    expect(prefs.btIds).toEqual([]);
+  });
+
+  it("isFreshDefaultPrefs detects untouched local records", () => {
+    expect(isFreshDefaultPrefs(null)).toBe(true);
+    expect(isFreshDefaultPrefs({ ...base, address: null } as DevicePrefs)).toBe(
+      true,
+    );
+    expect(
+      isFreshDefaultPrefs({
+        ...base,
+        address: null,
+        speed: 200,
+      } as DevicePrefs),
+    ).toBe(false);
+    expect(
+      isFreshDefaultPrefs({
+        ...base,
+        address: null,
+        savedRouters: ["Home"],
+      } as DevicePrefs),
+    ).toBe(false);
+  });
+
+  it("mergeCloudProfile adopts cloud over a fresh local default and clamps", () => {
+    const merged = mergeCloudProfile(
+      {
+        profile_key: "fw:1A2B3C",
+        car_name: "Shop car",
+        unique_id: "1A2B3C",
+        settings: { mode_id: "4wd4m", speed: 900, trim: 500 },
+        wifi_history: [],
+        updated_at: "2026-09-29T00:00:00Z",
+      },
+      null,
+      base,
+    );
+    expect(merged.source).toBe("cloud");
+    expect(merged.changed).toBe(true);
+    expect(merged.prefs.modeId).toBe("4wd4m");
+    // Clamp into what the car accepts (linear 100..255).
+    expect(merged.prefs.speed).toBe(255);
+    expect(merged.prefs.trim).toBe(100);
+    expect(merged.prefs.name).toBe("Shop car");
+  });
+
+  it("mergeCloudProfile keeps the local record when the local save is newer", () => {
+    const local = {
+      ...base,
+      address: "fw:1A2B3C",
+      speed: 130,
+      savedAt: Date.parse("2026-09-29T10:00:00Z"),
+    } as DevicePrefs;
+    const merged = mergeCloudProfile(
+      {
+        profile_key: "fw:1A2B3C",
+        car_name: "Older",
+        unique_id: null,
+        settings: { speed: 255 },
+        wifi_history: [],
+        updated_at: "2026-09-29T00:00:00Z",
+      },
+      local,
+      base,
+    );
+    expect(merged.source).toBe("local");
+    expect(merged.changed).toBe(false);
+    expect(merged.prefs.speed).toBe(130);
+  });
+
+  it("mergeCloudProfile takes the newer cloud save and stamps its time", () => {
+    const local = {
+      ...base,
+      address: "fw:1A2B3C",
+      speed: 130,
+      savedAt: Date.parse("2026-09-28T00:00:00Z"),
+    } as DevicePrefs;
+    const merged = mergeCloudProfile(
+      {
+        profile_key: "fw:1A2B3C",
+        car_name: "Newer",
+        unique_id: null,
+        settings: { speed: 150, mode_id: "self-balancing" },
+        wifi_history: [],
+        updated_at: "2026-09-29T12:00:00Z",
+      },
+      local,
+      base,
+    );
+    expect(merged.source).toBe("cloud");
+    expect(merged.changed).toBe(true);
+    expect(merged.prefs.speed).toBe(150);
+    expect(merged.prefs.modeId).toBe("self-balancing");
+    expect(merged.prefs.savedAt).toBe(Date.parse("2026-09-29T12:00:00Z"));
+  });
+
+  it("toCloudRecord mirrors the control style flag", () => {
+    const record = toCloudRecord(
+      {
+        ...base,
+        address: "fw:1A2B3C",
+        useJoystick: true,
+        joystickLayout: "single",
+      } as DevicePrefs,
+      "fw:1A2B3C",
+    );
+    expect(record.settings.use_joystick).toBe(true);
+    expect(record.settings.joystick_layout).toBe("single");
   });
 });
