@@ -12,6 +12,11 @@
 //   • an Add form (SSID + password) that reaches the car over ANY live
 //     link (ROUTERS;ADD;<ssid>;<pass>, dispatched by the car's
 //     system-command hook in every mode).
+// R4-4 (owner: "add/edit/delete the wifi routers saved in the car"): a per-row
+// EDIT action joins Switch + Delete. The car stores ONE password per SSID and
+// ADD is an upsert (T-48a), so an edit re-sends ADD for that SSID; the panel
+// pre-fills the SSID + password fields and the panel parent reports which row
+// is being edited via editingSsid. Passwords still never leave the car/phone.
 //
 // Security: passwords live ONLY on the car's NVS (W-14). The app holds
 // the typed password in this component's local state for the flight of
@@ -61,6 +66,8 @@ export function RouterPanel({
   onDelete,
   onClear,
   onOpenWebPage,
+  onStartEdit,
+  editingSsid = null,
 }: RouterPanelProps) {
   const [ssid, setSsid] = React.useState("");
   const [pass, setPass] = React.useState("");
@@ -258,7 +265,11 @@ export function RouterPanel({
                 userNetworks.map((n) => (
                   <View
                     key={n}
-                    className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-2"
+                    className={`mt-1.5 flex-row items-center gap-2 rounded-lg border px-2.5 py-2 ${
+                      n === editingSsid
+                        ? "border-sky-500 bg-sky-500/10"
+                        : "border-line bg-card"
+                    }`}
                   >
                     <Feather
                       name="wifi"
@@ -272,6 +283,11 @@ export function RouterPanel({
                     >
                       {n}
                     </Text>
+                    {n === editingSsid ? (
+                      <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-sky-700 dark:text-sky-300">
+                        Editing
+                      </Text>
+                    ) : null}
                     {n === carSsid ? (
                       <Text className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                         Active
@@ -290,6 +306,22 @@ export function RouterPanel({
                         </Text>
                       </Pressable>
                     )}
+                    {/* R4-4: edit the stored password (re-ADD upsert). Hidden
+                        for the row that is already open in the form. */}
+                    {onStartEdit && n !== editingSsid ? (
+                      <Pressable
+                        onPress={() => onStartEdit(n)}
+                        disabled={!linked}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit the saved password for ${n}`}
+                        hitSlop={6}
+                        className="rounded-full border border-line bg-card px-2.5 py-1.5 disabled:opacity-40"
+                      >
+                        <Text className="text-[11px] font-black text-muted">
+                          Edit
+                        </Text>
+                      </Pressable>
+                    ) : null}
                     <Pressable
                       onPress={() => handleDelete(n)}
                       disabled={!linked}
@@ -356,7 +388,8 @@ export function RouterPanel({
               </Text>
             </Pressable>
             <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-              Stored on the car only — the password never leaves it (W-14).
+              Stored on the car only — the password never leaves it (W-14). If
+              the name already exists on the car, this updates its password.
             </Text>
             {!canControl && (
               <Text className="mt-1 text-[11px] leading-4 text-muted">
