@@ -1,5 +1,44 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-59 round — Connection-Manager Phase B: envelope wiring (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Phase B wires the JSON command envelope built in Phase A
+> (`transports/commandEnvelope.ts`) into the live path. It adds
+> `LinkManager.sendEnvelope` + ONE flag-gated intake in the hub
+> (`sendEnvelopeCommand`), and nothing else. **No screen changed** — the
+> intake ships OFF (F-41) and no UI calls it yet, so on the shipped build
+> this round must be invisible.
+>
+> Bench rows for the actual envelope exercise are T11–T14 in
+> `../../Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (that car is the only
+> permitted test target). The rows below are the app-side regression
+> guard.
+
+### U-59-1 — the shipped build is unchanged (the important one)
+
+- [ ] Install the OTA (close + reopen the app ×2). Control Panel behaves
+      exactly as before: drive, mode switch, speed/servo/trim, e-stop,
+      router panel, all five decks, the connection banner.
+- [ ] Nothing new appeared in any menu, and no control was added anywhere
+      for JSON envelopes (that is deliberate — F-41).
+
+### U-59-2 — both dialects coexist
+
+- [ ] The existing hand-written wire path still drives the car normally
+      (this is what the hub's fan-out was left untouched to guarantee).
+- [ ] `sendEnvelopeCommand` exists on the hub return value and, with the
+      gate off, refuses with "Command envelopes are not enabled on this
+      build." rather than throwing or silently dropping.
+
+### U-59-3 — nothing user-selectable changed
+
+- [ ] Transport picker rows unchanged (still 8 registered; the F-41 gate
+      on selectable methods is untouched by this round).
+- [ ] Connection-method list, teaching text and the primary-method gate
+      all render as before.
+
+---
+
 ## U-58 round — deck landscape layout fix: no more merging/overlapping (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner: "the drive deck you made earlier opens the drive screen for each project category
