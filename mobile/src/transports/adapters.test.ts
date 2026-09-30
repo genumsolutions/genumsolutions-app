@@ -6,8 +6,11 @@
 //      live socket's URL equals THIS transport's target — AP and STA can
 //      never both light up from the same socket.
 //   2. The HTTP/REST adapter: verifies by one /status round-trip, maps the
-//      text protocol to the car's web-server routes (/f /b /l /r /stop,
-//      /speed?val=, /mode?val=) and refuses orders with no REST route.
+//      text protocol to the car's ACTUAL web-server routes (/forward
+//      /backward /left /right /stop, /speed?val=, /mode?val=) and refuses
+//      orders with no REST route. The direction-route names are pinned
+//      here because the app once shipped the short forms (/f /b /l /r),
+//      which the car answers with 404 (F-50).
 //   3. The placeholders: isSupported()===false, connect() throws the roadmap
 //      note, and the registry contains every possible comm method.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -180,16 +183,29 @@ describe("HTTP / REST adapter", () => {
 
     await http.sendLine("F");
     await http.sendLine("B");
+    await http.sendLine("L");
+    await http.sendLine("R");
     await http.sendLine("S");
     await http.sendLine("SPD200");
     await http.sendLine("4WD4M");
 
     expect(requested).toContain("/status");
-    expect(requested).toContain("/f");
-    expect(requested).toContain("/b");
+    // F-50: the car registers the SPELLED-OUT routes (WebServerComm.cpp
+    // server.on("/forward") etc, same on the wireless donor and the 4WD4M
+    // testbed). This adapter used to build /f /b /l /r and the car answered
+    // 404 — direction commands failed while the link looked healthy.
+    expect(requested).toContain("/forward");
+    expect(requested).toContain("/backward");
+    expect(requested).toContain("/left");
+    expect(requested).toContain("/right");
     expect(requested).toContain("/stop");
     expect(requested).toContain("/speed?val=200");
     expect(requested).toContain("/mode?val=4WD4M");
+    // The short forms must NEVER reappear: they are the bug.
+    expect(requested).not.toContain("/f");
+    expect(requested).not.toContain("/b");
+    expect(requested).not.toContain("/l");
+    expect(requested).not.toContain("/r");
   });
 
   it("maps emergency stop (ESTOP) and stop (S) to /stop", async () => {
@@ -203,6 +219,34 @@ describe("HTTP / REST adapter", () => {
     await http.sendLine("S");
     await http.sendLine("ESTOP");
     expect(requested.filter((p) => p === "/stop").length).toBe(2);
+  });
+
+  it("routes SPD0 to /stop, NEVER to /speed (F-51)", async () => {
+    // SPD0 is a neutral stop line on BT/WS. The firmware's /speed handler
+    // clamps with constrain(val, MIN_SPEED, MAX_SPEED), so /speed?val=0
+    // would set speed 100 and the car would DRIVE. The same "stop" command
+    // meaning opposite things on two transports is the F-30 class.
+    stubFetch((path) =>
+      path === "/status"
+        ? {
+            ok: true,
+            text: async () => JSON.stringify({ ok: true, status: "READY" }),
+          }
+        : { ok: true, text: async () => JSON.stringify({ ok: true }) },
+    );
+    const http = createHttpTransport();
+    await http.connect();
+    await http.sendLine("SPD0");
+    expect(requested).toContain("/stop");
+    expect(requested).not.toContain("/speed?val=0");
+
+    // Anything below the car floor is a stop intent too, never a speed.
+    await http.sendLine("SPD50");
+    expect(requested).not.toContain("/speed?val=50");
+
+    // In-window speeds still use /speed.
+    await http.sendLine("SPD100");
+    expect(requested).toContain("/speed?val=100");
   });
 
   it("refuses orders that have no REST route", async () => {
