@@ -1,4 +1,36 @@
-# NEXT SESSION — genumsolutions-app (2026-09-30: Phase A+B + HTTP/REST fix; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-30: Phase A+B + HTTP + live-transport NACK fix; release 3.2.7/60)
+
+**✅ FIXED 2026-09-30 — A `NACK` IS NOT ALWAYS A MODE REJECTION: E-STOP RAISED A FALSE ERROR ON
+THE LIVE TRANSPORTS (`79ac4ab`, FAILSAFES F-52).** Having applied F-51's lesson to HTTP, I
+applied it to the transports people actually drive — Bluetooth SPP and WebSocket — and found the
+same class of defect on the live path. The firmware's `handleCommand()` **ends with
+`setModeFromString(cmdBuf)` as a catch-all** (`ModeManager.cpp:436`), so ANY line it doesn't handle
+is answered `NACK;E=UNKNOWN_MODE;ARG=<token>` (`:798`) — the wire cannot tell "unknown MODE" from
+"no such COMMAND", and the error code lies. `handleEStop()` sends `ESTOP` + `SPD0` + `SERVO90`, and
+**no firmware in the fleet implements `ESTOP`** (verified across all six repos). So **every
+EMERGENCY STOP press** produced a red toast *"ESTOP is not supported by this car"*, overwrote the
+EMERGENCY STOP status with "Not supported by car", and parked a phantom `ESTOP` stub — on the one
+control that must never look broken. Same on every trim / steering-limit edit (`TRIM<n>`, `STEER<n>`
+are 2WD1M-only; the 4WD4M is differential drive). **The car did stop** — `SPD0` is the real stop and
+was the second line in the batch — so the round read as PASS; that is F-52's sharpest rule: judge a
+control by its whole surface, not only the motion. Fix: `isModeToken()` derived from
+`REMOTE_MODE_ORDER` (not hand-written) and `handleNack` returns early for non-mode tokens. The
+E-stop lines stay on purpose — `SERVO90` centring is real on 2WD1M/self-balance, so the correction
+belongs at the interpreter, not by deleting commands the fleet may honour. Gates: tsc 0 · vitest
+**348/348** · prettier clean. Bench rows **T19–T20** (Round N), incl. a must-still-work 2WD1M
+cross-check.
+
+**✅ AUDITED 2026-09-30 — THE REMAINING GATED METHODS, AND TWO ROADMAP CLAIMS CORRECTED.** F-51's
+rule is "a registered but non-selectable method is not a verified one", so I checked the rest rather
+than trusting the labels. **BLE: app side genuinely real** (`bleService` + `createBleTransport()` do
+scan/connect/GATT write/`requestState`) **but the 4WD4M firmware has NO BLE server at all** — zero
+hits for `BLEDevice`/`BLEServer`/`NimBLE`. So BLE is a *firmware* round (NimBLE UART: write →
+`handleCommand`, notify → STATE), not an app flip. Flash headroom is fine — this car runs a **3 MB
+`app0` partition** — and the roadmap's "huge_app at 55%" note belonged to a different car. **mDNS
+and MQTT app rows checked out as honest placeholders** (they already say "needs the car to advertise
+it" / "no broker exists"). Nothing shipped for these three: they need owner go + a flash, and MQTT
+is still blocked on the broker/credential decisions. Roadmap §5 rewritten so the next session
+doesn't inherit the overstated claims.
 
 **✅ FIXED 2026-09-30 — HTTP/REST ADAPTER WAS BROKEN IN TWO WAYS (`163adea`, FAILSAFES F-51).**
 Auditing Phase C item 2 (the roadmap called HTTP "already implemented end-to-end; cheapest win;
