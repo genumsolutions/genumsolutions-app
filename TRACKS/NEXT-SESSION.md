@@ -1,5 +1,34 @@
 # NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
 
+**✅ SHIPPED 2026-09-30 (later) — U-58: DECK LANDSCAPE LAYOUT FIX (JS-only → same-version OTA
+3.2.7/60, uncommitted at write time — push/commit on owner go).** Owner: the per-category
+drive decks "merge and overlap everything together in the landscape view" while the robocar
+deck is proper. Root causes: ① the non-robocar branch's row had NO bounded height (the OLED's
+`max-h-[55%]` resolved against an indefinite parent → ignored) and the deck card overflowed
+the screen bottom, clipped by `overflow-hidden` → "merged"; ② decks drew their own DeckCard
+INSIDE the screen's card (double borders); ③ tile classes `w-[47%] flex-1 min-w-[120px]`
+fought each other → unpredictable wraps. Fix (robocar branch + DroneControls untouched):
+`RemoteControlScreen` deck branch rebuilt on the robocar telemetry-view idiom — flex-1
+min-h-0 row · fixed 2:1 OLED column (30% width, max 280 px, self-start, overflow-hidden) ·
+the deck's OWN DeckCard fills the bounded column (screen no longer wraps decks in a second
+card; DroneControls/SensorGrid keep their screen-level card) · `shared.tsx` DeckCard defaults
+`flex={1}` + min-h-0; DeckGrid replaced the percentage tiles with explicit 2-up rows (odd
+count pads the empty half). Gates: tsc 0 · vitest **317/317**. Device rows: `mobile/TESTING.md`
+**U-58-1..4**.
+
+**✅ DOCS 2026-09-30 — CONNECTION-MANAGER PROMPT ANALYZED (docs-only, no code) + SCOPE
+RULING.** The outside AI's "Connection Manager" design brief was analyzed against the repo:
+~70% already built (LinkManager/registry/`CommInterface`), and its two headline ideas
+(first-handshake auto-selection; a new unified JSON schema `{"mode":"obstacle_avoid",…}`)
+CONFLICT with locked rules (F-38/F-41/R-16a; FIN-23/24 + F-21/F-23 protocol locks; D-1
+parking; flash budgets 86%/89%). Full record + verbatim prompt:
+`guide/SESSION-2026-09-30-CONNECTION-MANAGER-PROMPT.md` · one-page summary: root
+`RESUME-ME.md` (new root resume note). **OWNER SCOPE RULING recorded: the new Connection
+Manager design will be TESTED IN THE APP AND THE `Genum_4WD4M_CAR` TESTBED ONLY** — donor
+cars (wireless/2WD/balance/remote) and no-firmware projects are not test targets; the
+ESP-NOW-via-remote-bridge spike is out of scope (it would touch the excluded remote repo).
+Nothing implemented.
+
 **✅ SHIPPED 2026-09-30 (latest) — DECKS STEPS ②+③: ALL FIVE CATEGORY DECKS + KIND HEADERS,
 JS-only → same-version OTA 3.2.7/60 (`c40e3be` + `f05cdaf`).** Owner approved the Smart Home
 pilot screenshot → ② SmartFarmDeck (Pump Room/Solenoid Valve live relays, Soil Wetness gauge,
