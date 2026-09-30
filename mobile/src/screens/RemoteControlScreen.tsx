@@ -808,94 +808,111 @@ export function RemoteControlScreen({ navigation }: Props) {
 
         {/* ── Content area ── */}
         {isDrone || isNonRobocar ? (
-          <View className="flex-1 min-h-0 pt-2">
-            <View className="flex-row items-start gap-3">
-              <View className="min-w-0 flex-[0.3] max-h-[55%]">
-                <OledDisplay {...oledCommonProps} />
-              </View>
-              <View className="min-w-0 flex-[0.7]">
-                <View className="flex-1 min-h-0 rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
-                  {isDrone ? (
-                    <DroneControls
-                      canControl={canControl}
-                      targetAltitude={targetAltitude}
-                      gimbalPan={gimbalPan}
-                      gimbalTilt={gimbalTilt}
-                      onAltitude={handleAltitude}
-                      onGimbalPan={handleGimbalPan}
-                      onGimbalTilt={handleGimbalTilt}
-                      onCommand={(c) => hub.sendCommand(c)}
-                      onSetAltitude={(v) => handleAltitude(v)}
-                    />
-                  ) : hasDeck(activeCategory) ? (
-                    /* PLAN-2026-09-29 step ②: dedicated per-category deck —
-                       ONLY this category's tiles, never the shared SensorGrid
-                       fallback (owner decision ③). Every non-robocar, non-drone
-                       category has a built deck; the screen maps slug →
-                       deck component (tripwire cleared in deckkit.ts). */
-                    (() => {
-                      switch (activeCategory) {
-                        case "smart-farm":
-                          return (
-                            <SmartFarmDeck
-                              sensorData={sensorData}
-                              relays={relays}
-                              canControl={canControl}
-                              onToggleRelay={toggleRelay}
-                            />
-                          );
-                        case "smart-city":
-                          return (
-                            <SmartCityDeck
-                              sensorData={sensorData}
-                              relays={relays}
-                              canControl={canControl}
-                              onToggleRelay={toggleRelay}
-                            />
-                          );
-                        case "smart-dustbin":
-                          return (
-                            <SmartDustbinDeck
-                              sensorData={sensorData}
-                              relays={relays}
-                              canControl={canControl}
-                              onToggleRelay={toggleRelay}
-                            />
-                          );
-                        case "remote-controller":
-                          return (
-                            <HandheldDeck
-                              sensorData={sensorData}
-                              relays={relays}
-                              canControl={canControl}
-                              onToggleRelay={toggleRelay}
-                            />
-                          );
-                        default:
-                          return (
-                            <SmartHomeDeck
-                              sensorData={sensorData}
-                              relays={relays}
-                              canControl={canControl}
-                              onToggleRelay={toggleRelay}
-                            />
-                          );
-                      }
-                    })()
-                  ) : (
-                    <SensorGrid
-                      canControl={canControl}
-                      isDrone={false}
-                      isNonRobocar
-                      activeCategory={activeCategory}
-                      sensorData={sensorData}
-                      relays={relays}
-                      telemetry={telemetry}
-                      onToggleRelay={toggleRelay}
-                    />
-                  )}
+          /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
+             in the landscape view"): the old branch was unbounded — the row had
+             no flex height (so the OLED's max-h-[55%] resolved against an
+             indefinite parent and was IGNORED), the deck card overflowed the
+             screen bottom (clipped by overflow-hidden → "merged"), and decks
+             drew their own DeckCard INSIDE the screen's card (double borders).
+             Rebuilt with the robocar telemetry-view idiom: the row is flex-1
+             min-h-0 (bounded heights), the OLED is a fixed 2:1 aspect column
+             (width-share, self-start), and the deck owns its ONE card, filling
+             the column. Robocar branch untouched. */
+          <View className="mt-2 min-h-0 flex-1 flex-row items-stretch gap-3">
+            {/* OLED mirror column — fixed 2:1 shape, top-anchored (same
+                aspect-ratio idiom as the robocar telemetry view). */}
+            <View
+              className="aspect-[2/1] shrink-0 self-start overflow-hidden rounded-lg"
+              style={{ width: "30%", maxWidth: 280 }}
+            >
+              <OledDisplay {...oledCommonProps} />
+            </View>
+            <View className="min-h-0 min-w-0 flex-1">
+              {isDrone ? (
+                <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
+                  <DroneControls
+                    canControl={canControl}
+                    targetAltitude={targetAltitude}
+                    gimbalPan={gimbalPan}
+                    gimbalTilt={gimbalTilt}
+                    onAltitude={handleAltitude}
+                    onGimbalPan={handleGimbalPan}
+                    onGimbalTilt={handleGimbalTilt}
+                    onCommand={(c) => hub.sendCommand(c)}
+                    onSetAltitude={(v) => handleAltitude(v)}
+                  />
                 </View>
-              </View>
+              ) : hasDeck(activeCategory) ? (
+                /* PLAN-2026-09-29 step ②: dedicated per-category deck —
+                   ONLY this category's tiles, never the shared SensorGrid
+                   fallback (owner decision ③). Every non-robocar, non-drone
+                   category has a built deck; the screen maps slug →
+                   deck component (tripwire cleared in deckkit.ts).
+                   U-58: the deck draws its OWN DeckCard (flex={1} fills this
+                   bounded column) — no second screen-level card wrapper. */
+                (() => {
+                  switch (activeCategory) {
+                    case "smart-farm":
+                      return (
+                        <SmartFarmDeck
+                          sensorData={sensorData}
+                          relays={relays}
+                          canControl={canControl}
+                          onToggleRelay={toggleRelay}
+                        />
+                      );
+                    case "smart-city":
+                      return (
+                        <SmartCityDeck
+                          sensorData={sensorData}
+                          relays={relays}
+                          canControl={canControl}
+                          onToggleRelay={toggleRelay}
+                        />
+                      );
+                    case "smart-dustbin":
+                      return (
+                        <SmartDustbinDeck
+                          sensorData={sensorData}
+                          relays={relays}
+                          canControl={canControl}
+                          onToggleRelay={toggleRelay}
+                        />
+                      );
+                    case "remote-controller":
+                      return (
+                        <HandheldDeck
+                          sensorData={sensorData}
+                          relays={relays}
+                          canControl={canControl}
+                          onToggleRelay={toggleRelay}
+                        />
+                      );
+                    default:
+                      return (
+                        <SmartHomeDeck
+                          sensorData={sensorData}
+                          relays={relays}
+                          canControl={canControl}
+                          onToggleRelay={toggleRelay}
+                        />
+                      );
+                  }
+                })()
+              ) : (
+                <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
+                  <SensorGrid
+                    canControl={canControl}
+                    isDrone={false}
+                    isNonRobocar
+                    activeCategory={activeCategory}
+                    sensorData={sensorData}
+                    relays={relays}
+                    telemetry={telemetry}
+                    onToggleRelay={toggleRelay}
+                  />
+                </View>
+              )}
             </View>
           </View>
         ) : (

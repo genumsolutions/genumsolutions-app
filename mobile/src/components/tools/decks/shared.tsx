@@ -21,17 +21,25 @@ import type {
 import type { SensorData } from "../types";
 
 /** One card of the deck — same borders/spacing as the robocar deck's
-    cards (design rule 1). */
+    cards (design rule 1).
+
+    U-58 (owner report 2026-09-30 — deck cards overlapping in landscape):
+    the card now FILLS its column (flex={1} default) because the screen gives
+    the deck a bounded flex-1 column with min-h-0. flex-1 + min-h-0 together
+    mean "fill exactly this column, never taller" — the old natural-height
+    card overflowed the screen bottom and was clipped ("merged/overlapping").
+    The screen does NOT wrap decks in a second card anymore — this is the
+    ONE card (double-border/nesting removed). */
 export function DeckCard({
   children,
-  flex,
+  flex = 1,
 }: {
   children: React.ReactNode;
   flex?: number;
 }) {
   return (
     <View
-      className="min-w-0 rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20"
+      className="min-h-0 min-w-0 rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20"
       style={flex ? { flex } : undefined}
     >
       {children}
@@ -207,8 +215,14 @@ export function DeckTile({
 }
 
 /** The deck body: renders the manifest's switches as one wall, then the
-    readout/planned tiles in a wrap row. Only THIS category's tiles ever
-    render — the manifest is the whole surface (rule ②/③). */
+    readout/planned tiles on a STABLE 2-up grid. Only THIS category's tiles
+    ever render — the manifest is the whole surface (rule ②/③).
+
+    U-58: the old per-tile classes `w-[47%] flex-1 min-w-[120px]` fought each
+    other (percentage width + flex-basis + min-width) so rows wrapped
+    unpredictably at landscape widths and tiles collided. Now each row is an
+    explicit flex-row of two fixed-width halves (no percentages, no wrap) —
+    odd counts leave the last slot empty by design (honest, stable layout). */
 export function DeckGrid({
   tiles,
   sensorData,
@@ -224,10 +238,14 @@ export function DeckGrid({
 }) {
   const switches = tiles.filter((t) => t.kind === "switch");
   const others = tiles.filter((t) => t.kind !== "switch");
+  const rows: DeckTileSpec[][] = [];
+  for (let i = 0; i < others.length; i += 2) {
+    rows.push(others.slice(i, i + 2));
+  }
   return (
-    <View className="gap-2.5">
+    <View className="min-h-0 flex-1 gap-2.5">
       {switches.length > 0 && (
-        <View>
+        <View className="shrink-0">
           <Text className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-muted">
             Outputs
           </Text>
@@ -243,17 +261,23 @@ export function DeckGrid({
           ))}
         </View>
       )}
-      {others.length > 0 && (
-        <View className="flex-row flex-wrap gap-2.5">
-          {others.map((t) => (
-            <View key={t.id} className="w-[47%] flex-1 min-w-[120px]">
-              <DeckTile
-                tile={t}
-                sensorData={sensorData}
-                relays={relays}
-                canControl={canControl}
-                onToggleRelay={onToggleRelay}
-              />
+      {rows.length > 0 && (
+        <View className="min-h-0 flex-1 flex-col justify-start gap-2.5">
+          {rows.map((row, ri) => (
+            <View key={ri} className="flex-row gap-2.5">
+              {row.map((t) => (
+                <View key={t.id} className="flex-1">
+                  <DeckTile
+                    tile={t}
+                    sensorData={sensorData}
+                    relays={relays}
+                    canControl={canControl}
+                    onToggleRelay={onToggleRelay}
+                  />
+                </View>
+              ))}
+              {/* Odd row: pad the missing half so widths stay symmetric. */}
+              {row.length === 1 && <View className="flex-1" />}
             </View>
           ))}
         </View>
