@@ -14,6 +14,9 @@ verified one; a test asserting a hand-written literal is not evidence; one logic
 mean the same thing on every transport. Pinned with negative assertions (`/f`, `/b`, `/l`, `/r`,
 `/speed?val=0` must never appear). Gates: tsc 0 · vitest **344/344** · prettier clean. Bench rows
 **T15–T18** (`Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` Round H); the F-41 flip waits on them.
+**Ship evidence:** `163adea` (fix) + `f54f7b2` (ledger), pushed `fb50d56..f54f7b2`; CI ✓
+`36761236003` · OTA ✓ `36761236227` published; live manifest = `OTA · Short update (f54f7b2…)`,
+3.2.7 unchanged (JS-only, F-32). Car repo `Genum_4WD4M_CAR` `6e0d5ac` (Round H rows).
 
 **✅ BUILT 2026-09-30 — CONNECTION-MANAGER PHASE B: ENVELOPE WIRING (GATE STILL OFF
 — activation needs the owner's bench round).** Phase A built the translation layer; Phase B puts it
