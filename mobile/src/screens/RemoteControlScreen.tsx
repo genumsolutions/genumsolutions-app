@@ -42,6 +42,8 @@ import type { PidKey } from "../components/tools/BalanceControls";
 import { ModeChooser } from "../components/tools/ModeChooser";
 import { OledDisplay } from "../components/tools/OledDisplay";
 import { SensorGrid } from "../components/tools/SensorGrid";
+import { hasDeck } from "../components/tools/decks/deckkit";
+import { SmartHomeDeck } from "../components/tools/decks/SmartHomeDeck";
 import { DroneControls } from "../components/tools/DroneControls";
 import { RouterPanel } from "../components/tools/RouterPanel";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
@@ -820,6 +822,17 @@ export function RemoteControlScreen({ navigation }: Props) {
                       onGimbalTilt={handleGimbalTilt}
                       onCommand={(c) => hub.sendCommand(c)}
                       onSetAltitude={(v) => handleAltitude(v)}
+                    />
+                  ) : hasDeck(activeCategory) ? (
+                    /* PLAN-2026-09-29 step ①: dedicated per-category deck — ONLY
+                   this category's tiles, never the shared SensorGrid fallback
+                   (owner decision ③). Smart Home is the pilot; the other four
+                   land after owner screenshot approval (step ②). */
+                    <SmartHomeDeck
+                      sensorData={sensorData}
+                      relays={relays}
+                      canControl={canControl}
+                      onToggleRelay={toggleRelay}
                     />
                   ) : (
                     <SensorGrid
