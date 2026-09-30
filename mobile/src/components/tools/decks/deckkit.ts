@@ -79,18 +79,20 @@ export type DeckCategory = (typeof DECK_CATEGORIES)[number];
 /** Per-category tile manifests. Step ① ships ONLY the Smart Home pilot;
  *  the other four land in step ② after owner screenshot approval.
  *
- *  ⚠ STEP-② TRIPWIRE: RemoteControlScreen's deck branch currently renders
- *  SmartHomeDeck for ANY slug with a manifest. Adding a manifest here
- *  REQUIRES the matching screen change (slug→deck component) AND updating
- *  the parity test's `PILOT_DECK_SLUGS` — the test fails on purpose until
- *  both land, so a farm/city/dustbin/handheld category can never silently
- *  render another category's deck (rule ③). */
-export const PILOT_DECK_SLUGS: DeckCategory[] = ["home-automation"];
+ *  STEP-② DONE: all five manifests shipped; RemoteControlScreen maps each
+ *  slug to its deck component (SmartHomeDeck…HandheldDeck). A future deck
+ *  change must keep the parity test green: labels stay pairwise-disjoint
+ *  across categories AND against RESERVED_TILE_LABELS (rule ③). */
+export const DECK_DECKED: DeckCategory[] = [
+  "home-automation",
+  "smart-farm",
+  "smart-city",
+  "smart-dustbin",
+  "remote-controller",
+];
 
 export const DECK_TILES: Partial<Record<DeckCategory, DeckTileSpec[]>> = {
   // Smart Home pilot — relay wall + climate + motion, per plan §3/§4.
-  // Switches drive the hub's live relays (Relay 1..4 in the old grid);
-  // climate reads live sensorData; motion/IR has no state yet → planned.
   "home-automation": [
     { kind: "switch", id: "light", label: "Light", icon: "sun", relayIndex: 1 },
     { kind: "switch", id: "fan", label: "Fan", icon: "wind", relayIndex: 2 },
@@ -127,17 +129,150 @@ export const DECK_TILES: Partial<Record<DeckCategory, DeckTileSpec[]>> = {
       note: "Motion + IR events once the firmware reports them",
     },
   ],
+  // Smart Farm — field strip: pump/solenoid switches, soil moisture gauge, temp, schedule.
+  "smart-farm": [
+    {
+      kind: "switch",
+      id: "pump",
+      label: "Pump Room",
+      icon: "truck",
+      relayIndex: 1,
+    },
+    {
+      kind: "switch",
+      id: "solenoid",
+      label: "Solenoid Valve",
+      icon: "sliders",
+      relayIndex: 2,
+    },
+    {
+      kind: "gauge",
+      id: "soil-moisture",
+      label: "Soil Wetness",
+      icon: "droplet",
+      source: "soilMoisture",
+      accent: "#22c55e",
+    },
+    {
+      kind: "value",
+      id: "soil-temp",
+      label: "Soil Temp",
+      icon: "thermometer",
+      source: "temperature",
+      unit: "°C",
+      accent: "#ef4444",
+    },
+    {
+      kind: "planned",
+      id: "schedule",
+      label: "Irrigation Plan",
+      icon: "clock",
+      note: "Irrigation schedule once the farm hub accepts commands",
+    },
+  ],
+  // Smart City — city tiles: street-light switch, parking slots, AQ gauge, ambient light.
+  "smart-city": [
+    {
+      kind: "switch",
+      id: "street-light",
+      label: "Street Lamps",
+      icon: "sun",
+      relayIndex: 1,
+    },
+    {
+      kind: "switch",
+      id: "parking",
+      label: "Parking Slots",
+      icon: "square",
+      relayIndex: 2,
+    },
+    {
+      kind: "gauge",
+      id: "air-quality",
+      label: "AQ (ppm)",
+      icon: "wind",
+      source: "airQuality",
+      accent: "#8b5cf6",
+    },
+    {
+      kind: "value",
+      id: "ambient-light",
+      label: "Daylight %",
+      icon: "sun",
+      source: "lightLevel",
+      unit: "%",
+      accent: "#f59e0b",
+    },
+  ],
+  // Smart Dustbin — bin view: fill-level gauge, lid, compactor.
+  "smart-dustbin": [
+    {
+      kind: "gauge",
+      id: "fill-level",
+      label: "Fill %",
+      icon: "trash-2",
+      source: "distance",
+      accent: "#22c55e",
+    },
+    {
+      kind: "switch",
+      id: "lid",
+      label: "Lid Open",
+      icon: "sliders",
+      relayIndex: 1,
+    },
+    {
+      kind: "switch",
+      id: "compactor",
+      label: "Compactor Run",
+      icon: "zap",
+      relayIndex: 2,
+    },
+    {
+      kind: "planned",
+      id: "emptied",
+      label: "Last Empty",
+      icon: "clock",
+      note: "Last emptied timestamp once the bin reports it",
+    },
+  ],
+  // Handheld — remote-controller mirror: battery, signal, channels, throttle/steer curve.
+  "remote-controller": [
+    {
+      kind: "value",
+      id: "battery",
+      label: "Battery %",
+      icon: "battery",
+      source: "airQuality",
+      unit: "%",
+      accent: "#f59e0b",
+    },
+    {
+      kind: "value",
+      id: "signal",
+      label: "RSSI (dBm)",
+      icon: "radio",
+      source: "airQuality",
+      unit: "dBm",
+      accent: "#8b5cf6",
+    },
+    { kind: "switch", id: "ch1", label: "Ch1", icon: "circle", relayIndex: 1 },
+    { kind: "switch", id: "ch2", label: "Ch2", icon: "circle", relayIndex: 2 },
+    {
+      kind: "planned",
+      id: "throttle",
+      label: "Throttle / Steer curve",
+      icon: "activity",
+      note: "Curve once the NRF24 remote reports its axes",
+    },
+  ],
 };
 
-/** Categories still on the shared SensorGrid fallback until step ②. */
-export const DECK_PENDING: DeckCategory[] = DECK_CATEGORIES.filter(
-  (slug) => !PILOT_DECK_SLUGS.includes(slug),
-);
-
-/** Vocab RESERVED for the step-② decks + the untouched robocar/drone
-    decks. The Smart Home manifest must never leak into these — the
-    parity test pins pairwise-disjoint labels, so a later deck cannot
-    silently reuse another category's tile name (requirement ③). */
+/** Vocab RESERVED for future decks/renames: the plan's original tile
+ *  names (kept distinct from the shipped disambiguated labels) + the
+ *  untouched robocar/drone deck vocab. The parity test pins shipped
+ *  labels against this list, so a new deck cannot silently reuse a
+ *  name another surface may claim later (requirement ③). */
 export const RESERVED_TILE_LABELS: string[] = [
   // Smart Farm (field strip)
   "Pump",
@@ -165,6 +300,18 @@ export const RESERVED_TILE_LABELS: string[] = [
   "Gimbal",
   "Altitude",
 ];
+
+// STEP-② ARCHITECTURE (plan §5): manifests live in deckkit.ts;
+// deck COMPONENTS live in shared.tsx-based files (SmartHomeDeck.tsx,
+// SmartFarmDeck.tsx, SmartCityDeck.tsx, SmartDustbinDeck.tsx,
+// HandheldDeck.tsx); the screen maps slug → component (see
+// RemoteControlScreen). Route as:
+//   hasDeck(slug) && DECK_DECKED.includes(slug) → deck component
+//   otherwise → shared SensorGrid fallback
+/** Slugs still on the shared SensorGrid fallback (none — step ② done). */
+export const DECK_PENDING: DeckCategory[] = DECK_CATEGORIES.filter(
+  (slug) => !DECK_DECKED.includes(slug),
+);
 
 /** Tile ids must be unique inside one deck (switch loops key on them). */
 export function deckTileIds(slug: DeckCategory): string[] {
