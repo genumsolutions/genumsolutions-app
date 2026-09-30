@@ -1,4 +1,19 @@
-# NEXT SESSION — genumsolutions-app (2026-09-29: control panel round 3; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-30: round 4 core shipped; current release 3.2.7/60)
+
+**✅ SHIPPED 2026-09-30 — ROUND 4 CORE (R4-1b · R4-4 · R4-5), JS-only → same-version OTA
+3.2.7/60, one concern per commit.** ① R4-1b: ConnectionBanner's Signal row is method-flavored
+— "Router signal · car to your router" on a home-router link, "Car AP signal · phone to the
+car's hotspot" on an AP link (the dBm is always the car's own radio; only the wording follows
+the method — owner: "when the car is the AP, show that, not home-router dBm"). ② R4-4:
+TransportPicker publishes the chosen method via `onPickedChange`; ToolsScreen hosts the
+**Home router settings** section ONLY for `wifi-sta-ws` — the same RouterPanel the remote's
+webserver mode uses, plus a per-row **Edit** (re-ADD upsert, T-48a) — AP/BT never see it. ③
+R4-5: the WIP `deviceProfileService.ts` (broken: duplicate export, dead effect guard, second
+`device_profiles` table = data-mixing risk) was DISCARDED; the U-52 `car_profiles` engine now
+also syncs `last_wifi_ssid` + restores it on adopt (recency seed + STA address prefill).
+WIP commit rule violated by the leftover WIP — see FAILSAFES **F-49**. Gates: tsc 0 · vitest
+**296/296** · prettier clean. Device rows: `mobile/TESTING.md` **U-54-1..6**. Next queued:
+**R4-7** (User preferences hub; rides the existing engine).
 
 **PLANNED (owner decisions captured 2026-09-29) — CONTROL PANEL PER-CATEGORY DECKS, UI-first.
 Plan: `guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md`.** Owner: the 7 categories stay SEPARATE
@@ -660,31 +675,37 @@ Broken into buildable items (each = one commit, one concern, like rounds 2-3):
   is read-only (press does nothing, combobox→text role, a11y disabled, menu cannot open) and
   `onSelect` refuses to dial — the Disconnect capsule is the one way to change methods.
   Remaining audit (scan/wifi-config sections mid-link) queued with R4-3.
-- **R4-3 — Home-router (STA) method unlocked.** F-41's gate opens `wifi-sta-ws` for selection
-  once R4-4/5 exist (the transport + adapter already exist in `adapters.ts`/`linkManager`).
-- **R4-4 — Router profile CRUD (app ↔ car ↔ DB sync).** User can add/edit/delete saved-router
-  profiles on the CAR (via the car's WIFICFG protocol, `carProtocol.ts` provisioning lines) and
-  in the APP (Car Profile card → Saved routers editor). Contract mirrors `car_profiles`:
-  car is source of truth while linked; app persists to AsyncStorage (`savedPrefs` pattern in
-  useControlHub) AND mirrors to a cloud table; on link the app pulls car truth → memory → DB;
-  on user edit the app pushes to car first, then DB. Passwords NEVER leave car/phone (F-series
-  security note: history rows are names + security flags only).
-- **R4-5 — Car-side save of everything.** Profile, settings, presets, data the user changes
-  must persist on the CAR (NVS/preferences via firmware) and sync back — extend the U-52
-  `car_profiles` engine (profile-key focus pull / push-on-save already exists; add the
-  router-profile + presets scopes to the same merge helpers).
+- ✅ **R4-3 SHIPPED (`0e9349c`, 2026-09-29).** Home-router (STA) method unlocked: the gate's
+  own condition (SPP + AP device-verified in U-51) was met and the `wifi-sta-ws` transport +
+  adapter already existed; `wifi-sta-ws` joined PRIMARY_METHODS in TransportPicker. Also
+  **R4-1b/R4-4/R4-5 SHIPPED 2026-09-30** (see the round ledger at the top of this file).
+- ✅ **R4-4 SHIPPED (2026-09-30, two commits).** ① TransportPicker gained `onPickedChange` —
+  the screen learns which method the user chose (pickedId, null on disconnect; effect-published,
+  never render-phase). ② ToolsScreen renders the **Home router settings** section ONLY when the
+  chosen method is `wifi-sta-ws`: the same `RouterPanel` the remote's webserver mode hosts
+  (Active connection + tappable IP, own network pinned Default, saved list, Add form) PLUS a
+  per-row **Edit** action — RouterPanel gained `onStartEdit`/`editingSsid`; the car stores ONE
+  password per SSID and ADD is an upsert (T-48a), so edit = pre-filled form → re-ADD; AP/BT
+  methods never render it (no method mixing).
+- ✅ **R4-5 SHIPPED (2026-09-30, on the existing U-52 engine — NO new table).** The WIP
+  `deviceProfileService.ts` found at session start was DISCARDED: it duplicated the
+  `car_profiles` store as a second `device_profiles` table (cross-method mixing risk + broken:
+  duplicate `upsertDeviceProfile`, missing export, dead effect guard). Instead `car_profiles`
+  now also carries `last_wifi_ssid` (name only, never passwords) alongside the existing
+  `last_wifi_url`; on adopt the hub restores it — smart-link recency seed + STA address
+  prefill. Everything the user changes still lands in deviceMemory first, then mirrors to the
+  DB on save (offline-first, unchanged). 4 new engine tests (34/34 in the file).
 - ✅ **R4-6 SHIPPED (`fe2e909`).** WifiDiagnosticsPanel: after a run the panel now shows ONE
   summary row (pass/fail tinted, per-verdict count) + a Details chip; the full verdict list +
   probe line collapse until tapped; re-running re-collapses. Panel framing already matched the
   deck family (rounded-xl border-line bg-mist); deep-link from the banner deferred — the panel
   only mounts for WiFi methods (`isWifi && !compact`), so it no longer appears for BT links.
 
-Order for next session: R4-3→R4-5 (car+DB round; needs firmware/car verify + possibly a new
-  table → F-45 rule: apply DB live and probe 200 before claiming done), then R4-7 (rides the
-  same sync engine once it exists). R4-1/R4-2/R4-6 shipped 2026-09-29, OTA `36603138203` green,
-  manifest → `fe2e909…`, 3.2.7/60 unchanged. Owner device rows for these three fixes: add
-  U-54 checks when the next TESTING.md round is written (AP link hides router sections ·
-  dropdown locked while connected · WiFi test auto-collapses).
+Order for next session: R4-1b/R4-4/R4-5 are DONE (this session — see ledger above); **R4-7 is
+  the next queued item** (rides the existing U-52 engine; no schema change expected — its DB
+  shape already fits `car_profiles`/`robot_user_settings`). R4-1/R4-2/R4-6 shipped 2026-09-29,
+  OTA `36603138203` green. Owner device rows: **U-54-1..6** in `mobile/TESTING.md` (written
+  2026-09-30).
 - **R4-7 — Menu: "Robot preferences" → "User preferences" + connected-device hub (owner,
   latest message).** Rename the Menu → Robot Settings group item (MenuScreen.tsx ~line 132:
   currently `label="Robot preferences"`, pushes `RobotPreferences`, Pro chip) to **User

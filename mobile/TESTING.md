@@ -10,6 +10,73 @@
 
 ---
 
+## U-54 round — Round 4: AP truth, method lock, home-router method + router editor, profile restores the last router (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner round 4: "when the car is the AP the dBm line must read as the AP, not as some home
+> router · lock the connection dropdown while connected · unlock the home-router method and
+> give it the same router management the remote's webserver mode has · user can add/edit/delete
+> saved routers · nothing mixes between methods · the car shares its info to the app then the
+> database on connect." Shipped: R4-1 `3a9d2c5` · R4-2 `c029b3e` · R4-6 `fe2e909` · R4-3
+> `0e9349c` · R4-1b + R4-4 + R4-5 (2026-09-30, this round). Gates: tsc 0 · vitest **296/296** ·
+> prettier clean.
+
+### U-54-1 — AP link shows ZERO home-router flavor
+
+- [ ] Connect via **Car access point**, banner on **own access point**: the Signal row reads
+      **Car AP signal** — with the note "phone to the car's hotspot". The words "router" and
+      "home" appear NOWHERE in the banner while the car is on its AP.
+- [ ] The **Car Profile** card on the same AP link shows NO Saved-routers / Wi-Fi-history
+      sections (R4-1) — only identity + last-saved drive settings + the smart-link toggle.
+- [ ] The **Home router settings** section is ABSENT (it exists only under the home-router
+      method — see U-54-3).
+
+### U-54-2 — home-router link reads as the router
+
+- [ ] Put the car on your home router (or read the banner while the car reports a joined
+      SSID): the Network row says **On your router · <ssid>** and the Signal row reads
+      **Router signal** with the note "car to your router" — distinct from the AP wording.
+
+### U-54-3 — home-router method: router management like the remote's webserver mode
+
+- [ ] Pick **Home router (WiFi STA)** in the dropdown: a **Home router settings** section
+      appears under the Car Profile card with the SAME layout the remote's webserver mode
+      hosts — Active connection card (IP tappable → car web page), **Saved on the car** list
+      with the car's own network pinned as **Default**, and the Add form.
+- [ ] Each saved row shows **Switch**, **Edit**, **Delete**; "Clear all" still confirms first.
+- [ ] Tap **Edit** on a row: the row highlights with an **Editing** chip and the form
+      pre-fills its SSID. Save (or "Add + switch") sends the update to the car; the edit
+      highlight clears. The car keeps one password per SSID, so the save is a re-ADD —
+      after saving, use **Switch** to rejoin with the new password.
+- [ ] **Car AP method regression:** pick the Car access point method — the Home router
+      settings section does NOT render (no method mixing), and the AP's own steps still work.
+- [ ] **Bluetooth regression:** under SPP the router section is also absent.
+
+### U-54-4 — the dropdown stays locked while a link is live (R4-2)
+
+- [ ] Connect by any method: the Connection method chip is read-only — tapping it does not
+      open the list; the Disconnect capsule is the only way to change methods.
+- [ ] After Disconnect the dropdown opens again and all three primary methods are selectable
+      (Classic Bluetooth, Car access point, Home router).
+
+### U-54-5 — the profile restores the last router (R4-5, signed in)
+
+- [ ] On device A (signed in), connect the car to a router (or use the STA method), then edit
+      drive settings and wait for the profile badge to show **synced**.
+- [ ] On device B (same account, factory-fresh for this car): connect via any method — the
+      Car Profile card adopts the cloud row: mode/speed/steer/trim/joystick come back AND the
+      last router SSID re-fills the WiFi-provision field; if the car was on a router, the
+      STA address field pre-fills toward that router so the next home-router connect is one tap.
+- [ ] The Wi-Fi test panel (R4-6) still collapses to a one-line result after a run.
+
+### U-54-6 — nothing else moved
+
+- [ ] Panel order unchanged: category → detail card → Connections (banner, picker, [home-router
+      section when chosen], Car Profile) → About.
+- [ ] Remote window (Drive deck) webserver-mode RouterPanel unchanged (now with the same
+      per-row **Edit** button).
+
+---
+
 ## U-53 round — Control Panel round 3: false statusCallbacks error, portrait banner rows, dialog on the phone (2026-09-29, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner round: ① red `Cannot read properties of undefined (reading 'statusCallbacks')` just below
