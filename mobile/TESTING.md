@@ -1,5 +1,48 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-58 round — deck landscape layout fix: no more merging/overlapping (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner: "the drive deck you made earlier opens the drive screen for each project category
+> but everything is merging and overlapping everything together in the landscape view… the
+> robocar drive deck is proper and no changes needed; the other categories are a mess; the
+> drive deck for those remaining projects should be in landscape and properly displayed."
+> Root causes (3): ① the deck branch's row had no bounded height, so the OLED's
+> `max-h-[55%]` resolved against an indefinite parent and was ignored while the deck card
+> overflowed the screen bottom (clipped → "merged"); ② decks drew their own DeckCard INSIDE
+> the screen's card → double borders/padding; ③ per-tile `w-[47%] flex-1 min-w-[120px]`
+> fought each other → unpredictable wraps/collisions. Fixed: the branch now uses the
+> robocar telemetry-view idiom (flex-1 min-h-0 row · fixed 2:1 OLED column at 30% width,
+> max 280 px · the deck's OWN DeckCard fills the column · stable explicit 2-up tile rows,
+> no percentages). Robocar branch + DroneControls untouched. Gates: tsc 0 · vitest
+> **317/317** · prettier clean.
+
+### U-58-1 — every non-robocar deck fills the landscape window cleanly
+
+- [ ] Open each of Smart Home / Smart Farm / Smart City / Smart Dustbin / Remote Controller
+      → Remote: the deck card sits fully INSIDE the window — nothing clipped at the bottom,
+      nothing overlapping the OLED, no border-inside-border (exactly ONE card edge around
+      the deck).
+- [ ] The OLED mirror (top-left, 2:1) stays a fixed size next to the deck at every landscape
+      width (small folded-keyboard window included) and never covers the deck tiles.
+
+### U-58-2 — tile rows are stable
+
+- [ ] Readout tiles (gauges/values/planned chips) render as tidy 2-up rows; an odd count
+      leaves the last slot empty (never a stretched lone tile); no tile ever collides with
+      its neighbour at any landscape width.
+
+### U-58-3 — robocar untouched (regression)
+
+- [ ] Robo Car drive deck (D-pad/Joystick/Telemetry + OLED 180×90 + Mode/Speed chrome) is
+      pixel-identical to before this round; Aerial Drones gimbal view unchanged.
+
+### U-58-4 — nothing else moved
+
+- [ ] Chrome row / sub-header / settings dropdown / reconnect banner behave as before on a
+      deck category; back navigation returns to the Control Panel with the link alive.
+
+---
+
 > 🆕 **2026-09-18 — RELEASE FINALIZATION (v3.2.0).** Release plan:
 > `../../guide/RELEASE-FINALIZATION-PLAN.md`; checklist `../../guide/FINALIZATION-TODO.md`;
 > failsafe `../../guide/FINALIZATION-FAILSAFE.md`. **RC: app v3.2.0 / 53**.
