@@ -36,6 +36,7 @@ import {
   pickBestRouter,
   upsertWifiHistory,
 } from "../../services/carProfileService";
+import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
@@ -657,6 +658,10 @@ export function useControlHub(routeCategory?: string) {
       } as DevicePrefs;
       void deviceMemory.write(addressForMemory, next);
       setSavedPrefs(next);
+      // R4-7: register the key in the device-profile registry index so the
+      // User preferences hub can enumerate every device ever saved (the
+      // index is a best-effort spill; deviceMemory stays authoritative).
+      void rememberDeviceKey(addressForMemory);
       // Profiles-sync: mirror the save to the user's cloud account so the
       // same car restores its last-saved state on any device (fire-and-
       // forget; local write already succeeded so this can never block UX).

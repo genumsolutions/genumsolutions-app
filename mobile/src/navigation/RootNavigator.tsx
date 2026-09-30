@@ -26,7 +26,7 @@ import { ToolsScreen } from "../screens/ToolsScreen";
 import { RemoteControlScreen } from "../screens/RemoteControlScreen";
 import { DeviceSetupScreen } from "../screens/DeviceSetupScreen";
 import { DeviceConnectionScreen } from "../screens/DeviceConnectionScreen";
-import { RobotPreferencesScreen } from "../screens/RobotPreferencesScreen";
+import { UserPreferencesScreen } from "../screens/UserPreferencesScreen";
 import { UpdateScreen } from "../screens/UpdateScreen";
 import { JournalScreen } from "../screens/JournalScreen";
 import { PrintingScreen } from "../screens/PrintingScreen";
@@ -82,9 +82,9 @@ const JournalScreenSafe = withErrorBoundary(JournalScreen, "Journal");
 const PrintingScreenSafe = withErrorBoundary(PrintingScreen, "Printing");
 const OpenToolsScreenSafe = withErrorBoundary(OpenToolsScreen, "OpenTools");
 const LegalScreenSafe = withErrorBoundary(LegalScreen, "Legal");
-const RobotPreferencesScreenSafe = withErrorBoundary(
-  RobotPreferencesScreen,
-  "RobotPreferences",
+const UserPreferencesScreenSafe = withErrorBoundary(
+  UserPreferencesScreen,
+  "UserPreferences",
 );
 
 // Wrapper to adapt UpdateScreen (modal with visible/onClose) to navigation screen
@@ -243,11 +243,11 @@ export function RootNavigator() {
           }}
         />
         <Stack.Screen
-          name="RobotPreferences"
-          component={RobotPreferencesScreenSafe}
+          name="UserPreferences"
+          component={UserPreferencesScreenSafe}
           options={{
             headerShown: true,
-            title: "Robot preferences",
+            title: "User preferences",
             headerTintColor: "#1e3a8a",
             headerBackTitle: "Back",
           }}
