@@ -1,4 +1,26 @@
-# NEXT SESSION — genumsolutions-app (2026-09-30: Phase A+B + HTTP + live-transport NACK fix; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-30: Phase A+B + HTTP + NACK + gate; release 3.2.7/60)
+
+**✅ 2026-09-30 — ALL CODE WORK IS DONE; THE BENCH IS ONE CONSOLIDATED ROUND AT THE END.** Owner
+instruction was to finish the code first and test on hardware last, so the four scattered device
+rounds are now a single **⭐ MASTER RUN** table at the top of
+`Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md`, ordered **safety rows first** (A = Bluetooth + e-stop,
+B = speed/`SPD0`-must-stop), with an explicit *needs the car?* column. **T18b no longer needs the
+car** — see F-53 below; the gate is proved in CI. Everything genuinely left is blocked on the owner,
+not on code: the bench round, the BLE firmware+flash, and the MQTT broker decisions.
+
+**✅ FIXED 2026-09-30 — THE F-41 GATE IS NOW PROVED IN CI, NOT ON A DEVICE (`f13c2bb`, FAILSAFES
+F-53).** `isSelectable()` lived inside `TransportPicker.tsx`, so "only bt-classic / wifi-ap-ws /
+wifi-sta-ws may ever be picked" was verified *only* by device row T18 — by a person, with hardware.
+A gate deciding whether the app may send drive commands to a car cannot rest on a manual check.
+Moved to `transportGate.ts` (both halves required: the owner-approved PRIMARY set **and** the
+adapter's own `isSupported()`), with `transportGate.test.ts` asserting it against the **real**
+registry via the new `buildAllTransports()` export. The assertion that matters is the negative one:
+**HTTP stays parked even though its adapter now reports supported** — F-51 fixed it, and *fixed is
+not proven* — plus nothing carrying a `roadmapNote` is ever selectable. Also removed a false claim
+from the Home-router help window: it told the owner to check the router SSID "**and signal**", but
+no firmware in the fleet answers `ROUTERS;SCAN` (checked 4WD4M + donor + 2WD1M), so a signal
+strength never exists. F-53 rule 3: every capability named in owner-facing text must be one some
+firmware actually delivers.
 
 **✅ FIXED 2026-09-30 — A `NACK` IS NOT ALWAYS A MODE REJECTION: E-STOP RAISED A FALSE ERROR ON
 THE LIVE TRANSPORTS (`79ac4ab`, FAILSAFES F-52).** Having applied F-51's lesson to HTTP, I
