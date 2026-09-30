@@ -46,6 +46,7 @@ import {
 import {
   LOCAL_CAR_MODES,
   type CarMode,
+  isModeToken,
   nextRemoteModeToken,
   sortRemoteModes,
 } from "../../config/roboCarCatalog";
@@ -1414,10 +1415,23 @@ export function useControlHub(routeCategory?: string) {
   // supported by car" and park the token as car-truth stub so selectMode() /
   // cycleMode() refuse it from here on â€” exactly what the hand-held remote
   // does (comms.cpp:505-508: setCarStub(arg,true) + setStatus(...)).
+  //
+  // F-52: a NACK is NOT only about modes. handleCommand() falls through to
+  // setModeFromString() for any line it does not handle, so the car answers
+  // every unrecognised COMMAND with the same UNKNOWN_MODE error. The 4WD4M
+  // (differential drive) implements neither ESTOP, SERVO<n>, TRIM<n> nor
+  // STEER<n> — all four are sent by this screen — so every EMERGENCY STOP
+  // press (and every trim / steering-limit edit) arrived here and produced a
+  // red "ESTOP is not supported by this car" toast on the one control that
+  // must never look broken, overwrote the "EMERGENCY STOP" status with
+  // "Not supported by car", and parked a phantom `ESTOP` stub. The car did
+  // stop (SPD0 is correct) — which is exactly why it survived every bench
+  // round. Only a real MODE token may be parked or reported.
   const handleNack = useCallback(
     (arg: string) => {
       const tok = canonicalCarToken(arg);
       if (!tok) return;
+      if (!isModeToken(tok)) return;
       setCarStubMap((prev) =>
         prev[tok] === true ? prev : { ...prev, [tok]: true },
       );

@@ -9,6 +9,7 @@ import {
   resolveModeByIndex,
   nextMode,
   nextRemoteModeToken,
+  isModeToken,
   sortRemoteModes,
   resolveModeForProduct,
   type CarModeId,
@@ -237,5 +238,44 @@ describe("resolveModeForProduct", () => {
   it("returns undefined for empty input", () => {
     expect(resolveModeForProduct({})).toBeUndefined();
     expect(resolveModeForProduct({ id: "" })).toBeUndefined();
+  });
+});
+
+describe("isModeToken (F-52 guard)", () => {
+  it("accepts every fleet mode token, case- and space-insensitively", () => {
+    for (const t of REMOTE_MODE_ORDER) {
+      expect(isModeToken(t)).toBe(true);
+      expect(isModeToken(t.toLowerCase())).toBe(true);
+      expect(isModeToken(` ${t} `)).toBe(true);
+    }
+  });
+
+  it("accepts the X-8 legacy BT alias (canonicalised to 4WD4M by the caller)", () => {
+    expect(isModeToken("BT")).toBe(true);
+  });
+
+  // The car answers every UNRECOGNISED line with NACK;E=UNKNOWN_MODE, because
+  // handleCommand() falls through to setModeFromString(). These are real
+  // command families this screen sends that the 4WD4M does NOT implement -
+  // each one used to raise a red "not supported by this car" toast, most
+  // alarmingly on the EMERGENCY STOP button.
+  it("rejects non-mode command tokens the car NACKs on the 4WD4M", () => {
+    for (const t of [
+      "ESTOP",
+      "SERVO90",
+      "TRIM5",
+      "TRIM-5",
+      "STEER30",
+      "F",
+      "SPD0",
+    ]) {
+      expect(isModeToken(t)).toBe(false);
+    }
+  });
+
+  it("rejects empty and unknown tokens", () => {
+    expect(isModeToken("")).toBe(false);
+    expect(isModeToken("   ")).toBe(false);
+    expect(isModeToken("NOPE")).toBe(false);
   });
 });
