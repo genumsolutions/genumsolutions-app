@@ -118,6 +118,13 @@ export type TransportTeaching = {
   needs: string;
   /** When this method is the right choice. */
   when: string;
+  /**
+   * Who dials whom, in one sentence, plus the consequence of that choice.
+   * Optional per-transport, but EVERY row that reaches a network fills it in:
+   * "server" and "client" are the single most misread words in this feature,
+   * and getting them backwards is why a link that "should just work" doesn't.
+   */
+  serverClient?: string;
   /** Concrete steps to connect + verify (numbered lines). */
   steps: string[];
 };

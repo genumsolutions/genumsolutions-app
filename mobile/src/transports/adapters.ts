@@ -83,6 +83,8 @@ export function createClassicBtTransport(): Transport {
       needs:
         "An Android phone with Bluetooth. The car must be powered on and paired in the phone's Bluetooth settings.",
       when: "The default choice — the proven, reliable path here. Use it when the car is on the bench or wherever RF distance is enough.",
+      serverClient:
+        "The car is the SERVER and the phone is the CLIENT, and the pairing is symmetric-free: the car advertises the name '4WD CAR' from boot and simply waits, so the phone is always the side that initiates. The phone therefore picks the car from a scan — there is no address to type. Because the link is direct, it survives with no router and no internet, and the car keeps driving even if the phone's WiFi is on someone else's network.",
       steps: [
         "Pair the car ('4WD CAR') once in Android Settings → Connections → Bluetooth.",
         "In Connections → Bluetooth Classic (SPP), tap Scan for cars and pick it.",
@@ -152,6 +154,8 @@ export function createBleTransport(): Transport {
       needs:
         "Car firmware with a BLE UART service; a phone with Bluetooth Low Energy.",
       when: "A good future option for low-power cars. On this 4WD4M firmware build it is NOT available yet (see the roadmap note).",
+      serverClient:
+        "The car is the GATT SERVER and the phone is the GATT CLIENT — and unlike SPP, a BLE peripheral has to ADVERTISE first, so the phone must scan to find the car rather than dialing a known name. Low power is the whole point: the car can sleep between commands instead of holding an open connection, at the cost of latency and a smaller payload per packet.",
       steps: [
         "Firmware: add the BLE-UART service (next firmware round).",
         "App: this row becomes selectable automatically once the service exists.",
@@ -277,6 +281,8 @@ const WIFI_AP_TEACHING: TransportTeaching = {
   needs:
     "A WiFi phone. The car powered on and broadcasting 4WDCar_Wifi (it always does unless it joined a home router and you prefer that).",
   when: "The easy WiFi default: it works anywhere, no router, no passwords. Use it whenever the car is not already joined to your home router.",
+  serverClient:
+    "The car is the SERVER and the phone is the CLIENT: the car creates the network and publishes a fixed address (192.168.245.1), then waits for the phone to dial in. The phone must therefore be the one that connects. Because the car chose the network, there is no router, no password and no internet — but only one such car is reachable at a time from a given phone.",
   steps: [
     "Join 4WDCar_Wifi from the phone's WiFi settings (no password).",
     "In Connections → Car access point (WiFi), keep the default ws://192.168.245.1:81 and press Connect.",
@@ -290,6 +296,8 @@ const WIFI_STA_TEACHING: TransportTeaching = {
   needs:
     "The car must be provisioned with the router (Connections → WiFi setup, or the Router panel: add the SSID + password and 'use' it). The phone must be on that same network.",
   when: "Pick this when the car is already joined to your router — longer range, and the same router keeps both car and phone on one LAN. Requires the router password to provision once.",
+  serverClient:
+    "Both sides are CLIENTS of your router — that is what STA means. The router is the only server here, and it hands each device its own address, so the car needs a router before the phone can find it. Two consequences: the car cannot be reached at all until it has joined a router, and its address can change between joins, so the phone reads the current IP off the car's STATE line or the OLED rather than assuming one. With both on one LAN, more than one car can be reachable at once.",
   steps: [
     "Provision the router once (SSID + password) so the car can join it.",
     "Confirm the car is ON the router (its network row shows the router SSID).",
@@ -334,6 +342,8 @@ const HTTP_TEACHING: TransportTeaching = {
   needs:
     "HTTP reachability only. Same as the AP method when phone is on 4WDCar_Wifi (http://192.168.245.1:80), or the car's LAN address when both are on a router.",
   when: "Great for scripts, browser tests and quick link checks. Telemetry is polled (/status), not pushed, so prefer the WebSocket methods for continuous driving.",
+  serverClient:
+    "The car is the HTTP SERVER and the phone is the CLIENT — this is the clearest example of the split. The car listens on port 80 and holds nothing open; the phone sends one request per command and the car answers immediately, then the connection closes. Two consequences worth knowing: because nothing stays open, the car can never push to the phone (so telemetry must be polled at /status, which is why this method is for checks and scripts rather than driving), and because each command is a separate request, a lost packet loses exactly one command instead of a queued batch.",
   steps: [
     "Confirm the car answers in a browser: http://192.168.245.1/status returns JSON.",
     "In Connections → HTTP/REST keep http://192.168.245.1:80 and press Connect.",
@@ -559,6 +569,8 @@ function createMdnssTransport(): Transport {
       needs:
         "Car firmware that advertises mDNS; phone on the same WiFi network.",
       when: "A future convenience for the Home-router method.",
+      serverClient:
+        "The phone is the CLIENT asking the network a QUESTION: 'what address is genum-car.local?' A small DNS responder on the car answers. Nothing about who dials whom changes — this sits on top of the Home-router method, where the car is still a client of your router. The whole point is that you stop typing an IP, so it is a convenience layer, never a new connection type.",
       steps: [
         "Firmware round: advertise genum-car.local over mDNS.",
         "App chooses the URL automatically; no IP to type.",
@@ -581,6 +593,8 @@ function createMqttTransport(): Transport {
       needs:
         "A broker (e.g. Mosquitto) reachable by both sides; firmware MQTT client.",
       when: "The future path to control the car from anywhere (cloud relay). Needs a broker decision first.",
+      serverClient:
+        "Neither side connects to the other. BOTH the phone and the car are CLIENTS of a broker, and each one dials OUT to it — the broker is the only server, and it holds both connections and passes messages between them. That is the whole reason MQTT is the answer for 'drive from anywhere': neither device needs to be reachable or even on the same network, because each makes its own outbound connection. It also means credentials become a real concern — a broker with a public address needs a per-device login, which is why this row stays parked until that decision is made.",
       steps: [
         "Choose/deploy a broker and decide credentials.",
         "Firmware round: add the MQTT client + the same text protocol over topic messages.",
@@ -604,6 +618,8 @@ function createCloudRelayTransport(): Transport {
       needs:
         "A hosted relay/tunnel service; the car must be on a network that can reach it.",
       when: "The future 'drive from anywhere' mode. LAN STA works today; internet needs the relay decision.",
+      serverClient:
+        "The car dials OUT to a relay on the public internet, so the relay can reach the car even though the car sits behind a home router that would otherwise hide it. The phone then connects to that same relay. Both sides are clients of the relay — the car is not reachable directly at all. This is the same 'dial outward' shape as MQTT, differing in that the relay is a purpose-built tunnel for this one app rather than a general message bus.",
       steps: [
         "Decide the relay (MQTT broker or WebRTC-style tunnel).",
         "Firmware + app both connect to the relay.",

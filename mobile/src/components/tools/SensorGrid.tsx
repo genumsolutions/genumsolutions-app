@@ -4,6 +4,28 @@ import { Switch, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { SensorGridProps, SensorData } from "./types";
 
+/**
+ * A reading the app cannot actually source must never be printed as a number.
+ *
+ * `setSensorData` has no caller anywhere in the app, so every tile here used
+ * to render its initial 0 as though it were a live reading — "Live Sensors:
+ * 0°C, 0%, 0ppm, 0dBm" on a car that has no sensors fitted. A fabricated 0 is
+ * worse than a blank: 0°C reads as a measurement, and an owner has no way to
+ * tell it from a real one. The deck already refuses to fake CONTROLS ("Ready
+ * for firmware"); readouts were never covered by that rule. Now they are.
+ *
+ * `null` means "this project has no sensor for this slot" and prints as `—`
+ * with a plain explanation. A real number is only ever printed when some
+ * telemetry actually supplied one.
+ */
+const NO_READING = "—";
+
+function reading(value: number | null | undefined, suffix: string): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${value}${suffix}`
+    : NO_READING;
+}
+
 export function SensorGrid({
   canControl,
   isDrone,
@@ -46,24 +68,29 @@ export function SensorGrid({
             Live Sensors
           </Text>
         </View>
+        <Text className="mt-1 text-[11px] leading-4 text-muted">
+          {NO_READING} means this project has no sensor on that slot yet — the
+          firmware does not report it. A number only appears once real telemetry
+          supplies one.
+        </Text>
         <View className="mt-3 flex-row flex-wrap gap-2">
           <SensorCard
             icon="thermometer"
             label="Temperature"
-            value={`${sensorData.temperature}°C`}
+            value={reading(sensorData.temperature, "°C")}
             color="#ef4444"
-          />
+          />{" "}
           <SensorCard
             icon="droplet"
             label="Humidity"
-            value={`${sensorData.humidity}%`}
+            value={reading(sensorData.humidity, "%")}
             color="#3b82f6"
           />
           {activeCategory === "smart-farm" && (
             <SensorCard
               icon="layers"
               label="Soil Moisture"
-              value={`${sensorData.soilMoisture}%`}
+              value={reading(sensorData.soilMoisture, "%")}
               color="#22c55e"
             />
           )}
@@ -72,13 +99,13 @@ export function SensorGrid({
               <SensorCard
                 icon="sun"
                 label="Light Level"
-                value={`${sensorData.lightLevel}%`}
+                value={reading(sensorData.lightLevel, "%")}
                 color="#f59e0b"
               />
               <SensorCard
                 icon="wind"
                 label="Air Quality"
-                value={`${sensorData.airQuality}ppm`}
+                value={reading(sensorData.airQuality, "ppm")}
                 color="#8b5cf6"
               />
             </>
@@ -89,15 +116,17 @@ export function SensorGrid({
               <SensorCard
                 icon="trash-2"
                 label="Fill Level"
-                value={`${sensorData.distance}%`}
+                value={reading(sensorData.distance, "%")}
                 color="#22c55e"
               />
               <SensorCard
                 icon="disc"
                 label="Lid Angle"
-                value={`${Math.round(
-                  ((sensorData.distance ?? 0) / 180) * 90 + 45,
-                )}°`}
+                value={
+                  typeof sensorData.distance === "number"
+                    ? `${Math.round((sensorData.distance / 180) * 90 + 45)}°`
+                    : NO_READING
+                }
                 color="#06b6d4"
               />
             </>
@@ -106,7 +135,7 @@ export function SensorGrid({
             <SensorCard
               icon="radio"
               label="Signal (RSSI)"
-              value={`${sensorData.airQuality}dBm`}
+              value={reading(sensorData.airQuality, " dBm")}
               color="#8b5cf6"
             />
           )}
@@ -115,7 +144,7 @@ export function SensorGrid({
             <SensorCard
               icon="maximize-2"
               label="Distance"
-              value={`${sensorData.distance}cm`}
+              value={reading(sensorData.distance, "cm")}
               color="#06b6d4"
             />
           )}

@@ -283,6 +283,16 @@ function MethodHelpModal({
                 <Text className="text-[12px] leading-4 text-muted">
                   {teaching.when}
                 </Text>
+                {teaching.serverClient ? (
+                  <>
+                    <Text className="mt-2.5 text-[10px] font-black uppercase tracking-wide text-muted">
+                      Who connects to whom
+                    </Text>
+                    <Text className="text-[12px] leading-4 text-muted">
+                      {teaching.serverClient}
+                    </Text>
+                  </>
+                ) : null}
                 <Text className="mt-2.5 text-[10px] font-black uppercase tracking-wide text-muted">
                   Connect + verify
                 </Text>
