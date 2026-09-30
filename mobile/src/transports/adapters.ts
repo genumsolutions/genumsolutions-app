@@ -29,6 +29,7 @@ import {
   DEFAULT_AP_IP,
   DEFAULT_WS_URL,
   parseTelemetryLine,
+  SPEED_MIN,
 } from "../services/carProtocol";
 import { linkManager, type CommandSender } from "./linkManager";
 import type {
@@ -329,7 +330,7 @@ const HTTP_TEACHING: TransportTeaching = {
   steps: [
     "Confirm the car answers in a browser: http://192.168.245.1/status returns JSON.",
     "In Connections → HTTP/REST keep http://192.168.245.1:80 and press Connect.",
-    "Drive letters (F/B/L/R/S), SPD<n> and mode tokens map to /f, /b, /l, /r, /stop, /speed?val=, /mode?val=; one /status round-trip verifies the link.",
+    "Drive letters (F/B/L/R/S), SPD<n> and mode tokens map to /forward, /backward, /left, /right, /stop, /speed?val=, /mode?val=; one /status round-trip verifies the link.",
   ],
 };
 
@@ -427,13 +428,34 @@ export function createHttpTransport(): Transport {
       const up = c.toUpperCase();
       let path: string | null = null;
       if (c === "S") path = "/stop";
-      else if (/^[FBLR]$/.test(c)) path = `/${c.toLowerCase()}`;
+      // The car's web server registers the SPELLED-OUT routes
+      // /forward /backward /left /right (WebServerComm.cpp server.on calls,
+      // identical on the wireless donor car and the 4WD4M testbed). This
+      // adapter used to build /f /b /l /r, which the car answers with a
+      // 404 Not Found — so every direction command silently failed while
+      // the link still looked healthy. One wrong byte-pair, exactly the
+      // class F-30 records. The routes are named here once, from the
+      // firmware, and pinned by adapters.test.ts.
+      else if (c === "F") path = "/forward";
+      else if (c === "B") path = "/backward";
+      else if (c === "L") path = "/left";
+      else if (c === "R") path = "/right";
       else if (c === "ESTOP")
         path = "/stop"; // no ESTOP route; safest stop
       else {
         const mSpd = /^SPD(\d{1,3})$/.exec(up);
-        if (mSpd) path = `/speed?val=${Number(mSpd[1])}`;
-        else {
+        if (mSpd) {
+          const value = Number(mSpd[1]);
+          // SPD0 is a STOP line (SAFE_STOP_LINES), but /speed has no stop
+          // semantics: the firmware clamps with constrain(val, MIN_SPEED,
+          // MAX_SPEED), so SPD0 would become speed 100 and the car would
+          // DRIVE. On BT/WS the car treats SPD0 as a stop, so mapping it to
+          // /speed?val=0 made the SAME neutral command mean opposite things
+          // on two transports — the exact "two dialects for one field" trap
+          // F-30 records. Route every sub-floor speed to /stop instead.
+          if (value < SPEED_MIN) path = "/stop";
+          else path = `/speed?val=${value}`;
+        } else {
           const mMode = /^(?:MODE_)?([A-Z0-9_]{2,})$/.exec(up);
           if (
             mMode &&
