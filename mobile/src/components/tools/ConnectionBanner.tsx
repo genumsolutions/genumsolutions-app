@@ -11,6 +11,12 @@
 //   • Network    — STA truth: "car is on your home router <ssid>" with
 //                  dBm signal bars, all read from car telemetry; otherwise
 //                  "car is its own access point". Never both.
+// R4-1b (owner: "when the car is the AP, the dBm line must read as the AP,
+// not as some home router"): the Signal row is labeled by the SAME method
+// flavor as the Network row — "Router signal" (the car's link TO your
+// router) on a home-router link, "Car AP signal" (the phone's link to the
+// car's hotspot) on an AP link. The dBm value itself is always the CAR's
+// own radio measurement; only the wording follows the method.
 // This replaces the old two-card duplication (owner ① ② ③).
 // =====================================================================
 import React from "react";
@@ -120,6 +126,21 @@ export function ConnectionBanner({
       ? "Linked & verified"
       : "Linked — waiting for the car";
   const networkKind = staSsid ? "sta" : apName ? "ap" : null;
+  // R4-1b: the Signal row belongs to the network the car is actually on —
+  // same flavor source as the Network row, so AP can never borrow the
+  // home-router wording (and vice versa).
+  const signalLabel =
+    networkKind === "sta"
+      ? "Router signal"
+      : networkKind === "ap"
+        ? "Car AP signal"
+        : "Signal";
+  const signalNote =
+    networkKind === "sta"
+      ? "car to your router"
+      : networkKind === "ap"
+        ? "phone to the car's hotspot"
+        : null;
 
   return (
     <View className="rounded-2xl border border-line bg-card p-4 shadow-card">
@@ -191,10 +212,11 @@ export function ConnectionBanner({
           {signal !== null ? (
             <Row
               icon="bar-chart-2"
-              label="Signal"
+              label={signalLabel}
               sub={
                 <Text className="text-[11px] text-muted">
                   {signal}%{rssi !== null ? ` · ${rssi} dBm` : ""}
+                  {signalNote ? ` · ${signalNote}` : ""}
                 </Text>
               }
               trailing={<SignalBars signal={signal} />}
