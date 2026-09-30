@@ -138,6 +138,24 @@ export function getProjectCategory(slug: string): ProjectCategory | undefined {
   return PROJECT_CATEGORIES.find((c) => c.slug === slug);
 }
 
+/**
+ * PLAN-2026-09-29 §2: visual KIND groups for the Control Panel's pill row.
+ * Two slim section headers above the SAME 7 pills in the SAME order as
+ * before — kinds are labels only: nothing merges, nothing moves between
+ * categories (owner decision ①). Static strings — no DB, no admin.
+ * (§6 open check: owner may rename the labels later; data-only change.)
+ */
+export const KIND_GROUPS: Array<{ label: string; slugs: string[] }> = [
+  {
+    label: "Devices that drive",
+    slugs: ["robocar", "drones", "remote-controller"],
+  },
+  {
+    label: "Devices that monitor & switch",
+    slugs: ["home-automation", "smart-farm", "smart-city", "smart-dustbin"],
+  },
+];
+
 // Maps the product.category values from Supabase (e.g. 'Robot Cars')
 // to the PROJECT_CATEGORIES slugs used by the Control Panel.
 export const PRODUCT_CATEGORY_TO_SLUG: Record<string, string> = {

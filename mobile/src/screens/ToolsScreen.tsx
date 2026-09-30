@@ -36,6 +36,7 @@ import type { TransportConnectOptions, TransportId } from "../transports/types";
 import type { SppDevice } from "../services/sppService";
 import { feedbackTap } from "../services/hapticsService";
 import {
+  KIND_GROUPS,
   PROJECT_CATEGORIES,
   PRODUCT_CATEGORY_TO_SLUG,
   type ProjectCategory,
@@ -307,34 +308,47 @@ export function ToolsScreen() {
           </View>
         </View>
 
-        {/* Category selector */}
-        <View className="mt-5 flex-row flex-wrap gap-2">
-          {categories.map((c) => {
-            const active = c.slug === selectedSlug;
-            return (
-              <Pressable
-                key={c.slug}
-                onPress={() => setSelectedSlug(c.slug)}
-                accessibilityRole="button"
-                accessibilityLabel={`Select category ${c.name}`}
-                accessibilityState={{ selected: active }}
-                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${active ? "bg-navy" : "border border-line bg-card"}`}
-              >
-                <Feather
-                  name={CATEGORY_ICONS[c.slug] ?? "box"}
-                  size={13}
-                  color={active ? "#fff" : "#1e3a8a"}
-                />
-                <Text
-                  numberOfLines={1}
-                  className={`text-xs font-bold ${active ? "text-white" : "text-navy"}`}
-                >
-                  {c.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/* Category selector — grouped by KIND (PLAN-2026-09-29 §2): two slim
+            section headers above the same 7 pills in the SAME order as before.
+            Kinds are visual labels only — nothing merges, nothing moves. */}
+        {KIND_GROUPS.map((group) => {
+          const pills = categories.filter((c) => group.slugs.includes(c.slug));
+          if (pills.length === 0) return null;
+          return (
+            <View key={group.label} className="mt-5">
+              <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
+                {group.label}
+              </Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {pills.map((c) => {
+                  const active = c.slug === selectedSlug;
+                  return (
+                    <Pressable
+                      key={c.slug}
+                      onPress={() => setSelectedSlug(c.slug)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select category ${c.name}`}
+                      accessibilityState={{ selected: active }}
+                      className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${active ? "bg-navy" : "border border-line bg-card"}`}
+                    >
+                      <Feather
+                        name={CATEGORY_ICONS[c.slug] ?? "box"}
+                        size={13}
+                        color={active ? "#fff" : "#1e3a8a"}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        className={`text-xs font-bold ${active ? "text-white" : "text-navy"}`}
+                      >
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
 
         {/* Category detail card */}
         <View
