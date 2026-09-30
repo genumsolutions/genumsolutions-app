@@ -1,5 +1,23 @@
 # NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
 
+**✅ BUILT 2026-09-30 (latest) — CONNECTION-MANAGER PHASE A: JSON COMMAND ENVELOPE
+(`commandEnvelope.ts` + 13 tests, INTENTIONALLY DORMANT — zero live call-sites).** Owner:
+"dont wait for me do what you need to until this session ends; study properly the existing
+architecture and build what you need to properly." Architecture study done (transports/
+linkManager + types + adapters + carProtocol read end to end — the brief's ~70% exists).
+Built the SAFE form of the brief's "unified JSON schema": a pure, versioned (`v: 1`)
+translation layer that accepts friendly JSON and emits ONLY the locked wire grammar via the
+REAL carProtocol builders (injected as deps — the envelope cannot fork the grammar). Refuses
+unknown versions, free-text mode names (`"obstacle_avoid"` → error; FIN-23 registry is the
+only vocab; the ONE legacy alias BT→4WD4M applies), and out-of-window values with readable
+errors. NOT wired into the live path — the hub/transports still speak wire lines; activation
+is Phase B of `guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md` (owner go + F-41
+discipline, acceptance on the 4WD4M testbed). Dormancy recorded here + root `CONTINUITY.md`
+per the U-25/F-45 dead-code liability rule. Gates: tsc 0 · vitest **330/330** (23 files).
+Roadmap doc: `guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md` (Phase B wiring, Phase C
+unlock order HTTP→BLE→mDNS→MQTT each behind its own device round; ESP-NOW out of scope).
+Mid-session handoff for the next AI: root **`CONTINUITY.md`**.
+
 **✅ SHIPPED 2026-09-30 (later) — U-58: DECK LANDSCAPE LAYOUT FIX (JS-only → same-version OTA
 3.2.7/60, COMMITTED + PUSHED + OTA PUBLISHED + VERIFIED LIVE).** Owner: the per-category
 drive decks "merge and overlap everything together in the landscape view" while the robocar
