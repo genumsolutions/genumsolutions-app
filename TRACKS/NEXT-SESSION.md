@@ -1,6 +1,21 @@
-# NEXT SESSION — genumsolutions-app (2026-09-30: Connection-Manager Phase A+B complete; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-30: Phase A+B + HTTP/REST fix; current release 3.2.7/60)
 
-**✅ BUILT 2026-09-30 (latest) — CONNECTION-MANAGER PHASE B: ENVELOPE WIRING (GATE STILL OFF
+**✅ FIXED 2026-09-30 — HTTP/REST ADAPTER WAS BROKEN IN TWO WAYS (`163adea`, FAILSAFES F-51).**
+Auditing Phase C item 2 (the roadmap called HTTP "already implemented end-to-end; cheapest win;
+do first") against the firmware found it was **not**: ① the adapter emitted `/f /b /l /r` while
+the car registers `/forward /backward /left /right` (`WebServerComm.cpp`, identical on the donor
+and the 4WD4M testbed) → **every direction command 404'd** while `/status` kept the link looking
+healthy; ② **SAFETY: `SPD0`** (a neutral stop line on BT/WS) mapped to `/speed?val=0`, but the
+firmware clamps with `constrain(val, MIN_SPEED=100, …)` → a **stop became speed 100 and the car
+drove**. Fixed both: routes named from the firmware, and any sub-floor `SPD` routes to `/stop`.
+Why it hid so long: HTTP is F-41-gated so nobody could drive it, **and the existing test asserted
+the same wrong routes** — test and bug agreed. New rules in **F-51**: a gated method is not a
+verified one; a test asserting a hand-written literal is not evidence; one logical command must
+mean the same thing on every transport. Pinned with negative assertions (`/f`, `/b`, `/l`, `/r`,
+`/speed?val=0` must never appear). Gates: tsc 0 · vitest **344/344** · prettier clean. Bench rows
+**T15–T18** (`Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` Round H); the F-41 flip waits on them.
+
+**✅ BUILT 2026-09-30 — CONNECTION-MANAGER PHASE B: ENVELOPE WIRING (GATE STILL OFF
 — activation needs the owner's bench round).** Phase A built the translation layer; Phase B puts it
 on the live path without changing what the user sees. Three changes, no screen touched:
 ① **NEW `transports/envelopeWiring.ts`** — the ONE canonical binding of the real `carProtocol`
