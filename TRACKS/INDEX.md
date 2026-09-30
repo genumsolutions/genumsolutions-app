@@ -1,6 +1,15 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
-> ✅ **2026-09-30 (latest) — PER-CATEGORY DECKS STEP ① SHIPPED: Smart Home deck pilot
+> ✅ **2026-09-30 (latest) — DECKS ②+③ SHIPPED: ALL FIVE CATEGORY DECKS + KIND HEADERS
+> (JS-only → same-version OTA 3.2.7/60, `c40e3be` + `f05cdaf`).** Owner approved the pilot →
+> SmartFarm/SmartCity/SmartDustbin/Handheld decks landed (live relay switches + honest
+> "Ready for firmware" placeholders; SensorGrid fallback retired) and the Control Panel pill
+> row gained two kind headers ("Devices that drive" / "Devices that monitor & switch") —
+> same 7 pills, same order, static catalog data. Tile labels disambiguated to keep the
+> parity test's zero-leakage rule. Gates: tsc 0 · vitest **317/317** · prettier clean.
+> Device rows: **U-57-1..4**. Per-category decks round COMPLETE.
+
+> ✅ **2026-09-30 — PER-CATEGORY DECKS STEP ① SHIPPED: Smart Home deck pilot
 > (JS-only → same-version OTA 3.2.7/60, `9570187`).** The approved plan
 > (`guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md`) started: deck kit (`decks/deckkit.ts`
 > manifests + `decks/shared.tsx` chrome) + **SmartHomeDeck** — the Remote window's Smart Home

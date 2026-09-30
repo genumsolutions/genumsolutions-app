@@ -10,6 +10,49 @@
 
 ---
 
+## U-57 round — decks steps ②+③: all five category decks + kind headers (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner approved the Smart Home pilot screenshot → steps ② and ③ landed in one round:
+> every non-robocar/non-drone category now has its OWN deck (the shared SensorGrid fallback
+> is fully retired) and the pill row is grouped under two kind headers. Gates: tsc 0 ·
+> vitest **317/317** · prettier clean.
+
+### U-57-1 — every category opens its OWN deck
+
+- [ ] **Smart Farm** → Remote shows the farm deck: Pump Room / Solenoid Valve switches, Soil
+      Wetness gauge, Soil Temp, and a "Ready for firmware" Irrigation Plan tile — no home/
+      city/dustbin tiles anywhere.
+- [ ] **Smart City** → Street Lamps / Parking Slots switches, AQ (ppm) gauge, Daylight % tile.
+- [ ] **Smart Dustbin** → Fill % gauge, Lid Open / Compactor Run switches, "Ready for
+      firmware" Last Empty tile.
+- [ ] **Remote Controller** → Battery % / RSSI (dBm) tiles, Ch1/Ch2 switches, "Ready for
+      firmware" throttle-curve tile.
+- [ ] The old shared grid (Outputs + Live Sensors) no longer appears for ANY category;
+      Robo Car and Aerial Drones decks are unchanged.
+
+### U-57-2 — switches are live; placeholders stay honest
+
+- [ ] With the car linked: each deck's switches send real `OUT<i>:n` writes (Farm Pump Room
+      = relay 1, Solenoid Valve = relay 2; City Street Lamps = relay 1, Parking Slots =
+      relay 2; Dustbin Lid Open = relay 1, Compactor Run = relay 2; Handheld Ch1/Ch2 =
+      relays 1/2); disabled while no link is up.
+- [ ] Planned tiles (Irrigation Plan, Last Empty, Throttle / Steer curve) never fire a
+      command and always show the amber "Ready for firmware" chip.
+
+### U-57-3 — kind headers on the Control Panel
+
+- [ ] The pill row now reads **DEVICES THAT DRIVE** (Robo Car · Aerial Drones · Remote
+      Controller) then **DEVICES THAT MONITOR & SWITCH** (Smart Home · Smart Farm · Smart
+      City · Smart Dustbin) — same 7 pills, same order inside each group.
+- [ ] Selecting a pill still opens the same detail card as before; nothing else on the
+      page moved.
+
+### U-57-4 — deck isolation regression sweep
+
+- [ ] Open each of the five decked categories in turn and confirm zero label overlap:
+      no deck shows another category's tile wording (pinned by the deckkit parity test;
+      verify visually on device at small landscape widths).
+
 ## U-56 round — per-category decks step ①: Smart Home deck pilot (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner plan: `guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md` — every non-robocar/non-drone
