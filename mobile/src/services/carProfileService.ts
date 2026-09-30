@@ -158,6 +158,10 @@ export function toCloudRecord(
     use_joystick: prefs.useJoystick ?? null,
     joystick_layout: prefs.joystickLayout ?? null,
     last_wifi_url: prefs.lastWifiUrl ?? null,
+    // R4-5: the last SSID the user sent to THIS car joins the cloud row so a
+    // second device restores the smart-link recency fallback too. Names
+    // only — never passwords.
+    last_wifi_ssid: prefs.lastWifiSsid ?? null,
     auto_join_router: prefs.autoJoinRouter ?? true,
     bt_ids: prefs.btIds ?? [],
     saved_routers: prefs.savedRouters ?? [],
@@ -198,6 +202,9 @@ const SYNCABLE_SETTINGS = {
     typeof v === "string" && v.length > 0 && v.length <= 64 ? v : null,
   last_wifi_url: (v: unknown): string | null =>
     typeof v === "string" && v.length <= 500 ? v : null,
+  // R4-5: last SSID sent to this car (smart-link recency seed; name only).
+  last_wifi_ssid: (v: unknown): string | null =>
+    typeof v === "string" && v.length > 0 && v.length <= 64 ? v : null,
   auto_join_router: (v: unknown): boolean | null =>
     typeof v === "boolean" ? v : null,
   bt_ids: (v: unknown): string[] | null =>
@@ -238,7 +245,6 @@ export function prefsFromCloudSettings(
       SYNCABLE_SETTINGS.joystick_layout(s.joystick_layout) ??
       base.joystickLayout,
     fullscreen: base.fullscreen,
-    lastWifiSsid: base.lastWifiSsid ?? null,
     savedRouters:
       SYNCABLE_SETTINGS.saved_routers(s.saved_routers) ??
       base.savedRouters ??
@@ -249,6 +255,10 @@ export function prefsFromCloudSettings(
     lastWifiUrl:
       SYNCABLE_SETTINGS.last_wifi_url(s.last_wifi_url) ??
       base.lastWifiUrl ??
+      null,
+    lastWifiSsid:
+      SYNCABLE_SETTINGS.last_wifi_ssid(s.last_wifi_ssid) ??
+      base.lastWifiSsid ??
       null,
     autoJoinRouter:
       SYNCABLE_SETTINGS.auto_join_router(s.auto_join_router) ??

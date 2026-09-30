@@ -490,3 +490,87 @@ describe("profiles sync engine (last-saved-wins)", () => {
     expect(record.settings.joystick_layout).toBe("single");
   });
 });
+
+// =====================================================================
+// R4-5 (2026-09-30): the last-used router joins the synced profile.
+// Owner: "if the user changes things for the car, that car should also
+// save all those things — profile, settings, data, presets."
+// =====================================================================
+describe("R4-5: last-used router sync", () => {
+  const base = {
+    name: null,
+    modeId: null,
+    speed: 170,
+    servo: 90,
+    steerLimit: 90,
+    trim: 0,
+    useJoystick: false,
+    fullscreen: false,
+    joystickLayout: "dual",
+    lastWifiSsid: null,
+    savedRouters: [],
+  } as Omit<DevicePrefs, "address">;
+
+  it("toCloudRecord carries last_wifi_ssid (name only, never passwords)", () => {
+    const prefs = {
+      address: "fw:1A2B3C",
+      name: "4WD4M",
+      modeId: null,
+      speed: 170,
+      servo: 90,
+      steerLimit: 90,
+      trim: 0,
+      useJoystick: false,
+      fullscreen: false,
+      joystickLayout: "dual",
+      lastWifiSsid: "HomeNet",
+      savedRouters: ["HomeNet"],
+      uniqueId: "1A2B3C",
+      btIds: [],
+      wifiHistory: [],
+      lastWifiUrl: "ws://192.168.1.5:81",
+      autoJoinRouter: true,
+    } as never;
+    const record = toCloudRecord(prefs, "fw:1A2B3C");
+    expect(record.settings.last_wifi_ssid).toBe("HomeNet");
+  });
+
+  it("prefsFromCloudSettings restores last_wifi_ssid and last_wifi_url", () => {
+    const prefs = prefsFromCloudSettings(
+      {
+        last_wifi_ssid: "HomeNet",
+        last_wifi_url: "ws://192.168.1.5:81",
+      },
+      base,
+    );
+    expect(prefs.lastWifiSsid).toBe("HomeNet");
+    expect(prefs.lastWifiUrl).toBe("ws://192.168.1.5:81");
+  });
+
+  it("prefsFromCloudSettings drops a corrupt last_wifi_ssid (forward-compatible)", () => {
+    const prefs = prefsFromCloudSettings({ last_wifi_ssid: 42 }, base);
+    expect(prefs.lastWifiSsid).toBeNull();
+  });
+
+  it("mergeCloudProfile carries the restored SSID/URL through adoption", () => {
+    const merged = mergeCloudProfile(
+      {
+        profile_key: "fw:1A2B3C",
+        car_name: "Shop car",
+        unique_id: "1A2B3C",
+        settings: {
+          last_wifi_ssid: "HomeNet",
+          last_wifi_url: "ws://192.168.1.5:81",
+        },
+        wifi_history: [],
+        updated_at: "2026-09-30T00:00:00Z",
+      },
+      null,
+      base,
+    );
+    expect(merged.source).toBe("cloud");
+    expect(merged.changed).toBe(true);
+    expect(merged.prefs.lastWifiSsid).toBe("HomeNet");
+    expect(merged.prefs.lastWifiUrl).toBe("ws://192.168.1.5:81");
+  });
+});

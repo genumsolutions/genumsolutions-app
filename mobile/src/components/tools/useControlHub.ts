@@ -588,6 +588,18 @@ export function useControlHub(routeCategory?: string) {
           cur.length > 0 ? cur : (merged.prefs.savedRouters ?? []),
         );
       }
+      // R4-5 (owner: "after being connected, the car shares its info to the
+      // app, then the database — and back"): the adopted profile restores
+      // the last-used router too — the smart-link recency seed AND the
+      // home-router address field, so the next STA connect is one tap.
+      if (merged.prefs.lastWifiSsid) {
+        setWifiSsid((cur) => cur || merged.prefs.lastWifiSsid!);
+      }
+      if (merged.prefs.lastWifiUrl) {
+        setWifiUrl((cur) =>
+          cur && cur !== DEFAULT_WS_URL ? cur : merged.prefs.lastWifiUrl!,
+        );
+      }
       setProfileSync({ state: "adopted", at: Date.now() });
     })();
     return () => {
