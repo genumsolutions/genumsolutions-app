@@ -1,5 +1,15 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-09-30 — ROUND 4 CORE SHIPPED (R4-1b · R4-4 · R4-5, JS-only → same-version OTA
+> 3.2.7/60): AP-vs-router banner wording follows the method (R4-1b) · TransportPicker reports
+> the chosen method and the home-router (STA) method hosts the SAME RouterPanel the remote's
+> webserver mode has, with a per-row Edit (re-ADD upsert) — AP/BT never show it (R4-4) · the
+> U-52 `car_profiles` engine (NOT a second table — the broken device_profiles WIP was
+> discarded, F-49) now syncs the last router SSID and restores it on adopt: recency seed +
+> STA address prefill (R4-5). Gates: tsc 0 · vitest **296/296** · prettier clean. Owner device
+> round: `mobile/TESTING.md` **U-54-1..6**. Next queued: R4-7 (User preferences hub).
+> Resume: `NEXT-SESSION.md` here.
+
 > 🔁 **2026-09-29 SESSION CLOSE — round 4 QUEUED (owner's last message of the session), nothing
 > built yet.** Owner asks: ① connection-method-aware panel — on the car-AP WiFi link show the
 > CAR's AP truth (name + dBm), never home-router rows; hide sections unrelated to the current
