@@ -274,6 +274,23 @@ function remoteOrderIndex(token: string): number {
 }
 
 /**
+ * Is `token` one of the 9 fleet MODE tokens (the X-8 `BT` legacy alias
+ * included)? Derived from REMOTE_MODE_ORDER — never hand-write the list
+ * again (F-51: a hand-written literal is not evidence).
+ *
+ * Needed because the car answers EVERY unrecognised line with
+ * `NACK;E=UNKNOWN_MODE;ARG=<token>`: handleCommand() falls through to
+ * setModeFromString() for anything it does not otherwise handle, so the
+ * "unknown MODE" error also covers "this car has no such COMMAND"
+ * (ESTOP, SERVO<n>, TRIM<n>, STEER<n> on the differential-drive 4WD4M).
+ * Callers that interpret a NACK as "mode not supported" must gate on this
+ * or they will raise a false error for an unimplemented command.
+ */
+export function isModeToken(token: string): boolean {
+  return remoteOrderIndex(token) !== -1 || token.trim().toUpperCase() === "BT";
+}
+
+/**
  * The mode token that follows `token` in the fleet order — ALWAYS advances
  * and wraps, never falls back to a "default" mode (the old cycleMode could
  * bounce to pool[0] when its id-lookup missed). Unknown / legacy tokens
