@@ -52,6 +52,7 @@ import {
 } from "../../transports/types";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../../services/carProtocol";
 import { WifiDiagnosticsPanel } from "./WifiDiagnosticsPanel";
+import { isSelectable } from "./transportGate";
 
 export type TransportPickerProps = {
   /** Shown under the rows. Lets the screen own layout. */
@@ -120,17 +121,10 @@ const CAPABILITY_LABEL: Array<[TransportCapability, string]> = [
  * home-router (STA) shape: the transport + adapter already existed and the
  * U-51 device round verified SPP + AP on the car, which was this gate's
  * stated condition for unlocking STA. It stays gated on `isSupported()`.
+ *
+ * The rule itself moved to ./transportGate so CI can prove the gate holds —
+ * a gate over drive commands must not depend on a human noticing on a device.
  */
-const PRIMARY_METHODS: ReadonlySet<TransportId> = new Set<TransportId>([
-  "bt-classic",
-  "wifi-ap-ws",
-  "wifi-sta-ws",
-]);
-
-/** A method the user may actually pick and dial right now. */
-function isSelectable(t: Transport): boolean {
-  return PRIMARY_METHODS.has(t.id) && t.isSupported();
-}
 
 const STATUS_META: Record<TransportStatus, { label: string; tint: string }> = {
   idle: { label: "Not connected", tint: "#64748b" },
