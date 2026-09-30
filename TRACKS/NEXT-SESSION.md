@@ -1,6 +1,31 @@
-# NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-30: Connection-Manager Phase A+B complete; current release 3.2.7/60)
 
-**✅ BUILT 2026-09-30 (latest) — CONNECTION-MANAGER PHASE A: JSON COMMAND ENVELOPE
+**✅ BUILT 2026-09-30 (latest) — CONNECTION-MANAGER PHASE B: ENVELOPE WIRING (GATE STILL OFF
+— activation needs the owner's bench round).** Phase A built the translation layer; Phase B puts it
+on the live path without changing what the user sees. Three changes, no screen touched:
+① **NEW `transports/envelopeWiring.ts`** — the ONE canonical binding of the real `carProtocol`
+builders into the envelope's injected deps + the gate (`ENVELOPE_INTAKE_ENABLED`, default **off**,
+in-memory only). Phase A injected the deps so the layer could never fork the grammar; this file
+guarantees there is exactly ONE place they are bound, so no call-site can quietly drop a builder.
+② **`LinkManager.sendEnvelope(input)`** — decode → encode → the existing `sendLine`. Resolves
+`{ok}` / `{ok:false,error}` (no throw) so a caller can render the reason; fails CLOSED on both
+counts (malformed envelope → translation error before any I/O; transport failure → the manager's
+own reason). ③ **`useControlHub.sendEnvelopeCommand(input)`** — ONE flag-gated intake so both
+dialects coexist. It encodes to a line and then calls the **existing** `sendCommand` fan-out:
+deliberate, because `sendCommand` is where **R-4 fleet parity** lives (mode-based transport routing
++ the `EVERY_LINK_COMMANDS` broadcast set) and `linkManager.sendLine` is NOT on that path — routing
+envelopes through `linkManager` would have silently bypassed R-4. Encoding first also makes "no wire
+line differs from the pre-envelope path" true **by construction**, not by test.
+**W-14:** a success result carries **no line** on purpose — for `ROUTERS;ADD` / `WIFICFG` the line
+IS the password, and an echoed string is exactly how a credential lands in a log or crash report.
+**F-41:** the gate ships OFF and no UI calls it, so on the shipped build this round is invisible.
+Gates: tsc 0 · vitest **343/343** (24 files) · prettier clean. New tests pin byte parity for EVERY
+envelope type over BOTH BT and WS in CI (so the acceptance criterion can't regress between device
+rounds), fail-closed on malformed input, gate-default-off, and the no-echo rule.
+**Bench rows:** `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` **T11–T14** (Round E — that car is the only
+permitted test target); app regression rows `mobile/TESTING.md` **U-59-1..3**. To run: flip
+`setEnvelopeIntakeEnabled(true)` in a scratch build. Roadmap: §4 done, §4b = remaining gate.
+**✅ PHASE A (previous step) — CONNECTION-MANAGER: JSON COMMAND ENVELOPE
 (`commandEnvelope.ts` + 13 tests, INTENTIONALLY DORMANT — zero live call-sites).** Owner:
 "dont wait for me do what you need to until this session ends; study properly the existing
 architecture and build what you need to properly." Architecture study done (transports/
