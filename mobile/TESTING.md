@@ -10,6 +10,61 @@
 
 ---
 
+## U-55 round — R4-7: User preferences hub (devices ever connected + robot profiles) (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner: "Robot preferences → User preferences … every car/device the user has EVER connected
+> through ANY transport with set · edit · delete per device, easily, from one place." Built on
+> the existing stores (car_profiles + robot_user_settings — no new table). Gates: tsc 0 ·
+> vitest **305/305** · prettier clean.
+
+### U-55-1 — the Menu entry moved
+
+- [ ] Menu → the group reads **User Settings** with the item **User preferences** (no "Robot
+      preferences" text anywhere; the Pro chip still shows for free users).
+- [ ] Opening it shows the title **User preferences** — no crash, and free users see the Pro
+      explanation card as before.
+
+### U-55-2 — My devices lists every car ever connected (any transport)
+
+- [ ] After linking a car over **Bluetooth**, **Car access point**, and **Home router** (one
+      link each is enough to test), the hub's **My devices** list shows that car ONCE — not
+      one entry per transport (fw:<boardId> wins over MAC over wifi:<identity>).
+- [ ] The row shows the car's name, its stable key, and a badge: **synced** (mirrored to your
+      account) or **this phone** (local only — e.g. you were signed out when you linked it).
+- [ ] A car linked for the very first time appears in the list even before its first settings
+      save (the last-device spill makes it visible).
+
+### U-55-3 — set · edit · forget per device
+
+- [ ] **Set name:** tap it, type a new name, Save — the row renames; reopen the hub and the
+      name is still there; on a second device signed into the same account the renamed car
+      shows the new name too (cloud mirror).
+- [ ] **Auto-join on/off:** the button flips the smart-link auto-join preference for that car;
+      reopening the hub keeps the choice; the Control Panel's Car Profile toggle shows the
+      same state next link.
+- [ ] **Forget:** confirm dialog explains the car itself is NOT touched. After forgetting, the
+      device leaves the list and its local memory is gone; re-linking the car in the Control
+      Panel starts a fresh profile (and it re-appears in the hub).
+
+### U-55-4 — offline-first: phone memory first, DB when online
+
+- [ ] With the phone in airplane mode, open the hub: the devices list still renders (badge
+      reads **offline — phone memory**), and forget/rename still work locally.
+- [ ] Back online, reopen the hub: locally-known devices push to the account automatically
+      (badge flips to **synced**); no manual action needed.
+
+### U-55-5 — Robot profiles still work inside the hub
+
+- [ ] The **per-robot profiles** section below behaves exactly as before: add / edit / delete
+      a profile with code values, parameters, telemetry channels.
+
+### U-55-6 — nothing else moved
+
+- [ ] Control Panel connect/drive flows unchanged; the Car Profile card still shows the
+      sync badge; signing out hides nothing it shouldn't.
+
+---
+
 ## U-54 round — Round 4: AP truth, method lock, home-router method + router editor, profile restores the last router (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner round 4: "when the car is the AP the dBm line must read as the AP, not as some home

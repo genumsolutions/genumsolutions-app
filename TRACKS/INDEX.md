@@ -1,5 +1,15 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-09-30 (later) — R4-7 SHIPPED: USER PREFERENCES HUB (JS-only → same-version OTA
+> 3.2.7/60).** Menu "Robot Settings / Robot preferences" → **"User Settings / User
+> preferences"**; the screen is now the user hub — **My devices** (every car ever connected via
+> ANY transport, listed once: union of car_profiles + local deviceMemory + last-device spill;
+> per device Set name · Auto-join · Forget — forget never touches the car) + the existing robot
+> profiles. New `deviceProfileRegistryService.ts` (union + actions + offline-first
+> pushLocalDevicesToCloud; no new table — owner rule). Hub writes register device keys so the
+> registry never misses one. Gates: tsc 0 · vitest **305/305** · prettier clean. Device rows:
+> **U-55-1..6**. R4-1..R4-7 now ALL shipped — next queued design round: per-category decks.
+
 > ✅ **2026-09-30 — ROUND 4 CORE SHIPPED (R4-1b · R4-4 · R4-5, JS-only → same-version OTA
 > 3.2.7/60): AP-vs-router banner wording follows the method (R4-1b) · TransportPicker reports
 > the chosen method and the home-router (STA) method hosts the SAME RouterPanel the remote's
