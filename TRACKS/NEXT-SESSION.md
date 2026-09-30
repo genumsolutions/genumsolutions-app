@@ -1,5 +1,30 @@
 # NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
 
+**✅ SHIPPED 2026-09-30 (latest) — PER-CATEGORY DECKS STEP ①: Smart Home deck pilot,
+JS-only → same-version OTA 3.2.7/60 (`9570187`).** The approved plan
+(`guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md`) is now started: new
+`components/tools/decks/` — `deckkit.ts` (pure-TS per-category tile manifests + reserved
+step-② vocab + `hasDeck()` routing helper + PILOT_DECK_SLUGS tripwire) and `shared.tsx`
+(DeckCard/DeckSwitch/DeckValue/DeckGauge/DeckPlanned/DeckGrid chrome, robocar-card family
+styling). RemoteControlScreen's non-robocar branch renders the **SmartHomeDeck** for any
+category with a manifest — Smart Home shows ONLY its own tiles: Light/Fan/Socket relay wall
+(LIVE `OUT<i>:n` writes via the hub's toggleRelay, canControl-gated), Temperature/Humidity
+readouts (live sensorData placeholders, U-47 pattern), and an honest **"Ready for firmware"
+Motion/IR tile** (disabled, never fakes success). Farm/City/Dustbin/Handheld stay on the
+shared SensorGrid until owner screenshot approval (step ②); robocar + drones untouched
+(gold standard). Parity test `deckkit.test.ts` (8) pins zero cross-category tile-label
+overlap (incl. the reserved vocab) and the step-② tripwire. Gates: tsc 0 · vitest
+**313/313** · prettier clean. Device rows: `mobile/TESTING.md` **U-56-1..4**. REMAINING:
+step ② (four decks after owner approval) → step ③ (ToolsScreen kind headers).
+
+**✅ FIXED 2026-09-30 — WEBSITE CI REPAIR (`a8f72f7` + ledger `22b14b3`, website repo).**
+The owner reported red runs: `tests/car-profiles.test.ts` indexed `body.profiles[0]`
+without the optional chain → TS2532 under `noUncheckedIndexedAccess` → ci.yml red AND every
+scheduled sync-app-fallback run failed its typecheck gate (no fallback auto-commit could
+land while red). One-line optional-chain fix; website gates: tsc 0 · vitest **164/164** ·
+prettier clean · CI ✓ (36700664286) · Sync app fallback ✓ (36700664409). App repo was and
+stayed fully green throughout.
+
 **✅ SHIPPED 2026-09-30 (later) — R4-7: USER PREFERENCES HUB, JS-only → same-version OTA
 3.2.7/60.** Menu group "Robot Settings" → **"User Settings"**, item "Robot preferences" →
 **"User preferences"**; route `RobotPreferences` → `UserPreferences` (screen renamed via git mv,
@@ -41,7 +66,8 @@ kind headers (Vehicles & Controllers / Stations & Environments), five dedicated 
 (SmartHome/Farm/City/Dustbin/Handheld) on a shared deck kit, honest "Ready for firmware" chips
 for not-yet-wired controls, parity tests pinning zero cross-category leakage. Rollout: deck kit
 + SmartHomeDeck pilot → owner screenshot approval → remaining decks → kind headers. Owner open
-checks in plan §6 (label wording, tile defaults, chip wording). NOT started in code.
+checks in plan §6 (label wording, tile defaults, chip wording). **Step ① SHIPPED 2026-09-30
+(see top banner) — steps ②–③ remain.**
 **2026-09-29 (LATEST) — CONTROL PANEL ROUND 3: FALSE CONNECT ERROR KILLED, PORTRAIT BANNER
 FIXED, DIALOG CENTERS ON THE PHONE (`2a8b406` `ca5822d` `f890a2e`, JS-only → same-version OTA
 3.2.7/60, run `36593994243` green).** Owner: red `Cannot read properties of undefined (reading

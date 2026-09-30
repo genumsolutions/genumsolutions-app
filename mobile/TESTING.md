@@ -10,6 +10,45 @@
 
 ---
 
+## U-56 round — per-category decks step ①: Smart Home deck pilot (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner plan: `guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md` — every non-robocar/non-drone
+> category gets its OWN remote deck showing ONLY its own things; robocar + drones untouched.
+> Step ① ships the shared deck kit + the **Smart Home** pilot; the other four decks wait for
+> the owner's screenshot approval (step ②). Gates: tsc 0 · vitest **313/313** · prettier clean.
+
+### U-56-1 — only Smart Home changes
+
+- [ ] Control Panel → **Smart Home** → Open deck: the Remote window shows the Smart Home deck
+      (relay wall + Temperature/Humidity + a "Ready for firmware" Motion/IR tile) — NOT the old
+      Outputs/Live Sensors grid.
+- [ ] **Smart Farm, Smart City, Smart Dustbin, Remote Controller** still open the shared grid
+      exactly as before (step ② pending); **Robo Car** and **Aerial Drones** decks are unchanged
+      (gold standard).
+
+### U-56-2 — the deck shows ONLY Smart Home things
+
+- [ ] No farm/city/dustbin/handheld wording anywhere in the deck (no Pumps, Street Light, Fill
+      Level, Battery…) — only Light / Fan / Socket / Temperature / Humidity / Motion-IR.
+- [ ] Rotating the phone (deck is landscape-locked like the robocar window) keeps the deck
+      laid out; nothing overlaps at small widths.
+
+### U-56-3 — the switches are real; the placeholder is honest
+
+- [ ] With the car linked: flipping **Light / Fan / Socket** sends `OUT1/2/3:<n>` on the live
+      link (relay clicks on hardware that wires relays 1–3); switches are disabled while no
+      link is up.
+- [ ] **Motion / IR** reads "Ready for firmware", is disabled, and never pretends to work;
+      Temperature/Humidity show the live sensor values (0° placeholders until a real firmware
+      protocol exists — the established U-47 pattern).
+
+### U-56-4 — decks stay separate (regression pin)
+
+- [ ] Open Smart Home, back out, open Smart Farm: the farm category still shows the shared
+      grid (never the home deck); repeat for the other categories.
+- [ ] After an app restart the same routing holds (the deck choice is by category, not by
+      session state).
+
 ## U-55 round — R4-7: User preferences hub (devices ever connected + robot profiles) (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner: "Robot preferences → User preferences … every car/device the user has EVER connected

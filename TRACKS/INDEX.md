@@ -1,5 +1,17 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-09-30 (latest) — PER-CATEGORY DECKS STEP ① SHIPPED: Smart Home deck pilot
+> (JS-only → same-version OTA 3.2.7/60, `9570187`).** The approved plan
+> (`guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md`) started: deck kit (`decks/deckkit.ts`
+> manifests + `decks/shared.tsx` chrome) + **SmartHomeDeck** — the Remote window's Smart Home
+> category renders ONLY its own tiles (Light/Fan/Socket live relay wall, live
+> Temperature/Humidity, honest "Ready for firmware" Motion/IR chip), never the shared
+> SensorGrid; farm/city/dustbin/handheld wait for owner screenshot approval (step ②);
+> robocar + drones untouched. Parity test pins zero cross-category tile-label overlap + a
+> step-② tripwire. Gates: tsc 0 · vitest **313/313** · prettier clean. Device rows:
+> **U-56-1..4**. Also this session: **website CI repaired** (`a8f72f7` — TS2532 in
+> car-profiles tests had failed every sync-app-fallback run; now green).
+
 > ✅ **2026-09-30 (later) — R4-7 SHIPPED: USER PREFERENCES HUB (JS-only → same-version OTA
 > 3.2.7/60).** Menu "Robot Settings / Robot preferences" → **"User Settings / User
 > preferences"**; the screen is now the user hub — **My devices** (every car ever connected via
