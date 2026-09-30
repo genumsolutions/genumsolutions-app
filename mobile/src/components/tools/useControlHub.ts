@@ -38,6 +38,12 @@ import {
 } from "../../services/carProfileService";
 import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
 import {
+  encodeEnvelopeWire,
+  isEnvelopeIntakeEnabled,
+  type EnvelopeInput,
+  type EnvelopeSendResult,
+} from "../../transports/envelopeWiring";
+import {
   LOCAL_CAR_MODES,
   type CarMode,
   nextRemoteModeToken,
@@ -1536,6 +1542,48 @@ export function useControlHub(routeCategory?: string) {
     [connected, wifiConnected, activeMode],
   );
 
+  // ---- Connection-Manager Phase B: the ONE opt-in envelope intake ----
+  //
+  // Both dialects now coexist: the existing screen code keeps calling
+  // sendCommand("SPD140") with hand-written wire lines, and this accepts
+  // the additive JSON envelope. The envelope is encoded to a line FIRST,
+  // then handed to the SAME sendCommand fan-out above — deliberately, not
+  // to linkManager. Going through linkManager would have been shorter but
+  // WRONG: sendCommand is where R-4 fleet parity lives (mode-based
+  // transport routing + the EVERY_LINK_COMMANDS broadcast set), and
+  // linkManager.sendLine is not on that path. Encoding here is also what
+  // makes "the envelope never changes a byte on the wire" true by
+  // construction rather than by test.
+  //
+  // Fails CLOSED in three places, none of which put anything on the wire:
+  //   • gate off (the shipped default)      → refused
+  //   • malformed envelope                  → its readable error
+  //   • no link / nothing connected         → the fan-out's own no-op
+  const sendEnvelopeCommand = useCallback(
+    (input: EnvelopeInput): EnvelopeSendResult => {
+      if (!isEnvelopeIntakeEnabled()) {
+        return {
+          ok: false,
+          error: "Command envelopes are not enabled on this build.",
+        };
+      }
+      const encoded = encodeEnvelopeWire(input);
+      if (!encoded.ok) {
+        // Surface the translation layer's own reason (F-30: one readable
+        // error, never a silent drop).
+        setError(encoded.error);
+        return { ok: false, error: encoded.error };
+      }
+      // The line is now a normal wire line: mode routing, the broadcast
+      // set and the canControl gating all behave exactly as they do for a
+      // hand-written one. W-14: the password-bearing lines (ROUTERS;ADD,
+      // WIFICFG) go to the car and are never echoed into a status string.
+      sendCommand(encoded.line);
+      return { ok: true };
+    },
+    [sendCommand],
+  );
+
   // ---- A-27: saved-router registry (wireless car v1.7.1, ROUTERS;*) ----
   // The car (NVS `botcfg`) is the source of truth; the app mirrors names in
   // savedRouters so the panel restores instantly. Commands broadcast over
@@ -2145,6 +2193,11 @@ export function useControlHub(routeCategory?: string) {
     adjustTrim,
     handleEStop,
     sendCommand,
+    // Connection-Manager Phase B — flag-gated JSON envelope intake. Shipped
+    // OFF (F-41); no screen calls it yet. Exposed so the 4WD4M testbed
+    // acceptance round can exercise it without touching the UI.
+    sendEnvelopeCommand,
+    isEnvelopeIntakeEnabled,
     // R-19 (FIN-45): car-truth trip metrics (2WD1M family)
     tripAvg,
     maxSteer,

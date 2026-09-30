@@ -25,6 +25,11 @@ import type {
   TransportStatus,
   TransportStatusEvent,
 } from "./types";
+import {
+  encodeEnvelopeWire,
+  type EnvelopeInput,
+  type EnvelopeSendResult,
+} from "./envelopeWiring";
 
 // AsyncStorage is loaded lazily (safeNative precedent): it is a native
 // module, and a static import would make this file un-importable in the
@@ -389,6 +394,48 @@ export class LinkManager {
     } catch {
       /* the UI already reflects a disconnected link */
     }
+  };
+
+  /**
+   * Send a JSON command envelope over the active link.
+   *
+   * The additive front door from Connection-Manager Phase B: friendly
+   * JSON in, the EXISTING wire line out, via the same `sendLine` every
+   * other command uses — so there is exactly one place a command reaches
+   * the transport and exactly one dialect on the wire (F-21/F-23).
+   *
+   * Two failure modes, both fail CLOSED (nothing is emitted):
+   *   • a malformed envelope returns its readable error from the
+   *     translation layer, before any I/O;
+   *   • a transport failure (no link, socket closed) returns the
+   *     manager's own reason.
+   *
+   * It resolves rather than throws so a caller can render the reason;
+   * sendLine keeps throwing for the existing callers that expect it.
+   *
+   * NOTE: it does not consult the F-41 gate. It is the low-level
+   * primitive; the GATE lives at the hub intake, which is the product
+   * surface. Keeping them separate is what lets the acceptance round
+   * exercise the primitive on the testbed without the shipped UI
+   * offering a second dialect.
+   */
+  sendEnvelope = async (input: EnvelopeInput): Promise<EnvelopeSendResult> => {
+    const encoded = encodeEnvelopeWire(input);
+    if (!encoded.ok) return { ok: false, error: encoded.error };
+    try {
+      await this.sendLine(encoded.line);
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+  };
+
+  /** Fire-and-forget envelope send, for the same UI paths sendSafe covers. */
+  sendEnvelopeSafe = async (input: EnvelopeInput): Promise<void> => {
+    await this.sendEnvelope(input);
   };
 
   requestState = async (): Promise<void> => {
