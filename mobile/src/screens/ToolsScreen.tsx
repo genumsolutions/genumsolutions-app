@@ -472,34 +472,21 @@ export function ToolsScreen() {
             />
           </View>
 
-          {sppStatusMsg && sppStatus !== "connected" && !wifiConnected && (
-            <View
-              className={`mt-3 rounded-xl px-4 py-3 ${
-                sppStatus === "error" || sppStatus === "disconnected"
-                  ? "bg-red-50 border border-red-200"
-                  : "bg-navy/10 border border-navy/20"
-              }`}
-            >
-              <Text
-                numberOfLines={2}
-                className={`text-sm font-bold ${sppStatus === "error" || sppStatus === "disconnected" ? "text-red-600" : "text-navy"}`}
-              >
-                {sppStatusMsg}
-              </Text>
-            </View>
-          )}
+          {/*
+            ONE connection-problem surface, not three (owner 2026-09-30:
+            "the control panel shows unnecessary messages ... that are
+            duplicate and not needed"). This column used to render the same
+            failure up to three times at once — inside ConnectionBanner via
+            `error`, then again as the `sppStatusMsg` card, then again as the
+            hub `error` card — all stacked directly above the picker, so one
+            failed connect filled the screen with the same sentence three
+            ways and pushed the actual controls off-screen.
 
-          {/* Hub-level connect errors sit WITH the feedback cluster above the
-            picker (owner 2026-09-29 UI/UX pass) — they used to render at the
-            very bottom of the section, under the profile card, where the
-            failure and its message were never on screen together. */}
-          {sppSupported && error && !connected && !wifiConnected && (
-            <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-              <Text className="text-xs leading-5 text-red-600">{error}</Text>
-            </View>
-          )}
-
-          {/* Reconnect banner — shown when connection drops and auto-reconnect exhausted */}
+            ConnectionBanner is now the single place a link problem appears.
+            The two cards below are kept ONLY for the two facts the banner has
+            no field for: the auto-reconnect prompt (an action, not a message)
+            and the "pick a car" hint before any attempt has been made.
+          */}
           {showSppsRetry && (
             <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <Text className="text-sm font-bold text-amber-800">
