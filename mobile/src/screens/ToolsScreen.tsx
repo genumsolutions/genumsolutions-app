@@ -12,6 +12,7 @@ import {
   ScrollView,
   Text,
   View,
+  Linking,
 } from "react-native";
 import {
   useRoute,
@@ -27,6 +28,8 @@ import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { TransportPicker } from "../components/tools/TransportPicker";
 import { ConnectionBanner } from "../components/tools/ConnectionBanner";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
+import { RouterPanel } from "../components/tools/RouterPanel";
+import { DEFAULT_AP_IP } from "../services/carProtocol";
 import { useActiveTransport } from "../transports/linkManagerHooks";
 import { linkManager } from "../transports/linkManager";
 import type { TransportConnectOptions, TransportId } from "../transports/types";
@@ -127,6 +130,13 @@ export function ToolsScreen() {
     telemetry,
     carApName,
     carSsid,
+    canControl,
+    carNetworks,
+    routerUse,
+    routerAdd,
+    routerDelete,
+    routerClearAll,
+    setWifiSsid,
   } = hub;
 
   // The banner's "which link" truth comes from the SAME manager the picker
@@ -139,6 +149,30 @@ export function ToolsScreen() {
 
   const anyLinked = sppStatus === "connected" || wifiConnected;
   const linkVerified = hub.linkVerified || sppStatus === "connected";
+
+  // R4-4 (owner): the home-router (STA) method gets the SAME router-management
+  // surface the remote's webserver mode hosts (RouterPanel), plus an
+  // edit-password affordance (the car stores one password per SSID, so an
+  // edit is a re-ADD — T-48a) and a "connect the car to this router" action
+  // (USE). The car-AP method NEVER renders it — the AP method's own steps
+  // live in the picker; this is the no-mixing rule.
+  const [pickedMethod, setPickedMethod] = useState<TransportId | null>(null);
+  // R4-4: which saved router is open for an edit (re-ADD upsert). Null when
+  // the form is in plain add mode.
+  const [editingRouter, setEditingRouter] = useState<string | null>(null);
+  const onPickedChange = useCallback((id: TransportId | null) => {
+    setPickedMethod(id);
+    // A method change closes any open router edit — the edit belongs to the
+    // method surface that opened it.
+    setEditingRouter(null);
+  }, []);
+  const isHomeRouterMethod = pickedMethod === "wifi-sta-ws";
+  const handleOpenWebPage = useCallback(() => {
+    const ip = telemetry.ip?.trim();
+    void Linking.openURL(`http://${ip || DEFAULT_AP_IP}`).catch(
+      () => undefined,
+    );
+  }, [telemetry.ip]);
   const carIdentityId = telemetry.id ?? null;
   // STA truth only when the CAR says it joined a router (JSON `connected`).
   const staSsid =
@@ -491,8 +525,59 @@ export function ToolsScreen() {
             <TransportPicker
               onActivate={onTransportActivate}
               onDeactivate={onTransportDeactivate}
+              onPickedChange={onPickedChange}
             />
           </View>
+
+          {/* R4-4: the home-router method's OWN surface — the same RouterPanel
+              the remote's webserver mode hosts (owner: "make this just like it
+              is in the remote screen inside, in the webserver mode"), plus an
+              edit-password affordance (car stores one password per SSID → an
+              edit is a re-ADD, T-48a) and a USE action. It mounts ONLY for the
+              home-router method: the car-AP method never shows router-editing
+              UI, and BT/other methods never do either (no method mixing). */}
+          {isHomeRouterMethod && (
+            <View className="mt-3">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                Home router settings
+              </Text>
+              <Text className="mt-0.5 text-[11px] leading-4 text-muted">
+                Routers saved on the car — switch, edit the stored password, or
+                remove them. The car needs a live link to apply changes.
+              </Text>
+              <View className="mt-3">
+                <RouterPanel
+                  canControl={canControl}
+                  linked={anyLinked}
+                  onStartEdit={(ssid) => {
+                    feedbackTap();
+                    setEditingRouter(ssid);
+                    setWifiSsid(ssid);
+                  }}
+                  editingSsid={editingRouter}
+                  carSsid={staSsid}
+                  carApName={apName}
+                  ip={telemetry.ip ?? null}
+                  networks={carNetworks}
+                  onUse={(ssid) => {
+                    feedbackTap();
+                    routerUse(ssid);
+                    setWifiSsid(ssid);
+                  }}
+                  onAdd={(ssid, pass) => {
+                    feedbackTap();
+                    routerAdd(ssid, pass);
+                    // An add OR an edit-save clears the editing state — the
+                    // car's next `networks` echo re-syncs the list either way.
+                    setEditingRouter(null);
+                  }}
+                  onDelete={routerDelete}
+                  onClear={routerClearAll}
+                  onOpenWebPage={handleOpenWebPage}
+                />
+              </View>
+            </View>
+          )}
 
           <View className="mt-3">
             <CarProfileCard

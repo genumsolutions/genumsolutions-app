@@ -275,6 +275,18 @@ export type RouterPanelProps = {
       and reverts to the car's OWN network (T-62). */
   onClear: () => void;
   onOpenWebPage: () => void;
+  /**
+   * R4-4 (owner: add/edit/delete saved routers): opens the EDIT view for one
+   * saved router — pre-fills the SSID + password fields (password never comes
+   * from the car; it stays blank unless the user retypes one) and routes the
+   * save through onAdd, because the car stores ONE password per SSID: an edit
+   * IS a re-ADD upsert (T-48a). Optional — the panel renders the per-row
+   * Edit button only when supplied.
+   */
+  onStartEdit?: (ssid: string) => void;
+  /** Whether the edit form is currently open for the given SSID (drives the
+      row's "Editing" chip). Optional — omit for the remote's plain list. */
+  editingSsid?: string | null;
 };
 
 export type DriveControlsProps = {

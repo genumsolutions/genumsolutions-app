@@ -75,6 +75,14 @@ export type TransportPickerProps = {
     options: TransportConnectOptions,
   ) => Promise<void>;
   onDeactivate?: () => Promise<void>;
+  /**
+   * R4-4 (owner): reports the method the user has CHOSEN in the dropdown
+   * (pickedId, null before a choice / after Disconnect). The screen mounts
+   * method-specific surfaces from this — the home-router method gets the
+   * Router panel, and ONLY that method does, so AP/Bluetooth links never
+   * show router-management UI (no method flavor mixing).
+   */
+  onPickedChange?: (id: TransportId | null) => void;
 };
 
 /** The dropdown groups methods by radio so the choice reads as
@@ -378,6 +386,7 @@ export function TransportPicker({
   compact = false,
   onActivate,
   onDeactivate,
+  onPickedChange,
 }: TransportPickerProps) {
   const transports = useTransportList();
   const link = useActiveTransport();
@@ -398,6 +407,13 @@ export function TransportPicker({
   // from the control page" report. Choosing a method now always shows that
   // method's own steps, connected or not.
   const [pickedId, setPickedId] = React.useState<TransportId | null>(null);
+
+  // R4-4: publish the chosen method upward (screen-level surfaces). The
+  // effect, not a render-phase call — a parent setState during render would
+  // throw. onPickedChange is expected to be stable (useCallback upstream).
+  React.useEffect(() => {
+    onPickedChange?.(pickedId);
+  }, [pickedId, onPickedChange]);
 
   const active = link.id
     ? (transports.find((t) => t.id === link.id) ?? null)
