@@ -44,6 +44,10 @@ import { OledDisplay } from "../components/tools/OledDisplay";
 import { SensorGrid } from "../components/tools/SensorGrid";
 import { hasDeck } from "../components/tools/decks/deckkit";
 import { SmartHomeDeck } from "../components/tools/decks/SmartHomeDeck";
+import { SmartFarmDeck } from "../components/tools/decks/SmartFarmDeck";
+import { SmartCityDeck } from "../components/tools/decks/SmartCityDeck";
+import { SmartDustbinDeck } from "../components/tools/decks/SmartDustbinDeck";
+import { HandheldDeck } from "../components/tools/decks/HandheldDeck";
 import { DroneControls } from "../components/tools/DroneControls";
 import { RouterPanel } from "../components/tools/RouterPanel";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
@@ -824,16 +828,60 @@ export function RemoteControlScreen({ navigation }: Props) {
                       onSetAltitude={(v) => handleAltitude(v)}
                     />
                   ) : hasDeck(activeCategory) ? (
-                    /* PLAN-2026-09-29 step ①: dedicated per-category deck — ONLY
-                   this category's tiles, never the shared SensorGrid fallback
-                   (owner decision ③). Smart Home is the pilot; the other four
-                   land after owner screenshot approval (step ②). */
-                    <SmartHomeDeck
-                      sensorData={sensorData}
-                      relays={relays}
-                      canControl={canControl}
-                      onToggleRelay={toggleRelay}
-                    />
+                    /* PLAN-2026-09-29 step ②: dedicated per-category deck —
+                       ONLY this category's tiles, never the shared SensorGrid
+                       fallback (owner decision ③). Every non-robocar, non-drone
+                       category has a built deck; the screen maps slug →
+                       deck component (tripwire cleared in deckkit.ts). */
+                    (() => {
+                      switch (activeCategory) {
+                        case "smart-farm":
+                          return (
+                            <SmartFarmDeck
+                              sensorData={sensorData}
+                              relays={relays}
+                              canControl={canControl}
+                              onToggleRelay={toggleRelay}
+                            />
+                          );
+                        case "smart-city":
+                          return (
+                            <SmartCityDeck
+                              sensorData={sensorData}
+                              relays={relays}
+                              canControl={canControl}
+                              onToggleRelay={toggleRelay}
+                            />
+                          );
+                        case "smart-dustbin":
+                          return (
+                            <SmartDustbinDeck
+                              sensorData={sensorData}
+                              relays={relays}
+                              canControl={canControl}
+                              onToggleRelay={toggleRelay}
+                            />
+                          );
+                        case "remote-controller":
+                          return (
+                            <HandheldDeck
+                              sensorData={sensorData}
+                              relays={relays}
+                              canControl={canControl}
+                              onToggleRelay={toggleRelay}
+                            />
+                          );
+                        default:
+                          return (
+                            <SmartHomeDeck
+                              sensorData={sensorData}
+                              relays={relays}
+                              canControl={canControl}
+                              onToggleRelay={toggleRelay}
+                            />
+                          );
+                      }
+                    })()
                   ) : (
                     <SensorGrid
                       canControl={canControl}

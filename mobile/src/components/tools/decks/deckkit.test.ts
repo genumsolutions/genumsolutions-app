@@ -10,9 +10,9 @@
 import { describe, expect, it } from "vitest";
 import {
   DECK_CATEGORIES,
+  DECK_DECKED,
   DECK_PENDING,
   DECK_TILES,
-  PILOT_DECK_SLUGS,
   RESERVED_TILE_LABELS,
   deckTileIds,
   hasDeck,
@@ -44,11 +44,20 @@ describe("deckkit parity contract", () => {
     }
   });
 
-  it("ships ONLY the Smart Home pilot in step ① (rest stay pending)", () => {
-    expect(PILOT_DECK_SLUGS).toEqual(["home-automation"]);
-    expect(DECK_PENDING.sort()).toEqual(
-      ["smart-farm", "smart-city", "smart-dustbin", "remote-controller"].sort(),
+  it("ships all five dedicated decks by step ② (none on the fallback set)", () => {
+    expect(DECK_DECKED.sort()).toEqual(
+      [
+        "home-automation",
+        "smart-farm",
+        "smart-city",
+        "smart-dustbin",
+        "remote-controller",
+      ].sort(),
     );
+    // All five manifests must be pairwise disjoint in labels.
+    const shipped = DECK_CATEGORIES.flatMap((slug) => labelsOf(slug));
+    const all = [...shipped, ...RESERVED_TILE_LABELS];
+    expect(new Set(all).size).toBe(all.length);
   });
 
   it("every manifest tile label is pairwise-disjoint across ALL reserved + shipped vocab (zero cross-category leakage)", () => {
@@ -70,15 +79,18 @@ describe("deckkit parity contract", () => {
     }
   });
 
-  it("manifests with tiles haveDeck(); empty/missing ones never do (no empty deck card can render)", () => {
+  it("manifests with tiles haveDeck(); empty ones never do (no empty deck card can render)", () => {
     expect(hasDeck("home-automation")).toBe(true);
-    for (const slug of DECK_PENDING) {
-      expect(hasDeck(slug)).toBe(false);
+    for (const slug of DECK_CATEGORIES) {
+      const has = hasDeck(slug);
+      // A category WITH a manifest is decked; one without is pending and
+      // still falls back to the shared SensorGrid.
+      expect(has).toBe(Boolean(DECK_TILES[slug as keyof typeof DECK_TILES]));
     }
   });
 
-  it("every tile is honestly one of the four kinds with the required fields", () => {
-    for (const slug of PILOT_DECK_SLUGS) {
+  it("every shipped tile is honestly one of the four kinds with the required fields", () => {
+    for (const slug of DECK_CATEGORIES) {
       for (const tile of DECK_TILES[slug] ?? []) {
         expect(["switch", "value", "gauge", "planned"]).toContain(tile.kind);
         expect(tile.label.length).toBeGreaterThan(0);
