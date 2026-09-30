@@ -1,7 +1,7 @@
 # NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
 
 **✅ SHIPPED 2026-09-30 (later) — U-58: DECK LANDSCAPE LAYOUT FIX (JS-only → same-version OTA
-3.2.7/60, uncommitted at write time — push/commit on owner go).** Owner: the per-category
+3.2.7/60, COMMITTED + PUSHED + OTA PUBLISHED + VERIFIED LIVE).** Owner: the per-category
 drive decks "merge and overlap everything together in the landscape view" while the robocar
 deck is proper. Root causes: ① the non-robocar branch's row had NO bounded height (the OLED's
 `max-h-[55%]` resolved against an indefinite parent → ignored) and the deck card overflowed
@@ -13,8 +13,11 @@ min-h-0 row · fixed 2:1 OLED column (30% width, max 280 px, self-start, overflo
 the deck's OWN DeckCard fills the bounded column (screen no longer wraps decks in a second
 card; DroneControls/SensorGrid keep their screen-level card) · `shared.tsx` DeckCard defaults
 `flex={1}` + min-h-0; DeckGrid replaced the percentage tiles with explicit 2-up rows (odd
-count pads the empty half). Gates: tsc 0 · vitest **317/317**. Device rows: `mobile/TESTING.md`
-**U-58-1..4**.
+count pads the empty half). Gates: tsc 0 · vitest **317/317**. **Ship evidence:** commits
+`4a4e87c` (fix) + `3d9b488` (ledger), pushed `a39a758..3d9b488`; CI ✓ `36752541275` · OTA
+Only ✓ `36752541302` (release-guard passed, bundle PUBLISHED 2m43s); live `release.json` =
+`OTA · Short update (3d9b4889…)`, version 3.2.7/60 unchanged. Device rows: `mobile/TESTING.md`
+**U-58-1..4** — owner device queue: **U-58 + still-open U-51..U-57** (close+reopen the app ×2).
 
 **✅ DOCS 2026-09-30 — CONNECTION-MANAGER PROMPT ANALYZED (docs-only, no code) + SCOPE
 RULING.** The outside AI's "Connection Manager" design brief was analyzed against the repo:
