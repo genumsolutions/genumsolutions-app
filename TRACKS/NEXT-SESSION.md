@@ -1,5 +1,24 @@
 # NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
 
+**✅ SHIPPED 2026-09-30 (latest) — DECKS STEPS ②+③: ALL FIVE CATEGORY DECKS + KIND HEADERS,
+JS-only → same-version OTA 3.2.7/60 (`c40e3be` + `f05cdaf`).** Owner approved the Smart Home
+pilot screenshot → ② SmartFarmDeck (Pump Room/Solenoid Valve live relays, Soil Wetness gauge,
+Soil Temp, honest "Ready for firmware" Irrigation Plan), SmartCityDeck (Street Lamps/Parking
+Slots relays, AQ (ppm) gauge, Daylight %), SmartDustbinDeck (Fill % gauge, Lid Open/Compactor
+Run relays, Last Empty placeholder), HandheldDeck (Battery %, RSSI (dBm), Ch1/Ch2 relays,
+throttle-curve placeholder) — RemoteControlScreen maps slug→deck via an IIFE switch; the
+shared SensorGrid fallback is FULLY RETIRED. ③ ToolsScreen pill row grouped under two static
+kind headers (KIND_GROUPS in project-catalog.ts): "Devices that drive" / "Devices that monitor
+& switch" — same 7 pills, same order, nothing merges (owner decision ①). Tile labels were
+disambiguated (Pump→Pump Room, Solenoid→Solenoid Valve, Soil Moisture→Soil Wetness, Schedule→
+Irrigation Plan, Street Light→Street Lamps, Parking→Parking Slots, Air Quality→AQ (ppm),
+Ambient Light→Daylight %, Fill Level→Fill %, Lid→Lid Open, Compactor→Compactor Run, Last
+Emptied→Last Empty, Battery→Battery %, Signal (RSSI)→RSSI (dBm)) so the parity test's
+pairwise-disjoint rule holds across shipped labels AND the reserved vocabulary. Gates: tsc 0
+· vitest **317/317** (8 parity + 4 kind-group tests) · prettier clean. Device rows:
+`mobile/TESTING.md` **U-57-1..4**. Per-category decks round COMPLETE (steps ①②③ done) —
+remaining: owner device passes (U-51..U-57) + FIN-36 re-stage.
+
 **✅ SHIPPED 2026-09-30 (latest) — PER-CATEGORY DECKS STEP ①: Smart Home deck pilot,
 JS-only → same-version OTA 3.2.7/60 (`9570187`).** The approved plan
 (`guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md`) is now started: new
