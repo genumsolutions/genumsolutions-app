@@ -25,6 +25,12 @@ rounds), fail-closed on malformed input, gate-default-off, and the no-echo rule.
 **Bench rows:** `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` **T11–T14** (Round E — that car is the only
 permitted test target); app regression rows `mobile/TESTING.md` **U-59-1..3**. To run: flip
 `setEnvelopeIntakeEnabled(true)` in a scratch build. Roadmap: §4 done, §4b = remaining gate.
+**Ship evidence:** commits `2d659e5` (wiring) + `730cc4c` (ledger), pushed `3160826..730cc4c`;
+CI ✓ `36759054003` · OTA Only ✓ `36759054023` (release-guard passed, metadata PUBLISHED); live
+`release.json` = `OTA · Short update (730cc4c1…)`, **3.2.7 unchanged** (correct — JS-only, F-32).
+Car repo: `Genum_4WD4M_CAR` `c8771da` (Round E rows). ⚠ **This OTA is behaviourally IDENTICAL to the
+previous one** — the gate is OFF and no screen calls the intake. Do not expect the app to *look*
+different; that is the round working as designed.
 **✅ PHASE A (previous step) — CONNECTION-MANAGER: JSON COMMAND ENVELOPE
 (`commandEnvelope.ts` + 13 tests, INTENTIONALLY DORMANT — zero live call-sites).** Owner:
 "dont wait for me do what you need to until this session ends; study properly the existing
