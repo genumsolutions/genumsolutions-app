@@ -1,4 +1,21 @@
-# NEXT SESSION — genumsolutions-app (2026-09-30: round 4 core shipped; current release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-09-30: round 4 complete incl. R4-7; current release 3.2.7/60)
+
+**✅ SHIPPED 2026-09-30 (later) — R4-7: USER PREFERENCES HUB, JS-only → same-version OTA
+3.2.7/60.** Menu group "Robot Settings" → **"User Settings"**, item "Robot preferences" →
+**"User preferences"**; route `RobotPreferences` → `UserPreferences` (screen renamed via git mv,
+robotSettingsService untouched). The screen is now the USER hub: ① **My devices** — every
+car/device ever connected through ANY transport, listed ONCE (union of cloud `car_profiles` +
+local deviceMemory records + the last-device spill, keyed by the stable profile key
+fw:<id> | MAC | wifi:<identity>; mirrored rows flagged; local-only rows badged "this phone");
+per device **Set name · Auto-join on/off · Forget** (forget = app memory + cloud row, NEVER the
+car). ② **Robot profiles** — the existing robot_user_settings scope, unchanged. New
+`deviceProfileRegistryService.ts` (union + actions + `pushLocalDevicesToCloud` offline-first
+spill: locally-known devices land in the DB automatically once online; factory-fresh stubs are
+never pushed). Hub writes now call `rememberDeviceKey()` so the registry index never misses a
+device. No new table (owner rule) — car_profiles already stores everything; F-45 probe rule
+not triggered. 9 new registry tests (vitest **305/305**). Device rows: TESTING.md
+**U-55-1..6**. REMAINING round-4 item: none in code — R4-1..R4-7 all shipped; next queued
+design round = per-category decks (PLAN-2026-09-29-CONTROL-PANEL-KINDS.md).
 
 **✅ SHIPPED 2026-09-30 — ROUND 4 CORE (R4-1b · R4-4 · R4-5), JS-only → same-version OTA
 3.2.7/60, one concern per commit.** ① R4-1b: ConnectionBanner's Signal row is method-flavored
@@ -701,11 +718,10 @@ Broken into buildable items (each = one commit, one concern, like rounds 2-3):
   deck family (rounded-xl border-line bg-mist); deep-link from the banner deferred — the panel
   only mounts for WiFi methods (`isWifi && !compact`), so it no longer appears for BT links.
 
-Order for next session: R4-1b/R4-4/R4-5 are DONE (this session — see ledger above); **R4-7 is
-  the next queued item** (rides the existing U-52 engine; no schema change expected — its DB
-  shape already fits `car_profiles`/`robot_user_settings`). R4-1/R4-2/R4-6 shipped 2026-09-29,
-  OTA `36603138203` green. Owner device rows: **U-54-1..6** in `mobile/TESTING.md` (written
-  2026-09-30).
+Order for next session: R4-1..R4-7 are ALL SHIPPED (see the two ledgers above); owner device
+  rounds **U-54-1..6 + U-55-1..6** are the gate. Next queued design round: per-category decks
+  (PLAN-2026-09-29-CONTROL-PANEL-KINDS.md). R4-1/R4-2/R4-6 shipped 2026-09-29, OTA
+  `36603138203` green.
 - **R4-7 — Menu: "Robot preferences" → "User preferences" + connected-device hub (owner,
   latest message).** Rename the Menu → Robot Settings group item (MenuScreen.tsx ~line 132:
   currently `label="Robot preferences"`, pushes `RobotPreferences`, Pro chip) to **User
