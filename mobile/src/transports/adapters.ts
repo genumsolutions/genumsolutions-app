@@ -292,9 +292,16 @@ const WIFI_STA_TEACHING: TransportTeaching = {
   when: "Pick this when the car is already joined to your router — longer range, and the same router keeps both car and phone on one LAN. Requires the router password to provision once.",
   steps: [
     "Provision the router once (SSID + password) so the car can join it.",
-    "Confirm the car is ON the router (its network row shows the router SSID and signal).",
+    "Confirm the car is ON the router (its network row shows the router SSID).",
     "In Connections → Home router (WiFi), enter the car's LAN address (the IP it reports) as ws://<ip>:81 and press Connect.",
   ],
+  // Honest limits, stated where the owner reads them (F-51: a help window that
+  // promises a capability the car cannot deliver is the same defect as a route
+  // the car does not serve):
+  //  • the car reports the SSID it is on, NOT a signal strength — no firmware
+  //    in the fleet answers ROUTERS;SCAN, so the smart-link strength pick falls
+  //    back to most-recently-used. Do not promise a "signal" here.
+  //  • mDNS name resolution is a roadmap item; the LAN address is typed today.
 };
 
 export function createWifiApTransport(): Transport {
@@ -609,9 +616,16 @@ function createCloudRelayTransport(): Transport {
 
 // --- registry --------------------------------------------------------
 
-/** Build and register every transport. Idempotent. */
-export function registerAllTransports(): void {
-  const built: Transport[] = [
+/**
+ * Every registered transport, in display order.
+ *
+ * Exported (not just folded into registerAllTransports) so the F-41 method
+ * gate can be asserted against the REAL registry in CI: a policy test built on
+ * a hand-written list of ids proves nothing about the ids that actually ship —
+ * that is F-51's second rule applied to our own tests.
+ */
+export function buildAllTransports(): Transport[] {
+  return [
     createClassicBtTransport(),
     createBleTransport(),
     createWifiApTransport(),
@@ -621,7 +635,11 @@ export function registerAllTransports(): void {
     createMqttTransport(),
     createCloudRelayTransport(),
   ];
-  for (const t of built) linkManager.register(t);
+}
+
+/** Build and register every transport. Idempotent. */
+export function registerAllTransports(): void {
+  for (const t of buildAllTransports()) linkManager.register(t);
 }
 
 /** The command path the rest of the app uses. Routes to the chosen link. */
