@@ -129,14 +129,15 @@ export function MenuScreen() {
         />
       </MenuGroup>
 
-      {/* Robot preferences (2026-09-22): per-robot code values / parameters /
-          telemetry channels for the signed-in user. Pro feature — the screen
-          itself explains the tier gate to free users. */}
-      <MenuGroup title="Robot Settings">
+      {/* R4-7 (owner 2026-09-30): the USER hub — every device ever connected
+          through ANY transport (set · edit · delete) + the per-robot profiles
+          (unchanged scope). Pro feature — the screen itself explains the tier
+          gate to free users. */}
+      <MenuGroup title="User Settings">
         <MenuItem
           icon="sliders"
-          label="Robot preferences"
-          onPress={() => navigation.push("RobotPreferences")}
+          label="User preferences"
+          onPress={() => navigation.push("UserPreferences")}
           right={
             isPro ? undefined : (
               <View className="rounded-full bg-mist px-2 py-0.5">

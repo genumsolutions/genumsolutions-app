@@ -37,7 +37,8 @@ export type RootStackParamList = {
   RemoteControl: { category?: string } | undefined;
   /** Per-robot preference profiles (Settings menu, Pro users): code values,
    *  parameters, and telemetry channel picks stored per user × robot. */
-  RobotPreferences: undefined;
+  /** R4-7: the user hub — devices ever connected + per-robot profiles. */
+  UserPreferences: undefined;
   Admin: undefined;
   Journal: undefined;
   Printing: undefined;
