@@ -1435,9 +1435,16 @@ export function useControlHub(routeCategory?: string) {
 
   // R-4 (app half, fleet parity): the car replied NACK;E=UNKNOWN_MODE;ARG=<token>
   // to a mode token it doesn't recognize (mixed-pair case). Surface "Not
-  // supported by car" and park the token as car-truth stub so selectMode() /
-  // cycleMode() refuse it from here on â€” exactly what the hand-held remote
-  // does (comms.cpp:505-508: setCarStub(arg,true) + setStatus(...)).
+  // supported by car" and park the token as car-truth stub so ModeChooser
+  // BADGES it as work-in-progress, which is what the hand-held remote does
+  // (comms.cpp:505-508: setCarStub(arg,true) + setStatus(...)).
+  //
+  // It does NOT refuse the token, and an earlier version of this comment
+  // claimed it did. Parking is presentation-only: selectMode() sends every
+  // token (R-10, 2026-09-15) and the car is the authority on what it accepts.
+  // The stale "refuse it from here on" wording survived a deliberate removal
+  // of that gate, which is the worst kind of comment — one that describes a
+  // safety control that isn't there.
   //
   // F-52: a NACK is NOT only about modes. handleCommand() falls through to
   // setModeFromString() for any line it does not handle, so the car answers

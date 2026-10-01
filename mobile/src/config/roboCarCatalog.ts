@@ -77,6 +77,33 @@ export const PLANNED_MODE_IDS: readonly CarModeId[] = [
   "rf-manual",
 ];
 
+/**
+ * Is this mode's firmware actually built?
+ *
+ * LABEL, DO NOT GATE (R-10, owner decision 2026-09-15): callers use this to
+ * BADGE a mode as coming soon, never to disable it. A planned mode stays
+ * selectable because the CAR refuses it with its own COMING SOON frame or a
+ * NACK — the app must not claim a capability no firmware delivers (F-53), and
+ * must not silently swallow a tap either.
+ *
+ * `mode` is matched by id first, then token, so callers that hold either
+ * identifier get the same answer. An unknown identifier is treated as BUILT:
+ * a missing catalogue entry is this function's problem to report, not a
+ * reason to label a real mode as unbuilt.
+ */
+export function isCarModeBuilt(
+  mode: { id?: string; token?: string; isPlanned?: boolean } | null | undefined,
+): boolean {
+  if (!mode) return true;
+  if (typeof mode.isPlanned === "boolean") return !mode.isPlanned;
+  const entry = LOCAL_CAR_MODES.find(
+    (m) =>
+      (mode.id != null && m.id === mode.id) ||
+      (mode.token != null && m.token === mode.token),
+  );
+  return entry ? !entry.isPlanned : true;
+}
+
 // The 9 modes from the ESP32 remote firmware (Genum_ESP32_Remote_v1.0.0)
 export const LOCAL_CAR_MODES: CarMode[] = [
   {

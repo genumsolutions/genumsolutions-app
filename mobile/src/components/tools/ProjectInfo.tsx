@@ -12,7 +12,7 @@ import React, { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { CarMode } from "../../config/roboCarCatalog";
-import { LOCAL_CAR_MODES } from "../../config/roboCarCatalog";
+import { isCarModeBuilt, LOCAL_CAR_MODES } from "../../config/roboCarCatalog";
 import type { ProjectCategory } from "../../config/project-catalog";
 import { getProjectCategory } from "../../config/project-catalog";
 import { company } from "../../config/company";
@@ -27,20 +27,21 @@ const CAR_PROJECT_NAME: Record<string, string> = {
   AUTO: "Self Balance Car",
 };
 
-// Tokens the physical ESP32 remote + GENUM fleet drive today. All 9 firmware
-// modes are SELECTABLE in the 2026-09-15 fleet; the only default "coming
-// soon" mark is MAN (RF-manual — needs the RF handset, which no car carries).
-// X-8: `4WD4M` is the canonical drive token (legacy `BT` retired).
-const AVAILABLE_TOKENS = new Set([
-  "4WD4M",
-  "ESP_SER",
-  "PATH",
-  "OBS_US",
-  "OBS_IR",
-  "AUTO",
-  "ESP_CLI",
-  "2WD1M",
-]);
+// Which modes are actually BUILT.
+//
+// This used to be a hard-coded AVAILABLE_TOKENS set listing 8 of the 9
+// tokens as available and badging only MAN. That was a THIRD availability
+// source, and it contradicted the canonical `robo_car_modes_flags` table,
+// which marks SIX modes as planned. A user therefore saw "Coming soon" on
+// exactly one unbuilt mode while five equally-unbuilt modes — obstacle
+// US/IR, both website modes, and path-follow — were presented as fine.
+//
+// The flag now comes from roboCarCatalog, the same source carModeService
+// overlays from the DB, so the bundled card and the live catalogue cannot
+// drift. See isCarModeBuilt for the label-don't-gate rule (R-10).
+//
+// The bundled list is read rather than the DB on purpose: this is a static
+// "about" card and must render offline.
 
 const CAPABILITY_LABELS: Record<string, string> = {
   directional: "Directional drive",
@@ -106,7 +107,7 @@ export function ProjectInfo({
           >
             {LOCAL_CAR_MODES.map((m) => {
               const isActive = m.id === selectedModeId;
-              const isAvailable = AVAILABLE_TOKENS.has(m.token);
+              const isAvailable = isCarModeBuilt(m);
               return (
                 <Pressable
                   key={m.id}
@@ -162,12 +163,12 @@ export function ProjectInfo({
             <Text className="mt-3 text-xs leading-5 text-muted">
               {selectedMode.blurb}
             </Text>
-            {!AVAILABLE_TOKENS.has(selectedMode.token) && (
+            {!isCarModeBuilt(selectedMode) && (
               <View className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
                 <Text className="text-[11px] font-bold text-amber-700">
                   {selectedMode.token === "MAN"
                     ? "RF-manual needs the RF handset (not bundled with any GENUM car). Selectable from the remote — the handset makes it drive."
-                    : "Not yet available on this car. Selectable from the remote — the car shows its own COMING SOON frame."}
+                    : "Not built yet. Selectable from the remote — the car shows its own COMING SOON frame."}
                 </Text>
               </View>
             )}
