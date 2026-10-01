@@ -44,6 +44,10 @@ import {
 import { getProjectCategories } from "../services/projectCategoryService";
 import { sppService } from "../services/sppService";
 import { wifiService } from "../services/wifiService";
+import {
+  DECK_OPEN_DEBOUNCE_MS,
+  queueDeckOpen,
+} from "../components/tools/toolsScreenFlow";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
 
@@ -225,9 +229,11 @@ export function ToolsScreen() {
         return;
       }
       if (id === "wifi-ap-ws" || id === "wifi-sta-ws") {
-        // The hub reads the address from its own state, so mirror it first.
+        // Mirror the address into the hub's state for the user, but dial with
+        // the EXPLICIT value (OPS-2): the state write above has not re-rendered
+        // yet when this handler runs in the same tick.
         if (options.url) setWifiUrl(options.url);
-        await handleWifiConnect();
+        await handleWifiConnect(options.url?.trim() || undefined);
         // Only record an actually-verified link (socket + car answered).
         if (wifiService.isConnected && wifiService.linkVerified) {
           await linkManager.adopt(id, { url: options.url || undefined });
@@ -254,10 +260,20 @@ export function ToolsScreen() {
   // stuck on a connected-category view. The sections remain in the same order
   // (U-53-4) — we only reset the active slice.
   useEffect(() => {
-    if (!connected) {
+    // UX-3: only a transport loss resets the selection — never a mount, a
+    // pull-to-refresh, or the user's own earlier pill tap.
+    if (!connected && !userTouchedSelectionRef.current) {
       setSelectedSlug(categories[0]!.slug);
     }
   }, [connected, categories]);
+
+  // UX-2: a queued deck-open must not fire after the screen is gone.
+  useEffect(() => {
+    return () => {
+      deckOpenTimerRef.current?.();
+      deckOpenTimerRef.current = null;
+    };
+  }, []);
 
   // Category organizer
   const [selectedSlug, setSelectedSlug] = useState<string>(
@@ -265,6 +281,15 @@ export function ToolsScreen() {
       ? routeCategory
       : categories[0]!.slug,
   );
+  // UX-3 (2026-10-02 audit): a pill tap is USER INTENT. The reset below is
+  // for TRANSPORT LOSS only — this flag lets it tell the difference, so a
+  // mount/refresh cycle can no longer snap a chosen category back to the
+  // first pill.
+  const userTouchedSelectionRef = useRef(false);
+  const selectCategory = useCallback((slug: string) => {
+    userTouchedSelectionRef.current = true;
+    setSelectedSlug(slug);
+  }, []);
   const category: ProjectCategory =
     categories.find((c) => c.slug === selectedSlug) ?? categories[0]!;
 
@@ -283,13 +308,23 @@ export function ToolsScreen() {
     [category.capabilityLabels],
   );
 
+  // UX-2 (2026-10-02 audit): the deck-open debounce's cancel handle lives in a
+  // ref — the tap handler must never create-and-cancel a timer in the same
+  // tick (the old inline cleanup made the button a dead end on the first
+  // press), and queueDeckOpen replaces an in-flight timer on a double-tap.
+  const deckOpenTimerRef = useRef<(() => void) | null>(null);
   // Connection tab:
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  // UX-4 (2026-10-02 audit): ONE disconnect flow. The dialog is the only
+  // user-facing disconnect: the picker's footer button requests it via
+  // onDisconnectRequest, and confirm runs the shared teardown (BT or WiFi,
+  // plus the manager) — the same teardown the method-switch path uses, which
+  // stays immediate because the switch strip already confirmed it.
   const confirmDisconnect = useCallback(() => {
     feedbackTap();
     setShowDisconnectConfirm(false);
-    handleDisconnect();
-  }, [handleDisconnect]);
+    void onTransportDeactivate();
+  }, [onTransportDeactivate]);
 
   return (
     // F-47: a flex-1 SCREEN-WIDE root wrapping the ScrollView. The disconnect
@@ -335,7 +370,7 @@ export function ToolsScreen() {
                   return (
                     <Pressable
                       key={c.slug}
-                      onPress={() => setSelectedSlug(c.slug)}
+                      onPress={() => selectCategory(c.slug)}
                       accessibilityRole="button"
                       accessibilityLabel={`Select category ${c.name}`}
                       accessibilityState={{ selected: active }}
@@ -418,12 +453,16 @@ export function ToolsScreen() {
             onPress={() => {
               feedbackTap();
               setSelectedSlug(categories[0]!.slug);
-              const id = setTimeout(() => {
-                navigation.navigate("RemoteControl", {
-                  category: category.slug,
-                });
-              }, 150);
-              return () => clearTimeout(id);
+              // UX-2: replace any in-flight timer; the cancel handle is stored
+              // (cleared on unmount below) — never consumed in this same tick.
+              deckOpenTimerRef.current = queueDeckOpen(
+                deckOpenTimerRef.current,
+                () => {
+                  navigation.navigate("RemoteControl", {
+                    category: category.slug,
+                  });
+                },
+              );
             }}
             accessibilityRole="button"
             accessibilityLabel={`Open ${category.name} remote window`}
@@ -530,6 +569,7 @@ export function ToolsScreen() {
               onActivate={onTransportActivate}
               onDeactivate={onTransportDeactivate}
               onPickedChange={onPickedChange}
+              onDisconnectRequest={() => setShowDisconnectConfirm(true)}
             />
           </View>
 
