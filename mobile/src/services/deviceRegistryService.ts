@@ -244,6 +244,33 @@ export async function fetchUserDevices(userId: string): Promise<UserDevice[]> {
 }
 
 /**
+ * Claim a unit by an ALREADY RESOLVED unique id.
+ *
+ * This is the single write path to the registry. Both entry points below
+ * funnel through it so there is exactly one place that talks to
+ * `register_device`, and one place to change if the RPC's signature moves.
+ */
+async function claimByUniqueId(
+  uniqueId: string,
+  modelId?: string | null,
+  fwVersion?: string | null,
+): Promise<{ uniqueId: string; deviceId: string | null } | null> {
+  if (!supabaseConfigured) return null;
+  if (!uniqueId) return null;
+  try {
+    const { data, error } = await supabase.rpc("register_device", {
+      p_unique_id: uniqueId,
+      p_model_id: modelId ?? null,
+      p_fw_version: fwVersion ?? null,
+    });
+    if (error || !data) return { uniqueId, deviceId: null };
+    return { uniqueId, deviceId: String(data) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Register a unit the user just drove, so it can carry a name of its own.
  * Reuses resolveProfileKey so the unique_id matches what car_profiles already
  * stores - otherwise the same car would appear twice under two keys.
@@ -265,21 +292,38 @@ export async function ensureDevice(
   modelId?: string | null,
   fwVersion?: string | null,
 ): Promise<{ uniqueId: string; deviceId: string | null } | null> {
-  if (!supabaseConfigured) return null;
   void userId;
-  const uniqueId = resolveProfileKey(identity);
-  if (!uniqueId) return null;
+  return claimByUniqueId(resolveProfileKey(identity) ?? "", modelId, fwVersion);
+}
+
+/**
+ * Claim the car the app is linked to RIGHT NOW, from a profile key that has
+ * already been resolved elsewhere.
+ *
+ * This is the call the connection flow makes, because by the time a link is
+ * open the hub holds `fw:<id>` / MAC / `wifi:<ssid>` as a finished string and
+ * has no `CarProfileIdentity` to hand back. Re-deriving one from a split
+ * string would risk producing a different key than car_profiles already
+ * stored, which is exactly the duplicate-row bug the shared key rule exists to
+ * prevent.
+ *
+ * Returns false when signed out or offline; that is not an error, the garage
+ * simply fills in on the next successful link.
+ */
+export async function registerCurrentDevice(
+  profileKey: string | null,
+  modelId?: string | null,
+  fwVersion?: string | null,
+): Promise<boolean> {
+  if (!supabaseConfigured || !profileKey) return false;
   try {
-    const { data, error } = await supabase.rpc("register_device", {
-      p_unique_id: uniqueId,
-      p_model_id: modelId ?? null,
-      p_fw_version: fwVersion ?? null,
-    });
-    if (error || !data) return { uniqueId, deviceId: null };
-    return { uniqueId, deviceId: String(data) };
+    const { data } = await supabase.auth.getUser();
+    if (!data.user?.id) return false;
   } catch {
-    return null;
+    return false;
   }
+  const r = await claimByUniqueId(profileKey, modelId, fwVersion);
+  return r?.deviceId != null;
 }
 
 /** Set (or clear) the owner's name for one of their units. */

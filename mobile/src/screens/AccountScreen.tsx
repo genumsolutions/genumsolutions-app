@@ -3,6 +3,8 @@
 // Mirrors the website's AccountPanel layout:
 //   - header (avatar, name, email, admin badge, sign out)
 //   - stats row: orders placed · build-list item types · support messages
+//   - "My garage" (the signed-in user's own devices, each named by them —
+//     the standing inventory, distinct from the live per-car card in Tools)
 //   - "Your orders" (status pill, provider, total, line items)
 //   - "Your details" (name / phone / address profile form)
 //   - "Your messages" (support history with status pills)
@@ -37,6 +39,7 @@ import {
 } from "../services/orderService";
 import { logger } from "../services/logger";
 import { subscribeToNewsletter } from "../services/newsletterService";
+import DeviceGarageCard from "../components/tools/DeviceGarageCard";
 import { galleryImages, type Order, type Product } from "../types";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -441,6 +444,14 @@ export function AccountScreen() {
               </View>
             </View>
           )}
+
+        {/* My garage — every car this account owns, named by the user.
+            Placed above orders because a device is a more likely reason to
+            open Account than a past order, and it shares the same identity
+            source (device_registry) the Tools screen registers against. */}
+        <View className="mt-5">
+          <DeviceGarageCard userId={user?.id ?? null} />
+        </View>
 
         {/* Your orders — status pill + provider + total + line items */}
         <View className="mt-5 rounded-2xl border border-line bg-card p-4">

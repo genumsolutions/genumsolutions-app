@@ -177,26 +177,30 @@ describe("device unique ids reuse the existing profile key rule", () => {
 const dbMocks = vi.hoisted(() => {
   const rpc = vi.fn();
   const from = vi.fn();
+  const getUser = vi.fn();
   rpc.mockResolvedValue({ data: "dev-123", error: null });
+  getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
   from.mockImplementation(() => {
     throw new Error(
       "ensureDevice must not write to `devices` directly - use register_device()",
     );
   });
-  return { rpc, from };
+  return { rpc, from, getUser };
 });
 
 vi.mock("../config/supabase", () => ({
   supabase: {
     rpc: (...a: unknown[]) => dbMocks.rpc(...a),
     from: (...a: unknown[]) => dbMocks.from(...a),
+    auth: { getUser: (...a: unknown[]) => dbMocks.getUser(...a) },
   },
   supabaseConfigured: true,
   googleWebClientId: "",
   googleConfigured: false,
 }));
 
-const { ensureDevice } = await import("./deviceRegistryService");
+const { ensureDevice, registerCurrentDevice } =
+  await import("./deviceRegistryService");
 
 describe("ensureDevice claims a unit through the RPC", () => {
   beforeEach(() => {
@@ -251,5 +255,62 @@ describe("ensureDevice claims a unit through the RPC", () => {
     // create a garbage device row.
     expect(await ensureDevice("user-1", {})).toBeNull();
     expect(dbMocks.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("registerCurrentDevice claims the linked car", () => {
+  beforeEach(() => {
+    dbMocks.rpc.mockReset();
+    dbMocks.rpc.mockResolvedValue({ data: "dev-123", error: null });
+    dbMocks.getUser.mockReset();
+    dbMocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+  });
+
+  it("passes the already-resolved profile key straight through", async () => {
+    // The hub holds `fw:<id>` as a finished string; re-deriving an identity
+    // from it could yield a DIFFERENT key than car_profiles stored, which is
+    // the duplicate-row bug the shared key rule exists to prevent.
+    await registerCurrentDevice("fw:1FB608");
+    expect(dbMocks.rpc).toHaveBeenCalledWith("register_device", {
+      p_unique_id: "fw:1FB608",
+      p_model_id: null,
+      p_fw_version: null,
+    });
+  });
+
+  it("sends a null model rather than a mode id", async () => {
+    // Regression guard. `savedPrefs.modeId` is a MODE id ("obstacle-us"),
+    // not a MODEL id, and the three only coincide for three of the nine
+    // modes. register_device validates its model argument against
+    // device_models and RAISES on an unknown one, so sending a mode id
+    // aborts the whole claim and the car never reaches the garage.
+    // Verified live: 'obstacle-us' -> "unknown model_id", null -> OK.
+    await registerCurrentDevice("fw:1FB608", null);
+    expect(dbMocks.rpc.mock.calls[0]![1]).toMatchObject({ p_model_id: null });
+  });
+
+  it("does nothing when signed out", async () => {
+    dbMocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(await registerCurrentDevice("fw:1FB608")).toBe(false);
+    expect(dbMocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when no link is open", async () => {
+    expect(await registerCurrentDevice(null)).toBe(false);
+    expect(dbMocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("reports failure without throwing when the RPC is rejected", async () => {
+    dbMocks.rpc.mockResolvedValue({ data: null, error: { message: "nope" } });
+    expect(await registerCurrentDevice("fw:1FB608")).toBe(false);
+  });
+
+  it("reports failure without throwing when the network is down", async () => {
+    dbMocks.rpc.mockRejectedValue(new Error("offline"));
+    expect(await registerCurrentDevice("fw:1FB608")).toBe(false);
+  });
+
+  it("reports success when the device id comes back", async () => {
+    expect(await registerCurrentDevice("fw:1FB608")).toBe(true);
   });
 });
