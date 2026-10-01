@@ -5,7 +5,7 @@
 // card, and Remote window handoff. This is the single entry point
 // from Menu → Control Panel and Projects → Control.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   RefreshControl,
