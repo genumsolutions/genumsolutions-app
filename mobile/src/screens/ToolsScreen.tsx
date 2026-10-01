@@ -445,20 +445,6 @@ export function ToolsScreen() {
                 One method at a time — pick it, verify it, drive.
               </Text>
             </View>
-            {(sppStatus === "connected" || wifiConnected) && (
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  setShowDisconnectConfirm(true);
-                }}
-                className="shrink-0"
-                hitSlop={8}
-              >
-                <Text className="text-sm font-bold text-gold underline">
-                  Disconnect
-                </Text>
-              </Pressable>
-            )}
           </View>
 
           <View className="mt-3">
