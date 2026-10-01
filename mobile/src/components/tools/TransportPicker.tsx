@@ -453,6 +453,16 @@ export function TransportPicker({
   // from the control page" report. Choosing a method now always shows that
   // method's own steps, connected or not.
   const [pickedId, setPickedId] = React.useState<TransportId | null>(null);
+  // R4-2 (owner 2026-10-02): changing method while a link is live is a TEARDOWN
+  // decision, so it stays confirmed — but it is no longer refused. Picking a
+  // different method queues it here instead of silently dropping the tap, and
+  // the inline strip asks once before the link comes down. Deliberately an
+  // inline strip and NOT a fixed/absolute overlay: this card renders inside the
+  // Control Panel ScrollView, where an inset-0 overlay maps to the whole
+  // scrollable page and lands far below the fold (the F-47 lesson).
+  const [pendingSwitch, setPendingSwitch] = React.useState<TransportId | null>(
+    null,
+  );
 
   // R4-4: publish the chosen method upward (screen-level surfaces). The
   // effect, not a render-phase call — a parent setState during render would
@@ -477,12 +487,13 @@ export function TransportPicker({
   const canScan = Boolean(selected?.scan);
   // The live link is the chosen method only while it is actually up.
   const isActiveLink = Boolean(active && active.id === selected?.id);
-  // R4-2 (owner): a live link LOCKS the method dropdown — changing method is a
-  // teardown decision, so it must go through the Disconnect confirm first (the
-  // picker renders the lock as a read-only "Connected via X" chip; the row
-  // expands only after the link is down). Method rows also never dial while a
-  // link is live (belt-and-braces: the chip does not open, and onSelect
-  // refuses while locked).
+  // R4-2 (owner, revised 2026-10-02): a live link used to LOCK this dropdown,
+  // which left "change the communication method while connected" impossible from
+  // the page that owns the method choice. It is now a CONFIRMED teardown: the
+  // chip stays tappable while connected, picking a different method queues a
+  // switch behind the inline confirm, and onSelect dials the new method only
+  // after the old link is down. Re-picking the live method stays a no-op, and a
+  // "Coming Soon" row is refused before it can touch the link.
 
   // Every method once, in registry order, grouped by radio. The cable group is
   // gone with the USB-serial method. De-duplicated by id on purpose (owner:
@@ -543,21 +554,14 @@ export function TransportPicker({
     [activate, onActivate],
   );
 
-  const onSelect = React.useCallback(
-    (id: TransportId) => {
-      const t = transports.find((x) => x.id === id);
-      if (!t) return;
-      // R4-2: the dropdown is locked while a link is live — disconnect first.
-      if (link.id) return;
-      // PRIMARY-method gate (owner 2026-09-29): only bt-classic + wifi-ap-ws
-      // are selectable today. A gated method never becomes the picked method
-      // and never dials; its ⓘ window (on the row) stays the way to read
-      // about it. Keeps "Coming Soon" rows from opening half-working
-      // connection steps below the dropdown.
-      if (!isSelectable(t)) return;
+  // Apply the pick and put the link up. Shared by the plain path and the
+  // confirmed-switch path so both behave identically once the teardown is done.
+  const pickAndDial = React.useCallback(
+    async (id: TransportId, t: Transport) => {
       setDevices(null);
       setError(null);
       setMenuOpen(false);
+      setPendingSwitch(null);
       // Remember the choice first, so its connection steps (address box, scan)
       // show immediately — the user chose it, so its UI is what they need.
       setPickedId(id);
@@ -568,14 +572,58 @@ export function TransportPicker({
       if (t.scan) return;
       // WiFi and HTTP need an address; the rest dial the car directly.
       if (t.radio === "wifi" || t.id === "http") {
-        void run(() =>
-          activateTransport(id, url.trim() ? { url: url.trim() } : {}),
-        );
+        await activateTransport(id, url.trim() ? { url: url.trim() } : {});
       } else {
-        void run(() => activateTransport(id, {}));
+        await activateTransport(id, {});
       }
     },
-    [activateTransport, run, transports, url],
+    [activateTransport, url],
+  );
+
+  const teardownLink = React.useCallback(async () => {
+    await (onDeactivate ? onDeactivate() : linkManager.deactivate());
+  }, [onDeactivate]);
+
+  // The user confirmed the switch: the OLD link comes down first, then the new
+  // method is picked and dialled. Order matters — dialling first would leave two
+  // live transports and the banner could only report one of them.
+  const onConfirmSwitch = React.useCallback(() => {
+    const id = pendingSwitch;
+    if (!id) return;
+    const t = transports.find((x) => x.id === id);
+    if (!t) {
+      setPendingSwitch(null);
+      return;
+    }
+    void run(async () => {
+      await teardownLink();
+      await pickAndDial(id, t);
+    });
+  }, [pendingSwitch, pickAndDial, run, teardownLink, transports]);
+
+  const onCancelSwitch = React.useCallback(() => {
+    setPendingSwitch(null);
+  }, []);
+
+  const onSelect = React.useCallback(
+    (id: TransportId) => {
+      const t = transports.find((x) => x.id === id);
+      if (!t) return;
+      // PRIMARY-method gate (owner 2026-09-29) runs BEFORE anything else: a
+      // "Coming Soon" row must never be able to tear a working link down.
+      if (!isSelectable(t)) return;
+      // R4-2 (owner 2026-10-02): a live link no longer refuses the switch, it
+      // confirms it. Re-picking the method that is ALREADY live is a no-op —
+      // that must never drop a working connection.
+      if (link.id) {
+        setMenuOpen(false);
+        if (link.id === id) return;
+        setPendingSwitch(id);
+        return;
+      }
+      void run(() => pickAndDial(id, t));
+    },
+    [link.id, pickAndDial, run, transports],
   );
 
   const onScan = React.useCallback(() => {
@@ -623,12 +671,13 @@ export function TransportPicker({
       {/* --- the single dropdown: all methods, one at a time ------------ */}
       <Pressable
         onPress={() => {
-          // R4-2: locked while a link is live — the chip is read-only until
-          // the user disconnects (the Disconnect capsule is how they change).
-          if (!link.id) setMenuOpen((v) => !v);
+          // R4-2 (revised): the chip opens even while a link is live — choosing
+          // a different method now goes through the inline confirm below, so the
+          // method can be changed from the page that owns the choice.
+          setMenuOpen((v) => !v);
         }}
-        accessibilityRole={link.id ? "text" : "combobox"}
-        accessibilityState={{ expanded: menuOpen, disabled: !!link.id }}
+        accessibilityRole="combobox"
+        accessibilityState={{ expanded: menuOpen, disabled: busy }}
         accessibilityLabel="Connection method"
         className="mt-2.5 flex-row items-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5"
       >
@@ -692,6 +741,47 @@ export function TransportPicker({
               ))}
             </View>
           ))}
+        </View>
+      ) : null}
+
+      {/* R4-2 (revised): the confirmed method switch. Inline, not an overlay —
+          an inset-0 overlay inside this ScrollView centers below the fold
+          (F-47). Says exactly what is about to go down, and names the method
+          being switched to. */}
+      {pendingSwitch ? (
+        <View className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <Text className="text-[12px] font-black text-amber-900">
+            Switch to{" "}
+            {transports.find((t) => t.id === pendingSwitch)?.label ??
+              "another method"}
+            ?
+          </Text>
+          <Text className="mt-1 text-[11px] leading-4 text-amber-800">
+            This disconnects {active?.label ?? "the current link"} first. The
+            car stops safely and your saved settings are remembered.
+          </Text>
+          <View className="mt-2.5 flex-row gap-2">
+            <Pressable
+              onPress={onConfirmSwitch}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm method switch"
+              accessibilityState={{ disabled: busy, busy }}
+              className="h-11 flex-1 items-center justify-center rounded-full bg-sky-700 px-4 disabled:opacity-40"
+            >
+              <Text className="text-[13px] font-black text-white">Switch</Text>
+            </Pressable>
+            <Pressable
+              onPress={onCancelSwitch}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel method switch"
+              accessibilityState={{ disabled: busy }}
+              className="h-11 flex-1 items-center justify-center rounded-full border border-line bg-card px-4 disabled:opacity-40"
+            >
+              <Text className="text-[13px] font-bold text-ink">Cancel</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
