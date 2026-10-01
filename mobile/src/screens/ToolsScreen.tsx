@@ -44,6 +44,7 @@ import {
 import { getProjectCategories } from "../services/projectCategoryService";
 import { sppService } from "../services/sppService";
 import { wifiService } from "../services/wifiService";
+import { staDialUrl, staPhase } from "../components/tools/staHandoff";
 import {
   DECK_OPEN_DEBOUNCE_MS,
   queueDeckOpen,
@@ -172,6 +173,49 @@ export function ToolsScreen() {
     setEditingRouter(null);
   }, []);
   const isHomeRouterMethod = pickedMethod === "wifi-sta-ws";
+
+  // ---------------------------------------------------------------------
+  // F-59: the GUIDED HOME-ROUTER HANDOFF (owner report 2026-10-02: picking
+  // the home-router method while connected "prompts the user about the
+  // switch" but nothing works, and "the car doesn't seem to initiate the
+  // switch"). Root cause: the switch treated STA like every other method —
+  // tear the link down, then dial a default. But the car can only join the
+  // router when something tells it (`ROUTERS;USE`), and that command needs
+  // the very link the teardown destroyed. The switch is therefore a
+  // HANDOFF, guided by this card:
+  //   step 1  the car is told to join the most recently saved router over
+  //          the LIVE link (or, if none is saved, the Add form below is the
+  //          step),
+  //   step 2  the card waits — the car's STATE broadcast reports its router
+  //          IP within seconds,
+  //   step 3  the car's reported IP unlocks the dial (`staDialUrl`); the
+  //          phone joins the same router and connects. Never a guessed
+  //          address — the IP is the car's own report (staPhase is pinned
+  //          by staHandoff.test.ts).
+  // ---------------------------------------------------------------------
+  const [staHandoffShown, setStaHandoffShown] = useState(false);
+  const staOwnApName = carApName?.trim() || "4WDCar_Wifi";
+  const staPhaseNow = staPhase(
+    {
+      connected: telemetry.connected === true,
+      ssid: telemetry.ssid ?? null,
+      ip: telemetry.ip ?? null,
+    },
+    staOwnApName,
+  );
+  const startStaHandoff = useCallback(() => {
+    feedbackTap();
+    setStaHandoffShown(true);
+    setPickedMethod("wifi-sta-ws");
+    setEditingRouter(null);
+    // Step 1 fires immediately: the most recently saved router. The car's
+    // next STATE broadcast reports the router SSID + IP, and the card moves
+    // itself forward from car truth (staPhase). With no saved router the
+    // card points at the Add form instead — it never invents an SSID.
+    if (carNetworks.length > 0) {
+      routerUse(carNetworks[0]!);
+    }
+  }, [carNetworks, routerUse]);
   const handleOpenWebPage = useCallback(() => {
     const ip = telemetry.ip?.trim();
     void Linking.openURL(`http://${ip || DEFAULT_AP_IP}`).catch(
@@ -254,6 +298,17 @@ export function ToolsScreen() {
     // chip in step with the teardown that just happened.
     await linkManager.deactivate();
   }, [connected, wifiConnected, handleDisconnect, handleWifiDisconnect]);
+
+  // F-59 step 3 — declared AFTER the bridge (it dials through it). The dial
+  // uses ONLY the IP the car reported; no IP → no dial (staHandoff.test.ts).
+  const staDial = useCallback(() => {
+    const url = staDialUrl(telemetry.ip ?? null);
+    if (!url) return;
+    feedbackTap();
+    setWifiUrl(url);
+    setPickedMethod("wifi-sta-ws");
+    void onTransportActivate("wifi-sta-ws", { url });
+  }, [telemetry.ip, onTransportActivate, setWifiUrl]);
 
   // F-57 / round-close: when the transport disconnects, reset the selected category
   // so the control panel returns to a clean default state rather than staying
@@ -564,12 +619,78 @@ export function ToolsScreen() {
             </View>
           )}
 
+          {/* F-59: the guided handoff card — lives between the banner and
+              the picker, because the picker's STA pick is what opens it. It
+              hides itself once a STA link is actually up (the banner takes
+              over) and can be dismissed. */}
+          {staHandoffShown &&
+          !(pickedMethod === "wifi-sta-ws" && wifiConnected) ? (
+            <View className="mt-3 rounded-xl border border-sky-500/40 bg-sky-500/5 p-3">
+              <View className="flex-row items-center gap-2">
+                <Feather name="navigation" size={14} color="#0369a1" />
+                <Text className="min-w-0 flex-1 text-[12px] font-black text-sky-900 dark:text-sky-300">
+                  Switching to your home router
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    feedbackTap();
+                    setStaHandoffShown(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss the home-router handoff"
+                  hitSlop={6}
+                  className="h-6 w-6 items-center justify-center rounded-full active:opacity-60"
+                >
+                  <Feather name="x" size={14} color="#64748b" />
+                </Pressable>
+              </View>
+              {staPhaseNow === "car-on-ap" ? (
+                <>
+                  <Text className="mt-1.5 text-[11px] leading-4 text-muted">
+                    {carNetworks.length > 0
+                      ? `Step 1 — the car was told to join "${carNetworks[0]}" over this link. This takes a few seconds.`
+                      : "Step 1 — no router is saved on the car yet. Add your router below (name + password) and the car joins it over this link."}
+                  </Text>
+                  <Text className="mt-1 text-[11px] leading-4 text-muted">
+                    Step 2 — this card unlocks the moment the car reports its
+                    router IP. Then join the SAME router on this phone and
+                    connect.
+                  </Text>
+                </>
+              ) : staPhaseNow === "joined" ? (
+                <Text className="mt-1.5 text-[11px] leading-4 text-muted">
+                  The car has joined the router and is getting an address. Step
+                  2 unlocks the moment its IP arrives.
+                </Text>
+              ) : (
+                <>
+                  <Text className="mt-1.5 text-[11px] leading-4 text-muted">
+                    The car is on the router at {telemetry.ip}. Join{" "}
+                    {staSsid ?? "the same router"} on this phone, then connect.
+                  </Text>
+                  <Pressable
+                    onPress={staDial}
+                    accessibilityRole="button"
+                    accessibilityLabel="Connect to the car over the home router"
+                    className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700"
+                  >
+                    <Feather name="link" size={14} color="#fff" />
+                    <Text className="text-[13px] font-black text-white">
+                      Connect via home router
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          ) : null}
+
           <View className="mt-3">
             <TransportPicker
               onActivate={onTransportActivate}
               onDeactivate={onTransportDeactivate}
               onPickedChange={onPickedChange}
               onDisconnectRequest={() => setShowDisconnectConfirm(true)}
+              onStaHandoffRequest={startStaHandoff}
             />
           </View>
 

@@ -86,6 +86,15 @@ export type TransportPickerProps = {
    */
   onDisconnectRequest?: () => void;
   /**
+   * F-59 (owner report 2026-10-02): requested when the user picks the
+   * HOME-ROUTER method while a link is LIVE. Switching to STA is a handoff,
+   * NOT a teardown — the car can only join the router over the link that is
+   * up (`ROUTERS;USE`), so the screen guides the handoff (join → car reports
+   * its router IP → phone follows → dial the reported IP). The picker must
+   * never tear the link for this pick, and never blind-dial a default.
+   */
+  onStaHandoffRequest?: () => void;
+  /**
    * R4-4 (owner): reports the method the user has CHOSEN in the dropdown
    * (pickedId, null before a choice / after Disconnect). The screen mounts
    * method-specific surfaces from this — the home-router method gets the
@@ -443,6 +452,7 @@ export function TransportPicker({
   onDeactivate,
   onPickedChange,
   onDisconnectRequest,
+  onStaHandoffRequest,
 }: TransportPickerProps) {
   const transports = useTransportList();
   const link = useActiveTransport();
@@ -635,12 +645,19 @@ export function TransportPicker({
       if (link.id) {
         setMenuOpen(false);
         if (link.id === id) return;
+        // F-59: a live-link pick of the home-router method is a HANDOFF, not
+        // a teardown — the car joins the router over the link that is up and
+        // the screen guides the rest. Never queued into the switch strip.
+        if (id === "wifi-sta-ws") {
+          onStaHandoffRequest?.();
+          return;
+        }
         setPendingSwitch(id);
         return;
       }
       void run(() => pickAndDial(id, t));
     },
-    [link.id, pickAndDial, run, transports],
+    [link.id, onStaHandoffRequest, pickAndDial, run, transports],
   );
 
   const onScan = React.useCallback(() => {
