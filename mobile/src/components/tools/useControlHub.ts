@@ -1262,10 +1262,8 @@ export function useControlHub(routeCategory?: string) {
           setError(e instanceof Error ? e.message : "Connection failed");
           setConnecting(false);
           setConnectingAddress(null);
-          showConnectionMessage(
-            e instanceof Error ? e.message : "Connection failed",
-            "error",
-          );
+          // UX-1: no toast here — the banner's `error` is the single failure
+          // surface; toasting the same sentence double-displays it.
         }
       }
     },
@@ -1288,51 +1286,63 @@ export function useControlHub(routeCategory?: string) {
     }
   }, []);
 
-  const handleWifiConnect = useCallback(async () => {
-    setError(null);
-    if (!wifiUrl) {
-      setError(`Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`);
-      return;
-    }
-    const wsUrl =
-      wifiUrl.startsWith("ws://") || wifiUrl.startsWith("wss://")
-        ? wifiUrl
-        : `ws://${wifiUrl}`;
-    manualCloseRef.current = false;
-    setConnecting(true);
-    setLinkVerified(false);
-    // Deliver over the ONE shared socket every hub reads — the SAME
-    // WebSocket the website page (http://192.168.245.1) uses for drive.
-    // R1: connect() only proves the socket opened, so wait for the car to
-    // actually answer before claiming a working link.
-    try {
-      await wifiService.connect(wsUrl);
-      const answered = await wifiService.waitForCarAnswer();
-      if (!mountedRef.current) return;
-      setLinkVerified(answered);
-      if (answered) {
-        setWifiConnected(true);
-        setError(null);
-        showConnectionMessage(`Connected to car via WiFi`, "success");
-        setTimeout(() => {
-          wifiService.requestState().catch(() => {});
-        }, 200);
-      } else {
-        setWifiConnected(false);
-        setError(
-          "WiFi link opened but the car did not answer STATE/REPLY. Check the car is powered and the WebSocket port (81) is reachable.",
-        );
+  // UX-1 (2026-10-02 audit): a connect failure surfaces ONCE — through the
+  // hub's `error` (the ConnectionBanner is the single problem surface on the
+  // Control Panel). The extra toast here was the duplicate-message defect
+  // the 2026-09-30 cleanup killed, reintroduced by the picker bridge.
+  const handleWifiConnect = useCallback(
+    async (overrideUrl?: string) => {
+      setError(null);
+      // OPS-2: the ToolsScreen bridge calls setWifiUrl(options.url) and then
+      // this handler in the SAME tick — the `wifiUrl` state has not re-rendered
+      // yet, so a first connect would dial the bundled default instead of the
+      // restored address. An explicit override is dialled directly.
+      const effectiveUrl = overrideUrl?.trim() || wifiUrl;
+      if (!effectiveUrl) {
+        setError(`Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`);
+        return;
       }
-    } catch (e) {
-      if (mountedRef.current) {
-        setError(e instanceof Error ? e.message : "WiFi connect failed");
-        setWifiConnected(false);
-        setLinkVerified(false);
+      const wsUrl =
+        effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
+          ? effectiveUrl
+          : `ws://${effectiveUrl}`;
+      manualCloseRef.current = false;
+      setConnecting(true);
+      setLinkVerified(false);
+      // Deliver over the ONE shared socket every hub reads — the SAME
+      // WebSocket the website page (http://192.168.245.1) uses for drive.
+      // R1: connect() only proves the socket opened, so wait for the car to
+      // actually answer before claiming a working link.
+      try {
+        await wifiService.connect(wsUrl);
+        const answered = await wifiService.waitForCarAnswer();
+        if (!mountedRef.current) return;
+        setLinkVerified(answered);
+        if (answered) {
+          setWifiConnected(true);
+          setError(null);
+          showConnectionMessage(`Connected to car via WiFi`, "success");
+          setTimeout(() => {
+            wifiService.requestState().catch(() => {});
+          }, 200);
+        } else {
+          setWifiConnected(false);
+          setError(
+            "WiFi link opened but the car did not answer STATE/REPLY. Check the car is powered and the WebSocket port (81) is reachable.",
+          );
+        }
+      } catch (e) {
+        if (mountedRef.current) {
+          setError(e instanceof Error ? e.message : "WiFi connect failed");
+          setWifiConnected(false);
+          setLinkVerified(false);
+        }
+      } finally {
+        if (mountedRef.current) setConnecting(false);
       }
-    } finally {
-      if (mountedRef.current) setConnecting(false);
-    }
-  }, [wifiUrl, showConnectionMessage]);
+    },
+    [wifiUrl, showConnectionMessage],
+  ) as (overrideUrl?: string) => Promise<void>;
 
   const handleWifiDisconnect = useCallback(async () => {
     manualCloseRef.current = true;

@@ -53,6 +53,7 @@ import {
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../../services/carProtocol";
 import { WifiDiagnosticsPanel } from "./WifiDiagnosticsPanel";
 import { isSelectable } from "./transportGate";
+import { DEFAULT_URL_BY_METHOD, planSwitch } from "./transportPickerFlow";
 
 export type TransportPickerProps = {
   /** Shown under the rows. Lets the screen own layout. */
@@ -76,6 +77,14 @@ export type TransportPickerProps = {
     options: TransportConnectOptions,
   ) => Promise<void>;
   onDeactivate?: () => Promise<void>;
+  /**
+   * UX-4 (2026-10-02 audit): called when the USER taps Disconnect, so the
+   * screen can route the teardown through its confirm dialog. Omit it and
+   * Disconnect stays immediate (onDeactivate). Internal teardowns — the
+   * confirmed method switch — NEVER pass through here: that path already
+   * carries its own inline confirmation and must not ask twice.
+   */
+  onDisconnectRequest?: () => void;
   /**
    * R4-4 (owner): reports the method the user has CHOSEN in the dropdown
    * (pickedId, null before a choice / after Disconnect). The screen mounts
@@ -433,6 +442,7 @@ export function TransportPicker({
   onActivate,
   onDeactivate,
   onPickedChange,
+  onDisconnectRequest,
 }: TransportPickerProps) {
   const transports = useTransportList();
   const link = useActiveTransport();
@@ -463,6 +473,11 @@ export function TransportPicker({
   const [pendingSwitch, setPendingSwitch] = React.useState<TransportId | null>(
     null,
   );
+  // OPS-1 (2026-10-02 audit): per-method addresses live in a ref, so a
+  // confirmed switch resolves the TARGET's URL from current truth — the
+  // `url` state variable still belongs to the method being LEFT at that
+  // instant and must never be read by the dial.
+  const urlByTransport = React.useRef<Record<string, string>>({});
 
   // R4-4: publish the chosen method upward (screen-level surfaces). The
   // effect, not a render-phase call — a parent setState during render would
@@ -508,19 +523,14 @@ export function TransportPicker({
     ),
   })).filter((g) => g.items.length > 0);
 
-  // Keep one typed address per URL-shaped method, so switching WiFi → HTTP
-  // never carries a ws:// value into the HTTP box (or vice versa).
-  const urlByTransport = React.useRef<Record<string, string>>({});
+  // OPS-1: the fallback default is the method's OWN, from the one shared
+  // source (transportPickerFlow) — never another method's stored URL.
   React.useEffect(() => {
     if (!selected) return;
-    const stored = urlByTransport.current[selected.id];
     setUrl(
-      stored ??
-        (selected.radio === "wifi"
-          ? DEFAULT_WS_URL
-          : selected.id === "http"
-            ? `http://${DEFAULT_AP_IP}:80`
-            : ""),
+      urlByTransport.current[selected.id] ??
+        DEFAULT_URL_BY_METHOD[selected.id] ??
+        "",
     );
   }, [selected]);
 
@@ -570,9 +580,16 @@ export function TransportPicker({
       // connecting blind just raised "Pick a car from the Bluetooth list" as if
       // the method were broken. Pick it, show the scan, connect on the tap.
       if (t.scan) return;
-      // WiFi and HTTP need an address; the rest dial the car directly.
-      if (t.radio === "wifi" || t.id === "http") {
-        await activateTransport(id, url.trim() ? { url: url.trim() } : {});
+      // OPS-1: dial the TARGET's address via the pure, CI-pinned planSwitch —
+      // the `url` state variable belongs to the method being LEFT and must
+      // not be read here. scanBased is the registry's own truth for the target.
+      const plan = planSwitch({
+        targetMethodId: id,
+        urlByTransport: urlByTransport.current,
+        scanBased: Boolean(t.scan),
+      });
+      if (plan?.url) {
+        await activateTransport(id, { url: plan.url });
       } else {
         await activateTransport(id, {});
       }
@@ -650,10 +667,17 @@ export function TransportPicker({
   );
 
   const onDisconnect = React.useCallback(() => {
+    // UX-4: the user's Disconnect goes through the screen's confirm dialog
+    // when one is supplied. One flow for both surfaces — the dialog and the
+    // footer button can no longer disagree about whether disconnect asks.
+    if (onDisconnectRequest) {
+      onDisconnectRequest();
+      return;
+    }
     setPickedId(null);
     setDevices(null);
     void run(() => (onDeactivate ? onDeactivate() : linkManager.deactivate()));
-  }, [onDeactivate, run]);
+  }, [onDeactivate, onDisconnectRequest, run]);
 
   const statusOf = (t: Transport): TransportStatus =>
     t.id === active?.id ? link.status : t.getStatus();
@@ -791,7 +815,7 @@ export function TransportPicker({
           chip above is locked and already reads "Connected", and the footer
           below carries the Disconnect). Hiding them on `link.id` keeps the
           post-connect surface identical whichever method was chosen. */}
-      {needsUrl && !link.id ? (
+      {needsUrl && !link.id && !pendingSwitch ? (
         <View className="mt-1 rounded-xl border border-line bg-card p-3">
           <Text className="text-[11px] font-black uppercase tracking-wide text-muted">
             Car address
