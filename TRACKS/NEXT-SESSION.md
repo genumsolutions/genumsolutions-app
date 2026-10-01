@@ -1,4 +1,31 @@
-# NEXT SESSION — genumsolutions-app (2026-10-02: 4WD4M live-link integration round; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-10-02: Control Panel audit round; release 3.2.7/60)
+
+**✅ FIXED 2026-10-02 — CONTROL PANEL AUDIT ROUND: FIVE DEFECTS (UI/UX + OPERATIONS), TESTS
+FIRST, JS-only → same-version OTA 3.2.7/60.** Owner: "the control panel page is not working
+properly." The audit (screen + picker + hub + car web page read end to end) found two defect
+families. **UI/UX:** ① the deck-open button was a dead end on the first tap (the 150 ms
+debounce created its timer inside onPress and returned the cleanup from the same callback —
+React consumed it immediately); ② every BT connect failure displayed TWICE (banner error +
+toast); ③ the F-57 category reset fired on mount/refresh, snapping a chosen pill back to the
+first; ④ two disconnect flows disagreed (picker footer = immediate; the F-47 confirm dialog
+was unreachable dead state); ⑤ cosmetic: post-connect chrome jump in the picker (noted,
+NOT fixed). **Operations:** ⑥ the confirmed method switch dialled the LEFT method's `url`
+state (stale closure — AP→router dialled the car's AP address on the home router); ⑦ the
+ToolsScreen bridge `setWifiUrl(options.url)` then called the handler reading `wifiUrl` in
+the SAME tick — first connect dialled the bundled default; ⑧ BT→AP→BT re-pick could hit the
+direct-MAC fallback with a stale name (silent, noted). Fixed ①–④+⑥–⑦ with tests written
+FIRST (owner go): pure CI-pinned modules `toolsScreenFlow.ts` (3 tests) +
+`transportPickerFlow.ts` (7 tests, `planSwitch` takes the registry's OWN `scan` truth —
+F-51 rule 2), explicit-URL parameter on `handleWifiConnect`, one toast removed,
+`onDisconnectRequest` unifying BOTH disconnect surfaces behind the F-47 dialog (WiFi now
+confirms too), touched-flag guarding the selection reset. Disconnect semantics: user-facing
+disconnect ALWAYS confirms; the method-switch teardown stays immediate (its strip already
+confirmed). Rules recorded as **F-58** (root `guide/FAILSAFES.md`). Gates: tsc 0 · vitest
+**419/419** (30 files) · prettier clean. Device rows: `mobile/TESTING.md` **U-61-1..5**.
+Car side of the audit: web page + hub send-path verified healthy; the OLED/ROUTERS fixes
+still need the bench flash (Round 2, T21–T23).
+
+---
 
 **✅ SHIPPED 2026-10-01→02 (late session) — 4WD4M LIVE-LINK INTEGRATION ROUND: METHOD SWITCHING
 WHILE CONNECTED + CONNECT-FLOW SNAGS, JS-only → same-version OTA 3.2.7/60 (8 app commits
