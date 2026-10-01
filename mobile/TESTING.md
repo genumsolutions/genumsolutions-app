@@ -1,5 +1,44 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-61 round — Control Panel audit fixes: one surface, one dial, one disconnect (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> The 2026-10-02 Control Panel audit (UI/UX + operations) found five defects; all fixed with
+> CI-pinned regression tests (`toolsScreenFlow.test.ts`, `transportPickerFlow.test.ts` — F-58).
+> Gates: tsc 0 · vitest **419/419** · prettier clean.
+
+### U-61-1 — the deck button opens on the FIRST tap
+
+- [ ] Tap "Open … deck" once → the Remote window opens every time (the old inline cleanup
+      could cancel the 150 ms navigation — the dead-end first tap).
+- [ ] Double-tap → exactly ONE window opens (the debounce replaces, never duplicates).
+
+### U-61-2 — a chosen category stays chosen
+
+- [ ] Tap any category pill → pull-to-refresh, leave and re-enter the page → the SAME pill is
+      still selected (mount/refresh no longer snaps the selection back to the first pill).
+- [ ] Disconnect a live link → the selection DOES reset to the first pill (transport loss
+      still cleans up — that part is F-57, kept).
+
+### U-61-3 — a failure shows ONCE
+
+- [ ] Force a BT connect failure (car off) → the red banner appears; NO second toast repeating
+      the same sentence.
+
+### U-61-4 — a method switch dials the TARGET's address (needs the car)
+
+- [ ] With the phone on the home router and a live home-router link: switch method to
+      Car access point → confirm → the dial goes to the AP default, and after joining
+      `4WDCar_Wifi` the link verifies (the old bug dialled the PREVIOUS method's URL).
+- [ ] Switch back AP → home-router → the router's stored address is dialled, not the AP's.
+
+### U-61-5 — one disconnect flow
+
+- [ ] Tap the picker's Disconnect → the confirm dialog appears (centered on the phone, F-47);
+      Cancel keeps the link; Confirm tears down safely.
+- [ ] WiFi links confirm the same way (previously the dialog only covered BT).
+
+---
+
 ## U-60 round — live-link method switching + connect-flow snags (2026-10-01→02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > The 4WD4M integration bench session produced five app-side fixes. Headline: the method
