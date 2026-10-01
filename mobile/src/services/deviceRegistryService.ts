@@ -247,37 +247,36 @@ export async function fetchUserDevices(userId: string): Promise<UserDevice[]> {
  * Register a unit the user just drove, so it can carry a name of its own.
  * Reuses resolveProfileKey so the unique_id matches what car_profiles already
  * stores - otherwise the same car would appear twice under two keys.
+ *
+ * Calls the `register_device` RPC rather than upserting `devices` directly.
+ * `devices` is the SHARED fleet table and its INSERT policy is staff-only by
+ * design, so a direct upsert fails RLS (42501) and the car is silently never
+ * linked. The RPC is SECURITY DEFINER and links the unit to auth.uid() only,
+ * which is exactly this function's intent - see
+ * supabase/migrations/20261001140000_device_claim_rpc_and_backfill.sql.
+ *
+ * The userId argument is retained for call-site compatibility but is NOT sent
+ * to the database: the server derives the owner from the session, so a
+ * mismatched value can never attach a car to the wrong account.
  */
 export async function ensureDevice(
   userId: string,
   identity: CarProfileIdentity,
   modelId?: string | null,
+  fwVersion?: string | null,
 ): Promise<{ uniqueId: string; deviceId: string | null } | null> {
   if (!supabaseConfigured) return null;
+  void userId;
   const uniqueId = resolveProfileKey(identity);
   if (!uniqueId) return null;
   try {
-    const { data: dev, error: devErr } = await supabase
-      .from("devices")
-      .upsert(
-        {
-          unique_id: uniqueId,
-          model_id: modelId ?? null,
-          last_seen_at: new Date().toISOString(),
-        },
-        { onConflict: "unique_id" },
-      )
-      .select("id")
-      .maybeSingle();
-    if (devErr || !dev) return { uniqueId, deviceId: null };
-    const deviceId = (dev as { id: string }).id;
-    await supabase
-      .from("user_devices")
-      .upsert(
-        { user_id: userId, device_id: deviceId },
-        { onConflict: "user_id,device_id" },
-      );
-    return { uniqueId, deviceId };
+    const { data, error } = await supabase.rpc("register_device", {
+      p_unique_id: uniqueId,
+      p_model_id: modelId ?? null,
+      p_fw_version: fwVersion ?? null,
+    });
+    if (error || !data) return { uniqueId, deviceId: null };
+    return { uniqueId, deviceId: String(data) };
   } catch {
     return null;
   }
