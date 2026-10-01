@@ -1,5 +1,40 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-62 round — guided home-router handoff (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner bench report: picking Home router while connected showed the switch prompt but
+> nothing worked, and the car never joined. Root cause + fix = F-59: the switch is a guided
+> HANDOFF (car joins over the live link → car reports its router IP → phone follows → dial
+> the reported IP), not a teardown. Gates: tsc 0 · vitest **428/428** · prettier clean.
+
+### U-62-1 — the STA pick opens the handoff (no teardown, no strip)
+
+- [ ] Connect over the car's AP, pick **Home router (WiFi)** in the method dropdown → NO
+      confirm strip, the AP link STAYS live, and the "Switching to your home router" card
+      appears with Step 1 (the car was told to join your saved router).
+- [ ] Other-method picks while connected (AP ↔ BT) still use the confirm strip as before.
+
+### U-62-2 — the car actually joins (needs the car)
+
+- [ ] Step 1 fires over the live link; within seconds the car's OLED/network row shows the
+      ROUTER's SSID (firmware T21/T22 rows — flash `main` first) and the app's card moves to
+      "joined / waiting for its IP" on its own.
+- [ ] With NO router saved on the car, the card says to add one below and NEVER dials a
+      default address.
+
+### U-62-3 — the dial uses only the car's reported IP
+
+- [ ] When the car reports its router IP, the card shows it and unlocks **Connect via home
+      router**; before that, there is no dial (nothing to mis-dial).
+- [ ] Join the SAME router on the phone, tap Connect → the link verifies over the home
+      router (banner: verified, car id).
+
+### U-62-4 — the handoff stays escapable
+
+- [ ] The card's ✕ dismisses it at any step; a live link at dismiss time keeps working.
+
+---
+
 ## U-61 round — Control Panel audit fixes: one surface, one dial, one disconnect (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > The 2026-10-02 Control Panel audit (UI/UX + operations) found five defects; all fixed with
