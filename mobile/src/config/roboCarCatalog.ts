@@ -46,7 +46,36 @@ export interface CarMode {
   controls: ControlKind[];
   requiresConnection: boolean;
   blurb: string;
+  /**
+   * True when the firmware for this mode has NOT been built yet (owner
+   * decision 2026-10-01). The mode is a sellable product with no
+   * repository behind it, so the UI must say so rather than imply a car
+   * that does not exist. Mirrored in the `robo_car_modes_flags.is_planned`
+   * column; `carModeService` merges the two.
+   *
+   * This is NOT a protocol change: `token` and `deviceIndex` stay exactly as
+   * the firmware defines them, so mode cycling and the remote's button parity
+   * are unaffected.
+   */
+  isPlanned?: boolean;
 }
+
+/**
+ * Modes whose firmware does not exist yet (owner decision 2026-10-01).
+ *
+ * Kept OFF the LOCAL_CAR_MODES entries on purpose: it is a separate exported
+ * set so the OFFLINE fallback path can flag them too. A mode missing from
+ * this set has firmware; a mode in it is a planned product. `rf-manual` is
+ * here because the remote performs that mode, not the car.
+ */
+export const PLANNED_MODE_IDS: readonly CarModeId[] = [
+  "obstacle-us",
+  "obstacle-ir",
+  "website-client",
+  "website-server",
+  "path-follow",
+  "rf-manual",
+];
 
 // The 9 modes from the ESP32 remote firmware (Genum_ESP32_Remote_v1.0.0)
 export const LOCAL_CAR_MODES: CarMode[] = [
@@ -55,7 +84,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "4WD4M",
     token: "4WD4M",
     deviceIndex: 0,
-    car: "4-wheel-drive",
+    car: "4-Wheel Drive",
     wheel: "4 × BO/brushed motors",
     steering: "Skid-steer (differential)",
     sensors: [],
@@ -75,7 +104,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Bluetooth · 2WD + Servo (1M)",
     token: "2WD1M",
     deviceIndex: 8,
-    car: "2-wheel-drive",
+    car: "2-Wheel Drive",
     wheel: "1 × BO motor (rear)",
     steering: "1 × servo (0..180, center 90)",
     sensors: [],
@@ -91,7 +120,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Self-Balancing",
     token: "AUTO",
     deviceIndex: 6,
-    car: "Self-balancing",
+    car: "Self-Balancing",
     wheel: "2 × BO motors",
     steering: "Self-balance (PID)",
     sensors: ["MPU6050 IMU"],
@@ -107,7 +136,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Obstacle Avoidance · Ultrasonic",
     token: "OBS_US",
     deviceIndex: 3,
-    car: "Obstacle avoider",
+    car: "Obstacle Avoider",
     wheel: "2/4 × BO motors",
     steering: "Skid-steer",
     sensors: ["HC-SR04 / ultrasonic"],
@@ -115,6 +144,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     remoteWith: "ESP REMOTE",
     controls: ["start-stop"],
     requiresConnection: true,
+    isPlanned: true,
     blurb: "Runs autonomous obstacle avoidance using an ultrasonic sensor.",
   },
   {
@@ -122,7 +152,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Obstacle Avoidance · IR",
     token: "OBS_IR",
     deviceIndex: 4,
-    car: "Obstacle avoider",
+    car: "Obstacle Avoider",
     wheel: "2/4 × BO motors",
     steering: "Skid-steer",
     sensors: ["IR / photodiode pair"],
@@ -130,6 +160,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     remoteWith: "ESP REMOTE",
     controls: ["start-stop"],
     requiresConnection: true,
+    isPlanned: true,
     blurb: "Autonomous obstacle avoidance driven by IR sensors.",
   },
   {
@@ -137,7 +168,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Website Controlled · Client",
     token: "ESP_CLI",
     deviceIndex: 7,
-    car: "Website car",
+    car: "Website Car",
     wheel: "2/4 × BO motors",
     steering: "Skid-steer",
     sensors: [],
@@ -145,6 +176,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     remoteWith: "Browser / app",
     controls: ["weblink"],
     requiresConnection: false,
+    isPlanned: true,
     blurb:
       "The ESP32 is a WiFi client; the browser/app acts as the control server.",
   },
@@ -153,7 +185,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Website Controlled · Server",
     token: "ESP_SER",
     deviceIndex: 1,
-    car: "Website car",
+    car: "Website Car",
     wheel: "2/4 × BO motors",
     steering: "Skid-steer",
     sensors: [],
@@ -161,6 +193,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     remoteWith: "Browser / app",
     controls: ["weblink"],
     requiresConnection: false,
+    isPlanned: true,
     blurb: "The ESP32 hosts its own web page; open its IP to drive it.",
   },
   {
@@ -168,7 +201,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Path Following · IR",
     token: "PATH",
     deviceIndex: 2,
-    car: "Line follower",
+    car: "Line Follower",
     wheel: "2/4 × BO motors",
     steering: "Skid-steer",
     sensors: ["IR line sensors"],
@@ -176,6 +209,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     remoteWith: "ESP REMOTE",
     controls: ["start-stop"],
     requiresConnection: true,
+    isPlanned: true,
     blurb: "Follows an IR-detected line or path autonomously.",
   },
   {
@@ -183,7 +217,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     name: "Manual · RF",
     token: "MAN",
     deviceIndex: 5,
-    car: "RF car",
+    car: "RF Car",
     wheel: "2/4 × BO motors",
     steering: "Skid-steer",
     sensors: [],
@@ -191,6 +225,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     remoteWith: "RF hand-held remote",
     controls: ["drive-tank"],
     requiresConnection: false,
+    isPlanned: true,
     blurb:
       "Manual control over RF modules (not BT or WiFi) - drive with the RF handset.",
   },
