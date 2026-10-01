@@ -1,4 +1,23 @@
-# NEXT SESSION — genumsolutions-app (2026-10-02: Control Panel audit round; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
+
+**✅ FIXED 2026-10-02 (bench feedback, same day) — THE HOME-ROUTER SWITCH IS A GUIDED HANDOFF,
+NOT A TEARDOWN (`staHandoff.ts`, F-59).** Owner at the bench: picking Home router while
+connected showed the switch prompt "but no confirm button or anything to initiate", and "the
+car doesn't seem to initiate the switch". Root cause: the F-58 round routed the STA pick
+through the teardown-then-default-dial path — but the car joins the router only when told
+(`ROUTERS;USE`) and that command needs the link the teardown destroyed; the default dial
+presupposed the end state. Now: the STA pick while live opens a step card (between banner and
+picker) driven by PURE CAR TRUTH — ① the car is told to join the most recently saved router
+over the LIVE link (or pointed at the Add form when none saved), ② the card waits for the
+car's STATE broadcast, ③ the dial unlocks using ONLY the IP the car reported (`staDialUrl`),
+phone joins the same router and connects. The picker delegates via `onStaHandoffRequest`
+(other methods keep the confirm strip); no default address is EVER dialled as a consequence
+of a state change (9 CI tests pin the phase machine + dial). Rules = **F-59** (root
+FAILSAFES): order steps by what each command needs; UI reads car-reported truth only; never
+dial a default after a state change; a pick that re-networks the CAR is provisioning, not a
+transport switch. Gates: tsc 0 · vitest **428/428** (31 files) · prettier clean. Device
+rows: `mobile/TESTING.md` **U-62-1..4**. NOTE: step 1's on-car proof needs firmware `main`
+flashed (T21/T22).
 
 **✅ FIXED 2026-10-02 — CONTROL PANEL AUDIT ROUND: FIVE DEFECTS (UI/UX + OPERATIONS), TESTS
 FIRST, JS-only → same-version OTA 3.2.7/60.** Owner: "the control panel page is not working
