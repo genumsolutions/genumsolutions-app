@@ -1,4 +1,29 @@
-# NEXT SESSION — genumsolutions-app (2026-09-30: Phase A+B + HTTP + NACK + gate; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (2026-10-02: 4WD4M live-link integration round; release 3.2.7/60)
+
+**✅ SHIPPED 2026-10-01→02 (late session) — 4WD4M LIVE-LINK INTEGRATION ROUND: METHOD SWITCHING
+WHILE CONNECTED + CONNECT-FLOW SNAGS, JS-only → same-version OTA 3.2.7/60 (8 app commits
+`edb3fd7`→`f3223ce`, one revert mid-round, all pushed; CI ✓ `36911189810` · OTA ✓ `36911189952`
+PUBLISHED, 3.2.7 android+ios).** The integration thread driven by the owner's bench session.
+**App:** ① **R4-2 revised — the method dropdown is no longer LOCKED while a link is live.**
+Picking a DIFFERENT method shows an inline confirm (names the target + what will drop), then
+tears the old link down FIRST and dials the new one — two transports never live at once;
+re-picking the already-live method is a no-op that never drops a working connection; the F-41
+PRIMARY gate runs BEFORE the live-link branch so a "Coming Soon" row can never tear a working
+link (`f3223ce`). The first attempt (`e29c478`, a modal in ToolsScreen) was REVERTED
+(`c44802a`) and rebuilt properly inside `TransportPicker` — the surface that owns the method
+choice. The confirm is an inline strip, not an inset-0 overlay: the card renders inside the
+Control Panel ScrollView where such an overlay centers below the fold (F-47 lesson).
+② **150 ms debounce** before RemoteControl navigation kills the connect-flicker (`49add08`).
+③ **Connect-flow cleanup:** duplicate header disconnect button removed (`a908282`) · selected
+category resets to the first pill on disconnect (`b78ac71`) · 48 dp touch targets + per-row
+Connect buttons (`845d802`). ④ **All six unbuilt modes badged planned** (`edb3fd7`).
+**Car firmware side of the same session** (committed + CI green there, NOT yet flashed):
+OLED directive v1.0.1 fixes, `ROUTERS;USE` on-the-fly add/switch, web page no longer
+force-sets `MODE_ESP_SERVER` — bench rows **T21–T23 (Round 2)** in that repo's
+`TRACKS/DEVICE-TESTS.md`. Gates at close: tsc 0 · vitest **409/409** (28 files) · CI green on
+every push. Device rows: `mobile/TESTING.md` **U-60-1..5**. ⚠ Ledger-discipline note: this
+round landed with NO ledger entries (written retroactively the next session) — the
+"write entries as you go" rule was broken; do not repeat.
 
 **✅ 2026-09-30 — ALL CODE WORK IS DONE; THE BENCH IS ONE CONSOLIDATED ROUND AT THE END.** Owner
 instruction was to finish the code first and test on hardware last, so the four scattered device
