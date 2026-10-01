@@ -955,3 +955,89 @@ apply DB live and probe 200 before claiming done), R4-7 rides the same engine on
   (`onStatus: vi.fn(() => …)` = zero-arg) makes call-arg assertions brittle. If reattempting,
   declare mocks `vi.fn((_cb: StatusCb) => () => undefined)` and mockClear() in each test —
   the file is currently RESTORED CLEAN (no test added).
+
+---
+
+# 2026-10-01 - device identity / metadata session
+
+## READ THIS FIRST: how to reach the database
+**The `db.<ref>.supabase.co` host does NOT resolve on this machine. Do not waste time on it.**
+The Supavisor pooler works, and the project is in region **`ap-southeast-2`** — that is
+undiscoverable without the Management API, so sweep it if the region ever changes.
+
+```
+host:     aws-0-ap-southeast-2.pooler.supabase.com
+port:     5432
+user:     postgres.bkylfnlybtsujwzropru
+password: from genumsolutions-website\.env.local -> SUPABASE_DB_URL (URL-decode the password)
+ssl:      rejectUnauthorized:false
+```
+`pg` is already in `genumsolutions-website/node_modules` — require it by absolute path, no
+install needed. `psql` is NOT installed and there is no `supabase` CLI on PATH (use
+`npx supabase`, and note its stored token at `~/.supabase/access-token` is **revoked** →
+`Unauthorized`).
+
+For future secrets: put them in a `.env.local` and tell me the KEY NAME. Chat history gets
+summarized out of the session, which is how the original token got lost.
+
+## Owner decisions taken (do not re-litigate)
+1. **Model metadata is canonical in the repo** — `guide/DEVICE-REGISTRY.json` (NOT a git repo,
+   plain file). **Per-unit display name lives in the database.**
+2. **Advertised BT/AP names are FROZEN.** Renaming breaks saved pairings and every stored
+   `car_profiles.profile_key`. Record them, never regenerate them.
+3. Shared Supabase IS in scope; apply migrations live for both app and website.
+
+## Landed this session
+- **Website `5c4558f`** — migration `20261001120000_device_registry.sql`, **APPLIED LIVE** in one
+  transaction. New: `device_models` (6 seeded, public read/staff write), `devices`,
+  `user_devices`, `profiles` 8→17 cols (additive only, nothing dropped/renamed).
+  Verified from the app's anon key: models=6, devices/user_devices/profiles=**0** (RLS holds).
+- **App `adf9851`** — `services/deviceRegistryService.ts` (+15 tests). DB-first with
+  `BUNDLED_DEVICE_MODELS` fallback; `pairingLabel()` shows app name + announced name.
+- **App `5382d08`** — server/client help for all 8 methods; killed the 3× duplicate error card in
+  `ToolsScreen`; `SensorGrid` prints `—` instead of fake `0°C/0%` (setSensorData has NO caller).
+- Gates: tsc 0 · **vitest 369/369 (26 files)** · prettier clean. Both repos CLEAN.
+
+## The bug that was found and fixed
+`robo_car_modes.token` for `4wd4m` was `BT`. The firmware's real token is **`4WD4M`**; `BT` is a
+LEGACY ALIAS kept only for pre-v1.5.0 controllers (firmware X-8). So the DB misreported what the
+car expects. **Command behaviour was never affected** — the app's protocol layer is bound to the
+bundled `roboCarCatalog` tokens, not that column. All 9 mode names unified on the em dash the app
+already uses. `device_index` is PROTOCOL — untouched.
+
+## Architecture already correct (do not "fix" it)
+`robo_car_modes` = DISPLAY catalogue (website-admin-edited, public read). `roboCarCatalog.ts` =
+PROTOCOL truth + offline fallback + **seed source**. They are intentionally different layers;
+`carModeService` reads DB-first. `device_index` is the cycle order and is protocol.
+
+## Known drift — needs an owner answer, do not guess
+- **4 naming vocabularies per device:** repo folder / firmware `FW_NAME` / advertised BT+AP /
+  app catalogue. 4WD4M = `Genum_4WD4M_CAR` · "4WD4M Car" · "4WD CAR"+"4WDCar_Wifi" · "4WD4M".
+- **`wireless-car` (fw 1.8.0, the 4WD4M's own ancestor) and `smart-dustbin` have firmware but NO app
+  mode entry** — invisible to the app. Add catalogue entries, or retired?
+- **5 app modes have NO firmware repo:** `obstacle-us`, `obstacle-ir`, `website-client`,
+  `website-server`, `path-follow`. Real products awaiting firmware, or dead entries to delete?
+- App `car:` labels are internally inconsistent: `4-wheel-drive`/`2-wheel-drive` lower-hyphenated,
+  `Self-balancing` capitalised, rest prose (`Obstacle avoider`, `RF car`).
+- `4WD4M` + `remote-esp32` DEVIATE from the repo-wide "BT name = FW_NAME upper-cased" rule (R-17).
+  Both deliberate and frozen; the new tests assert the deviation so it is not "corrected".
+
+## Next moves
+1. **Owner profile UI** — DB columns exist, nothing renders them. No garage screen yet.
+2. Website: consume `device_models` so product/IoT pages show registry metadata.
+3. Firmware `WebPage.h:219-220` still force-calls `setMode(MODE_ESP_SERVER)` on page load.
+4. Untested-on-hardware (unchanged): HTTP `REQ_STATE → /status` + mode-token whitelist, unified
+   JSON envelope, per-device Connection Manager API, first-handshake arbitration.
+5. BLE/mDNS/MQTT still parked. MQTT still needs broker + credential decisions.
+
+## Do-not-regress additions this session
+- F-49: A **model** (physical product line, `device_models`) is NOT a **mode** (operational state,
+  `robo_car_modes`). Conflating them is how one device ended up with four names.
+- F-50: RLS verified from the PUBLIC anon key, not as `postgres`. A policy that only passes when
+  tested as superuser is not protecting anything.
+- F-51: Postgres validates a policy body at CREATE time — a policy referencing a table that does
+  not exist yet fails the migration. Create both tables, THEN the policies (see section 3b).
+- F-52: `advertisedName` must never be a copy of `displayName` — that edit renames hardware and
+  breaks every saved pairing. Asserted case-SENSITIVELY; a case-only difference is legitimate.
+- F-53: Never print a sensor reading no code path can supply. `0°C` reads as a measurement; `—`
+  plus a reason is honest. Applies to every readout, not just controls.
