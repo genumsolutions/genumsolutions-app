@@ -249,6 +249,16 @@ export function ToolsScreen() {
     await linkManager.deactivate();
   }, [connected, wifiConnected, handleDisconnect, handleWifiDisconnect]);
 
+  // F-57 / round-close: when the transport disconnects, reset the selected category
+  // so the control panel returns to a clean default state rather than staying
+  // stuck on a connected-category view. The sections remain in the same order
+  // (U-53-4) — we only reset the active slice.
+  useEffect(() => {
+    if (!connected) {
+      setSelectedSlug(categories[0]!.slug);
+    }
+  }, [connected, categories]);
+
   // Category organizer
   const [selectedSlug, setSelectedSlug] = useState<string>(
     routeCategory && categories.some((c) => c.slug === routeCategory)
