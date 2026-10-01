@@ -1032,7 +1032,12 @@ PROTOCOL truth + offline fallback + **seed source**. They are intentionally diff
 
 ## Do-not-regress additions this session
 - F-49: A **model** (physical product line, `device_models`) is NOT a **mode** (operational state,
-  `robo_car_modes`). Conflating them is how one device ended up with four names.
+  `robo_car_modes`). Conflating them is how one device ended up with four names. **This nearly
+  shipped a live outage**: the garage claim passed `savedPrefs.modeId` as the model, and
+  `register_device` validates its model arg against `device_models` and RAISES on an unknown one -
+  so every car in a non-basic mode would have silently failed to reach the garage. Verified live:
+  `'obstacle-us'` -> "unknown model_id", `null` -> OK. Fixed to send `null` (the RPC treats null as
+  "did not say" and cannot overwrite a curated value). Pinned by a test.
 - F-50: RLS verified from the PUBLIC anon key, not as `postgres`. A policy that only passes when
   tested as superuser is not protecting anything.
 - F-51: Postgres validates a policy body at CREATE time — a policy referencing a table that does
@@ -1041,3 +1046,21 @@ PROTOCOL truth + offline fallback + **seed source**. They are intentionally diff
   breaks every saved pairing. Asserted case-SENSITIVELY; a case-only difference is legitimate.
 - F-53: Never print a sensor reading no code path can supply. `0°C` reads as a measurement; `—`
   plus a reason is honest. Applies to every readout, not just controls.
+- F-54: **Check the argument ORDER in a SQL `coalesce` conflict clause against the comment that
+  describes it.** `coalesce` returns its first non-null argument, so `coalesce(excluded.x, d.x)`
+  and `coalesce(d.x, excluded.x)` are opposite policies. `20261001140000` promised "a reported
+  model only fills a gap; it never overwrites a curated value" and then wrote the caller-wins
+  order, so any signed-in user could retype somebody else's car on the SHARED `devices` table.
+  Reproduced live (`4wd4m` -> `smart-dustbin` on claim), fixed in `20261001160000`. Curated
+  catalogue data is **first-write-wins**; only self-reported facts (`fw_version`, `last_seen_at`)
+  may be refreshed by a caller.
+- F-55: **A defect in SQL has no unit test to catch it.** All 208 website tests passed while the
+  above was live. For SQL, assert the migration TEXT and always run a negative control:
+  reintroduce the bug, confirm the test fails, restore. Also assert only the CREATE statement,
+  excluding leading comment blocks, since a header that *documents* a bug will otherwise satisfy
+  or trip assertions meant for executable code.
+- F-56: **A `"use client"` component must never reach a module that imports `next/headers`.**
+  `lib/supabase/server.ts` is labelled SERVER-ONLY in its own header. An unused re-export in
+  `GaragePanel.tsx` pulled it in and `next build` still passed, because tree-shaking hid it. A
+  green build is not proof of a clean server/client boundary; unused re-exports survive longest
+  and turn real the moment someone uses them.
