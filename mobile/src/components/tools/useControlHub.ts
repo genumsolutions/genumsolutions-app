@@ -37,6 +37,7 @@ import {
   upsertWifiHistory,
 } from "../../services/carProfileService";
 import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
+import { registerCurrentDevice } from "../../services/deviceRegistryService";
 import {
   encodeEnvelopeWire,
   isEnvelopeIntakeEnabled,
@@ -512,11 +513,33 @@ export function useControlHub(routeCategory?: string) {
   // Push happens in persistPrefs; pull happens here (last-saved-wins both
   // ways; nothing secret is in the row — names only, never passwords).
   const cloudAdoptedRef = useRef<string | null>(null);
+  // Registry claim guard: one claim attempt per car per session. Without it
+  // every effect re-run (and every reconnect) would fire another RPC.
+  const claimedDeviceRef = useRef<string | null>(null);
   useEffect(() => {
     if (!addressForMemory) return;
     if (cloudAdoptedRef.current === addressForMemory) return;
     cloudAdoptedRef.current = addressForMemory;
     let active = true;
+
+    // Register the unit in the shared device registry as soon as a stable
+    // identity exists, so it appears in the user's garage (app Account tab
+    // and the website /tools garage) instead of only as a car_profiles row.
+    // Fire-and-forget: a failed claim must never block the drive UI, and the
+    // car is still fully usable with a car_profiles row alone.
+    //
+    // The model is deliberately NOT passed. `savedPrefs.modeId` is a MODE id
+    // ("obstacle-us"), not a MODEL id ("4wd4m"); the two only coincide for
+    // three of the nine. register_device validates its model argument against
+    // device_models and raises on an unknown one, so sending a mode id would
+    // abort the whole claim and the car would never reach the garage. The
+    // RPC treats null as "did not say" and leaves the column alone, so
+    // passing nothing is both correct and non-destructive.
+    if (claimedDeviceRef.current !== addressForMemory) {
+      claimedDeviceRef.current = addressForMemory;
+      void registerCurrentDevice(addressForMemory, null);
+    }
+
     void (async () => {
       const { rows, offline } = await fetchCarProfiles();
       if (!active || offline) {
