@@ -37,25 +37,12 @@ import {
   setDeviceName,
   type UserDevice,
 } from "../../services/deviceRegistryService";
+import { relativeTime } from "./deviceGarageFormat";
 
 export type DeviceGarageCardProps = {
   /** Signed-in user id; null when signed out, in which case nothing renders. */
   userId: string | null;
 };
-
-function relativeTime(iso: string | null): string {
-  if (!iso) return "Not seen yet";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "Not seen yet";
-  const mins = Math.floor((Date.now() - then) / 60000);
-  if (mins < 1) return "Seen just now";
-  if (mins < 60) return `Seen ${mins} min ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `Seen ${hours} h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `Seen ${days} d ago`;
-  return `Seen ${new Date(iso).toLocaleDateString()}`;
-}
 
 export default function DeviceGarageCard({ userId }: DeviceGarageCardProps) {
   const [devices, setDevices] = useState<UserDevice[]>([]);

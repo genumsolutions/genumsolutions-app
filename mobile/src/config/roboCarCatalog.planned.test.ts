@@ -17,6 +17,7 @@ import { describe, it, expect } from "vitest";
 import {
   LOCAL_CAR_MODES,
   PLANNED_MODE_IDS,
+  isCarModeBuilt,
   isModeToken,
   sortRemoteModes,
   type CarMode,
@@ -91,6 +92,68 @@ describe("planned modes (owner 2026-10-01)", () => {
     // remote that performs the mode, so from the car's point of view there
     // is no car firmware to build.
     expect(PLANNED_MODE_IDS).toContain("rf-manual");
+  });
+});
+
+describe("isCarModeBuilt badges the six planned modes", () => {
+  // ProjectInfo.tsx used to hard-code its own AVAILABLE_TOKENS set naming 8
+  // of 9 tokens available and badging only MAN — a THIRD availability source
+  // that contradicted this table, so five unbuilt modes (obstacle US/IR,
+  // both website modes, path-follow) were shown to users as working. These
+  // tests pin the count and the membership so a third source cannot quietly
+  // return.
+  it("reports unbuilt for exactly the six planned modes", () => {
+    const unbuilt = LOCAL_CAR_MODES.filter((m) => !isCarModeBuilt(m)).map(
+      (m) => m.id,
+    );
+    expect(unbuilt.sort()).toEqual([...PLANNED_MODE_IDS].sort());
+  });
+
+  it("reports built for the three modes with firmware", () => {
+    for (const m of LOCAL_CAR_MODES) {
+      if (m.id === "4wd4m" || m.id === "2wd1m" || m.id === "self-balancing") {
+        expect(isCarModeBuilt(m), `${m.id} has firmware`).toBe(true);
+      }
+    }
+  });
+
+  it("agrees with the flag when handed a DB-shaped row", () => {
+    // carModeService overlays is_planned from robo_car_modes_flags, so the
+    // same predicate has to work on a row that never passed through the
+    // bundled catalogue.
+    expect(isCarModeBuilt({ id: "obstacle-us", isPlanned: true })).toBe(false);
+    expect(isCarModeBuilt({ id: "4wd4m", isPlanned: false })).toBe(true);
+  });
+
+  it("resolves by token when no id is supplied", () => {
+    for (const m of LOCAL_CAR_MODES) {
+      expect(isCarModeBuilt({ token: m.token }), `${m.token} by token`).toBe(
+        isCarModeBuilt(m),
+      );
+    }
+  });
+
+  it("falls back to the catalogue when the flag is absent", () => {
+    expect(isCarModeBuilt({ id: "rf-manual" })).toBe(false);
+    expect(isCarModeBuilt({ token: "MAN" })).toBe(false);
+  });
+
+  it("treats an unknown or missing mode as built, never as unbuilt", () => {
+    // Silently badging a real mode as unbuilt is the failure this guard
+    // exists to prevent; an unrecognised identifier must not do that.
+    expect(isCarModeBuilt(null)).toBe(true);
+    expect(isCarModeBuilt(undefined)).toBe(true);
+    expect(isCarModeBuilt({})).toBe(true);
+    expect(isCarModeBuilt({ id: "not-a-mode" })).toBe(true);
+  });
+});
+
+describe("planned modes are labelled, never gated (R-10)", () => {
+  it("returns a boolean, so a caller cannot mistake it for a permission", () => {
+    // The whole point of R-10 is that isCarModeBuilt is a DISPLAY signal.
+    // If this ever started returning something a caller could use to block a
+    // selection, these tests should be the thing that fails.
+    expect(typeof isCarModeBuilt(LOCAL_CAR_MODES[0]!)).toBe("boolean");
   });
 });
 
