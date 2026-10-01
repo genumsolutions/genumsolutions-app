@@ -151,11 +151,6 @@ export function ToolsScreen() {
   const anyLinked = sppStatus === "connected" || wifiConnected;
   const linkVerified = hub.linkVerified || sppStatus === "connected";
 
-  // R4-2: method-switching state — shown as a modal when the user taps
-  // "Change Method" (locked while a link is live; the disconnect-first rule
-  // is enforced by the onTransportDeactivate below).
-  const [showMethodMenu, setShowMethodMenu] = useState(false);
-
   // R4-4 (owner): the home-router (STA) method gets the SAME router-management
   // surface the remote's webserver mode hosts (RouterPanel), plus an
   // edit-password affordance (the car stores one password per SSID, so an
@@ -457,20 +452,6 @@ export function ToolsScreen() {
                 One method at a time — pick it, verify it, drive.
               </Text>
             </View>
-            {/* R4-2: the dropdown is locked while a link is live — disconnect first. */}
-            {(sppStatus === "connected" || wifiConnected) && (
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  setShowMethodMenu(true);
-                }}
-                className="shrink-0 text-[10px] font-black uppercase tracking-[0.1em] text-gold underline"
-                accessibilityRole="button"
-                accessibilityLabel="Change method"
-              >
-                Change Method
-              </Pressable>
-            )}
           </View>
 
           <View className="mt-3">
@@ -551,63 +532,6 @@ export function ToolsScreen() {
               onPickedChange={onPickedChange}
             />
           </View>
-
-          {/* R4-2: method switcher — modal that appears when "Change Method" is tapped.
-               It is only rendered when a link is NOT live (owner rule); the
-               onTransportDeactivate below will close it on disconnect so the UI
-               returns to a clean default state. */}
-          {showMethodMenu && (
-            <View className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
-              <View className="rounded-2xl border border-line bg-card p-6 w-full max-w-md">
-                <Text className="text-xl font-black text-ink mb-4">
-                  Select Communication Method
-                </Text>
-                <View className="space-y-3">
-                  <Pressable
-                    onPress={() => {
-                      feedbackTap();
-                      setShowMethodMenu(false);
-                      onPickedChange("bt-classic");
-                    }}
-                    className="flex items-center gap-3 rounded-full border border-line bg-mist px-4 py-2 text-left"
-                  >
-                    <Feather name="bluetooth" size={18} color="#000" />
-                    <Text className="font-bold text-lg">Bluetooth Classic</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      feedbackTap();
-                      setShowMethodMenu(false);
-                      onPickedChange("wifi-ap-ws");
-                    }}
-                    className="flex items-center gap-3 rounded-full border border-line bg-mist px-4 py-2 text-left"
-                  >
-                    <Feather name="wifi" size={18} color="#000" />
-                    <Text className="font-bold text-lg">WiFi Access Point</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      feedbackTap();
-                      setShowMethodMenu(false);
-                      onPickedChange("wifi-sta-ws");
-                    }}
-                    className="flex items-center gap-3 rounded-full border border-line bg-mist px-4 py-2 text-left"
-                  >
-                    <Feather name="wifi" size={18} color="#000" />
-                    <Text className="font-bold text-lg">WiFi Station</Text>
-                  </Pressable>
-                </View>
-                <Pressable
-                  onPress={() => setShowMethodMenu(false)}
-                  className="mt-4 text-sm text-muted hover:underline"
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel method change"
-                >
-                  Cancel
-                </Pressable>
-              </View>
-            </View>
-          )}
 
           {/* R4-4: the home-router method's OWN surface — the same RouterPanel
               the remote's webserver mode hosts (owner: "make this just like it
