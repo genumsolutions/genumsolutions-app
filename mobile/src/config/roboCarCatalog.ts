@@ -14,15 +14,15 @@
 // =====================================================================
 
 export type CarModeId =
-  | "4wd4m" // Bluetooth · 4WD (4M)
-  | "2wd1m" // Bluetooth · 2WD + Servo (1M)
+  | "4wd4m" // Bluetooth — 4WD (4M)
+  | "2wd1m" // Bluetooth — 2WD + Servo (1M)
   | "self-balancing" // Self-Balancing
-  | "obstacle-us" // Obstacle Avoidance · Ultrasonic
-  | "obstacle-ir" // Obstacle Avoidance · IR
-  | "website-client" // Website Controlled · Client
-  | "website-server" // Website Controlled · Server
-  | "path-follow" // Path Following · IR
-  | "rf-manual"; // Manual · RF
+  | "obstacle-us" // Obstacle Avoidance — Ultrasonic
+  | "obstacle-ir" // Obstacle Avoidance — IR
+  | "website-client" // Website Controlled — Client
+  | "website-server" // Website Controlled — Server
+  | "path-follow" // Path Following — IR
+  | "rf-manual"; // Manual — RF
 
 export type ControlKind =
   | "drive-tank" // 4WD: drive+direction
@@ -101,7 +101,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "2wd1m",
-    name: "Bluetooth · 2WD + Servo (1M)",
+    name: "Bluetooth — 2WD + Servo (1M)",
     token: "2WD1M",
     deviceIndex: 8,
     car: "2-Wheel Drive",
@@ -133,7 +133,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "obstacle-us",
-    name: "Obstacle Avoidance · Ultrasonic",
+    name: "Obstacle Avoidance — Ultrasonic",
     token: "OBS_US",
     deviceIndex: 3,
     car: "Obstacle Avoider",
@@ -149,7 +149,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "obstacle-ir",
-    name: "Obstacle Avoidance · IR",
+    name: "Obstacle Avoidance — IR",
     token: "OBS_IR",
     deviceIndex: 4,
     car: "Obstacle Avoider",
@@ -165,7 +165,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "website-client",
-    name: "Website Controlled · Client",
+    name: "Website Controlled — Client",
     token: "ESP_CLI",
     deviceIndex: 7,
     car: "Website Car",
@@ -182,7 +182,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "website-server",
-    name: "Website Controlled · Server",
+    name: "Website Controlled — Server",
     token: "ESP_SER",
     deviceIndex: 1,
     car: "Website Car",
@@ -198,7 +198,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "path-follow",
-    name: "Path Following · IR",
+    name: "Path Following — IR",
     token: "PATH",
     deviceIndex: 2,
     car: "Line Follower",
@@ -214,7 +214,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
   },
   {
     id: "rf-manual",
-    name: "Manual · RF",
+    name: "Manual — RF",
     token: "MAN",
     deviceIndex: 5,
     car: "RF Car",
