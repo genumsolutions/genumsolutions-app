@@ -415,9 +415,16 @@ export function ToolsScreen() {
           </View>
 
           <Pressable
-            onPress={() =>
-              navigation.navigate("RemoteControl", { category: category.slug })
-            }
+            onPress={() => {
+              feedbackTap();
+              setSelectedSlug(categories[0]!.slug);
+              const id = setTimeout(() => {
+                navigation.navigate("RemoteControl", {
+                  category: category.slug,
+                });
+              }, 150);
+              return () => clearTimeout(id);
+            }}
             accessibilityRole="button"
             accessibilityLabel={`Open ${category.name} remote window`}
             className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-3"
