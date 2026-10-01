@@ -16,6 +16,7 @@
 import { supabase, supabaseConfigured } from "../config/supabase";
 import {
   LOCAL_CAR_MODES,
+  PLANNED_MODE_IDS,
   type CarMode,
   type CarModeId,
   type ControlKind,
@@ -82,7 +83,24 @@ function mapRow(row: CarModeRow): CarMode | null {
     ),
     requiresConnection: row.requires_connection !== false,
     blurb: row.blurb ?? "",
+    // Owner decision 2026-10-01: a mode whose firmware was never built must
+    // not read as a working car. Default true (fail toward the honest
+    // "not built yet" label) so a missing flag row can never understate the
+    // gap; LOCAL_CAR_MODES supplies the real answer when flags are absent.
+    isPlanned: PLANNED_MODE_IDS.includes(row.id as CarModeId),
   };
+}
+
+/** Merge `robo_car_modes_flags` (DB truth) over the catalogue defaults. */
+function applyPlannedFlags(
+  modes: CarMode[],
+  flags: Map<string, { is_planned: boolean }>,
+): CarMode[] {
+  return modes.map((m) => {
+    const f = flags.get(m.id);
+    if (!f) return m;
+    return { ...m, isPlanned: f.is_planned };
+  });
 }
 
 /** Fetch the car-mode catalogue DB-first with the bundled list as fallback. */
@@ -102,6 +120,25 @@ export async function getCarModes(): Promise<CarMode[]> {
       .filter((m): m is CarMode => m !== null);
     if (modes.length === 0) return LOCAL_CAR_MODES;
 
+    // Overlay the is_planned flags. Deliberately NOT fatal: if this second
+    // read fails we keep the catalogue defaults, because a mode with no
+    // firmware still has to be labelled "not built yet" from the bundled
+    // PLANNED_MODE_IDS alone.
+    let flagMap = new Map<string, { is_planned: boolean }>();
+    try {
+      const { data: flagRows } = await supabase
+        .from("robo_car_modes_flags")
+        .select("mode_id,is_planned");
+      for (const f of (flagRows ?? []) as Record<string, unknown>[]) {
+        if (typeof f.mode_id === "string")
+          flagMap.set(f.mode_id, {
+            is_planned: f.is_planned === true,
+          });
+      }
+    } catch {
+      // keep defaults
+    }
+
     // Ensure the firmware-available modes are always present even if the DB
     // row has null id/name/token and was dropped. X-8: `4WD4M` is the
     // canonical token (legacy `BT` no longer a shipped mode); all 9 firmware
@@ -117,8 +154,13 @@ export async function getCarModes(): Promise<CarMode[]> {
       }
     }
 
-    return modes;
+    return applyPlannedFlags(modes, flagMap);
   } catch {
-    return LOCAL_CAR_MODES;
+    // Offline path still has to be honest about unbuilt modes, so it applies
+    // the bundled PLANNED_MODE_IDS rather than returning the list untouched.
+    return LOCAL_CAR_MODES.map((m) => ({
+      ...m,
+      isPlanned: PLANNED_MODE_IDS.includes(m.id),
+    }));
   }
 }
