@@ -1,5 +1,47 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-60 round — live-link method switching + connect-flow snags (2026-10-01→02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> The 4WD4M integration bench session produced five app-side fixes. Headline: the method
+> dropdown no longer LOCKS while a link is live (R4-2 revised) — switching method is a
+> CONFIRMED teardown, and two transports are never live at once. Gates: tsc 0 · vitest
+> **409/409** · CI ✓ `36911189810` · OTA ✓ published (3.2.7 android+ios, run `36911189952`).
+
+### U-60-1 — switch communication method while connected
+
+- [ ] Connect over BT (`4WD CAR`), drive, tap the method chip → the list OPENS while the link
+      is live (R4-2 used to lock it).
+- [ ] Pick a DIFFERENT method (e.g. Car access point) → an INLINE confirm strip names the
+      target and says what will be disconnected — no overlay centered below the fold.
+- [ ] Confirm → the BT link tears down FIRST, then the new method dials; the banner/picker
+      never shows two live links at once.
+- [ ] Re-pick the ALREADY-live method → no-op: the link never drops, no reconnect churn.
+
+### U-60-2 — the F-41 gate still protects a live link
+
+- [ ] While connected, the "Coming Soon" rows (BLE, HTTP/REST, …) stay dimmed and can NEVER
+      open the confirm strip — a parked method must never tear down a working link (the
+      PRIMARY gate runs before the live-link branch).
+
+### U-60-3 — connect flicker is gone
+
+- [ ] Connect over BT or WS → the app lands on the Remote screen exactly ONCE — no double
+      navigation or flash (150 ms debounce before RemoteControl navigation).
+
+### U-60-4 — disconnect cleanup
+
+- [ ] There is exactly ONE disconnect control (the duplicate header button is gone).
+- [ ] After disconnect, the Control Panel selection resets to the FIRST category pill — no
+      stuck connected-category view; the section order is unchanged (U-53-4 regression).
+
+### U-60-5 — touch targets + honest mode badges
+
+- [ ] Method rows are ≥48 dp tall with a per-row Connect button; comfortable at 320–360 px.
+- [ ] All six unbuilt modes carry the planned badge (garage card, project info, mode chips) —
+      displayed, never selectable on the 4WD4M.
+
+---
+
 ## U-59 round — Connection-Manager Phase B: envelope wiring (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Phase B wires the JSON command envelope built in Phase A
