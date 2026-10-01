@@ -9,7 +9,7 @@
 // ("4WD4M" + car label "4-wheel-drive") - with nothing asserting they
 // described the same thing.
 // =====================================================================
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import {
   BUNDLED_DEVICE_MODELS,
   pairingLabel,
@@ -160,5 +160,96 @@ describe("device unique ids reuse the existing profile key rule", () => {
 
   it("returns null when nothing is known, rather than inventing a key", () => {
     expect(resolveProfileKey({})).toBeNull();
+  });
+});
+
+// ── ensureDevice goes through the register_device RPC ────────────────────
+//
+// This block exists because of a bug that made the whole garage feature
+// dead on arrival. ensureDevice() used to upsert `devices` directly, but
+// that table's INSERT policy is staff-only by design (the fleet table is
+// shared, so a blanket user insert would let anyone claim any car). The
+// upsert therefore failed RLS with 42501, the function returned
+// { deviceId: null }, and no car was ever linked to its owner.
+//
+// The fix is the SECURITY DEFINER `register_device` RPC. These tests pin
+// the call shape so nobody "simplifies" it back into a direct upsert.
+const dbMocks = vi.hoisted(() => {
+  const rpc = vi.fn();
+  const from = vi.fn();
+  rpc.mockResolvedValue({ data: "dev-123", error: null });
+  from.mockImplementation(() => {
+    throw new Error(
+      "ensureDevice must not write to `devices` directly - use register_device()",
+    );
+  });
+  return { rpc, from };
+});
+
+vi.mock("../config/supabase", () => ({
+  supabase: {
+    rpc: (...a: unknown[]) => dbMocks.rpc(...a),
+    from: (...a: unknown[]) => dbMocks.from(...a),
+  },
+  supabaseConfigured: true,
+  googleWebClientId: "",
+  googleConfigured: false,
+}));
+
+const { ensureDevice } = await import("./deviceRegistryService");
+
+describe("ensureDevice claims a unit through the RPC", () => {
+  beforeEach(() => {
+    dbMocks.rpc.mockReset();
+    dbMocks.rpc.mockResolvedValue({ data: "dev-123", error: null });
+    dbMocks.from.mockClear();
+  });
+
+  it("calls register_device with the resolved profile key", async () => {
+    const r = await ensureDevice("user-1", { fwId: "1FB608" }, "4wd4m");
+    expect(dbMocks.rpc).toHaveBeenCalledTimes(1);
+    expect(dbMocks.rpc).toHaveBeenCalledWith("register_device", {
+      p_unique_id: "fw:1FB608",
+      p_model_id: "4wd4m",
+      p_fw_version: null,
+    });
+    expect(r).toEqual({ uniqueId: "fw:1FB608", deviceId: "dev-123" });
+  });
+
+  it("never writes to the shared devices table directly", async () => {
+    // A direct upsert is what RLS rejected in the first place.
+    await ensureDevice("user-1", { fwId: "1FB608" }, "4wd4m");
+    expect(dbMocks.from).not.toHaveBeenCalled();
+  });
+
+  it("does not send a user id - the server derives the owner from the session", async () => {
+    await ensureDevice("user-1", { fwId: "1FB608" }, "4wd4m");
+    const args = dbMocks.rpc.mock.calls[0]![1] as Record<string, unknown>;
+    expect(Object.keys(args).sort()).toEqual([
+      "p_fw_version",
+      "p_model_id",
+      "p_unique_id",
+    ]);
+    expect(JSON.stringify(args)).not.toContain("user-1");
+  });
+
+  it("forwards a reported firmware version when the car gave one", async () => {
+    await ensureDevice("user-1", { fwId: "1FB608" }, "4wd4m", "1.0.0");
+    expect(dbMocks.rpc.mock.calls[0]![1]).toMatchObject({
+      p_fw_version: "1.0.0",
+    });
+  });
+
+  it("keeps the unique id when the claim fails, so the caller can log it", async () => {
+    dbMocks.rpc.mockResolvedValue({ data: null, error: { message: "nope" } });
+    const r = await ensureDevice("user-1", { fwId: "1FB608" }, "4wd4m");
+    expect(r).toEqual({ uniqueId: "fw:1FB608", deviceId: null });
+  });
+
+  it("returns null when the identity resolves to nothing", async () => {
+    // No board id, no MAC, no SSID: inventing a key here would silently
+    // create a garbage device row.
+    expect(await ensureDevice("user-1", {})).toBeNull();
+    expect(dbMocks.rpc).not.toHaveBeenCalled();
   });
 });
