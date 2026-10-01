@@ -349,7 +349,19 @@ function MethodHelpModal({
 
 /** The scan result list. Extracted to keep the picker shallow — F-9 (one
  *  subscription/owner per concern) and it removes a 6-level JSX nest that
- *  proved hostile to edit. */
+ *  proved hostile to edit.
+ *
+ *  Owner 2026-10-01: the rows were too small to hit reliably on a phone —
+ *  a thin pill with the whole row as the tap area. Two changes, both
+ *  additive: every row is now at least a 48 dp touch target (py-3 +
+ *  minHeight), and each row carries its OWN "Connect" button on the right
+ *  so the target does not depend on hitting the row precisely. The row's
+ *  onPress stays (tapping the name is still a shortcut), but the explicit
+ *  button is what a thumb aims for. `hitSlop` widens the button's tap area
+ *  past its visual bounds so the small right-hand capsule is comfortable.
+ *  Paired state reads as a chip rather than bare text, because "Not
+ *  paired" and a signal number ("-57 dBm", BLE) are different kinds of
+ *  fact and the pairing one is the actionable one. */
 function DeviceList({
   devices,
   busy,
@@ -360,28 +372,58 @@ function DeviceList({
   onPick: (d: DiscoveredDevice) => void;
 }) {
   return (
-    <ScrollView className="mt-2" style={{ maxHeight: 200 }} nestedScrollEnabled>
-      {devices.map((d) => (
-        <Pressable
-          key={d.id}
-          onPress={() => onPick(d)}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel={`Connect to ${d.name}`}
-          className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-line bg-mist px-2.5 py-2"
-        >
-          <Feather name="bluetooth" size={13} color="#64748b" />
-          <Text
-            className="min-w-0 flex-1 text-[13px] font-bold text-ink dark:text-white"
-            numberOfLines={1}
+    <ScrollView className="mt-2" style={{ maxHeight: 240 }} nestedScrollEnabled>
+      {devices.map((d) => {
+        const paired = d.detail === "Paired";
+        return (
+          <Pressable
+            key={d.id}
+            onPress={() => onPick(d)}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={`Connect to ${d.name}`}
+            // 48 dp minimum touch target (Android/Apple guidance) — the row
+            // was ~30 dp tall and missed taps under a moving thumb.
+            style={{ minHeight: 48 }}
+            className="mt-1.5 flex-row items-center gap-2 rounded-lg border border-line bg-mist px-3 py-3 disabled:opacity-50"
           >
-            {d.name}
-          </Text>
-          {d.detail ? (
-            <Text className="shrink-0 text-[11px] text-muted">{d.detail}</Text>
-          ) : null}
-        </Pressable>
-      ))}
+            <Feather name="bluetooth" size={13} color="#64748b" />
+            <View className="min-w-0 flex-1">
+              <Text
+                className="text-[13px] font-bold text-ink dark:text-white"
+                numberOfLines={1}
+              >
+                {d.name}
+              </Text>
+              <View className="mt-0.5 flex-row items-center gap-1.5">
+                {paired ? (
+                  <View className="rounded-full bg-emerald-500/15 px-1.5 py-0.5">
+                    <Text className="text-[10px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                      Paired
+                    </Text>
+                  </View>
+                ) : null}
+                {d.detail && !paired ? (
+                  <Text className="text-[11px] text-muted" numberOfLines={1}>
+                    {d.detail}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            <Pressable
+              onPress={() => onPick(d)}
+              disabled={busy}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Connect to ${d.name}`}
+              accessibilityState={{ disabled: busy, busy }}
+              className="h-11 shrink-0 items-center justify-center rounded-full bg-sky-700 px-4 disabled:opacity-40"
+            >
+              <Text className="text-[12px] font-black text-white">Connect</Text>
+            </Pressable>
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -654,7 +696,12 @@ export function TransportPicker({
       ) : null}
 
       {/* --- per-transport connection details ------------------------- */}
-      {needsUrl ? (
+      {/* Owner 2026-10-01: parity with the Bluetooth path — once a link is
+          live the address box + Connect button are dead weight (the method
+          chip above is locked and already reads "Connected", and the footer
+          below carries the Disconnect). Hiding them on `link.id` keeps the
+          post-connect surface identical whichever method was chosen. */}
+      {needsUrl && !link.id ? (
         <View className="mt-1 rounded-xl border border-line bg-card p-3">
           <Text className="text-[11px] font-black uppercase tracking-wide text-muted">
             Car address
@@ -727,7 +774,10 @@ export function TransportPicker({
                   {busy ? "Scanning…" : "Scan for cars"}
                 </Text>
               </Pressable>
-              {devices && devices.length > 0 ? (
+              {devices &&
+              devices.length > 0 &&
+              !link.id &&
+              link.status !== "connected" ? (
                 <DeviceList
                   devices={devices}
                   busy={busy}
