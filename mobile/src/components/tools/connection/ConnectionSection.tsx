@@ -478,6 +478,11 @@ export function ConnectionSection({
           onScanBluetooth={() => void scanBluetooth()}
           onConnectBluetooth={connectBluetooth}
           onConnectWifi={connectWifi}
+          switchableSsid={switchable.map((r) => ({
+            ssid: r.ssid,
+            isActive: r.isActive,
+          }))}
+          onSwitchRouter={(s) => void switchRouter(s)}
         />
       ) : null}
 
@@ -566,6 +571,8 @@ function MethodSetup({
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
+  switchableSsid,
+  onSwitchRouter,
 }: {
   method: (typeof CONNECTION_METHODS)[number];
   target: ConnectionTarget;
@@ -583,6 +590,9 @@ function MethodSetup({
   onScanBluetooth: () => void;
   onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
+  /** U-73: the saved routers, offered HERE so switching lives in ONE place. */
+  switchableSsid: readonly { ssid: string; isActive: boolean }[];
+  onSwitchRouter: (ssid: string) => void;
 }) {
   // U-69: WiFi LAN has TWO targets, so it uses the same dropdown rule as
   // everything else rather than two buttons that both look tappable.
@@ -615,6 +625,21 @@ function MethodSetup({
           onConnectBluetooth={onConnectBluetooth}
           onConnectWifi={onConnectWifi}
         />
+        {switchableSsid.length > 0 ? (
+          <View className="mt-2.5">
+            <SelectRow
+              label="Switch the car to"
+              value={null}
+              options={switchableSsid.map((r) => ({
+                id: r.ssid,
+                label: r.ssid,
+                hint: r.isActive ? "current" : null,
+              }))}
+              onChange={onSwitchRouter}
+              testID="conn-router-switch"
+            />
+          </View>
+        ) : null}
       </ConnectionCard>
     );
   }
@@ -833,8 +858,8 @@ function RouterManager({
     >
       {/* D1: the own AP is shown as the always-available default and is NEVER
           an option in the switch dropdown — switching to it is what erased the
-          stored credentials. The dropdown is the ONLY place a switch can start,
-          so there is no row anywhere that can offer it. */}
+          stored credentials. The dropdown in the connection card above is the
+          ONLY place a switch can start, so no row here can offer it either. */}
       <InlineMessage tone="info">
         {ownAp
           ? `${ownAp.ssid} is always available if no router works.`
@@ -847,23 +872,18 @@ function RouterManager({
           power cycle.
         </InlineMessage>
       ) : (
-        <View className="mt-2">
-          <SelectRow
-            label="Switch the car to"
-            value={null}
-            options={options.map((r) => ({
-              id: r.ssid,
-              label: r.ssid,
-              hint: r.isActive
-                ? "current"
-                : suggested === r.ssid
-                  ? "suggested"
-                  : null,
-            }))}
-            onChange={onSwitch}
-            testID="conn-router-switch"
-          />
-        </View>
+        // U-73 (2026-10-02), owner: *"in the wifi lan method instant, there are
+        // still confusing thing in the screen"* / *"the switching the router"*.
+        // TWO controls both switched the router — one in the connection card and
+        // one down here in the manager — so a single action appeared twice with
+        // different wording and different hints, which is exactly the
+        // "which one do I press" confusion. The SWITCH now lives only in the
+        // connection card, directly under where the car is; this card only
+        // MANAGES the list. One place to switch, one place to manage.
+        <InlineMessage tone="info">
+          {options.length} saved. Use &quot;Switch the car to&quot; in the card
+          above to change which one the car joins.
+        </InlineMessage>
       )}
 
       {/* scan — honest about needing the car (D3) */}
