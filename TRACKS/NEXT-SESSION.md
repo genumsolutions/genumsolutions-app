@@ -1,5 +1,56 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+FIXED 2026-10-02 (U-71) - THE OWNER ASKED WHETHER THE PREVIOUS ROUND WAS INTERRUPTED. IT WAS:
+U-70 deferred only WiFi.begin(); the boot auto-join and the last-good persistence had not been
+started. All of it is now finished, plus the settings-in-the-database request.
+
+FIRMWARE 7ba6152 (Arduino CI 37035295780, SRAM 69,764 B / 21%, +112 B):
+
+1. THE RESTART - the strongest explanation yet, and a REAL defect. WiFi.mode() and softAP() were
+   still running synchronously inside rejoinNetwork(), which is called from ModeManager::run()
+   INSIDE loop(). On ESP32 WiFi.mode() RESTARTS the WiFi driver; a driver restart plus softAP() plus
+   begin() can occupy loop() long enough to trip the 5 s task watchdog - and the WDT's action IS a
+   reboot (F-24). That fits the report exactly: the switch churns the radio in the command path and
+   the very next thing to arrive is an HTTP request served by that same driver. rejoinNetwork() now
+   does NO RADIO WORK AT ALL - it only arms a state machine that handle() advances with ONE radio
+   call per loop pass (MODE -> AP -> BEGIN). loop() returns between steps, the WDT is fed, and the
+   web server can ANSWER a request in between - exactly the window that used to be missing. U-70's
+   staBeginPending_ flag is REMOVED, not layered on: U-71 supersedes it. Not claimed as fixed until
+   U-70-4 is run - but it is now a mechanism with an explanation, and the reset-reason line will
+   confirm or refute it.
+
+2. THE CAR REMEMBERS THE ROUTER THAT WORKED, NOT THE ONE IT WAS ASKED FOR. storedSsid_ is written to
+   NVS the moment ROUTERS;USE stores the pair - BEFORE any association is attempted - so a FAILED
+   switch overwrote a working router with a broken one, and a boot would retry the router that had
+   just failed. New lastGoodSsid_/lastGoodPass_ (NVS last_ok_ssid/last_ok_pass) are written ONLY from
+   the connect-success path. "What we tried" and "what worked" are separate facts; only the second
+   survives a power cycle.
+
+3. BOOT AUTO-JOIN, DELIBERATELY BOUNDED. armBootAutoJoin() runs at the end of beginAlwaysOn().
+   WARNING - THIS REVERSES R-16/T-64 ("the own AP is THE default network; a stored router is joined
+   ONLY on explicit request"). The owner has overridden that ruling and it is recorded here rather
+   than quietly done. The reason the rule existed still stands, so the override is BOUNDED: the boot
+   attempt gets BOOT_STA_TIMEOUT_MS (6 s) and BOOT_STA_MAX_RETRIES (1), then settles AP-only
+   immediately. The full retry budget stays reserved for an EXPLICIT user switch, where the user is
+   watching. An unreachable router therefore cannot keep the car off its own hotspot for more than a
+   few seconds - and the hotspot is the only way in when the router is absent. A router that has never
+   once connected is never auto-joined, so the boot window is never spent on something already known
+   to fail. Budget is per-attempt state and restores to normal the instant an association succeeds.
+
+APP d495839 - a REAL gap I introduced in U-68, and it hit the user's most common action. The old
+routerUse/routerAdd persisted an optimistic list, so a switch WAS remembered. The ack-consuming path
+(requestRouter / runSwitchPlan) only persisted on a `list` answer - so adding or SWITCHING a router
+updated the car and the screen and wrote NOTHING to AsyncStorage or to the Supabase car_profiles row.
+Now every CONFIRMED change is remembered and the list is derived from the car's ANSWER, never from
+what the app hoped would happen: ADDED adds that name, USED adds it and records it as lastWifiSsid
+(so the field pre-fills and the smart-link's recency pick starts from the truth), DELETED removes it,
+CLEARED empties it, a list replaces wholesale. A REFUSED answer (FULL / Reserved / Password too long
+/ SSID length / Syntax / Not saved) changes NOTHING - which is the entire reason the reply is consumed
+at all (F-62). Persisted BEFORE resolving, so a caller reacting to the outcome cannot race the save.
+Pinned by connection/routerMemory.test.ts (9 tests).
+
+Device rows: mobile/TESTING.md U-71-1..3. U-71-1/2 need the flash; U-71-3 is app-only. Gates:
+tsc 0 - vitest 536/536 (35 files) - prettier clean.
 FIXED 2026-10-02 (U-70) - THE OWNER'S THIRD REVIEW: the car shows a router it never joined, and the
 scan list is a page-ful. ONE APP FIX, TWO FIRMWARE FIXES, ONE NOT-YET-DIAGNOSABLE RESTART.
 

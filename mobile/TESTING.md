@@ -1,6 +1,52 @@
 # TESTING — Physical Device Test Checklist
 
-## U-70 round — the car's network honesty, the join, and the scan list (2026-10-02)
+## U-71 round — the restart, the boot auto-join, and remembered settings (2026-10-02)
+
+> Owner: _"i used the other router switch thing but the car restarted as soon as i tried to access
+> the webpage"_ · _"save the last connected router configs for the power restart too if that router is
+> in the range to connect if not goes back to esps own hottspot"_ · _"all the car and app to rememnber
+> the old setting in the database too and both app and cars too"_.
+>
+> **U-71-1 and U-71-2 need the car flashed.** That one flash now carries U-67 + U-68 + U-70 + U-71.
+> **U-71-3 is app-only.**
+>
+> ⚠ U-70 reversed a standing ruling — the car now **auto-joins** the last working router on power-up
+> instead of waiting for an explicit request (R-16/T-64). It is deliberately bounded to one 6 s
+> attempt; **U-71-2 exists to prove the fallback still holds**, which is the reason that ruling existed.
+
+### U-71-1 — the switch no longer restarts the car ⭐ (the reported bug)
+
+- [ ] Serial monitor at **115200**, then: switch the car to the home router, then immediately open
+      the car's web page.
+- [ ] **The car must not restart.** If it does, paste the `[BOOT] reset reason: N (label)` line —
+      that is now the whole diagnosis (U-70-4).
+- [ ] The car must **answer** the web-page request during the switch (the AP + servers stay up for
+      the whole hand-over), and the page must load once the car is on the router.
+
+### U-71-2 — boot auto-join, and the fallback still holds ⭐ (⚠ reverses R-16/T-64)
+
+- [ ] With the car **on the home router**, power-cycle it → within a few seconds it **rejoins the
+      router by itself**; the OLED shows the router name and the app finds it at its router address.
+- [ ] **Turn the router OFF**, power-cycle the car → within a few seconds it is **back on its own
+      hotspot** (`4WDCar_Wifi`) and reachable there. **It must not sit unreachable trying.**
+- [ ] Confirm the wait is short: one 6 s window, not a long retry sequence. If the hotspot takes
+      noticeably longer than that to come back, report it.
+- [ ] A router that **never** worked must not be auto-joined — only one that has actually connected
+      before.
+
+### U-71-3 — settings are remembered by BOTH (app only)
+
+- [ ] Add a router from the app → **force-close the app completely and reopen it** → the router is
+      still listed.
+- [ ] Switch to a different router, reopen the app → the app still knows the router you switched to
+      (it pre-fills the name field).
+- [ ] Delete a router, reopen → still gone.
+- [ ] Sign in on another device / check the car's profile in the admin dashboard → **the saved routers
+      are in the cloud row**, not only on the phone.
+- [ ] A router the car **REFUSED** (e.g. a 7th one, or a too-long password) must **not** appear in
+      the remembered list.
+
+---## U-70 round — the car's network honesty, the join, and the scan list (2026-10-02)
 
 > Owner: _"the car is displaying the new router in its oled but not switching actually to that new
 > router network and the car still show the website only on its own esp hotspot. and doesnt show to
