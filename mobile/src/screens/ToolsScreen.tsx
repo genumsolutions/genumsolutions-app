@@ -11,6 +11,7 @@ import {
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   View,
   Linking,
 } from "react-native";
@@ -53,6 +54,47 @@ import {
 type Route = RouteProp<RootStackParamList, "Tools">;
 
 type FeatherIcon = ComponentProps<typeof Feather>["name"];
+
+/**
+ * ① (owner bench report 2026-10-02 evening: the Control Panel is "too
+ * confusing and shows unnecessary datas too much"): settings/about blocks
+ * fold away behind a section header row, so the page LEADS with control.
+ * Deliberately NOT a card — it sits on the page like the Connections header
+ * (double-card nesting would add back the noise this removes).
+ */
+function SectionDisclosure({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View className="mt-6">
+      <Pressable
+        onPress={() => {
+          feedbackTap();
+          setOpen((v) => !v);
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={title}
+        className="flex-row items-center gap-2 py-1"
+      >
+        <Text className="min-w-0 flex-1 text-xs font-black uppercase tracking-widest text-navy">
+          {title}
+        </Text>
+        <Feather
+          name={open ? "chevron-up" : "chevron-down"}
+          size={14}
+          color="#64748b"
+        />
+      </Pressable>
+      {open ? <View className="mt-3">{children}</View> : null}
+    </View>
+  );
+}
 
 const CATEGORY_ICONS: Record<string, FeatherIcon> = {
   robocar: "cpu",
@@ -183,17 +225,34 @@ export function ToolsScreen() {
   // router when something tells it (`ROUTERS;USE`), and that command needs
   // the very link the teardown destroyed. The switch is therefore a
   // HANDOFF, guided by this card:
-  //   step 1  the car is told to join the most recently saved router over
-  //          the LIVE link (or, if none is saved, the Add form below is the
-  //          step),
+  //   step 1  the card ASKS (owner bench report, same evening: "it shows
+  //          prompt to allow user to switch but there is no yes or confirm
+  //          button, there is only cancel button") — the previously saved
+  //          router is offered with a real Yes, or an inline Add form when
+  //          none is saved; `ROUTERS;USE` fires ONLY on that confirm, over
+  //          the LIVE link the card is riding. The card never narrates a
+  //          command that already went out.
   //   step 2  the card waits — the car's STATE broadcast reports its router
   //          IP within seconds,
   //   step 3  the car's reported IP unlocks the dial (`staDialUrl`); the
   //          phone joins the same router and connects. Never a guessed
   //          address — the IP is the car's own report (staPhase is pinned
   //          by staHandoff.test.ts).
+  //   and if the link dies mid-handoff (the car reset — the unflashed
+  //   cd3158f bug), the card flips to `car-dropped` instead of claiming
+  //   progress forever.
   // ---------------------------------------------------------------------
   const [staHandoffShown, setStaHandoffShown] = useState(false);
+  // The user's YES: set when a confirm button fires the command, so the
+  // card's waiting text keys off it. Car truth (staPhase) still drives the
+  // phases — this flag is intent, not state (F-59 rule 2).
+  const [staRequested, setStaRequested] = useState(false);
+  // The SSID the handoff actually told the car to join (the waiting text
+  // names THIS one, never "carNetworks[0]" which may have changed since).
+  const [staTargetSsid, setStaTargetSsid] = useState<string | null>(null);
+  // Inline Add (no router saved yet): name + password typed right on the card.
+  const [staAddSsid, setStaAddSsid] = useState("");
+  const [staAddPass, setStaAddPass] = useState("");
   const staOwnApName = carApName?.trim() || "4WDCar_Wifi";
   const staPhaseNow = staPhase(
     {
@@ -202,20 +261,47 @@ export function ToolsScreen() {
       ip: telemetry.ip ?? null,
     },
     staOwnApName,
+    anyLinked,
   );
+  const dismissStaHandoff = useCallback(() => {
+    feedbackTap();
+    setStaHandoffShown(false);
+    setStaRequested(false);
+    setStaTargetSsid(null);
+  }, []);
   const startStaHandoff = useCallback(() => {
     feedbackTap();
     setStaHandoffShown(true);
     setPickedMethod("wifi-sta-ws");
     setEditingRouter(null);
-    // Step 1 fires immediately: the most recently saved router. The car's
-    // next STATE broadcast reports the router SSID + IP, and the card moves
-    // itself forward from car truth (staPhase). With no saved router the
-    // card points at the Add form instead — it never invents an SSID.
-    if (carNetworks.length > 0) {
-      routerUse(carNetworks[0]!);
-    }
-  }, [carNetworks, routerUse]);
+    setStaRequested(false);
+    setStaTargetSsid(null);
+    // NO command fires here — the card asks first (see the block comment).
+  }, []);
+  const joinStaRouter = useCallback(
+    (ssid: string) => {
+      const s = ssid.trim();
+      if (!s) return;
+      feedbackTap();
+      setStaRequested(true);
+      setStaTargetSsid(s);
+      routerUse(s);
+    },
+    [routerUse],
+  );
+  const joinStaNewRouter = useCallback(() => {
+    const s = staAddSsid.trim();
+    if (!s) return;
+    feedbackTap();
+    // ADD stores the pair on the car; USE switches to it. Both are system
+    // commands (W-14) and ride the live link the card is riding.
+    routerAdd(s, staAddPass);
+    setStaRequested(true);
+    setStaTargetSsid(s);
+    routerUse(s);
+    setStaAddSsid("");
+    setStaAddPass("");
+  }, [staAddSsid, staAddPass, routerAdd, routerUse]);
   const handleOpenWebPage = useCallback(() => {
     const ip = telemetry.ip?.trim();
     void Linking.openURL(`http://${ip || DEFAULT_AP_IP}`).catch(
@@ -335,6 +421,10 @@ export function ToolsScreen() {
       ? routeCategory
       : categories[0]!.slug,
   );
+  // ①: the category detail card leads COMPACT (name · tagline · hardware);
+  // the long description + capability checklist hide behind a Details toggle
+  // and reset when the category changes (each category's card starts clean).
+  const [showCategoryDetails, setShowCategoryDetails] = useState(false);
   // UX-3 (2026-10-02 audit): a pill tap is USER INTENT. The reset below is
   // for TRANSPORT LOSS only — this flag lets it tell the difference, so a
   // mount/refresh cycle can no longer snap a chosen category back to the
@@ -342,6 +432,7 @@ export function ToolsScreen() {
   const userTouchedSelectionRef = useRef(false);
   const selectCategory = useCallback((slug: string) => {
     userTouchedSelectionRef.current = true;
+    setShowCategoryDetails(false);
     setSelectedSlug(slug);
   }, []);
   const category: ProjectCategory =
@@ -477,31 +568,44 @@ export function ToolsScreen() {
               </Text>
             </View>
           </View>
-          <Text className="mt-3 text-sm leading-5 text-muted">
-            {category.description}
-          </Text>
-
-          <View className="mt-3 flex-row flex-wrap gap-1.5">
-            {category.hardware.map((h) => (
-              <Text
-                key={h}
-                className="rounded-full bg-mist px-2.5 py-1 text-[10px] font-bold text-navy"
-              >
-                {h}
+          {/* ①: description + capability checklist fold behind Details —
+              the card leads with what the page is FOR (the deck CTA). */}
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              setShowCategoryDetails((v) => !v);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showCategoryDetails }}
+            accessibilityLabel={`Details about ${category.name}`}
+            className="mt-3 flex-row items-center gap-1.5"
+          >
+            <Text className="text-xs font-bold text-sky-700 dark:text-sky-300">
+              {showCategoryDetails ? "Hide details" : "Details"}
+            </Text>
+            <Feather
+              name={showCategoryDetails ? "chevron-up" : "chevron-down"}
+              size={13}
+              color="#64748b"
+            />
+          </Pressable>
+          {showCategoryDetails ? (
+            <>
+              <Text className="mt-2 text-sm leading-5 text-muted">
+                {category.description}
               </Text>
-            ))}
-          </View>
-
-          <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
-            {category.capabilities.map((cap) => (
-              <View key={cap} className="flex-row items-center gap-1.5">
-                <Feather name="check-circle" size={12} color="#059669" />
-                <Text className="text-xs font-semibold text-ink">
-                  {capabilityLabel(cap)}
-                </Text>
+              <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
+                {category.capabilities.map((cap) => (
+                  <View key={cap} className="flex-row items-center gap-1.5">
+                    <Feather name="check-circle" size={12} color="#059669" />
+                    <Text className="text-xs font-semibold text-ink">
+                      {capabilityLabel(cap)}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </>
+          ) : null}
 
           <Pressable
             onPress={() => {
@@ -528,10 +632,6 @@ export function ToolsScreen() {
             </Text>
             <Feather name="arrow-right" size={15} color="#fff" />
           </Pressable>
-          <Text className="mt-1.5 text-center text-[11px] text-muted">
-            Drive controls and speed live in the Remote window — this page stays
-            a clean organizer.
-          </Text>
         </View>
 
         {/* Connections — the ONE connection surface (owner ①⑥) */}
@@ -540,9 +640,6 @@ export function ToolsScreen() {
             <View className="min-w-0 flex-1">
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
                 Connections
-              </Text>
-              <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-                One method at a time — pick it, verify it, drive.
               </Text>
             </View>
           </View>
@@ -631,10 +728,7 @@ export function ToolsScreen() {
                   Switching to your home router
                 </Text>
                 <Pressable
-                  onPress={() => {
-                    feedbackTap();
-                    setStaHandoffShown(false);
-                  }}
+                  onPress={dismissStaHandoff}
                   accessibilityRole="button"
                   accessibilityLabel="Dismiss the home-router handoff"
                   hitSlop={6}
@@ -643,19 +737,109 @@ export function ToolsScreen() {
                   <Feather name="x" size={14} color="#64748b" />
                 </Pressable>
               </View>
-              {staPhaseNow === "car-on-ap" ? (
+              {staPhaseNow === "car-dropped" ? (
                 <>
                   <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-                    {carNetworks.length > 0
-                      ? `Step 1 — the car was told to join "${carNetworks[0]}" over this link. This takes a few seconds.`
-                      : "Step 1 — no router is saved on the car yet. Add your router below (name + password) and the car joins it over this link."}
+                    The car dropped the link while switching — it may have
+                    rebooted. Reconnect to the car first, then pick the
+                    home-router method again.
                   </Text>
-                  <Text className="mt-1 text-[11px] leading-4 text-muted">
-                    Step 2 — this card unlocks the moment the car reports its
-                    router IP. Then join the SAME router on this phone and
-                    connect.
-                  </Text>
+                  <Pressable
+                    onPress={dismissStaHandoff}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss the dropped handoff"
+                    className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full border border-line bg-card"
+                  >
+                    <Text className="text-[13px] font-black text-ink">
+                      Got it
+                    </Text>
+                  </Pressable>
                 </>
+              ) : staPhaseNow === "car-on-ap" ? (
+                staRequested ? (
+                  <Text className="mt-1.5 text-[11px] leading-4 text-muted">
+                    The car was told to join "{staTargetSsid}" over this link.
+                    This takes a few seconds — the card moves on the moment the
+                    car reports it.
+                  </Text>
+                ) : carNetworks.length > 0 ? (
+                  <>
+                    <Text className="mt-1.5 text-[12px] font-bold text-ink">
+                      Join "{carNetworks[0]}" now?
+                    </Text>
+                    <Text className="mt-1 text-[11px] leading-4 text-muted">
+                      The car joins this router over the current link, then this
+                      phone follows it. Its reported IP unlocks the connect
+                      step.
+                    </Text>
+                    <View className="mt-2.5 flex-row gap-2">
+                      <Pressable
+                        onPress={() => joinStaRouter(carNetworks[0]!)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Tell the car to join ${carNetworks[0]}`}
+                        className="h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 px-4"
+                      >
+                        <Feather name="wifi" size={14} color="#fff" />
+                        <Text className="text-[13px] font-black text-white">
+                          Yes, join it
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={dismissStaHandoff}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel the home-router switch"
+                        className="h-11 flex-1 items-center justify-center rounded-full border border-line bg-card px-4"
+                      >
+                        <Text className="text-[13px] font-bold text-ink">
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text className="mt-1.5 text-[11px] leading-4 text-muted">
+                      No router is saved on the car yet. Enter your router's
+                      name and password — the car joins it over this link.
+                    </Text>
+                    <TextInput
+                      value={staAddSsid}
+                      onChangeText={setStaAddSsid}
+                      placeholder="Router name (SSID)"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      accessibilityLabel="Home router name"
+                      className="mt-2 h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink dark:text-white"
+                      placeholderTextColor="#64748b"
+                    />
+                    <TextInput
+                      value={staAddPass}
+                      onChangeText={setStaAddPass}
+                      placeholder="Router password"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      secureTextEntry
+                      accessibilityLabel="Home router password"
+                      className="mt-2 h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink dark:text-white"
+                      placeholderTextColor="#64748b"
+                    />
+                    <Pressable
+                      onPress={joinStaNewRouter}
+                      disabled={staAddSsid.trim().length === 0}
+                      accessibilityRole="button"
+                      accessibilityLabel="Save the router and join it"
+                      accessibilityState={{
+                        disabled: staAddSsid.trim().length === 0,
+                      }}
+                      className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 disabled:opacity-40"
+                    >
+                      <Feather name="wifi" size={14} color="#fff" />
+                      <Text className="text-[13px] font-black text-white">
+                        Save &amp; join
+                      </Text>
+                    </Pressable>
+                  </>
+                )
               ) : staPhaseNow === "joined" ? (
                 <Text className="mt-1.5 text-[11px] leading-4 text-muted">
                   The car has joined the router and is getting an address. Step
@@ -706,8 +890,7 @@ export function ToolsScreen() {
                 Home router settings
               </Text>
               <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-                Routers saved on the car — switch, edit the stored password, or
-                remove them. The car needs a live link to apply changes.
+                Saved on the car — a live link applies changes.
               </Text>
               <View className="mt-3">
                 <RouterPanel
@@ -743,7 +926,8 @@ export function ToolsScreen() {
             </View>
           )}
 
-          <View className="mt-3">
+          {/* ①: the saved-settings block folds away — control surfaces lead. */}
+          <SectionDisclosure title="Saved settings">
             <CarProfileCard
               profileKey={hub.profileKey}
               savedPrefs={hub.savedPrefs}
@@ -770,15 +954,15 @@ export function ToolsScreen() {
               staSsid={staSsid}
               apName={apName}
             />
-          </View>
+          </SectionDisclosure>
         </View>
 
-        {/* About this project — the page now ENDS here (owner 2026-09-29:
-          the teaching card after it is gone; mt-6 matches the Connections
-          section rhythm). */}
-        <View className="mt-6">
+        {/* About this project — the page ENDS here (owner 2026-09-29: the
+          teaching card after it is gone). ①: folded behind a disclosure so
+          the page ends on CONTROL, not reading material. */}
+        <SectionDisclosure title="About this project">
           <ProjectInfo mode={activeMode} categorySlug={category.slug} />
-        </View>
+        </SectionDisclosure>
       </ScrollView>
 
       {/* Disconnect confirmation — OUTSIDE the ScrollView (F-47), so the

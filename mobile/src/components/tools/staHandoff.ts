@@ -43,7 +43,14 @@ export type StaPhase =
   /** Step 2: the car joined the router but has not reported an IP yet — wait. */
   | "joined"
   /** Step 3: the car joined AND reported its router IP — the dial may be offered. */
-  | "ready";
+  | "ready"
+  /**
+   * The link died mid-handoff (owner report 2026-10-02 evening: the car
+   * reset — the unflashed cd3158f bug — and the card kept claiming "a few
+   * seconds" forever). The card must say the car went away, not narrate
+   * progress it cannot make.
+   */
+  | "car-dropped";
 
 /** Own-AP match, case-insensitive: the car has reported the name in both cases. */
 export function isOwnApSsid(ssid: string | null, ownApName: string): boolean {
@@ -57,18 +64,32 @@ export function isOwnApSsid(ssid: string | null, ownApName: string): boolean {
  * the card must never claim a step the car has not reported (F-53: no
  * invented state). Unknown/degenerate truth fails open to `car-on-ap`,
  * because step 1 is always safe to show.
+ *
+ * `linkLive` (default true) is whether the link the handoff is riding is
+ * still up. Before the dial, a dead link means the car went away while
+ * switching — the card flips to `car-dropped` instead of narrating progress
+ * forever (owner bench report 2026-10-02 evening). At `ready` the drop is
+ * EXPECTED — the phone leaving the car's AP to join the router is step 3 —
+ * so `ready` survives it.
  */
-export function staPhase(t: StaTelemetry, ownApName: string): StaPhase {
+export function staPhase(
+  t: StaTelemetry,
+  ownApName: string,
+  linkLive = true,
+): StaPhase {
   const ssid = t.ssid?.trim() || null;
   const ip = t.ip?.trim() || null;
 
   // The car's own AP (or unknown truth) is step 1 — even if `connected`
   // was reported, an own-AP ssid means it is NOT on the router.
-  if (!ssid || isOwnApSsid(ssid, ownApName)) return "car-on-ap";
+  if (!ssid || isOwnApSsid(ssid, ownApName)) {
+    return linkLive ? "car-on-ap" : "car-dropped";
+  }
   // The car names a router it is joined to. Without an IP it has nothing
   // to dial yet — step 2 waits for the STATE broadcast.
-  if (!t.connected) return "car-on-ap";
-  return ip ? "ready" : "joined";
+  if (!t.connected) return linkLive ? "car-on-ap" : "car-dropped";
+  if (ip) return "ready";
+  return linkLive ? "joined" : "car-dropped";
 }
 
 /**

@@ -70,6 +70,49 @@ describe("staPhase — the handoff state machine", () => {
     };
     expect(staPhase(t, AP_NAME)).toBe("car-on-ap");
   });
+
+  // ── car-dropped (owner report 2026-10-02 evening): the car RESET mid-
+  // handoff (the unflashed cd3158f bug) and the card kept saying "this takes
+  // a few seconds" forever. A link drop BEFORE the dial must flip the card
+  // to an honest dropped state — never claim progress the car cannot make.
+  describe("car-dropped — the link died mid-handoff", () => {
+    it("a drop while the car is still on its own AP is 'car-dropped'", () => {
+      const t: StaTelemetry = {
+        connected: false,
+        ssid: AP_NAME,
+        ip: "192.168.245.1",
+      };
+      expect(staPhase(t, AP_NAME, false)).toBe("car-dropped");
+    });
+
+    it("a drop while joined-but-no-IP is 'car-dropped'", () => {
+      const t: StaTelemetry = { connected: true, ssid: "Home", ip: null };
+      expect(staPhase(t, AP_NAME, false)).toBe("car-dropped");
+    });
+
+    it("no truth at all + no link is 'car-dropped' (honest, not fake progress)", () => {
+      const t: StaTelemetry = { connected: false, ssid: null, ip: null };
+      expect(staPhase(t, AP_NAME, false)).toBe("car-dropped");
+    });
+
+    it("'ready' SURVIVES a link drop — the phone leaving the car's AP at step 3 is expected", () => {
+      const t: StaTelemetry = {
+        connected: true,
+        ssid: "Home",
+        ip: "192.168.1.34",
+      };
+      expect(staPhase(t, AP_NAME, false)).toBe("ready");
+    });
+
+    it("defaults to link-live — existing callers and tests need no change", () => {
+      const t: StaTelemetry = {
+        connected: false,
+        ssid: AP_NAME,
+        ip: "192.168.245.1",
+      };
+      expect(staPhase(t, AP_NAME)).toBe("car-on-ap");
+    });
+  });
 });
 
 describe("staDialUrl — the handoff's dial", () => {
