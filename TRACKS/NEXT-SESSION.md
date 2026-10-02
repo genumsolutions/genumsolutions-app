@@ -1,5 +1,58 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**✅ U-68 PHASES 1-4 COMPLETE 2026-10-02 — the Control Panel connection layer is REBUILT. All four
+phases shipped; every gate green; the car still needs a FLASH for two of the fixes.**
+
+| Phase | What | Commit(s) | Gate |
+|---|---|---|---|
+| 0 | the plan + the diagnosis, **before** any code | `815573c` | — |
+| 1 | the pure model (`methods` / `routerList` / `commands` / `dial`), 78 tests | `257c8f0` | tsc 0 · 542/542 |
+| 2b | the ack consumer in the hub + `NETW;` over Bluetooth | `77321f8` | tsc 0 · 552/552 |
+| 2 | the uniform `ConnectionSection`, replacing banner + handoff + picker + router panel | `3cfd4b7` | tsc 0 · 552/552 |
+| 3 | the car's network layer (`ROUTERS;SCAN`, reply buffer, ack redaction) | car `39c96ab` + `46186a9` + `7cb409f` | **Arduino CI ✓ `37012141471`** — 1,748,602 B (55% of `huge_app`), SRAM 21% |
+| 4 | residue sweep + the F-41 guard re-expressed + device rows | this commit | tsc 0 · **518/518** (33 files) · prettier clean |
+
+**D1–D8, the eight defects behind "nothing is fixed":** D1 the own AP was list[0] so the switch
+reverted the car to itself — closed in `switchableRouters`/`defaultRouterSsid`/`planSwitch`/`pickBestRouter`
+· D2 every `ROUTERS` answer was discarded — closed by `requestRouter`/`runSwitchPlan` + a visible
+timeout · D3 `ROUTERS;SCAN` did not exist — implemented (car, needs a flash) · D4 STA-with-no-link
+blind-dialled the car's AP — closed by `resolveDial` returning null · D5 the handoff could never
+complete over Bluetooth — moot, the handoff is gone and Bluetooth is a first-class method · D6 the
+router list did not exist over Bluetooth — closed by the `NETW;` parser · D7 the reply truncated at
+63 chars — closed (car) · D8 router management existed on one method only — now on every method.
+
+**Residue removed (and why it was residue):** `TransportPicker.tsx` + `transportPickerFlow.ts`
+(the old connection UI, fully superseded — and `transportPickerFlow` carried the **D4** default
+address, so resurrecting it would have reintroduced the bug) · `transportGate.ts` (the F-41 gate
+was enforced *only inside the picker*, i.e. only while that component was mounted) ·
+`ConnectionBanner.tsx` · `staHandoff.ts` (its rules now live in `connection/dial.ts` +
+`connection/commands.ts`; keeping it would have left TWO implementations of "never dial the own
+AP", which is the duplication trap F-64 came from). **F-41's INTENT is preserved and re-tested**:
+`methods.test.ts` now pins that every offered target is backed by a registered, non-parked
+transport. **KEPT deliberately:** `RouterPanel.tsx` (RemoteControlScreen still mounts it — it is
+not residue, and the Remote screen was out of scope by the owner's instruction) · the whole
+`transports/` layer (live; the hub registers and adopts through it) · `commandRouting.ts` (the hub
+routes every command through it).
+
+**⚠ THE HONEST STATUS (F-61).** This round is **shipped, device-unverified**. tsc/vitest/CI prove
+the code compiles and the app's own rules agree with each other; they cannot prove the car changed
+state. Every previous round was marked done on exactly that evidence and the owner came back with
+"nothing is fixed". **Until someone runs `mobile/TESTING.md` U-68-1..4 against a real car, treat
+this as not verified** — and U-68-4 additionally needs the firmware flashed, because
+`ROUTERS;SCAN` is new firmware and the old binary answers `ROUTERS;ERROR;Syntax`.
+
+**Owner actions:** (1) flash the 4WD4M `main` (USB, 115200, `huge_app`) — this one flash also
+carries U-67's reset/retry fixes and T21–T26; (2) close + reopen the app ×2 and confirm
+Menu → Update shows the new `Short update (…)`; (3) run **U-68-1..4** first, then the rest of the
+⭐ BENCH MASTER RUN.
+
+**Known, recorded, NOT fixed (out of scope this round):** the Remote screen's `RouterPanel` still
+fires `ROUTERS;*` on the press with no confirm and no ack — the same class of defect U-67 fixed on
+the Control Panel. The owner said not to change the Remote screen, so it is left alone and needs
+its own go. Also `linkManager.loadSelection()` is still write-only (the persisted selection is
+never restored), and `DeviceConnectionScreen` is still a dead parallel connection surface in the
+route table.
+
 **🚧 IN PROGRESS 2026-10-02 (evening) — CONTROL-PANEL CONNECTION REBUILD, owner out of hours with
 full authority. PHASE 0 = the note, DONE. Read `guide/PLAN-2026-10-02-CONTROL-PANEL-CONNECTION-REBUILD.md`
 FIRST — it holds the verbatim directive, the scope (in/out), the eight diagnosed defects D1–D8, the
