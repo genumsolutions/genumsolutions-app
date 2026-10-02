@@ -1,5 +1,62 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**📋 NEXT ROUND — OWNER BENCH FEEDBACK (2026-10-02 evening): ANALYSIS DONE, FIXES QUEUED —
+NO CODE YET (owner: "analyse this all n note to fix this next").** Four items from the live
+bench session, each root-caused against the code:
+
+**① CONTROL PANEL IS TOO CONFUSING — TOO MUCH DATA.** Inventory of the current stack
+(top→bottom): header · kind headers + 7 pills · category detail card (tagline +
+description + hardware chips + capability checklist + Open-deck CTA + helper line) ·
+Connections header + subtitle · ConnectionBanner · (conditional) reconnect card ·
+(conditional) F-59 handoff card · TransportPicker (teaching subtitle + method dropdown +
+confirm strip + address box + BT scan card + active footer + error + **WiFi diagnostics
+panel** + help modal) · Home-router settings (RouterPanel: list/add/edit/USE/delete/clear +
+open-page) · CarProfileCard · ProjectInfo. Proposed simplification for owner approval:
+(a) remove WifiDiagnosticsPanel outright (item ③ below); (b) collapse the category detail
+card to ONE compact row (icon · name · tagline · hardware chips) with description +
+capabilities behind a "Details" disclosure; (c) move CarProfileCard + ProjectInfo behind
+disclosures (or off-page — they are settings/about, not control); (d) drop the picker's
+teaching subtitle (the per-method ⓘ windows already carry it) and the two helper lines.
+Nothing here is coded — needs the owner's pick of what may move vs go.
+
+**② HOME-ROUTER SWITCH: PROMPT WITH NO CONFIRM · CAR RESETS · NEVER REACHES THE ROUTER.**
+Three findings. **(a) App (F-59 card design gap):** the handoff card's phases `car-on-ap`
+and `joined` are NARRATION-ONLY — the ✕ is the only button, so the owner reads a
+"prompt to allow switching" with no Yes (exactly the report). Worse, `startStaHandoff`
+fires `ROUTERS;USE` **immediately, before any user confirmation** — the prompt has
+nothing to confirm because the action already happened. Fix: every actionable phase gets
+a real primary button — `car-on-ap` = "Join <ssid> now" [Yes / Cancel], and `USE` fires
+ONLY on Yes; no-saved-router = inline Add (name + password) with its own confirm, never
+"add it below" pointing at a distant form. **(b) The car RESET is the UNFLASHED firmware
+fix** — `ROUTERS;USE` on an unknown router reboots the car on the flashed binary; fixed
+in `Genum_4WD4M_CAR` `cd3158f` (CI green, **NOT on the board**). Bench precondition for
+this whole round: flash `main` (T21–T23). NOTE the smart-link auto-join can fire
+`ROUTERS;USE` on link-verify when autoJoinRouter is on — on the old binary that means
+surprise resets during ANY connect. **(c) The card has NO link-loss state:** when the car
+resets mid-handoff (what (b) does), the card stalls at "this takes a few seconds" forever.
+Fix: a `car-dropped` phase — honest text ("the car dropped the link while switching — it
+may have rebooted; reconnect to its hotspot") + a Reconnect action; phase machine + tests.
+**Rule candidate (record with the fix): a prompt that describes an action must BE the
+confirm for that action — never narrate a command that already went out.**
+
+**③ REMOVE THE WIFI TEST THING.** `WifiDiagnosticsPanel` — single call site =
+`TransportPicker.tsx` (`isWifi && !compact`), zero tests. Remove the render block + import
++ delete the component file (F-45 dead-code discipline: deletion recorded here, not left
+dangling).
+
+**④ HOME-ROUTER DRIVE DECK IS DULL / UNUSABLE.** Three candidates, to be discriminated on
+the bench with a VERIFIED STA link: **(a)** downstream of ② — no verified STA link →
+`canControl=false` → the deck is dim BY DESIGN (F-34 note); fix ② first and re-observe.
+**(b) REAL APP HAZARD — both-links-live routing:** `sendCommand` routes non-broadcast
+lines by the ACTIVE MODE's transport; with a stale BT link + STA WS both live, drive
+letters can route BT-only while the phone sits on the router (mode-dependent) — deck looks
+alive, car never moves. Needs a one-live-link-wins audit (R-4 extension) with tests.
+**(c)** firmware: if STATE frames never arrive over STA on the flashed binary the deck is
+alive-looking but empty (dull); the unflashed `64c2781` (web page no longer force-sets
+`MODE_ESP_SERVER`) + OLED v1.0.1 are relevant. Next-session diagnostic: with a verified
+STA link, record `canControl` / `linkVerified` / whether STATE arrives, then fix per
+finding. Also verify the robocar deck over STA after ② lands.
+
 **✅ FIXED 2026-10-02 (later same day) — AUDIT OPS-3: A BT CONNECT IS NAMED BY THE ROW THE
 USER JUST TAPPED, NEVER BY A STALE SCREEN-LEVEL SCAN ROW (`toolsScreenFlow.ts`
 `resolveBtConnectDevice`, 6 CI tests).** The one ⑧-class defect the U-61 audit round left
