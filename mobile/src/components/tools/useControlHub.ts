@@ -1863,24 +1863,82 @@ export function useControlHub(routeCategory?: string) {
    * received directly (a Bluetooth `REPLY` arrives on the same STATE line, so
    * this is belt-and-braces rather than a second path).
    */
+  // U-71 (2026-10-02): remember CONFIRMED router changes, so the app and the car
+  // both keep the setting.
+  //
+  // The owner asked for it directly ("all the car and app to remember the old
+  // setting in the database too and both app and cars too"), and it was a real
+  // gap I introduced in U-68: the pre-existing `routerUse`/`routerAdd` pair
+  // persisted its optimistic local list, but the ack-consuming path built in
+  // U-68 (`requestRouter`/`runSwitchPlan`) only persisted on a `list` answer. So
+  // adding or switching a router updated the car and the screen, and nothing was
+  // written to AsyncStorage or to the Supabase `car_profiles` row — the setting
+  // was forgotten the moment the app restarted.
+  //
+  // The list is derived from the car's ANSWER, never from what we hoped would
+  // happen: `ROUTERS;ADDED;<ssid>` adds that exact name, `DELETED` removes it,
+  // `CLEARED` empties it, and a `list` replaces it wholesale. A FAILED answer
+  // changes nothing, which is the point of consuming it at all (F-62).
+  const persistRouters = useCallback(
+    (next: string[], lastSsid?: string | null) => {
+      savedNetworksRef.current = next.slice();
+      persistPrefsRef.current?.({
+        savedRouters: next.slice(),
+        ...(lastSsid ? { lastWifiSsid: lastSsid } : {}),
+      });
+    },
+    [],
+  );
+
   const consumeRouterAnswer = useCallback(
     (text: string) => {
       const answer = parseRouterAnswer(text);
       if (!answer) return false;
+      const current = () => savedNetworksRef.current.slice();
+      const withName = (s: string) => {
+        const next = current();
+        return next.some((n) => n.toUpperCase() === s.toUpperCase())
+          ? next
+          : [...next, s];
+      };
+      const withoutName = (s: string) =>
+        current().filter((n) => n.toUpperCase() !== s.toUpperCase());
+
       // A list is DATA, not an acknowledgement: refresh the mirror but never
       // let it resolve a pending command (a scan result must not look like
       // the answer to an add).
       if (answer.kind === "list") {
         setCarNetworks(answer.ssids.slice());
-        persistPrefsRef.current?.({ savedRouters: answer.ssids.slice() });
+        persistRouters(answer.ssids.slice());
         return true;
       }
+      // Persist from the ANSWER before resolving, so a caller that reacts to the
+      // resolved outcome (clearing a form, closing a panel) cannot race the save.
+      if (answer.kind === "added") {
+        const next = withName(answer.ssid);
+        setCarNetworks(next);
+        persistRouters(next, answer.ssid);
+      } else if (answer.kind === "used") {
+        const next = withName(answer.ssid);
+        setCarNetworks(next);
+        // `lastWifiSsid` is what pre-fills the field next session and seeds the
+        // smart-link's recency pick, so a switch is remembered as a switch.
+        persistRouters(next, answer.ssid);
+      } else if (answer.kind === "deleted") {
+        const next = withoutName(answer.ssid);
+        setCarNetworks(next);
+        persistRouters(next);
+      } else if (answer.kind === "cleared") {
+        setCarNetworks([]);
+        persistRouters([]);
+      }
+
       const pending = routerPendingRef.current;
       if (!pending) return true; // nothing to attribute it to; not an error
       settleRouter(outcomeFor(answer, pending.request));
       return true;
     },
-    [settleRouter],
+    [persistRouters, settleRouter],
   );
   consumeRouterAnswerRef.current = consumeRouterAnswer;
 
