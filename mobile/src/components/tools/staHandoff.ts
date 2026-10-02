@@ -119,6 +119,76 @@ export function isOwnApGateway(ip: string): boolean {
 }
 
 /**
+ * The ONE switch confirm (owner report 2026-10-02: "the app still doesn't
+ * have switch ui ux standardly, n missing ok or confirm buttons while
+ * switching routers").
+ *
+ * The defect this replaces: switching the car to a router had THREE entry
+ * points and only one of them asked. The picker's STA pick opened the
+ * handoff card, which had a real "Yes, join it" / Cancel. But the Home
+ * router settings panel's per-row Switch fired `ROUTERS;USE` on the press
+ * itself, and its Add button (labelled "Add + switch") fired `ROUTERS;ADD`
+ * on the press itself - no confirm, no chance to back out, and the same
+ * logical action wearing three different UIs.
+ *
+ * The rule (already recorded for U-64): a prompt that describes an action
+ * must BE the confirm for that action - never narrate a command that already
+ * went out. So every entry point now resolves to exactly one intent, and
+ * exactly one card renders exactly one confirm for it. Nothing here sends
+ * anything: this is the wording + which-command-would-run, decided purely so
+ * it can be pinned in CI.
+ */
+export type SwitchIntent = {
+  /** The SSID the car should end up on. */
+  ssid: string;
+  /**
+   * Credentials to store on the car BEFORE the switch, or null for a router
+   * the car already holds. A non-empty pass means the confirm covers two
+   * commands (`ROUTERS;ADD` then `ROUTERS;USE`), so the wording says so.
+   */
+  pass: string | null;
+};
+
+export type SwitchConfirm =
+  /** Nothing to confirm - the card shows its ordinary step-1 offer. */
+  | { kind: "none" }
+  /**
+   * The car already holds this router: the confirm is a single `ROUTERS;USE`.
+   * Reached from the picker's STA pick and from a panel row's Switch.
+   */
+  | { kind: "switch"; ssid: string; confirmLabel: string }
+  /**
+   * A router the car does not hold yet (or an edited password): the confirm
+   * covers `ROUTERS;ADD` + `ROUTERS;USE`, so the button says it saves too.
+   */
+  | { kind: "save-and-switch"; ssid: string; confirmLabel: string };
+
+/**
+ * Resolve a requested switch into the ONE confirm the card should show.
+ *
+ * Degenerate intents collapse to `none` rather than offering a confirm that
+ * cannot work: a blank SSID, and the car's OWN network (the firmware
+ * reserves `WIFI_AP_NAME` and rejects it - `ROUTERS;ERROR;Reserved`, and
+ * "use the own AP" is not a switch at all, it is staying put).
+ *
+ * A whitespace-only pass counts as no pass: the car stores it as an empty
+ * password, and an open network is still "already saved" from the user's
+ * point of view, so the confirm must not claim it will save anything.
+ */
+export function switchConfirm(
+  intent: SwitchIntent | null | undefined,
+  ownApName: string,
+): SwitchConfirm {
+  const ssid = intent?.ssid?.trim() ?? "";
+  if (!intent || !ssid) return { kind: "none" };
+  if (isOwnApSsid(ssid, ownApName)) return { kind: "none" };
+  const pass = intent.pass?.trim() ?? "";
+  return pass
+    ? { kind: "save-and-switch", ssid, confirmLabel: "Save & switch" }
+    : { kind: "switch", ssid, confirmLabel: "Switch now" };
+}
+
+/**
  * The ONE dial the handoff may make: the car's REPORTED router IP on the
  * fleet WS port. No IP means no dial — the card must never dial a guessed
  * or default address (that is the defect this handoff replaces). The car's
