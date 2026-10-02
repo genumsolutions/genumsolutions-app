@@ -1,5 +1,45 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-64 round — bench feedback: panel simplified, handoff confirms, diagnostics gone (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner bench report (2026-10-02 evening): control panel too confusing, home-router switch
+> prompt has no confirm button (only cancel), car resets when switching, remove the WiFi
+> test panel. ①②③ fixed same evening; ④ (STA deck dullness) queued — needs the flashed
+> car. Gates: tsc 0 · vitest **439/439** · prettier clean. **U-62-1 is SUPERSEDED** (the
+> card now ASKS before the car is told; see U-64-1). ⚠ The car-reset half needs firmware
+> `main` flashed (T21–T23) — on the current board the switch cannot pass by design.
+
+### U-64-1 — the handoff ASKS before anything is sent
+
+- [ ] Connect over the car's AP (or SPP), pick **Home router (WiFi)** → the card shows
+      "Join \"<your router>\" now?" with **Yes, join it** and **Cancel**.
+- [ ] Tap **Cancel** → the card closes and the car was NEVER told (its OLED/network row
+      still shows the car's own AP).
+- [ ] Tap **Yes, join it** → the card changes to "The car was told to join …" and then
+      advances on its own from the car's reports (joined → IP → Connect via home router).
+
+### U-64-2 — no saved router: the card IS the add form
+
+- [ ] With no router saved on the car, pick Home router → the card shows inline **Router
+      name** + **Router password** fields and **Save & join** (no "add it below" pointer).
+- [ ] Save & join → the car stores the pair and switches to it; the card advances.
+
+### U-64-3 — the car drops the link mid-handoff (needs the car)
+
+- [ ] With the OLD firmware still flashed, do U-64-1 (Yes) → the car resets → within
+      seconds the card flips to "The car dropped the link while switching — it may have
+      rebooted" + **Got it** (it no longer waits forever).
+- [ ] After flashing `main`: the same flow never drops the link and never resets the car.
+
+### U-64-4 — the simplified panel
+
+- [ ] Control Panel: no WiFi diagnostics panel anywhere; the category card shows a
+      **Details** toggle (description + capabilities only when open); **Saved settings**
+      and **About this project** are collapsed header rows; no duplicate helper lines.
+- [ ] Details resets when switching category pills; both disclosures open/close cleanly.
+
+---
+
 ## U-63 round — BT connect names the car the user JUST tapped (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Audit OPS-3 (the one ⑧-class defect left open after the U-61 audit round): the hub's
@@ -32,11 +72,11 @@
 > HANDOFF (car joins over the live link → car reports its router IP → phone follows → dial
 > the reported IP), not a teardown. Gates: tsc 0 · vitest **428/428** · prettier clean.
 
-### U-62-1 — the STA pick opens the handoff (no teardown, no strip)
+### U-62-1 — the STA pick opens the handoff (no teardown, no strip) — ⚠ SUPERSEDED by U-64-1
 
-- [ ] Connect over the car's AP, pick **Home router (WiFi)** in the method dropdown → NO
-      confirm strip, the AP link STAYS live, and the "Switching to your home router" card
-      appears with Step 1 (the car was told to join your saved router).
+- [ ] (SUPERSEDED: the original row expected Step 1 to fire immediately; the card now
+      ASKS first — verify U-64-1 instead. The "NO confirm strip + AP link stays live" half
+      still holds.)
 - [ ] Other-method picks while connected (AP ↔ BT) still use the confirm strip as before.
 
 ### U-62-2 — the car actually joins (needs the car)
