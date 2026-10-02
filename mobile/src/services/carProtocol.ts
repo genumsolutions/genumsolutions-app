@@ -258,10 +258,22 @@ export const OWN_AP_NAMES: readonly string[] = [
   "4WDCar_Wifi",
 ];
 
-/** True when `name` is ANY car's own AP (protected, never deletable). */
+/**
+ * True when `name` is ANY car's own AP (protected, never deletable).
+ *
+ * F-64 (2026-10-02): this was case-SENSITIVE while `staHandoff.isOwnApSsid`
+ * was case-insensitive — two helpers, one job, one of them wrong. A car that
+ * reported its AP as `4wdcar_wifi` therefore rendered Switch/Delete on its own
+ * network and earned a `ROUTERS;ERROR;Reserved`. The registry is folded once
+ * here and every layer uses this function.
+ */
 export function isOwnApName(name: string): boolean {
-  return OWN_AP_NAMES.includes(name.trim());
+  return OWN_AP_NAMES_FOLDED.has(name.trim().toUpperCase());
 }
+
+const OWN_AP_NAMES_FOLDED: ReadonlySet<string> = new Set(
+  OWN_AP_NAMES.map((n) => n.toUpperCase()),
+);
 
 /**
  * v2 defaults for the new 4WD4M car: its own AP sits on 192.168.245.1/24
