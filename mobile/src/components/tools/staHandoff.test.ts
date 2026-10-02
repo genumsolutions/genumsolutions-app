@@ -71,6 +71,41 @@ describe("staPhase — the handoff state machine", () => {
     expect(staPhase(t, AP_NAME)).toBe("car-on-ap");
   });
 
+  // ── THE INTEGRATION BUG (app↔4WD4M audit, 2026-10-02 night): the car's
+  // JSON `ip` is NEVER empty — on its own AP it reports the softAP gateway
+  // (192.168.245.1, R-13). With a router STORED but the car sitting on its
+  // AP, `ssid` = the stored router's name and `connected` = true (any
+  // transport up), so the old phase logic read "ready" and offered the
+  // CAR'S HOTSPOT as the home-router dial. The phone stayed on the AP while
+  // the banner said verified. "Ready" must require an ip that is NOT the
+  // car's own-AP gateway, and the dial must refuse the gateway outright.
+  it("a STORED router + car on its own AP (gateway IP) is 'car-on-ap', NEVER 'ready'", () => {
+    const t: StaTelemetry = {
+      connected: true,
+      ssid: "Home", // stored active pair — NOT the AP name
+      ip: "192.168.245.1", // the softAP gateway (R-13: JSON ip never empty)
+    };
+    expect(staPhase(t, AP_NAME)).toBe("car-on-ap");
+  });
+
+  it("the gateway IP is not a router IP even under another SSID shape", () => {
+    const t: StaTelemetry = {
+      connected: true,
+      ssid: "4WDCAR_WIFI",
+      ip: "192.168.245.1",
+    };
+    expect(staPhase(t, AP_NAME)).toBe("car-on-ap");
+  });
+
+  it("a REAL router IP still reaches 'ready' (router joined, DHCP done)", () => {
+    const t: StaTelemetry = {
+      connected: true,
+      ssid: "Home",
+      ip: "192.168.1.34",
+    };
+    expect(staPhase(t, AP_NAME)).toBe("ready");
+  });
+
   // ── car-dropped (owner report 2026-10-02 evening): the car RESET mid-
   // handoff (the unflashed cd3158f bug) and the card kept saying "this takes
   // a few seconds" forever. A link drop BEFORE the dial must flip the card
@@ -128,5 +163,9 @@ describe("staDialUrl — the handoff's dial", () => {
     expect(staDialUrl(null)).toBeNull();
     expect(staDialUrl("")).toBeNull();
     expect(staDialUrl("   ")).toBeNull();
+  });
+
+  it("REFUSES the car's own-AP gateway — the hotspot is never the home-router dial", () => {
+    expect(staDialUrl("192.168.245.1")).toBeNull();
   });
 });

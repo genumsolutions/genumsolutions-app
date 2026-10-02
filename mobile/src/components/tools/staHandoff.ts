@@ -88,18 +88,52 @@ export function staPhase(
   // The car names a router it is joined to. Without an IP it has nothing
   // to dial yet — step 2 waits for the STATE broadcast.
   if (!t.connected) return linkLive ? "car-on-ap" : "car-dropped";
-  if (ip) return "ready";
+  // Integration guard (app↔4WD4M audit, 2026-10-02 night): the car's JSON
+  // `ip` is NEVER empty — on its own AP it reports the softAP gateway
+  // (WebServerComm::currentIp → 192.168.245.1, R-13). With a router stored
+  // but the car still ON its AP, `ssid` = the stored name and `connected`
+  // = true (ANY transport up), so a naive ip-presence check read "ready"
+  // and offered the car's HOTSPOT as the home-router dial. Ready requires
+  // an IP that is not the own-AP gateway — i.e. the router actually handed
+  // the car an address via DHCP.
+  if (ip && !isOwnApGateway(ip)) return "ready";
+  // A reported GATEWAY address proves the car is still on its own AP (the
+  // gateway can never be a DHCP lease — R-13 reports it while apRunning_).
+  // Honest phase is step 1: re-offer the join instead of waiting forever on
+  // an address that will never come (failed password lands here too). An
+  // ABSENT IP is different — the STATE broadcast may simply not have
+  // carried it yet — so that stays step 2 (joined/waiting).
+  if (ip) return linkLive ? "car-on-ap" : "car-dropped";
   return linkLive ? "joined" : "car-dropped";
+}
+
+/**
+ * The car's own-AP gateway address (4WD4M: 192.168.245.1 since FIN-48; the
+ * donor owns .244). The single subnet shape is a compile-time fact of the
+ * fleet firmware (WebServerComm softAP config), so matching it here is
+ * reading CAR truth, not inventing app-side policy. 192.168.4.x is forbidden
+ * fleet-wide and is NOT in the set.
+ */
+export function isOwnApGateway(ip: string): boolean {
+  return /^(192\.168\.24[45]\.1)$/.test(ip.trim());
 }
 
 /**
  * The ONE dial the handoff may make: the car's REPORTED router IP on the
  * fleet WS port. No IP means no dial — the card must never dial a guessed
- * or default address (that is the defect this handoff replaces).
+ * or default address (that is the defect this handoff replaces). The car's
+ * own-AP gateway is also refused: the JSON `ip` reports it while the car
+ * sits on its hotspot (R-13), and dialing it would "verify" against the
+ * very AP the switch was supposed to leave.
  */
 export function staDialUrl(ip: string | null): string | null {
   const t = ip?.trim();
   if (!t) return null;
-  if (/^wss?:\/\//i.test(t)) return t;
+  if (/^wss?:\/\//i.test(t)) {
+    return isOwnApGateway(t.replace(/^wss?:\/\//i, "").split(":")[0] ?? "")
+      ? null
+      : t;
+  }
+  if (isOwnApGateway(t)) return null;
   return t.includes(":") ? `ws://${t}` : `ws://${t}:${STA_WS_PORT}`;
 }
