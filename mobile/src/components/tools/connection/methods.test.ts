@@ -128,3 +128,61 @@ describe("lookups are total — an unknown id is a null, never a throw", () => {
     expect(targetsOfMethod(null)).toEqual([]);
   });
 });
+
+// F-41's protection, re-expressed for the rebuilt surface.
+//
+// The old gate lived in `transportGate.ts` and was enforced ONLY inside
+// TransportPicker — i.e. only while that particular component was mounted. It
+// is deleted with the picker. Its INTENT must not go with it: the transport
+// REGISTRY still carries eight entries (three real, five parked), and the rule
+// is that a user may only ever be OFFERED the ones that work.
+//
+// So the guarantee now moves to the model: the offered targets are declared in
+// `methods.ts` and these tests pin that every one of them is a real registered
+// transport, and that the parked ones cannot leak in.
+describe("F-41 intent, preserved: only working transports are offered", () => {
+  // Mirrors buildAllTransports()'s ids (adapters.test.ts pins the list at 8).
+  const REGISTERED = [
+    "bt-classic",
+    "bt-ble",
+    "wifi-ap-ws",
+    "wifi-sta-ws",
+    "http",
+    "mdns",
+    "mqtt",
+    "cloud-relay",
+  ] as const;
+
+  /** target id -> the transport id that actually carries it. */
+  const CARRIER: Record<string, string> = {
+    "bt-spp": "bt-classic",
+    "car-hotspot": "wifi-ap-ws",
+    "home-router": "wifi-sta-ws",
+  };
+
+  it("every offered target is backed by a REGISTERED transport", () => {
+    for (const t of CONNECTION_METHODS.flatMap((m) => m.targets)) {
+      const carrier = CARRIER[t.id];
+      expect(carrier, `${t.id} has no carrier`).toBeTruthy();
+      expect(REGISTERED).toContain(carrier);
+    }
+  });
+
+  it("no offered target is carried by a parked transport", () => {
+    const parked = ["bt-ble", "http", "mdns", "mqtt", "cloud-relay"];
+    for (const t of CONNECTION_METHODS.flatMap((m) => m.targets)) {
+      expect(parked).not.toContain(CARRIER[t.id]);
+    }
+  });
+
+  it("no parked transport is reachable through the method list at all", () => {
+    const parked = ["bt-ble", "http", "mdns", "mqtt", "cloud-relay"];
+    const ids = JSON.stringify(CONNECTION_METHODS);
+    for (const p of parked) expect(ids).not.toContain(p);
+  });
+
+  it("Internet offers NO target - it has no carrier and must not pretend to", () => {
+    // An unbacked target would be a button that dials nothing.
+    expect(getMethod("internet")!.targets).toEqual([]);
+  });
+});

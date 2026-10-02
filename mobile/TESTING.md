@@ -1,6 +1,66 @@
-﻿# TESTING — Physical Device Test Checklist
+# TESTING — Physical Device Test Checklist
 
-## U-67 round — router switch: no reset, one-go retry, ONE confirm (2026-10-02, IMPLEMENTED — app JS OTA + firmware FLASH both required)
+## U-68 round — Control Panel connection rebuild (2026-10-02, app SHIPPED · firmware NEEDS A FLASH)
+
+> Owner: _"nothing is fixed please rebuild the control panel page from the begning with new design…
+> the method switching was not working, the adding the new router is not working. the cards and the
+> section of the control panel page are not unifrom in the fuctiion. the netword data login is not
+> proper, the selecting of the network is not proper, the keyboard apperaing is blocking the entry
+> field. also the car not switching to next router."_
+>
+> **Read `guide/PLAN-2026-10-02-CONTROL-PANEL-CONNECTION-REBUILD.md` first.** U-68-1/2/3 run on the
+> **app alone** (same-version OTA). **U-68-4 needs the car flashed** — `ROUTERS;SCAN` did not exist in
+> any shipped binary, so "Find networks near the car" cannot work until then.
+>
+> ⚠ **F-61: this round is NOT "verified" by the fact that CI is green.** Every earlier round shipped
+> on that evidence and the owner came back with "nothing is fixed". These rows are the only thing
+> that can close it.
+
+### U-68-1 — exactly three methods, one uniform surface
+
+- [ ] The Connections area shows **Connection**, then **Bluetooth · WiFi (LAN) · Internet**, then
+      one setup card, then the routers — in that order, every option on the same card component.
+- [ ] **Bluetooth** offers one target only (SPP). There is **no BLE row anywhere**.
+- [ ] **WiFi (LAN)** offers two targets: _the car's hotspot_ and _your home router_.
+- [ ] **Internet** is present and says plainly that it is not set up yet. It must **not** offer a
+      connect button and must never appear to work.
+
+### U-68-2 — method switching actually switches ⭐ ("the method switching was not working")
+
+- [ ] Disconnected → pick **your home router** → the Connect button is **disabled** with the reason
+      "the car has not joined your router yet". It must **not** dial `192.168.245.1` (the car's own
+      hotspot) behind a green "connected".
+- [ ] Disconnected → pick **the car's hotspot** → Connect works and reaches the car at its hotspot.
+- [ ] **While connected**, picking the other method does **not** tear the link down before the car
+      is ready: no disconnect flash, no reset, and the status bar keeps naming the live link until
+      the new one answers.
+- [ ] Disconnect clears the status bar to "Not connected" and no stale method keeps claiming to be
+      live.
+
+### U-68-3 — router management works, and says what happened ⭐ ("adding a new router is not working")
+
+- [ ] **Over Bluetooth** (the case that never worked): connect BT → the car's routers appear →
+      **Add a router** → Save & switch → the car answers and the card says **what actually
+      happened**.
+- [ ] A **wrong password** or a **wrong name** → the car refuses and the message says so. The form
+      does **not** silently clear as if it worked.
+- [ ] Fill all **6** slots → **Add a router** is disabled and says why (delete one first).
+- [ ] **The car's own network has NO Switch button** — it is shown as the always-available default.
+      This is the D1 fix: switching to it is what erased the stored credentials.
+- [ ] Switching to a real router: the car joins it, and the card reports the car's **own** answer
+      (`ROUTERS;USED;…`). A car that never answers produces a **visible timeout**, not a fake
+      success.
+- [ ] The keyboard: tap the **Router name** field → the keyboard opens **and** the field stays
+      visible above it; the tap is not swallowed. Same for the password field.
+
+### U-68-4 — nearby-network selection ⭐ **NEEDS THE CAR FLASHED**
+
+- [ ] **Find networks near the car** → within a few seconds a list of real SSIDs with strengths
+      appears, tapped to pre-fill the add form.
+- [ ] On the **old** binary this button returns `ROUTERS;ERROR;Syntax`. The app must say the car
+      needs a **flash** rather than showing an empty list as if nothing were there.
+
+---## U-67 round — router switch: no reset, one-go retry, ONE confirm (2026-10-02, IMPLEMENTED — app JS OTA + firmware FLASH both required)
 
 > Owner bench: "the car resets when I switch the wifi router from the app and the car is not
 > always switching properly… the app still doesn't have switch ui ux standardly, n missing ok
