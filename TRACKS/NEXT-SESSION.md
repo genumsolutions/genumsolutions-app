@@ -15,7 +15,7 @@ and the switch never completed — exactly the reported symptom. Worse than a sw
 throttle is 60 s, so an **unattended car parked on the router rebooted on a loop**. Fixed (car
 repo, NEEDS A FLASH): no `ESP.restart()` from the BT path ever again (a failed re-init is reported
 and the car KEEPS RUNNING on AP/router), and the watchdog arms only on a link that was CONNECTED
-and then dropped — "never had a client since boot" is idle, not wedged. **FAILSAFES F-47: a
+and then dropped — "never had a client since boot" is idle, not wedged. **FAILSAFES F-60: a
 transport failure must never take down the whole car.** Flashing the already-committed firmware
 does NOT fix this — `cd3158f` never touched this path.
 **"NOT ALWAYS SWITCHING / DOESN'T DO IT IN ONE GO" — also firmware, also a real bug:**
@@ -45,9 +45,12 @@ the reset + retry fixes need a firmware FLASH — until then U-67-3/4 still repr
 **Ship evidence (app, JS-only → same-version OTA 3.2.7/60, no bump):** `bfe1cda` (code) ·
 `7919d5c` (ledgers, the pushed tip); CI ✓ `37000785055` · OTA Guard ✓ `37000784997` · OTA Only
 ✓ `37000785239` published, update group `75dc154a-dc16-4944-babf-8dda508d1c7b`, live manifest
-= `Short update (7919d5c…)`. **Firmware (car repo, COMMITTED LOCALLY, NOT PUSHED — firmware pushes
-need an explicit owner ask):** `26d41d5` (fix) · `3f080c2` (TRACKS). The car's arduino CI can only
-prove the compile after that push.
+= `Short update (7919d5c…)`. **Firmware (car repo):** `26d41d5` (fix) · `3f080c2` (TRACKS) —
+owner go given, pushed `030726f..3f080c2`, **Arduino CI ✓ `37001533166`** (1,746,294 B / 55% of
+`huge_app`, SRAM 21%). Car bench rows for the two firmware fixes: **`Genum_4WD4M_CAR/TRACKS/
+DEVICE-TESTS.md` T24–T26** (Round 3 — T24/T25 are the reported bug, run them FIRST; they are the
+same single flash as T21–T23). **T22 is NOT this bug** — `cd3158f` was the unknown-router
+`ROUTERS;USE` path, and the reset reported here was a different one that was still live.
 **NOT THIS (already-committed fixes, different defects — do not re-report as new):** `cd3158f` =
 `ROUTERS;USE` on an UNKNOWN router rebooting the car (the panel's Add path). `02548b2` = the F-59
 card's missing confirm for the PICKER path only. Neither covers a panel-row Switch, and neither
@@ -930,25 +933,37 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
 
 0. ✅ **DONE (long since) — RBAC levels + Admin Settings→Content reorg: shipped 2026-09-22/23.** Phases B+C landed in BOTH repos on 2026-09-22 (web `0bc4d2d`+`8cdbe8f`, app `b8a87bf` RBAC + `862d1c7` phase-C Content reorg — verified in git history 2026-09-26); U-15 gap-close web-only 2026-09-23 (`lib/roles.ts` ladder, AdminRows Hide/Show, admin-roles tests). This entry previously said "PLANNED" — stale ledger prose, the round was never logged app-side. **Re-verified live 2026-09-26: `staff-access-e2e.mjs` ALL PASSED vs prod** (staff read/edit 200 + deletes/role-change/robot-settings-delete 403 · admin user-delete 403 · customer 401 ×3 · owner full incl. user-delete 200; disposable probes cleaned up). App state today: `AppContext` isStaff/isOwner ✓ · AdminScreen owner gating ✓ · Content tab holds the 3 editors (training/pilot/curriculum) with Settings Company-only ✓. No code work outstanding; see web TRACKS U-10/U-15 for the full record.
 
-1. ⏳ **OWNER: install 3.2.5/58 on the test devices** → via the in-app updater prompt
-   (3.2.3/3.2.4 installs ARE offered 3.2.5 — the prompt appearing is EXPECTED, it is the
-   R-20a updater working) or sign in on the web /app page (download is now
-   **registered-only**) and sideload. After install verify:
-   - App sections show the **native installed version 3.2.5 (58)**.
+1. ⏳ **OWNER: the device round — but the CURRENT target is 3.2.7/60, not 3.2.5/58.**
+   *This entry was written 2026-09-22 and left stale; corrected 2026-10-02.* 3.2.5/58 was
+   superseded by **3.2.6/59 (2026-09-27)** and then **3.2.7/60 (2026-09-28, U-49, `5c99357`)**
+   — 3.2.7 is a **new APK, not an OTA** (it carried the WiFi manifest change; F-30: a LAN
+   feature can never ship over OTA), so the in-app updater will NOT offer it and the web
+   `/app` download is the route (registered-only). Everything since 3.2.7 is same-version JS
+   OTA, so after the APK: close + reopen the app ×2 and confirm Menu → Update shows
+   `Short update (7919d5c…)` (the U-67 bundle; see the U-67 entry at the top).
+   **The 4WD4M firmware must ALSO be flashed (USB, 115200, `huge_app`) — see §0/T24–T26.**
+   After install verify:
+   - App sections show the **native installed version 3.2.7 (60)**.
    - **Launcher icon = the company stamp.**
    - **§5B device rows E-1..E-7** in `guide/DEVICE-RERUN-2026-09-21.md` — the new
      tier/robot-preference checks (download gate, remote pro gate, tier flip, preferences
      CRUD + web mirror + admin reach, downgrade behaviour).
    - Prior P6 checks still apply: admin role grant/revoke works; no stale "update
      available"; R-20 drive changes; 2WD1M editor stays gone.
-   - Then run `guide/DEVICE-RERUN-2026-09-21.md` (retargeted to 3.2.5/58 2026-09-22).
+   - Then the car/app rows that matter now: `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md`
+     **T24–T26** + `mobile/TESTING.md` **U-67-1..4** (run these FIRST), then the rest of the
+     `mobile/TESTING.md` ⭐ BENCH MASTER RUN.
 2. ✅ **RELEASE-NOTES-DRAFT.md** (FIN-35) — refreshed to the released **3.2.5/58**
    2026-09-22 (tier + robot-preference bullets added on top of the P6 bullets).
-3. 🔜 **FIN-36:** version-defining commits — **STALE at 3.2.5 (2026-09-22 staging); re-stage
-   after the U-47 device pass:** app **`v3.2.6` → `4f8ed03`** (the bump commit), website
-   **`website-v3.2.6` → the current fallback-sync bot commit**, then `guide/FIN-36-TAGS.sh
---dry-run` before cutting. Firmware targets unchanged (v1.6.6 / v1.0.10 / v1.8.3 / v1.2.5).
-   Cut ONLY after the device gate passes.
+   *⚠ Stale since: the released version is 3.2.7/60 and U-63…U-67 are not in it. Refresh it
+   during FIN-35, not before the device gate passes.*
+3. 🔜 **FIN-36:** version-defining commits — **STALE at 3.2.5 (2026-09-22 staging), and the
+   text below is stale twice over. Re-stage to the CURRENT release, 3.2.7/60:** app
+   **`v3.2.7` → `5c99357`** (the U-49 bump commit), website **`website-v3.2.7` → the current
+   fallback-sync bot commit**, then `guide/FIN-36-TAGS.sh --dry-run` before cutting. Firmware
+   targets unchanged (v1.6.6 / v1.0.10 / v1.8.3 / v1.2.5).
+   Re-staging before cutting is allowed; **never move a tag that was already pushed.** Cut ONLY
+   after the device gate passes (i.e. after T24–T26 + U-67-1..4 are recorded).
 4. 🌉 **ECOSYSTEM UNIFICATION:** P1–P5 DONE + pushed (see guide/ARCHITECTURE.md);
    W-6 + W-3 live; P3 machine review 27 PASS · 0 SNAG · 0 FAIL · 2 DEFER (owner visual
    pass still open — `guide/P3-REVIEW-CHECKLIST-2026-09-21.md`). **2026-09-22 adds the
