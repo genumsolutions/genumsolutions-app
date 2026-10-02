@@ -59,6 +59,11 @@ import {
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
 import { ensureTransportsRegistered } from "../../transports/linkManagerHooks";
+// Imported from the PURE modules directly, not from the `./connection` barrel.
+// The barrel re-exports the UI (ConnectionSection → useControlHub, a
+// type-only back-reference), and a hook has no business pulling React
+// components into its dependency graph — nor sitting one hop from a cycle with
+// the screen that renders it.
 import {
   outcomeFor,
   parseRouterAnswer,
@@ -67,7 +72,7 @@ import {
   type RouterOutcome,
   type RouterRequest,
   type SwitchPlan,
-} from "./connection";
+} from "./connection/commands";
 import { linkManager } from "../../transports/linkManager";
 import {
   isAllowedDriveStatus,
