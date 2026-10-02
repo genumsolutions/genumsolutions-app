@@ -17,3 +17,4 @@ export {
   InlineMessage,
   type CardTone,
 } from "./ConnectionCard";
+export * from "./discovery";

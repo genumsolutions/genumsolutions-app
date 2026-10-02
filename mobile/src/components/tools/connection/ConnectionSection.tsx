@@ -58,14 +58,19 @@ import { ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import {
+  CAR_STATUS_URL,
+  CAR_WS_URL,
   CONNECTION_METHODS,
+  PROBE_TIMEOUT_MS,
   canAddRouter,
   carIsOnOwnHotspot,
   defaultRouterSsid,
+  findCarOnNetwork,
   methodOfTarget,
   normalizeRouters,
   planSwitch,
   resolveDial,
+  subnetCandidates,
   switchableRouters,
   targetUnavailableReason,
   validateRouterInput,
@@ -80,6 +85,7 @@ import {
   SelectRow,
 } from "./ConnectionCard";
 import type { useControlHub } from "../useControlHub";
+import NetInfo from "@react-native-community/netinfo";
 
 type Hub = ReturnType<typeof useControlHub>;
 
@@ -93,6 +99,30 @@ type Message = { tone: "error" | "ok" | "info"; text: string };
  * inside itself.
  */
 const DEVICE_LIST_MAX_HEIGHT = 260;
+
+// =====================================================================
+// Fetch one car `/status`, bounded in time.
+//
+// A closed port is the EXPECTED majority in a sweep, so this rejects rather than
+// resolving empty and lets the caller move straight on to the next host.
+// `AbortController` + a timer is used instead of `AbortSignal.timeout`, which
+// is not reliably present in React Native's fetch polyfill — and the timeout is
+// what stops one dead host from stalling the whole sweep.
+// =====================================================================
+async function probeCarStatus(
+  url: string,
+  timeoutMs: number,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as unknown;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export type ConnectionSectionProps = {
   hub: Hub;
@@ -352,6 +382,97 @@ export function ConnectionSection({
     [handleWifiConnect, tap],
   );
 
+  /**
+   * U-74b: find the car on whatever network this phone is on, with no native
+   * module and therefore no APK.
+   *
+   * Why this exists rather than the elegant fix: the car advertises
+   * `genum-car.local` over mDNS (car U-74), but React Native cannot resolve a
+   * `.local` name without a NATIVE MODULE, and a native module cannot be
+   * delivered by an OTA. So this is the fallback that ships today — it uses two
+   * things the app already has:
+   *
+   *   - `NetInfo` (already a dependency, already in the APK) to learn the PHONE's
+   *     address, which tells us the /24 the car must be inside; and
+   *   - the car's own `GET /status` on port 80 to tell our car from the router,
+   *     the laptop and the printer that also answer there.
+   *
+   * Nothing invented: a DHCP lease is knowable exactly one way, and that is it.
+   *
+   * The bounds are deliberate and are the reason this is safe to leave in the
+   * app: it runs only on an explicit tap, only on the user's own network, only
+   * against the /24 the phone is genuinely on, only on port 80, in parallel,
+   * with a short per-probe timeout, and it stops at the first hit.
+   */
+  const findCarOnThisNetwork = useCallback(async () => {
+    tap();
+    setBusy(true);
+    setMessage(null);
+    try {
+      const state = await NetInfo.fetch();
+      // Read defensively rather than narrowing: NetInfo's `details` type is a
+      // loose union across transports, and only the WiFi shape carries
+      // `ipAddress`. `subnetCandidates` re-validates it anyway, so anything
+      // unusable simply falls through to an honest "no usable address" error.
+      const details = state.details as Record<string, unknown> | undefined;
+      const rawIp = details?.["ipAddress"];
+      const phoneIp = typeof rawIp === "string" ? rawIp : null;
+      const candidates = subnetCandidates(phoneIp);
+      if (candidates.length === 0) {
+        setMessage({
+          tone: "error",
+          text: "This phone has no usable WiFi address, so there is nothing to search. Join your router on this phone, then try again.",
+        });
+        return;
+      }
+
+      setMessage({
+        tone: "info",
+        text: `Looking for the car on your network (${candidates.length} addresses to check)...`,
+      });
+
+      const host = await findCarOnNetwork({
+        candidates,
+        // The AP name is what makes this work before the phone has ever paired
+        // with this car - which is the case that actually matters, because the
+        // phone has no profile for a car it has never seen.
+        expect: { apName: "4WDCar_Wifi" },
+        fetchJson: probeCarStatus,
+      });
+
+      if (!host) {
+        setMessage({
+          tone: "error",
+          text: "No car answered on this network. Check the car's screen — it needs to be switched ON and joined to this same router.",
+        });
+        return;
+      }
+
+      const outcome = await handleWifiConnect(CAR_WS_URL(host));
+      setMessage(
+        outcome.ok
+          ? { tone: "ok", text: outcome.message }
+          : {
+              tone: "error",
+              text:
+                outcome.reason ||
+                `Found a car at ${host}, but the drive link did not open.`,
+            },
+      );
+    } catch {
+      setMessage({
+        tone: "error",
+        text: "Could not search this network. Check that this phone is on your router's WiFi, then try again.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [handleWifiConnect, tap]);
+
+  /**
+   * Fetch one `/status`, bounded. A closed port is the expected majority, so the
+   * caller treats a rejection as "not the car" rather than as an error.
+   */
   const disconnect = useCallback(async () => {
     try {
       if (btLive) await handleDisconnect();
@@ -522,6 +643,7 @@ export function ConnectionSection({
           onConnectWifi={connectWifi}
           lastRouterIp={lastRouterIp}
           onConnectRouterLease={connectRouterLease}
+          onFindCarOnNetwork={findCarOnThisNetwork}
           switchableSsid={switchable.map((r) => ({
             ssid: r.ssid,
             isActive: r.isActive,
@@ -617,6 +739,7 @@ function MethodSetup({
   onConnectWifi,
   lastRouterIp,
   onConnectRouterLease,
+  onFindCarOnNetwork,
   switchableSsid,
   onSwitchRouter,
 }: {
@@ -640,6 +763,8 @@ function MethodSetup({
    *  after the hotspot link drops. A HINT, never an authority. */
   lastRouterIp: string | null;
   onConnectRouterLease: (ip: string) => Promise<void>;
+  /** U-74b: sweep this phone's own /24 for the car. No native module. */
+  onFindCarOnNetwork: () => Promise<void>;
   /** U-73: the saved routers, offered HERE so switching lives in ONE place. */
   switchableSsid: readonly { ssid: string; isActive: boolean }[];
   onSwitchRouter: (ssid: string) => void;
@@ -701,8 +826,28 @@ function MethodSetup({
             />
             <InlineMessage tone="info">
               Your phone left the car&apos;s hotspot when the car moved to your
-              router. Join <strong>{lastRouterIp}</strong> — or join your router
-              on this phone first, then tap the button above.
+              router. Join that router on this phone first, then tap the button
+              above.
+            </InlineMessage>
+          </View>
+        ) : null}
+        {/* U-74b: no remembered lease, but we KNOW a car is reachable on this
+            network (the Access-point tab connects to it), so its address is
+            knowable in principle. Find it by sweeping this phone's own /24 -
+            no native module, so no APK. */}
+        {!linkLive && !lastRouterIp ? (
+          <View className="mt-2.5">
+            <ActionButton
+              label="Find the car on this network"
+              icon="search"
+              onPress={() => void onFindCarOnNetwork()}
+              disabled={busy}
+              testID="conn-find-car"
+            />
+            <InlineMessage tone="info">
+              Your phone is on the car&apos;s own hotspot. Join your router on
+              this phone first, then tap the button above and the app will look
+              for the car.
             </InlineMessage>
           </View>
         ) : null}
