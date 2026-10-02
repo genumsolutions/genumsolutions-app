@@ -51,7 +51,6 @@ import {
   type TransportStatus,
 } from "../../transports/types";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../../services/carProtocol";
-import { WifiDiagnosticsPanel } from "./WifiDiagnosticsPanel";
 import { isSelectable } from "./transportGate";
 import { DEFAULT_URL_BY_METHOD, planSwitch } from "./transportPickerFlow";
 
@@ -704,10 +703,6 @@ export function TransportPicker({
       <Text className="text-xs font-black uppercase tracking-widest text-muted">
         Connection method
       </Text>
-      <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-        Pick how the app talks to the car. One at a time. Tap ⓘ on any method
-        for how it works.
-      </Text>
 
       {/* --- the single dropdown: all methods, one at a time ------------ */}
       <Pressable
@@ -962,18 +957,11 @@ export function TransportPicker({
         </View>
       ) : null}
 
-      {isWifi && !compact ? (
-        <View className="mt-3">
-          <WifiDiagnosticsPanel
-            link={{
-              url: selected?.getTargetLabel() ?? null,
-              isConnected: link.status === "connected",
-              linkVerified: link.verified,
-              lastError: link.error,
-            }}
-          />
-        </View>
-      ) : null}
+      {/* WifiDiagnosticsPanel removed (owner bench report 2026-10-02 evening:
+          "remove the wifi test thing, which is burden itself"). The method
+          chip + footer above already carry link status, and a failed connect
+          surfaces its own error card — the panel was a second, denser way of
+          saying the same thing. Deleted with its component file (F-45). */}
 
       {/* --- the per-method help window (small, separate) ------------- */}
       {help ? (
