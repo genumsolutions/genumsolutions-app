@@ -1,5 +1,58 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**🚧 IN PROGRESS 2026-10-02 (evening) — CONTROL-PANEL CONNECTION REBUILD, owner out of hours with
+full authority. PHASE 0 = the note, DONE. Read `guide/PLAN-2026-10-02-CONTROL-PANEL-CONNECTION-REBUILD.md`
+FIRST — it holds the verbatim directive, the scope (in/out), the eight diagnosed defects D1–D8, the
+design, the phases and the new failsafes F-61…F-69.** This entry is the app-side pointer; the plan
+is the source of truth.
+
+**Why this round exists: the owner came back from the bench with "nothing is fixed".** U-64…U-67
+each fixed one narrow symptom and every one of them verified only that a command was SENT and the
+UI RENDERED — never that the CAR changed state (now **F-61**). The audit behind this round found
+**eight live defects across both repos**, several of which actively fight the fixes already
+shipped. The three that most directly match the owner's words:
+
+- **D1 — the car's own hotspot is element `[0]` of the saved-router list.** The handoff card's
+  "Yes, join it" used `carNetworks[0]` and fired `ROUTERS;USE;4WDCar_Wifi`, which the firmware
+  answers by **erasing the stored credentials and reverting the car to its own AP**. The user asks
+  to switch to the router; the app switches the car back to itself. **This is the most likely
+  cause of "the car not switching to next router"** and it survived every round because each round
+  assumed `[0]` meant "the most recently saved router" (now **F-63**).
+- **D2 — every `ROUTERS;*` reply is thrown away.** The car answers `ADDED` / `USED` / `DELETED` /
+  `CLEARED` / `FULL` / `ERROR;…`; the app parses `REPLY=` and discards it (only `WIFICFG;*` is
+  handled). So *"adding a new router is not working"* has no feedback and no error — success and
+  `ROUTERS;FULL` look identical. This is why U-64's confirm could not detect a failed add (now
+  **F-62**).
+- **D3 — `ROUTERS;SCAN` does not exist in the firmware.** The app sends it and expects a `"scan"`
+  array; the car replies `ROUTERS;ERROR;Syntax`. *"Selecting of the network is not proper"* —
+  there is nothing to select from.
+
+Also live: D4 STA-with-no-link blind-dials the car's AP address · D5 the handoff can never
+complete over Bluetooth (`connected` exists only in the WS JSON) · D6 the saved-router list does
+not exist over Bluetooth (the firmware's `NETW;` line is never parsed) · D7 the reply buffer
+truncates at 63 chars · D8 router management is mounted for exactly one method, so **on Bluetooth
+or the car hotspot there is no way to add or switch a router at all**.
+
+**The method model the rebuild lands (owner-specified, verbatim "keep only these method for now,
+Bluwtooth, Wifi(LAN), Internet"):** **Bluetooth — SPP only.** · **WiFi (LAN) — the car's own
+ESP32 hotspot** (the provisioning surface: add / edit / delete / switch the router from there) and
+**the home router** (dialled only from the IP the car reports, never a default). · **Internet** —
+offered honestly as unavailable, because no relay or broker exists; it must never appear to work.
+
+**Scope discipline (owner was explicit):** the Control Panel's connection layer ONLY. **Drive decks
+and the Remote screen are NOT touched.** Because `RouterPanel.tsx` is also mounted by the Remote
+screen, the rebuild adds NEW components and stops mounting `RouterPanel` from the Control Panel —
+so `RouterPanel` stays alive for the Remote screen and is **not** residue. The Remote screen's
+unconfirmed Switch/Add is **recorded, not fixed** (needs its own owner go).
+
+**Phase gates:** Phase 0 the note (this + the plan + F-61…F-69) → Phase 1 the pure model in
+`src/components/tools/connection/` (methods · routerList · commands-with-ack-matching · dial),
+every rule test-pinned → Phase 2 the uniform `ConnectionSection` on the Control Panel → Phase 3
+the car's network layer (`ROUTERS;SCAN`, reply buffer, ack password hygiene) → Phase 4 residue +
+gates + push. **Each phase commits and pushes on its own; the app rides same-version OTA
+(3.2.7/60, no bump), firmware needs the owner's flash.**
+
+
 **✅ FIXED 2026-10-02 (U-67) — OWNER BENCH: "THE CAR RESETTS WHEN I SWITCH THE WIFI ROUTER FROM
 THE APP AND THE CAR IS NOT ALWAYS SWITCHING PROPERLY… THE APP STILL DOESN'T HAVE SWITCH UI UX
 STANDARDLY, N MISSING OK OR CONFIRM BUTTONS WHILE SWITCHING ROUTERS."** Three reports, **TWO were
