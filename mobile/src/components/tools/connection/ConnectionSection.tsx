@@ -136,6 +136,7 @@ export function ConnectionSection({
     requestRouter,
     runSwitchPlan,
     requestScan,
+    lastRouterIp,
     routerDelete,
     routerClearAll,
   } = hub;
@@ -307,10 +308,51 @@ export function ConnectionSection({
     [carApName, handleWifiConnect, reportedIp, reportedSsid, tap],
   );
 
+  /**
+   * U-74: dial the router lease the car last reported.
+   *
+   * This is the ONE piece of the "the drive deck doesn't open on the router"
+   * problem that can be solved without a native module, so it is worth being
+   * precise about what it is and is not. The phone loses the car when the car
+   * joins a router (the hotspot moves to the router's channel — one radio, one
+   * channel), so the app needs an address it did not have. The car broadcasts
+   * its lease for a moment before that happens, so we remembered it, and this
+   * dials it.
+   *
+   * It goes through the same `handleWifiConnect` every other WiFi dial uses, so
+   * it is bounded, verified the same way, and reports a real failure — a lease
+   * that has gone stale produces an honest error, not a fake "Connected".
+   * Bypassing `resolveDial` here is deliberate and safe: `resolveDial` refuses
+   * addresses that are not car-reported, and this IS a car-reported address,
+   * just remembered from a moment ago.
+   */
+  const connectRouterLease = useCallback(
+    async (ip: string) => {
+      const host = ip.trim();
+      if (!host) return;
+      tap();
+      setBusy(true);
+      setMessage(null);
+      try {
+        const outcome = await handleWifiConnect(`ws://${host}:81`);
+        setMessage(
+          outcome.ok
+            ? { tone: "ok", text: outcome.message }
+            : {
+                tone: "error",
+                text:
+                  outcome.reason ||
+                  "Could not reach the car at that address. It may have been given a new one — check the car's screen.",
+              },
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [handleWifiConnect, tap],
+  );
+
   const disconnect = useCallback(async () => {
-    tap();
-    setBusy(true);
-    setMessage(null);
     try {
       if (btLive) await handleDisconnect();
       if (wifiConnected) await handleWifiDisconnect();
@@ -478,6 +520,8 @@ export function ConnectionSection({
           onScanBluetooth={() => void scanBluetooth()}
           onConnectBluetooth={connectBluetooth}
           onConnectWifi={connectWifi}
+          lastRouterIp={lastRouterIp}
+          onConnectRouterLease={connectRouterLease}
           switchableSsid={switchable.map((r) => ({
             ssid: r.ssid,
             isActive: r.isActive,
@@ -571,6 +615,8 @@ function MethodSetup({
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
+  lastRouterIp,
+  onConnectRouterLease,
   switchableSsid,
   onSwitchRouter,
 }: {
@@ -590,6 +636,10 @@ function MethodSetup({
   onScanBluetooth: () => void;
   onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
+  /** U-74: the last router lease the car reported — the one-tap way back to it
+   *  after the hotspot link drops. A HINT, never an authority. */
+  lastRouterIp: string | null;
+  onConnectRouterLease: (ip: string) => Promise<void>;
   /** U-73: the saved routers, offered HERE so switching lives in ONE place. */
   switchableSsid: readonly { ssid: string; isActive: boolean }[];
   onSwitchRouter: (ssid: string) => void;
@@ -625,6 +675,37 @@ function MethodSetup({
           onConnectBluetooth={onConnectBluetooth}
           onConnectWifi={onConnectWifi}
         />
+        {/*
+          U-74 (2026-10-02), owner: *"the drive deck doesnt open when on other
+          router is selected"*. When the car joins your router its hotspot moves
+          to that router's channel - one radio, one channel - so this phone loses
+          the link, and with no link the app has no address for the car. That is
+          the whole reason the deck will not open, and it is not fixable in this
+          screen alone.
+
+          What IS fixable today, with no native module and no APK: the car
+          broadcasts its router lease on the hotspot link for a moment before the
+          drop, so we REMEMBER it. When the link is down but we know an address,
+          offer it as one tap - once the phone is on the router. It is a HINT, not
+          an authority: if it does not answer, the error says so plainly rather
+          than pretending.
+        */}
+        {!linkLive && lastRouterIp ? (
+          <View className="mt-2.5">
+            <ActionButton
+              label={`Connect to the car on your router (${lastRouterIp})`}
+              icon="link"
+              onPress={() => void onConnectRouterLease(lastRouterIp)}
+              disabled={busy}
+              testID="conn-router-lease"
+            />
+            <InlineMessage tone="info">
+              Your phone left the car&apos;s hotspot when the car moved to your
+              router. Join <strong>{lastRouterIp}</strong> — or join your router
+              on this phone first, then tap the button above.
+            </InlineMessage>
+          </View>
+        ) : null}
         {switchableSsid.length > 0 ? (
           <View className="mt-2.5">
             <SelectRow
