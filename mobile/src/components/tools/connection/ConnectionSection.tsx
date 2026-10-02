@@ -54,7 +54,7 @@
 // =====================================================================
 
 import React, { useCallback, useMemo, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import {
@@ -84,6 +84,15 @@ import type { useControlHub } from "../useControlHub";
 type Hub = ReturnType<typeof useControlHub>;
 
 type Message = { tone: "error" | "ok" | "info"; text: string };
+
+/**
+ * U-70: the scan-result list is a BOUNDED scrolling window, not a page-ful.
+ * The owner: *"the list of the bluetooth device found while scanning are too
+ * long, please keep all those in a scrolling window."* Roughly five rows — the
+ * page keeps its shape whatever the phone finds nearby, and the list scrolls
+ * inside itself.
+ */
+const DEVICE_LIST_MAX_HEIGHT = 260;
 
 export type ConnectionSectionProps = {
   hub: Hub;
@@ -465,6 +474,7 @@ export function ConnectionSection({
           sppSupported={sppSupported}
           sppStatus={sppStatus}
           sppDevices={sppDevices}
+          linkLive={anyLink}
           onScanBluetooth={() => void scanBluetooth()}
           onConnectBluetooth={connectBluetooth}
           onConnectWifi={connectWifi}
@@ -536,6 +546,7 @@ function MethodSetup({
   sppSupported,
   sppStatus,
   sppDevices,
+  linkLive,
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
@@ -551,6 +562,8 @@ function MethodSetup({
   sppSupported: boolean;
   sppStatus: string;
   sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
+  /** U-70: a link is already up, so the scan affordances must be hidden. */
+  linkLive: boolean;
   onScanBluetooth: () => void;
   onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
@@ -581,6 +594,7 @@ function MethodSetup({
           sppSupported={sppSupported}
           sppStatus={sppStatus}
           sppDevices={sppDevices}
+          linkLive={linkLive}
           onScanBluetooth={onScanBluetooth}
           onConnectBluetooth={onConnectBluetooth}
           onConnectWifi={onConnectWifi}
@@ -608,6 +622,7 @@ function MethodSetup({
           sppSupported={sppSupported}
           sppStatus={sppStatus}
           sppDevices={sppDevices}
+          linkLive={linkLive}
           onScanBluetooth={onScanBluetooth}
           onConnectBluetooth={onConnectBluetooth}
           onConnectWifi={onConnectWifi}
@@ -625,6 +640,7 @@ function TargetBody({
   sppSupported,
   sppStatus,
   sppDevices,
+  linkLive,
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
@@ -636,6 +652,8 @@ function TargetBody({
   sppSupported: boolean;
   sppStatus: string;
   sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
+  /** U-70: a link is already up, so the scan affordances must be hidden. */
+  linkLive: boolean;
   onScanBluetooth: () => void;
   onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
@@ -648,7 +666,7 @@ function TargetBody({
     <View>
       <InlineMessage tone="info">{target.requirement}</InlineMessage>
 
-      {target.id === "bt-spp" ? (
+      {target.id === "bt-spp" && !linkLive ? (
         <View className="mt-2.5 gap-2">
           {/* U-69: if classic Bluetooth is not in this build, say so HERE with
               the reason, instead of offering a button that can only fail. */}
@@ -667,17 +685,45 @@ function TargetBody({
               testID="conn-bt-scan"
             />
           )}
+          {/*
+            U-70 (2026-10-02): *"the list of the bluetooth device found while
+            scanning are too long, please keep all those in a scrolling window.
+            and also the list shoulnt be displayed when connected to any one of
+            those devices."*
+
+            Two fixes, both about the list being a page-ful rather than a
+            control:
+              - a BOUNDED scrolling window (maxHeight + its own ScrollView), so
+                twenty nearby devices cannot push the rest of the page off the
+                screen. The outer page ScrollView cannot do this job: a nested
+                vertical scroller of unbounded height just grows forever.
+              - hidden entirely once a link is up, along with the scan button. A
+                scan list next to a live connection is not information, it is a
+                way to connect a SECOND car to a session that already has one.
+          */}
           {sppDevices.length > 0 ? (
-            <View className="gap-1.5">
-              {sppDevices.map((d) => (
-                <ConnectionCard
-                  key={d.id}
-                  title={d.name || d.id}
-                  subtitle={d.bonded ? "Paired" : d.id}
-                  onPress={() => void onConnectBluetooth(d.id, d.name)}
-                  testID={`conn-bt-device-${d.id}`}
-                />
-              ))}
+            <View
+              className="mt-1"
+              testID="conn-bt-list"
+              style={{ maxHeight: DEVICE_LIST_MAX_HEIGHT }}
+            >
+              <ScrollView
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
+                <View className="gap-1.5 pr-1">
+                  {sppDevices.map((d) => (
+                    <ConnectionCard
+                      key={d.id}
+                      title={d.name || d.id}
+                      subtitle={d.bonded ? "Paired" : d.id}
+                      onPress={() => void onConnectBluetooth(d.id, d.name)}
+                      testID={`conn-bt-device-${d.id}`}
+                    />
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           ) : null}
         </View>
