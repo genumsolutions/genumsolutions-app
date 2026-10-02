@@ -1,5 +1,28 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-65 round — queue round: chosen-link routing tie-break + smooth connect collapse (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> ④b: when two links are live, a drive command can no longer be stranded on a stale
+> secondary link — the user's CHOSEN method is added as a carrier (pure rule, 11 CI tests).
+> ⑤: the picker's post-connect chrome collapse is animated (Android). F-46's regression pin
+> is CI-only (no device row). Gates: tsc 0 · vitest **453/453** · prettier clean.
+
+### U-65-1 — the drive follows the chosen method when BOTH links are live (needs the car)
+
+- [ ] Connect over BT, then do U-64-1 (Yes, join the router) and complete the handoff so the
+      STA link is live WHILE BT is still up → open the Drive deck and drive → the car moves
+      (before this fix a BT-transport mode could send to the stale BT link only).
+- [ ] No double-motion/duplicate-command artefacts while both links are live; after
+      disconnecting BT, driving continues normally over the STA link.
+
+### U-65-2 — the connect collapse is smooth (visual)
+
+- [ ] Tap Connect (or pick a BT device): the address/scan card collapses and the footer
+      appears as ONE gentle ease-in-ease-out glide — content below no longer jumps.
+- [ ] Disconnect: the card returns the same way.
+
+---
+
 ## U-64 round — bench feedback: panel simplified, handoff confirms, diagnostics gone (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner bench report (2026-10-02 evening): control panel too confusing, home-router switch
