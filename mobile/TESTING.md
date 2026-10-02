@@ -1,5 +1,30 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-63 round — BT connect names the car the user JUST tapped (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Audit OPS-3 (the one ⑧-class defect left open after the U-61 audit round): the hub's
+> screen-level scan list survives a method switch un-cleared, so a BT → Car-AP → BT
+> re-pick could resolve the connect against a STALE row from the earlier session — most
+> visibly a MAC-shaped fallback name an old scan recorded when the device name was
+> unresolved. The connect worked; the label lied. Fix: the name from the CURRENT
+> connect request (the row just tapped) always wins; the screen list fills gaps only
+> (`resolveBtConnectDevice`, 6 CI tests). Gates: tsc 0 · vitest **434/434** · prettier
+> clean.
+
+### U-63-1 — a re-pick shows the CURRENT name
+
+- [ ] Connect over BT, switch to Car-AP (confirm strip), switch back to BT → scan and
+      pick the car → the connect succeeds AND the header/banner names the car with its
+      CURRENT name (not a MAC-shaped string and not an old name from before a rename).
+
+### U-63-2 — the direct-MAC fallback still never refuses (F-40 must not regress)
+
+- [ ] On a fresh app open, pick BT and IMMEDIATELY tap the car row the moment it appears
+      (before the screen list refreshes) → the connect still dials by MAC and succeeds —
+      never "That car is no longer in the scan list. Rescan."
+
+---
+
 ## U-62 round — guided home-router handoff (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > Owner bench report: picking Home router while connected showed the switch prompt but
