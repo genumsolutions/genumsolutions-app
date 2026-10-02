@@ -1,5 +1,38 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-66 round — integration fixes: gateway dial refused + auto-join labelled (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> App↔4WD4M integration audit found a REAL cross-repo bug: the car's JSON `ip` reports the
+> softAP gateway (192.168.245.1) while it sits on its own AP, and with a router stored the
+> handoff could read "ready" and offer the CAR'S OWN HOTSPOT as the home-router dial — the
+> phone never left the AP while the banner said verified (this presents exactly as "the
+> home-router deck is dull / not usable"). Fixed: ready requires a non-gateway IP and
+> staDialUrl refuses the gateway outright (4 tests). Also: the smart-link auto-join toast
+> now says the join is AUTOMATIC and names the off-switch (Saved settings → Auto-join
+> saved router). Gates: tsc 0 · vitest **457/457** · prettier clean.
+
+### U-66-1 — the card never offers the car's own hotspot as the router dial
+
+- [ ] With a router saved on the car, connect over the car's AP and pick **Home router** →
+      Yes → while the car is still on its AP, the card shows Step 1/2 (or re-offers the
+      join) — it NEVER shows "The car is on the router at 192.168.245.1" and never unlocks
+      a Connect button pointed at the car's own hotspot.
+- [ ] Only when the OLED/network row shows a real router address (e.g. 192.168.1.x) does
+      "Connect via home router" appear, and connecting from the phone-on-router verifies.
+
+### U-66-2 — a wrong router password lands back on Step 1, not a fake wait
+
+- [ ] Save & join with a WRONG password → the card returns to the Step-1 offer (join
+      re-offered / inline add) instead of sitting at "getting an address" forever.
+
+### U-66-3 — the auto-join toast says what it is
+
+- [ ] Connect over the car's AP with auto-join ON and a saved router → the toast reads
+      "Smart-link joined … automatically … Turn this off under Saved settings → Auto-join
+      saved router" (not a bare "Smart-link: joining …").
+
+---
+
 ## ⭐ BENCH MASTER RUN — after flashing firmware `main` (2026-10-02, owner run sheet)
 
 > Flash the 4WD4M ONCE via USB (115200, huge_app). The same flash clears ALL pending car
@@ -24,6 +57,7 @@ rows A/B (BT + e-stop; `SPD0` must stop) LAST, on whichever link you end up usin
 3. **U-62-2..4 + U-64-1..4** — the home-router handoff (NOW with the confirm button; the
    reset symptom U-64-3 must NOT reproduce on the new binary).
 4. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
+5. **U-66-1..3** — gateway-dial refusal (the ④ dull-deck fix) + auto-join labelling.
 
 **Reading results:**
 
