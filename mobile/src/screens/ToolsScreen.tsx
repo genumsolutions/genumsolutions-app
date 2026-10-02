@@ -33,7 +33,6 @@ import { DEFAULT_AP_IP } from "../services/carProtocol";
 import { useActiveTransport } from "../transports/linkManagerHooks";
 import { linkManager } from "../transports/linkManager";
 import type { TransportConnectOptions, TransportId } from "../transports/types";
-import type { SppDevice } from "../services/sppService";
 import { feedbackTap } from "../services/hapticsService";
 import {
   KIND_GROUPS,
@@ -48,6 +47,7 @@ import { staDialUrl, staPhase } from "../components/tools/staHandoff";
 import {
   DECK_OPEN_DEBOUNCE_MS,
   queueDeckOpen,
+  resolveBtConnectDevice,
 } from "../components/tools/toolsScreenFlow";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
@@ -249,21 +249,20 @@ export function ToolsScreen() {
           throw new Error("Scan for the car first, then pick it.");
         }
         // The hub's handler takes the scanned SppDevice (it needs id/name/
-        // bonded for display). Resolve it from the CURRENT scan results when
-        // they still hold the address — but NEVER fail the connect because a
-        // mutable in-memory list lost the row (owner 2026-09-29: a paired car
-        // that was really in range was refused with "That car is no longer in
-        // the scan list. Rescan." — a false error). A MAC address is all the
-        // dial needs: fall through to a direct SppDevice built from the
-        // scanned row's name (or the address) and let sppService.connect()
-        // validate + bond like the legacy path always did.
-        const scanned = sppDevices.find((d) => d.address === options.address);
-        const device: SppDevice = scanned ?? {
-          id: options.address,
-          name: options.name || options.address,
-          address: options.address,
-          bonded: true,
-        };
+        // bonded for display). Resolution is OPS-3's pure rule (CI-pinned in
+        // toolsScreenFlow): the name from THIS connect request — the row the
+        // user just tapped — always wins; the screen-level scan list fills
+        // gaps only, because it survives a method switch un-cleared and can
+        // hold a stale row from an earlier session. NEVER fail the connect
+        // because that mutable list lost the row (owner 2026-09-29, F-40: a
+        // paired car that was really in range was refused with "That car is
+        // no longer in the scan list. Rescan." — a false error). A MAC
+        // address is all the dial needs; sppService.connect() validates +
+        // bonds like the legacy path always did.
+        const device = resolveBtConnectDevice(
+          { address: options.address, name: options.name ?? null },
+          sppDevices,
+        );
         await handleConnect(device);
         // F-34b: tell the manager (no re-dial) so the picker's selection,
         // active chip and Disconnect capsule match the live link.
