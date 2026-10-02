@@ -1,6 +1,58 @@
 # TESTING — Physical Device Test Checklist
 
-## U-69 round — Bluetooth really connects, one method at a time, contrast (2026-10-02, app SHIPPED)
+## U-70 round — the car's network honesty, the join, and the scan list (2026-10-02)
+
+> Owner: _"the car is displaying the new router in its oled but not switching actually to that new
+> router network and the car still show the website only on its own esp hotspot. and doesnt show to
+> new router"_ · _"the car restarts when the app directs to cars webpage"_ · _"the list of the
+> bluetooth device found while scanning are too long, please keep all those in a scrolling window.
+> and also the list shoulnt be displayed when connected to any one of those devices."_
+>
+> **U-70-1/2 need the car flashed** (that one flash now carries U-67 + U-68 + U-70). **U-70-3 is
+> app-only.**
+>
+> ⚠ **The single most important row is U-70-4.** The "car restarts" report is **not fixed** — it is
+> _instrumented_. The reset reason is now printed on the serial line at every boot.
+
+### U-70-1 — the car never claims a router it is not on ⭐ (this is what made the bug invisible)
+
+- [ ] Save a router, switch the car to it, and watch **both** the OLED and the app:
+- [ ] With the car **on its own hotspot**: the OLED shows `4WDCar_Wifi` and the app shows the car's
+      OWN network as current — with the requested router shown separately as **"trying to join …"**.
+      It must **NOT** claim the car is already on the new router.
+- [ ] Only once the car has actually associated does the current network become the new router's
+      name, in both places, at the same time.
+- [ ] Turn the home router OFF (or use a wrong password), switch, and wait: the car must end up
+      **saying it is on its own hotspot**, not on the router it failed to join.
+
+### U-70-2 — the switch actually joins ⭐ (the mode-change/begin race)
+
+- [ ] From the car's own hotspot, switch to the home router and **wait without touching the phone**.
+      The car must join on its own.
+- [ ] On success the OLED shows the **router** name (not `AP:`) and the car answers on its router
+      address.
+- [ ] Open the car's web page **from the router address** while the phone is on that router — it must
+      load. This is the row that was failing ("the website only shows on its own esp hotspot").
+- [ ] Switch back to the car's own hotspot afterwards and confirm it is reachable there again.
+
+### U-70-3 — the scan list is a window, and it hides when connected (app only)
+
+- [ ] Scan in a place with many devices nearby → the list is a **bounded scrolling window** (~5 rows
+      visible, scrolls inside itself). The rest of the page keeps its shape and stays reachable.
+- [ ] **Once connected to any car, the scan button and the whole list disappear.** Bluetooth or WiFi
+      — either counts.
+- [ ] They come back after Disconnect.
+
+### U-70-4 — ⭐ READ THE SERIAL LINE FOR THE RESTART (the row that unblocks the next round)
+
+- [ ] Open the serial monitor at **115200** and reproduce: app → the car's web page.
+- [ ] At the restart, the car prints `[BOOT] reset reason: N (<label>)`. **Paste that line.**
+- [ ] `TASK WATCHDOG (loop hung >5s)` → `loop()` blocked; `PANIC (crash/exception)` → a crash;
+      `BROWNOUT (undervoltage)` → power; `power-on` → it was not a crash at all.
+- [ ] Until this line exists, **the restart is not diagnosed** — do not record it as fixed or as
+      not-reproducible.
+
+---## U-69 round — Bluetooth really connects, one method at a time, contrast (2026-10-02, app SHIPPED)
 
 > The owner's second review: _"the bluetooth is not build in the app and i am not able to connect the
 > device to the app to test the device. fix this first"_ · _"connections methods are scattered all over
