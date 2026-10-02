@@ -1,5 +1,34 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**✅ FIXED 2026-10-02 (night, part 2) — U-66: THE INTEGRATION BUG BEHIND ④ ("the home-router
+deck is dull / not usable") IS FOUND AND FIXED, PLUS THE AUTO-JOIN REVIEW + THE OTA GUARD.**
+Owner asked whether both 4WD4M and the app had been analysed and whether everything is
+integrated. Reading the CAR side (`WebServerComm.cpp`) against the app's handoff found a
+REAL cross-repo mismatch: `currentIp()` deliberately reports the **softAP gateway
+(192.168.245.1)** while the car sits on its own AP (R-13: JSON `ip` never empty — the app
+deck + tap-to-open depend on that), and `"connected"` = **ANY** transport up. So with a
+router STORED but the car still ON its AP, the JSON reads `ssid=<router>, connected=true,
+ip=192.168.245.1` — and `staPhase`'s ip-presence check declared **ready**, offering the
+car's own hotspot as the "home router" dial. The phone stayed on the AP; the banner said
+verified; every tile below starved. Fixed app-side (the firmware behaviour is CORRECT and
+load-bearing): `ready` now requires a **non-gateway** IP (a reported gateway drops the card
+back to Step 1 — re-offer the join, which also catches a wrong password; an absent IP still
+waits at step 2), and `staDialUrl` refuses the gateway outright, even behind an explicit
+`ws://`. 4 new tests (457/457). **Auto-join review (owner ask): NO confirm — the feature IS
+the owner's 2026-09-30 "auto-join on selection" decision, gated by the per-car Auto-join
+toggle, once per link session, and it only fires when the car sits on its own AP with saved
+routers.** But the toast now says the join is AUTOMATIC and names the off-switch (the old
+`Smart-link: joining …` read as an unexplained switch — the same narration-hides-action
+failure F-59 fixed, in automation form; on the old binary this auto-fire was very likely
+the "car reset during connect" trigger). **OTA Guard (owner ask):** new workflow
+`ota-guard.yml` — on every push touching mobile/src|assets it fetches release.json, pulls
+the commit hash from the `notes` line, and FAILS unless it is an ancestor of the pushed
+tip: red means "JS exists but no device will load it" (the F-1/F-2 class that CI never
+gated). First run green. Ship evidence: `dad5c0c` (gateway fix) · `eb7d436` (toast) ·
+`ba3cf36` (guard) — CI ✓ `36976974146` · OTA Guard ✓ `36976974081` · OTA Only ✓
+`36976974078` (this bundle carries U-66; devices verify via the Update screen `Short
+update (ba3cf36…)`). Device rows: `mobile/TESTING.md` **U-66-1..3**.
+
 **✅ FIXED 2026-10-02 (night) — THE REST OF THE QUEUE: ④b ROUTING TIE-BREAK · F-46 REGRESSION
 PINNED · ⑤ CHROME JUMP SMOOTHED.** Owner: "go ahead do all the coding side things and i will
 test later." **④b — the both-links-live hazard is closed:** new pure `commandRouting.ts`
