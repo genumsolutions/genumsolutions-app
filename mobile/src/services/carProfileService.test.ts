@@ -181,6 +181,7 @@ describe("toCloudRecord", () => {
       fullscreen: false,
       joystickLayout: "dual",
       lastWifiSsid: null,
+      lastRouterIp: null,
       savedRouters: ["Home", "Office"],
       uniqueId: "1A2B3C",
       btIds: ["AA:00:00:00:00:01"],
@@ -291,6 +292,7 @@ describe("cloud sync", () => {
       fullscreen: false,
       joystickLayout: "dual",
       lastWifiSsid: null,
+      lastRouterIp: null,
       savedRouters: [],
       uniqueId: "1A2B3C",
     } as never;
@@ -347,6 +349,7 @@ describe("profiles sync engine (last-saved-wins)", () => {
     fullscreen: false,
     joystickLayout: "dual",
     lastWifiSsid: null,
+    lastRouterIp: null,
     savedRouters: [],
   } as Omit<DevicePrefs, "address">;
 
@@ -508,6 +511,7 @@ describe("R4-5: last-used router sync", () => {
     fullscreen: false,
     joystickLayout: "dual",
     lastWifiSsid: null,
+    lastRouterIp: null,
     savedRouters: [],
   } as Omit<DevicePrefs, "address">;
 

@@ -1,4 +1,4 @@
-﻿// =====================================================================
+// =====================================================================
 // useControlHub â€” shared connection/control/telemetry state + command
 // logic for the IoT Control Panel.
 //
@@ -73,6 +73,7 @@ import {
   type RouterRequest,
   type SwitchPlan,
 } from "./connection/commands";
+import { isCarApGateway } from "./connection/dial";
 import { linkManager } from "../../transports/linkManager";
 import {
   isAllowedDriveStatus,
@@ -351,6 +352,8 @@ export function useControlHub(routeCategory?: string) {
   // Connections-Hub (smart-link): the car-side scan result (ROUTERS;SCAN),
   // carried as telemetry.scan. Strength-aware auto-join reads it.
   const [carScan, setCarScan] = useState<ScanNetwork[] | null>(null);
+  // U-74: the last router lease the car reported (see DevicePrefs.lastRouterIp).
+  const [lastRouterIp, setLastRouterIp] = useState<string | null>(null);
   // Smart-link session state: which profile has been offered a router join in
   // the CURRENT link session (reset when the link drops), plus the pending
   // scan timer so the app waits ≤ SMART_LINK_SCAN_MS for strength data before
@@ -667,6 +670,7 @@ export function useControlHub(routeCategory?: string) {
         fullscreen: false,
         joystickLayout: "dual",
         lastWifiSsid: null,
+        lastRouterIp: null,
         savedRouters: [],
       };
       const merged = mergeCloudProfile(row, local, base);
@@ -740,6 +744,10 @@ export function useControlHub(routeCategory?: string) {
         useJoystick,
         joystickLayout: joystickLayoutId,
         lastWifiSsid: savedPrefs?.lastWifiSsid ?? null,
+        // U-74: the last router lease the car reported. A HINT for the one-tap
+        // 'connect to the car on your router' after the hotspot link drops - never
+        // an authority, and never the hotspot gateway.
+        lastRouterIp: savedPrefs?.lastRouterIp ?? null,
         // A-27 / round-6: ship the LIVE saved-router mirror with every patch
         // (never a stale-captured base), so router additions survive later
         // speed/steer persists AND a device power cycle.
@@ -1026,6 +1034,18 @@ export function useControlHub(routeCategory?: string) {
         // is why a failed add was indistinguishable from a successful one.
         handleWifiProvisionReplyRef.current?.(t.reply);
         consumeRouterAnswerRef.current?.(t.reply);
+      }
+      // U-74: remember a router lease as soon as the car reports one. The car
+      // broadcasts it on the hotspot link just before the AP moves channel, so
+      // this is the one chance the app gets to learn where the car went. The
+      // gateway check keeps the car's OWN hotspot address out of this field: it
+      // is not a lease, and offering it as "the car on your router" is the D4
+      // bug all over again.
+      if (t.ip !== undefined) {
+        const reported = (t.ip ?? "").trim();
+        if (reported && !isCarApGateway(reported)) {
+          setLastRouterIp((cur) => (cur === reported ? cur : reported));
+        }
       }
       if (t.ap !== undefined) setCarApName(t.ap || null);
       if (t.ssid !== undefined) setCarSsid(t.ssid || null);
@@ -2539,6 +2559,9 @@ export function useControlHub(routeCategory?: string) {
     runSwitchPlan,
     requestScan,
     consumeRouterAnswer,
+    // U-74: the last router lease the car reported, so the Control Panel can offer
+    // a one-tap reconnect after the hotspot link drops.
+    lastRouterIp,
     // D3 (U-68): the car's own antenna scan result, so the Control Panel can
     // offer a real nearby-network list. `null` until the car answers.
     carScan,

@@ -64,10 +64,29 @@ export type DevicePrefs = {
       The password is deliberately NOT persisted — it lives only in flight
       and in the car's NVS. */
   lastWifiSsid: string | null;
-  /** A-27 (device-round-5): per-device mirror of the saved-router list
-      (names only, from the car's `networks` JSON / optimistic edits) so the
-      WiFi & Router panel restores instantly while the car is unpaired.
-      The car remains the source of truth; passwords are never stored here. */
+  /**
+   * U-74 (2026-10-02): the router address the car LAST REPORTED while joined to
+   * a router — the DHCP lease, not the hotspot gateway.
+   *
+   * Why this is needed: in AP_STA the softAP and the STA share one radio and
+   * therefore one channel, so when the car joins a router its hotspot MOVES to
+   * that router's channel and the phone's hotspot link drops. With no link the
+   * app has no address for the car, which is why "the drive deck doesn't open
+   * when on the other router". The car DOES broadcast the lease on that link for
+   * a moment before the drop, so remembering it here turns "the app cannot find
+   * the car" into a one-tap "connect to the car on your router".
+   *
+   * Persisted per device because the lease is stable for as long as the car is on
+   * that router, and it is worthless the moment the lease changes — so it is
+   * only ever a HINT, never an authority. The gateway address is deliberately
+   * never stored here (that is the car's own hotspot, not a router lease).
+   */
+  lastRouterIp: string | null;
+  /**
+   * A-27 (device-round-5): per-device mirror of the saved-router list
+   * (names only, from the car's `networks` JSON / optimistic edits) so the
+   * WiFi & Router panel restores instantly while the car is unpaired.
+   * The car remains the source of truth; passwords are never stored here. */
   savedRouters: string[] | null;
   /**
    * Connections-Hub round (per-device profiles): the board-unique id from

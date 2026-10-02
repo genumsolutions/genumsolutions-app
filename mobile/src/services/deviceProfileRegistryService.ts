@@ -303,6 +303,7 @@ function cloudRowToPrefs(row: CarProfileCloudRecord): DevicePrefs {
     fullscreen: false,
     joystickLayout: "dual",
     lastWifiSsid: null,
+    lastRouterIp: null,
     savedRouters: Array.isArray(s.saved_routers)
       ? (s.saved_routers as string[])
       : [],
@@ -327,6 +328,7 @@ function stubPrefs(profileKey: string, name: string): DevicePrefs {
     fullscreen: false,
     joystickLayout: "dual",
     lastWifiSsid: null,
+    lastRouterIp: null,
     savedRouters: [],
     btIds: [],
     wifiHistory: [],
