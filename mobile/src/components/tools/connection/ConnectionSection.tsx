@@ -481,8 +481,24 @@ export function ConnectionSection({
         />
       ) : null}
 
-      {/* ---- routers: a property of the CONNECTION (D8) ------------------- */}
-      {anyLink ? (
+      {/* ---- routers: WiFi ONLY (U-72) ------------------------------------
+          Owner verbatim: *"keep the wifi things seperate from the bluetooth ones
+          and dont mix the section in the control panel page"* and *"the other
+          wifi router other than the own hotspot has no need to switch from the
+          bluetooth mode. so please remove those unnecessary thing on that
+          instant."*
+
+          So this is gated on the SELECTED METHOD being WiFi, not on "is anything
+          connected". In the Bluetooth view there is now no WiFi content at all:
+          no saved-router list, no scan, no add form, and no way to begin a
+          router switch from a Bluetooth session. That reverses the U-68 decision
+          (D8/F-66) to expose router management on every method — defensible on
+          capability grounds, since the commands do ride a Bluetooth link, but
+          not what the user asked for, and a panel that shows WiFi machinery while
+          you are connected over Bluetooth invites exactly the "which link is
+          this using" confusion the rebuild was meant to remove. The CAPABILITY
+          is untouched; only the OFFERING is separated. */}
+      {method === "wifi" && anyLink ? (
         <RouterManager
           routers={routers}
           suggested={defaultRouterSsid(routers)}
