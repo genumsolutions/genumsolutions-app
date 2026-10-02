@@ -69,6 +69,7 @@ import { DEFAULT_WS_URL } from "../services/carProtocol";
 import { linkManager } from "./linkManager";
 import {
   createBleTransport,
+  createClassicBtTransport,
   createHttpTransport,
   createWifiApTransport,
   createWifiStaTransport,
@@ -316,5 +317,78 @@ describe("Registered placeholders and the full registry", () => {
     await expect(mqtt?.connect?.()).rejects.toThrow(/broker/i);
     expect(mdns?.getStatus()).toBe("idle");
     expect(mdns?.getTargetLabel()).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------
+// F-46 regression pin (the test the original fix round skipped as
+// "shared-mock typing made it brittle"). The REAL services subscribe via
+// METHODS that read `this` (e.g. sppService.statusCallbacks). The adapter
+// bug was passing the bare function reference — a DETACHED call whose
+// `this` is undefined — which threw "Cannot read properties of undefined
+// (reading 'statusCallbacks')" on every adopt/activate under a perfectly
+// healthy link. These tests reproduce the real services' `this`-reading
+// shape and pin that every live adapter invokes onStatus ON its object.
+// ---------------------------------------------------------------------
+
+type StatusCb = (kind: string, message?: string) => void;
+type ServiceWithStatusCallbacks = {
+  statusCallbacks: StatusCb[];
+  onStatus: (cb: StatusCb) => () => void;
+};
+
+/** Swap a mock's onStatus for the REAL services' `this`-reading shape. */
+function attachThisBoundOnStatus(
+  mock: Record<string, unknown>,
+): ServiceWithStatusCallbacks {
+  const shaped = mock as unknown as ServiceWithStatusCallbacks;
+  shaped.statusCallbacks = [];
+  shaped.onStatus = function (this: ServiceWithStatusCallbacks, cb) {
+    // Throws on a detached call: `this` would be undefined.
+    this.statusCallbacks.push(cb);
+    return () => undefined;
+  };
+  return shaped;
+}
+
+describe("F-46 — adapters must call the services' onStatus ON the service object", () => {
+  const originals = {
+    spp: sppMock.onStatus,
+    ble: bleMock.onStatus,
+    wifi: wifiMock.onStatus,
+  };
+  afterEach(() => {
+    sppMock.onStatus = originals.spp;
+    bleMock.onStatus = originals.ble;
+    wifiMock.onStatus = originals.wifi;
+  });
+
+  it("bt-classic subscribes without detaching `this`", () => {
+    const svc = attachThisBoundOnStatus(
+      sppMock as unknown as Record<string, unknown>,
+    );
+    const t = createClassicBtTransport();
+    expect(() => t.onStatus(() => undefined)).not.toThrow();
+    expect(svc.statusCallbacks.length).toBe(1);
+  });
+
+  it("bt-ble subscribes without detaching `this`", () => {
+    const svc = attachThisBoundOnStatus(
+      bleMock as unknown as Record<string, unknown>,
+    );
+    const t = createBleTransport();
+    expect(() => t.onStatus(() => undefined)).not.toThrow();
+    expect(svc.statusCallbacks.length).toBe(1);
+  });
+
+  it("wifi adapters subscribe without detaching `this`", () => {
+    const svc = attachThisBoundOnStatus(
+      wifiMock as unknown as Record<string, unknown>,
+    );
+    const ap = createWifiApTransport();
+    const sta = createWifiStaTransport();
+    expect(() => ap.onStatus(() => undefined)).not.toThrow();
+    expect(() => sta.onStatus(() => undefined)).not.toThrow();
+    expect(svc.statusCallbacks.length).toBe(2);
   });
 });
