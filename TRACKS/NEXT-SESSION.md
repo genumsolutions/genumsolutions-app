@@ -20,9 +20,21 @@ consumed by that very commit). Cosmetic-only and revertible in two hunks if it e
 glitches on a device. Gates: tsc 0 · vitest **453/453** (32 files) · prettier clean.
 **Ship evidence:** commits `ce6a507` (routing) · `6e01c37` (F-46 pin) · `1a0b6be` (⑤) ·
 `b93740d` (ledgers), pushed `af31aab..b93740d`; CI ✓ `36972177622` · OTA Only ✓
-`36972177611` — JS-only → same-version OTA 3.2.7/60. Device rows:
-`mobile/TESTING.md` **U-65-1..2**. ④a/④c remain bench-discriminated (need the
-flashed car).
+`36972177611` — JS-only → same-version OTA 3.2.7/60. Devicerows: `mobile/TESTING.md` **U-65-1..2**. **Remote-window audit (same day, no code needed):**
+the Remote screen runs its OWN `useControlHub` instance — the same hook the Control Panel
+uses — so the ④b fix applies there automatically (`hub.sendCommand` IS the routeCommand
+path; every drive handler and the decks' `onCommand` end at it, and the screen has zero
+direct service sends). The only direct `sendLine` calls in the hub are the DISCONNECT
+safe-stops (`S`/`SPD0`/`SERVO90` over each live service before closing it) — those are
+correctly direct: a teardown must neutralize every transport it closes, not only the
+active one. ④a/④c remain bench-discriminated (need the flashed car).
+**OTA content verification (owner ask):** the U-65 OTA run (`36972177611`) published with
+`eas update --branch main --message "OTA-only push (b93740d…)"` — Expo accepted android+ios,
+update group `174fa093-1c5e-4157-909e-fb58a1b42777`. `b93740d` contains ALL U-64 + U-65 code
+(only the post-publish commits are docs). A direct curl of the served manifest 404s —
+the endpoint requires the expo-updates client protocol, so the on-device proof is the
+Update screen showing `Short update (b93740d…)` after close+reopen ×2 (TESTING.md pre-flight
+row added).
 
 **✅ FIXED 2026-10-02 (evening) — OWNER BENCH FEEDBACK ROUND: PANEL SIMPLIFIED (①),
 HANDOFF NOW CONFIRMS (②), WIFI DIAGNOSTICS REMOVED (③); ④ QUEUED (needs the flashed car).**

@@ -1,5 +1,43 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## ⭐ BENCH MASTER RUN — after flashing firmware `main` (2026-10-02, owner run sheet)
+
+> Flash the 4WD4M ONCE via USB (115200, huge_app). The same flash clears ALL pending car
+> rows (T21–T23 + Round 1's OLED row). Then run the rounds BELOW in this order. After each
+> app round: close + reopen the app ×2 and confirm Menu → Update shows `Short update
+(b93740d…)` — that is the OTA containing U-63/U-64/U-65 (curl cannot verify the served
+> bundle; the Update screen is the proof).
+
+**Stage 0 — flash sanity (5 min, no app):**
+
+- [ ] Car boots; OLED shows the BT name + `Type: SPP` and a real joined SSID/IP (v1.0.1 rows).
+- [ ] Open `http://192.168.245.1` on the phone (joined to `4WDCar_Wifi`) — page loads.
+
+**Stage 1 — car rows (car repo `DEVICE-TESTS.md`):** T21 · T22 · T23 (router switch on the
+NEW binary: must NOT reset; `ROUTERS;USE` joins and the car stays up) → T1–T10 → safety
+rows A/B (BT + e-stop; `SPD0` must stop) LAST, on whichever link you end up using.
+
+**Stage 2 — app rounds (this file), in order:**
+
+1. **U-61-1..5** — audit round (deck button, pills, single error, switch dials the target).
+2. **U-63-1..2** — BT naming (re-pick shows the CURRENT name; direct-MAC never refuses).
+3. **U-62-2..4 + U-64-1..4** — the home-router handoff (NOW with the confirm button; the
+   reset symptom U-64-3 must NOT reproduce on the new binary).
+4. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
+
+**Reading results:**
+
+- A row PASS → tick it. A row FAIL → note the exact step + what the screen showed; the
+  FAILING row on the NEW binary is a bug (report it), the SAME failure on the OLD binary
+  was the unflashed-firmware class — do not re-report those.
+- If the home-router switch still resets the car AFTER the flash → stop, report, that is
+  `cd3158f` not actually on the board (re-flash, verify the IDE used `huge_app` + `main`).
+- If the STA deck is STILL dull with a verified link (U-65-1 driving passes but tiles are
+  dead/empty) → that is candidate ④c (no STATE over STA) — capture the Remote window's
+  banner + OLED row and report; ④a is already fixed by U-65-1 passing.
+
+---
+
 ## U-65 round — queue round: chosen-link routing tie-break + smooth connect collapse (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > ④b: when two links are live, a drive command can no longer be stranded on a stale
