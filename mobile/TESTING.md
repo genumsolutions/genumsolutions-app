@@ -145,41 +145,47 @@
 
 ## ⭐ BENCH MASTER RUN — after flashing firmware `main` (2026-10-02, owner run sheet)
 
-> Flash the 4WD4M ONCE via USB (115200, huge_app). The same flash clears ALL pending car
-> rows (T21–T23 + Round 1's OLED row) **and the U-67 reset/retry fixes**. Then run the rounds
-> BELOW in this order. After each app round: close + reopen the app ×2 and confirm
-> Menu → Update shows `Short update (7919d5c…)` — that is the OTA containing
-> U-63/U-64/U-65/U-66/U-67 (curl cannot verify the served bundle; the Update screen is the
-> proof).
+> Flash the 4WD4M ONCE via USB (115200, huge_app). That single flash clears ALL pending car
+> rows: T21–T23 + Round 1's OLED row, **U-67's reset/retry fixes (T24–T26)** and **U-68's
+> `ROUTERS;SCAN` / reply-buffer / ack-redaction fixes (U-68-4)**. Then run the rounds BELOW in
+> this order. After each app round: close + reopen the app ×2 and confirm Menu → Update shows
+> `Short update (318565c…)` — that is the OTA containing U-63…U-68 (curl cannot verify the served
+> bundle; the Update screen is the proof).
 
 **Stage 0 — flash sanity (5 min, no app):**
 
 - [ ] Car boots; OLED shows the BT name + `Type: SPP` and a real joined SSID/IP (v1.0.1 rows).
 - [ ] Open `http://192.168.245.1` on the phone (joined to `4WDCar_Wifi`) — page loads.
 
-**Stage 1 — car rows (car repo `DEVICE-TESTS.md`):** T21 · T22 · T23 (router switch on the
-NEW binary: must NOT reset; `ROUTERS;USE` joins and the car stays up) → T1–T10 → safety
-rows A/B (BT + e-stop; `SPD0` must stop) LAST, on whichever link you end up using.
+**Stage 1 — car rows (car repo `DEVICE-TESTS.md`):** **T24 · T25** (U-67: the reset and the
+one-go router switch — the reported bugs) → T21 · T22 · T23 (router switch must NOT reset;
+`ROUTERS;USE` joins and the car stays up) → T1–T10 → safety rows A/B (BT + e-stop; `SPD0` must
+stop) LAST, on whichever link you end up using.
 
 **Stage 2 — app rounds (this file), in order:**
 
-0. **U-67-3/4 FIRST** — the reported bugs. The reset + one-go switch are firmware; if the
-   flash did not take, these reproduce and every later router row is meaningless.
-1. **U-67-1/2** — the ONE switch confirm (panel Switch + Add + picker all behave alike).
+0. **U-68-1..4 FIRST** — the rebuilt connection section. This is the surface the owner
+   complained about, so it is the one most worth judging first. U-68-4 (nearby networks)
+   **cannot pass** without the new firmware — that is the flash's whole point.
+1. **U-67-3/4** — the reset + one-go switch (the other reported bugs).
 2. **U-61-1..5** — audit round (deck button, pills, single error, switch dials the target).
 3. **U-63-1..2** — BT naming (re-pick shows the CURRENT name; direct-MAC never refuses).
-4. **U-62-2..4 + U-64-1..4** — the home-router handoff (NOW with the confirm button; the
-   reset symptom U-64-3 must NOT reproduce on the new binary).
-5. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
-6. **U-66-1..3** — gateway-dial refusal (the ④ dull-deck fix) + auto-join labelling.
+4. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
+5. **U-66-1..3** — gateway-dial refusal (the ④ dull-deck fix) + auto-join labelling.
 
 **Reading results:**
 
 - A row PASS → tick it. A row FAIL → note the exact step + what the screen showed; the
   FAILING row on the NEW binary is a bug (report it), the SAME failure on the OLD binary
   was the unflashed-firmware class — do not re-report those.
-- If the home-router switch still resets the car AFTER the flash → stop, report, that is
-  `cd3158f` not actually on the board (re-flash, verify the IDE used `huge_app` + `main`).
+- **U-68-1..3 failing on the NEW app** → report. Those rows are app-only, so there is no
+  firmware excuse for them; a failure there is a real defect in the rebuild.
+- If **U-68-4** returns "the car did not understand the request" → that is `ROUTERS;SCAN`
+  not on the board. Re-flash and confirm the IDE used `huge_app` + `main`.
+- If the home-router switch still resets the car AFTER the flash → stop and report: that is
+  the U-67 BT-watchdog fix (`26d41d5`) not actually on the board.
+- If **U-68-2** shows the home-router target dialling `192.168.245.1` → stop and report. That
+  is D4 resurfacing, and it means `resolveDial` is not the only thing producing a URL.
 - If the STA deck is STILL dull with a verified link (U-65-1 driving passes but tiles are
   dead/empty) → that is candidate ④c (no STATE over STA) — capture the Remote window's
   banner + OLED row and report; ④a is already fixed by U-65-1 passing.
