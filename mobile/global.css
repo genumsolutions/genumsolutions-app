@@ -27,6 +27,22 @@ html[data-theme="light"] {
   --color-card: 255 255 255; /* white           */
   --color-muted: 71 85 105; /* slate-600 (deeper on the tint) */
   --color-accent: 5 150 105; /* emerald-600     */
+  /* ---- U-69 (2026-10-02): the palette had NO error/success/selected pair, so
+     every failure surface reached for an off-palette Tailwind colour.
+     Off-palette colours do NOT flip with the theme: text-red-600 is fine on a
+     white card and nearly unreadable on the dark card (#16223a). That is the
+     owner's "the text and the background are merging". Both themes are defined
+     here with the foreground checked against the card:
+       light  danger #b91c1c on #ffffff -> 6.6:1, success #047857 -> 5.3:1,
+              selected #1e3a8a on #e3eaf7 -> 8.4:1
+       dark   danger #fca5a5 on #16223a -> 8.1:1, success #6ee7b7 -> 9.4:1,
+              selected #e3eaf7 on #1e3a8a -> 8.4:1                        */
+  --color-danger: 185 28 28;
+  --color-danger-soft: 254 242 242;
+  --color-success: 4 120 87;
+  --color-success-soft: 236 253 245;
+  --color-select-bg: 227 234 247;
+  --color-select-ink: 30 58 138;
 }
 
 /* OS dark, or the app's manual Dark pick on web (data-theme set in
@@ -50,7 +66,15 @@ html[data-theme="light"] {
     --color-surface: 15 26 46; /* #0f1a2e midnight */
     --color-card: 22 34 58; /* #16223a navy card */
     --color-muted: 158 174 197; /* #9eaec5 (brightened) */
-    --color-accent: 16 185 129; /* emerald-500     */
+    --color-accent: 16 185 129; /* emerald-500     */ /* U-69 dark counterparts: the foreground is BRIGHTENED because the card is
+       a dark navy, and the selected fill is a LIFTED navy with a near-white
+       ink so the selected row is unmistakable rather than a subtle tint. */
+    --color-danger: 252 165 165;
+    --color-danger-soft: 76 22 30;
+    --color-success: 110 231 183;
+    --color-success-soft: 6 46 40;
+    --color-select-bg: 30 58 138;
+    --color-select-ink: 219 228 248;
   }
 }
 
@@ -69,4 +93,15 @@ html[data-theme="dark"] {
   --color-card: 22 34 58; /* #16223a navy card */
   --color-muted: 158 174 197; /* #9eaec5 (brightened) */
   --color-accent: 16 185 129; /* emerald-500     */
+  /* U-69: the manual Dark pick must carry the SAME danger/success/selected pair
+     as the OS-dark media block above. This selector outranks :root, so without
+     these lines an app switched to Dark by hand kept the LIGHT foregrounds on
+     the dark card - which is precisely the 'text and background merging'
+     report, and it would only appear for users who chose Dark themselves. */
+  --color-danger: 252 165 165;
+  --color-danger-soft: 76 22 30;
+  --color-success: 110 231 183;
+  --color-success-soft: 6 46 40;
+  --color-select-bg: 30 58 138;
+  --color-select-ink: 219 228 248;
 }

@@ -142,6 +142,27 @@ import type { SensorData } from "./types";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
 
+/**
+ * U-69 (2026-10-02): the outcome of a connect attempt.
+ *
+ * `handleConnect` and `handleWifiConnect` have always stored their failure in
+ * the hub's `error` state and returned NORMALLY. That was survivable only while
+ * `error` had a renderer — `ConnectionBanner`. U-68 replaced the banner with the
+ * rebuilt ConnectionSection, and with no surface and no return value a FAILED
+ * connect was indistinguishable from a successful one: the app announced
+ * "Connected to <car>" and nothing was connected. The owner's report — *"the
+ * bluetooth is not build in the app and i am not able to connect the device to
+ * the app"* — is exactly that bug. It was never a missing permission or a
+ * missing native module.
+ *
+ * A fake success is worse than no success: it sends the tester hunting for a
+ * link that does not exist (F-61/F-62). So a connect now reports what happened
+ * and the UI is obliged to show it. Adding a return value is backwards
+ * compatible — callers that ignore it are unaffected.
+ */
+export type ConnectOutcome =
+  { ok: true; message: string } | { ok: false; reason: string };
+
 export function useControlHub(routeCategory?: string) {
   // U-68 (2026-10-02): the transport registry used to be registered LAZILY,
   // as a side effect of `useTransportList` — which only `TransportPicker`
@@ -346,6 +367,27 @@ export function useControlHub(routeCategory?: string) {
    * flap, short enough that a silent car does not leave the UI spinning.
    */
   const ROUTER_ACK_TIMEOUT_MS = 6000;
+
+  /**
+   * U-69 (2026-10-02): the outcome of a connect attempt.
+   *
+   * `handleConnect` and `handleWifiConnect` have always stored their failure in
+   * the hub's `error` state and returned normally. That was survivable only
+   * while `error` had a renderer — ConnectionBanner. U-68 replaced the banner
+   * with the rebuilt ConnectionSection, and with no surface and no return value
+   * a FAILED connect looked exactly like a successful one: the app announced
+   * "Connected to <car>" and nothing was connected. The owner's report — *"the
+   * bluetooth is not build in the app and i am not able to connect the device to
+   * the app"* — is that bug.
+   *
+   * A fake success is worse than no success: it sends the tester hunting for a
+   * link that does not exist. So a connect now reports what happened, and the
+   * UI is obliged to show it (F-61, F-62).
+   *
+   * Adding a return value is backwards compatible — callers that ignore it are
+   * unaffected.
+   */
+
   // A-37: user mode-commit grace (ESP remote R-33 parity) — remember the token
   // the USER chose plus the car-truth mode at commit time so the stale in-flight
   // echo (still the pre-commit mode) cannot undo the optimistic pick (that was
@@ -1302,10 +1344,12 @@ export function useControlHub(routeCategory?: string) {
 
   // Connect to SPP device
   const handleConnect = useCallback(
-    async (device: SppDevice) => {
+    async (device: SppDevice): Promise<ConnectOutcome> => {
       if (!device.address) {
-        setError("This car has no Bluetooth address. Rescan and try again.");
-        return;
+        const reason =
+          "This car has no Bluetooth address. Rescan and try again.";
+        setError(reason);
+        return { ok: false, reason };
       }
       setConnectingAddress(device.address);
       setError(null);
@@ -1322,14 +1366,35 @@ export function useControlHub(routeCategory?: string) {
         setWifiConnected(false);
         showConnectionMessage(`Connected to ${device.name}`, "success");
         void sppService.requestState().catch(() => {});
+        return {
+          ok: true,
+          message: `Connected to ${device.name || device.address}.`,
+        };
       } catch (e) {
+        const reason = e instanceof Error ? e.message : "Connection failed";
         if (mountedRef.current) {
-          setError(e instanceof Error ? e.message : "Connection failed");
+          setError(reason);
           setConnecting(false);
           setConnectingAddress(null);
-          // UX-1: no toast here — the banner's `error` is the single failure
-          // surface; toasting the same sentence double-displays it.
+          // UX-1: no toast here - the hub's `error` is the single failure
+          // state; the Control Panel's connection section renders it.
         }
+        // U-69 (2026-10-02): the outcome is now RETURNED as well as stored.
+        //
+        // This handler has always swallowed its failure into `error` state,
+        // which used to be rendered by ConnectionBanner. When U-68 replaced the
+        // banner with the rebuilt ConnectionSection, the caller had nothing to
+        // await and nothing to read — so a FAILED Bluetooth connect resolved
+        // normally and the UI announced "Connected to <car>". That is the
+        // owner's "the bluetooth is not build in the app and i am not able to
+        // connect the device to the app": a fake success is worse than no
+        // success, because it sends the tester looking for a link that is not
+        // there (F-61/F-62).
+        //
+        // Returning the outcome is ADDITIVE — the callers that ignore it (the
+        // dead DeviceConnectionScreen) are unaffected — and it makes a failure
+        // impossible to mistake for a success.
+        return { ok: false, reason };
       }
     },
     [showConnectionMessage],
@@ -1364,8 +1429,9 @@ export function useControlHub(routeCategory?: string) {
       // restored address. An explicit override is dialled directly.
       const effectiveUrl = overrideUrl?.trim() || wifiUrl;
       if (!effectiveUrl) {
-        setError(`Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`);
-        return;
+        const reason = `Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`;
+        setError(reason);
+        return { ok: false, reason };
       }
       const wsUrl =
         effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
@@ -1381,7 +1447,12 @@ export function useControlHub(routeCategory?: string) {
       try {
         await wifiService.connect(wsUrl);
         const answered = await wifiService.waitForCarAnswer();
-        if (!mountedRef.current) return;
+        if (!mountedRef.current) {
+          return {
+            ok: false,
+            reason: "The app closed before the car answered.",
+          };
+        }
         setLinkVerified(answered);
         if (answered) {
           setWifiConnected(true);
@@ -1390,24 +1461,29 @@ export function useControlHub(routeCategory?: string) {
           setTimeout(() => {
             wifiService.requestState().catch(() => {});
           }, 200);
-        } else {
-          setWifiConnected(false);
-          setError(
-            "WiFi link opened but the car did not answer STATE/REPLY. Check the car is powered and the WebSocket port (81) is reachable.",
-          );
+          return { ok: true, message: "Connected." };
         }
+        // The socket opened but the car never spoke — a half-open link. Say so
+        // rather than letting the caller assume a connection (U-69).
+        const reason =
+          "WiFi link opened but the car did not answer. Check the car is powered and that you are on the right network.";
+        setWifiConnected(false);
+        setError(reason);
+        return { ok: false, reason };
       } catch (e) {
+        const reason = e instanceof Error ? e.message : "WiFi connect failed";
         if (mountedRef.current) {
-          setError(e instanceof Error ? e.message : "WiFi connect failed");
+          setError(reason);
           setWifiConnected(false);
           setLinkVerified(false);
         }
+        return { ok: false, reason };
       } finally {
         if (mountedRef.current) setConnecting(false);
       }
     },
     [wifiUrl, showConnectionMessage],
-  ) as (overrideUrl?: string) => Promise<void>;
+  ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
 
   const handleWifiDisconnect = useCallback(async () => {
     manualCloseRef.current = true;
