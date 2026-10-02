@@ -1,5 +1,27 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**✅ FIXED 2026-10-02 (later same day) — AUDIT OPS-3: A BT CONNECT IS NAMED BY THE ROW THE
+USER JUST TAPPED, NEVER BY A STALE SCREEN-LEVEL SCAN ROW (`toolsScreenFlow.ts`
+`resolveBtConnectDevice`, 6 CI tests).** The one ⑧-class defect the U-61 audit round left
+open ("BT→AP→BT re-pick could hit the direct-MAC fallback with a stale name — silent"). Root cause: the hub's `sppDevices` screen state survives a method switch un-cleared
+(the picker's scan writes `sppService.scan()` results into PICKER state, never back into
+the hub), so after BT → Car-AP → BT the ToolsScreen bridge could `find()` a row from the
+EARLIER session — most visibly a MAC-shaped fallback name an old scan recorded when the
+device name was unresolved — and prefer it wholesale over the fresh `options.name` the
+picker passed with the connect request. The connect worked; the label lied (F-52's
+family: judge the whole surface). Fix: the resolution is now a PURE, CI-pinned rule —
+request name → screen row name → the MAC; the screen row still contributes identity
+(bonded, lastMode/lastSpeed) but can never relabel; F-40's never-refuse contract is
+pinned too (empty screen list still dials direct by MAC). Ledger written AS the work
+landed (the U-60 round's retroactive-ledger lesson applied). Gates: tsc 0 · vitest
+**434/434** (31 files) · prettier clean. Device rows: `mobile/TESTING.md` **U-63-1..2**.
+**OPEN from the audit, deliberately NOT coded:** ⑤ post-connect chrome jump in the
+picker — diagnosed (the address/scan card is removed on `link.id` per the owner's
+2026-10-01 parity decision, and the footer appears in the same commit, so the content
+below jumps by that card's height). A LayoutAnimation fix would be GLOBAL on Android
+and risky on a control surface two stability rounds in — needs an owner decision:
+animate the collapse, or accept the jump. Not queued anywhere else.
+
 **✅ FIXED 2026-10-02 (bench feedback, same day) — THE HOME-ROUTER SWITCH IS A GUIDED HANDOFF,
 NOT A TEARDOWN (`staHandoff.ts`, F-59).** Owner at the bench: picking Home router while
 connected showed the switch prompt "but no confirm button or anything to initiate", and "the
