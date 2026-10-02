@@ -1,51 +1,45 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
-**📋 NEXT ROUND — OWNER BENCH FEEDBACK (2026-10-02 evening): ANALYSIS DONE, FIXES QUEUED —
-NO CODE YET (owner: "analyse this all n note to fix this next").** Four items from the live
-bench session, each root-caused against the code:
+**✅ FIXED 2026-10-02 (evening) — OWNER BENCH FEEDBACK ROUND: PANEL SIMPLIFIED (①),
+HANDOFF NOW CONFIRMS (②), WIFI DIAGNOSTICS REMOVED (③); ④ QUEUED (needs the flashed car).**
+Owner: "the control panel page is too confusing and shows unnecessary datas too much" +
+"no yes or confirm button, only cancel" on the home-router switch + "remove the wifi test
+thing" + the STA deck "not usable and dull". ①②③ coded the same evening (owner chose the
+full simplification plan); ④ needs the bench with a flashed car to discriminate its three
+candidates. Gates: tsc 0 · vitest **439/439** (31 files) · prettier clean.
 
-**① CONTROL PANEL IS TOO CONFUSING — TOO MUCH DATA.** Inventory of the current stack
-(top→bottom): header · kind headers + 7 pills · category detail card (tagline +
-description + hardware chips + capability checklist + Open-deck CTA + helper line) ·
-Connections header + subtitle · ConnectionBanner · (conditional) reconnect card ·
-(conditional) F-59 handoff card · TransportPicker (teaching subtitle + method dropdown +
-confirm strip + address box + BT scan card + active footer + error + **WiFi diagnostics
-panel** + help modal) · Home-router settings (RouterPanel: list/add/edit/USE/delete/clear +
-open-page) · CarProfileCard · ProjectInfo. Proposed simplification for owner approval:
-(a) remove WifiDiagnosticsPanel outright (item ③ below); (b) collapse the category detail
-card to ONE compact row (icon · name · tagline · hardware chips) with description +
-capabilities behind a "Details" disclosure; (c) move CarProfileCard + ProjectInfo behind
-disclosures (or off-page — they are settings/about, not control); (d) drop the picker's
-teaching subtitle (the per-method ⓘ windows already carry it) and the two helper lines.
-Nothing here is coded — needs the owner's pick of what may move vs go.
+**① CONTROL PANEL SIMPLIFIED (full plan, owner-approved).** Was a 12-block stack; now:
+the category detail card leads COMPACT (icon · name · tagline · hardware chips) with
+description + capability checklist behind a **Details** toggle (resets per category), the
+picker's teaching subtitle and the two duplicate helper lines are GONE (the per-method ⓘ
+windows carry the how-to), and **Saved settings** (CarProfileCard) + **About this project**
+(ProjectInfo) fold behind `SectionDisclosure` header rows — the page leads with control,
+not reading material. The Connections header keeps its name only (subtitle gone); the
+Home-router settings subtitle is one short line now.
 
-**② HOME-ROUTER SWITCH: PROMPT WITH NO CONFIRM · CAR RESETS · NEVER REACHES THE ROUTER.**
-Three findings. **(a) App (F-59 card design gap):** the handoff card's phases `car-on-ap`
-and `joined` are NARRATION-ONLY — the ✕ is the only button, so the owner reads a
-"prompt to allow switching" with no Yes (exactly the report). Worse, `startStaHandoff`
-fires `ROUTERS;USE` **immediately, before any user confirmation** — the prompt has
-nothing to confirm because the action already happened. Fix: every actionable phase gets
-a real primary button — `car-on-ap` = "Join <ssid> now" [Yes / Cancel], and `USE` fires
-ONLY on Yes; no-saved-router = inline Add (name + password) with its own confirm, never
-"add it below" pointing at a distant form. **(b) The car RESET is the UNFLASHED firmware
-fix** — `ROUTERS;USE` on an unknown router reboots the car on the flashed binary; fixed
-in `Genum_4WD4M_CAR` `cd3158f` (CI green, **NOT on the board**). Bench precondition for
-this whole round: flash `main` (T21–T23). NOTE the smart-link auto-join can fire
+**② THE HANDOFF CARD NOW ASKS — AND SURVIVES A CAR DROP.** **(a) Confirm fixed:**
+`startStaHandoff` no longer fires anything; the card shows "Join \"<ssid>\" now?" with a
+real **Yes, join it** / **Cancel** — `ROUTERS;USE` fires ONLY on Yes (the card never
+narrates a command that already went out). No saved router = inline **Add form** (name +
+password + **Save & join**) right on the card, never "add it below". **(b) The car RESET is
+the UNFLASHED firmware fix** — `ROUTERS;USE` on an unknown router reboots the flashed
+binary; fixed in `Genum_4WD4M_CAR` `cd3158f` (CI green, **NOT on the board**). **Flash
+`main` before this round can pass** (T21–T23). NOTE the smart-link auto-join can fire
 `ROUTERS;USE` on link-verify when autoJoinRouter is on — on the old binary that means
-surprise resets during ANY connect. **(c) The card has NO link-loss state:** when the car
-resets mid-handoff (what (b) does), the card stalls at "this takes a few seconds" forever.
-Fix: a `car-dropped` phase — honest text ("the car dropped the link while switching — it
-may have rebooted; reconnect to its hotspot") + a Reconnect action; phase machine + tests.
-**Rule candidate (record with the fix): a prompt that describes an action must BE the
-confirm for that action — never narrate a command that already went out.**
+surprise resets during ANY connect. **(c) New `car-dropped` phase:** a link drop before
+the dial flips the card to honest text ("the car dropped the link while switching — it may
+have rebooted") + a **Got it** button, instead of claiming "a few seconds" forever;
+`ready` deliberately SURVIVES a link drop (the phone leaving the car's AP at step 3 is
+expected). 5 new phase tests. **Rule candidate (record with the fix): a prompt that
+describes an action must BE the confirm for that action — never narrate a command that
+already went out.**
 
-**③ REMOVE THE WIFI TEST THING.** `WifiDiagnosticsPanel` — single call site =
-`TransportPicker.tsx` (`isWifi && !compact`), zero tests. Remove the render block + import
-+ delete the component file (F-45 dead-code discipline: deletion recorded here, not left
-dangling).
+**③ REMOVED THE WIFI TEST THING.** `WifiDiagnosticsPanel` deleted — render block + import
++ the component file (single call site, zero tests; F-45 deletion recorded here, not left
+dangling). The method chip + footer + error card already say everything it said.
 
-**④ HOME-ROUTER DRIVE DECK IS DULL / UNUSABLE.** Three candidates, to be discriminated on
-the bench with a VERIFIED STA link: **(a)** downstream of ② — no verified STA link →
+**⏳ ④ STILL QUEUED (needs the flashed car on the bench): HOME-ROUTER DRIVE DECK IS DULL /
+UNUSABLE.** Three candidates, to be discriminated with a VERIFIED STA link: **(a)** downstream of ② — no verified STA link →
 `canControl=false` → the deck is dim BY DESIGN (F-34 note); fix ② first and re-observe.
 **(b) REAL APP HAZARD — both-links-live routing:** `sendCommand` routes non-broadcast
 lines by the ACTIVE MODE's transport; with a stale BT link + STA WS both live, drive
