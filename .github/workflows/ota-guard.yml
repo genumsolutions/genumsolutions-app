@@ -1,0 +1,69 @@
+# =====================================================================
+# OTA Guard — the delivery promise, enforced.
+#
+# F-1/F-2 class failures shipped here twice: JS that never reached a
+# device because the OTA channel silently did not run. The push that
+# inspired this guard (2026-10-02) carried the U-63/U-64/U-65 fixes;
+# its OTA-only run DID publish, but nothing would have caught the
+# failure mode: ota-only.yml can skip itself (the release-guard), its
+# publish step can fail while CI stays green (CI never checks delivery),
+# or a docs-only follow-up push can leave the tip of main without a
+# bundle. This workflow is the check that was missing: on every push to
+# main that TOUCHES mobile/src or mobile/assets, it verifies that the
+# commit behind the latest manifest's "Last published" note matches one
+# of the pushed commits. Red here means "the JS exists but no device
+# will ever load it" — exactly the failure every previous gate missed.
+# =====================================================================
+name: OTA Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/src/**"
+      - "mobile/assets/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ota-guard
+  cancel-in-progress: false
+
+jobs:
+  verify-delivery:
+    if: github.ref == 'refs/heads/main'
+    name: A JS push must end in a published bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The push range (before..after) needs history; the guard reads
+          # nothing else from the working tree.
+          fetch-depth: 0
+
+      - name: The latest published bundle must name a pushed commit
+        run: |
+          set -e
+          MANIFEST_URL="https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json"
+          if ! MANIFEST=$(curl -sS --fail --max-time 15 "$MANIFEST_URL"); then
+            echo "::error::release.json is unreachable — the OTA delivery state is unknown. If no bundle was ever published this is expected once (bootstrap); otherwise investigate the storage bucket."
+            exit 1
+          fi
+          NOTE=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).notes ?? ''))" "$MANIFEST")
+          echo "Manifest note: $NOTE"
+          SHA=$(printf '%s' "$NOTE" | grep -oE '[0-9a-f]{7,40}' | head -1 || true)
+          if [ -z "$SHA" ]; then
+            echo "::error::Manifest note does not carry a commit short-hash (expected the sync-ota-manifest \"…(<sha>)\" shape). Did the metadata sync run? (It is continue-on-error in ota-only.yml — if it failed, the note is stale.)"
+            exit 1
+          fi
+          # Accept either the exact commit or a descendant: the newest
+          # published bundle may legitimately be a LATER docs-only push
+          # (its own OTA run publishes nothing new, but the delivery of the
+          # JS content happened at the earlier commit).
+          if git merge-base --is-ancestor "$SHA" "${{ github.sha }}" 2>/dev/null; then
+            echo "OK: latest published bundle ($SHA) is an ancestor of the pushed tip — the JS content is delivered."
+            exit 0
+          fi
+          echo "::error::The latest published bundle ($SHA) is NOT part of this push — a JS-only push to main ended with no OTA publish. Check the OTA Only run for this SHA (skipped by the release-guard? publish step failed?) and re-publish before merging anything else."
+          exit 1
