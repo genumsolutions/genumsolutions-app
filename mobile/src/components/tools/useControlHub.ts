@@ -58,6 +58,7 @@ import {
   SPP_RECONNECT_DELAYS_MS,
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
+import { ensureTransportsRegistered } from "../../transports/linkManagerHooks";
 import {
   outcomeFor,
   parseRouterAnswer,
@@ -137,6 +138,17 @@ import type { SensorData } from "./types";
 type Route = RouteProp<RootStackParamList, "Tools">;
 
 export function useControlHub(routeCategory?: string) {
+  // U-68 (2026-10-02): the transport registry used to be registered LAZILY,
+  // as a side effect of `useTransportList` — which only `TransportPicker`
+  // called. The Control Panel no longer mounts the picker (the connection
+  // section was rebuilt), so nothing registered the transports and every
+  // `linkManager.adopt("bt-classic", …)` in this hook would have thrown
+  // "Unknown transport" the moment a connection was made.
+  //
+  // The registry is not a UI concern: any screen that owns a connection needs
+  // it, so the hook that owns connections registers it. Idempotent.
+  ensureTransportsRegistered();
+
   const route = useRoute<Route>();
   const resolvedCategory = routeCategory ?? route.params?.category;
 
@@ -2388,6 +2400,9 @@ export function useControlHub(routeCategory?: string) {
     runSwitchPlan,
     requestScan,
     consumeRouterAnswer,
+    // D3 (U-68): the car's own antenna scan result, so the Control Panel can
+    // offer a real nearby-network list. `null` until the car answers.
+    carScan,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
     // mode + category (carStubMap is returned with the WiFi-truth group above)

@@ -11,9 +11,7 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   View,
-  Linking,
 } from "react-native";
 import {
   useRoute,
@@ -26,14 +24,11 @@ import type { ComponentProps } from "react";
 import type { RootStackParamList } from "../navigation/types";
 import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
-import { TransportPicker } from "../components/tools/TransportPicker";
-import { ConnectionBanner } from "../components/tools/ConnectionBanner";
+import {
+  ConnectionSection,
+  type ConnectionMethodId,
+} from "../components/tools/connection";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
-import { RouterPanel } from "../components/tools/RouterPanel";
-import { DEFAULT_AP_IP } from "../services/carProtocol";
-import { useActiveTransport } from "../transports/linkManagerHooks";
-import { linkManager } from "../transports/linkManager";
-import type { TransportConnectOptions, TransportId } from "../transports/types";
 import { feedbackTap } from "../services/hapticsService";
 import {
   KIND_GROUPS,
@@ -42,18 +37,9 @@ import {
   type ProjectCategory,
 } from "../config/project-catalog";
 import { getProjectCategories } from "../services/projectCategoryService";
-import { sppService } from "../services/sppService";
-import { wifiService } from "../services/wifiService";
-import {
-  staDialUrl,
-  staPhase,
-  switchConfirm,
-  type SwitchIntent,
-} from "../components/tools/staHandoff";
 import {
   DECK_OPEN_DEBOUNCE_MS,
   queueDeckOpen,
-  resolveBtConnectDevice,
 } from "../components/tools/toolsScreenFlow";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
@@ -161,270 +147,57 @@ export function ToolsScreen() {
 
   // Shared hook — connection state + everything the Remote window handoff
   // needs (the window runs its own hub instance on the same transports).
+  //
+  // U-68: the screen no longer destructures the connection API. It passes the
+  // WHOLE hub to ConnectionSection, which reads what it needs — so a field
+  // added for the connection layer is picked up in one place instead of
+  // needing a screen edit, and this list cannot rot into a second, partial
+  // view of the connection. What remains destructured is what the UNTOUCHED
+  // parts of the page read directly.
   const hub = useControlHub(routeCategory);
   const {
     connected,
     sppStatus,
     deviceName,
     sppSupported,
-    sppDevices,
-    handleConnect,
-    handleDisconnect,
     wifiConnected,
-    setWifiUrl,
-    handleWifiConnect,
-    handleWifiDisconnect,
-    error,
-    sppStatusMsg,
     activeMode,
-    showSppsRetry,
-    handleSppsRetry,
-    handleReconnectPromptCancel,
     telemetry,
     carApName,
     carSsid,
-    canControl,
-    carNetworks,
-    routerUse,
-    routerAdd,
-    routerDelete,
-    routerClearAll,
-    setWifiSsid,
   } = hub;
 
-  // The banner's "which link" truth comes from the SAME manager the picker
-  // uses (one source — this round's whole point). It is live-subscribed so
-  // it can never claim a link the selection did not actually make.
-  const managerLink = useActiveTransport();
-  const activeLinkLabel = managerLink.id
-    ? (linkManager.get(managerLink.id)?.label ?? null)
-    : null;
-
+  // U-68 (2026-10-02): the connection truth used to be read in three places
+  // on this page — the banner (`useActiveTransport` + the manager's label),
+  // the picker (`useActiveTransport` again), and the hub's own state. That is
+  // how "connected but the UI says no" happened. There is now ONE reader: the
+  // ConnectionSection derives everything from the hub's state, and the hub
+  // registers the transport registry itself (see `ensureTransportsRegistered`
+  // in useControlHub) so the manager never depends on a screen being mounted.
+  // `anyLinked`/`linkVerified` stay here only for the Saved-settings card.
   const anyLinked = sppStatus === "connected" || wifiConnected;
   const linkVerified = hub.linkVerified || sppStatus === "connected";
 
-  // R4-4 (owner): the home-router (STA) method gets the SAME router-management
-  // surface the remote's webserver mode hosts (RouterPanel), plus an
-  // edit-password affordance (the car stores one password per SSID, so an
-  // edit is a re-ADD — T-48a) and a "connect the car to this router" action
-  // (USE). The car-AP method NEVER renders it — the AP method's own steps
-  // live in the picker; this is the no-mixing rule.
-  const [pickedMethod, setPickedMethod] = useState<TransportId | null>(null);
-  // R4-4: which saved router is open for an edit (re-ADD upsert). Null when
-  // the form is in plain add mode.
-  const [editingRouter, setEditingRouter] = useState<string | null>(null);
-  const onPickedChange = useCallback((id: TransportId | null) => {
-    setPickedMethod(id);
-    // A method change closes any open router edit — the edit belongs to the
-    // method surface that opened it.
-    setEditingRouter(null);
-  }, []);
-  const isHomeRouterMethod = pickedMethod === "wifi-sta-ws";
-
-  // ---------------------------------------------------------------------
-  // F-59: the GUIDED HOME-ROUTER HANDOFF (owner report 2026-10-02: picking
-  // the home-router method while connected "prompts the user about the
-  // switch" but nothing works, and "the car doesn't seem to initiate the
-  // switch"). Root cause: the switch treated STA like every other method —
-  // tear the link down, then dial a default. But the car can only join the
-  // router when something tells it (`ROUTERS;USE`), and that command needs
-  // the very link the teardown destroyed. The switch is therefore a
-  // HANDOFF, guided by this card:
-  //   step 1  the card ASKS (owner bench report, same evening: "it shows
-  //          prompt to allow user to switch but there is no yes or confirm
-  //          button, there is only cancel button") — the previously saved
-  //          router is offered with a real Yes, or an inline Add form when
-  //          none is saved; `ROUTERS;USE` fires ONLY on that confirm, over
-  //          the LIVE link the card is riding. The card never narrates a
-  //          command that already went out.
-  //   step 2  the card waits — the car's STATE broadcast reports its router
-  //          IP within seconds,
-  //   step 3  the car's reported IP unlocks the dial (`staDialUrl`); the
-  //          phone joins the same router and connects. Never a guessed
-  //          address — the IP is the car's own report (staPhase is pinned
-  //          by staHandoff.test.ts).
-  //   and if the link dies mid-handoff (the car reset — the unflashed
-  //   cd3158f bug), the card flips to `car-dropped` instead of claiming
-  //   progress forever.
-  // ---------------------------------------------------------------------
-  const [staHandoffShown, setStaHandoffShown] = useState(false);
-  // The user's YES: set when a confirm button fires the command, so the
-  // card's waiting text keys off it. Car truth (staPhase) still drives the
-  // phases — this flag is intent, not state (F-59 rule 2).
-  const [staRequested, setStaRequested] = useState(false);
-  // The SSID the handoff actually told the car to join (the waiting text
-  // names THIS one, never "carNetworks[0]" which may have changed since).
-  const [staTargetSsid, setStaTargetSsid] = useState<string | null>(null);
-  // Inline Add (no router saved yet): name + password typed right on the card.
-  const [staAddSsid, setStaAddSsid] = useState("");
-  const [staAddPass, setStaAddPass] = useState("");
-  // U-67: the switch the user ASKED for, pending the one confirm. Set by any
-  // entry point (picker / panel row / panel add form); the card renders the
-  // confirm for it and only `confirmStaSwitch` acts on it.
-  const [staIntent, setStaIntent] = useState<SwitchIntent | null>(null);
-  const staOwnApName = carApName?.trim() || "4WDCar_Wifi";
-  const staConfirm = switchConfirm(staIntent, staOwnApName);
-  const staPhaseNow = staPhase(
-    {
-      connected: telemetry.connected === true,
-      ssid: telemetry.ssid ?? null,
-      ip: telemetry.ip ?? null,
-    },
-    staOwnApName,
-    anyLinked,
-  );
-  const dismissStaHandoff = useCallback(() => {
-    feedbackTap();
-    setStaHandoffShown(false);
-    setStaRequested(false);
-    setStaTargetSsid(null);
-    setStaIntent(null);
-  }, []);
-  // U-67 (owner 2026-10-02: "the app still doesn't have switch ui ux
-  // standardly, n missing ok or confirm buttons while switching routers").
-  // EVERY switch entry point now lands here and lands on the SAME confirm.
-  // `intent` is what the user asked to switch to — from the picker's STA pick
-  // (no intent → the card offers its ordinary step-1 choice), from a panel
-  // row's Switch, or from the panel's Add form. A string is accepted as the
-  // common "a router the car already holds" case.
-  const startStaHandoff = useCallback((intent?: SwitchIntent | string) => {
-    feedbackTap();
-    setStaIntent(
-      typeof intent === "string"
-        ? { ssid: intent, pass: null }
-        : (intent ?? null),
-    );
-    setStaHandoffShown(true);
-    setPickedMethod("wifi-sta-ws");
-    setEditingRouter(null);
-    setStaRequested(false);
-    setStaTargetSsid(null);
-    // NO command fires here — the card asks first (see the block comment).
-  }, []);
-  // The card's ONE yes. Split out from joinStaRouter so the pre-targeted
-  // confirm (panel Switch / Add) and the card's own step-1 offer run the
-  // exact same command sequence — there is no second, quieter path.
-  const confirmStaSwitch = useCallback(
-    (intent: SwitchIntent) => {
-      const s = intent.ssid.trim();
-      if (!s) return;
-      feedbackTap();
-      // ADD stores the pair on the car; USE switches to it. A save-and-switch
-      // confirm is the only path that sends ADD, and it says so on the button.
-      if (switchConfirm(intent, staOwnApName).kind === "save-and-switch") {
-        routerAdd(s, intent.pass ?? "");
-      }
-      setStaRequested(true);
-      setStaTargetSsid(s);
-      routerUse(s);
-    },
-    [routerAdd, routerUse, staOwnApName],
-  );
-  const joinStaRouter = useCallback(
-    (ssid: string) => {
-      confirmStaSwitch({ ssid, pass: null });
-    },
-    [confirmStaSwitch],
-  );
-  const joinStaNewRouter = useCallback(() => {
-    const s = staAddSsid.trim();
-    if (!s) return;
-    confirmStaSwitch({ ssid: s, pass: staAddPass });
-    setStaAddSsid("");
-    setStaAddPass("");
-  }, [staAddSsid, staAddPass, confirmStaSwitch]);
-  const handleOpenWebPage = useCallback(() => {
-    const ip = telemetry.ip?.trim();
-    void Linking.openURL(`http://${ip || DEFAULT_AP_IP}`).catch(
-      () => undefined,
-    );
-  }, [telemetry.ip]);
-  const carIdentityId = telemetry.id ?? null;
-  // STA truth only when the CAR says it joined a router (JSON `connected`).
-  const staSsid =
-    telemetry.connected === true
-      ? telemetry.ssid?.trim() || carSsid || null
-      : null;
-  const apName = staSsid ? null : carApName?.trim() || "4WDCar_Wifi";
-
-  // ---------------------------------------------------------------------
-  // Transport picker bridge (F-17 — one owner for connection side effects).
+  // R4-4 history (kept, because the reasoning still holds): the home-router
+  // method used to get its own RouterPanel with an edit affordance (the car
+  // stores one password per SSID, so an edit is a re-ADD — T-48a) and a USE
+  // action, and the car-AP method never rendered it. That "no mixing" rule was
+  // right about not mixing, and wrong about WHY: the panel was mounted per
+  // METHOD, which is why router management did not exist on Bluetooth or on
+  // the car's own hotspot even though those commands ride any live link (D8).
+  // Router management is now a property of the CONNECTION and lives inside
+  // ConnectionSection, for every method.
+  // U-68 (2026-10-02): the connection method the new ConnectionSection shows.
+  // Kept here rather than inside the section so the choice survives the
+  // section re-rendering as car truth arrives. It is a SELECTION, never a
+  // claim about what is connected — the section derives that from the link.
   //
-  // The picker chooses the METHOD; this screen still performs the connect,
-  // because `useControlHub` owns the authoritative `connected` /
-  // `wifiConnected` / `linkVerified` state that the status dot, the banners
-  // and the RemoteControl gating all read. Connecting from the picker
-  // straight into the services would bring a link up while that state
-  // stayed false — "connected but the UI says no". Classic Bluetooth and
-  // the two WiFi shapes therefore route through the EXACT handlers the
-  // legacy cards used; only the new transports fall through to the manager.
-  // ---------------------------------------------------------------------
-  const onTransportActivate = useCallback(
-    async (id: TransportId, options: TransportConnectOptions) => {
-      if (id === "bt-classic") {
-        if (!options.address) {
-          throw new Error("Scan for the car first, then pick it.");
-        }
-        // The hub's handler takes the scanned SppDevice (it needs id/name/
-        // bonded for display). Resolution is OPS-3's pure rule (CI-pinned in
-        // toolsScreenFlow): the name from THIS connect request — the row the
-        // user just tapped — always wins; the screen-level scan list fills
-        // gaps only, because it survives a method switch un-cleared and can
-        // hold a stale row from an earlier session. NEVER fail the connect
-        // because that mutable list lost the row (owner 2026-09-29, F-40: a
-        // paired car that was really in range was refused with "That car is
-        // no longer in the scan list. Rescan." — a false error). A MAC
-        // address is all the dial needs; sppService.connect() validates +
-        // bonds like the legacy path always did.
-        const device = resolveBtConnectDevice(
-          { address: options.address, name: options.name ?? null },
-          sppDevices,
-        );
-        await handleConnect(device);
-        // F-34b: tell the manager (no re-dial) so the picker's selection,
-        // active chip and Disconnect capsule match the live link.
-        if (sppService.isConnected) {
-          await linkManager.adopt("bt-classic", { address: device.address });
-        }
-        return;
-      }
-      if (id === "wifi-ap-ws" || id === "wifi-sta-ws") {
-        // Mirror the address into the hub's state for the user, but dial with
-        // the EXPLICIT value (OPS-2): the state write above has not re-rendered
-        // yet when this handler runs in the same tick.
-        if (options.url) setWifiUrl(options.url);
-        await handleWifiConnect(options.url?.trim() || undefined);
-        // Only record an actually-verified link (socket + car answered).
-        if (wifiService.isConnected && wifiService.linkVerified) {
-          await linkManager.adopt(id, { url: options.url || undefined });
-        }
-        return;
-      }
-      // bt-ble has no hub bookkeeping yet — the manager owns it.
-      await linkManager.activate(id, options);
-    },
-    [handleConnect, handleWifiConnect, setWifiUrl, sppDevices],
-  );
-
-  const onTransportDeactivate = useCallback(async () => {
-    if (connected) await handleDisconnect();
-    else if (wifiConnected) await handleWifiDisconnect();
-    // Always clear the manager too: adopted links have no dial to undo, and
-    // deactivate() on an idle manager is a no-op. Keeps the picker's active
-    // chip in step with the teardown that just happened.
-    await linkManager.deactivate();
-  }, [connected, wifiConnected, handleDisconnect, handleWifiDisconnect]);
-
-  // F-59 step 3 — declared AFTER the bridge (it dials through it). The dial
-  // uses ONLY the IP the car reported; no IP → no dial (staHandoff.test.ts).
-  const staDial = useCallback(() => {
-    const url = staDialUrl(telemetry.ip ?? null);
-    if (!url) return;
-    feedbackTap();
-    setWifiUrl(url);
-    setPickedMethod("wifi-sta-ws");
-    void onTransportActivate("wifi-sta-ws", { url });
-  }, [telemetry.ip, onTransportActivate, setWifiUrl]);
+  // This replaces the old `pickedMethod` (a TransportId driven by
+  // TransportPicker's onPickedChange) together with `editingRouter`,
+  // `isHomeRouterMethod` and the whole F-59 handoff state block. The router
+  // edit state now lives inside the section's own form, because the form
+  // lives there.
+  const [connMethod, setConnMethod] = useState<ConnectionMethodId | null>(null);
 
   // F-57 / round-close: when the transport disconnects, reset the selected category
   // so the control panel returns to a clean default state rather than staying
@@ -490,17 +263,32 @@ export function ToolsScreen() {
   // press), and queueDeckOpen replaces an in-flight timer on a double-tap.
   const deckOpenTimerRef = useRef<(() => void) | null>(null);
   // Connection tab:
-  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
-  // UX-4 (2026-10-02 audit): ONE disconnect flow. The dialog is the only
-  // user-facing disconnect: the picker's footer button requests it via
-  // onDisconnectRequest, and confirm runs the shared teardown (BT or WiFi,
-  // plus the manager) — the same teardown the method-switch path uses, which
-  // stays immediate because the switch strip already confirmed it.
-  const confirmDisconnect = useCallback(() => {
-    feedbackTap();
-    setShowDisconnectConfirm(false);
-    void onTransportDeactivate();
-  }, [onTransportDeactivate]);
+  // U-68: the disconnect-confirm overlay is GONE. It existed because two
+  // disconnect flows disagreed (the picker's footer fired immediately, the
+  // F-47 dialog was unreachable dead state). The rebuilt section has exactly
+  // ONE disconnect button, so there is nothing left to disagree about, and a
+  // dialog with a single path behind it is ceremony (F-67).
+
+  // Values the (untouched) Saved-settings card still reads. These describe the
+  // car, not the connection UI, so they stay here rather than in the section.
+  const carIdentityId = telemetry.id ?? null;
+  const staSsid =
+    telemetry.connected === true
+      ? telemetry.ssid?.trim() || carSsid || null
+      : null;
+  const apName = staSsid ? null : carApName?.trim() || "4WDCar_Wifi";
+
+  // F-69 (U-68): the keyboard used to cover the field being typed into, and
+  // the tap that focused it was also consumed by the keyboard opening. Two
+  // halves: `keyboardShouldPersistTaps="handled"` on the ScrollView below, and
+  // this handler — the focused field reports its own offset and we scroll it
+  // above the keyboard. One handler for the whole page, so every future input
+  // gets it for free.
+  const scrollRef = useRef<ScrollView | null>(null);
+  const scrollInputIntoView = useCallback((y: number) => {
+    // A generous offset so the field clears the keyboard on a short screen.
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
+  }, []);
 
   return (
     // F-47: a flex-1 SCREEN-WIDE root wrapping the ScrollView. The disconnect
@@ -511,6 +299,9 @@ export function ToolsScreen() {
     // visible screen and the dialog truly centers on the phone.
     <View className="flex-1 bg-mist">
       <ScrollView
+        ref={scrollRef}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={
@@ -675,333 +466,23 @@ export function ToolsScreen() {
             </View>
           </View>
 
-          <View className="mt-3">
-            <ConnectionBanner
-              linked={anyLinked}
-              verified={linkVerified}
-              linkLabel={activeLinkLabel}
-              carLabel={
-                sppStatus === "connected"
-                  ? deviceName || null
-                  : wifiConnected
-                    ? apName
-                    : null
-              }
-              carId={carIdentityId}
-              staSsid={staSsid}
-              apName={apName}
-              signal={telemetry.signal ?? null}
-              rssi={telemetry.rssi ?? null}
-              error={error || (anyLinked ? null : sppStatusMsg)}
-            />
-          </View>
+          {/* U-68 (2026-10-02): the connection layer, rebuilt. This ONE
+              section replaces ConnectionBanner, the F-59 handoff card,
+              TransportPicker and RouterPanel on this page - they were four
+              card shapes with four behaviours (F-67). The Remote screen still
+              mounts RouterPanel and is deliberately untouched.
 
-          {/*
-            ONE connection-problem surface, not three (owner 2026-09-30:
-            "the control panel shows unnecessary messages ... that are
-            duplicate and not needed"). This column used to render the same
-            failure up to three times at once — inside ConnectionBanner via
-            `error`, then again as the `sppStatusMsg` card, then again as the
-            hub `error` card — all stacked directly above the picker, so one
-            failed connect filled the screen with the same sentence three
-            ways and pushed the actual controls off-screen.
-
-            ConnectionBanner is now the single place a link problem appears.
-            The two cards below are kept ONLY for the two facts the banner has
-            no field for: the auto-reconnect prompt (an action, not a message)
-            and the "pick a car" hint before any attempt has been made.
-          */}
-          {showSppsRetry && (
-            <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <Text className="text-sm font-bold text-amber-800">
-                Connection lost
-              </Text>
-              <Text className="mt-0.5 text-xs text-amber-600">
-                Reconnect to your car?
-              </Text>
-              <View className="mt-2 flex-row gap-2">
-                <Pressable
-                  onPress={() => {
-                    feedbackTap();
-                    void handleSppsRetry();
-                  }}
-                  className="rounded-full bg-gold px-4 py-1.5"
-                  hitSlop={6}
-                >
-                  <Text className="text-xs font-bold text-white">
-                    Reconnect
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    feedbackTap();
-                    handleReconnectPromptCancel();
-                  }}
-                  className="rounded-full border border-line bg-card px-4 py-1.5"
-                  hitSlop={6}
-                >
-                  <Text className="text-xs font-bold text-muted">Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {/* F-59: the guided handoff card — lives between the banner and
-              the picker, because the picker's STA pick is what opens it. It
-              hides itself once a STA link is actually up (the banner takes
-              over) and can be dismissed. */}
-          {staHandoffShown &&
-          !(pickedMethod === "wifi-sta-ws" && wifiConnected) ? (
-            <View className="mt-3 rounded-xl border border-sky-500/40 bg-sky-500/5 p-3">
-              <View className="flex-row items-center gap-2">
-                <Feather name="navigation" size={14} color="#0369a1" />
-                <Text className="min-w-0 flex-1 text-[12px] font-black text-sky-900 dark:text-sky-300">
-                  Switching to your home router
-                </Text>
-                <Pressable
-                  onPress={dismissStaHandoff}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss the home-router handoff"
-                  hitSlop={6}
-                  className="h-6 w-6 items-center justify-center rounded-full active:opacity-60"
-                >
-                  <Feather name="x" size={14} color="#64748b" />
-                </Pressable>
-              </View>
-              {staPhaseNow === "car-dropped" ? (
-                <>
-                  <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-                    The car dropped the link while switching — it may have
-                    rebooted. Reconnect to the car first, then pick the
-                    home-router method again.
-                  </Text>
-                  <Pressable
-                    onPress={dismissStaHandoff}
-                    accessibilityRole="button"
-                    accessibilityLabel="Dismiss the dropped handoff"
-                    className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full border border-line bg-card"
-                  >
-                    <Text className="text-[13px] font-black text-ink">
-                      Got it
-                    </Text>
-                  </Pressable>
-                </>
-              ) : staPhaseNow === "car-on-ap" ? (
-                staRequested ? (
-                  <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-                    The car was told to join "{staTargetSsid}" over this link.
-                    This takes a few seconds — the card moves on the moment the
-                    car reports it.
-                  </Text>
-                ) : staConfirm.kind !== "none" ? (
-                  /* U-67: THE switch confirm, pre-targeted at whatever the
-                     user tapped (a panel row's Switch, or the panel's Add
-                     form). Same shape, same words, same single yes as the
-                     step-1 offer below — one standard for the whole screen. */
-                  <>
-                    <Text className="mt-1.5 text-[12px] font-bold text-ink">
-                      {staConfirm.kind === "save-and-switch"
-                        ? `Save "${staConfirm.ssid}" on the car and switch to it?`
-                        : `Switch the car to "${staConfirm.ssid}"?`}
-                    </Text>
-                    <Text className="mt-1 text-[11px] leading-4 text-muted">
-                      {staConfirm.kind === "save-and-switch"
-                        ? "The password is stored on the car, then it joins. This phone follows it afterwards — the connect step unlocks once the car reports its address."
-                        : "The car joins this router over the current link, then this phone follows it. Its reported IP unlocks the connect step."}
-                    </Text>
-                    <View className="mt-2.5 flex-row gap-2">
-                      <Pressable
-                        onPress={() => {
-                          if (staIntent) confirmStaSwitch(staIntent);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={staConfirm.confirmLabel}
-                        className="h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 px-4"
-                      >
-                        <Feather name="wifi" size={14} color="#fff" />
-                        <Text className="text-[13px] font-black text-white">
-                          {staConfirm.confirmLabel}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={dismissStaHandoff}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel the home-router switch"
-                        className="h-11 flex-1 items-center justify-center rounded-full border border-line bg-card px-4"
-                      >
-                        <Text className="text-[13px] font-bold text-ink">
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : carNetworks.length > 0 ? (
-                  <>
-                    <Text className="mt-1.5 text-[12px] font-bold text-ink">
-                      Join "{carNetworks[0]}" now?
-                    </Text>
-                    <Text className="mt-1 text-[11px] leading-4 text-muted">
-                      The car joins this router over the current link, then this
-                      phone follows it. Its reported IP unlocks the connect
-                      step.
-                    </Text>
-                    <View className="mt-2.5 flex-row gap-2">
-                      <Pressable
-                        onPress={() => joinStaRouter(carNetworks[0]!)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Tell the car to join ${carNetworks[0]}`}
-                        className="h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 px-4"
-                      >
-                        <Feather name="wifi" size={14} color="#fff" />
-                        <Text className="text-[13px] font-black text-white">
-                          Yes, join it
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={dismissStaHandoff}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel the home-router switch"
-                        className="h-11 flex-1 items-center justify-center rounded-full border border-line bg-card px-4"
-                      >
-                        <Text className="text-[13px] font-bold text-ink">
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-                      No router is saved on the car yet. Enter your router's
-                      name and password — the car joins it over this link.
-                    </Text>
-                    <TextInput
-                      value={staAddSsid}
-                      onChangeText={setStaAddSsid}
-                      placeholder="Router name (SSID)"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      accessibilityLabel="Home router name"
-                      className="mt-2 h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink dark:text-white"
-                      placeholderTextColor="#64748b"
-                    />
-                    <TextInput
-                      value={staAddPass}
-                      onChangeText={setStaAddPass}
-                      placeholder="Router password"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      secureTextEntry
-                      accessibilityLabel="Home router password"
-                      className="mt-2 h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink dark:text-white"
-                      placeholderTextColor="#64748b"
-                    />
-                    <Pressable
-                      onPress={joinStaNewRouter}
-                      disabled={staAddSsid.trim().length === 0}
-                      accessibilityRole="button"
-                      accessibilityLabel="Save the router and join it"
-                      accessibilityState={{
-                        disabled: staAddSsid.trim().length === 0,
-                      }}
-                      className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 disabled:opacity-40"
-                    >
-                      <Feather name="wifi" size={14} color="#fff" />
-                      <Text className="text-[13px] font-black text-white">
-                        Save &amp; join
-                      </Text>
-                    </Pressable>
-                  </>
-                )
-              ) : staPhaseNow === "joined" ? (
-                <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-                  The car has joined the router and is getting an address. Step
-                  2 unlocks the moment its IP arrives.
-                </Text>
-              ) : (
-                <>
-                  <Text className="mt-1.5 text-[11px] leading-4 text-muted">
-                    The car is on the router at {telemetry.ip}. Join{" "}
-                    {staSsid ?? "the same router"} on this phone, then connect.
-                  </Text>
-                  <Pressable
-                    onPress={staDial}
-                    accessibilityRole="button"
-                    accessibilityLabel="Connect to the car over the home router"
-                    className="mt-2 h-11 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700"
-                  >
-                    <Feather name="link" size={14} color="#fff" />
-                    <Text className="text-[13px] font-black text-white">
-                      Connect via home router
-                    </Text>
-                  </Pressable>
-                </>
-              )}
-            </View>
-          ) : null}
-
-          <View className="mt-3">
-            <TransportPicker
-              onActivate={onTransportActivate}
-              onDeactivate={onTransportDeactivate}
-              onPickedChange={onPickedChange}
-              onDisconnectRequest={() => setShowDisconnectConfirm(true)}
-              onStaHandoffRequest={startStaHandoff}
-            />
-          </View>
-
-          {/* R4-4: the home-router method's OWN surface — the same RouterPanel
-              the remote's webserver mode hosts (owner: "make this just like it
-              is in the remote screen inside, in the webserver mode"), plus an
-              edit-password affordance (car stores one password per SSID → an
-              edit is a re-ADD, T-48a) and a USE action. It mounts ONLY for the
-              home-router method: the car-AP method never shows router-editing
-              UI, and BT/other methods never do either (no method mixing). */}
-          {isHomeRouterMethod && (
-            <View className="mt-3">
-              <Text className="text-xs font-black uppercase tracking-widest text-navy">
-                Home router settings
-              </Text>
-              <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-                Saved on the car — a live link applies changes.
-              </Text>
-              <View className="mt-3">
-                <RouterPanel
-                  canControl={canControl}
-                  linked={anyLinked}
-                  onStartEdit={(ssid) => {
-                    feedbackTap();
-                    setEditingRouter(ssid);
-                    setWifiSsid(ssid);
-                  }}
-                  editingSsid={editingRouter}
-                  carSsid={staSsid}
-                  carApName={apName}
-                  ip={telemetry.ip ?? null}
-                  networks={carNetworks}
-                  onUse={(ssid) => {
-                    // U-67: NO command on the press. Opens the ONE switch
-                    // confirm, pre-targeted at this row (it used to fire
-                    // ROUTERS;USE straight from the button — the "missing ok
-                    // or confirm button" the owner reported).
-                    startStaHandoff({ ssid, pass: null });
-                    setWifiSsid(ssid);
-                  }}
-                  onAdd={(ssid, pass) => {
-                    // U-67: same — the Add form opens the save-and-switch
-                    // confirm; the press itself only stages the credentials.
-                    startStaHandoff({ ssid, pass });
-                    // An add OR an edit-save clears the editing state — the
-                    // car's next `networks` echo re-syncs the list either way.
-                    setEditingRouter(null);
-                  }}
-                  onDelete={routerDelete}
-                  onClear={routerClearAll}
-                  onOpenWebPage={handleOpenWebPage}
-                />
-              </View>
-            </View>
-          )}
+              `keyboardShouldPersistTaps="handled"` + the scroll-into-view
+              handler above are F-69: the tap that focuses a field must not be
+              eaten by the keyboard opening, and the focused field must end up
+              above it. */}
+          <ConnectionSection
+            hub={hub}
+            method={connMethod}
+            onMethodChange={setConnMethod}
+            onInputFocus={scrollInputIntoView}
+            feedbackTap={feedbackTap}
+          />
 
           {/* ①: the saved-settings block folds away — control surfaces lead. */}
           <SectionDisclosure title="Saved settings">
@@ -1041,53 +522,6 @@ export function ToolsScreen() {
           <ProjectInfo mode={activeMode} categorySlug={category.slug} />
         </SectionDisclosure>
       </ScrollView>
-
-      {/* Disconnect confirmation — OUTSIDE the ScrollView (F-47), so the
-        overlay fills the visible screen and the dialog centers on the phone. */}
-      {showDisconnectConfirm && (
-        <>
-          <Pressable
-            className="absolute inset-0 z-30 bg-black/30"
-            onPress={() => setShowDisconnectConfirm(false)}
-            accessibilityLabel="Cancel disconnect"
-          />
-          <View className="absolute inset-0 z-40 items-center justify-center px-8">
-            <View className="w-full max-w-sm rounded-2xl border border-line bg-card p-5 shadow-xl">
-              <Text className="text-center text-base font-black text-ink">
-                Disconnect now?
-              </Text>
-              <Text className="mt-1 text-center text-xs leading-4 text-muted">
-                The car will stop safely before the link closes. Your saved
-                settings stay remembered for next time.
-              </Text>
-              <View className="mt-4 flex-row justify-center gap-3">
-                <Pressable
-                  onPress={() => setShowDisconnectConfirm(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Keep connection"
-                  hitSlop={8}
-                >
-                  <View className="rounded-full border border-line bg-surface px-6 py-2.5">
-                    <Text className="text-sm font-bold text-ink">Cancel</Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  onPress={confirmDisconnect}
-                  accessibilityRole="button"
-                  accessibilityLabel="Disconnect"
-                  hitSlop={8}
-                >
-                  <View className="rounded-full bg-red-600 px-6 py-2.5">
-                    <Text className="text-sm font-black text-white">
-                      Disconnect
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </>
-      )}
     </View>
   );
 }
