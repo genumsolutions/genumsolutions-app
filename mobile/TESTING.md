@@ -149,7 +149,7 @@
 > rows: T21–T23 + Round 1's OLED row, **U-67's reset/retry fixes (T24–T26)** and **U-68's
 > `ROUTERS;SCAN` / reply-buffer / ack-redaction fixes (U-68-4)**. Then run the rounds BELOW in
 > this order. After each app round: close + reopen the app ×2 and confirm Menu → Update shows
-> `Short update (318565c…)` — that is the OTA containing U-63…U-68 (curl cannot verify the served
+> `Short update (3f469ed…)` — that is the OTA containing U-63…U-68 (curl cannot verify the served
 > bundle; the Update screen is the proof).
 
 **Stage 0 — flash sanity (5 min, no app):**

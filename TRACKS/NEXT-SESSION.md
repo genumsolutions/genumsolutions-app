@@ -10,7 +10,7 @@ phases shipped; every gate green; the car still needs a FLASH for two of the fix
 | 2b | the ack consumer in the hub + `NETW;` over Bluetooth | `77321f8` | tsc 0 · 552/552 |
 | 2 | the uniform `ConnectionSection`, replacing banner + handoff + picker + router panel | `3cfd4b7` | tsc 0 · 552/552 |
 | 3 | the car's network layer (`ROUTERS;SCAN`, reply buffer, ack redaction) | car `39c96ab` + `46186a9` + `7cb409f` | **Arduino CI ✓ `37012141471`** — 1,748,602 B (55% of `huge_app`), SRAM 21% |
-| 4 | residue sweep + the F-41 guard re-expressed + device rows | this commit | tsc 0 · **518/518** (33 files) · prettier clean |
+| 4 | residue sweep + the F-41 guard re-expressed + device rows | 318565c + 3f469ed | tsc 0 · **518/518** (33 files) · prettier clean |
 
 **D1–D8, the eight defects behind "nothing is fixed":** D1 the own AP was list[0] so the switch
 reverted the car to itself — closed in `switchableRouters`/`defaultRouterSsid`/`planSwitch`/`pickBestRouter`
