@@ -109,6 +109,15 @@ export type CarTelemetry = {
    * from the CAR's antenna (not the phone's). Firmware v2 only.
    */
   scan?: ScanNetwork[];
+  /**
+   * D6 (U-68, 2026-10-02): the saved-router registry as the car sends it on
+   * a TEXT line — `NETW;<ownAP>;<ssid>;…`, its own line after every STATE on
+   * every transport. This is the ONLY shape a Bluetooth link carries (the
+   * `"networks"` JSON array is WebSocket-only), which is why the router
+   * feature used to work on WiFi alone. Same field as the JSON array so one
+   * consumer serves both links (F-66). Names only, never passwords (W-14).
+   */
+  netw?: string[];
 };
 
 export type ScanNetwork = {
@@ -569,6 +578,26 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   if (/^SPD[:=]?-?[\d]+$/i.test(l)) {
     const num = Number(l.replace(/^SPD[:=]?/i, "")) || 0;
     if (num > 0) telemetry.speed = num;
+  }
+
+  // D6 / F-66 (U-68, 2026-10-02): the car broadcasts the saved-router
+  // registry as its OWN line — `NETW;<ownAP>;<ssid>;…` — immediately after
+  // every STATE, on EVERY transport. This branch did not exist, so over
+  // Bluetooth the app received the line, matched nothing, and fell back to a
+  // stale local mirror: the router list existed on WiFi only, which made
+  // "add a router" a WiFi-shaped accident (F-66). Names only, never
+  // passwords (W-14), and the car's own network leads the list by design.
+  // A BARE `NETW` is a real shape: `buildNetworksLine` starts the buffer with
+  // "NETW" and appends `;<ssid>` per entry, so an empty registry ships a bare
+  // "NETW" line. It must parse to an empty list, not to a missing field —
+  // otherwise the UI cannot tell "no routers" from "no answer".
+  if (/^NETW([:;]|$)/i.test(up)) {
+    telemetry.networks = l
+      .replace(/^NETW[:;]?/i, "")
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return telemetry;
   }
 
   // Connections-Hub round: car-side scan over SPP —
