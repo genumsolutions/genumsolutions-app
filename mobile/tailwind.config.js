@@ -27,6 +27,19 @@ module.exports = {
         card: "rgb(var(--color-card) / <alpha-value>)",
         muted: "rgb(var(--color-muted) / <alpha-value>)",
         accent: "rgb(var(--color-accent) / <alpha-value>)",
+        // ---- U-69 (2026-10-02): the palette had NO error/success/selected pair.
+        // Every failure surface reached for an off-palette Tailwind colour
+        // (text-red-600, bg-emerald-500/10, bg-sky-500/5 …). Off-palette
+        // colours do not flip with the theme, so they read fine on a white
+        // card and merge into the dark card — the owner's "the text and the
+        // background are merging". These are defined for both themes in
+        // global.css with the foreground contrast-checked against the card.
+        danger: "rgb(var(--color-danger) / <alpha-value>)",
+        "danger-soft": "rgb(var(--color-danger-soft) / <alpha-value>)",
+        success: "rgb(var(--color-success) / <alpha-value>)",
+        "success-soft": "rgb(var(--color-success-soft) / <alpha-value>)",
+        "select-bg": "rgb(var(--color-select-bg) / <alpha-value>)",
+        "select-ink": "rgb(var(--color-select-ink) / <alpha-value>)",
       },
       fontFamily: {
         // ---- extracted from website tailwind.config.ts:27-31 ----

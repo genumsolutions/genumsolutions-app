@@ -1,44 +1,60 @@
 // =====================================================================
-// connection/ConnectionSection — the Control Panel's connection layer,
-// rebuilt (U-68, 2026-10-02).
+// connection/ConnectionSection — the Control Panel's connection layer
+// (U-68 rebuild, revised by U-69 on the owner's second review).
 //
 // Replaces, on the Control Panel only: ConnectionBanner, the F-59 handoff
 // card, TransportPicker and RouterPanel. The drive decks, the Remote screen
-// and every other page are untouched (owner was explicit).
+// and every other page are untouched.
 //
-// WHY A REBUILD AND NOT A FIX — five defects, all live at once, four of them
-// invisible from the UI:
+// THE SHAPE, and the three owner complaints that produced it:
 //
-//  D1  The car leads its router list with its OWN AP. The old flow's
-//      "Yes, join it" used `carNetworks[0]`, so it fired
-//      `ROUTERS;USE;4WDCar_Wifi` — which the firmware answers by ERASING the
-//      stored credentials and reverting the car to its own AP. The user asks
-//      to switch to the router; the app switches the car back to itself.
-//  D2  Every `ROUTERS;*` answer was discarded, so a failed add looked exactly
-//      like a successful one and the form cleared itself on a timer.
-//  D4  Selecting the home-router method while disconnected blind-dialled the
-//      car's AP address — the hotspot the switch was meant to leave.
-//  D8  Router management was mounted for exactly one method, so on Bluetooth
-//      or the car's own hotspot there was no way to add or switch a router at
-//      all, even though the commands ride any live link.
-//  U1  Four different card shapes on one page, each with its own behaviour.
+//   status  → one bar, one truth, derived from the hub only
+//   METHOD  → ONE dropdown. U-69: *"connections methods are scattered all over
+//              the page. please only show one method at a time and use the drop
+//              down menu for that and dont populate contents unnecessary."*
+//              So there is no longer a card per method: there is one selector
+//              showing the current method, and only that method's setup card.
+//   setup   → the selected method's job, and nothing else
+//   routers → ONE dropdown for "switch to a saved router" (six rows is
+//              "overly populated"), with add/edit/remove behind one explicit
+//              action — U-69: *"use the drop down menu where ever the things
+//              are overly populated."*
 //
-// THE SHAPE, bottom-up (the owner asked for it "from the bottom"):
+// Every decision comes from the pure model in this folder. This file renders it
+// and calls the hub; it never holds a second opinion about what is connected
+// and never produces a URL (`resolveDial` is the only thing that does).
 //
-//   status  → one bar, one truth, computed from the hub only
-//   method  → three uniform cards, from the pure model
-//   setup   → ONE card whose body is the selected target's job
-//   routers → available on EVERY method, because it is a property of the
-//             connection and not of one method
+// ---------------------------------------------------------------------
+// U-69 — TWO REAL BUGS THE OWNER HIT, both fixed here:
 //
-// Every decision is made by the pure model in this folder. This file only
-// renders it and calls the hub. It never holds a second opinion about what is
-// connected, and it never produces a URL — `dial.resolveDial` is the only
-// thing that does.
+// 1. *"the bluetooth is not build in the app and i am not able to connect the
+//     device to the app to test the device."* The cause was NOT a missing
+//     permission or a missing native module. `handleConnect` and
+//     `handleWifiConnect` stored their failure in the hub's `error` state and
+//     RETURNED NORMALLY, and their only renderer was `ConnectionBanner` — which
+//     U-68 deleted. With nothing to await and nothing to read, a FAILED connect
+//     resolved like a successful one and this section announced "Connected to
+//     <car>". Both handlers now return a `ConnectOutcome`, and this section
+//     reports what actually happened. A fake success is worse than no success:
+//     it sends the tester hunting for a link that does not exist (F-61/F-62).
+//
+// 2. *"the text and the background are merging and the texts are not visible
+//     properly. please fix the contrast too for once and for all."* The cause
+//     was off-palette colours: this app's palette is semantic tokens and defines
+//     no error/success/selected pair, so failure surfaces reached for
+//     `text-red-600` / `bg-emerald-500/10` / `bg-sky-500/5`. Those do NOT flip
+//     with the theme — readable on a white card, near-invisible on the dark one.
+//     Fixed at the TOKEN level (see ConnectionCard.tsx): `danger`, `success`,
+//     `select-bg` and `select-ink` now exist in all three theme blocks, and
+//     this folder uses semantic tokens only.
+//
+//     Note also `handleScan` below: scanning is the FIRST thing a user does, and
+//     if it fails the list silently stays empty — so the scan reports its own
+//     outcome here rather than leaving an empty box.
 // =====================================================================
 
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import {
@@ -52,16 +68,22 @@ import {
   resolveDial,
   switchableRouters,
   targetUnavailableReason,
-  timeoutOutcome,
   validateRouterInput,
   type ConnectionMethodId,
   type ConnectionTarget,
   type ConnectionTargetId,
 } from "./index";
-import { ActionButton, ConnectionCard, InlineMessage } from "./ConnectionCard";
+import {
+  ActionButton,
+  ConnectionCard,
+  InlineMessage,
+  SelectRow,
+} from "./ConnectionCard";
 import type { useControlHub } from "../useControlHub";
 
 type Hub = ReturnType<typeof useControlHub>;
+
+type Message = { tone: "error" | "ok" | "info"; text: string };
 
 export type ConnectionSectionProps = {
   hub: Hub;
@@ -90,9 +112,11 @@ export function ConnectionSection({
     sppStatus,
     sppStatusMsg,
     sppDevices,
+    sppSupported,
     showSppsRetry,
     wifiConnected,
     linkVerified,
+    error: hubError,
     handleScan,
     handleSppsRetry,
     handleReconnectPromptCancel,
@@ -109,10 +133,11 @@ export function ConnectionSection({
 
   const [targetId, setTargetId] = useState<ConnectionTargetId | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{
-    tone: "error" | "ok" | "info";
-    text: string;
-  } | null>(null);
+  const [message, setMessage] = useState<Message | null>(null);
+
+  const tap = useCallback(() => {
+    feedbackTap?.();
+  }, [feedbackTap]);
 
   // ---- the ONE truth about the link -------------------------------------
   const btLive = sppStatus === "connected";
@@ -125,8 +150,7 @@ export function ConnectionSection({
   });
   const carOnRouter = anyLink && !onOwnHotspot && Boolean(reportedIp);
 
-  // Which target is live RIGHT NOW, derived from the link — never a stored
-  // preference. A stale selection must not be able to claim a link is up.
+  /** The target that is live RIGHT NOW — derived, never remembered. */
   const liveTarget: ConnectionTargetId | null = btLive
     ? "bt-spp"
     : wifiConnected
@@ -135,29 +159,29 @@ export function ConnectionSection({
         : "home-router"
       : null;
 
-  // The target being SET UP: the live one if there is one, else the one the
-  // user picked in this method, else the method's only/first target.
-  const methodTargets = useMemo(
-    () => CONNECTION_METHODS.find((m) => m.id === method)?.targets ?? [],
+  const methodDef = useMemo(
+    () => CONNECTION_METHODS.find((m) => m.id === method) ?? null,
     [method],
   );
+
+  /** Only the SELECTED method's target is rendered (U-69). */
   const setupTarget: ConnectionTarget | null = useMemo(() => {
-    if (liveTarget && methodOfTarget(liveTarget) === method) {
+    if (!methodDef) return null;
+    if (liveTarget && methodOfTarget(liveTarget) === methodDef.id) {
       return (
         CONNECTION_METHODS.flatMap((m) => m.targets).find(
           (t) => t.id === liveTarget,
         ) ?? null
       );
     }
-    if (targetId && methodOfTarget(targetId) === method) {
-      return (
-        CONNECTION_METHODS.flatMap((m) => m.targets).find(
-          (t) => t.id === targetId,
-        ) ?? null
-      );
-    }
-    return methodTargets[0] ?? null;
-  }, [liveTarget, method, methodTargets, targetId]);
+    const chosen =
+      targetId && methodOfTarget(targetId) === methodDef.id ? targetId : null;
+    const id = chosen ?? methodDef.targets[0]?.id ?? null;
+    return (
+      CONNECTION_METHODS.flatMap((m) => m.targets).find((t) => t.id === id) ??
+      null
+    );
+  }, [liveTarget, methodDef, targetId]);
 
   const routers = useMemo(
     () =>
@@ -168,13 +192,9 @@ export function ConnectionSection({
     [carNetworks, carApName, carOnRouter, reportedSsid],
   );
   const switchable = switchableRouters(routers);
-  const suggested = defaultRouterSsid(routers);
 
-  const tap = useCallback(() => {
-    feedbackTap?.();
-  }, [feedbackTap]);
-
-  const run = useCallback(
+  /** Run a hub action and report its REAL outcome (U-69). */
+  const runOutcome = useCallback(
     async (
       fn: () => Promise<{ ok: boolean; message?: string; reason?: string }>,
     ) => {
@@ -203,18 +223,20 @@ export function ConnectionSection({
       setBusy(true);
       setMessage(null);
       try {
-        await handleConnect({
+        // U-69: the handler REPORTS. Before this it swallowed the failure and
+        // resolved normally, so this function announced success on a failed
+        // connect — the owner's "bluetooth is not built in the app".
+        const outcome = await handleConnect({
           id: address,
           address,
           name: name ?? address,
           bonded: false,
         });
-        setMessage({ tone: "ok", text: `Connected to ${name || address}.` });
-      } catch (e) {
-        setMessage({
-          tone: "error",
-          text: e instanceof Error ? e.message : "Could not connect.",
-        });
+        setMessage(
+          outcome.ok
+            ? { tone: "ok", text: outcome.message }
+            : { tone: "error", text: outcome.reason },
+        );
       } finally {
         setBusy(false);
       }
@@ -222,10 +244,27 @@ export function ConnectionSection({
     [handleConnect, tap],
   );
 
+  const scanBluetooth = useCallback(async () => {
+    tap();
+    setBusy(true);
+    setMessage(null);
+    try {
+      await handleScan();
+      setMessage(null); // the device list below is the result
+    } catch (e) {
+      setMessage({
+        tone: "error",
+        text: e instanceof Error ? e.message : "Could not search for cars.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [handleScan, tap]);
+
   const connectWifi = useCallback(
     async (target: ConnectionTargetId) => {
-      // D4: the ONLY place a URL is produced. Null means there is no honest
-      // address, and the UI must say why rather than dial something.
+      // D4: the ONLY place a URL is produced. Null means no honest address, and
+      // the UI says why rather than dialling something.
       const dial = resolveDial({
         target,
         reportedIp,
@@ -246,13 +285,12 @@ export function ConnectionSection({
       setBusy(true);
       setMessage(null);
       try {
-        await handleWifiConnect(dial.url);
-        setMessage({ tone: "ok", text: "Connected." });
-      } catch (e) {
-        setMessage({
-          tone: "error",
-          text: e instanceof Error ? e.message : "Could not connect.",
-        });
+        const outcome = await handleWifiConnect(dial.url);
+        setMessage(
+          outcome.ok
+            ? { tone: "ok", text: outcome.message }
+            : { tone: "error", text: outcome.reason },
+        );
       } finally {
         setBusy(false);
       }
@@ -263,6 +301,7 @@ export function ConnectionSection({
   const disconnect = useCallback(async () => {
     tap();
     setBusy(true);
+    setMessage(null);
     try {
       if (btLive) await handleDisconnect();
       if (wifiConnected) await handleWifiDisconnect();
@@ -289,32 +328,30 @@ export function ConnectionSection({
         });
         return;
       }
-      await run(() => runSwitchPlan(plan));
+      await runOutcome(() => runSwitchPlan(plan));
     },
-    [carApName, routers, run, runSwitchPlan, tap],
+    [carApName, routers, runOutcome, runSwitchPlan, tap],
   );
 
   const deleteRouter = useCallback(
     async (ssid: string) => {
       tap();
-      // Ask the car first, then mirror — the old path cleared the row first
-      // and reported nothing, so a refused delete looked like a success.
-      const ok = await run(() => requestRouter({ kind: "del", ssid }));
+      const ok = await runOutcome(() => requestRouter({ kind: "del", ssid }));
       if (ok) routerDelete(ssid);
     },
-    [requestRouter, routerDelete, run, tap],
+    [requestRouter, routerDelete, runOutcome, tap],
   );
 
   const clearAll = useCallback(async () => {
     tap();
-    const ok = await run(() => requestRouter({ kind: "clear" }));
+    const ok = await runOutcome(() => requestRouter({ kind: "clear" }));
     if (ok) routerClearAll();
-  }, [requestRouter, routerClearAll, run, tap]);
+  }, [requestRouter, routerClearAll, runOutcome, tap]);
 
   const scanNearby = useCallback(async () => {
     tap();
-    await run(() => requestScan());
-  }, [requestScan, run, tap]);
+    await runOutcome(() => requestScan());
+  }, [requestScan, runOutcome, tap]);
 
   // -----------------------------------------------------------------------
   // STATUS — one bar, one truth
@@ -322,15 +359,10 @@ export function ConnectionSection({
   const statusLabel = !anyLink
     ? "Not connected"
     : liveTarget === "bt-spp"
-      ? `Bluetooth · ${deviceTitle()}`
+      ? `Bluetooth · ${sppStatusMsg || "the car"}`
       : liveTarget === "car-hotspot"
         ? `Car's hotspot · ${carApName ?? "the car's Wi-Fi"}`
         : `Home router · ${reportedSsid ?? "your router"}`;
-  const statusTone = !anyLink ? "idle" : linkVerified ? "live" : "busy";
-
-  function deviceTitle(): string {
-    return sppStatusMsg || sppDevices.find((d) => d.bonded)?.name || "the car";
-  }
 
   return (
     <View className="mt-3 gap-2.5">
@@ -339,7 +371,7 @@ export function ConnectionSection({
         title="Connection"
         subtitle={statusLabel}
         icon="radio"
-        tone={statusTone}
+        tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
         testID="conn-status"
       >
         {linkVerified ? (
@@ -350,6 +382,12 @@ export function ConnectionSection({
           <InlineMessage tone="info">
             Connecting… the car has not answered yet.
           </InlineMessage>
+        ) : null}
+        {/* U-69: the hub's own error had NO surface once ConnectionBanner was
+            deleted, which is how a failed connect became invisible. It is
+            rendered here so no failure can be silent again. */}
+        {!anyLink && hubError ? (
+          <InlineMessage tone="error">{hubError}</InlineMessage>
         ) : null}
         {anyLink ? (
           <View className="mt-2.5">
@@ -363,10 +401,6 @@ export function ConnectionSection({
             />
           </View>
         ) : null}
-        {/* The Bluetooth auto-reconnect prompt, kept (it is a real feature) but
-            moved INTO the one status surface. It used to be a fifth card
-            stacked between the banner and the picker with its own styling and
-            its own button shapes — the F-67 complaint, exactly. */}
         {showSppsRetry ? (
           <View className="mt-2.5 gap-2">
             <InlineMessage tone="info">
@@ -394,89 +428,58 @@ export function ConnectionSection({
         ) : null}
       </ConnectionCard>
 
-      {/* ---- the three methods ------------------------------------------- */}
-      {CONNECTION_METHODS.map((m) => {
-        const isMethod = method === m.id;
-        const methodLive =
-          liveTarget !== null && methodOfTarget(liveTarget) === m.id;
-        return (
-          <ConnectionCard
-            key={m.id}
-            title={m.label}
-            subtitle={m.unavailable ?? m.blurb}
-            icon={
-              m.id === "bluetooth"
-                ? "bluetooth"
-                : m.id === "wifi"
-                  ? "wifi"
-                  : "globe"
-            }
-            tone={methodLive ? "live" : isMethod ? "busy" : "idle"}
-            selected={isMethod}
-            testID={`conn-method-${m.id}`}
-            onPress={() => {
-              tap();
-              onMethodChange(m.id);
-              setTargetId(null);
-              setMessage(null);
-            }}
-          >
-            {m.targets.length > 1 ? (
-              <View className="flex-row gap-2">
-                {m.targets.map((t) => {
-                  const reason = targetUnavailableReason(t.id, {
-                    carOnOwnRouter: carOnRouter,
-                  });
-                  const isTarget = setupTarget?.id === t.id;
-                  return (
-                    <ActionButton
-                      key={t.id}
-                      flex
-                      label={t.label}
-                      variant={isTarget ? "primary" : "quiet"}
-                      disabled={Boolean(reason) || busy}
-                      onPress={() => {
-                        tap();
-                        setTargetId(t.id);
-                      }}
-                      testID={`conn-target-${t.id}`}
-                    />
-                  );
-                })}
-              </View>
-            ) : null}
-            {m.unavailable ? (
-              <InlineMessage tone="info">{m.unavailable}</InlineMessage>
-            ) : null}
-          </ConnectionCard>
-        );
-      })}
+      {/* ---- ONE method dropdown (U-69) ---------------------------------- */}
+      <SelectRow<ConnectionMethodId>
+        label="Connection method"
+        value={method}
+        options={CONNECTION_METHODS.map((m) => ({
+          id: m.id,
+          label: m.label,
+          hint: m.targets.length > 1 ? `${m.targets.length} ways` : null,
+        }))}
+        onChange={(id) => {
+          tap();
+          onMethodChange(id);
+          setTargetId(null);
+          setMessage(null);
+        }}
+        testID="conn-method"
+      />
 
-      {/* ---- the setup card for the selected target ---------------------- */}
-      {method && setupTarget ? (
-        <SetupCard
+      {/* ---- the selected method's setup, and nothing else ---------------- */}
+      {methodDef && setupTarget ? (
+        <MethodSetup
+          method={methodDef}
           target={setupTarget}
           busy={busy}
-          onConnectBluetooth={connectBluetooth}
-          onConnectWifi={connectWifi}
-          onScanBluetooth={() => void handleScan()}
-          onScanBluetoothInternal={scanNearby}
-          sppStatus={sppStatus}
-          sppDevices={sppDevices}
+          hasAlternative={methodDef.targets.length > 1}
+          alternativeId={
+            methodDef.targets.find((t) => t.id !== setupTarget.id)?.id ?? null
+          }
+          onPickTarget={(id) => {
+            tap();
+            setTargetId(id);
+          }}
           carOnRouter={carOnRouter}
           reportedSsid={reportedSsid}
-          onInputFocus={onInputFocus}
+          sppSupported={sppSupported}
+          sppStatus={sppStatus}
+          sppDevices={sppDevices}
+          onScanBluetooth={() => void scanBluetooth()}
+          onConnectBluetooth={connectBluetooth}
+          onConnectWifi={connectWifi}
         />
       ) : null}
 
-      {/* ---- routers: a property of the CONNECTION, not of one method ----- */}
+      {/* ---- routers: a property of the CONNECTION (D8) ------------------- */}
       {anyLink ? (
         <RouterManager
           routers={routers}
-          suggested={suggested}
+          suggested={defaultRouterSsid(routers)}
           canAdd={canAddRouter(routers)}
           busy={busy}
           scanned={carScan ?? []}
+          ownApName={carApName}
           onSwitch={(s) => void switchRouter(s)}
           onDelete={(s) => void deleteRouter(s)}
           onClearAll={() => void clearAll()}
@@ -495,29 +498,19 @@ export function ConnectionSection({
                 });
                 return;
               }
-              const ok = await run(() => runSwitchPlan(plan));
-              if (ok)
+              const ok = await runOutcome(() => runSwitchPlan(plan));
+              if (ok) {
                 setMessage({
                   tone: "ok",
                   text: `Saved "${ssid}" and switching to it.`,
                 });
+              }
             })()
           }
           onScanNearby={() => void scanNearby()}
           onInputFocus={onInputFocus}
         />
-      ) : (
-        <ConnectionCard
-          title="Routers on the car"
-          subtitle="Connect first to manage them."
-          icon="list"
-        >
-          <InlineMessage tone="info">
-            The car's saved routers appear here once you are connected — over
-            Bluetooth or WiFi.
-          </InlineMessage>
-        </ConnectionCard>
-      )}
+      ) : null}
 
       {/* ---- ONE message surface for the whole section -------------------- */}
       {message ? (
@@ -528,56 +521,152 @@ export function ConnectionSection({
 }
 
 // =====================================================================
-// Setup card — one card, body varies by target
+// MethodSetup — the selected method's card. Nothing from any other method.
 // =====================================================================
 
-function SetupCard({
+function MethodSetup({
+  method,
   target,
   busy,
-  onConnectBluetooth,
-  onConnectWifi,
-  onScanBluetooth,
-  sppStatus,
-  sppDevices,
+  hasAlternative,
+  alternativeId,
+  onPickTarget,
   carOnRouter,
   reportedSsid,
-  onInputFocus,
+  sppSupported,
+  sppStatus,
+  sppDevices,
+  onScanBluetooth,
+  onConnectBluetooth,
+  onConnectWifi,
+}: {
+  method: (typeof CONNECTION_METHODS)[number];
+  target: ConnectionTarget;
+  busy: boolean;
+  hasAlternative: boolean;
+  alternativeId: ConnectionTargetId | null;
+  onPickTarget: (id: ConnectionTargetId) => void;
+  carOnRouter: boolean;
+  reportedSsid: string | null;
+  sppSupported: boolean;
+  sppStatus: string;
+  sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
+  onScanBluetooth: () => void;
+  onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
+  onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
+}) {
+  // U-69: WiFi LAN has TWO targets, so it uses the same dropdown rule as
+  // everything else rather than two buttons that both look tappable.
+  if (hasAlternative && alternativeId) {
+    return (
+      <ConnectionCard title={method.label} subtitle={method.blurb} icon="wifi">
+        <SelectRow<ConnectionTargetId>
+          label="Where is the car?"
+          value={target.id}
+          options={method.targets.map((t) => ({
+            id: t.id,
+            label: t.label,
+            hint: targetUnavailableReason(t.id, { carOnOwnRouter: carOnRouter })
+              ? "not ready"
+              : null,
+          }))}
+          onChange={onPickTarget}
+          testID="conn-target"
+        />
+        <TargetBody
+          target={target}
+          busy={busy}
+          carOnRouter={carOnRouter}
+          reportedSsid={reportedSsid}
+          sppSupported={sppSupported}
+          sppStatus={sppStatus}
+          sppDevices={sppDevices}
+          onScanBluetooth={onScanBluetooth}
+          onConnectBluetooth={onConnectBluetooth}
+          onConnectWifi={onConnectWifi}
+        />
+      </ConnectionCard>
+    );
+  }
+
+  return (
+    <ConnectionCard
+      title={method.label}
+      subtitle={method.unavailable ?? method.blurb}
+      icon={method.id === "bluetooth" ? "bluetooth" : "wifi"}
+      tone={method.unavailable ? "idle" : "busy"}
+      testID={`conn-setup-${method.id}`}
+    >
+      {method.unavailable ? (
+        <InlineMessage tone="info">{method.unavailable}</InlineMessage>
+      ) : (
+        <TargetBody
+          target={target}
+          busy={busy}
+          carOnRouter={carOnRouter}
+          reportedSsid={reportedSsid}
+          sppSupported={sppSupported}
+          sppStatus={sppStatus}
+          sppDevices={sppDevices}
+          onScanBluetooth={onScanBluetooth}
+          onConnectBluetooth={onConnectBluetooth}
+          onConnectWifi={onConnectWifi}
+        />
+      )}
+    </ConnectionCard>
+  );
+}
+
+function TargetBody({
+  target,
+  busy,
+  carOnRouter,
+  reportedSsid,
+  sppSupported,
+  sppStatus,
+  sppDevices,
+  onScanBluetooth,
+  onConnectBluetooth,
+  onConnectWifi,
 }: {
   target: ConnectionTarget;
   busy: boolean;
-  onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
-  onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
-  onScanBluetooth: () => void;
-  onScanBluetoothInternal: () => void;
-  sppStatus: string;
-  sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
   carOnRouter: boolean;
   reportedSsid: string | null;
-  onInputFocus?: (y: number) => void;
+  sppSupported: boolean;
+  sppStatus: string;
+  sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
+  onScanBluetooth: () => void;
+  onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
+  onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
 }) {
   const unavailable = targetUnavailableReason(target.id, {
     carOnOwnRouter: carOnRouter,
   });
 
   return (
-    <ConnectionCard
-      title={target.label}
-      subtitle={target.blurb}
-      icon="settings"
-      tone={unavailable ? "idle" : "busy"}
-      testID={`conn-setup-${target.id}`}
-    >
+    <View>
       <InlineMessage tone="info">{target.requirement}</InlineMessage>
 
       {target.id === "bt-spp" ? (
         <View className="mt-2.5 gap-2">
-          <ActionButton
-            label={sppStatus === "scanning" ? "Scanning…" : "Find my car"}
-            icon="bluetooth"
-            onPress={onScanBluetooth}
-            disabled={busy || sppStatus === "scanning"}
-            testID="conn-bt-scan"
-          />
+          {/* U-69: if classic Bluetooth is not in this build, say so HERE with
+              the reason, instead of offering a button that can only fail. */}
+          {sppSupported === false ? (
+            <InlineMessage tone="error">
+              Classic Bluetooth is not available in this build of the app. It
+              needs the latest APK — an update over Wi-Fi cannot add it. Use
+              WiFi (LAN) in the meantime.
+            </InlineMessage>
+          ) : (
+            <ActionButton
+              label={sppStatus === "scanning" ? "Searching…" : "Find my car"}
+              icon="bluetooth"
+              onPress={onScanBluetooth}
+              disabled={busy || sppStatus === "scanning"}
+              testID="conn-bt-scan"
+            />
+          )}
           {sppDevices.length > 0 ? (
             <View className="gap-1.5">
               {sppDevices.map((d) => (
@@ -586,6 +675,7 @@ function SetupCard({
                   title={d.name || d.id}
                   subtitle={d.bonded ? "Paired" : d.id}
                   onPress={() => void onConnectBluetooth(d.id, d.name)}
+                  testID={`conn-bt-device-${d.id}`}
                 />
               ))}
             </View>
@@ -602,6 +692,9 @@ function SetupCard({
             disabled={busy || Boolean(unavailable)}
             testID={`conn-wifi-connect-${target.id}`}
           />
+          {unavailable ? (
+            <InlineMessage tone="info">{unavailable}</InlineMessage>
+          ) : null}
           {target.id === "home-router" && carOnRouter && reportedSsid ? (
             <InlineMessage tone="ok">
               The car says it is on “{reportedSsid}”.
@@ -609,12 +702,13 @@ function SetupCard({
           ) : null}
         </View>
       ) : null}
-    </ConnectionCard>
+    </View>
   );
 }
 
 // =====================================================================
-// Router manager — available on EVERY method (D8)
+// RouterManager — available on EVERY method (D8), crowded things collapsed
+// into dropdowns (U-69).
 // =====================================================================
 
 function RouterManager({
@@ -623,6 +717,7 @@ function RouterManager({
   canAdd,
   busy,
   scanned,
+  ownApName,
   onSwitch,
   onDelete,
   onClearAll,
@@ -635,6 +730,7 @@ function RouterManager({
   canAdd: boolean;
   busy: boolean;
   scanned: readonly { ssid: string; rssi: number; open: boolean }[];
+  ownApName: string | null;
   onSwitch: (ssid: string) => void;
   onDelete: (ssid: string) => void;
   onClearAll: () => void;
@@ -645,10 +741,12 @@ function RouterManager({
   const [ssid, setSsid] = useState("");
   const [pass, setPass] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
 
-  const validation = validateRouterInput(ssid, pass);
+  const options = switchableRouters(routers);
+  const ownAp = routers.find((r) => r.isOwnAp);
+  const validation = validateRouterInput(ssid, pass, { ownApName: ownApName });
 
   const submit = () => {
     if (!validation.ok) {
@@ -661,81 +759,50 @@ function RouterManager({
     setPass("");
     setSsid("");
     setEditing(null);
-    setShowAdd(false);
+    setShowForm(false);
   };
 
   return (
     <ConnectionCard
-      title="Routers on the car"
-      subtitle={`${switchableRouters(routers).length} saved · add, switch or remove`}
+      title="The car's routers"
+      subtitle={`${options.length} saved`}
       icon="list"
       testID="conn-routers"
     >
-      {/* D1: the own AP is shown as the pinned default but is NEVER offered
-          as a switch target — switching to it is what erased the stored
-          credentials. */}
-      {routers
-        .filter((r) => r.isOwnAp)
-        .map((r) => (
-          <ConnectionCard
-            key={r.ssid}
-            title={r.ssid}
-            subtitle="The car's own network · always available"
-            icon="wifi"
-          />
-        ))}
+      {/* D1: the own AP is shown as the always-available default and is NEVER
+          an option in the switch dropdown — switching to it is what erased the
+          stored credentials. The dropdown is the ONLY place a switch can start,
+          so there is no row anywhere that can offer it. */}
+      <InlineMessage tone="info">
+        {ownAp
+          ? `${ownAp.ssid} is always available if no router works.`
+          : "The car's own hotspot stays available as a fallback."}
+      </InlineMessage>
 
-      {switchableRouters(routers).map((r) => (
-        <ConnectionCard
-          key={r.ssid}
-          title={r.ssid}
-          subtitle={
-            r.isActive
-              ? "The car is on this one"
-              : suggested === r.ssid
-                ? "Suggested"
-                : null
-          }
-          icon="wifi"
-          tone={r.isActive ? "live" : "idle"}
-        >
-          <View className="flex-row gap-2">
-            <ActionButton
-              flex
-              label={r.isActive ? "On this one" : "Switch to it"}
-              variant={r.isActive ? "quiet" : "primary"}
-              disabled={busy || r.isActive}
-              onPress={() => onSwitch(r.ssid)}
-              testID={`conn-router-switch-${r.ssid}`}
-            />
-            <ActionButton
-              label="Edit"
-              variant="quiet"
-              disabled={busy}
-              onPress={() => {
-                setEditing(r.ssid);
-                setSsid(r.ssid);
-                setPass("");
-                setShowAdd(true);
-              }}
-            />
-            <ActionButton
-              label="Remove"
-              variant="danger"
-              disabled={busy}
-              onPress={() => onDelete(r.ssid)}
-              testID={`conn-router-del-${r.ssid}`}
-            />
-          </View>
-        </ConnectionCard>
-      ))}
-
-      {switchableRouters(routers).length === 0 ? (
+      {options.length === 0 ? (
         <InlineMessage tone="info">
-          No routers saved on the car yet. Add one below — the car joins it and
-          keeps it even after a power cycle.
+          No routers saved on the car yet. Add one — the car keeps it after a
+          power cycle.
         </InlineMessage>
-      ) : null}
+      ) : (
+        <View className="mt-2">
+          <SelectRow
+            label="Switch the car to"
+            value={null}
+            options={options.map((r) => ({
+              id: r.ssid,
+              label: r.ssid,
+              hint: r.isActive
+                ? "current"
+                : suggested === r.ssid
+                  ? "suggested"
+                  : null,
+            }))}
+            onChange={onSwitch}
+            testID="conn-router-switch"
+          />
+        </View>
+      )}
 
       {/* scan — honest about needing the car (D3) */}
       <View className="mt-2.5">
@@ -748,26 +815,29 @@ function RouterManager({
           testID="conn-scan"
         />
         {scanned.length > 0 ? (
-          <View className="mt-2 gap-1.5">
-            {scanned.map((n) => (
-              <ConnectionCard
-                key={n.ssid}
-                title={n.ssid}
-                subtitle={`${n.rssi} dBm${n.open ? "" : " · locked"}`}
-                onPress={() => {
-                  setSsid(n.ssid);
-                  setShowAdd(true);
-                }}
-              />
-            ))}
+          <View className="mt-2">
+            <SelectRow
+              label="Networks the car can see"
+              value={null}
+              options={scanned.map((n) => ({
+                id: n.ssid,
+                label: n.ssid,
+                hint: `${n.rssi} dBm${n.open ? "" : " · locked"}`,
+              }))}
+              onChange={(id) => {
+                setSsid(id);
+                setShowForm(true);
+              }}
+              testID="conn-scanned"
+            />
           </View>
         ) : null}
       </View>
 
-      {/* add / edit form — keyboard-safe (F-69) */}
-      {showAdd ? (
+      {/* ONE action opens the form, so the page is not a wall of inputs (U-69) */}
+      {showForm ? (
         <View className="mt-2.5 gap-2" testID="conn-add-form">
-          <Text className="text-[11px] font-bold text-ink dark:text-white">
+          <Text className="text-[11px] font-bold text-ink">
             {editing ? `Edit “${editing}”` : "Add a router"}
           </Text>
           <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
@@ -778,13 +848,13 @@ function RouterManager({
                 setFieldError(null);
               }}
               placeholder="Router name"
+              placeholderTextColor="#64748b"
               autoCapitalize="none"
               autoCorrect={false}
               accessibilityLabel="Router name"
               maxLength={40}
               returnKeyType="next"
-              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink dark:text-white"
-              placeholderTextColor="#64748b"
+              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
               testID="conn-ssid"
             />
           </View>
@@ -795,7 +865,8 @@ function RouterManager({
                 setPass(v);
                 setFieldError(null);
               }}
-              placeholder="Password (leave blank if open)"
+              placeholder="Password (blank if open)"
+              placeholderTextColor="#64748b"
               autoCapitalize="none"
               autoCorrect={false}
               secureTextEntry
@@ -803,8 +874,7 @@ function RouterManager({
               maxLength={72}
               returnKeyType="done"
               onSubmitEditing={submit}
-              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink dark:text-white"
-              placeholderTextColor="#64748b"
+              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
               testID="conn-pass"
             />
           </View>
@@ -814,7 +884,7 @@ function RouterManager({
           <View className="flex-row gap-2">
             <ActionButton
               flex
-              label={editing ? "Save & switch" : "Save & switch"}
+              label={editing ? "Save and switch" : "Save and switch"}
               icon="check"
               onPress={submit}
               disabled={busy || !ssid.trim()}
@@ -824,7 +894,7 @@ function RouterManager({
               label="Cancel"
               variant="quiet"
               onPress={() => {
-                setShowAdd(false);
+                setShowForm(false);
                 setEditing(null);
                 setSsid("");
                 setPass("");
@@ -834,12 +904,13 @@ function RouterManager({
           </View>
         </View>
       ) : (
-        <View className="mt-2.5">
+        <View className="mt-2.5 flex-row gap-2">
           <ActionButton
+            flex
             label="Add a router"
             icon="plus"
             onPress={() => {
-              setShowAdd(true);
+              setShowForm(true);
               setEditing(null);
               setSsid("");
               setPass("");
@@ -848,28 +919,113 @@ function RouterManager({
             disabled={!canAdd}
             testID="conn-add-open"
           />
-          {!canAdd ? (
-            <InlineMessage tone="info">
-              The car already holds the maximum number of routers. Remove one
-              first.
-            </InlineMessage>
+          {options.length > 0 ? (
+            <ActionButton
+              label="Remove"
+              variant="danger"
+              onPress={() => setEditing(options[0]!.ssid)}
+              disabled={busy}
+              testID="conn-edit-open"
+            />
           ) : null}
         </View>
       )}
 
-      {switchableRouters(routers).length > 0 ? (
-        <View className="mt-2.5">
+      {/* Manage (edit / delete / clear) — behind one explicit action so the
+          common path stays short (U-69: don't populate unnecessary content). */}
+      {options.length > 0 ? (
+        <ManageRouters
+          options={options}
+          busy={busy}
+          onStartEdit={(s) => {
+            setEditing(s);
+            setSsid(s);
+            setPass("");
+            setShowForm(true);
+          }}
+          onDelete={onDelete}
+          onClearAll={onClearAll}
+        />
+      ) : null}
+    </ConnectionCard>
+  );
+}
+
+function ManageRouters({
+  options,
+  busy,
+  onStartEdit,
+  onDelete,
+  onClearAll,
+}: {
+  options: readonly { ssid: string; isActive: boolean }[];
+  busy: boolean;
+  onStartEdit: (ssid: string) => void;
+  onDelete: (ssid: string) => void;
+  onClearAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  return (
+    <View className="mt-2.5 gap-2">
+      <ActionButton
+        label={open ? "Done" : "Manage saved routers"}
+        variant="quiet"
+        icon="settings"
+        onPress={() => setOpen((v) => !v)}
+        testID="conn-manage-toggle"
+      />
+      {open ? (
+        <>
+          <SelectRow
+            label="Choose a router"
+            value={picked}
+            options={options.map((r) => ({
+              id: r.ssid,
+              label: r.ssid,
+              hint: r.isActive ? "current" : null,
+            }))}
+            onChange={setPicked}
+            testID="conn-manage-pick"
+          />
+          {picked ? (
+            <View className="flex-row gap-2">
+              <ActionButton
+                flex
+                label="Edit password"
+                variant="quiet"
+                onPress={() => {
+                  onStartEdit(picked);
+                  setOpen(false);
+                }}
+                disabled={busy}
+              />
+              <ActionButton
+                flex
+                label="Remove"
+                variant="danger"
+                onPress={() => {
+                  onDelete(picked);
+                  setPicked(null);
+                }}
+                disabled={busy}
+                testID="conn-manage-delete"
+              />
+            </View>
+          ) : null}
           <ActionButton
-            label="Remove all routers"
+            label="Remove every router"
             variant="danger"
             onPress={onClearAll}
             disabled={busy}
+            testID="conn-clear-all"
           />
           <InlineMessage tone="info">
-            This also puts the car back on its own network.
+            Removing every router also puts the car back on its own network.
           </InlineMessage>
-        </View>
+        </>
       ) : null}
-    </ConnectionCard>
+    </View>
   );
 }
