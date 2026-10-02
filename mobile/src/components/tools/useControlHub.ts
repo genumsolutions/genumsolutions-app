@@ -57,6 +57,8 @@ import {
   DRIVE_CMD_MIN_INTERVAL_MS,
   SPP_RECONNECT_DELAYS_MS,
 } from "./controlConstants";
+import { routeCommand } from "./commandRouting";
+import { linkManager } from "../../transports/linkManager";
 import {
   isAllowedDriveStatus,
   statusToDirection,
@@ -1568,12 +1570,15 @@ export function useControlHub(routeCategory?: string) {
   //   â€¢ When only ONE link is live it is used regardless of mode, so a 4WD4M
   //     car connected purely over the wireless car's WS still drives (that
   //     path accepts drive in any mode).
+  //   * 4b (2026-10-02 evening): when TWO links are live the user's CHOSEN
+  //     method (the manager's active link) is the tie-breaker — it is ADDED
+  //     as a carrier, so a stale secondary link can never strand a drive
+  //     command while the phone sits on the router. The decision is pinned
+  //     pure in commandRouting.ts / commandRouting.test.ts.
   const sendCommand = useCallback(
     (cmd: string) => {
       const btLive = sppService.isConnected || bleService.isConnected;
       const wsLive = wifiService.isConnected;
-      const onlyBt = btLive && !wsLive;
-      const onlyWs = wsLive && !btLive;
       const modeUsesBt =
         activeMode.transport.includes("classic-bt") ||
         activeMode.transport.includes("ble");
@@ -1581,15 +1586,24 @@ export function useControlHub(routeCategory?: string) {
       const broadcast = EVERY_LINK_COMMANDS.has(
         cmd.trim().toUpperCase().split(";")[0],
       );
-      const goBt = broadcast ? btLive : onlyBt ? true : modeUsesBt && btLive;
-      const goWs = broadcast ? wsLive : onlyWs ? true : modeUsesWifi && wsLive;
-      if (goBt && connected && sppService.isConnected) {
+      // F-12: the chosen link is read LIVE at call time (manager truth) —
+      // never cached in state, so a method switch changes routing on the
+      // very next command.
+      const route = routeCommand({
+        broadcast,
+        btLive,
+        wsLive,
+        modeUsesBt,
+        modeUsesWifi,
+        chosenRadio: linkManager.getActive()?.radio ?? null,
+      });
+      if (route.bt && connected && sppService.isConnected) {
         void sppService.sendLine(cmd).catch(() => {});
       }
-      if (goBt && connected && bleService.isConnected) {
+      if (route.bt && connected && bleService.isConnected) {
         void bleService.sendLine(cmd).catch(() => {});
       }
-      if (goWs && wifiService.isConnected) {
+      if (route.ws && wifiService.isConnected) {
         void wifiService.sendLine(cmd).catch(() => {});
       }
     },
