@@ -26,6 +26,7 @@
 import React from "react";
 import {
   ActivityIndicator,
+  LayoutAnimation,
   Modal,
   Pressable,
   ScrollView,
@@ -456,6 +457,23 @@ export function TransportPicker({
   const transports = useTransportList();
   const link = useActiveTransport();
   const activate = useActivateTransport();
+
+  // ⑤ (owner snag, 2026-10-02 audit): the address/scan card unmounts the
+  // moment a link goes live (and returns on disconnect), so everything below
+  // it jumped by that card's height — chrome jump right under the finger
+  // that just tapped Connect. Ask for ONE ease-in-ease-out layout pass on
+  // exactly the live→down / down→live transitions: configureNext applies to
+  // the very next commit, which is this render's. The Android experimental
+  // flag lives in App.tsx; on Fabric this is a no-op and the UI simply stays
+  // as it was (never worse).
+  const prevLinkIdRef = React.useRef<string | null>(null);
+  if (prevLinkIdRef.current !== link.id) {
+    const wasLive = prevLinkIdRef.current !== null;
+    prevLinkIdRef.current = link.id;
+    if (wasLive !== (link.id !== null)) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+  }
 
   // Inputs, not connection state (F-12).
   const [url, setUrl] = React.useState(DEFAULT_WS_URL);
