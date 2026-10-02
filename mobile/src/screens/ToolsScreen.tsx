@@ -44,7 +44,12 @@ import {
 import { getProjectCategories } from "../services/projectCategoryService";
 import { sppService } from "../services/sppService";
 import { wifiService } from "../services/wifiService";
-import { staDialUrl, staPhase } from "../components/tools/staHandoff";
+import {
+  staDialUrl,
+  staPhase,
+  switchConfirm,
+  type SwitchIntent,
+} from "../components/tools/staHandoff";
 import {
   DECK_OPEN_DEBOUNCE_MS,
   queueDeckOpen,
@@ -253,7 +258,12 @@ export function ToolsScreen() {
   // Inline Add (no router saved yet): name + password typed right on the card.
   const [staAddSsid, setStaAddSsid] = useState("");
   const [staAddPass, setStaAddPass] = useState("");
+  // U-67: the switch the user ASKED for, pending the one confirm. Set by any
+  // entry point (picker / panel row / panel add form); the card renders the
+  // confirm for it and only `confirmStaSwitch` acts on it.
+  const [staIntent, setStaIntent] = useState<SwitchIntent | null>(null);
   const staOwnApName = carApName?.trim() || "4WDCar_Wifi";
+  const staConfirm = switchConfirm(staIntent, staOwnApName);
   const staPhaseNow = staPhase(
     {
       connected: telemetry.connected === true,
@@ -268,9 +278,22 @@ export function ToolsScreen() {
     setStaHandoffShown(false);
     setStaRequested(false);
     setStaTargetSsid(null);
+    setStaIntent(null);
   }, []);
-  const startStaHandoff = useCallback(() => {
+  // U-67 (owner 2026-10-02: "the app still doesn't have switch ui ux
+  // standardly, n missing ok or confirm buttons while switching routers").
+  // EVERY switch entry point now lands here and lands on the SAME confirm.
+  // `intent` is what the user asked to switch to — from the picker's STA pick
+  // (no intent → the card offers its ordinary step-1 choice), from a panel
+  // row's Switch, or from the panel's Add form. A string is accepted as the
+  // common "a router the car already holds" case.
+  const startStaHandoff = useCallback((intent?: SwitchIntent | string) => {
     feedbackTap();
+    setStaIntent(
+      typeof intent === "string"
+        ? { ssid: intent, pass: null }
+        : (intent ?? null),
+    );
     setStaHandoffShown(true);
     setPickedMethod("wifi-sta-ws");
     setEditingRouter(null);
@@ -278,30 +301,38 @@ export function ToolsScreen() {
     setStaTargetSsid(null);
     // NO command fires here — the card asks first (see the block comment).
   }, []);
-  const joinStaRouter = useCallback(
-    (ssid: string) => {
-      const s = ssid.trim();
+  // The card's ONE yes. Split out from joinStaRouter so the pre-targeted
+  // confirm (panel Switch / Add) and the card's own step-1 offer run the
+  // exact same command sequence — there is no second, quieter path.
+  const confirmStaSwitch = useCallback(
+    (intent: SwitchIntent) => {
+      const s = intent.ssid.trim();
       if (!s) return;
       feedbackTap();
+      // ADD stores the pair on the car; USE switches to it. A save-and-switch
+      // confirm is the only path that sends ADD, and it says so on the button.
+      if (switchConfirm(intent, staOwnApName).kind === "save-and-switch") {
+        routerAdd(s, intent.pass ?? "");
+      }
       setStaRequested(true);
       setStaTargetSsid(s);
       routerUse(s);
     },
-    [routerUse],
+    [routerAdd, routerUse, staOwnApName],
+  );
+  const joinStaRouter = useCallback(
+    (ssid: string) => {
+      confirmStaSwitch({ ssid, pass: null });
+    },
+    [confirmStaSwitch],
   );
   const joinStaNewRouter = useCallback(() => {
     const s = staAddSsid.trim();
     if (!s) return;
-    feedbackTap();
-    // ADD stores the pair on the car; USE switches to it. Both are system
-    // commands (W-14) and ride the live link the card is riding.
-    routerAdd(s, staAddPass);
-    setStaRequested(true);
-    setStaTargetSsid(s);
-    routerUse(s);
+    confirmStaSwitch({ ssid: s, pass: staAddPass });
     setStaAddSsid("");
     setStaAddPass("");
-  }, [staAddSsid, staAddPass, routerAdd, routerUse]);
+  }, [staAddSsid, staAddPass, confirmStaSwitch]);
   const handleOpenWebPage = useCallback(() => {
     const ip = telemetry.ip?.trim();
     void Linking.openURL(`http://${ip || DEFAULT_AP_IP}`).catch(
@@ -762,6 +793,48 @@ export function ToolsScreen() {
                     This takes a few seconds — the card moves on the moment the
                     car reports it.
                   </Text>
+                ) : staConfirm.kind !== "none" ? (
+                  /* U-67: THE switch confirm, pre-targeted at whatever the
+                     user tapped (a panel row's Switch, or the panel's Add
+                     form). Same shape, same words, same single yes as the
+                     step-1 offer below — one standard for the whole screen. */
+                  <>
+                    <Text className="mt-1.5 text-[12px] font-bold text-ink">
+                      {staConfirm.kind === "save-and-switch"
+                        ? `Save "${staConfirm.ssid}" on the car and switch to it?`
+                        : `Switch the car to "${staConfirm.ssid}"?`}
+                    </Text>
+                    <Text className="mt-1 text-[11px] leading-4 text-muted">
+                      {staConfirm.kind === "save-and-switch"
+                        ? "The password is stored on the car, then it joins. This phone follows it afterwards — the connect step unlocks once the car reports its address."
+                        : "The car joins this router over the current link, then this phone follows it. Its reported IP unlocks the connect step."}
+                    </Text>
+                    <View className="mt-2.5 flex-row gap-2">
+                      <Pressable
+                        onPress={() => {
+                          if (staIntent) confirmStaSwitch(staIntent);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={staConfirm.confirmLabel}
+                        className="h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-full bg-sky-700 px-4"
+                      >
+                        <Feather name="wifi" size={14} color="#fff" />
+                        <Text className="text-[13px] font-black text-white">
+                          {staConfirm.confirmLabel}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={dismissStaHandoff}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel the home-router switch"
+                        className="h-11 flex-1 items-center justify-center rounded-full border border-line bg-card px-4"
+                      >
+                        <Text className="text-[13px] font-bold text-ink">
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </>
                 ) : carNetworks.length > 0 ? (
                   <>
                     <Text className="mt-1.5 text-[12px] font-bold text-ink">
@@ -907,13 +980,17 @@ export function ToolsScreen() {
                   ip={telemetry.ip ?? null}
                   networks={carNetworks}
                   onUse={(ssid) => {
-                    feedbackTap();
-                    routerUse(ssid);
+                    // U-67: NO command on the press. Opens the ONE switch
+                    // confirm, pre-targeted at this row (it used to fire
+                    // ROUTERS;USE straight from the button — the "missing ok
+                    // or confirm button" the owner reported).
+                    startStaHandoff({ ssid, pass: null });
                     setWifiSsid(ssid);
                   }}
                   onAdd={(ssid, pass) => {
-                    feedbackTap();
-                    routerAdd(ssid, pass);
+                    // U-67: same — the Add form opens the save-and-switch
+                    // confirm; the press itself only stages the credentials.
+                    startStaHandoff({ ssid, pass });
                     // An add OR an edit-save clears the editing state — the
                     // car's next `networks` echo re-syncs the list either way.
                     setEditingRouter(null);

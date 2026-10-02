@@ -20,7 +20,12 @@
 // =====================================================================
 import { describe, expect, it } from "vitest";
 
-import { staDialUrl, staPhase, type StaTelemetry } from "./staHandoff";
+import {
+  staDialUrl,
+  staPhase,
+  switchConfirm,
+  type StaTelemetry,
+} from "./staHandoff";
 
 const AP_NAME = "4WDCar_Wifi";
 
@@ -167,5 +172,77 @@ describe("staDialUrl — the handoff's dial", () => {
 
   it("REFUSES the car's own-AP gateway — the hotspot is never the home-router dial", () => {
     expect(staDialUrl("192.168.245.1")).toBeNull();
+  });
+});
+
+// The defect these pin (owner report 2026-10-02, verbatim: "the app still
+// doesn't have switch ui ux standardly, n missing ok or confirm buttons while
+// switching routers"): switching to a router had THREE entry points and only
+// ONE of them asked. The picker's STA pick opened the handoff card (real
+// "Yes, join it" / Cancel), but the Home router settings panel's per-row
+// Switch fired `ROUTERS;USE` on the press itself and its "Add + switch" button
+// fired `ROUTERS;ADD` on the press itself — no confirm, no way to back out,
+// one logical action in three different UIs.
+//
+// These pin the ONE confirm every entry point now resolves to, and — the part
+// that actually matters — that a switch which CANNOT work never gets offered.
+describe("switchConfirm — the one switch confirm", () => {
+  const AP = "4WDCar_Wifi";
+
+  it("a router the car already holds confirms a single switch (USE only)", () => {
+    expect(switchConfirm({ ssid: "HomeNet", pass: null }, AP)).toEqual({
+      kind: "switch",
+      ssid: "HomeNet",
+      confirmLabel: "Switch now",
+    });
+  });
+
+  it("a router the car does NOT hold confirms save + switch (ADD then USE)", () => {
+    expect(switchConfirm({ ssid: "HomeNet", pass: "hunter2" }, AP)).toEqual({
+      kind: "save-and-switch",
+      ssid: "HomeNet",
+      confirmLabel: "Save & switch",
+    });
+  });
+
+  it("a whitespace-only password is NOT a save — the car stores an open network", () => {
+    expect(switchConfirm({ ssid: "HomeNet", pass: "   " }, AP)).toEqual({
+      kind: "switch",
+      ssid: "HomeNet",
+      confirmLabel: "Switch now",
+    });
+  });
+
+  it("nothing pending → the card shows its ordinary step-1 offer", () => {
+    expect(switchConfirm(null, AP)).toEqual({ kind: "none" });
+    expect(switchConfirm(undefined, AP)).toEqual({ kind: "none" });
+  });
+
+  it("a blank SSID never becomes a confirm", () => {
+    expect(switchConfirm({ ssid: "", pass: "hunter2" }, AP)).toEqual({
+      kind: "none",
+    });
+    expect(switchConfirm({ ssid: "   ", pass: null }, AP)).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("the car's OWN AP is never a switch target — the firmware reserves it", () => {
+    // `ROUTERS;USE;<own ap>` is not "switching", it is staying put, and the
+    // panel must not dress it up as a switch the user can confirm.
+    expect(switchConfirm({ ssid: "4WDCar_Wifi", pass: null }, AP)).toEqual({
+      kind: "none",
+    });
+    expect(switchConfirm({ ssid: "4wdcar_wifi", pass: null }, AP)).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("the SSID is trimmed before it is confirmed (no padded name reaches the car)", () => {
+    expect(switchConfirm({ ssid: "  HomeNet  ", pass: null }, AP)).toEqual({
+      kind: "switch",
+      ssid: "HomeNet",
+      confirmLabel: "Switch now",
+    });
   });
 });
