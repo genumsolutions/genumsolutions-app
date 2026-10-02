@@ -1724,8 +1724,15 @@ export function useControlHub(routeCategory?: string) {
       if (smartLinkFiredRef.current) return;
       smartLinkFiredRef.current = profileKeyRef.current;
       routerUse(ssid);
+      // 2026-10-02 review: say the join is AUTOMATIC and name the toggle
+      // that turns it off. The owner's evening bench session read an
+      // unexplained router switch (and, on the unflashed binary, the car
+      // RESET it triggered) as "the app is broken" — an after-the-fact
+      // toast that never said "automatic" invited that read. This is the
+      // same narration-hides-an-action failure F-59's confirm rule fixed,
+      // in its automation form.
       showConnectionMessage(
-        `Smart-link: joining saved router "${ssid}" — connect your phone to it to drive.`,
+        `Smart-link joined "${ssid}" automatically — connect your phone to it to drive. Turn this off under Saved settings → Auto-join saved router.`,
         "success",
       );
     },
