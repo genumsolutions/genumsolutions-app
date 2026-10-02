@@ -88,7 +88,7 @@
 > Flash the 4WD4M ONCE via USB (115200, huge_app). The same flash clears ALL pending car
 > rows (T21–T23 + Round 1's OLED row) **and the U-67 reset/retry fixes**. Then run the rounds
 > BELOW in this order. After each app round: close + reopen the app ×2 and confirm
-> Menu → Update shows `Short update (bfe1cda…)` — that is the OTA containing
+> Menu → Update shows `Short update (7919d5c…)` — that is the OTA containing
 > U-63/U-64/U-65/U-66/U-67 (curl cannot verify the served bundle; the Update screen is the
 > proof).
 

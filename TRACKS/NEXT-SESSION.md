@@ -42,6 +42,12 @@ blank SSID and the car's OWN AP collapse to `none` (the firmware reserves the ow
 it" is staying put, not a switch). Gates: tsc 0 · vitest **464/464** (32 files) · prettier
 clean. Device rows: `mobile/TESTING.md` **U-67-1..4**. **The app half needs an OTA on the device;
 the reset + retry fixes need a firmware FLASH — until then U-67-3/4 still reproduce.**
+**Ship evidence (app, JS-only → same-version OTA 3.2.7/60, no bump):** `bfe1cda` (code) ·
+`7919d5c` (ledgers, the pushed tip); CI ✓ `37000785055` · OTA Guard ✓ `37000784997` · OTA Only
+✓ `37000785239` published, update group `75dc154a-dc16-4944-babf-8dda508d1c7b`, live manifest
+= `Short update (7919d5c…)`. **Firmware (car repo, COMMITTED LOCALLY, NOT PUSHED — firmware pushes
+need an explicit owner ask):** `26d41d5` (fix) · `3f080c2` (TRACKS). The car's arduino CI can only
+prove the compile after that push.
 **NOT THIS (already-committed fixes, different defects — do not re-report as new):** `cd3158f` =
 `ROUTERS;USE` on an UNKNOWN router rebooting the car (the panel's Add path). `02548b2` = the F-59
 card's missing confirm for the PICKER path only. Neither covers a panel-row Switch, and neither
