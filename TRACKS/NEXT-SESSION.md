@@ -1,5 +1,53 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+FIXED 2026-10-02 (U-70) - THE OWNER'S THIRD REVIEW: the car shows a router it never joined, and the
+scan list is a page-ful. ONE APP FIX, TWO FIRMWARE FIXES, ONE NOT-YET-DIAGNOSABLE RESTART.
+
+1. BT SCAN LIST ("the list of the bluetooth device found while scanning are too long, please keep all
+   those in a scrolling window. and also the list shoulnt be displayed when connected to any one of
+   those devices") - app `b21fed5`. The list was UNBOUNDED: it lived inside the page's own
+   ScrollView, so a nested vertical list of unbounded height never scrolls, it just grows and pushes
+   the page off the screen. Now a BOUNDED window (maxHeight 260, ~5 rows) with its own nested
+   ScrollView and a visible scrollbar. And the scan button plus the entire result list are now
+   HIDDEN whenever any link is up (Bluetooth OR WiFi) - a scan list next to a live connection is not
+   information, it is a way to connect a SECOND car to a session that already has one.
+
+2. THE CAR LIES ABOUT ITS NETWORK - car `13a406f`, and this is the reason symptom (3) below was
+   invisible. `storedSsid()` is written the moment `ROUTERS;USE` stores the pair - BEFORE any
+   association is attempted - and both the STATE line's `SSID=` and the JSON `ssid` used it. So a
+   FAILED switch announced the new router while the car sat on its own hotspot, and nothing in the
+   system could tell the difference: the app read "on HomeNet", the phone looked for it on a network
+   the car had never reached. **The owner's own words - "the car is displaying the new router in its
+   oled" - were the LIE, not the success they looked like.** Note the OLED itself was already
+   truthful (it reads `WiFi.SSID()` through extraInfo); it was the APP-FACING fields that lied,
+   which is exactly why the two disagreed. Now `SSID=` / `ssid` is `joinedSsid()` (joined STA SSID,
+   else its own broadcast id, else empty), and the requested target ships SEPARATELY as
+   `WANT=` / `"want"` so a switch in progress is visible instead of indistinguishable from a
+   finished one. "Which router did the user ask for" and "which router are we on" are different
+   questions and must stop sharing one field.
+
+3. THE JOIN STARTED IN THE SAME TICK AS A MODE CHANGE - car `13a406f`. `rejoinNetwork()` did
+   mode(WIFI_AP_STA) -> softAP() -> WiFi.begin() inside ONE call. On ESP32 `WiFi.mode()` RESTARTS
+   the WiFi driver, so a softAP() and a WiFi.begin() in the same tick race a driver that is still
+   initialising: the STA fails to associate while the softAP still comes up. That is precisely
+   "accepted and displayed the new router, never actually joined it, still reachable only on its own
+   hotspot". Fixed conservatively: `WiFi.mode()` only when the radio is NOT already AP_STA (the
+   common case - switching routers - no longer restarts the driver at all), and `WiFi.begin()` is
+   handed to handle() on the NEXT pass (`staBeginPending_` / `beginStaIfArmed()`). Retry budget, the
+   AP itself, safe-stop and the protocol are untouched.
+
+4. "the car restarts when the app directs to cars webpage" - **NOT YET DIAGNOSABLE, and I am not
+   going to pretend otherwise.** A watchdog abort, a stack smash, a brownout and an intentional reset
+   are indistinguishable from the outside, and I cannot reproduce it on the bench. So instead of
+   guessing, setup() now prints `esp_reset_reason()` on every boot and shouts when the reason was
+   NOT power-on/external/deep-sleep. **That is the one thing that turns the next occurrence into an
+   answer: TASK WATCHDOG means loop() blocked, PANIC means a crash, BROWNOUT means undervoltage.**
+   The owner should read the serial line (115200) at the moment of the next restart and paste it.
+
+Ship evidence - app `b21fed5`: CI ✓ `37033854684` - OTA Guard ✓ `37033854572` - OTA ✓ `37033854580`,
+live manifest = `Short update (b21fed5...)`. Car `13a406f`: **Arduino CI ✓ `37033364835`**, SRAM
+69,772 B (21%, -8 B). Gates app-side: tsc 0 - vitest 527/527 (34 files) - prettier clean. **The car
+half needs a FLASH.** Device rows: mobile/TESTING.md U-70-1..3.
 FIXED 2026-10-02 (U-69) - THE OWNER'S SECOND REVIEW. THREE ITEMS; THE FIRST WAS A REAL BUG THAT
 MADE BLUETOOTH LOOK BROKEN WHEN IT WAS ONLY BEING _REPORTED_ AS SUCCESSFUL.
 
