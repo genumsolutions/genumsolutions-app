@@ -6,7 +6,10 @@ Owner: "the control panel page is too confusing and shows unnecessary datas too 
 "no yes or confirm button, only cancel" on the home-router switch + "remove the wifi test
 thing" + the STA deck "not usable and dull". ①②③ coded the same evening (owner chose the
 full simplification plan); ④ needs the bench with a flashed car to discriminate its three
-candidates. Gates: tsc 0 · vitest **439/439** (31 files) · prettier clean.
+candidates. Gates: tsc 0 · vitest **439/439** (31 files) · prettier clean. **Ship evidence:**
+commits `02548b2` (②+① code) · `1ccf24d` (ledgers) — plus the same round's diagnostics
+removal — pushed `d863013..1ccf24d`; CI ✓ `36969793907` · OTA Only ✓ `36969793890` —
+JS-only → same-version OTA 3.2.7/60.
 
 **① CONTROL PANEL SIMPLIFIED (full plan, owner-approved).** Was a 12-block stack; now:
 the category detail card leads COMPACT (icon · name · tagline · hardware chips) with
