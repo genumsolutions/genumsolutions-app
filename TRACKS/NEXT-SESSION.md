@@ -1,5 +1,52 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**✅ FIXED 2026-10-02 (U-67) — OWNER BENCH: "THE CAR RESETTS WHEN I SWITCH THE WIFI ROUTER FROM
+THE APP AND THE CAR IS NOT ALWAYS SWITCHING PROPERLY… THE APP STILL DOESN'T HAVE SWITCH UI UX
+STANDARDLY, N MISSING OK OR CONFIRM BUTTONS WHILE SWITCHING ROUTERS."** Three reports, **TWO were
+real cross-repo bugs and NEITHER was the one we already knew about** (`cd3158f`/`02548b2` are real
+fixes, but for DIFFERENT defects — see "not this" below).
+**THE RESET — ROOT CAUSE FOUND, and it was the BT watchdog, not `ROUTERS;USE`:**
+`Genum_4WD4M_CAR/BluetoothComm.cpp` `restart()` ended a failed re-init with **`ESP.restart()`**,
+and `Genum_4WD4M_CAR.ino` armed that watchdog on **"no BT client"** rather than on "a client that
+dropped". Switching the car to the home router takes the phone OFF the car's BT — so
+`hasClient()` goes false and STAYS false, the watchdog fired after `BT_HARD_RESTART_MS` (120 s),
+tore bluedroid down, and the escalation REBOOTED THE CAR mid-handoff. It came back on its own AP
+and the switch never completed — exactly the reported symptom. Worse than a switch bug: the
+throttle is 60 s, so an **unattended car parked on the router rebooted on a loop**. Fixed (car
+repo, NEEDS A FLASH): no `ESP.restart()` from the BT path ever again (a failed re-init is reported
+and the car KEEPS RUNNING on AP/router), and the watchdog arms only on a link that was CONNECTED
+and then dropped — "never had a client since boot" is idle, not wedged. **FAILSAFES F-47: a
+transport failure must never take down the whole car.** Flashing the already-committed firmware
+does NOT fix this — `cd3158f` never touched this path.
+**"NOT ALWAYS SWITCHING / DOESN'T DO IT IN ONE GO" — also firmware, also a real bug:**
+`WebServerComm::handle()` treated `WIFI_STA_TIMEOUT_MS` (8 s) as the WHOLE switch: on timeout it
+cleared `pendingRejoin_` and set `startedAsAP`, which made the retry branch (`else if
+(pendingRejoin_ || !startedAsAP && …)`) **unreachable** — so `STA_MAX_RETRIES` never ran and ONE
+flaky association failed the switch **permanently**, the car silently left on its own AP. Fixed:
+the timeout hands OFF to that existing capped budget (up to 6 more attempts) and only the spent
+budget settles AP-only (the cap still holds, so the softAP beacon is never blanked forever). Each
+retry also re-arms `connectingPending_` for its own 8 s window — without that, a successful retry
+was invisible (no `updateExtraInfo`/`sendState`, so the app sat on "getting an address" while the
+car was already on the router) and `pendingRejoin_` stayed set, so the branch kept yanking a
+WORKING association down every 10 s.
+**"MISSING OK OR CONFIRM BUTTONS" — app, real, and it was THREE switch UIs where only one asked.**
+The picker's STA pick opened the F-59 card with a real "Yes, join it" / Cancel. But the Home
+router settings panel's per-row **Switch fired `ROUTERS;USE` on the press itself**, and its
+**"Add + switch" button fired `ROUTERS;ADD` on the press itself** — no confirm, no way to back
+out, one logical action in three different UIs. Now there is exactly ONE confirm: new pure
+`switchConfirm(intent, ownApName)` in `staHandoff.ts` (+8 tests) resolves any entry point to
+`switch` (USE only), `save-and-switch` (ADD then USE — the button says so), or `none`; the
+panel's Switch/Add **stage the intent and open the card instead of sending**, and the card's
+single yes runs the same `confirmStaSwitch` the step-1 offer uses — no second, quieter path. A
+blank SSID and the car's OWN AP collapse to `none` (the firmware reserves the own AP; "switch to
+it" is staying put, not a switch). Gates: tsc 0 · vitest **464/464** (32 files) · prettier
+clean. Device rows: `mobile/TESTING.md` **U-67-1..4**. **The app half needs an OTA on the device;
+the reset + retry fixes need a firmware FLASH — until then U-67-3/4 still reproduce.**
+**NOT THIS (already-committed fixes, different defects — do not re-report as new):** `cd3158f` =
+`ROUTERS;USE` on an UNKNOWN router rebooting the car (the panel's Add path). `02548b2` = the F-59
+card's missing confirm for the PICKER path only. Neither covers a panel-row Switch, and neither
+covers the BT watchdog.
+
 **✅ FIXED 2026-10-02 (night, part 2) — U-66: THE INTEGRATION BUG BEHIND ④ ("the home-router
 deck is dull / not usable") IS FOUND AND FIXED, PLUS THE AUTO-JOIN REVIEW + THE OTA GUARD.**
 Owner asked whether both 4WD4M and the app had been analysed and whether everything is
