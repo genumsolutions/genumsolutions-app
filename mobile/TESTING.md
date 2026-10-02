@@ -1,5 +1,55 @@
 ﻿# TESTING — Physical Device Test Checklist
 
+## U-67 round — router switch: no reset, one-go retry, ONE confirm (2026-10-02, IMPLEMENTED — app JS OTA + firmware FLASH both required)
+
+> Owner bench: "the car resets when I switch the wifi router from the app and the car is not
+> always switching properly… the app still doesn't have switch ui ux standardly, n missing ok
+> or confirm buttons while switching routers." **Two firmware bugs + one app UX defect, and
+> the reset was NOT the already-known `cd3158f` bug** — it was the BT watchdog calling
+> `ESP.restart()`. **U-67-3/4 cannot pass until the new firmware is flashed**; U-67-1/2 need the
+> OTA. Order: flash first, then close+reopen the app ×2, then run.
+
+### U-67-1 — ONE standard switch confirm, everywhere
+
+- [ ] **Home router settings** → a saved router's **Switch**: a confirm card appears naming
+      THAT router. Nothing is sent yet.
+- [ ] **Cancel** on that card → the car does **not** move networks (check the OLED network
+      row / the app banner still shows the car's own AP).
+- [ ] **Switch now** → the car is told to join, and the card advances to the waiting step.
+- [ ] Same again via **Home router settings** → **Add** a brand-new SSID+password: the confirm
+      says **"Save "<ssid>" on the car and switch to it?"** with a **Save & switch** button;
+      Cancel sends nothing (the router is not saved and the car does not move).
+- [ ] The **picker's** Home router pick still shows the original "Yes, join it" / Cancel
+      (unchanged) — and both paths now behave identically from there.
+
+### U-67-2 — the confirm never offers a switch that cannot work
+
+- [ ] With the car's own network among the panel rows, tapping **Switch** on it opens **no**
+      confirm and sends nothing (the car reserves its own AP).
+- [ ] An empty SSID in the Add form keeps its button disabled.
+
+### U-67-3 — the car does NOT reset when switching to the home router ⭐ (the reported bug)
+
+- [ ] Connect over the car's AP (or BT), switch to the home router via the confirm.
+- [ ] **Leave the car alone for 3+ minutes** (past `BT_HARD_RESTART_MS` = 120 s) with **no**
+      Bluetooth client attached — the car must stay up on the router: OLED keeps showing the
+      router SSID + its real IP, and the app's link stays verified.
+- [ ] An **unattended** car parked on the router for ~10 minutes must **not** reboot on a
+      ~60 s loop (watch the OLED; the old binary rebooted repeatedly here).
+- [ ] On the OLD flashed binary this row reproduces the reset — that is the unflashed-firmware
+      class, not a new bug.
+
+### U-67-4 — the switch completes in ONE go ⭐ (the reported "not always switching properly")
+
+- [ ] From the car's own AP, switch to the home router and just WAIT — do not touch the phone.
+      The car must end up on the router on its own (the firmware now retries a failed
+      association within its capped budget instead of giving up at 8 s).
+- [ ] The card must reach **"Connect via home router"** with the car's real router IP (a
+      192.168.x.x address — **never** 192.168.245.1, the car's own-AP gateway).
+- [ ] A **wrong** password → the card must return to the step-1 join offer (U-66-2), not hang.
+
+---
+
 ## U-66 round — integration fixes: gateway dial refused + auto-join labelled (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
 
 > App↔4WD4M integration audit found a REAL cross-repo bug: the car's JSON `ip` reports the
@@ -36,10 +86,11 @@
 ## ⭐ BENCH MASTER RUN — after flashing firmware `main` (2026-10-02, owner run sheet)
 
 > Flash the 4WD4M ONCE via USB (115200, huge_app). The same flash clears ALL pending car
-> rows (T21–T23 + Round 1's OLED row). Then run the rounds BELOW in this order. After each
-> app round: close + reopen the app ×2 and confirm Menu → Update shows `Short update
-(b93740d…)` — that is the OTA containing U-63/U-64/U-65 (curl cannot verify the served
-> bundle; the Update screen is the proof).
+> rows (T21–T23 + Round 1's OLED row) **and the U-67 reset/retry fixes**. Then run the rounds
+> BELOW in this order. After each app round: close + reopen the app ×2 and confirm
+> Menu → Update shows `Short update (bfe1cda…)` — that is the OTA containing
+> U-63/U-64/U-65/U-66/U-67 (curl cannot verify the served bundle; the Update screen is the
+> proof).
 
 **Stage 0 — flash sanity (5 min, no app):**
 
@@ -52,12 +103,15 @@ rows A/B (BT + e-stop; `SPD0` must stop) LAST, on whichever link you end up usin
 
 **Stage 2 — app rounds (this file), in order:**
 
-1. **U-61-1..5** — audit round (deck button, pills, single error, switch dials the target).
-2. **U-63-1..2** — BT naming (re-pick shows the CURRENT name; direct-MAC never refuses).
-3. **U-62-2..4 + U-64-1..4** — the home-router handoff (NOW with the confirm button; the
+0. **U-67-3/4 FIRST** — the reported bugs. The reset + one-go switch are firmware; if the
+   flash did not take, these reproduce and every later router row is meaningless.
+1. **U-67-1/2** — the ONE switch confirm (panel Switch + Add + picker all behave alike).
+2. **U-61-1..5** — audit round (deck button, pills, single error, switch dials the target).
+3. **U-63-1..2** — BT naming (re-pick shows the CURRENT name; direct-MAC never refuses).
+4. **U-62-2..4 + U-64-1..4** — the home-router handoff (NOW with the confirm button; the
    reset symptom U-64-3 must NOT reproduce on the new binary).
-4. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
-5. **U-66-1..3** — gateway-dial refusal (the ④ dull-deck fix) + auto-join labelling.
+5. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
+6. **U-66-1..3** — gateway-dial refusal (the ④ dull-deck fix) + auto-join labelling.
 
 **Reading results:**
 
