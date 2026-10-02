@@ -12,7 +12,7 @@
 // =====================================================================
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { View } from "react-native";
+import { Platform, UIManager, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import * as Linking from "expo-linking";
@@ -25,6 +25,20 @@ import { CollectionProvider } from "./src/context/CollectionContext";
 import { navigationRef, navigate } from "./src/navigation/navigationRef";
 import { clearCart } from "./src/services/cartService";
 import { recordScreenView } from "./src/services/analyticsService";
+
+// ⑤ (owner snag, 2026-10-02 audit): the Control Panel's connect flow
+// collapses the address/scan card the moment a link goes live, and the
+// content below it jumps by that card's height. TransportPicker now asks
+// for an ease-in-ease-out layout pass on those transitions; on Android's
+// legacy architecture that pass only exists behind this experimental flag
+// (a no-op on Fabric, where the flag does not exist). Guarded by the API
+// check so it never crashes a build where it was removed.
+if (
+  Platform.OS === "android" &&
+  typeof UIManager.setLayoutAnimationEnabledExperimental === "function"
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 /** Walk the navigation state tree to the focused route and return its name. */
 function getActiveRouteName(state: unknown): string | null {
