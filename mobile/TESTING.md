@@ -1,6 +1,50 @@
 # TESTING — Physical Device Test Checklist
 
-## U-68 round — Control Panel connection rebuild (2026-10-02, app SHIPPED · firmware NEEDS A FLASH)
+## U-69 round — Bluetooth really connects, one method at a time, contrast (2026-10-02, app SHIPPED)
+
+> The owner's second review: _"the bluetooth is not build in the app and i am not able to connect the
+> device to the app to test the device. fix this first"_ · _"connections methods are scattered all over
+> the page. please only show one method at a time and use the drop down menu for that and dont populate
+> contents unnecessary"_ · _"the text and the background are merging and the texts are not visible
+> properly. please fix the contrast too for once and for all"_ · _"use the drop down menu where ever
+> the things are overly populated"_.
+>
+> **U-69-1/2/3 are app-only.** U-69-3 must be checked in BOTH Light and Dark — that is the whole point.
+
+### U-69-1 — Bluetooth connects, and a failure says so ⭐ (the reported blocker)
+
+- [ ] Connection method → **Bluetooth** → **Find my car** → a permission prompt appears → the car
+      appears in the list → tap it → the status bar says **Bluetooth · <car>** and the car's live
+      data starts arriving (mode, speed, battery/telemetry values update).
+- [ ] **The failure case is the one that was broken.** Turn the car OFF, then tap it in the list →
+      the card must show a RED error saying it could not connect. It must **NOT** say "Connected".
+      (Before this fix the app reported success on every failure.)
+- [ ] No car in range + Find my car → either an empty list with no false success, or an error. Never
+      "Connected".
+- [ ] If the phone has Bluetooth switched off → the app asks for it / explains, rather than failing
+      silently.
+
+### U-69-2 — one method at a time, and crowded things collapsed
+
+- [ ] There is **one** method control (a dropdown) — **not** three stacked cards.
+- [ ] Choosing a method shows **only that method's** card. Bluetooth shows nothing about WiFi and
+      vice versa. The page does not grow when you look at a different method.
+- [ ] The dropdown row always shows the **current** method's name without being opened.
+- [ ] With **5–6 saved routers**, switching the car to one is a **dropdown**, not a wall of rows.
+- [ ] Add / Edit / Remove are behind a single action each; the common path is short.
+- [ ] A disabled control still shows **why** it is disabled (it is not silently absent).
+
+### U-69-3 — text is readable in BOTH themes ⭐ (the contrast report)
+
+- [ ] Switch the app to **Dark** (Account → theme) **and** check the OS in dark mode.
+- [ ] Every one of these is clearly readable on its background, in both themes: the card titles, the
+      explanatory lines, the **error** message, the **success** message, and the selected dropdown row.
+- [ ] The selected method/target/router row is obviously selected — not a barely-visible tint.
+- [ ] No text is the same colour as what is behind it. Pay attention to error text and to the grey
+      secondary lines on the dark cards.
+- [ ] Primary buttons: white label on a dark blue fill, legible in both themes.
+
+---## U-68 round — Control Panel connection rebuild (2026-10-02, app SHIPPED · firmware NEEDS A FLASH)
 
 > Owner: _"nothing is fixed please rebuild the control panel page from the begning with new design…
 > the method switching was not working, the adding the new router is not working. the cards and the
