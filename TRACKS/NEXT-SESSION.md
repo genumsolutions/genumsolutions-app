@@ -17,8 +17,11 @@ post-connect chrome jump:** App.tsx enables Android's layout-animation experimen
 (guarded; no-op on Fabric) and TransportPicker asks for ONE ease-in-ease-out pass on
 exactly the down→live / live→down transitions (configureNext during the transition render,
 consumed by that very commit). Cosmetic-only and revertible in two hunks if it ever
-glitches on a device. Gates: tsc 0 · vitest **453/453** (32 files) · prettier clean. Device
-rows: `mobile/TESTING.md` **U-65-1..2**. ④a/④c remain bench-discriminated (need the
+glitches on a device. Gates: tsc 0 · vitest **453/453** (32 files) · prettier clean.
+**Ship evidence:** commits `ce6a507` (routing) · `6e01c37` (F-46 pin) · `1a0b6be` (⑤) ·
+`b93740d` (ledgers), pushed `af31aab..b93740d`; CI ✓ `36972177622` · OTA Only ✓
+`36972177611` — JS-only → same-version OTA 3.2.7/60. Device rows:
+`mobile/TESTING.md` **U-65-1..2**. ④a/④c remain bench-discriminated (need the
 flashed car).
 
 **✅ FIXED 2026-10-02 (evening) — OWNER BENCH FEEDBACK ROUND: PANEL SIMPLIFIED (①),
