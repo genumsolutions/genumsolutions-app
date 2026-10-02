@@ -1,16 +1,75 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+FIXED 2026-10-02 (U-69) - THE OWNER'S SECOND REVIEW. THREE ITEMS; THE FIRST WAS A REAL BUG THAT
+MADE BLUETOOTH LOOK BROKEN WHEN IT WAS ONLY BEING _REPORTED_ AS SUCCESSFUL.
+
+1. "the bluetooth is not build in the app and i am not able to connect the device to the app to
+   test the device. fix this first" - root cause found, and it was NOT a missing permission and NOT
+   a missing native module. react-native-bluetooth-classic is a real dependency, BLUETOOTH_SCAN +
+   BLUETOOTH_CONNECT are declared in app.json and requested at runtime, and sppService is correct.
+   The actual defect: handleConnect and handleWifiConnect stored their failure in the hub's `error`
+   state and RETURNED NORMALLY, and the only thing that ever rendered that state was
+   ConnectionBanner - which U-68 deleted. With nothing to await and nothing to read, a FAILED
+   connect resolved exactly like a successful one, so ConnectionSection announced "Connected to
+   <car>" and no link existed. The tester was sent hunting for a connection that was never made.
+   Both handlers now return a ConnectOutcome ({ok:true,message} | {ok:false,reason} - additive, so
+   the callers that ignore it are unaffected), the section reports the real outcome, and the hub's
+   own `error` is rendered in the status card so NO FAILURE CAN BE SILENT AGAIN. The Bluetooth card
+   also names the truth when classic BT genuinely is not in the build (it needs an APK; an OTA
+   cannot add a native module). A fake success is worse than no success - it sends the tester
+   looking for a link that does not exist (F-61/F-62). This is the fourth round in a row whose only
+   evidence was tsc 0 / vitest N/N / CI green; four rounds of that produced four rounds of
+   "nothing is fixed".
+
+2. "connections methods are scattered all over the page... only show one method at a time and use
+   the drop down menu... dont populate contents unnecessary" + "use the drop down menu where ever
+   the things are overly populated." The three always-visible method cards are GONE. There is now
+   ONE SelectRow dropdown showing the current method, and ONLY that method's setup card renders - so
+   the page stops growing with the number of methods. The same rule is applied wherever a choice is
+   crowded, not just to methods: switching the car to a saved router (up to six) is a dropdown, the
+   car-scan result list is a dropdown, and edit/remove/clear sit behind a single "Manage saved
+   routers" action with the add form behind one button. SelectRow shows the current value when
+   closed and renders a disabled row WITH its reason rather than hiding the control.
+
+3. "the text and the background are merging... please fix the contrast too for once and for all."
+   Fixed at the TOKEN level, because a one-off patch is exactly what "for once and for all" is
+   warning against. Diagnosis: this app's palette is a set of semantic tokens (ink/navy/sky/card/
+   muted/line/...) and it defined NO error, success or "selected" pair, so every failure surface
+   reached for an OFF-PALETTE Tailwind colour (text-red-600, bg-emerald-500/10, bg-sky-500/5,
+   text-sky-900). Off-palette colours do NOT flip with the theme - red-600 on a white card is
+   perfectly readable and red-600 on the dark card (#16223a) is very nearly invisible. It looked
+   fine in Light, broke in Dark, and read as random text merging into its background. Added
+   danger / danger-soft / success / success-soft / select-bg / select-ink to ALL THREE theme blocks
+   in global.css and to tailwind.config.js. The third block matters: the manual Dark pick
+   (html[data-theme="dark"]) OUTRANKS :root, so without it a user who chose Dark by hand kept the
+   LIGHT foregrounds on the dark card - the same merge, for a subset of users only. Foregrounds are
+   contrast-checked against the card in both schemes (danger 6.6:1 light / 8.1:1 dark; success
+   5.3:1 / 9.4:1; selected 8.4:1 both). The selected state is now a FILLED pair instead of a
+   5%-alpha tint, and primary buttons are navy+white in both themes rather than off-palette
+   sky-700.
+   And the rule is now ENFORCED, not merely documented: connection/contrast.guard.test.ts reads the
+   real sources and fails on (a) any off-palette colour in a className, (b) any `dark:` override -
+   the tokens already flip, and a dark: override is precisely how a foreground drifts out of sync
+   with its background in one theme only - and (c) any token missing from one of the three theme
+   blocks or from tailwind.config.js. PROVEN TO FIRE, NOT ASSUMED: injecting
+   `text-red-600 dark:text-sky-300` fails both (a) and (b); reverting passes.
+
+Ship evidence (app, JS-only -> same-version OTA 3.2.7/60, no bump): 53ee045. Gates: tsc 0 - vitest
+527/527 (34 files) - prettier clean. Device rows: mobile/TESTING.md U-69-1..3, and U-69-3 must be
+checked in BOTH Light and Dark, which is the entire point of item 3. App-only: no flash needed for
+any of this round. Firmware is unchanged by U-69 and still needs the one flash for ROUTERS;SCAN
+(U-68-4) and U-67's reset/retry fixes.
 **✅ U-68 PHASES 1-4 COMPLETE 2026-10-02 — the Control Panel connection layer is REBUILT. All four
 phases shipped; every gate green; the car still needs a FLASH for two of the fixes.**
 
-| Phase | What | Commit(s) | Gate |
-|---|---|---|---|
-| 0 | the plan + the diagnosis, **before** any code | `815573c` | — |
-| 1 | the pure model (`methods` / `routerList` / `commands` / `dial`), 78 tests | `257c8f0` | tsc 0 · 542/542 |
-| 2b | the ack consumer in the hub + `NETW;` over Bluetooth | `77321f8` | tsc 0 · 552/552 |
-| 2 | the uniform `ConnectionSection`, replacing banner + handoff + picker + router panel | `3cfd4b7` | tsc 0 · 552/552 |
-| 3 | the car's network layer (`ROUTERS;SCAN`, reply buffer, ack redaction) | car `39c96ab` + `46186a9` + `7cb409f` | **Arduino CI ✓ `37012141471`** — 1,748,602 B (55% of `huge_app`), SRAM 21% |
-| 4 | residue sweep + the F-41 guard re-expressed + device rows | 318565c + 3f469ed | tsc 0 · **518/518** (33 files) · prettier clean |
+| Phase | What                                                                                | Commit(s)                             | Gate                                                                       |
+| ----- | ----------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------- |
+| 0     | the plan + the diagnosis, **before** any code                                       | `815573c`                             | —                                                                          |
+| 1     | the pure model (`methods` / `routerList` / `commands` / `dial`), 78 tests           | `257c8f0`                             | tsc 0 · 542/542                                                            |
+| 2b    | the ack consumer in the hub + `NETW;` over Bluetooth                                | `77321f8`                             | tsc 0 · 552/552                                                            |
+| 2     | the uniform `ConnectionSection`, replacing banner + handoff + picker + router panel | `3cfd4b7`                             | tsc 0 · 552/552                                                            |
+| 3     | the car's network layer (`ROUTERS;SCAN`, reply buffer, ack redaction)               | car `39c96ab` + `46186a9` + `7cb409f` | **Arduino CI ✓ `37012141471`** — 1,748,602 B (55% of `huge_app`), SRAM 21% |
+| 4     | residue sweep + the F-41 guard re-expressed + device rows                           | 318565c + 3f469ed                     | tsc 0 · **518/518** (33 files) · prettier clean                            |
 
 **D1–D8, the eight defects behind "nothing is fixed":** D1 the own AP was list[0] so the switch
 reverted the car to itself — closed in `switchableRouters`/`defaultRouterSsid`/`planSwitch`/`pickBestRouter`
@@ -24,7 +83,7 @@ router list did not exist over Bluetooth — closed by the `NETW;` parser · D7 
 **Residue removed (and why it was residue):** `TransportPicker.tsx` + `transportPickerFlow.ts`
 (the old connection UI, fully superseded — and `transportPickerFlow` carried the **D4** default
 address, so resurrecting it would have reintroduced the bug) · `transportGate.ts` (the F-41 gate
-was enforced *only inside the picker*, i.e. only while that component was mounted) ·
+was enforced _only inside the picker_, i.e. only while that component was mounted) ·
 `ConnectionBanner.tsx` · `staHandoff.ts` (its rules now live in `connection/dial.ts` +
 `connection/commands.ts`; keeping it would have left TWO implementations of "never dial the own
 AP", which is the duplication trap F-64 came from). **F-41's INTENT is preserved and re-tested**:
@@ -73,11 +132,11 @@ shipped. The three that most directly match the owner's words:
   assumed `[0]` meant "the most recently saved router" (now **F-63**).
 - **D2 — every `ROUTERS;*` reply is thrown away.** The car answers `ADDED` / `USED` / `DELETED` /
   `CLEARED` / `FULL` / `ERROR;…`; the app parses `REPLY=` and discards it (only `WIFICFG;*` is
-  handled). So *"adding a new router is not working"* has no feedback and no error — success and
+  handled). So _"adding a new router is not working"_ has no feedback and no error — success and
   `ROUTERS;FULL` look identical. This is why U-64's confirm could not detect a failed add (now
   **F-62**).
 - **D3 — `ROUTERS;SCAN` does not exist in the firmware.** The app sends it and expects a `"scan"`
-  array; the car replies `ROUTERS;ERROR;Syntax`. *"Selecting of the network is not proper"* —
+  array; the car replies `ROUTERS;ERROR;Syntax`. _"Selecting of the network is not proper"_ —
   there is nothing to select from.
 
 Also live: D4 STA-with-no-link blind-dials the car's AP address · D5 the handoff can never
@@ -104,7 +163,6 @@ every rule test-pinned → Phase 2 the uniform `ConnectionSection` on the Contro
 the car's network layer (`ROUTERS;SCAN`, reply buffer, ack password hygiene) → Phase 4 residue +
 gates + push. **Each phase commits and pushes on its own; the app rides same-version OTA
 (3.2.7/60, no bump), firmware needs the owner's flash.**
-
 
 **✅ FIXED 2026-10-02 (U-67) — OWNER BENCH: "THE CAR RESETTS WHEN I SWITCH THE WIFI ROUTER FROM
 THE APP AND THE CAR IS NOT ALWAYS SWITCHING PROPERLY… THE APP STILL DOESN'T HAVE SWITCH UI UX
@@ -265,8 +323,9 @@ describes an action must BE the confirm for that action — never narrate a comm
 already went out.**
 
 **③ REMOVED THE WIFI TEST THING.** `WifiDiagnosticsPanel` deleted — render block + import
-+ the component file (single call site, zero tests; F-45 deletion recorded here, not left
-dangling). The method chip + footer + error card already say everything it said.
+
+- the component file (single call site, zero tests; F-45 deletion recorded here, not left
+  dangling). The method chip + footer + error card already say everything it said.
 
 **⏳ ④a/④c STILL QUEUED (need the flashed car on the bench): HOME-ROUTER DRIVE DECK IS DULL /
 UNUSABLE.** ④b (the routing hazard) is FIXED — see the top entry. Remaining candidates, to be
@@ -382,19 +441,19 @@ round landed with NO ledger entries (written retroactively the next session) —
 instruction was to finish the code first and test on hardware last, so the four scattered device
 rounds are now a single **⭐ MASTER RUN** table at the top of
 `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md`, ordered **safety rows first** (A = Bluetooth + e-stop,
-B = speed/`SPD0`-must-stop), with an explicit *needs the car?* column. **T18b no longer needs the
+B = speed/`SPD0`-must-stop), with an explicit _needs the car?_ column. **T18b no longer needs the
 car** — see F-53 below; the gate is proved in CI. Everything genuinely left is blocked on the owner,
 not on code: the bench round, the BLE firmware+flash, and the MQTT broker decisions.
 
 **✅ FIXED 2026-09-30 — THE F-41 GATE IS NOW PROVED IN CI, NOT ON A DEVICE (`f13c2bb`, FAILSAFES
 F-53).** `isSelectable()` lived inside `TransportPicker.tsx`, so "only bt-classic / wifi-ap-ws /
-wifi-sta-ws may ever be picked" was verified *only* by device row T18 — by a person, with hardware.
+wifi-sta-ws may ever be picked" was verified _only_ by device row T18 — by a person, with hardware.
 A gate deciding whether the app may send drive commands to a car cannot rest on a manual check.
 Moved to `transportGate.ts` (both halves required: the owner-approved PRIMARY set **and** the
 adapter's own `isSupported()`), with `transportGate.test.ts` asserting it against the **real**
 registry via the new `buildAllTransports()` export. The assertion that matters is the negative one:
-**HTTP stays parked even though its adapter now reports supported** — F-51 fixed it, and *fixed is
-not proven* — plus nothing carrying a `roadmapNote` is ever selectable. Also removed a false claim
+**HTTP stays parked even though its adapter now reports supported** — F-51 fixed it, and _fixed is
+not proven_ — plus nothing carrying a `roadmapNote` is ever selectable. Also removed a false claim
 from the Home-router help window: it told the owner to check the router SSID "**and signal**", but
 no firmware in the fleet answers `ROUTERS;SCAN` (checked 4WD4M + donor + 2WD1M), so a signal
 strength never exists. F-53 rule 3: every capability named in owner-facing text must be one some
@@ -408,7 +467,7 @@ same class of defect on the live path. The firmware's `handleCommand()` **ends w
 is answered `NACK;E=UNKNOWN_MODE;ARG=<token>` (`:798`) — the wire cannot tell "unknown MODE" from
 "no such COMMAND", and the error code lies. `handleEStop()` sends `ESTOP` + `SPD0` + `SERVO90`, and
 **no firmware in the fleet implements `ESTOP`** (verified across all six repos). So **every
-EMERGENCY STOP press** produced a red toast *"ESTOP is not supported by this car"*, overwrote the
+EMERGENCY STOP press** produced a red toast _"ESTOP is not supported by this car"_, overwrote the
 EMERGENCY STOP status with "Not supported by car", and parked a phantom `ESTOP` stub — on the one
 control that must never look broken. Same on every trim / steering-limit edit (`TRIM<n>`, `STEER<n>`
 are 2WD1M-only; the 4WD4M is differential drive). **The car did stop** — `SPD0` is the real stop and
@@ -424,7 +483,7 @@ cross-check.
 rule is "a registered but non-selectable method is not a verified one", so I checked the rest rather
 than trusting the labels. **BLE: app side genuinely real** (`bleService` + `createBleTransport()` do
 scan/connect/GATT write/`requestState`) **but the 4WD4M firmware has NO BLE server at all** — zero
-hits for `BLEDevice`/`BLEServer`/`NimBLE`. So BLE is a *firmware* round (NimBLE UART: write →
+hits for `BLEDevice`/`BLEServer`/`NimBLE`. So BLE is a _firmware_ round (NimBLE UART: write →
 `handleCommand`, notify → STATE), not an app flip. Flash headroom is fine — this car runs a **3 MB
 `app0` partition** — and the roadmap's "huge_app at 55%" note belonged to a different car. **mDNS
 and MQTT app rows checked out as honest placeholders** (they already say "needs the car to advertise
@@ -463,41 +522,42 @@ counts (malformed envelope → translation error before any I/O; transport failu
 own reason). ③ **`useControlHub.sendEnvelopeCommand(input)`** — ONE flag-gated intake so both
 dialects coexist. It encodes to a line and then calls the **existing** `sendCommand` fan-out:
 deliberate, because `sendCommand` is where **R-4 fleet parity** lives (mode-based transport routing
-+ the `EVERY_LINK_COMMANDS` broadcast set) and `linkManager.sendLine` is NOT on that path — routing
-envelopes through `linkManager` would have silently bypassed R-4. Encoding first also makes "no wire
-line differs from the pre-envelope path" true **by construction**, not by test.
-**W-14:** a success result carries **no line** on purpose — for `ROUTERS;ADD` / `WIFICFG` the line
-IS the password, and an echoed string is exactly how a credential lands in a log or crash report.
-**F-41:** the gate ships OFF and no UI calls it, so on the shipped build this round is invisible.
-Gates: tsc 0 · vitest **343/343** (24 files) · prettier clean. New tests pin byte parity for EVERY
-envelope type over BOTH BT and WS in CI (so the acceptance criterion can't regress between device
-rounds), fail-closed on malformed input, gate-default-off, and the no-echo rule.
-**Bench rows:** `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` **T11–T14** (Round E — that car is the only
-permitted test target); app regression rows `mobile/TESTING.md` **U-59-1..3**. To run: flip
-`setEnvelopeIntakeEnabled(true)` in a scratch build. Roadmap: §4 done, §4b = remaining gate.
-**Ship evidence:** commits `2d659e5` (wiring) + `730cc4c` (ledger), pushed `3160826..730cc4c`;
-CI ✓ `36759054003` · OTA Only ✓ `36759054023` (release-guard passed, metadata PUBLISHED); live
-`release.json` = `OTA · Short update (730cc4c1…)`, **3.2.7 unchanged** (correct — JS-only, F-32).
-Car repo: `Genum_4WD4M_CAR` `c8771da` (Round E rows). ⚠ **This OTA is behaviourally IDENTICAL to the
-previous one** — the gate is OFF and no screen calls the intake. Do not expect the app to *look*
-different; that is the round working as designed.
-**✅ PHASE A (previous step) — CONNECTION-MANAGER: JSON COMMAND ENVELOPE
-(`commandEnvelope.ts` + 13 tests, INTENTIONALLY DORMANT — zero live call-sites).** Owner:
-"dont wait for me do what you need to until this session ends; study properly the existing
-architecture and build what you need to properly." Architecture study done (transports/
-linkManager + types + adapters + carProtocol read end to end — the brief's ~70% exists).
-Built the SAFE form of the brief's "unified JSON schema": a pure, versioned (`v: 1`)
-translation layer that accepts friendly JSON and emits ONLY the locked wire grammar via the
-REAL carProtocol builders (injected as deps — the envelope cannot fork the grammar). Refuses
-unknown versions, free-text mode names (`"obstacle_avoid"` → error; FIN-23 registry is the
-only vocab; the ONE legacy alias BT→4WD4M applies), and out-of-window values with readable
-errors. NOT wired into the live path — the hub/transports still speak wire lines; activation
-is Phase B of `guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md` (owner go + F-41
-discipline, acceptance on the 4WD4M testbed). Dormancy recorded here + root `CONTINUITY.md`
-per the U-25/F-45 dead-code liability rule. Gates: tsc 0 · vitest **330/330** (23 files).
-Roadmap doc: `guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md` (Phase B wiring, Phase C
-unlock order HTTP→BLE→mDNS→MQTT each behind its own device round; ESP-NOW out of scope).
-Mid-session handoff for the next AI: root **`CONTINUITY.md`**.
+
+- the `EVERY_LINK_COMMANDS` broadcast set) and `linkManager.sendLine` is NOT on that path — routing
+  envelopes through `linkManager` would have silently bypassed R-4. Encoding first also makes "no wire
+  line differs from the pre-envelope path" true **by construction**, not by test.
+  **W-14:** a success result carries **no line** on purpose — for `ROUTERS;ADD` / `WIFICFG` the line
+  IS the password, and an echoed string is exactly how a credential lands in a log or crash report.
+  **F-41:** the gate ships OFF and no UI calls it, so on the shipped build this round is invisible.
+  Gates: tsc 0 · vitest **343/343** (24 files) · prettier clean. New tests pin byte parity for EVERY
+  envelope type over BOTH BT and WS in CI (so the acceptance criterion can't regress between device
+  rounds), fail-closed on malformed input, gate-default-off, and the no-echo rule.
+  **Bench rows:** `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` **T11–T14** (Round E — that car is the only
+  permitted test target); app regression rows `mobile/TESTING.md` **U-59-1..3**. To run: flip
+  `setEnvelopeIntakeEnabled(true)` in a scratch build. Roadmap: §4 done, §4b = remaining gate.
+  **Ship evidence:** commits `2d659e5` (wiring) + `730cc4c` (ledger), pushed `3160826..730cc4c`;
+  CI ✓ `36759054003` · OTA Only ✓ `36759054023` (release-guard passed, metadata PUBLISHED); live
+  `release.json` = `OTA · Short update (730cc4c1…)`, **3.2.7 unchanged** (correct — JS-only, F-32).
+  Car repo: `Genum_4WD4M_CAR` `c8771da` (Round E rows). ⚠ **This OTA is behaviourally IDENTICAL to the
+  previous one** — the gate is OFF and no screen calls the intake. Do not expect the app to _look_
+  different; that is the round working as designed.
+  **✅ PHASE A (previous step) — CONNECTION-MANAGER: JSON COMMAND ENVELOPE
+  (`commandEnvelope.ts` + 13 tests, INTENTIONALLY DORMANT — zero live call-sites).** Owner:
+  "dont wait for me do what you need to until this session ends; study properly the existing
+  architecture and build what you need to properly." Architecture study done (transports/
+  linkManager + types + adapters + carProtocol read end to end — the brief's ~70% exists).
+  Built the SAFE form of the brief's "unified JSON schema": a pure, versioned (`v: 1`)
+  translation layer that accepts friendly JSON and emits ONLY the locked wire grammar via the
+  REAL carProtocol builders (injected as deps — the envelope cannot fork the grammar). Refuses
+  unknown versions, free-text mode names (`"obstacle_avoid"` → error; FIN-23 registry is the
+  only vocab; the ONE legacy alias BT→4WD4M applies), and out-of-window values with readable
+  errors. NOT wired into the live path — the hub/transports still speak wire lines; activation
+  is Phase B of `guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md` (owner go + F-41
+  discipline, acceptance on the 4WD4M testbed). Dormancy recorded here + root `CONTINUITY.md`
+  per the U-25/F-45 dead-code liability rule. Gates: tsc 0 · vitest **330/330** (23 files).
+  Roadmap doc: `guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md` (Phase B wiring, Phase C
+  unlock order HTTP→BLE→mDNS→MQTT each behind its own device round; ESP-NOW out of scope).
+  Mid-session handoff for the next AI: root **`CONTINUITY.md`**.
 
 **✅ SHIPPED 2026-09-30 (later) — U-58: DECK LANDSCAPE LAYOUT FIX (JS-only → same-version OTA
 3.2.7/60, COMMITTED + PUSHED + OTA PUBLISHED + VERIFIED LIVE).** Owner: the per-category
@@ -615,25 +675,26 @@ shared SensorGrid fallback) · build the full UI/display now, operations later. 
 kind headers (Vehicles & Controllers / Stations & Environments), five dedicated decks
 (SmartHome/Farm/City/Dustbin/Handheld) on a shared deck kit, honest "Ready for firmware" chips
 for not-yet-wired controls, parity tests pinning zero cross-category leakage. Rollout: deck kit
-+ SmartHomeDeck pilot → owner screenshot approval → remaining decks → kind headers. Owner open
-checks in plan §6 (label wording, tile defaults, chip wording). **Step ① SHIPPED 2026-09-30
-(see top banner) — steps ②–③ remain.**
-**2026-09-29 (LATEST) — CONTROL PANEL ROUND 3: FALSE CONNECT ERROR KILLED, PORTRAIT BANNER
-FIXED, DIALOG CENTERS ON THE PHONE (`2a8b406` `ca5822d` `f890a2e`, JS-only → same-version OTA
-3.2.7/60, run `36593994243` green).** Owner: red `Cannot read properties of undefined (reading
+
+- SmartHomeDeck pilot → owner screenshot approval → remaining decks → kind headers. Owner open
+  checks in plan §6 (label wording, tile defaults, chip wording). **Step ① SHIPPED 2026-09-30
+  (see top banner) — steps ②–③ remain.**
+  **2026-09-29 (LATEST) — CONTROL PANEL ROUND 3: FALSE CONNECT ERROR KILLED, PORTRAIT BANNER
+  FIXED, DIALOG CENTERS ON THE PHONE (`2a8b406` `ca5822d` `f890a2e`, JS-only → same-version OTA
+  3.2.7/60, run `36593994243` green).** Owner: red `Cannot read properties of undefined (reading
 'statusCallbacks')` under the verified line while the car answered fine on BT + WiFi; the
-Linked / "Network on the car · own access point" lines broken in portrait only; disconnect
-dialog centered on the page not the phone. ① F-46: `adapters.ts` passed `onStatus` as a bare
-method reference — detached `this` threw on every linkManager adopt/activate subscription (the
-direct hub paths always bound, which is why driving worked); arrow wrappers now bind the call.
-② F-48: ConnectionBanner `Row` rendered body text as a second flex column — portrait crushed
-the long lines, landscape masked it; body text lives in the text column, signal bars are a
-`trailing`. ③ F-47: the disconnect confirm rendered INSIDE the ScrollView so `inset-0` covered
-the scrollable PAGE; it is now a sibling of the ScrollView under a screen-wide root.
-Gates: tsc 0 · vitest 292/292 · prettier clean. F-46 regression test skipped (shared-mock
-typing made it brittle) — rule recorded in FAILSAFES F-46. Owner also asked for the Control
-Panel re-organized per project kind (robo cars, smart home, city…) — NOT started; queued as
-the next design round after the device passes. Device rows: `mobile/TESTING.md` **U-53-1..4**.
+  Linked / "Network on the car · own access point" lines broken in portrait only; disconnect
+  dialog centered on the page not the phone. ① F-46: `adapters.ts` passed `onStatus` as a bare
+  method reference — detached `this` threw on every linkManager adopt/activate subscription (the
+  direct hub paths always bound, which is why driving worked); arrow wrappers now bind the call.
+  ② F-48: ConnectionBanner `Row` rendered body text as a second flex column — portrait crushed
+  the long lines, landscape masked it; body text lives in the text column, signal bars are a
+  `trailing`. ③ F-47: the disconnect confirm rendered INSIDE the ScrollView so `inset-0` covered
+  the scrollable PAGE; it is now a sibling of the ScrollView under a screen-wide root.
+  Gates: tsc 0 · vitest 292/292 · prettier clean. F-46 regression test skipped (shared-mock
+  typing made it brittle) — rule recorded in FAILSAFES F-46. Owner also asked for the Control
+  Panel re-organized per project kind (robo cars, smart home, city…) — NOT started; queued as
+  the next design round after the device passes. Device rows: `mobile/TESTING.md` **U-53-1..4**.
 
 **2026-09-29 (LATEST) — CAR PROFILES EVERYWHERE: DB APPLIED LIVE, APP SYNC-ON-CONNECT WIRED,
 WEBSITE ACCOUNT SURFACE (`fb7d1c3` `a2e08cb` `a40be3d`, ALL JS-ONLY → SAME-VERSION OTA
@@ -1040,7 +1101,7 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
 0. ✅ **DONE (long since) — RBAC levels + Admin Settings→Content reorg: shipped 2026-09-22/23.** Phases B+C landed in BOTH repos on 2026-09-22 (web `0bc4d2d`+`8cdbe8f`, app `b8a87bf` RBAC + `862d1c7` phase-C Content reorg — verified in git history 2026-09-26); U-15 gap-close web-only 2026-09-23 (`lib/roles.ts` ladder, AdminRows Hide/Show, admin-roles tests). This entry previously said "PLANNED" — stale ledger prose, the round was never logged app-side. **Re-verified live 2026-09-26: `staff-access-e2e.mjs` ALL PASSED vs prod** (staff read/edit 200 + deletes/role-change/robot-settings-delete 403 · admin user-delete 403 · customer 401 ×3 · owner full incl. user-delete 200; disposable probes cleaned up). App state today: `AppContext` isStaff/isOwner ✓ · AdminScreen owner gating ✓ · Content tab holds the 3 editors (training/pilot/curriculum) with Settings Company-only ✓. No code work outstanding; see web TRACKS U-10/U-15 for the full record.
 
 1. ⏳ **OWNER: the device round — but the CURRENT target is 3.2.7/60, not 3.2.5/58.**
-   *This entry was written 2026-09-22 and left stale; corrected 2026-10-02.* 3.2.5/58 was
+   _This entry was written 2026-09-22 and left stale; corrected 2026-10-02._ 3.2.5/58 was
    superseded by **3.2.6/59 (2026-09-27)** and then **3.2.7/60 (2026-09-28, U-49, `5c99357`)**
    — 3.2.7 is a **new APK, not an OTA** (it carried the WiFi manifest change; F-30: a LAN
    feature can never ship over OTA), so the in-app updater will NOT offer it and the web
@@ -1061,8 +1122,8 @@ Re-verified 23/23 + 6/6 + p3-review 27 PASS/0 SNAG/0 FAIL/2 DEFER after the 2-mo
      `mobile/TESTING.md` ⭐ BENCH MASTER RUN.
 2. ✅ **RELEASE-NOTES-DRAFT.md** (FIN-35) — refreshed to the released **3.2.5/58**
    2026-09-22 (tier + robot-preference bullets added on top of the P6 bullets).
-   *⚠ Stale since: the released version is 3.2.7/60 and U-63…U-67 are not in it. Refresh it
-   during FIN-35, not before the device gate passes.*
+   _⚠ Stale since: the released version is 3.2.7/60 and U-63…U-67 are not in it. Refresh it
+   during FIN-35, not before the device gate passes._
 3. 🔜 **FIN-36:** version-defining commits — **STALE at 3.2.5 (2026-09-22 staging), and the
    text below is stale twice over. Re-stage to the CURRENT release, 3.2.7/60:** app
    **`v3.2.7` → `5c99357`** (the U-49 bump commit), website **`website-v3.2.7` → the current
@@ -1209,6 +1270,7 @@ rebuild with every release:
 
 NEXT: perf batch (HomeScreen progressive render, CartScreen/ShopScreen mount
 dedupe, single OTA check, memoized list items) and the admin dashboard uplift.
+
 # NEXT SESSION — genumsolutions-app (session close 2026-09-29: round 4 queued; current release 3.2.7/60)
 
 ## ⚠️ READ THIS FIRST — session continuity for the next AI
@@ -1251,6 +1313,7 @@ chips for unwired controls; parity test = every deck's tile labels disjoint (pur
 manifest, vitest-safe). Rollout: kit + SmartHome pilot → owner screenshot approval → rest.
 
 **B. ROUND 4 (owner, final message of the session — queued NEXT, nothing built):**
+
 > "using the car access point wifi method, the control panel is showing less-used things about
 > other router things like home router and its signal dbm. this should be about the car's AP.
 > Same things displayed the car's profile is ok but unnecessary messages and sections totally
@@ -1307,9 +1370,10 @@ Broken into buildable items (each = one commit, one concern, like rounds 2-3):
   only mounts for WiFi methods (`isWifi && !compact`), so it no longer appears for BT links.
 
 Order for next session: R4-1..R4-7 are ALL SHIPPED (see the two ledgers above); owner device
-  rounds **U-54-1..6 + U-55-1..6** are the gate. Next queued design round: per-category decks
-  (PLAN-2026-09-29-CONTROL-PANEL-KINDS.md). R4-1/R4-2/R4-6 shipped 2026-09-29, OTA
-  `36603138203` green.
+rounds **U-54-1..6 + U-55-1..6** are the gate. Next queued design round: per-category decks
+(PLAN-2026-09-29-CONTROL-PANEL-KINDS.md). R4-1/R4-2/R4-6 shipped 2026-09-29, OTA
+`36603138203` green.
+
 - **R4-7 — Menu: "Robot preferences" → "User preferences" + connected-device hub (owner,
   latest message).** Rename the Menu → Robot Settings group item (MenuScreen.tsx ~line 132:
   currently `label="Robot preferences"`, pushes `RobotPreferences`, Pro chip) to **User
@@ -1332,10 +1396,12 @@ then R4-3→R4-5 (car+DB round; needs firmware/car verify + possibly a new table
 apply DB live and probe 200 before claiming done), R4-7 rides the same engine once it exists.
 
 ## OWNER DEVICE ROUNDS STILL OPEN
+
 `mobile/TESTING.md`: **U-51-1..5** (round 2) · **U-52-1..5** (car profiles) · **U-53-1..4**
 (round 3). FIN-36 tag re-stage waits on the device pass (stale at 3.2.7 staging).
 
 ## Do-not-regress additions this session
+
 - F-46: NEVER pass `obj.method` as a bare callback — detached `this` throws "Cannot read
   properties of undefined" at runtime while tests pass. Wrap: `(cb) => obj.method(cb)`.
 - F-47: Screen-centering overlays render OUTSIDE the ScrollView (sibling under a flex-1 root).
@@ -1351,6 +1417,7 @@ apply DB live and probe 200 before claiming done), R4-7 rides the same engine on
 # 2026-10-01 - device identity / metadata session
 
 ## READ THIS FIRST: how to reach the database
+
 **The `db.<ref>.supabase.co` host does NOT resolve on this machine. Do not waste time on it.**
 The Supavisor pooler works, and the project is in region **`ap-southeast-2`** — that is
 undiscoverable without the Management API, so sweep it if the region ever changes.
@@ -1362,6 +1429,7 @@ user:     postgres.bkylfnlybtsujwzropru
 password: from genumsolutions-website\.env.local -> SUPABASE_DB_URL (URL-decode the password)
 ssl:      rejectUnauthorized:false
 ```
+
 `pg` is already in `genumsolutions-website/node_modules` — require it by absolute path, no
 install needed. `psql` is NOT installed and there is no `supabase` CLI on PATH (use
 `npx supabase`, and note its stored token at `~/.supabase/access-token` is **revoked** →
@@ -1371,6 +1439,7 @@ For future secrets: put them in a `.env.local` and tell me the KEY NAME. Chat hi
 summarized out of the session, which is how the original token got lost.
 
 ## Owner decisions taken (do not re-litigate)
+
 1. **Model metadata is canonical in the repo** — `guide/DEVICE-REGISTRY.json` (NOT a git repo,
    plain file). **Per-unit display name lives in the database.**
 2. **Advertised BT/AP names are FROZEN.** Renaming breaks saved pairings and every stored
@@ -1378,6 +1447,7 @@ summarized out of the session, which is how the original token got lost.
 3. Shared Supabase IS in scope; apply migrations live for both app and website.
 
 ## Landed this session
+
 - **Website `5c4558f`** — migration `20261001120000_device_registry.sql`, **APPLIED LIVE** in one
   transaction. New: `device_models` (6 seeded, public read/staff write), `devices`,
   `user_devices`, `profiles` 8→17 cols (additive only, nothing dropped/renamed).
@@ -1389,6 +1459,7 @@ summarized out of the session, which is how the original token got lost.
 - Gates: tsc 0 · **vitest 369/369 (26 files)** · prettier clean. Both repos CLEAN.
 
 ## The bug that was found and fixed
+
 `robo_car_modes.token` for `4wd4m` was `BT`. The firmware's real token is **`4WD4M`**; `BT` is a
 LEGACY ALIAS kept only for pre-v1.5.0 controllers (firmware X-8). So the DB misreported what the
 car expects. **Command behaviour was never affected** — the app's protocol layer is bound to the
@@ -1396,11 +1467,13 @@ bundled `roboCarCatalog` tokens, not that column. All 9 mode names unified on th
 already uses. `device_index` is PROTOCOL — untouched.
 
 ## Architecture already correct (do not "fix" it)
+
 `robo_car_modes` = DISPLAY catalogue (website-admin-edited, public read). `roboCarCatalog.ts` =
 PROTOCOL truth + offline fallback + **seed source**. They are intentionally different layers;
 `carModeService` reads DB-first. `device_index` is the cycle order and is protocol.
 
 ## Known drift — needs an owner answer, do not guess
+
 - **4 naming vocabularies per device:** repo folder / firmware `FW_NAME` / advertised BT+AP /
   app catalogue. 4WD4M = `Genum_4WD4M_CAR` · "4WD4M Car" · "4WD CAR"+"4WDCar_Wifi" · "4WD4M".
 - **`wireless-car` (fw 1.8.0, the 4WD4M's own ancestor) and `smart-dustbin` have firmware but NO app
@@ -1413,6 +1486,7 @@ PROTOCOL truth + offline fallback + **seed source**. They are intentionally diff
   Both deliberate and frozen; the new tests assert the deviation so it is not "corrected".
 
 ## Next moves
+
 1. **Owner profile UI** — DB columns exist, nothing renders them. No garage screen yet.
 2. Website: consume `device_models` so product/IoT pages show registry metadata.
 3. Firmware `WebPage.h:219-220` still force-calls `setMode(MODE_ESP_SERVER)` on page load.
@@ -1421,6 +1495,7 @@ PROTOCOL truth + offline fallback + **seed source**. They are intentionally diff
 5. BLE/mDNS/MQTT still parked. MQTT still needs broker + credential decisions.
 
 ## Do-not-regress additions this session
+
 - F-49: A **model** (physical product line, `device_models`) is NOT a **mode** (operational state,
   `robo_car_modes`). Conflating them is how one device ended up with four names. **This nearly
   shipped a live outage**: the garage claim passed `savedPrefs.modeId` as the model, and
@@ -1447,7 +1522,7 @@ PROTOCOL truth + offline fallback + **seed source**. They are intentionally diff
 - F-55: **A defect in SQL has no unit test to catch it.** All 208 website tests passed while the
   above was live. For SQL, assert the migration TEXT and always run a negative control:
   reintroduce the bug, confirm the test fails, restore. Also assert only the CREATE statement,
-  excluding leading comment blocks, since a header that *documents* a bug will otherwise satisfy
+  excluding leading comment blocks, since a header that _documents_ a bug will otherwise satisfy
   or trip assertions meant for executable code.
 - F-56: **A `"use client"` component must never reach a module that imports `next/headers`.**
   `lib/supabase/server.ts` is labelled SERVER-ONLY in its own header. An unused re-export in
