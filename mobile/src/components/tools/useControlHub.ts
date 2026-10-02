@@ -58,6 +58,15 @@ import {
   SPP_RECONNECT_DELAYS_MS,
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
+import {
+  outcomeFor,
+  parseRouterAnswer,
+  routerRequestLine,
+  timeoutOutcome,
+  type RouterOutcome,
+  type RouterRequest,
+  type SwitchPlan,
+} from "./connection";
 import { linkManager } from "../../transports/linkManager";
 import {
   isAllowedDriveStatus,
@@ -313,6 +322,13 @@ export function useControlHub(routeCategory?: string) {
     null,
   );
   const SMART_LINK_SCAN_MS = 6000;
+  /**
+   * D2 (U-68): how long a router request waits for the car's answer before it
+   * is reported as unanswered. The car answers inside one STATE broadcast
+   * (1 s) or the 2 s REQ_STATE poll, so this is generous — long enough not to
+   * flap, short enough that a silent car does not leave the UI spinning.
+   */
+  const ROUTER_ACK_TIMEOUT_MS = 6000;
   // A-37: user mode-commit grace (ESP remote R-33 parity) — remember the token
   // the USER chose plus the car-truth mode at commit time so the stale in-flight
   // echo (still the pre-commit mode) cannot undo the optimistic pick (that was
@@ -760,6 +776,15 @@ export function useControlHub(routeCategory?: string) {
   const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(
     null,
   );
+  /**
+   * D2 (U-68): the router-answer consumer, reached from the telemetry path via
+   * a ref for the same reason `handleWifiProvisionReply` is — the telemetry
+   * callback is registered once and must not be re-subscribed when the
+   * consumer's identity changes.
+   */
+  const consumeRouterAnswerRef = useRef<((text: string) => boolean) | null>(
+    null,
+  );
   // R-4 NACK handler mirror (defined below; applyTelemetry has empty deps).
   const handleNackRef = useRef<((arg: string) => void) | null>(null);
 
@@ -933,7 +958,16 @@ export function useControlHub(routeCategory?: string) {
       // app must give up the AP dial so the drive socket is not stuck on the
       // car's own AP. The car keeps every transport live; the next
       // STATE;IP= broadcasts the router IP for the user to dial.
-      if (t.reply) handleWifiProvisionReplyRef.current?.(t.reply);
+      if (t.reply) {
+        // D2 (U-68): the car answers router commands in the SAME `REPLY=` slot
+        // as the legacy WIFICFG replies. Both are offered to both consumers:
+        // the WIFICFG handler ignores what it does not own, and the router
+        // consumer ignores what is not a `ROUTERS;…` answer. Before this, a
+        // `ROUTERS;FULL` or `ROUTERS;ERROR;…` was received and dropped, which
+        // is why a failed add was indistinguishable from a successful one.
+        handleWifiProvisionReplyRef.current?.(t.reply);
+        consumeRouterAnswerRef.current?.(t.reply);
+      }
       if (t.ap !== undefined) setCarApName(t.ap || null);
       if (t.ssid !== undefined) setCarSsid(t.ssid || null);
       // Connections-Hub (smart-link): the car-side scan answer to ROUTERS;SCAN
@@ -949,8 +983,20 @@ export function useControlHub(routeCategory?: string) {
       // A-27: sync the saved-router mirror from the car's `networks` JSON
       // (broadcast on every WS status frame + REQ_STATE). Change-guarded to
       // skip identical arrays (steady 1 s broadcasts don't thrash the panel).
-      if (t.networks && Array.isArray(t.networks)) {
-        const incoming: string[] = t.networks;
+      //
+      // D6 (U-68): the car ALSO sends the registry as a `NETW;…` text line on
+      // every transport, and that is the only shape a Bluetooth link carries.
+      // Both feed the same state, so the router list is no longer a WiFi-shaped
+      // accident (F-66) — it is a property of the connection, which is what
+      // lets it be managed over Bluetooth at all.
+      const incomingRouters =
+        t.networks && Array.isArray(t.networks)
+          ? t.networks
+          : t.netw && Array.isArray(t.netw)
+            ? t.netw
+            : null;
+      if (incomingRouters) {
+        const incoming: string[] = incomingRouters;
         setCarNetworks((prev) =>
           prev.length === incoming.length &&
           prev.every((n, i) => n === incoming[i])
@@ -1674,7 +1720,7 @@ export function useControlHub(routeCategory?: string) {
       const s = ssid.trim();
       if (!s) return;
       sendCommand(buildRouterCommand("ADD", s, pass));
-      // Optimistic list update (the car's next JSON echo is authoritative).
+      // Optimistic list update (the car's next echo is authoritative).
       setCarNetworks((prev) => (prev.includes(s) ? prev : [...prev, s]));
       persistPrefsRef.current?.({
         savedRouters: carNetworks.includes(s)
@@ -1684,6 +1730,103 @@ export function useControlHub(routeCategory?: string) {
       setDriveStatusOnce(`Saved router ${s}`);
     },
     [sendCommand, carNetworks],
+  );
+
+  // -------------------------------------------------------------------
+  // D2 (U-68): RUN A ROUTER REQUEST AND WAIT FOR THE CAR'S ANSWER.
+  //
+  // The car answers every router command (`ROUTERS;ADDED` / `USED` /
+  // `DELETED` / `CLEARED` / `FULL` / `ERROR;…`). Until now the app parsed
+  // `REPLY=` off the STATE line and threw it away — only `WIFICFG;*` was
+  // handled — so "add a router" was fire-and-forget: a success and a
+  // `ROUTERS;FULL` looked identical, and the form cleared itself on a 600 ms
+  // timer. That is why the owner could not make adding a router work and
+  // could not see why.
+  //
+  // F-62: an answer must be CONSUMED. `requestRouter` sends the line, arms a
+  // timeout, and resolves with the outcome the user is shown. Silence becomes
+  // a VISIBLE failure — never a fake success. Exactly one request is in
+  // flight at a time, which is what lets a single answer be attributed.
+  // -------------------------------------------------------------------
+  const routerPendingRef = useRef<{
+    request: RouterRequest;
+    resolve: (o: RouterOutcome) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+
+  const settleRouter = useCallback((outcome: RouterOutcome) => {
+    const pending = routerPendingRef.current;
+    if (!pending) return;
+    routerPendingRef.current = null;
+    clearTimeout(pending.timer);
+    pending.resolve(outcome);
+  }, []);
+
+  /**
+   * Consume an inbound answer. Called from the telemetry path with the raw
+   * `REPLY=` text, and separately with any `ROUTERS;…` line.
+   *
+   * Exported through the hub so the Control Panel can also feed it a line it
+   * received directly (a Bluetooth `REPLY` arrives on the same STATE line, so
+   * this is belt-and-braces rather than a second path).
+   */
+  const consumeRouterAnswer = useCallback(
+    (text: string) => {
+      const answer = parseRouterAnswer(text);
+      if (!answer) return false;
+      // A list is DATA, not an acknowledgement: refresh the mirror but never
+      // let it resolve a pending command (a scan result must not look like
+      // the answer to an add).
+      if (answer.kind === "list") {
+        setCarNetworks(answer.ssids.slice());
+        persistPrefsRef.current?.({ savedRouters: answer.ssids.slice() });
+        return true;
+      }
+      const pending = routerPendingRef.current;
+      if (!pending) return true; // nothing to attribute it to; not an error
+      settleRouter(outcomeFor(answer, pending.request));
+      return true;
+    },
+    [settleRouter],
+  );
+  consumeRouterAnswerRef.current = consumeRouterAnswer;
+
+  const requestRouter = useCallback(
+    (request: RouterRequest): Promise<RouterOutcome> => {
+      // One at a time: a second request supersedes the first rather than
+      // racing it, and the superseded one is failed honestly.
+      settleRouter({
+        ok: false,
+        reason: "Another router request was started before this one finished.",
+      });
+      return new Promise<RouterOutcome>((resolve) => {
+        const timer = setTimeout(() => {
+          settleRouter(timeoutOutcome(request));
+        }, ROUTER_ACK_TIMEOUT_MS);
+        routerPendingRef.current = { request, resolve, timer };
+        sendCommand(routerRequestLine(request));
+      });
+    },
+    [sendCommand, settleRouter],
+  );
+
+  /** Run a switch plan's steps in order, stopping at the first failure. */
+  const runSwitchPlan = useCallback(
+    async (plan: SwitchPlan): Promise<RouterOutcome> => {
+      let last: RouterOutcome = { ok: true, message: "" };
+      for (const step of plan.steps) {
+        last = await requestRouter(step);
+        if (!last.ok) return last;
+      }
+      return last;
+    },
+    [requestRouter],
+  );
+
+  /** Ask the car to enumerate the networks its own antenna can see. */
+  const requestScan = useCallback(
+    () => requestRouter({ kind: "scan" }),
+    [requestRouter],
   );
 
   const routerDelete = useCallback(
@@ -2237,6 +2380,14 @@ export function useControlHub(routeCategory?: string) {
     routerAdd,
     routerDelete,
     routerClearAll,
+    // D2 (U-68): the ack-consuming API. `routerUse`/`routerAdd` above are the
+    // legacy fire-and-forget pair and are still exported because the Remote
+    // screen (which this round must not change) calls them directly; the
+    // Control Panel uses these instead so a failure is visible.
+    requestRouter,
+    runSwitchPlan,
+    requestScan,
+    consumeRouterAnswer,
     // SPP auto-reconnect
     handleReconnectPromptCancel,
     // mode + category (carStubMap is returned with the WiFi-truth group above)

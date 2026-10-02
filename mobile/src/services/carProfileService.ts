@@ -16,7 +16,7 @@
 // =====================================================================
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../config/supabase";
-import { SPEED_MAX, SPEED_MIN } from "./carProtocol";
+import { SPEED_MAX, SPEED_MIN, isOwnApName } from "./carProtocol";
 import type { DevicePrefs } from "../components/tools/types";
 
 export type WifiHistoryEntry = { ssid: string; lastSeen: number };
@@ -90,9 +90,16 @@ export type PickRouterInput = {
  * is nothing to join (stay on the car's own AP). Pure.
  */
 export function pickBestRouter(input: PickRouterInput): string | null {
+  // D1 (U-68, 2026-10-02): the own AP is REMOVED here, not by the caller.
+  // The car's `networks`/`NETW;` list leads with its own network by design
+  // (T-66) and the app mirrors that list straight into `savedRouters`, so any
+  // caller that passed it straight through could pick the car's own AP and
+  // fire `ROUTERS;USE;<ownAp>` — which the firmware answers by ERASING the
+  // stored credentials and reverting the car to its own AP. Filtering here
+  // means no caller can get that wrong (F-63).
   const saved = (input.saved ?? [])
     .map((s) => (typeof s === "string" ? s.trim() : ""))
-    .filter(Boolean);
+    .filter((s) => Boolean(s) && !isOwnApName(s));
   if (saved.length === 0) return null;
 
   const history = (input.history ?? []).filter(

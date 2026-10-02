@@ -613,3 +613,29 @@ describe("fleet mode-cycle order (roboCarCatalog REMOTE_MODE_ORDER)", () => {
     ]);
   });
 });
+
+// D6 / F-66 (U-68): the car broadcasts the saved-router registry as its own
+// `NETW;` line after every STATE, on EVERY transport. Before this branch
+// existed the line matched nothing, so over Bluetooth the app fell back to a
+// stale local mirror - the router feature existed on WiFi only.
+describe("parseTelemetryLine - the NETW saved-router line (all transports)", () => {
+  it("parses the registry, own AP first, names only", () => {
+    const t = parseTelemetryLine("NETW;4WDCar_Wifi;HomeNet;OfficeNet");
+    expect(t.networks).toEqual(["4WDCar_Wifi", "HomeNet", "OfficeNet"]);
+  });
+
+  it("accepts the ':' separator and stray spacing", () => {
+    expect(parseTelemetryLine("NETW: 4WDCar_Wifi ; HomeNet ").networks).toEqual(
+      ["4WDCar_Wifi", "HomeNet"],
+    );
+  });
+
+  it("an empty registry is an empty list, not a missing field", () => {
+    expect(parseTelemetryLine("NETW;").networks).toEqual([]);
+    expect(parseTelemetryLine("NETW").networks).toEqual([]);
+  });
+
+  it("a non-NETW line does not invent a list", () => {
+    expect(parseTelemetryLine("STATE;MODE=BT").networks).toBeUndefined();
+  });
+});

@@ -23,6 +23,8 @@
 // Pure. Pinned by routerList.test.ts.
 // =====================================================================
 
+import { isOwnApName as isOwnApNameShared } from "../../../services/carProtocol";
+
 /** Firmware `MAX_SAVED_ROUTERS` (WebServerComm.h). Mirrored, never guessed. */
 export const MAX_SAVED_ROUTERS = 6;
 /** Firmware `ROUTER_SSID_LEN - 1`. */
@@ -41,21 +43,35 @@ export type RouterEntry = {
 
 export type RouterValidation = { ok: true } | { ok: false; reason: string };
 
-/** Case-insensitive own-AP match (F-64: the two old helpers disagreed). */
+// ---------------------------------------------------------------------
+
+/** Case-insensitive own-AP match (F-64: the two old helpers disagreed).
+ *
+ *  Delegates to the ONE shared helper in `carProtocol` rather than keeping a
+ *  second copy of the name list — two lists is how the case-sensitivity bug
+ *  happened in the first place, and this module must not become the third. */
 export function isOwnApName(name: string | null | undefined): boolean {
-  const n = (name ?? "").trim().toUpperCase();
-  if (!n) return false;
-  return OWN_AP_NAMES_UPPER.has(n);
+  return ownApMatcher(name, null);
 }
 
 /**
- * The fleet registry of own-AP names, upper-cased once. Mirrors
- * `carProtocol.OWN_AP_NAMES`; kept here so this module has no import cycle
- * and so the case-folding happens in exactly one place per layer.
+ * The own-AP test, widened with the name the car reported for itself.
+ *
+ * `carProtocol.OWN_AP_NAMES` is the fleet registry; a project may also name
+ * its own network something the registry does not know, and the car tells us
+ * what it is in the telemetry `ap` field. Matching on the REPORTED name is
+ * car truth (F-51 rule 2), so a project-specific AP is still protected.
  */
-const OWN_AP_NAMES_UPPER: ReadonlySet<string> = new Set(
-  ["WirelessCar_Wifi", "4WDCar_Wifi"].map((n) => n.toUpperCase()),
-);
+export function ownApMatcher(
+  name: string | null | undefined,
+  reportedOwnApName: string | null | undefined,
+): boolean {
+  const n = (name ?? "").trim().toUpperCase();
+  if (!n) return false;
+  if (isOwnApNameShared(n)) return true;
+  const extra = (reportedOwnApName ?? "").trim().toUpperCase();
+  return Boolean(extra) && n === extra;
+}
 
 export function normalizeRouters(
   raw: ReadonlyArray<string | null | undefined>,
@@ -66,10 +82,7 @@ export function normalizeRouters(
     activeSsid?: string | null;
   } = {},
 ): RouterEntry[] {
-  const own = new Set(OWN_AP_NAMES_UPPER);
-  const extra = (ctx.ownApName ?? "").trim().toUpperCase();
-  if (extra) own.add(extra);
-
+  const own = ctx.ownApName?.trim() ?? "";
   const active = (ctx.activeSsid ?? "").trim().toUpperCase();
   const seen = new Set<string>();
   const out: RouterEntry[] = [];
@@ -84,7 +97,7 @@ export function normalizeRouters(
     seen.add(key);
     out.push({
       ssid,
-      isOwnAp: own.has(key),
+      isOwnAp: ownApMatcher(ssid, own),
       isActive: Boolean(active) && key === active,
     });
   }

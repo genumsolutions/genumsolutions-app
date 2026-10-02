@@ -574,3 +574,54 @@ describe("R4-5: last-used router sync", () => {
     expect(merged.prefs.lastWifiUrl).toBe("ws://192.168.1.5:81");
   });
 });
+
+// D1 (U-68): the own AP leads the car's list by design, and the app mirrors
+// that list straight into savedRouters. So the auto-join's picker must be
+// unable to return it - otherwise smart-link fires ROUTERS;USE;<ownAp> and
+// the firmware erases the stored credentials and reverts the car to itself.
+describe("pickBestRouter never returns the car's own network", () => {
+  const AP = "4WDCar_Wifi";
+
+  it("skips the own AP even when it is the only saved name", () => {
+    expect(pickBestRouter({ saved: [AP] })).toBeNull();
+  });
+
+  it("skips the own AP and picks the real router instead", () => {
+    // The own AP is first, exactly as the car reports it.
+    expect(pickBestRouter({ saved: [AP, "HomeNet"] })).toBe("HomeNet");
+  });
+
+  it("skips it case-insensitively (F-64)", () => {
+    expect(
+      pickBestRouter({ saved: ["4w dcar_wifi".replace(" ", ""), "HomeNet"] }),
+    ).toBe("HomeNet");
+  });
+
+  it("does not pick it on recency either - recency must not defeat the guard", () => {
+    expect(
+      pickBestRouter({
+        saved: [AP, "HomeNet"],
+        lastSsid: AP,
+        history: [{ ssid: AP, lastSeen: 1 }],
+      }),
+    ).toBe("HomeNet");
+  });
+
+  it("does not pick it on scan strength either", () => {
+    // The car's own AP is the strongest thing its antenna can hear - which is
+    // exactly why a strength-based pick was the most dangerous path.
+    expect(
+      pickBestRouter({
+        saved: [AP, "HomeNet"],
+        scan: [
+          { ssid: AP, rssi: -20 },
+          { ssid: "HomeNet", rssi: -70 },
+        ],
+      }),
+    ).toBe("HomeNet");
+  });
+
+  it("still picks a normal router when the own AP is absent", () => {
+    expect(pickBestRouter({ saved: ["HomeNet"] })).toBe("HomeNet");
+  });
+});
