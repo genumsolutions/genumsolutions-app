@@ -14,7 +14,10 @@ request name → screen row name → the MAC; the screen row still contributes i
 (bonded, lastMode/lastSpeed) but can never relabel; F-40's never-refuse contract is
 pinned too (empty screen list still dials direct by MAC). Ledger written AS the work
 landed (the U-60 round's retroactive-ledger lesson applied). Gates: tsc 0 · vitest
-**434/434** (31 files) · prettier clean. Device rows: `mobile/TESTING.md` **U-63-1..2**.
+**434/434** (31 files) · prettier clean. **Ship evidence:** commits `0b73887` (fix) +
+`2ffcb0a` (ledger), pushed `3f7619a..2ffcb0a`; CI ✓ `36967886971` · OTA Only ✓
+`36967886987` — JS-only → same-version OTA 3.2.7/60. Device rows:
+`mobile/TESTING.md` **U-63-1..2**.
 **OPEN from the audit, deliberately NOT coded:** ⑤ post-connect chrome jump in the
 picker — diagnosed (the address/scan card is removed on `link.id` per the owner's
 2026-10-01 parity decision, and the footer appears in the same commit, so the content
