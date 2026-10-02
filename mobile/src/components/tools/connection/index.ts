@@ -4,3 +4,16 @@ export * from "./methods";
 export * from "./routerList";
 export * from "./commands";
 export * from "./dial";
+
+// The UI. Exported from here so a screen imports ONE thing; it is kept out of
+// the pure modules so nothing in the model can reach for React.
+export {
+  ConnectionSection,
+  type ConnectionSectionProps,
+} from "./ConnectionSection";
+export {
+  ActionButton,
+  ConnectionCard,
+  InlineMessage,
+  type CardTone,
+} from "./ConnectionCard";
