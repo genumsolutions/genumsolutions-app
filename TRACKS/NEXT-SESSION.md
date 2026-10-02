@@ -1,5 +1,26 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**✅ FIXED 2026-10-02 (night) — THE REST OF THE QUEUE: ④b ROUTING TIE-BREAK · F-46 REGRESSION
+PINNED · ⑤ CHROME JUMP SMOOTHED.** Owner: "go ahead do all the coding side things and i will
+test later." **④b — the both-links-live hazard is closed:** new pure `commandRouting.ts`
+(`routeCommand`, 11 CI tests). The rule: broadcast → every live link; ONE live link → it wins
+regardless of mode (unchanged); BOTH live → mode parity still decides AND the user's CHOSEN
+method (the LinkManager's active radio, read LIVE at call time per F-12) is ADDED as a
+carrier — a stale secondary link can never strand a drive command while the phone sits on
+the router. Parity is preserved exactly (BT-transport mode + chosen BT still does not blast
+WS; no chosen link known → previous behavior). `sendCommand` now calls the pure rule.
+**F-46 — the skipped regression test is BACK and not brittle:** `adapters.test.ts` swaps
+each service mock's `onStatus` for the REAL services' `this`-reading shape
+(`statusCallbacks`) and pins that all three live adapters (SPP / BLE / WiFi) invoke it ON
+the object — it would fail on the old detached-reference code. **⑤ — the picker's
+post-connect chrome jump:** App.tsx enables Android's layout-animation experimental flag
+(guarded; no-op on Fabric) and TransportPicker asks for ONE ease-in-ease-out pass on
+exactly the down→live / live→down transitions (configureNext during the transition render,
+consumed by that very commit). Cosmetic-only and revertible in two hunks if it ever
+glitches on a device. Gates: tsc 0 · vitest **453/453** (32 files) · prettier clean. Device
+rows: `mobile/TESTING.md` **U-65-1..2**. ④a/④c remain bench-discriminated (need the
+flashed car).
+
 **✅ FIXED 2026-10-02 (evening) — OWNER BENCH FEEDBACK ROUND: PANEL SIMPLIFIED (①),
 HANDOFF NOW CONFIRMS (②), WIFI DIAGNOSTICS REMOVED (③); ④ QUEUED (needs the flashed car).**
 Owner: "the control panel page is too confusing and shows unnecessary datas too much" +
@@ -41,8 +62,9 @@ already went out.**
 + the component file (single call site, zero tests; F-45 deletion recorded here, not left
 dangling). The method chip + footer + error card already say everything it said.
 
-**⏳ ④ STILL QUEUED (needs the flashed car on the bench): HOME-ROUTER DRIVE DECK IS DULL /
-UNUSABLE.** Three candidates, to be discriminated with a VERIFIED STA link: **(a)** downstream of ② — no verified STA link →
+**⏳ ④a/④c STILL QUEUED (need the flashed car on the bench): HOME-ROUTER DRIVE DECK IS DULL /
+UNUSABLE.** ④b (the routing hazard) is FIXED — see the top entry. Remaining candidates, to be
+discriminated with a VERIFIED STA link: **(a)** downstream of ② — no verified STA link →
 `canControl=false` → the deck is dim BY DESIGN (F-34 note); fix ② first and re-observe.
 **(b) REAL APP HAZARD — both-links-live routing:** `sendCommand` routes non-broadcast
 lines by the ACTIVE MODE's transport; with a stale BT link + STA WS both live, drive
