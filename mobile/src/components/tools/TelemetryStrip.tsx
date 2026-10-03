@@ -36,13 +36,21 @@ export function TelemetryStrip({
 }: {
   fields: readonly TelemetryField[];
 }) {
+  // U-85: the tiles used to be `w-1/3` PLUS `marginRight: 6`. Three tiles then
+  // needed 100% + 18px, so every row overflowed its parent and the third
+  // column was clipped on a narrow phone - the owner's "the control panel at
+  // the top is not perfectly fitting space in the screen".
+  //
+  // A real gap grid fixes the arithmetic, and `grow` shares whatever is left so
+  // the columns stay equal. The per-tile border and fill are gone too: six
+  // bordered boxes inside a bordered card read as a website, not an app. The
+  // label/value pair carries the structure on its own.
   return (
-    <View className="mt-3 flex-row flex-wrap">
+    <View className="mt-3 flex-row flex-wrap" style={{ gap: 10 }}>
       {fields.map((f) => (
         <View
           key={f.label}
-          className="mb-2 w-1/3 rounded-xl border border-line bg-surface px-2.5 py-2"
-          style={{ marginRight: 6 }}
+          className="grow basis-[30%] rounded-lg bg-surface px-2.5 py-2"
         >
           <Text
             numberOfLines={1}
