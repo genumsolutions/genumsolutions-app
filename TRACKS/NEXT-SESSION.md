@@ -1,5 +1,16 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+CLEANUP ROUND 2026-10-03 (U-78, paired with car firmware U-77): repo hygiene audited end to end —
+tsc 0 errors, **543/543 vitest tests pass**, prettier --check clean, git side clean (android/,
+keystores/, releases/, dist/ all correctly gitignored — signing material stays local only).
+Residue removed: **`src/services/wifiDiagnostics.ts` + its test deleted** — the engine had ZERO
+runtime importers; the UI half was already removed by the owner's U-64 ruling ("panel simplified,
+handoff confirms, diagnostics gone"), so the module was dead weight kept alive only by its own test
+(553 → 543 tests, the delta is exactly its 10). Orphan sweep over 129 src files: everything else is
+reachable (App.tsx imports RootNavigator/SignInSheet/analyticsService; `.web.tsx` files resolve via
+Metro platform selection; `adminTabs.ts` is the B-6 parity fixture pinned by `admin-parity.test.ts`).
+No console.logs, no TODO/FIXME debt, no stale files in src/.
+
 FIXED 2026-10-02 (U-71) - THE OWNER ASKED WHETHER THE PREVIOUS ROUND WAS INTERRUPTED. IT WAS:
 U-70 deferred only WiFi.begin(); the boot auto-join and the last-good persistence had not been
 started. All of it is now finished, plus the settings-in-the-database request.
