@@ -62,9 +62,7 @@ import {
   CAR_WS_URL,
   CONNECTION_METHODS,
   PROBE_TIMEOUT_MS,
-  canAddRouter,
   carIsOnOwnHotspot,
-  defaultRouterSsid,
   findCarOnNetwork,
   methodOfTarget,
   normalizeRouters,
@@ -72,7 +70,6 @@ import {
   planSwitch,
   resolveDial,
   subnetCandidates,
-  switchableRouters,
   targetUnavailableReason,
   validateRouterInput,
   type ConnectionMethodId,
@@ -85,6 +82,7 @@ import {
   InlineMessage,
   SelectRow,
 } from "./ConnectionCard";
+import { WifiPanel } from "./WifiPanel";
 import type { useControlHub } from "../useControlHub";
 import NetInfo from "@react-native-community/netinfo";
 
@@ -150,7 +148,6 @@ export function ConnectionSection({
     requestScan,
     lastRouterIp,
     routerDelete,
-    routerClearAll,
     // U-80: the car-switched-networks prompt + automatic discovery share this
     // handler with the WiFi method card.
     routerSwitchNotice,
@@ -160,6 +157,11 @@ export function ConnectionSection({
   const [targetId, setTargetId] = useState<ConnectionTargetId | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
+  // U-84: after the car moves to another network this phone is on the wrong
+  // one, and Android will not join a network silently. Remember the target so
+  // the list can say so ONCE, in one place, with one action — instead of the
+  // old narration that told the user which other control to press.
+  const [pendingJoinSsid, setPendingJoinSsid] = useState<string | null>(null);
 
   const tap = useCallback(() => {
     feedbackTap?.();
@@ -217,7 +219,6 @@ export function ConnectionSection({
       }),
     [carNetworks, carApName, carOnRouter, reportedSsid],
   );
-  const switchable = switchableRouters(routers);
 
   /** Run a hub action and report its REAL outcome (U-69). */
   const runOutcome = useCallback(
@@ -500,11 +501,10 @@ export function ConnectionSection({
     [requestRouter, routerDelete, runOutcome, tap],
   );
 
-  const clearAll = useCallback(async () => {
-    tap();
-    const ok = await runOutcome(() => requestRouter({ kind: "clear" }));
-    if (ok) routerClearAll();
-  }, [requestRouter, routerClearAll, runOutcome, tap]);
+  // U-84: "clear all" is gone. It was reachable only from the old manager's
+  // Manage card, and a bulk destructive action does not belong in a list whose
+  // whole point is that each row does one obvious thing. Removing a network is
+  // a per-row action now.
 
   const scanNearby = useCallback(async () => {
     tap();
@@ -670,42 +670,34 @@ export function ConnectionSection({
           lastRouterIp={lastRouterIp}
           onConnectRouterLease={connectRouterLease}
           onFindCarOnNetwork={findCarOnThisNetwork}
-          switchableSsid={switchable.map((r) => ({
-            ssid: r.ssid,
-            isActive: r.isActive,
-          }))}
-          onSwitchRouter={(s) => void switchRouter(s)}
         />
       ) : null}
 
-      {/* ---- routers: WiFi ONLY (U-72) ------------------------------------
-          Owner verbatim: *"keep the wifi things seperate from the bluetooth ones
-          and dont mix the section in the control panel page"* and *"the other
-          wifi router other than the own hotspot has no need to switch from the
-          bluetooth mode. so please remove those unnecessary thing on that
-          instant."*
+      {/* ---- U-84: Wi-Fi is ONE list ---------------------------------------
+          Owner: the Wi-Fi half was "too messy", full of "guidance text in
+          subtitles", and split into a pointless "car hotspot vs home router"
+          choice. Three controls did one job — the "Where is the car?" target
+          dropdown, a "Connect to …" button for the chosen side, and the router
+          manager's own scan/add/switch cluster — while four InlineMessages
+          narrated the layout back at the user.
 
-          So this is gated on the SELECTED METHOD being WiFi, not on "is anything
-          connected". In the Bluetooth view there is now no WiFi content at all:
-          no saved-router list, no scan, no add form, and no way to begin a
-          router switch from a Bluetooth session. That reverses the U-68 decision
-          (D8/F-66) to expose router management on every method — defensible on
-          capability grounds, since the commands do ride a Bluetooth link, but
-          not what the user asked for, and a panel that shows WiFi machinery while
-          you are connected over Bluetooth invites exactly the "which link is
-          this using" confusion the rebuild was meant to remove. The CAPABILITY
-          is untouched; only the OFFERING is separated. */}
-      {method === "wifi" && anyLink ? (
-        <RouterManager
+          All of it is now one list. Tapping a row switches the car; there is no
+          second dropdown and no instruction text. The car's own hotspot stays
+          visible in the same list, tagged, and is deliberately not a switch
+          target (F-63).
+
+          Shown whenever the Wi-Fi method is chosen — not only when a link is
+          up — because "search for networks" is the first thing a user does,
+          and it used to be hidden exactly when it was needed. */}
+      {method === "wifi" ? (
+        <WifiPanel
           routers={routers}
-          suggested={defaultRouterSsid(routers)}
-          canAdd={canAddRouter(routers)}
-          busy={busy}
           scanned={carScan ?? []}
-          ownApName={carApName}
+          busy={busy}
+          reachable={anyLink}
+          pendingSsid={pendingJoinSsid}
           onSwitch={(s) => void switchRouter(s)}
-          onDelete={(s) => void deleteRouter(s)}
-          onClearAll={() => void clearAll()}
+          onForget={(s) => void deleteRouter(s)}
           onAdd={(ssid, pass) =>
             void (async () => {
               const plan = planSwitch({
@@ -723,14 +715,15 @@ export function ConnectionSection({
               }
               const ok = await runOutcome(() => runSwitchPlan(plan));
               if (ok) {
+                setPendingJoinSsid(ssid);
                 setMessage({
                   tone: "ok",
-                  text: `Saved "${ssid}" and switching to it.`,
+                  text: `The car is switching to “${ssid}”.`,
                 });
               }
             })()
           }
-          onScanNearby={() => void scanNearby()}
+          onScan={() => void scanNearby()}
           onInputFocus={onInputFocus}
         />
       ) : null}
@@ -766,8 +759,6 @@ function MethodSetup({
   lastRouterIp,
   onConnectRouterLease,
   onFindCarOnNetwork,
-  switchableSsid,
-  onSwitchRouter,
 }: {
   method: (typeof CONNECTION_METHODS)[number];
   target: ConnectionTarget;
@@ -791,12 +782,13 @@ function MethodSetup({
   onConnectRouterLease: (ip: string) => Promise<void>;
   /** U-74b: sweep this phone's own /24 for the car. No native module. */
   onFindCarOnNetwork: () => Promise<void>;
-  /** U-73: the saved routers, offered HERE so switching lives in ONE place. */
-  switchableSsid: readonly { ssid: string; isActive: boolean }[];
-  onSwitchRouter: (ssid: string) => void;
 }) {
-  // U-69: WiFi LAN has TWO targets, so it uses the same dropdown rule as
-  // everything else rather than two buttons that both look tappable.
+  // U-84: the "Where is the car?" split is GONE. It asked the user to choose
+  // between "The car's hotspot" and "Your home router" before they could do
+  // anything, which is not a choice a person makes — a phone's Wi-Fi list does
+  // not separate the hotspot from the router, it lists networks, and so does
+  // this now. What remains below is the single connection action plus, for
+  // Wi-Fi, the one unified list.
   if (hasAlternative && alternativeId) {
     return (
       <ConnectionCard title={method.label} subtitle={method.blurb} icon="wifi">
@@ -877,21 +869,11 @@ function MethodSetup({
             </InlineMessage>
           </View>
         ) : null}
-        {switchableSsid.length > 0 ? (
-          <View className="mt-2.5">
-            <SelectRow
-              label="Switch the car to"
-              value={null}
-              options={switchableSsid.map((r) => ({
-                id: r.ssid,
-                label: r.ssid,
-                hint: r.isActive ? "current" : null,
-              }))}
-              onChange={onSwitchRouter}
-              testID="conn-router-switch"
-            />
-          </View>
-        ) : null}
+        {/* U-84: the "Switch the car to" dropdown is GONE. It was a SECOND
+            control for the one action the Wi-Fi list now performs by tapping a
+            row, which is what produced "which one do I press" - and the router
+            manager used to answer that question with a paragraph of guidance
+            text. One list, one tap, one meaning. */}
       </ConnectionCard>
     );
   }
@@ -957,7 +939,10 @@ function TargetBody({
 
   return (
     <View>
-      <InlineMessage tone="info">{target.requirement}</InlineMessage>
+      {/* U-84: the per-target "requirement" paragraph is gone. It was guidance
+          text describing the control directly beneath it — the owner named
+          subtitles like this as part of the mess. If a target genuinely cannot
+          be used, TargetBody says why in place, where it applies. */}
 
       {target.id === "bt-spp" && !linkLive ? (
         <View className="mt-2.5 gap-2">
@@ -1040,325 +1025,6 @@ function TargetBody({
             </InlineMessage>
           ) : null}
         </View>
-      ) : null}
-    </View>
-  );
-}
-
-// =====================================================================
-// RouterManager — available on EVERY method (D8), crowded things collapsed
-// into dropdowns (U-69).
-// =====================================================================
-
-function RouterManager({
-  routers,
-  suggested,
-  canAdd,
-  busy,
-  scanned,
-  ownApName,
-  onSwitch,
-  onDelete,
-  onClearAll,
-  onAdd,
-  onScanNearby,
-  onInputFocus,
-}: {
-  routers: ReturnType<typeof normalizeRouters>;
-  suggested: string | null;
-  canAdd: boolean;
-  busy: boolean;
-  scanned: readonly { ssid: string; rssi: number; open: boolean }[];
-  ownApName: string | null;
-  onSwitch: (ssid: string) => void;
-  onDelete: (ssid: string) => void;
-  onClearAll: () => void;
-  onAdd: (ssid: string, pass: string) => void;
-  onScanNearby: () => void;
-  onInputFocus?: (y: number) => void;
-}) {
-  const [ssid, setSsid] = useState("");
-  const [pass, setPass] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [fieldError, setFieldError] = useState<string | null>(null);
-
-  const options = switchableRouters(routers);
-  const ownAp = routers.find((r) => r.isOwnAp);
-  const validation = validateRouterInput(ssid, pass, { ownApName: ownApName });
-
-  const submit = () => {
-    if (!validation.ok) {
-      setFieldError(validation.reason);
-      return;
-    }
-    setFieldError(null);
-    onAdd(ssid.trim(), pass);
-    // The password is never kept after it has been handed to the car (W-14).
-    setPass("");
-    setSsid("");
-    setEditing(null);
-    setShowForm(false);
-  };
-
-  return (
-    <ConnectionCard
-      title="The car's routers"
-      subtitle={`${options.length} saved`}
-      icon="list"
-      testID="conn-routers"
-    >
-      {/* D1: the own AP is shown as the always-available default and is NEVER
-          an option in the switch dropdown — switching to it is what erased the
-          stored credentials. The dropdown in the connection card above is the
-          ONLY place a switch can start, so no row here can offer it either. */}
-      <InlineMessage tone="info">
-        {ownAp
-          ? `${ownAp.ssid} is always available if no router works.`
-          : "The car's own hotspot stays available as a fallback."}
-      </InlineMessage>
-
-      {options.length === 0 ? (
-        <InlineMessage tone="info">
-          No routers saved on the car yet. Add one — the car keeps it after a
-          power cycle.
-        </InlineMessage>
-      ) : (
-        // U-73 (2026-10-02), owner: *"in the wifi lan method instant, there are
-        // still confusing thing in the screen"* / *"the switching the router"*.
-        // TWO controls both switched the router — one in the connection card and
-        // one down here in the manager — so a single action appeared twice with
-        // different wording and different hints, which is exactly the
-        // "which one do I press" confusion. The SWITCH now lives only in the
-        // connection card, directly under where the car is; this card only
-        // MANAGES the list. One place to switch, one place to manage.
-        <InlineMessage tone="info">
-          {options.length} saved. Use &quot;Switch the car to&quot; in the card
-          above to change which one the car joins.
-        </InlineMessage>
-      )}
-
-      {/* scan — honest about needing the car (D3) */}
-      <View className="mt-2.5">
-        <ActionButton
-          label="Find networks near the car"
-          variant="quiet"
-          icon="radio"
-          onPress={onScanNearby}
-          disabled={busy}
-          testID="conn-scan"
-        />
-        {scanned.length > 0 ? (
-          <View className="mt-2">
-            <SelectRow
-              label="Networks the car can see"
-              value={null}
-              options={scanned.map((n) => ({
-                id: n.ssid,
-                label: n.ssid,
-                hint: `${n.rssi} dBm${n.open ? "" : " · locked"}`,
-              }))}
-              onChange={(id) => {
-                setSsid(id);
-                setShowForm(true);
-              }}
-              testID="conn-scanned"
-            />
-          </View>
-        ) : null}
-      </View>
-
-      {/* ONE action opens the form, so the page is not a wall of inputs (U-69) */}
-      {showForm ? (
-        <View className="mt-2.5 gap-2" testID="conn-add-form">
-          <Text className="text-[11px] font-bold text-ink">
-            {editing ? `Edit “${editing}”` : "Add a router"}
-          </Text>
-          <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
-            <TextInput
-              value={ssid}
-              onChangeText={(v) => {
-                setSsid(v);
-                setFieldError(null);
-              }}
-              placeholder="Router name"
-              placeholderTextColor="#64748b"
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Router name"
-              maxLength={40}
-              returnKeyType="next"
-              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
-              testID="conn-ssid"
-            />
-          </View>
-          <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
-            <TextInput
-              value={pass}
-              onChangeText={(v) => {
-                setPass(v);
-                setFieldError(null);
-              }}
-              placeholder="Password (blank if open)"
-              placeholderTextColor="#64748b"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              accessibilityLabel="Router password"
-              maxLength={72}
-              returnKeyType="done"
-              onSubmitEditing={submit}
-              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
-              testID="conn-pass"
-            />
-          </View>
-          {fieldError ? (
-            <InlineMessage tone="error">{fieldError}</InlineMessage>
-          ) : null}
-          <View className="flex-row gap-2">
-            <ActionButton
-              flex
-              label={editing ? "Save and switch" : "Save and switch"}
-              icon="check"
-              onPress={submit}
-              disabled={busy || !ssid.trim()}
-              testID="conn-add-submit"
-            />
-            <ActionButton
-              label="Cancel"
-              variant="quiet"
-              onPress={() => {
-                setShowForm(false);
-                setEditing(null);
-                setSsid("");
-                setPass("");
-                setFieldError(null);
-              }}
-            />
-          </View>
-        </View>
-      ) : (
-        <View className="mt-2.5 flex-row gap-2">
-          <ActionButton
-            flex
-            label="Add a router"
-            icon="plus"
-            onPress={() => {
-              setShowForm(true);
-              setEditing(null);
-              setSsid("");
-              setPass("");
-              setFieldError(null);
-            }}
-            disabled={!canAdd}
-            testID="conn-add-open"
-          />
-          {options.length > 0 ? (
-            <ActionButton
-              label="Remove"
-              variant="danger"
-              onPress={() => setEditing(options[0]!.ssid)}
-              disabled={busy}
-              testID="conn-edit-open"
-            />
-          ) : null}
-        </View>
-      )}
-
-      {/* Manage (edit / delete / clear) — behind one explicit action so the
-          common path stays short (U-69: don't populate unnecessary content). */}
-      {options.length > 0 ? (
-        <ManageRouters
-          options={options}
-          busy={busy}
-          onStartEdit={(s) => {
-            setEditing(s);
-            setSsid(s);
-            setPass("");
-            setShowForm(true);
-          }}
-          onDelete={onDelete}
-          onClearAll={onClearAll}
-        />
-      ) : null}
-    </ConnectionCard>
-  );
-}
-
-function ManageRouters({
-  options,
-  busy,
-  onStartEdit,
-  onDelete,
-  onClearAll,
-}: {
-  options: readonly { ssid: string; isActive: boolean }[];
-  busy: boolean;
-  onStartEdit: (ssid: string) => void;
-  onDelete: (ssid: string) => void;
-  onClearAll: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
-
-  return (
-    <View className="mt-2.5 gap-2">
-      <ActionButton
-        label={open ? "Done" : "Manage saved routers"}
-        variant="quiet"
-        icon="settings"
-        onPress={() => setOpen((v) => !v)}
-        testID="conn-manage-toggle"
-      />
-      {open ? (
-        <>
-          <SelectRow
-            label="Choose a router"
-            value={picked}
-            options={options.map((r) => ({
-              id: r.ssid,
-              label: r.ssid,
-              hint: r.isActive ? "current" : null,
-            }))}
-            onChange={setPicked}
-            testID="conn-manage-pick"
-          />
-          {picked ? (
-            <View className="flex-row gap-2">
-              <ActionButton
-                flex
-                label="Edit password"
-                variant="quiet"
-                onPress={() => {
-                  onStartEdit(picked);
-                  setOpen(false);
-                }}
-                disabled={busy}
-              />
-              <ActionButton
-                flex
-                label="Remove"
-                variant="danger"
-                onPress={() => {
-                  onDelete(picked);
-                  setPicked(null);
-                }}
-                disabled={busy}
-                testID="conn-manage-delete"
-              />
-            </View>
-          ) : null}
-          <ActionButton
-            label="Remove every router"
-            variant="danger"
-            onPress={onClearAll}
-            disabled={busy}
-            testID="conn-clear-all"
-          />
-          <InlineMessage tone="info">
-            Removing every router also puts the car back on its own network.
-          </InlineMessage>
-        </>
       ) : null}
     </View>
   );
