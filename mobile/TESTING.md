@@ -1,5 +1,34 @@
 # TESTING — Physical Device Test Checklist
 
+## U-80 round — the phone is told when the car switches, and the app finds the car (2026-10-03, OTA `d97d6f1` ✓ published, group `c838d9b1`)
+
+> Owner: _"prompt the user to switch the phones network router too when the car switches the
+> network but simply"_ · _"the car app doesnt show where the car is for the new routers too"_ ·
+> _"there are other cars that still have those two mode in their setup so make app so as to not
+> break things for those"_. **Needs the car flashed with U-79** (`abb7297`) AND this OTA
+> (force-close + reopen the app ×2; the updater row must read `OTA · Short update (d97d6f1…)`).
+> Full plan: `guide/PLAN-2026-10-03-U79-U80-ONE-WIFI-SETUP.md`.
+
+- [ ] **U-80-1 — the simple prompt.** From the app (or the webpage), switch the car to a saved
+      router. A card appears IMMEDIATELY: "The car switched networks — join <ssid> on this
+      phone", with ONE button ("I joined — find the car") + Dismiss. No extra screens.
+- [ ] **U-80-2 — the prompt is honest and temporary.** It auto-expires after ~4 minutes (or on
+      Dismiss), and it appears no matter which surface fired the switch (panel, webpage, remote).
+- [ ] **U-80-3 — automatic discovery.** Phone joins the new router → reconnect in the app →
+      even if the old address is dead, the app finds the car itself and says
+      "Car found automatically at <ip>" (remembered lease or /24 sweep — no manual IP entry).
+- [ ] **U-80-4 — the find button works from the prompt.** "I joined — find the car" runs the
+      same sweep and opens the drive deck.
+- [ ] **U-80-5 — fleet regression guard (old cars KEEP their modes).** On a WIRELESS_CAR /
+      2WD1M / SELF_BALANCE car (pre-U-79 firmware): ESP_SER / ESP_CLI still appear, still
+      switch, still drive exactly as before. Nothing hardcoded — availability comes from each
+      car's own CAPS map.
+- [ ] **U-80-6 — new-firmware car NACKs retired tokens harmlessly.** On the U-79 4WD4M car,
+      selecting an old-car-only token (if any UI path still offers one) results in
+      `NACK;E=UNKNOWN_MODE` and the car STAYS in 4WD4M — no crash, no stuck UI.
+- [ ] **U-80-7 — copy truth.** WiFi provisioning no longer says "switching to Webserver/join
+      mode" — it says the car is joining that network and to join it on this phone too.
+
 ## U-71 round — the restart, the boot auto-join, and remembered settings (2026-10-02)
 
 > Owner: _"i used the other router switch thing but the car restarted as soon as i tried to access
