@@ -20,6 +20,7 @@ import { useRoute, type RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../../navigation/types";
 import { APP_VERSION } from "../../config/site";
 import { sppService, type SppDevice } from "../../services/sppService";
+import { CAR_WS_URL, probeCarStatus } from "./connection/discovery";
 import { bleService } from "../../services/bleService";
 import { wifiService } from "../../services/wifiService";
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
@@ -105,6 +106,9 @@ const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES;
 // Names only — passwords never leave the car (W-14) and never touch the app.
 const LAST_DEVICE_KEY = "genum.lastDevice";
 
+/** U-80: how long the "join <ssid> on this phone" prompt stays up. */
+const ROUTER_SWITCH_NOTICE_MS = 4 * 60 * 1000;
+
 /**
  * Commands that must reach the car over EVERY live link, regardless of the
  * active mode's transport. Mode tokens (any live link can switch the car
@@ -138,7 +142,9 @@ const EVERY_LINK_COMMANDS = new Set([
 ]);
 import { deviceMemory } from "./types";
 import type { CarTelemetry } from "../../services/carProtocol";
-import { DEFAULT_WS_URL } from "../../services/carProtocol";
+import { DEFAULT_WS_URL, OWN_AP_NAME } from "../../services/carProtocol";
+import NetInfo from "@react-native-community/netinfo";
+import { findCarOnNetwork, subnetCandidates } from "./connection/discovery";
 import type { SensorData } from "./types";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
@@ -354,6 +360,35 @@ export function useControlHub(routeCategory?: string) {
   const [carScan, setCarScan] = useState<ScanNetwork[] | null>(null);
   // U-74: the last router lease the car reported (see DevicePrefs.lastRouterIp).
   const [lastRouterIp, setLastRouterIp] = useState<string | null>(null);
+  // U-80: "the car switched to <ssid> - join it on this phone" prompt. Set the
+  // moment the car confirms a router switch (ROUTERS;USED) on ANY transport;
+  // auto-expires; dismissed by the renderer.
+  const [routerSwitchNotice, setRouterSwitchNoticeState] = useState<
+    string | null
+  >(null);
+  const routerSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const dismissRouterSwitchNotice = useCallback(() => {
+    if (routerSwitchTimerRef.current) {
+      clearTimeout(routerSwitchTimerRef.current);
+      routerSwitchTimerRef.current = null;
+    }
+    setRouterSwitchNoticeState(null);
+  }, []);
+
+  const setRouterSwitchNotice = useCallback((ssid: string) => {
+    setRouterSwitchNoticeState(ssid);
+    if (routerSwitchTimerRef.current) {
+      clearTimeout(routerSwitchTimerRef.current);
+    }
+    // The user needs a few minutes to walk the phone to the new network; the
+    // prompt must not linger forever after they have (or dismissed) it.
+    routerSwitchTimerRef.current = setTimeout(
+      () => setRouterSwitchNoticeState(null),
+      ROUTER_SWITCH_NOTICE_MS,
+    );
+  }, []);
   // Smart-link session state: which profile has been offered a router join in
   // the CURRENT link session (reset when the link drops), plus the pending
   // scan timer so the app waits ≤ SMART_LINK_SCAN_MS for strength data before
@@ -1440,6 +1475,35 @@ export function useControlHub(routeCategory?: string) {
   // hub's `error` (the ConnectionBanner is the single problem surface on the
   // Control Panel). The extra toast here was the duplicate-message defect
   // the 2026-09-30 cleanup killed, reintroduced by the picker bridge.
+  /**
+   * U-80 (2026-10-03): LOOK for the car without being asked. Owner ruling:
+   * discovery on a new network is AUTOMATIC. Two lookups, cheapest first:
+   *   1. the remembered router lease (U-74) — one HTTP probe;
+   *   2. a bounded /24 sweep of the phone's own subnet (U-74b engine).
+   * Pure lookups; never mutates connection state — the caller decides.
+   */
+  const findCarForUser = useCallback(async (): Promise<{
+    ok: boolean;
+    host: string | null;
+  }> => {
+    try {
+      const state = await NetInfo.fetch();
+      const details = state.details as Record<string, unknown> | undefined;
+      const rawIp = details?.["ipAddress"];
+      const phoneIp = typeof rawIp === "string" ? rawIp : null;
+      const candidates = subnetCandidates(phoneIp);
+      if (candidates.length === 0) return { ok: false, host: null };
+      const host = await findCarOnNetwork({
+        candidates,
+        expect: { apName: OWN_AP_NAME },
+        fetchJson: probeCarStatus,
+      });
+      return { ok: true, host };
+    } catch {
+      return { ok: false, host: null };
+    }
+  }, []);
+
   const handleWifiConnect = useCallback(
     async (overrideUrl?: string) => {
       setError(null);
@@ -1491,6 +1555,37 @@ export function useControlHub(routeCategory?: string) {
         setError(reason);
         return { ok: false, reason };
       } catch (e) {
+        // U-80 (owner 2026-10-03, "automatic"): the phone probably just followed
+        // the car onto a NEW router and the old address is dead. Before giving
+        // up, LOOK for the car automatically — remembered lease first (one
+        // probe), then a bounded /24 sweep of the phone's own subnet. Every
+        // ingredient is app-local (NetInfo + the car's own /status), so this
+        // needs no new APK and costs nothing when the phone is somewhere else.
+        const looked = await findCarForUser();
+        if (looked.ok && looked.host) {
+          try {
+            await wifiService.connect(CAR_WS_URL(looked.host));
+            const answered = await wifiService.waitForCarAnswer();
+            if (answered && mountedRef.current) {
+              setWifiConnected(true);
+              setLinkVerified(true);
+              setError(null);
+              showConnectionMessage(
+                `Car found automatically at ${looked.host} — connected.`,
+                "success",
+              );
+              setTimeout(() => {
+                wifiService.requestState().catch(() => {});
+              }, 200);
+              return {
+                ok: true,
+                message: `Found the car at ${looked.host}.`,
+              };
+            }
+          } catch {
+            /* fall through to the honest error below */
+          }
+        }
         const reason = e instanceof Error ? e.message : "WiFi connect failed";
         if (mountedRef.current) {
           setError(reason);
@@ -1555,7 +1650,7 @@ export function useControlHub(routeCategory?: string) {
       // STATE;IP= broadcasts the router IP for the user to dial.
       wifiService.disconnect().catch(() => {});
       showConnectionMessage(
-        `Sent WiFi "${ssid}" to the car — it is switching to Webserver/join mode.`,
+        `Sent WiFi "${ssid}" to the car — it is joining that network. Join it on this phone too; the U-80 prompt will remind you.`,
         "success",
       );
     } catch (e) {
@@ -1944,6 +2039,10 @@ export function useControlHub(routeCategory?: string) {
         // `lastWifiSsid` is what pre-fills the field next session and seeds the
         // smart-link's recency pick, so a switch is remembered as a switch.
         persistRouters(next, answer.ssid);
+        // U-80 (owner 2026-10-03): the car just moved networks - TELL the user
+        // to move the phone too, simply and immediately, no matter which
+        // surface fired the switch (panel, webpage, remote, smart-link).
+        setRouterSwitchNotice(answer.ssid);
       } else if (answer.kind === "deleted") {
         const next = withoutName(answer.ssid);
         setCarNetworks(next);
@@ -2562,6 +2661,10 @@ export function useControlHub(routeCategory?: string) {
     // U-74: the last router lease the car reported, so the Control Panel can offer
     // a one-tap reconnect after the hotspot link drops.
     lastRouterIp,
+    // U-80: the car switched networks — "join <ssid> on this phone" prompt
+    // (simple, immediate, on any surface; auto-expires).
+    routerSwitchNotice,
+    dismissRouterSwitchNotice,
     // D3 (U-68): the car's own antenna scan result, so the Control Panel can
     // offer a real nearby-network list. `null` until the car answers.
     carScan,

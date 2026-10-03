@@ -44,6 +44,31 @@ export const CAR_STATUS_URL = (host: string) => `http://${host}:80/status`;
 /** The drive link. Port 81 is the WebSocket, always up. */
 export const CAR_WS_URL = (host: string) => `ws://${host}:81`;
 
+// =====================================================================
+// Fetch one car `/status`, bounded in time. (Moved here from
+// ConnectionSection.tsx in U-80: the hub's automatic discovery needs the
+// same probe, and the pure module is its home — no React, no component.)
+//
+// A closed port is the EXPECTED majority in a sweep, so this rejects rather
+// than resolving empty and lets the caller move straight on to the next
+// host. `AbortController` + a timer instead of `AbortSignal.timeout`, which
+// is not reliably present in React Native's fetch polyfill.
+// =====================================================================
+export async function probeCarStatus(
+  url: string,
+  timeoutMs: number,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as unknown;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Per-probe timeout. Short: a wrong address should not hold the sweep up. */
 export const PROBE_TIMEOUT_MS = 1200;
 /** How many probes in flight at once. */

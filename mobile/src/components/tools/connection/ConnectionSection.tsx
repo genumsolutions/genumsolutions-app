@@ -68,6 +68,7 @@ import {
   findCarOnNetwork,
   methodOfTarget,
   normalizeRouters,
+  probeCarStatus,
   planSwitch,
   resolveDial,
   subnetCandidates,
@@ -101,28 +102,9 @@ type Message = { tone: "error" | "ok" | "info"; text: string };
 const DEVICE_LIST_MAX_HEIGHT = 260;
 
 // =====================================================================
-// Fetch one car `/status`, bounded in time.
-//
-// A closed port is the EXPECTED majority in a sweep, so this rejects rather than
-// resolving empty and lets the caller move straight on to the next host.
-// `AbortController` + a timer is used instead of `AbortSignal.timeout`, which
-// is not reliably present in React Native's fetch polyfill — and the timeout is
-// what stops one dead host from stalling the whole sweep.
+// (U-80) probeCarStatus moved to ./discovery.ts — the hub's automatic
+// discovery shares it, and the pure module is its home.
 // =====================================================================
-async function probeCarStatus(
-  url: string,
-  timeoutMs: number,
-): Promise<unknown> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as unknown;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export type ConnectionSectionProps = {
   hub: Hub;
@@ -169,6 +151,10 @@ export function ConnectionSection({
     lastRouterIp,
     routerDelete,
     routerClearAll,
+    // U-80: the car-switched-networks prompt + automatic discovery share this
+    // handler with the WiFi method card.
+    routerSwitchNotice,
+    dismissRouterSwitchNotice,
   } = hub;
 
   const [targetId, setTargetId] = useState<ConnectionTargetId | null>(null);
@@ -538,6 +524,46 @@ export function ConnectionSection({
 
   return (
     <View className="mt-3 gap-2.5">
+      {/* ---- U-80: the car moved networks — move this phone too ----------
+          Set the moment the car answers ROUTERS;USED on any transport. The
+          owner asked for it SIMPLE: one line, one action, no extra screens.
+          The AP link dropping during the switch is expected (one radio, one
+          channel — U-74), so this prompt is exactly what the user needs when
+          everything else appears to "stop working". */}
+      {routerSwitchNotice ? (
+        <ConnectionCard
+          title="The car switched networks"
+          subtitle={`It is joining "${routerSwitchNotice}" now`}
+          icon="wifi"
+          tone="busy"
+          testID="conn-phone-switch-prompt"
+        >
+          <InlineMessage tone="info">
+            Join <Text className="font-bold">{routerSwitchNotice}</Text> on this
+            phone&apos;s WiFi settings, then reconnect here. This is expected —
+            the car&apos;s hotspot drops while it moves to the router.
+          </InlineMessage>
+          <View className="mt-2 flex-row gap-2">
+            <ActionButton
+              flex
+              label="I joined — find the car"
+              icon="search"
+              onPress={() => void findCarOnThisNetwork()}
+              disabled={busy}
+              testID="conn-phone-switch-find"
+            />
+            <ActionButton
+              label="Dismiss"
+              variant="quiet"
+              onPress={() => {
+                tap();
+                dismissRouterSwitchNotice();
+              }}
+              testID="conn-phone-switch-dismiss"
+            />
+          </View>
+        </ConnectionCard>
+      ) : null}
       {/* ---- status ------------------------------------------------------ */}
       <ConnectionCard
         title="Connection"
