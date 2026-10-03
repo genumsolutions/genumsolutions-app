@@ -4,6 +4,7 @@ import React from "react";
 import { Platform } from "react-native";
 import type { CarTelemetry, ModeAvailReport } from "../../services/carProtocol";
 import type { CarMode } from "../../config/roboCarCatalog";
+import type { RouterOutcome } from "./connection/commands";
 
 export type SensorData = {
   temperature: number;
@@ -283,16 +284,26 @@ export type RouterPanelProps = {
   /** Saved-router names mirror (car `networks` JSON, optimistic edits,
       per-device savedRouters). Names only — never passwords. */
   networks: string[];
-  /** Fires when the car switches its ACTIVE router (ROUTERS;USE;<ssid>). */
-  onUse: (ssid: string) => void;
-  /** Fires on Add — ROUTERS;ADD;<ssid>;<pass> reaches the car over any link. */
-  onAdd: (ssid: string, pass: string) => void;
-  /** Fires on Delete — ROUTERS;DEL;<ssid>. */
-  onDelete: (ssid: string) => void;
+  // ---- U-81: every router action returns the CAR'S ANSWER -------------
+  //
+  // These used to be `=> void`. That is what let this panel lie: it fired a
+  // command, cleared its form on a 600 ms timer and showed the new name,
+  // without ever finding out whether the car had accepted it — so `ROUTERS;FULL`,
+  // `Reserved`, `Password too long`, `SSID length`, `Syntax` and a plain timeout
+  // were all pixel-identical to a success. The Control Panel had already been
+  // moved onto the ack-consuming API in U-68; this shared panel is now on it too
+  // (`requestRouter` / `runSwitchPlan`). Returning the outcome is what makes the
+  // panel able to tell the truth — see `connection/routerPanelOutcome.ts`.
+  /** Switch the car to a saved router. Resolves once the car answers. */
+  onUse: (ssid: string) => Promise<RouterOutcome>;
+  /** Add (or re-add, upsert) a router. Resolves once the car answers. */
+  onAdd: (ssid: string, pass: string) => Promise<RouterOutcome>;
+  /** Delete one saved router. Resolves once the car answers. */
+  onDelete: (ssid: string) => Promise<RouterOutcome>;
   /** A-42 (round-9): fires on "Clear all" (after the confirm) —
       ROUTERS;CLEAR wipes every saved router + the active pair on car+remote
-      and reverts to the car's OWN network (T-62). */
-  onClear: () => void;
+      and reverts to the car's OWN network (T-62). Resolves on the answer. */
+  onClear: () => Promise<RouterOutcome>;
   onOpenWebPage: () => void;
   /**
    * R4-4 (owner: add/edit/delete saved routers): opens the EDIT view for one

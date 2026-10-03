@@ -89,6 +89,9 @@ export type RouterAnswer =
   | { kind: "deleted"; ssid: string }
   | { kind: "cleared" }
   | { kind: "full" }
+  /** `ROUTERS;SCAN;STARTED` — the car accepted a scan and will report later.
+   *  NOT a list: see `parseRouterAnswer`. */
+  | { kind: "scanStarted" }
   | { kind: "error"; code: string; detail: string };
 
 /**
@@ -140,9 +143,21 @@ export function parseRouterAnswer(text: string): RouterAnswer | null {
     case "FULL":
       return { kind: "full" };
     case "SCAN":
-      // The car's scan answer. Absent from every shipped binary so far, but
-      // parsed so the shape is pinned before the firmware lands (D3).
-      return { kind: "list", ssids: parts.slice(2).filter(Boolean) };
+      // U-81 (2026-10-03): this used to return `kind: "list"`, so the car's
+      // `ROUTERS;SCAN;STARTED` acknowledgement was read as a saved-router list
+      // containing a router literally named "STARTED" — which was then written
+      // to AsyncStorage AND the shared `car_profiles` row, and (because a list
+      // answer never settles a pending request) left every scan timing out with
+      // "the car did not answer" while the app showed a phantom network in the
+      // one list that tells the user where the car is.
+      //
+      // A scan acknowledgement is its own thing. It must never reach the list
+      // branch, so it is a distinct kind and the persistence derivation's
+      // `default` arm ignores it (nothing to remember — a scan changes no
+      // saved router), while `outcomeFor` settles the pending scan honestly.
+      // The scan RESULTS arrive separately as the `SCAN;` data line / the
+      // JSON `"scan"` array, which is data, not an outcome.
+      return { kind: "scanStarted" };
     case "ERROR": {
       // The firmware packs the offending ssid onto the code with a colon:
       // `ROUTERS;ERROR;Not saved:HomeNet`. Split it so `outcomeFor` can
@@ -267,6 +282,12 @@ export function outcomeFor(
       };
     case "cleared":
       return { ok: true, message: "Cleared every saved router." };
+    case "scanStarted":
+      return {
+        ok: true,
+        message:
+          "The car is scanning for networks. Results appear in a moment.",
+      };
   }
 }
 

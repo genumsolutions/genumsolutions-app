@@ -1,9 +1,24 @@
 // =====================================================================
 // ToolsScreen — the Control Panel.
 //
-// Category organizer with category selector, detail card, connection
-// card, and Remote window handoff. This is the single entry point
-// from Menu → Control Panel and Projects → Control.
+// U-81 (owner 2026-10-03): the page order is now CAR -> CONNECT -> PROJECTS.
+//
+// It used to open with the project catalog — kind headers, seven category
+// pills, then a detail card carrying a tagline, a description and a capability
+// checklist — with the car itself reachable only after all of it. The owner's
+// complaint was "too confusing and shows unnecessary data too much", and for
+// someone whose car had just swallowed a newly added router that ordering is
+// exactly backwards: product copy first, the one fact they came for last.
+//
+// So the top of the page is now the car's own instrument panel — a status dot,
+// the reported mode / network / address, and six readings drawn as hairline
+// tiles with uppercase micro-labels and monospaced values, matching the
+// website's RoboCar control panel (genumsolutions-website/components/
+// RoboCarControl.tsx). Every reading is either something the car reported or an
+// em dash; the formatting and its edge cases are tested in telemetryFormat.ts.
+//
+// The catalog is unchanged and still chooses which deck opens. It just stopped
+// being the first thing on the screen.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -29,6 +44,14 @@ import {
   type ConnectionMethodId,
 } from "../components/tools/connection";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
+import {
+  CarStatusLine,
+  TelemetryStrip,
+} from "../components/tools/TelemetryStrip";
+import {
+  buildCarTelemetry,
+  describeCar,
+} from "../components/tools/telemetryFormat";
 import { feedbackTap } from "../services/hapticsService";
 import {
   KIND_GROUPS,
@@ -308,17 +331,96 @@ export function ToolsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header */}
-        <View className="flex-row items-center justify-between">
-          <View className="min-w-0 flex-1">
-            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+        {/* ---- U-81: the CAR leads. ------------------------------------
+            The page used to open with the project catalog — kind headers,
+            seven category pills, then a detail card carrying a tagline, a
+            description and a capability checklist — and only reached the car
+            after all of it. For someone asking "where is my car / the router
+            I just added is not there", that is the exact wrong first screen:
+            three screens of product copy, then the one fact they came for.
+
+            So the order is now car -> connect -> catalogue. The catalog is
+            still here and still does its job (it picks which deck opens); it
+            just stopped being the thing you read first.
+
+            Visual language is the website's RoboCar control panel
+            (genumsolutions-website/components/RoboCarControl.tsx): a status
+            dot, hairline tiles, uppercase micro-labels, monospaced values.
+            Every reading is either something the car said or an em dash. */}
+        <View className="rounded-2xl border border-line bg-card p-4 shadow-card">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
               Control Panel
             </Text>
-            <Text className="mt-2 font-display text-2xl font-bold text-ink">
-              Test &amp; control your projects
+            <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
+              {connected ? "Live" : "No link"}
             </Text>
           </View>
+          <CarStatusLine
+            connected={connected}
+            summary={describeCar({
+              id: telemetry.id,
+              mode: telemetry.mode,
+              ssid: telemetry.ssid ?? carSsid,
+              ip: telemetry.ip,
+            })}
+          />
+          <TelemetryStrip
+            fields={buildCarTelemetry({
+              connected,
+              // The car's REPORTED mode, not `activeMode` — the app can be
+              // showing a mode the car has not confirmed, and the strip is
+              // where that difference has to be visible.
+              mode: telemetry.mode,
+              speed: telemetry.speed,
+              rssi: telemetry.rssi,
+              signal: telemetry.signal,
+              uptimeMs: telemetry.uptimeMs,
+              freeHeap: telemetry.freeHeap,
+              linkLabel: wifiConnected
+                ? "Wi-Fi"
+                : sppStatus === "connected"
+                  ? "Bluetooth"
+                  : deviceName
+                    ? "Bluetooth"
+                    : null,
+            })}
+          />
         </View>
+
+        {/* Connections — the ONE connection surface (owner ①②). Placed
+            directly under the car status because connecting IS the next
+            action, not something to scroll to. */}
+        <View className="mt-4 rounded-2xl border border-line bg-card p-4 shadow-card">
+          <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
+            Connect
+          </Text>
+
+          {/* U-68 (2026-10-02): the connection layer, rebuilt. This ONE
+              section replaces ConnectionBanner, the F-59 handoff card,
+              TransportPicker and RouterPanel on this page - they were four
+              card shapes with four behaviours (F-67). The Remote screen still
+              mounts RouterPanel and is deliberately untouched.
+
+              `keyboardShouldPersistTaps="handled"` + the scroll-into-view
+              handler above are F-69: the tap that focuses a field must not be
+              eaten by the keyboard opening, and the focused field must end up
+              above it. */}
+          <ConnectionSection
+            hub={hub}
+            method={connMethod}
+            onMethodChange={setConnMethod}
+            onInputFocus={scrollInputIntoView}
+            feedbackTap={feedbackTap}
+          />
+        </View>
+
+        {/* ---- Projects: the catalog, now BELOW the car (U-81). ----
+            Unchanged in behaviour — same pills, same order, same detail card
+            and the same deck CTA. It only lost the top of the page. */}
+        <Text className="mt-6 text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
+          Projects
+        </Text>
 
         {/* Category selector — grouped by KIND (PLAN-2026-09-29 §2): two slim
             section headers above the same 7 pills in the SAME order as before.
@@ -327,7 +429,7 @@ export function ToolsScreen() {
           const pills = categories.filter((c) => group.slugs.includes(c.slug));
           if (pills.length === 0) return null;
           return (
-            <View key={group.label} className="mt-5">
+            <View key={group.label} className="mt-3">
               <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
                 {group.label}
               </Text>
@@ -456,64 +558,35 @@ export function ToolsScreen() {
           </Pressable>
         </View>
 
-        {/* Connections — the ONE connection surface (owner ①⑥) */}
-        <View className="mt-6">
-          <View className="flex-row items-center justify-between">
-            <View className="min-w-0 flex-1">
-              <Text className="text-xs font-black uppercase tracking-widest text-navy">
-                Connections
-              </Text>
-            </View>
-          </View>
-
-          {/* U-68 (2026-10-02): the connection layer, rebuilt. This ONE
-              section replaces ConnectionBanner, the F-59 handoff card,
-              TransportPicker and RouterPanel on this page - they were four
-              card shapes with four behaviours (F-67). The Remote screen still
-              mounts RouterPanel and is deliberately untouched.
-
-              `keyboardShouldPersistTaps="handled"` + the scroll-into-view
-              handler above are F-69: the tap that focuses a field must not be
-              eaten by the keyboard opening, and the focused field must end up
-              above it. */}
-          <ConnectionSection
-            hub={hub}
-            method={connMethod}
-            onMethodChange={setConnMethod}
-            onInputFocus={scrollInputIntoView}
-            feedbackTap={feedbackTap}
-          />
-
-          {/* ①: the saved-settings block folds away — control surfaces lead. */}
-          <SectionDisclosure title="Saved settings">
-            <CarProfileCard
-              profileKey={hub.profileKey}
-              savedPrefs={hub.savedPrefs}
-              autoJoinRouter={hub.autoJoinRouter}
-              setAutoJoinRouter={(v) => {
-                feedbackTap();
-                hub.setAutoJoinRouter(v);
-              }}
-              profileSync={hub.profileSync}
-              modeName={
-                hub.savedPrefs?.modeId
-                  ? (hub.carModes.find((m) => m.id === hub.savedPrefs?.modeId)
-                      ?.name ?? null)
+        {/* ①: the saved-settings block folds away — control surfaces lead. */}
+        <SectionDisclosure title="Saved settings">
+          <CarProfileCard
+            profileKey={hub.profileKey}
+            savedPrefs={hub.savedPrefs}
+            autoJoinRouter={hub.autoJoinRouter}
+            setAutoJoinRouter={(v) => {
+              feedbackTap();
+              hub.setAutoJoinRouter(v);
+            }}
+            profileSync={hub.profileSync}
+            modeName={
+              hub.savedPrefs?.modeId
+                ? (hub.carModes.find((m) => m.id === hub.savedPrefs?.modeId)
+                    ?.name ?? null)
+                : null
+            }
+            carLabel={
+              sppStatus === "connected"
+                ? deviceName || null
+                : wifiConnected
+                  ? apName
                   : null
-              }
-              carLabel={
-                sppStatus === "connected"
-                  ? deviceName || null
-                  : wifiConnected
-                    ? apName
-                    : null
-              }
-              carId={carIdentityId}
-              staSsid={staSsid}
-              apName={apName}
-            />
-          </SectionDisclosure>
-        </View>
+            }
+            carId={carIdentityId}
+            staSsid={staSsid}
+            apName={apName}
+          />
+        </SectionDisclosure>
 
         {/* About this project — the page ENDS here (owner 2026-09-29: the
           teaching card after it is gone). ①: folded behind a disclosure so

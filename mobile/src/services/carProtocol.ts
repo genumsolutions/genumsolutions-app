@@ -344,7 +344,14 @@ export function buildWifiConfigLine(ssid: string, password: string): string {
  * car renders its own frame; every token stays selectable so app and device
  * can toggle across all 9 modes.
  */
-export type ModeAvailReport = "LIVE" | "WIP" | "CS";
+/**
+ * How functional a mode is on the PAIRED car.
+ *
+ * `GONE` is new in U-81 and means: **this car does not have this mode at all.**
+ * It is not a flavour of "not ready" — the token is absent from the car's own
+ * registry, so sending it can only ever be refused.
+ */
+export type ModeAvailReport = "LIVE" | "WIP" | "CS" | "GONE";
 
 /**
  * Fallback stub table for tokens the paired car has NOT reported yet.
@@ -391,6 +398,28 @@ export function canonicalCarToken(token: string | null | undefined): string {
  *
  * The legacy stub map keeps filling as the car visits modes, so mixed
  * old/new fleets converge without extra controller work.
+ *
+ * ---- U-81: a CAPS line is the car's COMPLETE registry, so ABSENCE means GONE
+ *
+ * `ModeManager::buildCapsMap` walks the whole `MODE_REGISTRY` and prints every
+ * row (`ModeManager.cpp:64-81`), so a `CAPS;` line is not a delta — it is the
+ * entire list of modes that car will ever accept. Before this fix, step 3
+ * answered "not in the table" with LIVE, which was only safe while every car
+ * really did have all nine modes.
+ *
+ * U-79 stopped being safe: it REMOVED `ESP_SER`/`ESP_CLI` from the registry
+ * outright rather than marking them CS, so the new 4WD4M broadcasts
+ *
+ *     CAPS;4WD4M:LIVE;PATH:CS;OBS_US:CS;OBS_IR:CS;MAN:CS;AUTO:CS;2WD1M:CS
+ *
+ * with no `ESP_SER` key at all — and the app rendered "EspWebServer" as fully
+ * available on the one car that had deleted it. Tapping it sent a token the car
+ * refuses, every time. Absence was being read as permission.
+ *
+ * This only trusts absence when a CAPS table was actually received, so a car
+ * too old to broadcast one keeps the fleet fallback and old cars are
+ * unaffected: the pre-U-79 4WD4M announces `ESP_SER:LIVE` / `ESP_CLI:WIP`
+ * itself.
  */
 export function modeAvailStatus(
   token: string | null | undefined,
@@ -401,6 +430,8 @@ export function modeAvailStatus(
   if (!t) return "CS";
   const report = carAvailMap?.[t];
   if (report === "LIVE" || report === "WIP" || report === "CS") return report;
+  // We have the car's whole registry and this token is not in it.
+  if (carAvailMap && Object.keys(carAvailMap).length > 0) return "GONE";
   const reported = carStubMap[t];
   if (typeof reported === "boolean") return reported ? "CS" : "LIVE";
   return FALLBACK_STUB_TOKENS.has(t) ? "CS" : "LIVE";

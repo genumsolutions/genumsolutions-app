@@ -17,39 +17,17 @@
 // the whole point of consuming the reply (F-62) — an answer that is parsed and
 // then ignored is a silent failure.
 //
-// This is a pure transcription of the hub's persistence rule so the logic is
-// checkable without mounting the hook. `persistRouters` in useControlHub applies
-// exactly this.
+// This used to carry its own `applyAnswer` transcription of the hub's
+// persistence rule "so the logic is checkable without mounting the hook".
+// U-81 extracted that rule to production code (`deriveRouters` in
+// ./routerMemory) and the hub now calls it — so these assertions run against
+// the code the app actually executes, with no second copy to drift.
 import { describe, expect, it } from "vitest";
 
-import { parseRouterAnswer, type RouterAnswer } from "./commands";
+import { parseRouterAnswer } from "./commands";
+import { deriveRouters } from "./routerMemory";
 
-/** Mirror of useControlHub's persistRouters derivation. */
-function applyAnswer(
-  current: readonly string[],
-  answer: RouterAnswer,
-): { next: string[]; lastSsid?: string } | null {
-  const list = current.slice();
-  const withName = (s: string) =>
-    list.some((n) => n.toUpperCase() === s.toUpperCase()) ? list : [...list, s];
-  const withoutName = (s: string) =>
-    list.filter((n) => n.toUpperCase() !== s.toUpperCase());
-
-  switch (answer.kind) {
-    case "list":
-      return { next: answer.ssids.slice() };
-    case "added":
-      return { next: withName(answer.ssid), lastSsid: answer.ssid };
-    case "used":
-      return { next: withName(answer.ssid), lastSsid: answer.ssid };
-    case "deleted":
-      return { next: withoutName(answer.ssid) };
-    case "cleared":
-      return { next: [] };
-    default:
-      return null; // full / error -> nothing is remembered
-  }
-}
+const applyAnswer = deriveRouters;
 
 const AP = "4WDCar_Wifi";
 const START = [AP, "HomeNet"];
@@ -107,6 +85,17 @@ describe("U-71 — a confirmed change is remembered, a failed one is not", () =>
   it("adding a router the list already has does not duplicate it", () => {
     const r = applyAnswer(START, parseRouterAnswer("ROUTERS;ADDED;HomeNet")!);
     expect(r!.next).toEqual([AP, "HomeNet"]);
+  });
+
+  // U-81 (2026-10-03): a scan acknowledgement must not touch the remembered
+  // list AT ALL. It used to parse as `kind: "list"` with the ssids taken from
+  // the line, so `ROUTERS;SCAN;STARTED` persisted a router named "STARTED" —
+  // in AsyncStorage and in the shared `car_profiles` row — and the one list
+  // that tells the user where the car is grew a network that does not exist.
+  it("a scan acknowledgement remembers nothing", () => {
+    const answer = parseRouterAnswer("ROUTERS;SCAN;STARTED")!;
+    expect(answer.kind).toBe("scanStarted");
+    expect(applyAnswer(START, answer)).toBeNull();
   });
 
   it("matching is case-insensitive, like every other name comparison (F-64)", () => {

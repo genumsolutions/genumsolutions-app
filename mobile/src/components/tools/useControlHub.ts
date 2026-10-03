@@ -74,6 +74,7 @@ import {
   type RouterRequest,
   type SwitchPlan,
 } from "./connection/commands";
+import { deriveRouters } from "./connection/routerMemory";
 import { isCarApGateway } from "./connection/dial";
 import { linkManager } from "../../transports/linkManager";
 import {
@@ -1132,13 +1133,26 @@ export function useControlHub(routeCategory?: string) {
       // R-10: full availability table (CAPS;â€¦ broadcast) â€” authoritative
       // per-token 3-state truth. Canonical keys (legacy BT â†’ 4WD4M).
       if (t.caps && Object.keys(t.caps).length > 0) {
+        // U-81: REPLACE, do not merge. A CAPS line is the car's complete registry
+        // (ModeManager::buildCapsMap walks all of MODE_REGISTRY), so it is a
+        // snapshot to adopt, not a delta to accumulate. Merging kept tokens from
+        // a PREVIOUS car alive forever, which would quietly defeat the
+        // absence-means-GONE rule in modeAvailStatus: a mode the current car does
+        // not have would still look supported because some other car once
+        // announced it.
         setCarAvailMap((prev) => {
-          let next = prev;
-          for (const [tok, val] of Object.entries(t.caps!)) {
-            if (!tok) continue;
-            next = next[tok] === val ? next : { ...next, [tok]: val };
+          const incoming = t.caps as Record<string, string>;
+          let changed =
+            Object.keys(prev).length !== Object.keys(incoming).length;
+          if (!changed) {
+            for (const [tok, val] of Object.entries(incoming)) {
+              if (prev[tok] !== val) {
+                changed = true;
+                break;
+              }
+            }
           }
-          return next;
+          return changed ? { ...incoming } : prev;
         });
       }
       // R-4 (app half): the car rejected a sent mode token â€” park it as
@@ -1736,6 +1750,35 @@ export function useControlHub(routeCategory?: string) {
         `${MODE_NAME_FOR_TOKEN[tok] ?? tok} is not supported by this car.`,
         "error",
       );
+
+      // U-81: roll the DISPLAY back. `selectMode` set the new mode optimistically
+      // the instant it was tapped, and before this the refusal did not undo it —
+      // so the app showed a mode the car had just rejected and only corrected
+      // itself if some later, unrelated `MODE=` frame happened to arrive after
+      // MODE_CHANGE_GRACE_MS. F-62: consume the answer. The car said no, so stop
+      // showing yes.
+      //
+      // A NACK frame carries no `mode` field (carProtocol.ts returns early), so
+      // the car's own last-reported mode is the only truth available to restore.
+      const commit = modeCommitRef.current;
+      modeCommitRef.current = null;
+      if (commit && commit.token === tok) {
+        const reportedId = carModeIdRef.current ?? commit.stale;
+        const back =
+          (reportedId
+            ? carModesRef.current.find(
+                (m) =>
+                  m.id === reportedId.toLowerCase() || m.token === reportedId,
+              )
+            : undefined) ??
+          carModesRef.current.find((m) => m.token === commit.stale);
+        if (back) {
+          setActiveMode(back);
+          // The refused id was persisted on tap; leaving it there would restore
+          // a mode this car does not have on the next launch.
+          persistPrefsRef.current?.({ modeId: back.id });
+        }
+      }
     },
     [showConnectionMessage],
   );
@@ -2009,15 +2052,6 @@ export function useControlHub(routeCategory?: string) {
     (text: string) => {
       const answer = parseRouterAnswer(text);
       if (!answer) return false;
-      const current = () => savedNetworksRef.current.slice();
-      const withName = (s: string) => {
-        const next = current();
-        return next.some((n) => n.toUpperCase() === s.toUpperCase())
-          ? next
-          : [...next, s];
-      };
-      const withoutName = (s: string) =>
-        current().filter((n) => n.toUpperCase() !== s.toUpperCase());
 
       // A list is DATA, not an acknowledgement: refresh the mirror but never
       // let it resolve a pending command (a scan result must not look like
@@ -2027,29 +2061,19 @@ export function useControlHub(routeCategory?: string) {
         persistRouters(answer.ssids.slice());
         return true;
       }
-      // Persist from the ANSWER before resolving, so a caller that reacts to the
-      // resolved outcome (clearing a form, closing a panel) cannot race the save.
-      if (answer.kind === "added") {
-        const next = withName(answer.ssid);
-        setCarNetworks(next);
-        persistRouters(next, answer.ssid);
-      } else if (answer.kind === "used") {
-        const next = withName(answer.ssid);
-        setCarNetworks(next);
-        // `lastWifiSsid` is what pre-fills the field next session and seeds the
-        // smart-link's recency pick, so a switch is remembered as a switch.
-        persistRouters(next, answer.ssid);
+
+      // U-81: the derivation itself is `deriveRouters` in ./connection/routerMemory
+      // — the SAME function the tests assert. It used to be inlined here with a
+      // transcribed twin in the test file, which let the two disagree (the
+      // phantom "STARTED" router). `null` = this answer changes nothing.
+      const memory = deriveRouters(savedNetworksRef.current, answer);
+      if (memory) {
+        setCarNetworks(memory.next.slice());
+        persistRouters(memory.next.slice(), memory.lastSsid);
         // U-80 (owner 2026-10-03): the car just moved networks - TELL the user
         // to move the phone too, simply and immediately, no matter which
         // surface fired the switch (panel, webpage, remote, smart-link).
-        setRouterSwitchNotice(answer.ssid);
-      } else if (answer.kind === "deleted") {
-        const next = withoutName(answer.ssid);
-        setCarNetworks(next);
-        persistRouters(next);
-      } else if (answer.kind === "cleared") {
-        setCarNetworks([]);
-        persistRouters([]);
+        if (answer.kind === "used") setRouterSwitchNotice(answer.ssid);
       }
 
       const pending = routerPendingRef.current;

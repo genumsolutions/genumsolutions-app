@@ -173,14 +173,28 @@ export function ModeChooser({
                 // R-10: availability is CAR truth (CAPS table → stub map →
                 // fleet fallback). The state styles the row + badge — the row
                 // is ALWAYS selectable (owner decision 2026-09-15).
+                //
+                // U-81, one exception: `GONE` means the token is absent from
+                // this car's own registry, so the car CANNOT accept it. The
+                // 2026-09-15 ruling was made when every car had all nine
+                // modes and a CS/WIP tap was still worth allowing. U-79 deleted
+                // ESP_SER/ESP_CLI outright, which made the ruling cover sending
+                // a token that is guaranteed to be refused. So a GONE row is
+                // shown for honesty but cannot be selected.
                 const avail = modeAvailStatus(
                   m.token,
                   carStubMap ?? {},
                   carAvailMap,
                 );
+                const gone = avail === "GONE";
                 const notLive = avail !== "LIVE";
-                const badge =
-                  avail === "WIP"
+                const badge = gone
+                  ? {
+                      text: "Not on this car",
+                      cls: "bg-white/10",
+                      txt: "text-slate-400",
+                    }
+                  : avail === "WIP"
                     ? {
                         text: "Work in progress",
                         cls: "bg-sky-500/15",
@@ -191,21 +205,23 @@ export function ModeChooser({
                         cls: "bg-amber-500/15",
                         txt: "text-amber-400",
                       };
-                const markLine =
-                  avail === "WIP"
+                const markLine = gone
+                  ? " · this car does not have this mode"
+                  : avail === "WIP"
                     ? " · work in progress on this car"
                     : " · coming soon on this car";
                 return (
                   <Pressable
                     key={m.id}
                     onPress={() => {
-                      if (locked) return;
+                      if (locked || gone) return;
                       feedbackTap();
                       onSelect(m);
                       closeDropdown();
                     }}
-                    disabled={locked}
+                    disabled={locked || gone}
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: locked || gone }}
                     className={`mt-0.5 flex-row items-center justify-between rounded-lg px-2 py-1 ${
                       isActive
                         ? "bg-navy"
