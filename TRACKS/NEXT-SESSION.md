@@ -1,5 +1,37 @@
 # NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
 
+**U-80 (2026-10-03) - THE CAR SWITCHED NETWORKS → THE PHONE IS TOLD, AND THE APP FINDS THE CAR
+ITSELF. Owner: *"prompt the user to switch the phones network router too when the car switches the
+network but simply"* · *"the car app doesnt show where the car is for the new routers"* ·
+*"all the networks at one place ... the default hotspot is the last option"* · **fleet ruling:
+old cars KEEP ESP_SER/ESP_CLI — the app must not break for them.** Pairs with car firmware U-79
+(Genum_4WD4M_CAR `abb7297`, webserver mode deleted, transport power policy).
+
+1. **PHONE-SWITCH PROMPT (simple, as asked).** The moment the car answers `ROUTERS;USED;<ssid>` on
+   ANY transport, the hub sets `routerSwitchNotice` (auto-expires 4 min, dismissible) and the
+   Control Panel shows ONE card: "The car switched networks — Join <ssid> on this phone, then
+   reconnect here", with one button ("I joined — find the car" → the U-74b sweep) + Dismiss. This
+   is the surface the owner never had: the AP link drop during a switch is EXPECTED (one radio,
+   one channel — U-74), and until now the app went silent exactly when the user needed telling.
+2. **AUTOMATIC DISCOVERY (owner picked "Automatic").** `handleWifiConnect`'s failure path now runs
+   `findCarForUser()` BEFORE reporting failure: remembered lease / bounded /24 sweep of the
+   phone's own subnet (the U-68/U-74b pure engine, no new APK), then dials the found car and
+   reports "Car found automatically at <ip>". A phone that followed the car onto a new router now
+   reconnects WITHOUT the user hunting for an address.
+3. **FLEET SAFETY (the constraint that shaped the round).** No mode list was hardcoded anywhere:
+   the app already renders availability from each car's own CAPS map (parseCapsBody →
+   carStubMap/carAvailMap → modeAvailStatus), and `roboCarCatalog.ts` intentionally keeps the
+   ESP_SER/ESP_CLI tokens for the older cars (a new-firmware car NACKs those tokens and stays
+   put — no harm). `nextRemoteModeToken` keeps the fleet order for old cars. Result: the 4WD4M
+   car (U-79 firmware) simply never advertises those tokens; old cars keep theirs; one APK
+   serves both.
+4. **Residue:** the stale "switching to Webserver/join mode" provisioning toast now says what
+   actually happens ("it is joining that network — join it on this phone too").
+
+Gates: tsc 0 · vitest 543/543 · prettier clean. `probeCarStatus` moved to connection/discovery.ts
+(pure module — the hub shares it). OTA publishes automatically on push (runtime unchanged).
+
+
 CLEANUP ROUND 2026-10-03 (U-78, paired with car firmware U-77): repo hygiene audited end to end —
 tsc 0 errors, **543/543 vitest tests pass**, prettier --check clean, git side clean (android/,
 keystores/, releases/, dist/ all correctly gitignored — signing material stays local only).
