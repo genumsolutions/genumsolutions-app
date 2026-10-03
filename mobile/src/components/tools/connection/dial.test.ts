@@ -31,10 +31,10 @@ describe("the own-AP gateways are recognised, not guessed around", () => {
   });
 });
 
-describe("car-hotspot - the one legitimate constant", () => {
-  it("always resolves, because the car broadcasts this network", () => {
+describe("car-wifi - one target, the car's own address (U-86)", () => {
+  it("falls back to the AP constant only when the car reported nothing", () => {
     const d = resolveDial({
-      target: "car-hotspot",
+      target: "car-wifi",
       reportedIp: null,
       reportedSsid: null,
       ownApName: AP,
@@ -44,22 +44,23 @@ describe("car-hotspot - the one legitimate constant", () => {
     expect(d!.source).toBe("car-ap-constant");
   });
 
-  it("prefers the address the car actually reports", () => {
+  it("prefers ANY address the car reports, including its own hotspot", () => {
+    // U-86: the old code REFUSED the AP gateway for the home-router target,
+    // which is what made "which target am I on" a question the user had to
+    // answer. There is one target now, and a reported address is the truth.
     const d = resolveDial({
-      target: "car-hotspot",
-      reportedIp: "192.168.244.1",
+      target: "car-wifi",
+      reportedIp: "192.168.245.1",
       reportedSsid: AP,
       ownApName: AP,
     });
-    expect(d!.url).toBe("ws://192.168.244.1:81");
+    expect(d!.url).toBe("ws://192.168.245.1:81");
     expect(d!.source).toBe("car-reported");
   });
-});
 
-describe("home-router - a reported address or NOTHING", () => {
-  it("dials the address the car reported", () => {
+  it("dials a router address the car reported", () => {
     const d = resolveDial({
-      target: "home-router",
+      target: "car-wifi",
       reportedIp: "192.168.1.34",
       reportedSsid: "HomeNet",
       ownApName: AP,
@@ -71,43 +72,19 @@ describe("home-router - a reported address or NOTHING", () => {
     });
   });
 
-  it("REFUSES the car's own-AP gateway - the hotspot is never the router dial", () => {
-    // This is the D4 defect, stated as a test.
-    expect(
-      resolveDial({
-        target: "home-router",
-        reportedIp: "192.168.245.1",
-        reportedSsid: "HomeNet",
-        ownApName: AP,
-      }),
-    ).toBeNull();
-  });
-
-  it("has no dial at all when the car has reported nothing", () => {
-    expect(
-      resolveDial({
-        target: "home-router",
-        reportedIp: null,
-        reportedSsid: null,
-        ownApName: AP,
-      }),
-    ).toBeNull();
-  });
-
-  it("has no dial when the reported value is not an address", () => {
-    expect(
-      resolveDial({
-        target: "home-router",
-        reportedIp: "   ",
-        reportedSsid: "HomeNet",
-        ownApName: AP,
-      }),
-    ).toBeNull();
+  it("treats a blank reported value as nothing reported", () => {
+    const d = resolveDial({
+      target: "car-wifi",
+      reportedIp: "   ",
+      reportedSsid: "HomeNet",
+      ownApName: AP,
+    });
+    expect(d!.source).toBe("car-ap-constant");
   });
 
   it("strips a scheme the car reported rather than double-prefixing it", () => {
     const d = resolveDial({
-      target: "home-router",
+      target: "car-wifi",
       reportedIp: "ws://192.168.1.34:81",
       reportedSsid: "HomeNet",
       ownApName: AP,
@@ -115,7 +92,6 @@ describe("home-router - a reported address or NOTHING", () => {
     expect(d!.url).toBe("ws://192.168.1.34:81");
   });
 });
-
 describe("Bluetooth has no URL - it dials a MAC, not an address", () => {
   it("returns null so the URL path stays WiFi-only", () => {
     expect(

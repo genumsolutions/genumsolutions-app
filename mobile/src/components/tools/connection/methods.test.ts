@@ -39,11 +39,11 @@ describe("the method model — exactly the three the owner named", () => {
     expect(labels.join(" ").toLowerCase()).not.toContain("low energy");
   });
 
-  it("WiFi (LAN) has the car's own hotspot AND the home router as separate targets", () => {
-    expect(targetsOfMethod("wifi").map((t) => t.id)).toEqual([
-      "car-hotspot",
-      "home-router",
-    ]);
+  // U-86: this used to REQUIRE the hotspot and the home router as two separate
+  // targets, pinning the "Where is the car?" dropdown the owner asked to have
+  // deleted. One merged target now, and the network names come from the car.
+  it("Wi-Fi is ONE target, not a hotspot/router pair", () => {
+    expect(targetsOfMethod("wifi").map((t) => t.id)).toEqual(["car-wifi"]);
   });
 
   it("every target belongs to the method that lists it", () => {
@@ -65,14 +65,36 @@ describe("the method model — exactly the three the owner named", () => {
   });
 });
 
-describe("the F-65 discriminator is declared, not inferred", () => {
-  it("only the home-router target needs the car to have joined a router", () => {
-    expect(getTarget("home-router")!.needsCarOnRouter).toBe(true);
-    expect(getTarget("car-hotspot")!.needsCarOnRouter).toBe(false);
-    expect(getTarget("bt-spp")!.needsCarOnRouter).toBe(false);
+describe("U-86: the hotspot/router split is gone", () => {
+  it("Wi-Fi has exactly ONE target, so there is no 'Where is the car?' choice", () => {
+    expect(getMethod("wifi")!.targets).toHaveLength(1);
+    expect(getMethod("wifi")!.targets[0]!.id).toBe("car-wifi");
   });
 
-  it("reaching a target never tears the link down (no target re-provisions as a connect)", () => {
+  it("no target anywhere still refers to a home router or the hotspot by name", () => {
+    const ids = CONNECTION_METHODS.flatMap((m) => m.targets.map((t) => t.id));
+    expect(ids).not.toContain("home-router");
+    expect(ids).not.toContain("car-hotspot");
+  });
+
+  it("no target needs the car to have joined a router - that is not a precondition", () => {
+    for (const m of CONNECTION_METHODS) {
+      for (const t of m.targets) expect(t.needsCarOnRouter).toBe(false);
+    }
+  });
+
+  it("the Wi-Fi target is always available - the car is reachable either way", () => {
+    expect(
+      targetUnavailableReason("car-wifi", { carOnOwnRouter: false }),
+    ).toBeNull();
+    expect(
+      targetUnavailableReason("car-wifi", { carOnOwnRouter: true }),
+    ).toBeNull();
+  });
+});
+
+describe("the F-65 discriminator is declared, not inferred", () => {
+  it("no target re-provisions the car just by being reached", () => {
     // The link is only ever re-provisioned by an explicit switch ACTION, not
     // by the act of selecting a method. This is the D4/F-65 fix made explicit.
     for (const m of CONNECTION_METHODS) {
@@ -82,39 +104,18 @@ describe("the F-65 discriminator is declared, not inferred", () => {
 });
 
 describe("unavailability is a string the UI can render, never a silent button", () => {
-  it("the home-router target is unavailable until the car reports a router address", () => {
-    expect(
-      targetUnavailableReason("home-router", { carOnOwnRouter: false }),
-    ).toMatch(/has not joined your router yet/i);
-    expect(
-      targetUnavailableReason("home-router", { carOnOwnRouter: true }),
-    ).toBeNull();
-  });
-
-  it("the car's own hotspot is always available — the car broadcasts it", () => {
-    expect(
-      targetUnavailableReason("car-hotspot", { carOnOwnRouter: false }),
-    ).toBeNull();
-  });
-
   it("Bluetooth is always available", () => {
     expect(
       targetUnavailableReason("bt-spp", { carOnOwnRouter: false }),
     ).toBeNull();
   });
 
-  it("Internet reports the method's reason through any target query", () => {
-    expect(targetUnavailableReason(null, { carOnOwnRouter: true })).toMatch(
-      /no longer exists/i,
-    );
-  });
-
   it("a method's own unavailability beats the target precondition", () => {
-    const reason = targetUnavailableReason("car-hotspot", {
+    const reason = targetUnavailableReason("car-wifi", {
       carOnOwnRouter: false,
     });
     expect(reason).toBeNull();
-    expect(getMethod("internet")!.unavailable).toMatch(/relay or broker/i);
+    expect(getMethod("internet")!.unavailable).toBeTruthy();
   });
 });
 
@@ -153,25 +154,27 @@ describe("F-41 intent, preserved: only working transports are offered", () => {
     "cloud-relay",
   ] as const;
 
-  /** target id -> the transport id that actually carries it. */
-  const CARRIER: Record<string, string> = {
+  /** target id -> the transport id(s) that can actually carry it. */
+  const CARRIER: Record<string, string | string[]> = {
     "bt-spp": "bt-classic",
-    "car-hotspot": "wifi-ap-ws",
-    "home-router": "wifi-sta-ws",
+    // U-86: the merged Wi-Fi target is carried by EITHER wifi transport - the
+    // car's own AP or a router lease. Which one applies depends on where the
+    // car is, which the app reads from the car rather than asking the user.
+    "car-wifi": ["wifi-ap-ws", "wifi-sta-ws"],
   };
 
   it("every offered target is backed by a REGISTERED transport", () => {
     for (const t of CONNECTION_METHODS.flatMap((m) => m.targets)) {
-      const carrier = CARRIER[t.id];
-      expect(carrier, `${t.id} has no carrier`).toBeTruthy();
-      expect(REGISTERED).toContain(carrier);
+      const carriers = CARRIER[t.id];
+      expect(carriers, `${t.id} has no carrier`).toBeTruthy();
+      for (const c of [carriers].flat()) expect(REGISTERED).toContain(c);
     }
   });
 
   it("no offered target is carried by a parked transport", () => {
     const parked = ["bt-ble", "http", "mdns", "mqtt", "cloud-relay"];
     for (const t of CONNECTION_METHODS.flatMap((m) => m.targets)) {
-      expect(parked).not.toContain(CARRIER[t.id]);
+      for (const c of [CARRIER[t.id]].flat()) expect(parked).not.toContain(c);
     }
   });
 

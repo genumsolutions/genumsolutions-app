@@ -128,11 +128,15 @@ export function WifiPanel({
       if (seen.has(r.ssid)) continue;
       seen.add(r.ssid);
       if (r.isOwnAp) {
+        // U-86: the hotspot is a normal, tappable row again. It used to be
+        // listed but permanently disabled, so there was no way back to it from
+        // the app. planSwitch now emits a single USE step for it, and the
+        // firmware's T-66 handler keeps the saved-router registry intact.
         out.push({
           ssid: r.ssid,
           state: "hotspot",
           meta: "Car hotspot",
-          switchable: false,
+          switchable: true,
         });
       } else if (canSwitch.has(r.ssid)) {
         out.push({

@@ -210,7 +210,7 @@ describe("an answer becomes a readable outcome - the fix for silent failure", ()
   });
 });
 
-describe("the switch plan - ADD before USE, and never the own AP", () => {
+describe("the switch plan - ADD before USE, and USE-only for the own AP", () => {
   it("a router the car does not have: add, then use", () => {
     const p = planSwitch({
       target: "HomeNet",
@@ -245,22 +245,36 @@ describe("the switch plan - ADD before USE, and never the own AP", () => {
     expect(planSwitch({ target: "homenet", entries })!.steps).toHaveLength(1);
   });
 
-  it("REFUSES the car's own network - this is D1's fix, at the plan layer", () => {
+  // U-86 (owner): "switching or going back to default esp hotspot is not
+  // allowed, please enable that through the app." It used to be refused here,
+  // which is why the hotspot row was permanently dead in the UI.
+  it("ALLOWS switching back to the car's own hotspot, as a USE-only step", () => {
     const entries = normalizeRouters([AP, "HomeNet"]);
-    expect(planSwitch({ target: AP, entries })).toBeNull();
-    expect(
-      planSwitch({ target: "4w dcar_wifi".replace(" ", ""), entries }),
-    ).toBeNull();
+    const plan = planSwitch({ target: AP, entries });
+    expect(plan).not.toBeNull();
+    expect(plan!.steps).toEqual([{ kind: "use", ssid: AP }]);
+    // USE only, never ADD: the AP has no password and must not enter the
+    // saved-router registry.
+    expect(plan!.steps.some((s) => s.kind === "add")).toBe(false);
   });
 
-  it("refuses a car-reported own-AP name", () => {
-    expect(
-      planSwitch({
-        target: "GenumLab_AP",
-        entries: normalizeRouters(["GenumLab_AP", "Home"]),
-        ownApName: "GenumLab_AP",
-      }),
-    ).toBeNull();
+  it("matches the hotspot case- and space-insensitively, as a USE-only step", () => {
+    const entries = normalizeRouters([AP, "HomeNet"]);
+    const messy = "4w dcar_wifi".replace(" ", "");
+    const plan = planSwitch({ target: messy, entries });
+    expect(plan).not.toBeNull();
+    expect(plan!.steps).toEqual([{ kind: "use", ssid: messy }]);
+    expect(plan!.steps.some((s) => s.kind === "add")).toBe(false);
+  });
+
+  it("allows a car-reported own-AP name on the same USE-only terms", () => {
+    const plan = planSwitch({
+      target: "GenumLab_AP",
+      entries: normalizeRouters(["GenumLab_AP", "Home"]),
+      ownApName: "GenumLab_AP",
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.steps).toEqual([{ kind: "use", ssid: "GenumLab_AP" }]);
   });
 
   it("refuses a blank target", () => {

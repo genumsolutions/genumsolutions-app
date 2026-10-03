@@ -37,8 +37,12 @@
 /** The three methods, exactly. */
 export type ConnectionMethodId = "bluetooth" | "wifi" | "internet";
 
-/** A concrete connection target inside a method. */
-export type ConnectionTargetId = "bt-spp" | "car-hotspot" | "home-router";
+/**
+ * U-86: "The car's hotspot" and "Your home router" are gone as separate
+ * targets. One Wi-Fi target; the network the car is actually on is read from
+ * the car, not chosen here.
+ */
+export type ConnectionTargetId = "bt-spp" | "car-wifi";
 
 export type ConnectionTarget = {
   readonly id: ConnectionTargetId;
@@ -89,50 +93,45 @@ const BT_SPP: ConnectionTarget = {
   needsCarOnRouter: false,
 };
 
-const CAR_HOTSPOT: ConnectionTarget = {
-  id: "car-hotspot",
+/**
+ * U-86: ONE Wi-Fi target.
+ *
+ * There used to be two — "The car's hotspot" and "Your home router" — behind a
+ * "Where is the car?" dropdown. The owner called that section dumb and asked
+ * for it gone, and it was: the split describes how the phone happens to reach
+ * the car, not anything the user chooses. Worse, it showed the literal words
+ * "Your home router" even when the car was joined to something else, so the app
+ * could not say where the car actually was. The real network name comes from the
+ * car's own NETW line and is shown in the one list.
+ */
+const CAR_WIFI: ConnectionTarget = {
+  id: "car-wifi",
   method: "wifi",
-  label: "The car's hotspot",
-  blurb:
-    "The network the car broadcasts itself. Use this to add or switch the " +
-    "router the car joins.",
-  requirement: "Join the car's Wi-Fi on this phone first.",
+  label: "Wi-Fi",
+  blurb: "",
+  requirement: "",
   reprovisionsCar: false,
   needsCarOnRouter: false,
-};
-
-const HOME_ROUTER: ConnectionTarget = {
-  id: "home-router",
-  method: "wifi",
-  label: "Your home router",
-  blurb: "Reaches the car once it has joined your own router.",
-  requirement:
-    "Switch the car to your router from its hotspot first — this needs an " +
-    "address the car reports, never a guessed one.",
-  reprovisionsCar: false,
-  needsCarOnRouter: true,
 };
 
 export const CONNECTION_METHODS: readonly ConnectionMethod[] = [
   {
     id: "bluetooth",
     label: "Bluetooth",
-    blurb: "Direct to the car. No router involved.",
+    blurb: "",
     targets: [BT_SPP],
   },
   {
     id: "wifi",
-    label: "WiFi (LAN)",
-    blurb: "The car's own hotspot, or your router once the car has joined it.",
-    targets: [CAR_HOTSPOT, HOME_ROUTER],
+    label: "Wi-Fi",
+    blurb: "",
+    targets: [CAR_WIFI],
   },
   {
     id: "internet",
     label: "Internet",
-    blurb: "Reach the car from anywhere, through the cloud.",
-    unavailable:
-      "Not set up yet. Internet access needs a relay or broker that the " +
-      "project connects to, and none is configured.",
+    blurb: "",
+    unavailable: "Not available yet.",
     targets: [],
   },
 ];

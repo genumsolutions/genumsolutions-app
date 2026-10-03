@@ -337,11 +337,21 @@ export function planSwitch(input: {
 }): SwitchPlan | null {
   const target = input.target.trim();
   if (!target) return null;
-  if (
+  const isOwnAp =
     isOwnApName(target) ||
-    target.toUpperCase() === (input.ownApName ?? "").trim().toUpperCase()
-  ) {
-    return null;
+    target.toUpperCase() === (input.ownApName ?? "").trim().toUpperCase();
+  if (isOwnAp) {
+    // U-86 (owner): switching BACK to the car's own hotspot must be possible from
+    // the app. It used to be refused here, which is why the list showed the
+    // hotspot greyed out with no way back to it.
+    //
+    // The firmware has always supported this: `ROUTERS;USE;<ownAP>` is T-66 and
+    // clears only the ACTIVE pair (wifi_ssid/wifi_pass) before rejoining the AP.
+    // It does NOT touch savedRouterSsid_/savedRouterPass_, so the saved-router
+    // registry survives - verified on the car, not assumed.
+    //
+    // No "add" step: the AP has no password and must never enter the registry.
+    return { target, steps: [{ kind: "use", ssid: target }] };
   }
   const known = switchableRouters(input.entries).some(
     (e) => e.ssid.toUpperCase() === target.toUpperCase(),
