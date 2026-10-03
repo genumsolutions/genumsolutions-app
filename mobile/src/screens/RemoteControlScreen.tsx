@@ -15,7 +15,13 @@
 // layout, E-stop FAB, disconnect dialog, settings dropdown.
 // Drive controls (joystick/d-pad) are delegated to DriveControls.
 // =====================================================================
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Linking,
@@ -50,6 +56,8 @@ import { SmartDustbinDeck } from "../components/tools/decks/SmartDustbinDeck";
 import { HandheldDeck } from "../components/tools/decks/HandheldDeck";
 import { DroneControls } from "../components/tools/DroneControls";
 import { RouterPanel } from "../components/tools/RouterPanel";
+import { planSwitch, normalizeRouters } from "../components/tools/connection";
+import type { RouterOutcome } from "../components/tools/connection/commands";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
 import {
   LOCAL_CAR_MODES,
@@ -462,6 +470,79 @@ export function RemoteControlScreen({ navigation }: Props) {
       : `http://${DEFAULT_AP_IP}`;
     void Linking.openURL(url).catch(() => undefined);
   }, [telemetry.ip]);
+
+  // ---- U-81: this screen's router actions go through the ACK-CONSUMING path
+  //
+  // It used to hand `RouterPanel` the optimistic `routerUse` / `routerAdd` /
+  // `routerDelete` / `routerClearAll`, which fire a line and assume it landed —
+  // so on this screen a `ROUTERS;FULL`, a `Reserved` name, an over-long
+  // password and a plain timeout all looked and felt like a success. The
+  // Control Panel was moved onto `requestRouter` / `runSwitchPlan` in U-68;
+  // this screen was left behind and is now on the same contract.
+  //
+  // `planSwitch` builds the SAME step list the Control Panel builds (including
+  // its "this network cannot be switched to" refusal), so both surfaces now
+  // derive a router request from one engine rather than two hand-rolled pairs.
+  // The hub persists the list from the car's ANSWER on all of these, so
+  // add/switch/delete/clear are remembered here exactly as they are there.
+  // One derivation of the router list, shared with the Control Panel's
+  // `normalizeRouters` — a plain `string[]` cannot express "this is the car's
+  // own AP" or "this one is already active", which is what makes a switch safe.
+  const routerEntries = useMemo(
+    () =>
+      normalizeRouters(hub.carNetworks, {
+        ownApName: hub.carApName,
+        activeSsid: hub.carSsid,
+      }),
+    [hub.carNetworks, hub.carApName, hub.carSsid],
+  );
+
+  const routerUse = useCallback(
+    async (target: string): Promise<RouterOutcome> => {
+      const plan = planSwitch({
+        target,
+        entries: routerEntries,
+        ownApName: hub.carApName,
+      });
+      if (!plan) {
+        return { ok: false, reason: "That network cannot be switched to." };
+      }
+      return hub.runSwitchPlan(plan);
+    },
+    [hub, routerEntries],
+  );
+
+  const routerAdd = useCallback(
+    async (name: string, password: string): Promise<RouterOutcome> => {
+      const plan = planSwitch({
+        target: name,
+        pass: password,
+        entries: routerEntries,
+        ownApName: hub.carApName,
+      });
+      if (!plan) {
+        return { ok: false, reason: "That network cannot be used." };
+      }
+      return hub.runSwitchPlan(plan);
+    },
+    [hub, routerEntries],
+  );
+
+  const routerDelete = useCallback(
+    async (name: string): Promise<RouterOutcome> => {
+      const outcome = await hub.requestRouter({ kind: "del", ssid: name });
+      // Only the car's own DELETED answer may remove it from the local mirror.
+      if (outcome.ok) hub.routerDelete(name);
+      return outcome;
+    },
+    [hub],
+  );
+
+  const routerClearAll = useCallback(async (): Promise<RouterOutcome> => {
+    const outcome = await hub.requestRouter({ kind: "clear" });
+    if (outcome.ok) hub.routerClearAll();
+    return outcome;
+  }, [hub]);
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false);
@@ -971,10 +1052,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 carApName={hub.carApName}
                 ip={telemetry.ip ?? null}
                 networks={hub.carNetworks}
-                onUse={hub.routerUse}
-                onAdd={hub.routerAdd}
-                onDelete={hub.routerDelete}
-                onClear={hub.routerClearAll}
+                onUse={routerUse}
+                onAdd={routerAdd}
+                onDelete={routerDelete}
+                onClear={routerClearAll}
                 onOpenWebPage={handleOpenWebPage}
               />
             ) : (

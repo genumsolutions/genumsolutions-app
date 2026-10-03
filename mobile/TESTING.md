@@ -1,5 +1,60 @@
 # TESTING — Physical Device Test Checklist
 
+## U-81 round — the router list that could not update, modes that lied, and a Control Panel that reads like an instrument (2026-10-03, NOT YET SHIPPED → DEVICE VERIFY PENDING)
+
+> Owner: _"the app control panel needs redesign it's too confusing and shows unnecessary datas too
+> much … the setup page should be like the webserver mode telemetry style"_ · _"the where the car is
+> section is not having the new home routers that has just been added"_ · _"mode changes are not
+> working"_ · _"the webpage is not functioning properly"_.
+>
+> **This round is mostly the CAR's fault, not the app's.** The firmware's WiFi text transport was a
+> sink — `WebServerComm::write()` returned `len` and sent nothing — so every router answer, every
+> `CAPS` line and every mode refusal was silently discarded over WiFi. Firmware commit `7998a4f` is
+> the fix and **must be flashed first**; no app-only change can work around it.
+>
+> Full plan: `guide/PLAN-2026-10-03-U79-U80-ONE-WIFI-SETUP.md`.
+
+- [ ] **U-81-1 — the new home router actually appears (the headline bug).** Add a home router from
+      the app over WiFi. The router is confirmed **immediately** (`ROUTERS;ADDED;<ssid>`), the car
+      joins it, the socket drops. Join the same network on the phone and reopen: **the router is in
+      the "where the car is" list, and survives a restart.** Before U-81 it appeared nowhere.
+- [ ] **U-81-2 — no phantom router.** After any scan, the saved list contains only real SSIDs. There
+      must be no network called `STARTED` — `ROUTERS;SCAN;STARTED` is an acknowledgement, not a
+      router, and it used to be persisted as one.
+- [ ] **U-81-3 — the switch is confirmed and announced.** Switching to a saved router reports
+      `ROUTERS;USED;<ssid>` and the U-80 "join <ssid> on this phone" card appears (the app can
+      now actually receive that answer for the first time).
+- [ ] **U-81-4 — refusals are shown as refusals.** Force each of `ROUTERS;FULL`, `Reserved`
+      (the car's own AP name), `Password too long`, `SSID length`, `Not saved:<ssid>`. In the app
+      **and** on the car webpage, the car's own reason must be shown and the input kept. No success
+      message, no cleared form, no optimistic list.
+- [ ] **U-81-5 — a mode the car does not have cannot be picked.** On the U-79 car, `EspWebServer`
+      and `EspWebClient` are absent from the car's `CAPS` registry, so they must show **"Not on this
+      car"** and be unselectable. Tapping one (via any remaining path, e.g. the cycle button) must
+      show "not supported by this car" AND roll the mode display back — it must not sit there
+      claiming success.
+- [ ] **U-81-6 — fleet regression guard (old cars KEEP their modes).** On a pre-U-79 car
+      (WIRELESS_CAR / 2WD1M / SELF_BALANCE) `EspWebServer` / `EspWebClient` still appear, still
+      switch, still drive. A car that broadcasts no `CAPS` line at all must keep the fleet
+      fallback — nothing may be greyed out on old hardware.
+- [ ] **U-81-7 — the Control Panel reads like an instrument.** Top of page: status dot, the car's
+      reported mode · network · IP, then six tiles (Mode, Speed, Signal, Uptime, Heap, Link) with
+      uppercase micro-labels and monospaced values. Then **Connect**. Then **Projects**. The page
+      must no longer open with the project catalog, and the "Test & control your projects" subtitle
+      is gone.
+- [ ] **U-81-8 — every reading is real or an em dash.** Offline: all six tiles dash and Link reads
+      "Offline" (no stale last-known numbers). Connected but silent on a field: that tile dashes. A
+      **stopped** car shows Speed `0` and a just-booted car shows Uptime `0s` — those are readings,
+      not unknowns, and must not dash.
+- [ ] **U-81-9 — the signal tile never flatters.** A car reporting `rssi: 0` (which some firmwares
+      send to mean "no reading") shows `—`, not `0 dBm`.
+- [ ] **U-81-10 — the car webpage.** Load `http://192.168.245.1` on the car AP, ~10×. The page
+      must render fully each time — never a blank/hanging document. Every router action must report
+      the car's real answer in the notice line: green for confirmations, red for refusals, and a
+      refused mode must be named.
+- [ ] **U-81-11 — no regressions.** Bluetooth driving unchanged; drive deck still opens from every
+      Projects pill; Saved settings and About still expand; pull-to-refresh still reloads categories.
+
 ## U-80 round — the phone is told when the car switches, and the app finds the car (2026-10-03, OTA `d97d6f1` ✓ published, group `c838d9b1`)
 
 > Owner: _"prompt the user to switch the phones network router too when the car switches the

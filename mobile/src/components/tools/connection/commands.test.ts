@@ -77,6 +77,21 @@ describe("D2 - the car's answers are parsed, not dropped", () => {
     expect(parseRouterAnswer("ROUTERS;FULL")).toEqual({ kind: "full" });
   });
 
+  // U-81 (2026-10-03): `ROUTERS;SCAN;STARTED` is an ACKNOWLEDGEMENT, and it
+  // used to be parsed as a saved-router list — so the app grew a router
+  // literally named "STARTED", wrote it to AsyncStorage and the shared
+  // `car_profiles` row, and left every scan timing out. It must never be a
+  // list, and it must be able to settle the scan that is waiting for it.
+  it("a scan acknowledgement is NOT a saved-router list", () => {
+    expect(parseRouterAnswer("ROUTERS;SCAN;STARTED")).toEqual({
+      kind: "scanStarted",
+    });
+    // while it does settle the pending request, honestly and specifically
+    expect(outcomeFor({ kind: "scanStarted" }, { kind: "scan" })).toMatchObject(
+      { ok: true },
+    );
+  });
+
   it("parses the saved list, which leads with the own AP", () => {
     expect(parseRouterAnswer(`ROUTERS;${AP};HomeNet`)).toEqual({
       kind: "list",

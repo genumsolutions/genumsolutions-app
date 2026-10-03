@@ -53,6 +53,12 @@ import { Feather } from "@expo/vector-icons";
 import type { RouterPanelProps } from "./types";
 import { isOwnApName } from "../../services/carProtocol";
 import { DEFAULT_AP_IP } from "../../services/carProtocol";
+import type { RouterOutcome } from "./connection/commands";
+import {
+  panelOutcomeFor,
+  type PanelOutcome,
+  type RouterVerb,
+} from "./connection/routerPanelOutcome";
 
 export function RouterPanel({
   canControl,
@@ -72,6 +78,7 @@ export function RouterPanel({
   const [ssid, setSsid] = React.useState("");
   const [pass, setPass] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [notice, setNotice] = React.useState<PanelOutcome | null>(null);
   const activeName = carSsid ?? carApName ?? null;
   // v2: AP-fallback IP is per-car truth (the new 4WD4M car owns .245; the
   // donor owns .244; 192.168.4.x is forbidden fleet-wide).
@@ -98,26 +105,65 @@ export function RouterPanel({
           text: "Clear all",
           style: "destructive",
           onPress: () => {
-            if (!busy) onClear();
+            if (!busy) void run("clear", onClear);
           },
         },
       ],
     );
   };
 
+  // ---- U-81: RUN AN ACTION AND BELIEVE THE CAR ------------------------
+  //
+  // The old handlers sent a line and moved on: the form cleared itself and the
+  // row appeared on a fixed 600 ms timer, with no idea whether the car had
+  // accepted anything. `ROUTERS;FULL`, `Reserved`, `Password too long`,
+  // `SSID length`, `Syntax` and a plain timeout therefore all rendered exactly
+  // like a success — which is the whole F-62 failure the Control Panel had
+  // already been repaired for in U-68, still live in this shared panel.
+  //
+  // `busy` now ends when the ANSWER arrives, never on a guess, and the form is
+  // cleared only when the car confirmed (so a refusal leaves the typed values
+  // to correct). The password is never echoed into a message (W-14 / F-68).
+  const run = React.useCallback(
+    async (verb: RouterVerb, fn: () => Promise<RouterOutcome>) => {
+      setBusy(true);
+      setNotice(null);
+      try {
+        const shown = panelOutcomeFor(await fn(), verb);
+        setNotice(shown);
+        if (shown.clearForm) {
+          setSsid("");
+          setPass("");
+        }
+        return shown.tone === "ok";
+      } catch (e) {
+        // A throw is not an outcome. Say so rather than looking like success.
+        setNotice({
+          tone: "error",
+          text: "The app could not send that to the car. Nothing was changed.",
+          clearForm: false,
+        });
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
   const handleDelete = (name: string) => {
     if (isOwnApName(name)) return;
-    onDelete(name);
+    void run("delete", () => onDelete(name));
+  };
+
+  const handleUse = (name: string) => {
+    void run("switch", () => onUse(name));
   };
 
   const handleAdd = () => {
     const s = ssid.trim();
     if (!s || busy) return;
-    setBusy(true);
-    onAdd(s, pass);
-    setSsid("");
-    setPass("");
-    setTimeout(() => setBusy(false), 600);
+    void run("add", () => onAdd(s, pass));
   };
 
   // R-15: responsive card — flexGrow + flexBasis (never a fixed pixel width):
@@ -156,6 +202,38 @@ export function RouterPanel({
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
         >
+          {/* U-81: the CAR'S ANSWER, in one place, for every action in this
+              panel (add / switch / delete / clear). It sits at the top so it
+              is visible no matter which card the tap came from, and it is the
+              only thing this panel says about an action — no optimistic row,
+              no self-clearing form, no silent success (F-62). */}
+          {notice ? (
+            <View
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              className={`flex-row items-start gap-2 rounded-xl border px-3 py-2 ${
+                notice.tone === "ok"
+                  ? "border-emerald-500/40 bg-emerald-500/10"
+                  : "border-red-500/40 bg-red-500/10"
+              }`}
+            >
+              <Feather
+                name={notice.tone === "ok" ? "check-circle" : "alert-circle"}
+                size={13}
+                color={notice.tone === "ok" ? "#059669" : "#dc2626"}
+              />
+              <Text
+                className={`flex-1 text-[12px] leading-4 ${
+                  notice.tone === "ok"
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-red-700 dark:text-red-400"
+                }`}
+              >
+                {notice.text}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Row 1 (wide): active connection + saved routers side by side */}
           <View style={{ flexDirection: isWide ? "row" : "column", gap: 8 }}>
             {/* A-35b · Card: active connection + IP (tappable → web page) */}
@@ -294,7 +372,7 @@ export function RouterPanel({
                       </Text>
                     ) : (
                       <Pressable
-                        onPress={() => onUse(n)}
+                        onPress={() => handleUse(n)}
                         disabled={!linked}
                         accessibilityRole="button"
                         accessibilityLabel={`Switch the car to ${n}`}

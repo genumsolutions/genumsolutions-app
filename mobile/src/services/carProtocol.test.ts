@@ -547,6 +547,76 @@ describe("A-7 / R-10 car-truth availability resolution", () => {
   it("resolves the new 4WD4M token as live via the default", () => {
     expect(isTokenComingSoon("4WD4M", {})).toBe(false);
   });
+
+  // ---- U-81: a CAPS line is the car's COMPLETE registry ----
+
+  describe("U-81 - absence from the CAPS table means the car does not have the mode", () => {
+    // The literal line the U-79 4WD4M broadcasts. ESP_SER and ESP_CLI were
+    // REMOVED from its MODE_REGISTRY, so they are not CS — they are absent.
+    const U79_CAPS = {
+      "4WD4M": "LIVE",
+      PATH: "CS",
+      OBS_US: "CS",
+      OBS_IR: "CS",
+      MAN: "CS",
+      AUTO: "CS",
+      "2WD1M": "CS",
+    };
+
+    it("the retired website modes are GONE on this car, not available", () => {
+      expect(modeAvailStatus("ESP_SER", {}, U79_CAPS)).toBe("GONE");
+      expect(modeAvailStatus("ESP_CLI", {}, U79_CAPS)).toBe("GONE");
+    });
+
+    it("the modes the car still has are unaffected", () => {
+      expect(modeAvailStatus("4WD4M", {}, U79_CAPS)).toBe("LIVE");
+      expect(modeAvailStatus("PATH", {}, U79_CAPS)).toBe("CS");
+      expect(modeAvailStatus("AUTO", {}, U79_CAPS)).toBe("CS");
+    });
+
+    it("an OLDER car that still announces them keeps working", () => {
+      // The pre-U-79 fleet announces all nine, so nothing becomes GONE and the
+      // owner does not lose modes on hardware that supports them.
+      const oldCaps = { ...U79_CAPS, ESP_SER: "LIVE", ESP_CLI: "WIP" };
+      expect(modeAvailStatus("ESP_SER", {}, oldCaps)).toBe("LIVE");
+      expect(modeAvailStatus("ESP_CLI", {}, oldCaps)).toBe("WIP");
+    });
+
+    it("a car that has sent NO caps table falls back to the fleet default", () => {
+      // Crucially: absence is only meaningful once a table exists. A pre-v1.5
+      // car that never broadcasts CAPS must not have its modes declared GONE.
+      expect(modeAvailStatus("ESP_SER", {})).toBe("LIVE");
+      expect(modeAvailStatus("ESP_SER", {}, {})).toBe("LIVE");
+      expect(modeAvailStatus("ESP_SER", {}, undefined)).toBe("LIVE");
+    });
+
+    it("the legacy stub map still decides when there is no table at all", () => {
+      expect(modeAvailStatus("ESP_SER", { ESP_SER: true })).toBe("CS");
+      expect(modeAvailStatus("ESP_SER", { ESP_SER: false })).toBe("LIVE");
+    });
+
+    it("GONE counts as not-coming-soon, so it cannot read as merely unready", () => {
+      expect(isTokenComingSoon("ESP_SER", {}, U79_CAPS)).toBe(true);
+    });
+
+    it("the real U-79 CAPS line parses into exactly this table", () => {
+      // End to end: the bytes the car emits -> the tokens marked unavailable.
+      const t = parseTelemetryLine(
+        "CAPS;4WD4M:LIVE;PATH:CS;OBS_US:CS;OBS_IR:CS;MAN:CS;AUTO:CS;2WD1M:CS",
+      );
+      expect(t.caps).toEqual(U79_CAPS);
+      expect(modeAvailStatus("ESP_SER", {}, t.caps!)).toBe("GONE");
+      expect(modeAvailStatus("4WD4M", {}, t.caps!)).toBe("LIVE");
+    });
+
+    it("the pre-U-79 CAPS line parses with the website modes still live", () => {
+      const t = parseTelemetryLine(
+        "CAPS;4WD4M:LIVE;ESP_SER:LIVE;PATH:CS;OBS_US:CS;OBS_IR:CS;MAN:CS;AUTO:CS;ESP_CLI:WIP;2WD1M:CS",
+      );
+      expect(modeAvailStatus("ESP_SER", {}, t.caps!)).toBe("LIVE");
+      expect(modeAvailStatus("ESP_CLI", {}, t.caps!)).toBe("WIP");
+    });
+  });
 });
 
 describe("buildWifiConfigLine (v1.4.0 provisioning)", () => {

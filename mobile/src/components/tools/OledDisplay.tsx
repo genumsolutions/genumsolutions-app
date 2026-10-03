@@ -92,6 +92,9 @@ export function OledDisplay({
   // dashboard.
   const body = (() => {
     if (previewMode && previewModeAvail) {
+      if (previewModeAvail === "GONE")
+        // U-81: not "coming soon" — this car does not have the mode at all.
+        return { kind: "coming" as const, text: "NOT ON THIS CAR" };
       if (previewModeAvail === "CS")
         return { kind: "coming" as const, text: "COMING SOON" };
       if (previewModeAvail === "WIP")
