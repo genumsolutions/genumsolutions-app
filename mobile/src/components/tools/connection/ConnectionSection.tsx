@@ -178,13 +178,13 @@ export function ConnectionSection({
   });
   const carOnRouter = anyLink && !onOwnHotspot && Boolean(reportedIp);
 
-  /** The target that is live RIGHT NOW — derived, never remembered. */
+  // U-86: Wi-Fi is one target now. The car being on its own hotspot or on a
+  // router is a fact about the car, not a mode the user picks, so there is
+  // nothing to choose here - the list below shows the real network names.
   const liveTarget: ConnectionTargetId | null = btLive
     ? "bt-spp"
     : wifiConnected
-      ? onOwnHotspot
-        ? "car-hotspot"
-        : "home-router"
+      ? "car-wifi"
       : null;
 
   const methodDef = useMemo(
@@ -301,10 +301,7 @@ export function ConnectionSection({
       if (!dial) {
         setMessage({
           tone: "error",
-          text:
-            target === "home-router"
-              ? "The car has not told us an address on your router yet. Switch it from its own hotspot first."
-              : "There is no address to connect to yet.",
+          text: "The car has not reported an address yet.",
         });
         return;
       }
@@ -518,13 +515,16 @@ export function ConnectionSection({
   // -----------------------------------------------------------------------
   // STATUS — one bar, one truth
   // -----------------------------------------------------------------------
+  // U-86: the status names the network the CAR reports, never a generic
+  // "home router" - that phrase is exactly what the owner objected to, because
+  // it was shown even when the car was joined to something else.
   const statusLabel = !anyLink
     ? "Not connected"
     : liveTarget === "bt-spp"
       ? `Bluetooth · ${sppStatusMsg || "the car"}`
-      : liveTarget === "car-hotspot"
-        ? `Car's hotspot · ${carApName ?? "the car's Wi-Fi"}`
-        : `Home router · ${reportedSsid ?? "your router"}`;
+      : onOwnHotspot
+        ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
+        : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
 
   return (
     <View className="mt-3 gap-2.5">
@@ -536,17 +536,18 @@ export function ConnectionSection({
           everything else appears to "stop working". */}
       {routerSwitchNotice ? (
         <ConnectionCard
-          title="The car switched networks"
-          subtitle={`It is joining "${routerSwitchNotice}" now`}
+          title={`Join "${routerSwitchNotice}"`}
           icon="wifi"
           tone="busy"
           testID="conn-phone-switch-prompt"
         >
-          <InlineMessage tone="info">
-            Join <Text className="font-bold">{routerSwitchNotice}</Text> on this
-            phone&apos;s WiFi settings, then reconnect here. This is expected —
-            the car&apos;s hotspot drops while it moves to the router.
-          </InlineMessage>
+          {/* U-86: one line, and it is an instruction the user has to act on -
+              not a description of what just happened. The card title carries
+              the network name, so the body does not repeat it. */}
+          <Text className="text-[13px] leading-5 text-ink">
+            The car is on that network now. Open this phone&apos;s Wi-Fi
+            settings and join it to stay connected.
+          </Text>
           <View className="mt-2 flex-row gap-2">
             <ActionButton
               flex
@@ -576,14 +577,11 @@ export function ConnectionSection({
         tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
         testID="conn-status"
       >
-        {linkVerified ? (
-          <InlineMessage tone="ok">
-            The car is answering on this link.
-          </InlineMessage>
-        ) : anyLink ? (
-          <InlineMessage tone="info">
-            Connecting… the car has not answered yet.
-          </InlineMessage>
+        {/* U-86: "The car is answering on this link." removed. The status line above
+            already says Connected / Not connected with the network name, so
+            this restated it in a second place with different words. */}
+        {anyLink && !linkVerified ? (
+          <InlineMessage tone="info">Connecting…</InlineMessage>
         ) : null}
         {/* U-69: the hub's own error had NO surface once ConnectionBanner was
             deleted, which is how a failed connect became invisible. It is
@@ -795,7 +793,7 @@ function MethodSetup({
   // Wi-Fi, the one unified list.
   if (hasAlternative && alternativeId) {
     return (
-      <ConnectionCard title={method.label} subtitle={method.blurb} icon="wifi">
+      <ConnectionCard title={method.label} icon="wifi">
         <SelectRow<ConnectionTargetId>
           label="Where is the car?"
           value={target.id}
@@ -839,18 +837,16 @@ function MethodSetup({
         */}
         {!linkLive && lastRouterIp ? (
           <View className="mt-2.5">
+            {/* U-86: the explanatory paragraph under each of these is gone. The
+                button label already says what it does and the address it uses,
+                so the text underneath only repeated it. */}
             <ActionButton
-              label={`Connect to the car on your router (${lastRouterIp})`}
+              label={`Connect to the car (${lastRouterIp})`}
               icon="link"
               onPress={() => void onConnectRouterLease(lastRouterIp)}
               disabled={busy}
               testID="conn-router-lease"
             />
-            <InlineMessage tone="info">
-              Your phone left the car&apos;s hotspot when the car moved to your
-              router. Join that router on this phone first, then tap the button
-              above.
-            </InlineMessage>
           </View>
         ) : null}
         {/* U-74b: no remembered lease, but we KNOW a car is reachable on this
@@ -866,11 +862,6 @@ function MethodSetup({
               disabled={busy}
               testID="conn-find-car"
             />
-            <InlineMessage tone="info">
-              Your phone is on the car&apos;s own hotspot. Join your router on
-              this phone first, then tap the button above and the app will look
-              for the car.
-            </InlineMessage>
           </View>
         ) : null}
         {/* U-84: the "Switch the car to" dropdown is GONE. It was a SECOND
@@ -885,7 +876,6 @@ function MethodSetup({
   return (
     <ConnectionCard
       title={method.label}
-      subtitle={method.unavailable ?? method.blurb}
       icon={method.id === "bluetooth" ? "bluetooth" : "wifi"}
       tone={method.unavailable ? "idle" : "busy"}
       testID={`conn-setup-${method.id}`}
@@ -1011,10 +1001,11 @@ function TargetBody({
         </View>
       ) : null}
 
-      {target.id === "car-hotspot" || target.id === "home-router" ? (
+      {/* U-86: one Connect action, whatever network the car is on. */}
+      {target.id === "car-wifi" ? (
         <View className="mt-2.5">
           <ActionButton
-            label={`Connect to ${target.label.toLowerCase()}`}
+            label="Connect"
             icon="wifi"
             onPress={() => void onConnectWifi(target.id)}
             disabled={busy || Boolean(unavailable)}
@@ -1023,9 +1014,10 @@ function TargetBody({
           {unavailable ? (
             <InlineMessage tone="info">{unavailable}</InlineMessage>
           ) : null}
-          {target.id === "home-router" && carOnRouter && reportedSsid ? (
+          {/* U-86: name the network the CAR reports, not "your home router". */}
+          {carOnRouter && reportedSsid ? (
             <InlineMessage tone="ok">
-              The car says it is on “{reportedSsid}”.
+              The car is on “{reportedSsid}”.
             </InlineMessage>
           ) : null}
         </View>

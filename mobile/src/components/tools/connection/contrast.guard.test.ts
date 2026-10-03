@@ -245,9 +245,20 @@ describe("the offered methods still fit the owner's brief (regression net)", () 
     ).toEqual(["bt-spp"]);
   });
 
-  it("WiFi has exactly two targets, so it is the one method that needs a target dropdown", () => {
-    expect(
-      CONNECTION_METHODS.find((m) => m.id === "wifi")!.targets.length,
-    ).toBe(2);
+  // U-86: this assertion used to REQUIRE two Wi-Fi targets, i.e. it pinned the
+  // "Where is the car?" dropdown the owner asked to have deleted. It is now
+  // the regression net for the opposite: no method may grow a target dropdown
+  // again, because every extra target is a question the user has to answer
+  // about something they did not choose.
+  it("no method offers a target choice any more", () => {
+    for (const m of CONNECTION_METHODS) {
+      expect(m.targets.length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("Wi-Fi is a single target, so nothing asks 'where is the car?'", () => {
+    const wifi = CONNECTION_METHODS.find((m) => m.id === "wifi")!;
+    expect(wifi.targets).toHaveLength(1);
+    expect(wifi.targets[0]!.id).toBe("car-wifi");
   });
 });

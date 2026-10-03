@@ -98,43 +98,37 @@ const CAR_AP_NAMES_UPPER: ReadonlySet<string> = new Set(
  *
  * - `bt-spp` has no URL: it dials a MAC through the Bluetooth service, so
  *   returning `null` here is correct and keeps the URL path WiFi-only.
- * - `car-hotspot` → the AP constant. Always available: the car broadcasts it.
- * - `home-router` → ONLY a car-reported address that is not the own-AP
- *   gateway. If the car has not reported one, this returns `null` and the UI
- *   must show the target's `requirement` instead of a Connect button.
+ * - `car-wifi` → whatever address the car REPORTS. U-86 merged the old
+ *   `car-hotspot` and `home-router` targets into this one, so there is no longer
+ *   a question of "which kind of Wi-Fi" to answer: the car is either reachable
+ *   at an address it told us, or it is not reachable and we say so.
+ *
+ * The AP constant is the fallback ONLY when the car has reported nothing. It is
+ * not a guess about which network the car is on — it is the address the car's
+ * own setup hotspot is on by construction, and it is the one thing we can still
+ * reach when the car is on a router we cannot see.
  */
 export function resolveDial(ctx: DialContext): Dial {
   if (ctx.target === "bt-spp") return null;
 
-  if (ctx.target === "car-hotspot") {
-    // Prefer whatever the car actually reports while on its hotspot (it is
-    // the truth, and a future car may not be on .245), and fall back to the
-    // constant, which is correct for this target by construction.
-    const reported = (ctx.reportedIp ?? "").trim();
-    if (reported && isCarApGateway(reported)) {
+  const reported = (ctx.reportedIp ?? "").trim();
+  if (reported) {
+    // A reported address is car truth: use it whether it is the car's own
+    // hotspot gateway or a router lease.
+    const host = hostOf(reported);
+    if (host) {
       return {
-        url: `ws://${hostOf(reported)}:${CAR_WS_PORT}`,
+        url: `ws://${host}:${CAR_WS_PORT}`,
         source: "car-reported",
         reportedIp: reported,
       };
     }
-    return {
-      url: CAR_AP_WS_URL,
-      source: "car-ap-constant",
-      reportedIp: reported || null,
-    };
   }
-
-  // home-router
-  const reported = (ctx.reportedIp ?? "").trim();
-  if (!reported) return null;
-  if (isCarApGateway(reported)) return null; // still on its own hotspot
-  const host = hostOf(reported);
-  if (!host) return null;
+  // Nothing reported. The AP constant is honest here and only here.
   return {
-    url: `ws://${host}:${CAR_WS_PORT}`,
-    source: "car-reported",
-    reportedIp: reported,
+    url: CAR_AP_WS_URL,
+    source: "car-ap-constant",
+    reportedIp: null,
   };
 }
 

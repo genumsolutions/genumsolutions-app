@@ -321,6 +321,23 @@ export function ToolsScreen() {
     // as a SIBLING of the ScrollView under this root, "inset-0" is the
     // visible screen and the dialog truly centers on the phone.
     <View className="flex-1 bg-mist">
+      {/* ---- U-86: the page TITLE is now a fixed screen header, not the first
+          row inside the scroll view.
+
+          The owner reported the heading sitting too low and the dashboard too
+          high, which is what happens when the only title is inside the scroll
+          content: it scrolls away, so what you see depends on scroll position,
+          and it competes with the first card instead of labelling the screen.
+
+          This is the standard mobile shape — a pinned header, then scrolling
+          content — so the title is always in the same place, the dashboard
+          always starts directly beneath it, and neither moves. It sits OUTSIDE
+          the ScrollView for exactly that reason. */}
+      <View className="border-b border-line bg-card px-4 pb-3 pt-2">
+        <Text className="font-display text-xl font-bold text-ink">
+          Control Panel
+        </Text>
+      </View>
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
@@ -347,6 +364,10 @@ export function ToolsScreen() {
             (genumsolutions-website/components/RoboCarControl.tsx): a status
             dot, hairline tiles, uppercase micro-labels, monospaced values.
             Every reading is either something the car said or an em dash. */}
+        {/* U-86: the panel no longer repeats the screen title. It used to say
+            "Control Panel" here as well, so the word appeared twice within a
+            few centimetres — the "many things with the same meaning" complaint,
+            in its most literal form. The header above owns the name now. */}
         <View className="rounded-2xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
