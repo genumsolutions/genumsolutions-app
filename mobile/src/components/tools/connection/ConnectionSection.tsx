@@ -487,7 +487,11 @@ export function ConnectionSection({
         });
         return;
       }
-      await runOutcome(() => runSwitchPlan(plan));
+      const ok = await runOutcome(() => runSwitchPlan(plan));
+      // U-84: the phone is on the old network now, so record what to join.
+      // Only on a real outcome - never optimistically, or a refused switch
+      // would tell the user to follow a network the car never joined.
+      if (ok) setPendingJoinSsid(ssid);
     },
     [carApName, routers, runOutcome, runSwitchPlan, tap],
   );

@@ -99,7 +99,6 @@ export function WifiPanel({
   const [error, setError] = useState<string | null>(null);
 
   // Only the car's own reserved network is excluded from switching (F-63).
-  const switchable = switchableRouters(routers as RouterEntry[]);
   const ownAp = routers.find((r) => r.isOwnAp);
   const canAdd = canAddRouter(routers as RouterEntry[]);
 

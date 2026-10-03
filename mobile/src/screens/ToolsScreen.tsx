@@ -347,10 +347,10 @@ export function ToolsScreen() {
             (genumsolutions-website/components/RoboCarControl.tsx): a status
             dot, hairline tiles, uppercase micro-labels, monospaced values.
             Every reading is either something the car said or an em dash. */}
-        <View className="rounded-2xl border border-line bg-card p-4 shadow-card">
+        <View className="rounded-2xl border border-line bg-card p-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
-              Control Panel
+              Car
             </Text>
             <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
               {connected ? "Live" : "No link"}
@@ -391,7 +391,7 @@ export function ToolsScreen() {
         {/* Connections — the ONE connection surface (owner ①②). Placed
             directly under the car status because connecting IS the next
             action, not something to scroll to. */}
-        <View className="mt-4 rounded-2xl border border-line bg-card p-4 shadow-card">
+        <View className="mt-4 rounded-2xl border border-line bg-card p-4">
           <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
             Connect
           </Text>
@@ -467,7 +467,7 @@ export function ToolsScreen() {
         {/* Category detail card */}
         <View
           key={category.slug}
-          className="mt-4 rounded-2xl border border-line bg-card p-5 shadow-card"
+          className="mt-4 rounded-2xl border border-line bg-card p-5"
         >
           <View className="flex-row items-start">
             <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-light">
@@ -483,12 +483,6 @@ export function ToolsScreen() {
                 className="font-display text-lg font-bold text-ink"
               >
                 {category.name}
-              </Text>
-              <Text
-                numberOfLines={1}
-                className="mt-0.5 text-xs font-semibold text-navy"
-              >
-                {category.tagline}
               </Text>
             </View>
           </View>
