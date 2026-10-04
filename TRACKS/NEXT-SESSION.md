@@ -31,6 +31,15 @@ hook). CI/OTA verified from the GitHub API at `35aaa24`: CI ✓ #253 · OTA Only
 the owner's next close+reopen installs it. NOT yet seen by the owner on a phone (rotation on the
 Home tab is the visible check — mobile/TESTING.md U-91-1..2).
 
+**U-92 APP CHECK (2026-10-04, no app change needed).** Owner asked whether the app has the same
+own-hotspot problems the car's webpage had. Verified in source, no fix required: `routerList.ts`
+already dedupes the car's list by normalized name ("the user must not see two rows that are one
+router") and `switchableRouters()` excludes the own AP entirely — so the double entry the
+poisoned car registry produced never reached the app's switch UI; the app's hotspot switch
+sends the same `ROUTERS;USE;<ownAP>` that car U-92 makes actually leave the router; and the
+U-80 phone-switch prompt still fires on the `ROUTERS;USED;` answer. All fixes live in the car
+repo (firmware 1.0.5, `d325884`).
+
 **U-86…U-89 (2026-10-03, backfilled 2026-10-04) - THE FOUR ROUNDS AFTER U-80, RECOVERED FROM THE
 COMMIT BODIES.** This ledger was not written while the rounds happened — the git commits
 (`23524c0`, `e4a9132`) are the primary record and everything below is condensed from them. Gates
