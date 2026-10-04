@@ -496,10 +496,45 @@ export function ConnectionSection({
   const deleteRouter = useCallback(
     async (ssid: string) => {
       tap();
+      // U-93: ONE command, ONE answer. This used to call `routerDelete`
+      // (which sent the DEL line itself) AFTER the ack path had already sent
+      // it — the car received the same DEL twice and answered
+      // `ROUTERS;ERROR;Not saved:<ssid>` the second time: a working delete
+      // reporting failure. The ack path alone sends; `consumeRouterAnswer`
+      // derives the mirror from the CONFIRMED answer; this final mirror call
+      // only tidies local state that the answer may not cover (offline).
       const ok = await runOutcome(() => requestRouter({ kind: "del", ssid }));
       if (ok) routerDelete(ssid);
     },
     [requestRouter, routerDelete, runOutcome, tap],
+  );
+
+  // U-93 (owner: *"not able to edit those"*): Edit = set a NEW password for
+  // the saved name. The car treats ADD as an upsert by SSID (U-88 bench:
+  // "ADD again → ADDED"), so the plan is the switch plan with a password —
+  // an ADD step (the upsert) followed by the USE confirmation.
+  const editRouter = useCallback(
+    async (ssid: string, newPass: string) => {
+      tap();
+      const plan = planSwitch({
+        target: ssid,
+        pass: newPass,
+        entries: routers,
+        ownApName: carApName,
+      });
+      if (!plan) {
+        setMessage({ tone: "error", text: "That network cannot be edited." });
+        return;
+      }
+      const ok = await runOutcome(() => runSwitchPlan(plan));
+      if (ok) {
+        setMessage({
+          tone: "ok",
+          text: `Password for “${ssid}” saved on the car.`,
+        });
+      }
+    },
+    [carApName, routers, runOutcome, runSwitchPlan, tap],
   );
 
   // U-84: "clear all" is gone. It was reachable only from the old manager's
@@ -700,6 +735,7 @@ export function ConnectionSection({
           pendingSsid={pendingJoinSsid}
           onSwitch={(s) => void switchRouter(s)}
           onForget={(s) => void deleteRouter(s)}
+          onEdit={(s, p) => void editRouter(s, p)}
           onAdd={(ssid, pass) =>
             void (async () => {
               const plan = planSwitch({
