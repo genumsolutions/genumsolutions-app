@@ -43,6 +43,7 @@ import {
   ConnectionSection,
   type ConnectionMethodId,
 } from "../components/tools/connection";
+import { effectiveMethod as resolveMethod } from "../components/tools/connection/effectiveMethod";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
 import {
   CarStatusLine,
@@ -221,6 +222,26 @@ export function ToolsScreen() {
   // edit state now lives inside the section's own form, because the form
   // lives there.
   const [connMethod, setConnMethod] = useState<ConnectionMethodId | null>(null);
+
+  // U-89 (owner: *"the wifi method is not built well and complete, not
+  // everything works"*). The Wi-Fi list — every saved router, the switch, the
+  // search and the add form — renders ONLY when the selected method is "wifi",
+  // and the selected method was set ONLY by tapping a dropdown. So a user who
+  // connected by any other route (automatic discovery, the Connect button, a
+  // link that was already up) got a working connection and NO Wi-Fi controls at
+  // all: the list, the switch and the add form were simply not on the screen.
+  //
+  // Connecting worked; configuring the car did not exist. That is the whole
+  // report.
+  //
+  // Fix: fall back to the link that is ACTUALLY in use, so the controls for the
+  // way you are connected appear on their own. An explicit choice still wins —
+  // this only fills in a method the user has not chosen.
+  const effectiveMethod = resolveMethod({
+    chosen: connMethod,
+    wifiConnected,
+    bluetoothConnected: sppStatus === "connected",
+  });
 
   // F-57 / round-close: when the transport disconnects, reset the selected category
   // so the control panel returns to a clean default state rather than staying
@@ -429,8 +450,8 @@ export function ToolsScreen() {
               above it. */}
           <ConnectionSection
             hub={hub}
-            method={connMethod}
             onMethodChange={setConnMethod}
+            method={effectiveMethod}
             onInputFocus={scrollInputIntoView}
             feedbackTap={feedbackTap}
           />
