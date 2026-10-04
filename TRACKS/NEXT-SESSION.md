@@ -32,9 +32,25 @@ re-verified 2026-10-04 at `e4a9132`: tsc 0 · vitest **607/607** (41 files) · p
    session "the car sends no answer" was WRONG — the reply rides inside `STATE;…;REPLY=…` and the
    filter looked for a line STARTING with `ROUTERS`. `realCarBytes.test.ts` now pins the parsers
    against the bytes the car ACTUALLY sends (the pre-existing tests used a hand-written STATE
-   line with `CONNECTED=1;CAP=LIVE` the real car never emits). Also noted, left alone, worth an
-   owner decision: `ROUTERS;USE` on an SSID the car does not have does NOT refuse — the firmware
-   adds it and switches, so there is no refusal path to show.
+   line with `CONNECTED=1;CAP=LIVE` the real car never emits).
+   **⚠ CORRECTED 2026-10-04 — a THIRD claim was the same harness fault, and the open decision is
+   resolved:** the original round noted _"ROUTERS;USE on an SSID the car does not have does NOT
+   answer"_. False — read in the firmware (WebServerComm.cpp, the `;USE;` handler), EVERY branch
+   answers: `USED;<ssid>` (own AP / saved / added-on-the-fly) or `ERROR;SSID length` /
+   `ERROR;Password too long` / `ERROR;Reserved` / `FULL`. What is true: USE on an unknown SSID
+   ADDS it and switches instead of refusing — deliberate, shipped by T22 (`cd3158f`) to fix
+   USE-on-unknown REBOOTING the car, with its own device row (T22, car DEVICE-TESTS). Ruling:
+   the behavior STAYS (it is the car's "type a new network and join it" path) and it is fully
+   standard for the app — the answer is the same `REPLY=ROUTERS;USED;<ssid>` byte shape (pinned
+   in realCarBytes.test.ts) and the U-71 routerMemory already records a USED name it did not
+   previously know. No code change; only this record.
+
+**CI/OTA verified 2026-10-04 from the GitHub API:** `e4a9132` → CI ✓ #249 · OTA Only ✓ #217 ·
+OTA Guard ✓ #20, and the LIVE manifest carries _"OTA · Short update (e4a91324…)"_ at 3.2.7/60 —
+**the U-89 build is the currently published OTA**; the owner's next close+reopen installs it.
+`23524c0` → CI ✓ #248 · OTA Only ✓ #216 · OTA Guard ✓ #19. This backfill's own run: CI ✓ #250.
+The car repo's CI could NOT be re-checked (private repo, unauthenticated API 404) — treat
+`5e04df7`'s Arduino CI as last-seen-green from the previous session.
 
 **U-80 (2026-10-03) - THE CAR SWITCHED NETWORKS → THE PHONE IS TOLD, AND THE APP FINDS THE CAR
 ITSELF. Owner: _"prompt the user to switch the phones network router too when the car switches the
