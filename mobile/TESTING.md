@@ -1,5 +1,20 @@
 # TESTING — Physical Device Test Checklist
 
+## U-91 round — one responsive idiom; home carousels survive rotation (2026-10-04, OTA — DEVICE VERIFY PENDING)
+
+> Owner: _"untangle the app's legacy viewport/responsive CSS debt before the next UI round"_.
+> The app ships `"orientation": "default"` AND a web build, so the window size is NOT fixed —
+> the old home layout froze its card width at launch.
+
+- [ ] **U-91-1 — rotate on the Home tab.** Open the home screen, rotate the phone (or resize
+      the window on web): the two product carousels re-flow to exactly TWO cards per width and
+      snap correctly. Before U-91 the card width was a module-level constant — frozen at app
+      start, wrong in landscape, tablets, and web.
+- [ ] **U-91-2 — everything else unchanged (the point of the round).** Router panel still goes
+      two-column at ≥640 (tablet/landscape), the remote's landscape layout still flips,
+      the account sheet still caps its card at 316, the mode dropdown still budgets its
+      height — same numbers as before, now reactive.
+
 ## U-86 / U-89 round — one Wi-Fi target, controls that follow the link (2026-10-03, OTA `23524c0` + `e4a9132` — DEVICE VERIFY PENDING)
 
 > Owner: _"switching or going back to default esp hotspot is not allowed, please enable that

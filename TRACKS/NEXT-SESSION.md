@@ -1,4 +1,32 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-04: one Wi-Fi target, one answer per command, controls that follow the link; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-04: U-91 one responsive idiom; release 3.2.7/60)
+
+**U-91 (2026-10-04) - THE ONE RESPONSIVE IDIOM: no screen derives its own viewport facts any
+more.** Owner: *"Untangle the app's legacy viewport/responsive CSS debt before the next UI
+round"* (picked the shared-JS-hook option). Pairs with car U-90 (pushed first, per "fix these
+first and push properly").
+
+1. **NEW `src/lib/viewport.ts`** — `useViewport()` (live width/height + `isLandscape` +
+   `isWide`), ONE breakpoint (`WIDE_BREAKPOINT = 640`, RouterPanel's existing `sm` — semantics
+   unchanged), the U-47v5 home-strip rule (`homeCardWidth` + `HOME_CARD_GAP`), and the
+   no-frozen-reads rule pinned by `viewport.test.ts` (8 tests: breakpoint boundary, the square-
+   counts-as-portrait landscape rule, the card formula, and a source check that the module
+   itself never calls `Dimensions.get`).
+2. **THE ACTUAL BUG FIXED — HomeScreen's module-load constant.** `HOME_CARD_W =
+   (Dimensions.get("window").width - 40 - 12) / 2` was computed ONCE at import; the app ships
+   `"orientation": "default"` AND a web build, so after a rotation or window resize both home
+   carousels kept portrait-width cards and a wrong snap interval forever. Now derived from the
+   live viewport every render; the U-47v5 two-cards-per-viewport rule is unchanged (pinned).
+3. **MIGRATED to the shared hook** (semantics identical, verified by tsc + 615 tests):
+   RouterPanel (`isWide`), RemoteControlScreen (`isLandscape`), AccountSheet (card sizing),
+   ModeChooser (dropdown height budget). **FloatingRemoteButton deliberately NOT migrated** —
+   its drag-time `Dimensions.get` reads are EVENT-time (correct: avoids re-render churn
+   mid-drag) and the component is device-proven (2026-09-29 round); do not "migrate" it.
+4. **Why JS-side and not Tailwind variants:** NativeWind compiles `sm:`-style classes at BUILD
+   time (no runtime media query on native), and the codebase uses zero breakpoint classes —
+   the JS hook IS the responsive layer.
+
+Gates: tsc 0 · vitest **615/615** (42 files, +8) · prettier clean. NOT yet seen by the owner on
+a phone (rotation on the Home tab is the visible check — mobile/TESTING.md U-91-1..2).
 
 **U-86…U-89 (2026-10-03, backfilled 2026-10-04) - THE FOUR ROUNDS AFTER U-80, RECOVERED FROM THE
 COMMIT BODIES.** This ledger was not written while the rounds happened — the git commits

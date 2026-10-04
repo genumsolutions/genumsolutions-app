@@ -31,8 +31,8 @@ import {
   Switch,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
+import { useViewport } from "../lib/viewport";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -212,8 +212,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const route = useRoute<Route>();
   const routeCategory = route.params?.category;
   const hub = useControlHub(routeCategory);
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
+  const { width, height, isLandscape } = useViewport();
   const insets = useSafeAreaInsets();
   const { themeMode, setThemeMode, isPro, isSignedIn } = useApp();
 

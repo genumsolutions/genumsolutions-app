@@ -2,14 +2,8 @@
 // Mode order, names, and available status match the remote firmware
 // (state.cpp MODE_CMDS[] / MODE_NAMES[], ui_core.cpp isModeAvailable()).
 import React, { useRef, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useViewport } from "../../lib/viewport";
 import { Feather } from "@expo/vector-icons";
 import {
   LOCAL_CAR_MODES,
@@ -41,7 +35,7 @@ export function ModeChooser({
   carAvailMap,
 }: ModeChooserProps) {
   const [open, setOpen] = useState(false);
-  const { height } = useWindowDimensions();
+  const { height } = useViewport();
   // A-44: the trigger + cycle button skin via theme tokens so they stay
   // visible in BOTH themes (the old bg-white/5 + text-white vanished on a
   // light bg-surface). The dropdown stays a fixed dark fly-out (slate-900):

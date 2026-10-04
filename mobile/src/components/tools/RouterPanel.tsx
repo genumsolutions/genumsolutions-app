@@ -47,8 +47,8 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from "react-native";
+import { useViewport } from "../../lib/viewport";
 import { Feather } from "@expo/vector-icons";
 import type { RouterPanelProps } from "./types";
 import { isOwnApName } from "../../services/carProtocol";
@@ -83,10 +83,10 @@ export function RouterPanel({
   // v2: AP-fallback IP is per-car truth (the new 4WD4M car owns .245; the
   // donor owns .244; 192.168.4.x is forbidden fleet-wide).
   const ipOut = ip || (linked ? DEFAULT_AP_IP : null);
-  const { width } = useWindowDimensions();
   // R-15: medium+ widths (landscape phones / tablets) share one row;
-  // narrow portrait stacks the cards full-width.
-  const isWide = width >= 640;
+  // narrow portrait stacks the cards full-width. U-90: the 640 threshold is
+  // now the shared WIDE_BREAKPOINT in lib/viewport (semantics unchanged).
+  const { isWide } = useViewport();
 
   // A-46 (round-9): the car's OWN network is pinned as a non-deletable
   // Default row and never enters the saved-list delete/switch path.

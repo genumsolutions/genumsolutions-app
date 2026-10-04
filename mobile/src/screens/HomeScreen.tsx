@@ -6,7 +6,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Pressable,
   RefreshControl,
@@ -14,6 +13,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { HOME_CARD_GAP, homeCardWidth, useViewport } from "../lib/viewport";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { applyComponentsScope, getProducts } from "../services/productService";
@@ -34,13 +34,20 @@ type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
 
 // U-47v5 (owner: home shop items "stacked 5 in a row and elongated" — the
 // flex-wrap row squeezed 6 cards across the phone width): the home strips
-// are now snap carousels showing TWO cards per viewport width, like the
+// are snap carousels showing TWO cards per viewport width, like the
 // website's home shelves and the app's 3D Products tab grid.
-const HOME_CARD_W = (Dimensions.get("window").width - 40 - 12) / 2;
-const HOME_CARD_GAP = 12;
+// U-90: the card width used to be a MODULE-LEVEL Dimensions.get constant —
+// frozen at import time, so after a rotation (the app ships
+// "orientation": "default" and a web build) both strips kept portrait-width
+// cards and snapped to the wrong interval forever. The rule now lives in
+// lib/viewport.ts (homeCardWidth + HOME_CARD_GAP), computed from the LIVE
+// viewport every render below.
 
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
+  // U-90: reactive viewport — see the U-47v5 note above.
+  const { width } = useViewport();
+  const homeCardW = homeCardWidth(width);
   const [services, setServices] = useState<Service[]>([]);
   const [featured, setFeatured] = useState<Product[]>([]);
   // U-41 (2026-09-26): home 3D-printing band — mirrors the website's home
@@ -242,7 +249,7 @@ export function HomeScreen() {
                 data={printModels}
                 keyExtractor={(model) => model.id}
                 showsHorizontalScrollIndicator={false}
-                snapToInterval={HOME_CARD_W + HOME_CARD_GAP}
+                snapToInterval={homeCardW + HOME_CARD_GAP}
                 decelerationRate="fast"
                 contentContainerStyle={{
                   paddingTop: 12,
@@ -251,7 +258,7 @@ export function HomeScreen() {
                   gap: HOME_CARD_GAP,
                 }}
                 renderItem={({ item: model }) => (
-                  <View style={{ width: HOME_CARD_W }}>
+                  <View style={{ width: homeCardW }}>
                     {/* U-47v4b (card parity): themed category fallback like
                         the website — no more gray box icons. */}
                     <ProductCard product={model} />
@@ -414,14 +421,14 @@ export function HomeScreen() {
                   data={featured}
                   keyExtractor={(p) => p.id}
                   showsHorizontalScrollIndicator={false}
-                  snapToInterval={HOME_CARD_W + HOME_CARD_GAP}
+                  snapToInterval={homeCardW + HOME_CARD_GAP}
                   decelerationRate="fast"
                   contentContainerStyle={{
                     paddingBottom: 4,
                     gap: HOME_CARD_GAP,
                   }}
                   renderItem={({ item: p }) => (
-                    <View style={{ width: HOME_CARD_W }}>
+                    <View style={{ width: homeCardW }}>
                       {/* U-47v4b/v5: real ProductCard (themed fallback,
                           contain-fit, elevation) instead of the squashed
                           custom tile — matches the 3D Products display. */}

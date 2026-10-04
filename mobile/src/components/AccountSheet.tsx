@@ -12,11 +12,11 @@ import {
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useViewport } from "../lib/viewport";
 import { useApp } from "../context/AppContext";
 import { getMyOrders } from "../services/orderService";
 import { feedbackTap } from "../services/hapticsService";
@@ -91,7 +91,7 @@ function MenuRow({
 
 export function AccountSheet({ visible, onRequestClose }: Props) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useViewport();
   const { user, isSignedIn, isAdmin, signOut } = useApp();
   const nav = useNavigation<any>();
   const [loading, setLoading] = useState(false);
