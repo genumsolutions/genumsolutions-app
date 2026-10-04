@@ -1,5 +1,33 @@
 # TESTING — Physical Device Test Checklist
 
+## U-86 / U-89 round — one Wi-Fi target, controls that follow the link (2026-10-03, OTA `23524c0` + `e4a9132` — DEVICE VERIFY PENDING)
+
+> Owner: _"switching or going back to default esp hotspot is not allowed, please enable that
+> through the app"_ · _"there is still the home router and things mentioned in the app's control
+> panel page, please remove... merge all those wifi"_ · _"the wifi method is not built well and
+> complete, not everything works"_ · _"the car is at nijandangal_2.4 and the app is also at the
+> same, there proper response while clicking connect"_. Backfilled 2026-10-04 from the commit
+> bodies — the ledger was not written at the time. Force-close + reopen the app ×2 for the OTA.
+
+- [ ] **U-89-1 — the controls appear however you connected (the headline).** Connect by automatic
+      discovery (the U-80-3 path) or with the Connect button on a car already reachable: the
+      Wi-Fi panel — saved routers, tap to switch, "Search for networks", the add form — must be
+      on the screen WITHOUT ever opening the method dropdown. Before U-89 it rendered only when
+      the dropdown had been tapped; a working connection with no configuration UI was the bug.
+- [ ] **U-89-2 — the parser reads the car's real bytes.** While connected over WiFi, the status
+      line shows the car's actual STATE fields (mode, speed, network, REPLY slot). CI now pins
+      the parsers against bytes captured verbatim from the car (`realCarBytes.test.ts`) — the
+      earlier tests used a hand-written STATE line the real car never emits.
+- [ ] **U-86-1 — the hotspot is switchable again.** From the router list, the car's own hotspot
+      can be selected and the switch is confirmed (`ROUTERS;USED;4WDCar_Wifi`); the saved-router
+      registry survives it (USE-only — the AP must never enter the registry).
+- [ ] **U-86-2 — ONE Wi-Fi target, no "Where is the car?" split.** No dropdown offers
+      "The car's hotspot" vs "Your home router"; the network names shown come from the car's own
+      NETW line, on this car and on old cars alike.
+- [ ] **U-86-3 — the page is quiet and the title stays put.** No method blurbs, no per-target
+      requirement paragraphs, no "The car is answering on this link" line; the page title is
+      fixed at the top (outside the scroll) and the dashboard starts directly beneath it.
+
 ## U-81 round — the router list that could not update, modes that lied, and a Control Panel that reads like an instrument (2026-10-03, NOT YET SHIPPED → DEVICE VERIFY PENDING)
 
 > Owner: _"the app control panel needs redesign it's too confusing and shows unnecessary datas too

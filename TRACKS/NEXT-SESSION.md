@@ -1,9 +1,45 @@
-# NEXT SESSION — genumsolutions-app (2026-10-02: home-router handoff + audit round; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-04: one Wi-Fi target, one answer per command, controls that follow the link; release 3.2.7/60)
+
+**U-86…U-89 (2026-10-03, backfilled 2026-10-04) - THE FOUR ROUNDS AFTER U-80, RECOVERED FROM THE
+COMMIT BODIES.** This ledger was not written while the rounds happened — the git commits
+(`23524c0`, `e4a9132`) are the primary record and everything below is condensed from them. Gates
+re-verified 2026-10-04 at `e4a9132`: tsc 0 · vitest **607/607** (41 files) · prettier clean.
+
+1. **U-86 (`23524c0`) — one Wi-Fi target, the hotspot reachable again, page retitled.** Owner,
+   four things at once. ① Switching back to the car's own hotspot was REFUSED in `planSwitch` —
+   now allowed as a USE-only step (T-66: clearing the ACTIVE pair never touches the saved
+   registry; the AP has no password and must never enter it). ② "The car's hotspot" + "Your home
+   router" merged into ONE `car-wifi` target — the split described how the phone reaches the car,
+   not anything the user chooses; network names come from the car's own NETW line, and
+   `resolveDial` uses whatever address the car reports (AP constant only as fallback). ③ The
+   useless subtitle texts are gone: method blurbs, per-target requirement paragraphs, the two
+   explanatory blocks under Connect/Find, the "The car is answering on this link" line; the
+   router-switch prompt is now the one instruction to act on. ④ The page title moved to a FIXED
+   header OUTSIDE the ScrollView (it used to scroll away and compete with the first card); the
+   dashboard starts directly beneath a title that never moves. Two tests that PINNED the old
+   two-target design were rewritten to assert the opposite: no method may offer a target choice
+   again. Gates at the time: 593/593.
+2. **U-89 (`e4a9132`) — the Wi-Fi controls were hidden on a working connection.** Owner: _"the
+   wifi method is not built well and complete, not everything works"_ and _"the car is at
+   nijandangal_2.4 and the app is also at the same, there proper response while clicking
+   connect"_ — connected, responding, and NO configuration UI. Cause: the Wi-Fi panel (saved
+   routers, tap-to-switch, search, add form) renders only when the selected method is "wifi", and
+   that was set ONLY by tapping the dropdown. Automatic discovery, the Connect button, and an
+   already-up link never set it. `effectiveMethod()` now falls back to the link actually in use;
+   an explicit choice still wins. NO firmware change was needed — driving the car directly
+   showed every operation answers exactly once (U-88 landed first; what remained was the app
+   never asking). **Harness corrections, recorded so they are not re-investigated:** twice this
+   session "the car sends no answer" was WRONG — the reply rides inside `STATE;…;REPLY=…` and the
+   filter looked for a line STARTING with `ROUTERS`. `realCarBytes.test.ts` now pins the parsers
+   against the bytes the car ACTUALLY sends (the pre-existing tests used a hand-written STATE
+   line with `CONNECTED=1;CAP=LIVE` the real car never emits). Also noted, left alone, worth an
+   owner decision: `ROUTERS;USE` on an SSID the car does not have does NOT refuse — the firmware
+   adds it and switches, so there is no refusal path to show.
 
 **U-80 (2026-10-03) - THE CAR SWITCHED NETWORKS → THE PHONE IS TOLD, AND THE APP FINDS THE CAR
-ITSELF. Owner: *"prompt the user to switch the phones network router too when the car switches the
-network but simply"* · *"the car app doesnt show where the car is for the new routers"* ·
-*"all the networks at one place ... the default hotspot is the last option"* · **fleet ruling:
+ITSELF. Owner: _"prompt the user to switch the phones network router too when the car switches the
+network but simply"_ · _"the car app doesnt show where the car is for the new routers"_ ·
+_"all the networks at one place ... the default hotspot is the last option"_ · **fleet ruling:
 old cars KEEP ESP_SER/ESP_CLI — the app must not break for them.** Pairs with car firmware U-79
 (Genum_4WD4M_CAR `abb7297`, webserver mode deleted, transport power policy).
 
@@ -30,7 +66,6 @@ old cars KEEP ESP_SER/ESP_CLI — the app must not break for them.** Pairs with 
 
 Gates: tsc 0 · vitest 543/543 · prettier clean. `probeCarStatus` moved to connection/discovery.ts
 (pure module — the hub shares it). OTA publishes automatically on push (runtime unchanged).
-
 
 CLEANUP ROUND 2026-10-03 (U-78, paired with car firmware U-77): repo hygiene audited end to end —
 tsc 0 errors, **543/543 vitest tests pass**, prettier --check clean, git side clean (android/,
