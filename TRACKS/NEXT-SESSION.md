@@ -1,11 +1,11 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-04: U-93 the router actions, honestly; release 3.2.7/60)
 
-**U-93 (2026-10-04) - THE CONTROL PANEL'S ROUTER ACTIONS, HONESTLY.** Owner: *"the router select
+**U-93 (2026-10-04) - THE CONTROL PANEL'S ROUTER ACTIONS, HONESTLY.** Owner: _"the router select
 is not working sometime, even if the app and the car is the same network the connect device button
 doesnt work and also the list of the available save networks deleted button is not working and
 also not able to edit those … complete those things … make that control panel page more smooth
 and userfriendly … remove the duplicates things, residues, bugs, and discrepancies … make note of
-things so that you dont miss a thing."* Full diagnosis + owner decisions (ask_user: auto-find +
+things so that you dont miss a thing."_ Full diagnosis + owner decisions (ask_user: auto-find +
 honest states; **internet methods DEFERRED** to their own gated plan; Edit = set a new password)
 in `guide/PLAN-2026-10-04-U93-CONTROL-PANEL-ROUTER-ACTIONS.md`.
 
@@ -38,6 +38,15 @@ in `guide/PLAN-2026-10-04-U93-CONTROL-PANEL-ROUTER-ACTIONS.md`.
 Gates: tsc 0 · vitest **615/615** (42 files) · prettier clean. Device rows **U-93-1..5** in
 `mobile/TESTING.md` — ALL UNTICKED. Next up after the owner's pass: the Internet-method plan
 (deferred by owner decision this round), then the round-end app/car/website hygiene sweep.
+
+**U-94 DESIGN WRITTEN (2026-10-04, no code).** The Internet-method gated design is at
+`guide/PLAN-2026-10-04-U94-INTERNET-METHOD-DESIGN.md`: WSS relay, both ends dial OUT, pairing
+by the car's board id, the SAME locked byte grammar over the relay (no new grammar), the W-14
+analog for relay credentials, four sequential phases (relay service → car firmware on the
+TESTBED only → app flip → device round on a DIFFERENT network). Owner questions Q1 (relay
+implementation — Supabase-based recommended), Q2 (claim model — device-registry claim
+recommended), Q3 (timing — after the U-90/U-92/U-93 device pass) await answers before ANY
+build. MQTT/BLE/mDNS/ESP-NOW rows unchanged (roadmap untouched).
 
 **U-91 (2026-10-04) - THE ONE RESPONSIVE IDIOM: no screen derives its own viewport facts any
 more.** Owner: _"Untangle the app's legacy viewport/responsive CSS debt before the next UI
