@@ -28,7 +28,7 @@
       requirement paragraphs, no "The car is answering on this link" line; the page title is
       fixed at the top (outside the scroll) and the dashboard starts directly beneath it.
 
-## U-81 round — the router list that could not update, modes that lied, and a Control Panel that reads like an instrument (2026-10-03, NOT YET SHIPPED → DEVICE VERIFY PENDING)
+## U-81 round — the router list that could not update, modes that lied, and a Control Panel that reads like an instrument (2026-10-03, SHIPPED — flashed + OTA published; rows still DEVICE VERIFY PENDING)
 
 > Owner: _"the app control panel needs redesign it's too confusing and shows unnecessary datas too
 > much … the setup page should be like the webserver mode telemetry style"_ · _"the where the car is
