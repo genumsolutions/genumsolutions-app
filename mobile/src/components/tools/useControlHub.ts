@@ -1561,13 +1561,40 @@ export function useControlHub(routeCategory?: string) {
           }, 200);
           return { ok: true, message: "Connected." };
         }
-        // The socket opened but the car never spoke — a half-open link. Say so
-        // rather than letting the caller assume a connection (U-69).
-        const reason =
-          "WiFi link opened but the car did not answer. Check the car is powered and that you are on the right network.";
+        // The socket opened but the car never spoke — a half-open link. U-93:
+        // do NOT give up here — the address may simply be stale (the car moved
+        // routers and this is the old lease). Look, exactly like the refused
+        // path below.
+        const lookedHalf = await findCarForUser();
+        if (lookedHalf.ok && lookedHalf.host) {
+          try {
+            await wifiService.connect(CAR_WS_URL(lookedHalf.host));
+            const reanswered = await wifiService.waitForCarAnswer();
+            if (reanswered && mountedRef.current) {
+              setWifiConnected(true);
+              setLinkVerified(true);
+              setError(null);
+              showConnectionMessage(
+                `Car found automatically at ${lookedHalf.host} — connected.`,
+                "success",
+              );
+              setTimeout(() => {
+                wifiService.requestState().catch(() => {});
+              }, 200);
+              return {
+                ok: true,
+                message: `Found the car at ${lookedHalf.host}.`,
+              };
+            }
+          } catch {
+            /* fall through to the honest error below */
+          }
+        }
+        const reasonHalfOpen =
+          "The car did not answer at that address. Check the car is powered and that this phone is on the same network as the car.";
         setWifiConnected(false);
-        setError(reason);
-        return { ok: false, reason };
+        setError(reasonHalfOpen);
+        return { ok: false, reason: reasonHalfOpen };
       } catch (e) {
         // U-80 (owner 2026-10-03, "automatic"): the phone probably just followed
         // the car onto a NEW router and the old address is dead. Before giving
@@ -1600,7 +1627,13 @@ export function useControlHub(routeCategory?: string) {
             /* fall through to the honest error below */
           }
         }
-        const reason = e instanceof Error ? e.message : "WiFi connect failed";
+        // U-93: the rescue above already looked; the honest message now NAMES
+        // the real suspect — a stale address from the car's previous network —
+        // instead of a bare service error.
+        const reason =
+          e instanceof Error
+            ? `Could not connect (${e.message}). The car's address may have changed — make sure this phone is on the same network as the car, then try again.`
+            : "Could not connect. The car's address may have changed — make sure this phone is on the same network as the car, then try again.";
         if (mountedRef.current) {
           setError(reason);
           setWifiConnected(false);
@@ -2123,16 +2156,24 @@ export function useControlHub(routeCategory?: string) {
     [requestRouter],
   );
 
+  // U-93 (owner: *"deleted button is not working"*): this used to SEND the DEL
+  // line itself and persist an OPTIMISTIC local list — no ack consumed, no
+  // timeout, no error (F-62), and the caller went through the ack path FIRST,
+  // so the car received the same DEL TWICE (the second answering
+  // `ROUTERS;ERROR;Not saved:<ssid>` — a working delete reporting failure).
+  // One command, one answer, one mirror: the ack path (`requestRouter`) is the
+  // only sender; the confirmed `DELETED` answer derives the mirror in
+  // `consumeRouterAnswer`. This helper now only mirrors a CONFIRMED deletion
+  // for callers that have one.
   const routerDelete = useCallback(
     (ssid: string) => {
       const s = ssid.trim();
       if (!s) return;
-      sendCommand(buildRouterCommand("DEL", s));
       const next = carNetworks.filter((n) => n !== s);
       setCarNetworks(next);
       persistPrefsRef.current?.({ savedRouters: next });
     },
-    [sendCommand, carNetworks],
+    [carNetworks],
   );
 
   const routerClearAll = useCallback(() => {

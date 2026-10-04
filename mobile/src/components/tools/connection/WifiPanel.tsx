@@ -67,6 +67,7 @@ export type WifiPanelProps = {
   onSwitch: (ssid: string) => void;
   onForget: (ssid: string) => void;
   onAdd: (ssid: string, pass: string) => void;
+  onEdit: (ssid: string, newPass: string) => void;
   onScan: () => void;
   onInputFocus?: (y: number) => void;
   /** Shown after a switch so the phone follows the car (Android cannot do it silently). */
@@ -79,6 +80,8 @@ type Row = {
   state: "active" | "saved" | "hotspot" | "nearby";
   meta: string | null;
   switchable: boolean;
+  /** U-93: saved rows can be edited (set a new password on the car). */
+  editable: boolean;
 };
 
 export function WifiPanel({
@@ -89,11 +92,15 @@ export function WifiPanel({
   onSwitch,
   onForget,
   onAdd,
+  onEdit,
   onScan,
   onInputFocus,
   pendingSsid,
 }: WifiPanelProps) {
   const [adding, setAdding] = useState(false);
+  // U-93: editing an existing entry = setting a NEW password for it (the car
+  // never echoes a stored password — W-14 — so the form never prefills).
+  const [editingSsid, setEditingSsid] = useState<string | null>(null);
   const [ssid, setSsid] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +129,7 @@ export function WifiPanel({
         state: "active",
         meta: "Connected",
         switchable: false,
+        editable: false,
       });
     }
     for (const r of routers) {
@@ -137,6 +145,7 @@ export function WifiPanel({
           state: "hotspot",
           meta: "Car hotspot",
           switchable: true,
+          editable: false,
         });
       } else if (canSwitch.has(r.ssid)) {
         out.push({
@@ -144,6 +153,10 @@ export function WifiPanel({
           state: "saved",
           meta: null,
           switchable: true,
+          // U-93: saved rows are editable — the owner's "not able to edit
+          // those". Edit sets a NEW password for the name (W-14: never
+          // prefilled; the car never echoes one).
+          editable: true,
         });
       }
     }
@@ -157,6 +170,7 @@ export function WifiPanel({
         state: "nearby",
         meta: n.open ? `${n.rssi} dBm` : `${n.rssi} dBm · locked`,
         switchable: false,
+        editable: false,
       });
     }
     return out;
@@ -172,10 +186,18 @@ export function WifiPanel({
       return;
     }
     setError(null);
-    onAdd(ssid.trim(), pass);
+    // U-93: an edit keeps the row's name and hands over the NEW password —
+    // the same ADD upsert the add path uses (the car treats ADD as an upsert
+    // by SSID, verified on the car in U-88's bench matrix).
+    if (editingSsid) {
+      onEdit(editingSsid, pass);
+    } else {
+      onAdd(ssid.trim(), pass);
+    }
     // The password is handed straight to the car and never kept (W-14).
     setSsid("");
     setPass("");
+    setEditingSsid(null);
     setAdding(false);
   };
 
@@ -183,6 +205,7 @@ export function WifiPanel({
     setAdding(false);
     setSsid("");
     setPass("");
+    setEditingSsid(null);
     setError(null);
   };
 
@@ -209,7 +232,7 @@ export function WifiPanel({
         <View className="overflow-hidden rounded-xl border border-line bg-card">
           {rows.map((r, i) => (
             <View
-              key={r.ssid}
+              key={`${r.ssid}-${i}`}
               className={i === 0 ? "" : "border-t border-line"}
             >
               <View className="flex-row items-center">
@@ -264,16 +287,37 @@ export function WifiPanel({
                 {/* Forgetting is per-row and deliberately quiet: it must not
                     compete with the one action that matters, switching. */}
                 {r.state === "saved" ? (
-                  <Pressable
-                    onPress={() => onForget(r.ssid)}
-                    disabled={busy}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Forget ${r.ssid}`}
-                    className="px-3 py-3"
-                    testID={`wifi-forget-${r.ssid}`}
-                  >
-                    <Feather name="trash-2" size={15} color="#64748b" />
-                  </Pressable>
+                  <>
+                    {/* U-93: Edit = set a new password for this network. */}
+                    <Pressable
+                      onPress={() => {
+                        setEditingSsid(r.ssid);
+                        setSsid(r.ssid);
+                        setPass("");
+                        setError(null);
+                        setAdding(true);
+                      }}
+                      disabled={busy}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${r.ssid}`}
+                      className="px-3 py-3"
+                      testID={`wifi-edit-${r.ssid}`}
+                    >
+                      <Feather name="edit-2" size={15} color="#1e3a8a" />
+                    </Pressable>
+                    {/* Forgetting is per-row and deliberately quiet: it must not
+                        compete with the one action that matters, switching. */}
+                    <Pressable
+                      onPress={() => onForget(r.ssid)}
+                      disabled={busy}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Forget ${r.ssid}`}
+                      className="px-3 py-3"
+                      testID={`wifi-forget-${r.ssid}`}
+                    >
+                      <Feather name="trash-2" size={15} color="#64748b" />
+                    </Pressable>
+                  </>
                 ) : null}
               </View>
             </View>
@@ -281,7 +325,9 @@ export function WifiPanel({
         </View>
       )}
 
-      {/* Scanning is how a new network is found — the phone's own "refresh". */}
+      {/* Scanning is how a new network is found — the phone's own "refresh".
+          U-93: when it cannot work, it SAYS why (the owner's "router select
+          not working sometime" — a silently dead button reads as a bug). */}
       <Pressable
         onPress={onScan}
         disabled={busy || !reachable}
@@ -292,12 +338,24 @@ export function WifiPanel({
       >
         <Feather name="refresh-cw" size={14} color="#1e3a8a" />
         <Text className="text-[13px] font-bold text-navy">
-          {busy ? "Searching…" : "Search for networks"}
+          {busy
+            ? "Searching…"
+            : reachable
+              ? "Search for networks"
+              : "Connect to the car to search"}
         </Text>
       </Pressable>
 
       {adding ? (
         <View className="mt-2.5 gap-2" testID="wifi-add-form">
+          {editingSsid ? (
+            <Text
+              className="text-[13px] font-bold text-ink"
+              testID="wifi-edit-title"
+            >
+              Set a new password for “{editingSsid}”
+            </Text>
+          ) : null}
           <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
             <TextInput
               value={ssid}
@@ -340,13 +398,17 @@ export function WifiPanel({
           <View className="flex-row gap-2">
             <Pressable
               onPress={submit}
-              disabled={busy || !ssid.trim()}
+              disabled={
+                busy || !ssid.trim() || (editingSsid != null && !pass.trim())
+              }
               accessibilityRole="button"
               accessibilityLabel="Save network"
               className="flex-1 items-center rounded-full bg-navy py-3"
               testID="wifi-add-submit"
             >
-              <Text className="text-[13px] font-black text-white">Save</Text>
+              <Text className="text-[13px] font-black text-white">
+                {editingSsid ? "Save password" : "Save"}
+              </Text>
             </Pressable>
             <Pressable
               onPress={cancel}

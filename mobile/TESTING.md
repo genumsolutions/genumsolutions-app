@@ -1,5 +1,27 @@
 # TESTING — Physical Device Test Checklist
 
+## U-93 round — the router actions, honestly (2026-10-04, OTA — DEVICE VERIFY PENDING)
+
+> Owner: _"the router select is not working sometime … the connect device button doesnt work …
+> the deleted button is not working and also not able to edit those"_. OTA only — no firmware
+> change (the car already answers DEL exactly once since U-88). Force-close + reopen the app ×2.
+
+- [ ] **U-93-1 — delete works and tells the truth.** On a live link, forget a saved router:
+      exactly ONE command goes out (serial shows one `ROUTERS;DEL`), one `DELETED` answer, the
+      row disappears; deleting it again shows the car's refusal — never a fake success.
+- [ ] **U-93-2 — edit works.** Tap the pencil on a saved router → the form opens titled
+      "Set a new password for …" with the name fixed and EMPTY password field; save →
+      `Saved on the car` + the car switches (ADD upsert + USE). Reconnect with the new password
+      on the car's next join to that router.
+- [ ] **U-93-3 — Connect works on the right network with a stale address.** After the car has
+      switched routers at least once, tap Connect: the app may briefly search (the bounded
+      sweep) and then connect, reporting `Car found automatically at <ip>` — or it says plainly
+      that the car's address may have changed. Never a silent dead button.
+- [ ] **U-93-4 — honest disabled states.** With NO link: the scan button reads "Connect to the
+      car to search" and rows explain they need a live link (no silent nothing).
+- [ ] **U-93-5 — switch still works (regression).** Tap a saved router row → the car switches,
+      the phone-switch prompt appears, and the U-80 auto-join flow follows the car.
+
 ## U-91 round — one responsive idiom; home carousels survive rotation (2026-10-04, OTA — DEVICE VERIFY PENDING)
 
 > Owner: _"untangle the app's legacy viewport/responsive CSS debt before the next UI round"_.

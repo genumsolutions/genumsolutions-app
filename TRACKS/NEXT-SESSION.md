@@ -1,4 +1,43 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-04: U-91 one responsive idiom; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-04: U-93 the router actions, honestly; release 3.2.7/60)
+
+**U-93 (2026-10-04) - THE CONTROL PANEL'S ROUTER ACTIONS, HONESTLY.** Owner: *"the router select
+is not working sometime, even if the app and the car is the same network the connect device button
+doesnt work and also the list of the available save networks deleted button is not working and
+also not able to edit those … complete those things … make that control panel page more smooth
+and userfriendly … remove the duplicates things, residues, bugs, and discrepancies … make note of
+things so that you dont miss a thing."* Full diagnosis + owner decisions (ask_user: auto-find +
+honest states; **internet methods DEFERRED** to their own gated plan; Edit = set a new password)
+in `guide/PLAN-2026-10-04-U93-CONTROL-PANEL-ROUTER-ACTIONS.md`.
+
+1. **THE DELETE BUTTON NEVER REALLY WORKED — TWO STACKED BUGS.** The hub's `routerDelete` sent
+   the DEL line RAW and persisted an OPTIMISTIC local list (no ack, no timeout, no error — the
+   exact F-62 pattern U-71's ledger condemned); and the section's `deleteRouter` went through
+   the ack path FIRST, so the car received the same DEL TWICE — the second answering
+   `ROUTERS;ERROR;Not saved:<ssid>`, a working delete reporting failure (car U-88 measured
+   exactly this shape for a double DEL). **Now: one command, one answer** — `requestRouter` is
+   the only sender, `consumeRouterAnswer` derives the mirror from the CONFIRMED answer, and
+   `routerDelete` is a pure confirmed-mirror helper (no wire access).
+2. **THE CONNECT BUTTON'S STALE ADDRESS.** `handleWifiConnect` dials the car's LAST reported
+   address — dead after every router switch — and the U-80 auto-find rescue ran only on the
+   socket-REFUSED path. A HALF-OPEN connect (socket opens, car silent — the classic
+   stale-address shape) gave up with no search. **Now both failure paths look** (remembered
+   lease probe, then the bounded /24 sweep), and the honest error names the real suspect: the
+   car's address may have changed.
+3. **EDIT EXISTS AT LAST.** Saved rows gained an Edit affordance (pencil, `wifi-edit-<ssid>`):
+   it opens the form with the name fixed and asks for the NEW password (never prefilled — the
+   car never echoes one, W-14). Submit runs the switch plan with a password: the ADD step is an
+   upsert by SSID (U-88 bench: "ADD again → ADDED") followed by the USE confirmation. No
+   firmware change needed.
+4. **HONEST DISABLED STATES.** The scan button now says "Connect to the car to search" instead
+   of silently doing nothing without a link — the "router select not working sometimes" was
+   mostly this plus the stale address above.
+5. **Residues:** row keys now SSID+index (an SSID can appear as active AND nearby); the edit
+   form title (`wifi-edit-title`) and submit label change; `planSwitch` for an edit reuses the
+   add path by design (one grammar).
+
+Gates: tsc 0 · vitest **615/615** (42 files) · prettier clean. Device rows **U-93-1..5** in
+`mobile/TESTING.md` — ALL UNTICKED. Next up after the owner's pass: the Internet-method plan
+(deferred by owner decision this round), then the round-end app/car/website hygiene sweep.
 
 **U-91 (2026-10-04) - THE ONE RESPONSIVE IDIOM: no screen derives its own viewport facts any
 more.** Owner: _"Untangle the app's legacy viewport/responsive CSS debt before the next UI
