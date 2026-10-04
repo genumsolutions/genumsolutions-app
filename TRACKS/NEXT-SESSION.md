@@ -1,8 +1,8 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-04: U-91 one responsive idiom; release 3.2.7/60)
 
 **U-91 (2026-10-04) - THE ONE RESPONSIVE IDIOM: no screen derives its own viewport facts any
-more.** Owner: *"Untangle the app's legacy viewport/responsive CSS debt before the next UI
-round"* (picked the shared-JS-hook option). Pairs with car U-90 (pushed first, per "fix these
+more.** Owner: _"Untangle the app's legacy viewport/responsive CSS debt before the next UI
+round"_ (picked the shared-JS-hook option). Pairs with car U-90 (pushed first, per "fix these
 first and push properly").
 
 1. **NEW `src/lib/viewport.ts`** — `useViewport()` (live width/height + `isLandscape` +
@@ -12,7 +12,7 @@ first and push properly").
    counts-as-portrait landscape rule, the card formula, and a source check that the module
    itself never calls `Dimensions.get`).
 2. **THE ACTUAL BUG FIXED — HomeScreen's module-load constant.** `HOME_CARD_W =
-   (Dimensions.get("window").width - 40 - 12) / 2` was computed ONCE at import; the app ships
+(Dimensions.get("window").width - 40 - 12) / 2` was computed ONCE at import; the app ships
    `"orientation": "default"` AND a web build, so after a rotation or window resize both home
    carousels kept portrait-width cards and a wrong snap interval forever. Now derived from the
    live viewport every render; the U-47v5 two-cards-per-viewport rule is unchanged (pinned).
@@ -25,8 +25,11 @@ first and push properly").
    time (no runtime media query on native), and the codebase uses zero breakpoint classes —
    the JS hook IS the responsive layer.
 
-Gates: tsc 0 · vitest **615/615** (42 files, +8) · prettier clean. NOT yet seen by the owner on
-a phone (rotation on the Home tab is the visible check — mobile/TESTING.md U-91-1..2).
+Gates: tsc 0 · vitest **615/615** (42 files, +8) · prettier clean · eslint clean (pre-commit
+hook). CI/OTA verified from the GitHub API at `35aaa24`: CI ✓ #253 · OTA Only ✓ #218 · OTA Guard
+✓ #21, and the LIVE manifest carries this build ("OTA · Short update (35aaa24…)" at 3.2.7/60) —
+the owner's next close+reopen installs it. NOT yet seen by the owner on a phone (rotation on the
+Home tab is the visible check — mobile/TESTING.md U-91-1..2).
 
 **U-86…U-89 (2026-10-03, backfilled 2026-10-04) - THE FOUR ROUNDS AFTER U-80, RECOVERED FROM THE
 COMMIT BODIES.** This ledger was not written while the rounds happened — the git commits
