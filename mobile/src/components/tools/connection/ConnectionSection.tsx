@@ -181,6 +181,9 @@ export function ConnectionSection({
   // U-86: Wi-Fi is one target now. The car being on its own hotspot or on a
   // router is a fact about the car, not a mode the user picks, so there is
   // nothing to choose here - the list below shows the real network names.
+  // Bluetooth has two targets (connect + router management); when already
+  // connected over SPP the connect target is live, and router management is
+  // available as the second action.
   const liveTarget: ConnectionTargetId | null = btLive
     ? "bt-spp"
     : wifiConnected
@@ -831,7 +834,11 @@ function MethodSetup({
     return (
       <ConnectionCard title={method.label} icon="wifi">
         <SelectRow<ConnectionTargetId>
-          label="Where is the car?"
+          label={
+            method.id === "bluetooth"
+              ? "What do you want to do?"
+              : "Where is the car?"
+          }
           value={target.id}
           options={method.targets.map((t) => ({
             id: t.id,
@@ -933,6 +940,34 @@ function MethodSetup({
           onConnectWifi={onConnectWifi}
         />
       )}
+
+      {/* U-96: Bluetooth router management \u2014 switch/add/edit/delete routers over
+          the live SPP link. The same ROUTERS;\u2026 commands the Wi-Fi panel sends,
+          but reached from the Bluetooth method card when the car is already
+          connected. */}
+      {target.id === "bt-routers" ? (
+        <View className="mt-2.5">
+          {!linkLive ? (
+            <InlineMessage tone="error">
+              Connect to the car over Bluetooth first, then manage its routers.
+            </InlineMessage>
+          ) : (
+            <ActionButton
+              label="Manage saved routers"
+              icon="settings"
+              onPress={() => {
+                /* The full router panel (list + add/edit/delete) lives in the
+                   Wi-Fi method card and the Remote screen's RouterPanel. From
+                   the Bluetooth card we hand the user to the Tools \u2192 Routers
+                   screen, which reuses the same hub actions over the live SPP
+                   link. */
+              }}
+              disabled={busy}
+              testID="conn-bt-routers"
+            />
+          )}
+        </View>
+      ) : null}
     </ConnectionCard>
   );
 }
