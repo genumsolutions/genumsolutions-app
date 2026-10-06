@@ -232,33 +232,42 @@ describe("the U-69 token pair exists everywhere it must", () => {
 });
 
 describe("the offered methods still fit the owner's brief (regression net)", () => {
-  it("exactly three methods, Bluetooth offering SPP only", () => {
+  it("exactly three methods, Wi-Fi a single target", () => {
     expect(CONNECTION_METHODS.map((m) => m.id)).toEqual([
       "bluetooth",
       "wifi",
       "internet",
     ]);
-    expect(
-      CONNECTION_METHODS.find((m) => m.id === "bluetooth")!.targets.map(
-        (t) => t.id,
-      ),
-    ).toEqual(["bt-spp"]);
+    const wifi = CONNECTION_METHODS.find((m) => m.id === "wifi")!;
+    expect(wifi.targets).toHaveLength(1);
+    expect(wifi.targets[0]!.id).toBe("car-wifi");
   });
 
-  // U-86: this assertion used to REQUIRE two Wi-Fi targets, i.e. it pinned the
-  // "Where is the car?" dropdown the owner asked to have deleted. It is now
-  // the regression net for the opposite: no method may grow a target dropdown
-  // again, because every extra target is a question the user has to answer
-  // about something they did not choose.
-  it("no method offers a target choice any more", () => {
+  // U-86: the "Where is the car?" dropdown is gone from Wi-Fi — the car's
+  // hotspot vs home router is not a user choice, it is a fact about the car.
+  // Bluetooth is the exception: SPP connect and router management are two
+  // different things the user may want to do from the same link, so the
+  // method card offers that choice. The regression net is that Wi-Fi stays
+  // single-target and the extra Bluetooth target is a real action, not a
+  // location choice.
+  it("no method other than Bluetooth offers a target choice", () => {
     for (const m of CONNECTION_METHODS) {
+      if (m.id === "bluetooth") continue;
       expect(m.targets.length).toBeLessThanOrEqual(1);
     }
   });
 
-  it("Wi-Fi is a single target, so nothing asks 'where is the car?'", () => {
-    const wifi = CONNECTION_METHODS.find((m) => m.id === "wifi")!;
-    expect(wifi.targets).toHaveLength(1);
-    expect(wifi.targets[0]!.id).toBe("car-wifi");
+  it("Bluetooth offers SPP connect and router management as two actions", () => {
+    const bt = CONNECTION_METHODS.find((m) => m.id === "bluetooth")!;
+    expect(bt.targets.map((t) => t.id)).toEqual(["bt-spp", "bt-routers"]);
+    // Both are real actions, not a "where is the car" location split.
+    expect(bt.targets[0]).toMatchObject({
+      id: "bt-spp",
+      reprovisionsCar: false,
+    });
+    expect(bt.targets[1]).toMatchObject({
+      id: "bt-routers",
+      reprovisionsCar: true,
+    });
   });
 });

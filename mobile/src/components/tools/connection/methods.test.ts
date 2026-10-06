@@ -19,10 +19,10 @@ describe("the method model — exactly the three the owner named", () => {
     expect(METHOD_IDS).toEqual(["bluetooth", "wifi", "internet"]);
   });
 
-  it("Bluetooth offers SPP ONLY - no BLE row exists to be mistaken for working", () => {
+  it("Bluetooth offers SPP connect and router management, never BLE", () => {
     const bt = getMethod("bluetooth");
     expect(bt).not.toBeNull();
-    expect(bt!.targets.map((t) => t.id)).toEqual(["bt-spp"]);
+    expect(bt!.targets.map((t) => t.id)).toEqual(["bt-spp", "bt-routers"]);
     // Assert on the ids a user could pick, not on a substring of the JSON
     // ("unavailable" happens to contain "ble").
     const allTargetIds = CONNECTION_METHODS.flatMap((m) =>
@@ -94,12 +94,16 @@ describe("U-86: the hotspot/router split is gone", () => {
 });
 
 describe("the F-65 discriminator is declared, not inferred", () => {
-  it("no target re-provisions the car just by being reached", () => {
-    // The link is only ever re-provisioned by an explicit switch ACTION, not
-    // by the act of selecting a method. This is the D4/F-65 fix made explicit.
-    for (const m of CONNECTION_METHODS) {
-      for (const t of m.targets) expect(t.reprovisionsCar).toBe(false);
-    }
+  it("only the router-management target re-provisions the car", () => {
+    // Re-provisioning means reaching the target changes the CAR's network.
+    // Bluetooth router management does (switch/add/edit/delete over SPP);
+    // SPP connect and the Wi-Fi target do not — they only dial a live link.
+    const byId = Object.fromEntries(
+      CONNECTION_METHODS.flatMap((m) => m.targets.map((t) => [t.id, t])),
+    );
+    expect(byId["bt-spp"].reprovisionsCar).toBe(false);
+    expect(byId["bt-routers"].reprovisionsCar).toBe(true);
+    expect(byId["car-wifi"].reprovisionsCar).toBe(false);
   });
 });
 
@@ -157,6 +161,10 @@ describe("F-41 intent, preserved: only working transports are offered", () => {
   /** target id -> the transport id(s) that can actually carry it. */
   const CARRIER: Record<string, string | string[]> = {
     "bt-spp": "bt-classic",
+    // U-96: router management over Bluetooth rides the SAME SPP link the car
+    // is already on — switching/add/edit/delete are ROUTERS;… commands sent
+    // over the live SPP socket, not a second transport.
+    "bt-routers": "bt-classic",
     // U-86: the merged Wi-Fi target is carried by EITHER wifi transport - the
     // car's own AP or a router lease. Which one applies depends on where the
     // car is, which the app reads from the car rather than asking the user.

@@ -41,8 +41,11 @@ export type ConnectionMethodId = "bluetooth" | "wifi" | "internet";
  * U-86: "The car's hotspot" and "Your home router" are gone as separate
  * targets. One Wi-Fi target; the network the car is actually on is read from
  * the car, not chosen here.
+ *
+ * U-96 (owner): Bluetooth target also supports router management — the user can
+ * switch the car's router from the Bluetooth screen too, not just Wi-Fi.
  */
-export type ConnectionTargetId = "bt-spp" | "car-wifi";
+export type ConnectionTargetId = "bt-spp" | "bt-routers" | "car-wifi";
 
 export type ConnectionTarget = {
   readonly id: ConnectionTargetId;
@@ -86,10 +89,26 @@ export type ConnectionMethod = {
 const BT_SPP: ConnectionTarget = {
   id: "bt-spp",
   method: "bluetooth",
-  label: "Bluetooth",
+  label: "Connect",
   blurb: "Direct link to the car over Bluetooth Classic.",
   requirement: "Turn on Bluetooth and pick the car from the list.",
   reprovisionsCar: false,
+  needsCarOnRouter: false,
+};
+
+/**
+ * U-96 (owner): the Bluetooth screen also lets you manage the car's routers —
+ * switch to a saved router, add a new one, edit/delete. Same capability as the
+ * Wi-Fi screen, so the user is not forced to the car's hotspot just to change
+ * the router while connected over Bluetooth.
+ */
+const BT_ROUTERS: ConnectionTarget = {
+  id: "bt-routers",
+  method: "bluetooth",
+  label: "Routers",
+  blurb: "Switch the car to a different router, or manage saved routers.",
+  requirement: "Car must be connected over Bluetooth first.",
+  reprovisionsCar: true,
   needsCarOnRouter: false,
 };
 
@@ -118,8 +137,8 @@ export const CONNECTION_METHODS: readonly ConnectionMethod[] = [
   {
     id: "bluetooth",
     label: "Bluetooth",
-    blurb: "",
-    targets: [BT_SPP],
+    blurb: "Pair with the car directly over Bluetooth Classic.",
+    targets: [BT_SPP, BT_ROUTERS],
   },
   {
     id: "wifi",
