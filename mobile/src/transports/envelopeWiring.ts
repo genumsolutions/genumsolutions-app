@@ -1,7 +1,8 @@
 // =====================================================================
 // envelopeWiring — the ONE place the JSON envelope meets the real
 // wire grammar (Connection-Manager Phase B, 2026-09-30; plan §4 in
-// guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md).
+// guide/PLAN-2026-09-30-CONNECTION-MANAGER-ROADMAP.md - NOT in the repo; this
+// file + envelopeWiring.test.ts are the surviving record).
 //
 // WHY this file exists separately from commandEnvelope.ts:
 // Phase A deliberately kept commandEnvelope PURE with the protocol

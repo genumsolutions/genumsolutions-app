@@ -1,5 +1,6 @@
 // =====================================================================
-// adminTabs.ts — canonical admin tab inventory (ARCHITECTURE.md B-6).
+// adminTabs.ts — canonical admin tab inventory (was "ARCHITECTURE.md B-6";
+// that spec is NOT in the repo).
 //
 // The admin surface must be an exact mirror on both clients (app
 // AdminScreen + website AdminPanel). This module is the app-side,

@@ -292,8 +292,8 @@ export const OWN_AP_NAMES: readonly string[] = [
 /**
  * True when `name` is ANY car's own AP (protected, never deletable).
  *
- * F-64 (2026-10-02): this was case-SENSITIVE while `staHandoff.isOwnApSsid`
- * was case-insensitive — two helpers, one job, one of them wrong. A car that
+ * F-64 (2026-10-02): this was case-SENSITIVE while a second helper
+ * (`staHandoff.isOwnApSsid`, since removed) was case-insensitive — two helpers, one job, one of them wrong. A car that
  * reported its AP as `4wdcar_wifi` therefore rendered Switch/Delete on its own
  * network and earned a `ROUTERS;ERROR;Reserved`. The registry is folded once
  * here and every layer uses this function.

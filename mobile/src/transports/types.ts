@@ -35,7 +35,7 @@
  *
  * Implemented today: bt-classic, wifi-ap-ws, wifi-sta-ws, http (REST).
  * Registered placeholders (the full "what if every possible comm method"
- * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md §3):
+ * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md, NOT in the repo):
  * bt-ble (needs firmware GATT-UART), mdns, mqtt, cloud-relay.
  */
 export type TransportId =

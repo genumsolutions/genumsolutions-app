@@ -149,11 +149,30 @@ describe("isCarModeBuilt badges the six planned modes", () => {
 });
 
 describe("planned modes are labelled, never gated (R-10)", () => {
-  it("returns a boolean, so a caller cannot mistake it for a permission", () => {
-    // The whole point of R-10 is that isCarModeBuilt is a DISPLAY signal.
-    // If this ever started returning something a caller could use to block a
-    // selection, these tests should be the thing that fails.
-    expect(typeof isCarModeBuilt(LOCAL_CAR_MODES[0]!)).toBe("boolean");
+  it("answers 'is the firmware built?', and never blocks on ignorance", () => {
+    // The previous version of this test asserted `typeof result === "boolean"`,
+    // which is a compile-time fact no implementation change can falsify — a
+    // test that could not fail.
+    //
+    // What this actually has to pin is the FUNCTION's contract, because R-10
+    // depends on it: a planned mode is honestly "not built" (false), a live one
+    // is built (true), and an UNKNOWN mode is NOT treated as unbuilt — if it
+    // were, a catalogue lookup miss would silently hide a mode that works.
+    // "Never gated" is enforced elsewhere: the UI still offers planned modes,
+    // labelled coming-soon, rather than hiding them. That is what isCarModeBuilt
+    // is for — it must not be usable as a permission, and it never is.
+    const planned = LOCAL_CAR_MODES.find((m) => m.isPlanned === true);
+    const live = LOCAL_CAR_MODES.find((m) => m.isPlanned !== true);
+    expect(planned, "catalog must still contain a planned mode").toBeDefined();
+    expect(live, "catalog must still contain a live mode").toBeDefined();
+
+    expect(isCarModeBuilt(planned!)).toBe(false);
+    expect(isCarModeBuilt(live!)).toBe(true);
+    // Unknown must not be read as "not built" — that would gate a working mode.
+    expect(isCarModeBuilt(null)).toBe(true);
+    expect(isCarModeBuilt(undefined)).toBe(true);
+    // An id it cannot find in the catalog is likewise not a reason to hide it.
+    expect(isCarModeBuilt({ id: "no-such-mode" })).toBe(true);
   });
 });
 

@@ -173,8 +173,8 @@ export type ConnectOutcome =
 
 export function useControlHub(routeCategory?: string) {
   // U-68 (2026-10-02): the transport registry used to be registered LAZILY,
-  // as a side effect of `useTransportList` — which only `TransportPicker`
-  // called. The Control Panel no longer mounts the picker (the connection
+  // as a side effect of `useTransportList` — a hook in linkManagerHooks.ts that
+  // only `TransportPicker` called, and which has since been deleted as dead. The Control Panel no longer mounts the picker (the connection
   // section was rebuilt), so nothing registered the transports and every
   // `linkManager.adopt("bt-classic", …)` in this hook would have thrown
   // "Unknown transport" the moment a connection was made.
@@ -327,7 +327,11 @@ export function useControlHub(routeCategory?: string) {
   const [targetAltitude, setTargetAltitude] = useState(0);
 
   // ---- Sensor data for non-robocar categories ----
-  const [sensorData, setSensorData] = useState<SensorData>({
+  // The setter is intentionally NOT bound: nothing in the app writes sensor
+  // data (the 4WD4M car reports no sensor channel), so this value has only
+  // ever been its zero-init. SensorGrid already documents that. Binding the
+  // setter anyway made this look like a live input.
+  const [sensorData] = useState<SensorData>({
     temperature: 0,
     humidity: 0,
     soilMoisture: 0,
@@ -395,9 +399,9 @@ export function useControlHub(routeCategory?: string) {
   // scan timer so the app waits ≤ SMART_LINK_SCAN_MS for strength data before
   // falling back to a recency pick.
   const smartLinkFiredRef = useRef<string | null>(null);
-  const smartLinkScanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  // `smartLinkScanTimerRef` used to sit here and was removed as dead: declared,
+  // never read, never written, never cleared. The sibling smartLinkFiredRef
+  // above is the one that actually carries the state.
   const SMART_LINK_SCAN_MS = 6000;
   /**
    * D2 (U-68): how long a router request waits for the car's answer before it
@@ -447,7 +451,10 @@ export function useControlHub(routeCategory?: string) {
   const [joystickLayoutId, setJoystickLayoutId] = useState<string>("dual");
 
   // Remote settings drawer (in-window, non-overflowing).
-  const [showSettings, setShowSettings] = useState(false);
+  // This copy of the drawer state was removed as dead: it was never returned
+  // from this hook and never read. RemoteControlScreen has its OWN separate
+  // showSettings/setShowSettings pair, which IS live — the two were never
+  // connected, and keeping a second one here only made that look accidental.
 
   const mountedRef = useRef(true);
   const manualCloseRef = useRef(false);

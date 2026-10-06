@@ -6,6 +6,7 @@ import {
   pushRecentlyViewed,
   relatedProducts,
   resolveRecentlyViewed,
+  SORT_OPTIONS,
   sortProducts,
   withinPrice,
   type SortOption,
@@ -122,13 +123,20 @@ describe("price/stock filters (C2, app parity with web lib/catalog.ts)", () => {
 
 describe("sort option type safety", () => {
   it("covers the same four options as the website", () => {
-    const expected: SortOption[] = [
+    // Previously this built a LOCAL array of four literals and asserted its own
+    // length — it never touched SORT_OPTIONS, so it could not fail no matter
+    // what the app shipped. Assert the real constant, which is the thing the
+    // website parity claim is actually about.
+    expect([...SORT_OPTIONS]).toEqual([
       "featured",
       "price-asc",
       "price-desc",
       "name",
-    ];
-    expect(expected).toHaveLength(4);
+    ]);
+    // And the type must be derived from it, so a fifth option cannot be added
+    // without SortOption growing with it.
+    const exhaustive: SortOption[] = [...SORT_OPTIONS];
+    expect(exhaustive).toHaveLength(4);
   });
 });
 

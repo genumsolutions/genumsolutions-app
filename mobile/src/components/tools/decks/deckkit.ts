@@ -1,7 +1,8 @@
 // =====================================================================
 // deckkit.ts — per-category DECK manifests (PLAN-2026-09-29, step ①).
 //
-// Owner decisions (guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md):
+// Owner decisions (guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md — NOT in the
+// repo; this file and deckkit.test.ts are the surviving record):
 //   ① The 7 categories stay SEPARATE — a deck shows ONLY its category's
 //      tiles; kinds are visual labels, nothing merges.
 //   ② Robocar + drones are UNTOUCHED (gold standard) — they must NEVER
@@ -76,13 +77,13 @@ export const DECK_CATEGORIES = [
 
 export type DeckCategory = (typeof DECK_CATEGORIES)[number];
 
-/** Per-category tile manifests. Step ① ships ONLY the Smart Home pilot;
- *  the other four land in step ② after owner screenshot approval.
- *
- *  STEP-② DONE: all five manifests shipped; RemoteControlScreen maps each
- *  slug to its deck component (SmartHomeDeck…HandheldDeck). A future deck
- *  change must keep the parity test green: labels stay pairwise-disjoint
- *  across categories AND against RESERVED_TILE_LABELS (rule ③). */
+/** Per-category tile manifests.
+ *  Originally step ① shipped ONLY the Smart Home pilot, with the other four
+ *  held for step ② after owner screenshot approval. STEP ② IS DONE — all five
+ *  manifests shipped, and RemoteControlScreen maps each slug to its deck
+ *  component (SmartHomeDeck…HandheldDeck). DECK_DECKED below lists all five.
+ *  A future deck change must keep the parity test green: labels stay
+ *  pairwise-disjoint across categories AND against RESERVED_TILE_LABELS (rule ③). */
 export const DECK_DECKED: DeckCategory[] = [
   "home-automation",
   "smart-farm",

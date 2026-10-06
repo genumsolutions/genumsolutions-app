@@ -1,4 +1,79 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-04: U-93 the router actions, honestly; release 3.2.7/60)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-06: U-95 crash telemetry now REACHES the phone; dead-code sweep)
+
+> **READ FIRST (2026-10-06).** Two things closed the loop between this app and the 4WD4M car, plus a
+> dead-code pass. The firmware was **not compiling** at the start of that session — the car repo's own
+> syntax gate had been reporting `PASS 9/9` while skipping the `.ino`, which is where the break was.
+> That is fixed (`Genum_4WD4M_CAR e457393`). If you read only one thing here, read #1 and #2.
+
+## 1. U-95's restart record now actually reaches the owner
+
+The car has persisted *why* it rebooted since U-95 — boot count, crash count, reset reason, boot heap,
+the phase it was executing — and ships all of it on `/status`. **This app parsed `free_heap` out of that
+same JSON object and silently discarded every restart field.** U-95's entire premise was that the only
+copy of the diagnostic was a Serial line printed at the instant of the fault, on a wire nobody was
+attached to; the record had to go where the owner already is. The owner was on their phone. It did not
+get there.
+
+- `services/carProtocol.ts` — `CarTelemetry` gains `resetReason`, `bootCount`, `crashCount`,
+  `lastCrashPhase`, `lastCrashHeap`, parsed beside `free_heap`. **`phase` is deliberately NOT mapped**:
+  it is the *live* phase and changes every frame, which would turn a record of something that happened
+  into a permanently-true value. Pinned by a test so nobody adds it back.
+- `components/tools/telemetryFormat.ts` — `buildRestartField()`. Kept OUT of `buildCarTelemetry` so the
+  fixed six-reading strip keeps its shape and its tested ordering. It separates three states that look
+  identical on a dash:
+  - `crash_count: 0` → **"None"** — a real reading. Dashing it would be a lie.
+  - field absent (pre-1.2.0) → **no row at all**. A dash would imply all-clear from a car that never
+    checked.
+  - offline → dash. The record describes the last car we saw, not this one.
+  On a real crash the hint names reason **and** phase — `TASK_WDT during http-root` — which is the
+  difference between "it resets again and again" and a bug report. Heap is mentioned only below 64 kB.
+
+**First thing to do after flashing the car:** the Restarts row on the Tools panel. If `crash_count`
+climbs, it names the operation.
+
+## 2. Two dead deep links / routes corrected
+
+`App.tsx` linked `CarRemote: "car/:productId"`. **No route named `CarRemote` exists** — the screen is
+registered as `RemoteControl`, whose only param is `category`, not `productId`. So that link pointed at a
+route that does not exist *and* carried a param it never had. Now `RemoteControl: "car"`. Nothing in
+`src` generated such a link, which is why nobody noticed.
+
+## 3. Dead-code sweep (2026-10-06) — what went, what stayed
+
+**Removed (provably zero references, verified by grep before deleting):**
+- `transports/linkManagerHooks.ts` — **6 dead exports**: `useActiveTransport`, `useTransportList`,
+  `useSelectedTransport`, `useActiveTelemetry`, `useActivateTransport`, `__resetRegistrationForTests`.
+  Not one screen imported any of them, and the "test-only" reset had no test either. Three comments
+  (`ToolsScreen`, `useControlHub`, `linkManager`) nonetheless described screens as *using* two of them —
+  which is how six dead hooks sat there looking load-bearing. Those comments are fixed too. The file is
+  now registration-only, so its **name over-promises**; left as-is because a rename touches the two live
+  importers and is a bigger diff than the dead code it removes.
+- `useControlHub` — `setSensorData` (bound but never called; `sensorData` itself is live and still
+  returned), `smartLinkScanTimerRef` (declared, never read/written/cleared), and a second
+  `showSettings`/`setShowSettings` pair that was **never returned** and is not the one
+  `RemoteControlScreen` uses — those two were never connected and looked accidental.
+
+**Two vacuous tests made real.** Both could not fail as written:
+- `catalogFilters.test.ts` "sort option type safety" built a *local* array of 4 literals and asserted
+  its own length — `SORT_OPTIONS` was never imported. Now asserts the real constant.
+- `roboCarCatalog.planned.test.ts` asserted `typeof isCarModeBuilt(...) === "boolean"`, a compile-time
+  fact. Now pins the actual contract: planned → `false`, live → `true`, **unknown → `true`** (a
+  catalogue miss must never hide a working mode). *(First attempt at this asserted planned → `true` and
+  failed: the function returns `!isPlanned`. The failed version is the honest record of the trap.)*
+
+**Stale comments corrected (documentation only, zero behaviour change):** 7 files referenced design docs
+that **are not in the repo** (`ARCHITECTURE.md` and 6 `guide/*.md`) — marked as absent rather than
+pointed at an unrelated surviving file. `AdminScreen` claimed "6 tabs" (there are 8, Catalog split into
+three). `navigation/types.ts` said the bottom bar was "Home/Shop/Cart/Menu" — Cart moved to the stack.
+`MainTabPager.tsx` described keeping Cart mounted in the pager "so existing call sites work"; there are
+**zero** such call sites. `RemoteControlScreen`'s layout diagram showed an `[E-STOP]` FAB that is not
+rendered (`handleEStop` is returned by the hub and consumed by nobody, and the firmware has **no ESTOP
+handler at all** — car FAILSAFE #11). `ProductDetailScreen` + `App.tsx` referenced a `CarRemote` route
+that does not exist. `deckkit.ts` claimed step ① shipped one deck; step ② shipped all five.
+
+---
+
+# (earlier session notes follow)
 
 **U-93 (2026-10-04) - THE CONTROL PANEL'S ROUTER ACTIONS, HONESTLY.** Owner: _"the router select
 is not working sometime, even if the app and the car is the same network the connect device button

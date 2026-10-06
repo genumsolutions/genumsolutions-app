@@ -77,7 +77,13 @@ const linking = {
       Contact: "contact",
       About: "about",
       Tools: "tools",
-      CarRemote: "car/:productId",
+      // The per-car remote screen is registered as `RemoteControl`, not
+      // `CarRemote`, and its only param is `category` — see RootStackParamList.
+      // This entry used to read `CarRemote: "car/:productId"`, which pointed at
+      // a route that does not exist AND carried a param that route never had, so
+      // a `car/...` deep link could not have resolved. No code in src generates
+      // such a link, which is why nothing noticed.
+      RemoteControl: "car",
       Admin: "admin",
       Journal: "journal",
       Printing: "printing",

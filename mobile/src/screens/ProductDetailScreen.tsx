@@ -634,8 +634,11 @@ export function ProductDetailScreen() {
               </Pressable>
             </View>
           )}
-          {/* Robot-car products get a per-package remote (CarRemote) that opens
-              preconfigured for the car's firmware mode - like the ESP remote. */}
+          {/* Robot-car products get a per-package remote that opens
+              preconfigured for the car's firmware mode - like the ESP remote.
+              The route is registered as `RemoteControl` (navigation/types.ts);
+              this comment used to call it CarRemote, a name that survives in
+              App.tsx's linking path only. */}
           {isQuote && resolveModeForProduct(product) && (
             <Pressable
               onPress={() =>
