@@ -193,8 +193,8 @@ export function ToolsScreen() {
   } = hub;
 
   // U-68 (2026-10-02): the connection truth used to be read in three places
-  // on this page — the banner (`useActiveTransport` + the manager's label),
-  // the picker (`useActiveTransport` again), and the hub's own state. That is
+  // on this page — a banner, a picker, and the hub's own state (the first two
+  // read it through `useActiveTransport`, which no longer exists). That is
   // how "connected but the UI says no" happened. There is now ONE reader: the
   // ConnectionSection derives everything from the hub's state, and the hub
   // registers the transport registry itself (see `ensureTransportsRegistered`

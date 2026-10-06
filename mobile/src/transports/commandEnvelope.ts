@@ -1,7 +1,8 @@
 // =====================================================================
 // commandEnvelope.ts — the JSON ⇄ wire-grammar translation layer
 // (Connection-Manager round, 2026-09-30; plan §3.6 in
-// guide/SESSION-2026-09-30-CONNECTION-MANAGER-PROMPT.md).
+// guide/SESSION-2026-09-30-CONNECTION-MANAGER-PROMPT.md - NOT in the repo; this
+// file + commandEnvelope.test.ts are the surviving record).
 //
 // WHY: the outside AI's brief asked for "commands always use a unified
 // JSON schema regardless of protocol". The fleet ALREADY has a locked wire

@@ -1,6 +1,7 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs: Dashboard · Orders · Catalog · Content · Users · Settings.
+// Tabs (8): Dashboard · Orders · Electronic Products · 3D Products · Projects · Content · Users · Settings.
+// This line used to say "Catalog" and "6 tabs" — Catalog was split into three.
 // =====================================================================
 import React, {
   useCallback,
@@ -1367,7 +1368,7 @@ export function AdminScreen() {
         </View>
       ) : null}
 
-      {/* Swipeable tab content — each of the 6 merged tabs is a pager
+      {/* Swipeable tab content — each of the 8 tabs is a pager
            page synced with the tab strip above (swipe -> onPageSelected
            -> setTab; tab tap -> goToTab -> setPage). Pages mount lazily
            on first visit so the admin doesn't fire all 6 data loads at

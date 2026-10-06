@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { ADMIN_TABS } from "./adminTabs";
 
 // =====================================================================
-// Admin-surface parity guard (ARCHITECTURE.md B-6): the website AdminPanel
+// Admin-surface parity guard (was "ARCHITECTURE.md B-6"; that spec is NOT in
+// the repo). The website AdminPanel
 // and the app AdminScreen must expose the SAME tab inventory, in the SAME
 // order. The website's canonical list lives in
 // `components/admin/admin-types.ts` (TABS); the app's in

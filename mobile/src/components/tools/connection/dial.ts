@@ -13,11 +13,11 @@
 //
 // The defect this replaces (D4, owner report: *"the method switching was
 // not working"*): selecting the home-router method while disconnected
-// blind-dialled `ws://192.168.245.1:81` — the car's own AP — because
-// `transportPickerFlow.DEFAULT_URL_BY_METHOD["wifi-sta-ws"]` was set to the
-// AP address, contradicting the adapter's own deliberately empty default. So
-// the phone dialled the hotspot it was supposed to have left, "verified",
-// and every tile below it starved.
+// blind-dialled `ws://192.168.245.1:81` — the car's own AP — because a
+// former `transportPickerFlow.DEFAULT_URL_BY_METHOD["wifi-sta-ws"]` (that module
+// no longer exists in the repo) was set to the AP address, contradicting the
+// adapter's own deliberately empty default. So the phone dialled the hotspot it
+// was supposed to have left, "verified", and every tile below it starved.
 //
 // Pure. Pinned by dial.test.ts.
 // =====================================================================

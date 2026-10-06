@@ -14,8 +14,10 @@
 // "traffic goes over WiFi".
 //
 // It is deliberately plain TypeScript with a subscribe() API (no React
-// imports) so it can be unit-tested in the node vitest environment; the
-// `useActiveTransport` hook in linkManagerHooks.ts binds it to a screen.
+// imports) so it can be unit-tested in the node vitest environment.
+// (The `useActiveTransport` hook that used to bind it to a screen was removed
+// in the 2026-10-06 cleanup — it had zero imports. linkManagerHooks.ts is now
+// registration only.)
 // =====================================================================
 /* eslint-disable @typescript-eslint/no-require-imports */
 import type {

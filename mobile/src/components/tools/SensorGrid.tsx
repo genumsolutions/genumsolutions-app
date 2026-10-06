@@ -7,7 +7,11 @@ import type { SensorGridProps, SensorData } from "./types";
 /**
  * A reading the app cannot actually source must never be printed as a number.
  *
- * `setSensorData` has no caller anywhere in the app, so every tile here used
+ * Nothing in the app writes sensor data — the 4WD4M car reports no sensor
+ * channel — so the value has only ever been its zero-init. (A `setSensorData`
+ * existed in useControlHub and was removed as dead in the 2026-10-06 cleanup;
+ * this comment previously described it as "having no caller", which described
+ * the bug rather than removing it.) So every tile here used
  * to render its initial 0 as though it were a live reading — "Live Sensors:
  * 0°C, 0%, 0ppm, 0dBm" on a car that has no sensors fitted. A fabricated 0 is
  * worse than a blank: 0°C reads as a measurement, and an owner has no way to

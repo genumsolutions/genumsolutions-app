@@ -15,6 +15,24 @@ Do-not-break invariants + recovery during the app·website sync effort. Master p
 - **`runtimeVersion` stays `1.0.0`**; JS-only changes ride `ota-only.yml`, never APK.
 - **`4wd4m` edit (B1) is a pure display-string change** — token/id/deviceIndex unchanged,
   so it cannot break the wire protocol or DB seeding.
+- **No ESTOP in the 4WD4M firmware.** `handleEStop` is returned by `useControlHub` and
+  consumed by nothing, and `RemoteControlScreen`'s layout comment used to advertise an
+  `[E-STOP]` FAB that is not rendered. The car's own FAILSAFE #11 says it has zero `ESTOP`
+  handling. Safe stop is `S` / `SPD0` / disconnect. **Do not wire an E-stop UI up without
+  an owner ruling on the firmware side first** — the button would send a command the car
+  answers with `NACK;E=UNKNOWN_MODE`.
+- **A dead reference is worse than a missing feature.** Several comments in this repo
+  pointed at design docs that are not in the tree (`ARCHITECTURE.md`, 6 `guide/*.md`), at a
+  route (`CarRemote`) that is not registered, at modules (`transportPickerFlow`,
+  `staHandoff`) that no longer exist, and at hooks that had zero imports. Each read as
+  documentation and each sent the next reader looking for something absent. When removing
+  something, **fix the comments that described it** — a dangling "the X does Y" is the
+  residue, not the dead code.
+- **A test that cannot fail is not a test.** Two existed and were removed/rewritten
+  2026-10-06: one asserted the length of a local literal array (the real constant was never
+  imported), one asserted `typeof fn() === "boolean"`. Prefer asserting the real contract.
+  When you discover the contract contradicts what you assumed, say so in the test comment —
+  the wrong assumption is the thing future readers will repeat.
 
 ## Recovery
 

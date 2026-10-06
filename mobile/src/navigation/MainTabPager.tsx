@@ -44,11 +44,14 @@ import type { MainTabParamList, RootStackParamList } from "./types";
 type TabKey = keyof MainTabParamList;
 
 // U-44 (2026-09-26, owner): 4-tab bottom nav — Cart is NOT a tab anymore
-// (the BrandHeader bag icon, top right, is the cart entry point). The Cart
-// screen stays mounted in the pager (unpaged, unreachable by swipe) so every
-// existing `navigate('Main', { screen: 'Cart' })` call site still works — it
-// maps to the pager index of -1... instead we render it hidden and route
-// navigation to it via the same param mechanism.
+// (the BrandHeader bag icon, top right, is the cart entry point). Cart lives in
+// the stack below Main.
+//
+// CORRECTION: this comment used to say the Cart screen "stays mounted in the
+// pager" so that `navigate('Main', { screen: 'Cart' })` call sites kept working.
+// There are ZERO such call sites left in src, and Cart is not in TAB_ORDER
+// below, so nothing was keeping it mounted. The text described behaviour that
+// no longer existed.
 const TAB_ORDER: TabKey[] = ["Home", "Printing", "Shop", "Menu"];
 
 type IconName = ComponentProps<typeof Feather>["name"];

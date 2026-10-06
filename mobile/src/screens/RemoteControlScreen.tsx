@@ -9,11 +9,17 @@
 //   │← ● →│     │  OLED   │    │← ● →│
 //   │  ↓  │     │ 128×64  │    │  ↓  │
 //   └─────┘     └─────────┘    └─────┘
-//   L joystick                R joystick        [E-STOP]
+//   L joystick                R joystick
 //
 // Phase 1 rebuild: clean chrome row (no ScrollView), standard gamepad
-// layout, E-stop FAB, disconnect dialog, settings dropdown.
-// Drive controls (joystick/d-pad) are delegated to DriveControls.
+// layout, disconnect dialog, settings dropdown. Drive controls
+// (joystick/d-pad) are delegated to DriveControls.
+//
+// NO E-STOP CONTROL IS RENDERED, despite what the diagram above used to show.
+// useControlHub still exposes handleEStop but nothing consumes it, and the
+// firmware has no ESTOP handler at all (see the car's FAILSAFE #11) — safe
+// stop is S / SPD0 / disconnect. The layout diagram and the "E-stop FAB" line
+// are corrected here rather than left to describe a feature that does not exist.
 // =====================================================================
 import React, {
   useCallback,
