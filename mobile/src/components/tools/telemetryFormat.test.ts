@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCarTelemetry,
+  buildRestartField,
+  DASH,
   describeCar,
   formatHeap,
   formatSignal,
@@ -174,5 +176,90 @@ describe("buildCarTelemetry", () => {
     // must render what the car said, so a refusal cannot be papered over.
     const fields = buildCarTelemetry({ connected: true, mode: " 4WD4M " });
     expect(fields[0]!.value).toBe("4WD4M");
+  });
+});
+
+// ---- U-95/F-79: the restart record ----
+
+describe("buildRestartField", () => {
+  it("shows NO ROW when the car reports nothing — a dash would imply all-clear", () => {
+    // Firmware older than 1.2.0 has no crash_count. Rendering a dash or, worse,
+    // a green "None" would tell the owner a car that never checked is healthy.
+    expect(buildRestartField({ connected: true })).toBeNull();
+    expect(
+      buildRestartField({ connected: true, crashCount: null, bootCount: null }),
+    ).toBeNull();
+  });
+
+  it("shows a real zero as 'None', not as a dash", () => {
+    const f = buildRestartField({
+      connected: true,
+      crashCount: 0,
+      bootCount: 7,
+    });
+    expect(f).toEqual({
+      label: "Restarts",
+      value: "None",
+      tone: "good",
+      hint: "7 clean boots",
+    });
+  });
+
+  it("names the reason AND the phase when the car crashed", () => {
+    // This is the whole point of U-95: "it resets again and again" becomes a
+    // specific operation, which is the difference between a feeling and a bug.
+    const f = buildRestartField({
+      connected: true,
+      crashCount: 12,
+      resetReason: "TASK_WDT",
+      lastCrashPhase: "http-root",
+    });
+    expect(f?.value).toBe("12");
+    expect(f?.tone).toBe("bad");
+    expect(f?.hint).toBe("TASK_WDT during http-root");
+  });
+
+  it("survives a crash with no reason or phase reported", () => {
+    const f = buildRestartField({ connected: true, crashCount: 3 });
+    expect(f?.value).toBe("3");
+    expect(f?.tone).toBe("bad");
+    expect(f?.hint).toBeUndefined();
+  });
+
+  it("mentions the heap only when it is small enough to be the cause", () => {
+    // A healthy heap number on every crash is noise.
+    expect(
+      buildRestartField({
+        connected: true,
+        crashCount: 1,
+        lastCrashHeap: 38000,
+      })?.hint,
+    ).toBe("low heap 37 kB");
+    expect(
+      buildRestartField({
+        connected: true,
+        crashCount: 1,
+        lastCrashHeap: 900_000,
+      })?.hint,
+    ).toBeUndefined();
+  });
+
+  it("does not present a stale record as current when the car is offline", () => {
+    // Last seen was 12 crashes; showing "12" now would state a fact about a car
+    // we are not currently talking to.
+    const f = buildRestartField({
+      connected: false,
+      crashCount: 12,
+      resetReason: "TASK_WDT",
+    });
+    expect(f).toEqual({ label: "Restarts", value: DASH, tone: "muted" });
+  });
+
+  it("says the firmware is too old rather than implying a clean car", () => {
+    // boot_count but no crash_count is a partial record, not a clean bill.
+    const f = buildRestartField({ connected: true, bootCount: 4 });
+    expect(f?.value).toBe(DASH);
+    expect(f?.tone).toBe("muted");
+    expect(f?.hint).toBe("Firmware too old to report restarts");
   });
 });

@@ -311,6 +311,61 @@ describe("parseTelemetryLine", () => {
     });
   });
 
+  // ---- U-95/F-79: the restart record ----
+
+  // These six arrived in the SAME JSON object as free_heap two assertions up and
+  // were silently dropped. The car built the record specifically so the owner
+  // could read it; the phone was the place the owner was already looking.
+  it("parses the U-95 restart record the car puts on /status", () => {
+    const line =
+      '{"status":"Stopped","mode":"4WD4M","speed":0,"free_heap":1203456,"uptime_ms":152000,"reset_reason":"TASK_WDT","boot_count":41,"crash_count":12,"last_crash_phase":"http-root","last_crash_heap":38000,"phase":"idle"}';
+    expect(parseTelemetryLine(line)).toEqual({
+      status: "Stopped",
+      mode: "4WD4M",
+      speed: 0,
+      freeHeap: 1203456,
+      uptimeMs: 152000,
+      resetReason: "TASK_WDT",
+      bootCount: 41,
+      crashCount: 12,
+      lastCrashPhase: "http-root",
+      lastCrashHeap: 38000,
+    });
+  });
+
+  // A crash_count of 0 is a REAL reading ("it has never crashed") and must
+  // survive the parse as 0, not be dropped as falsy.
+  it("keeps a zero crash_count as zero — never drops it as falsy", () => {
+    const t = parseTelemetryLine(
+      '{"mode":"4WD4M","crash_count":0,"boot_count":7}',
+    );
+    expect(t.crashCount).toBe(0);
+    expect(t.bootCount).toBe(7);
+  });
+
+  // Pre-1.2.0 firmware simply has no such keys. They must stay undefined so the
+  // UI can say "does not report" instead of implying a clean car.
+  it("leaves the restart fields undefined on firmware that does not report them", () => {
+    const t = parseTelemetryLine(
+      '{"mode":"4WD4M","speed":0,"free_heap":900000}',
+    );
+    expect(t.resetReason).toBeUndefined();
+    expect(t.bootCount).toBeUndefined();
+    expect(t.crashCount).toBeUndefined();
+    expect(t.lastCrashPhase).toBeUndefined();
+    expect(t.lastCrashHeap).toBeUndefined();
+  });
+
+  // `phase` is the LIVE phase and changes every frame; it is deliberately not
+  // mapped. Pinning that here so nobody "helpfully" adds it and turns a record
+  // of something that happened into a permanently-true value.
+  it("does not map the live `phase` field", () => {
+    const t = parseTelemetryLine(
+      '{"mode":"4WD4M","phase":"idle","crash_count":0}',
+    );
+    expect("phase" in t).toBe(false);
+  });
+
   // ---- A-7: per-token car-truth stub map ----
 
   it("parses CAP=STUB on STATE lines (bare token shape)", () => {

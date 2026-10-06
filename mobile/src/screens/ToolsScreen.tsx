@@ -51,6 +51,7 @@ import {
 } from "../components/tools/TelemetryStrip";
 import {
   buildCarTelemetry,
+  buildRestartField,
   describeCar,
 } from "../components/tools/telemetryFormat";
 import { feedbackTap } from "../services/hapticsService";
@@ -334,6 +335,18 @@ export function ToolsScreen() {
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
   }, []);
 
+  // U-95/F-79: the car's restart record, resolved once. `null` on firmware that
+  // does not report one, which is why the strip appends it conditionally rather
+  // than rendering a dash the owner would read as reassurance.
+  const restartField = buildRestartField({
+    connected,
+    resetReason: telemetry.resetReason,
+    bootCount: telemetry.bootCount,
+    crashCount: telemetry.crashCount,
+    lastCrashPhase: telemetry.lastCrashPhase,
+    lastCrashHeap: telemetry.lastCrashHeap,
+  });
+
   return (
     // F-47: a flex-1 SCREEN-WIDE root wrapping the ScrollView. The disconnect
     // confirm used to live INSIDE the ScrollView, so its "absolute inset-0"
@@ -408,25 +421,31 @@ export function ToolsScreen() {
             })}
           />
           <TelemetryStrip
-            fields={buildCarTelemetry({
-              connected,
-              // The car's REPORTED mode, not `activeMode` — the app can be
-              // showing a mode the car has not confirmed, and the strip is
-              // where that difference has to be visible.
-              mode: telemetry.mode,
-              speed: telemetry.speed,
-              rssi: telemetry.rssi,
-              signal: telemetry.signal,
-              uptimeMs: telemetry.uptimeMs,
-              freeHeap: telemetry.freeHeap,
-              linkLabel: wifiConnected
-                ? "Wi-Fi"
-                : sppStatus === "connected"
-                  ? "Bluetooth"
-                  : deviceName
+            fields={[
+              ...buildCarTelemetry({
+                connected,
+                // The car's REPORTED mode, not `activeMode` — the app can be
+                // showing a mode the car has not confirmed, and the strip is
+                // where that difference has to be visible.
+                mode: telemetry.mode,
+                speed: telemetry.speed,
+                rssi: telemetry.rssi,
+                signal: telemetry.signal,
+                uptimeMs: telemetry.uptimeMs,
+                freeHeap: telemetry.freeHeap,
+                linkLabel: wifiConnected
+                  ? "Wi-Fi"
+                  : sppStatus === "connected"
                     ? "Bluetooth"
-                    : null,
-            })}
+                    : deviceName
+                      ? "Bluetooth"
+                      : null,
+              }),
+              // U-95/F-79: the car's own record of why it rebooted. Appended,
+              // not interleaved, so the six fixed readings keep their order.
+              // `null` on pre-1.2.0 firmware — no row rather than a false "None".
+              ...(restartField ? [restartField] : []),
+            ]}
           />
         </View>
 

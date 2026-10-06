@@ -163,3 +163,85 @@ export function buildCarTelemetry(args: BuildTelemetryArgs): TelemetryField[] {
     },
   ];
 }
+
+/**
+ * The U-95/F-79 restart record as one field, or `null` when there is nothing
+ * honest to say.
+ *
+ * WHY THIS IS SEPARATE from `buildCarTelemetry`: that one is a fixed six-reading
+ * instrument strip whose ordering several tests pin. Appending a seventh "when
+ * present, sometimes" row would make the strip's shape depend on the car's
+ * firmware version, which is exactly the kind of drift the strip is not for.
+ *
+ * WHY IT CAN RETURN `null`: three states look identical on a dash but mean very
+ * different things, and this is the one place in the panel where that matters —
+ *
+ *   * the car reports `crash_count: 0`  -> it has NEVER crashed. A real zero,
+ *     shown as "None". Dashing it would be a lie of omission.
+ *   * the field is absent entirely      -> this firmware does not report
+ *     restarts (pre-1.2.0). No row is better than a row that implies a clean
+ *     bill of health the car never actually gave.
+ *   * the car is offline                -> we cannot know; the last record we
+ *     held is stale, and showing it as current would be the worst of the three.
+ */
+export function buildRestartField(args: {
+  connected: boolean;
+  resetReason?: string | null;
+  bootCount?: number | null;
+  crashCount?: number | null;
+  lastCrashPhase?: string | null;
+  lastCrashHeap?: number | null;
+}): TelemetryField | null {
+  const reported =
+    typeof args.crashCount === "number" && Number.isFinite(args.crashCount);
+  const boots =
+    typeof args.bootCount === "number" && Number.isFinite(args.bootCount);
+
+  // Old firmware, or a car that has simply never said. Either way there is no
+  // record, so there is no row.
+  if (!reported && !boots) return null;
+  // Offline: the record we hold describes the last car we saw, not this one.
+  if (!args.connected) {
+    return { label: "Restarts", value: DASH, tone: "muted" };
+  }
+
+  if (!reported) {
+    return {
+      label: "Restarts",
+      value: DASH,
+      tone: "muted",
+      hint: "Firmware too old to report restarts",
+    };
+  }
+
+  if (args.crashCount! <= 0) {
+    return {
+      label: "Restarts",
+      value: "None",
+      tone: "good",
+      ...(boots ? { hint: `${args.bootCount} clean boots` } : {}),
+    };
+  }
+
+  // A real crash. The hint is the whole point: the reason names HOW the car died
+  // and the phase names WHICH operation it was doing. "It resets again and
+  // again" becomes "TASK_WDT during http-root" — which is a bug report.
+  const parts: string[] = [];
+  const reason = args.resetReason?.trim();
+  const phase = args.lastCrashPhase?.trim();
+  if (reason) parts.push(reason);
+  if (phase) parts.push(`during ${phase}`);
+  const heap = args.lastCrashHeap;
+  if (typeof heap === "number" && Number.isFinite(heap) && heap > 0) {
+    // Only surface the heap when it is small enough to be the likely cause;
+    // printing a healthy heap number on every crash is noise.
+    if (heap < 64 * 1024) parts.push(`low heap ${formatHeap(heap)}`);
+  }
+
+  return {
+    label: "Restarts",
+    value: String(args.crashCount),
+    tone: "bad",
+    ...(parts.length > 0 ? { hint: parts.join(" ") } : {}),
+  };
+}
