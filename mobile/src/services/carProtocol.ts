@@ -63,6 +63,28 @@ export type CarTelemetry = {
   uptimeMs?: number;
   /** Free heap bytes (JSON `free_heap`) — low heap = car running tight. */
   freeHeap?: number;
+  /**
+   * U-95/F-79 restart record. The car persisted *why* it rebooted and sends the
+   * record on `/status`; before this the phone parsed `free_heap` out of the very
+   * same JSON and silently dropped these, so the evidence U-95 was built to
+   * collect never reached the owner. All six are absent on firmware older than
+   * 1.2.0 — every consumer must treat "missing" as "unknown", never as zero.
+   */
+  /** Human-readable reset reason (JSON `reset_reason`) — the car's mapped label. */
+  resetReason?: string;
+  /** Boots since the counter was last cleared (JSON `boot_count`). */
+  bootCount?: number;
+  /**
+   * UNSOLICITED restarts (JSON `crash_count`) — boots that were not power-on,
+   * external-pin, deep-sleep or software resets. This is the number that answers
+   * "does the car restart on its own?", and it is the one worth showing: a
+   * growing value is the reset loop the owner reports.
+   */
+  crashCount?: number;
+  /** The operation in flight when the car died (JSON `last_crash_phase`). */
+  lastCrashPhase?: string;
+  /** Free heap at the last crash (JSON `last_crash_heap`) — low = ran out of heap. */
+  lastCrashHeap?: number;
   /** v1.4.0 provisioning reply from the car (REPLY=WIFICFG;… on STATE lines). */
   reply?: string;
   /** v1.4.0: car truth flags — AP broadcast id, configured SSID, stub mode. */
@@ -657,6 +679,8 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   // trailing newline): {"status":"OK","mode":"ESP_SER","connected":true,
   // "ip":"192.168.4.1","rssi":-45,"signal":62,"uptime_ms":120000,"free_heap":1048576,
   // "speed":170,...}. Maps the display + telemetry-deck fields.
+  // U-95/F-79 restart fields (`reset_reason`, `boot_count`, `crash_count`,
+  // `last_crash_phase`, `last_crash_heap`) ride the same object — see below.
   if (l.startsWith("{") && l.endsWith("}")) {
     try {
       const j = JSON.parse(l) as Record<string, unknown>;
@@ -669,6 +693,20 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.signal === "number") telemetry.signal = j.signal;
       if (typeof j.uptime_ms === "number") telemetry.uptimeMs = j.uptime_ms;
       if (typeof j.free_heap === "number") telemetry.freeHeap = j.free_heap;
+      // U-95/F-79 restart record. Same JSON, same transport — these were being
+      // discarded here while free_heap two lines up was honoured. The firmware
+      // sends `phase` (the LIVE phase) too; it is not mapped because it changes
+      // on every frame and would make this field a permanent "true" rather than
+      // a record of something that happened.
+      if (typeof j.reset_reason === "string")
+        telemetry.resetReason = j.reset_reason;
+      if (typeof j.boot_count === "number") telemetry.bootCount = j.boot_count;
+      if (typeof j.crash_count === "number")
+        telemetry.crashCount = j.crash_count;
+      if (typeof j.last_crash_phase === "string")
+        telemetry.lastCrashPhase = j.last_crash_phase;
+      if (typeof j.last_crash_heap === "number")
+        telemetry.lastCrashHeap = j.last_crash_heap;
       if (typeof j.connected === "boolean") telemetry.connected = j.connected;
       if (typeof j.ssid === "string") telemetry.ssid = j.ssid;
       if (typeof j.ap === "string") telemetry.ap = j.ap;
