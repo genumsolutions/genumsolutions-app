@@ -244,6 +244,39 @@ describe("forgetDevice", () => {
     expect(after.devices).toHaveLength(0);
     expect(await localMemory.read("fw:DDDDDD")).toBeNull();
   });
+
+  it("clears the last-device spill, so a forgotten device cannot reappear", async () => {
+    // The forget-then-reappears bug: the spill is rewritten on every Control
+    // Hub save (useControlHub) and fetchKnownDevices re-adds `spill.address`
+    // when it is missing from the union — so Forget looked like it worked,
+    // reload, and the device was back. The spill must die with the device.
+    await localMemory.write("fw:EEEEEE", prefs());
+    await rememberDeviceKey("fw:EEEEEE");
+    mocks.store.set(
+      "genum.lastDevice",
+      JSON.stringify({ address: "fw:EEEEEE", name: "Test car" }),
+    );
+    await forgetDevice("fw:EEEEEE");
+    expect(mocks.store.has("genum.lastDevice")).toBe(false);
+    const after = await fetchKnownDevices();
+    expect(after.devices).toHaveLength(0);
+  });
+
+  it("leaves a DIFFERENT device's spill alone", async () => {
+    // Clearing the spill unconditionally would silently wipe the cold-start
+    // router recall for the car the user is actually driving.
+    await localMemory.write("fw:FFFFFF", prefs());
+    await rememberDeviceKey("fw:FFFFFF");
+    mocks.store.set(
+      "genum.lastDevice",
+      JSON.stringify({ address: "fw:ABCDEF", name: "Other car" }),
+    );
+    await forgetDevice("fw:FFFFFF");
+    expect(mocks.store.has("genum.lastDevice")).toBe(true);
+    expect(JSON.parse(mocks.store.get("genum.lastDevice")!).address).toBe(
+      "fw:ABCDEF",
+    );
+  });
 });
 
 describe("pushLocalDevicesToCloud (offline-first spill)", () => {

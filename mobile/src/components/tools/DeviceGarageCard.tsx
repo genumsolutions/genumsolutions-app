@@ -34,10 +34,12 @@ import { Feather } from "@expo/vector-icons";
 import {
   fetchUserDevices,
   pairingLabel,
+  removeUserDevice,
+  setDeviceFavourite,
   setDeviceName,
   type UserDevice,
 } from "../../services/deviceRegistryService";
-import { relativeTime } from "./deviceGarageFormat";
+import { deviceDetailRows, relativeTime } from "./deviceGarageFormat";
 
 export type DeviceGarageCardProps = {
   /** Signed-in user id; null when signed out, in which case nothing renders. */
@@ -50,6 +52,10 @@ export default function DeviceGarageCard({ userId }: DeviceGarageCardProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  // U-95 Phase 4a: the expanded detail row + the in-flight action, so a
+  // slow network cannot double-fire a delete or a favourite toggle.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -94,6 +100,76 @@ export default function DeviceGarageCard({ userId }: DeviceGarageCardProps) {
       }
     },
     [userId, draft],
+  );
+
+  // FAVOURITE — the is_favourite column has been read since the registry
+  // shipped and never written; this is its only writer. The row updates
+  // optimistically through the same setDevices map the rename uses, and
+  // reverts through load() on failure so the star can never claim a state
+  // the database does not hold.
+  const toggleFavourite = useCallback(
+    async (device: UserDevice) => {
+      if (!userId || busyId) return;
+      const next = !device.isFavourite;
+      setBusyId(device.deviceId);
+      try {
+        const ok = await setDeviceFavourite(userId, device.deviceId, next);
+        if (!ok) {
+          Alert.alert(
+            "Could not update favourite",
+            "Check your connection and try again.",
+          );
+          await load();
+          return;
+        }
+        setDevices((prev) =>
+          prev.map((d) =>
+            d.deviceId === device.deviceId ? { ...d, isFavourite: next } : d,
+          ),
+        );
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [userId, busyId, load],
+  );
+
+  // ROW-LEVEL DELETE — unlinks this ONE unit from this user's garage (the
+  // user_devices row). The fleet record and the car's saved settings are
+  // untouched, and driving the car again re-claims it — the confirm text
+  // says so, because a delete that reads as permanent is a delete users
+  // avoid.
+  const confirmRemove = useCallback(
+    (device: UserDevice) => {
+      if (!userId || busyId) return;
+      Alert.alert(
+        "Remove from garage?",
+        `${device.displayName} is unlinked from your account's garage. The car itself and its saved settings are not touched — drive it again and it comes back.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: () => {
+              setBusyId(device.deviceId);
+              void removeUserDevice(userId, device.deviceId).then((ok) => {
+                setBusyId(null);
+                if (!ok) {
+                  Alert.alert(
+                    "Could not remove",
+                    "Check your connection and try again.",
+                  );
+                  return;
+                }
+                setDetailId((cur) => (cur === device.deviceId ? null : cur));
+                void load();
+              });
+            },
+          },
+        ],
+      );
+    },
+    [userId, busyId, load],
   );
 
   // Nothing to show when signed out, and an empty list must read as

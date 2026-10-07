@@ -372,6 +372,16 @@ export async function forgetDevice(
       (k) => k !== devicePrefsKey(profileKey),
     );
     await AsyncStorage.setItem(LOCAL_INDEX_KEY, JSON.stringify(keys));
+    // Forget-then-reappears: fetchKnownDevices re-adds `spill.address` when
+    // the union does not contain it, and the Control Hub rewrites this spill
+    // on every save — so a spill still pointing at the forgotten key brings
+    // the device straight back on the next load. Clear it WITH the device,
+    // and only when it is this device's spill (the cold-start router recall
+    // for the car currently in use must survive an unrelated forget).
+    const spill = await readLastDeviceSpill();
+    if (spill?.address === profileKey) {
+      await AsyncStorage.removeItem(LAST_DEVICE_KEY);
+    }
   } catch {
     /* local cleanup is best-effort; the cloud delete still runs */
   }
