@@ -2,7 +2,14 @@
 // OpenToolsScreen - directory of open-source tools the team relies on.
 // =====================================================================
 import React, { useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  FlatList,
+  Linking,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 
 type Tool = { group: string; name: string; description: string; href: string };
@@ -112,8 +119,10 @@ export function OpenToolsScreen() {
               {item.description}
             </Text>
             <Pressable
-              onPress={() => {}}
-              className="mt-5 flex-row items-center items-center gap-1.5"
+              onPress={() =>
+                void Linking.openURL(item.href).catch(() => undefined)
+              }
+              className="mt-5 flex-row items-center gap-1.5"
             >
               <Text className="text-sm font-bold text-navy underline">
                 Open tool ↗

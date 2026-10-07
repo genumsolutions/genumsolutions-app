@@ -349,6 +349,65 @@ export async function setDeviceName(
 }
 
 /**
+ * Set (or clear) the owner's FAVOURITE flag for one unit.
+ *
+ * The `is_favourite` column has been read since the registry shipped and
+ * never written, so the field was a dead column. The upsert payload carries
+ * ONLY the three key/flag columns: `display_name` has a NOT NULL default and
+ * the row already exists, so sending it (even as "") would silently wipe the
+ * name the owner gave the car — the same narrow-patch class as F-44.
+ */
+export async function setDeviceFavourite(
+  userId: string,
+  deviceId: string,
+  isFavourite: boolean,
+): Promise<boolean> {
+  if (!supabaseConfigured) return false;
+  try {
+    const { error } = await supabase.from("user_devices").upsert(
+      {
+        user_id: userId,
+        device_id: deviceId,
+        is_favourite: isFavourite,
+      },
+      { onConflict: "user_id,device_id" },
+    );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Row-level delete: unlink ONE unit from THIS user's garage.
+ *
+ * Only the `user_devices` row goes away — the shared `devices` record and
+ * the car's `car_profiles` are untouched, because the fleet row is staff-
+ * maintained and the profiles are the car's saved state. Driving the car
+ * again re-claims it (registerCurrentDevice), so "remove from garage" is an
+ * honest, reversible label.
+ *
+ * Both filters are load-bearing: a delete keyed on user_id alone would wipe
+ * every row in the owner's garage at once.
+ */
+export async function removeUserDevice(
+  userId: string,
+  deviceId: string,
+): Promise<boolean> {
+  if (!supabaseConfigured) return false;
+  try {
+    const { error } = await supabase
+      .from("user_devices")
+      .delete()
+      .eq("user_id", userId)
+      .eq("device_id", deviceId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * What the user will actually SEE when pairing, which is NOT the same as the
  * in-app name. A car called "4WD 4-Motor Car" in the app is announced as
  * "4WD CAR" over Bluetooth, and the OS pairing list shows the announced

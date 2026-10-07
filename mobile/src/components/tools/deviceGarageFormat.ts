@@ -47,3 +47,66 @@ export function relativeTime(
   // needs the original string for locale formatting.
   return `Seen ${new Date(iso).toLocaleDateString()}`;
 }
+
+// ---------------------------------------------------------------------
+// Per-device detail view (U-95 Phase 4a). The garage row showed one line
+// of meta and there was no way to see the rest of what the registry knows,
+// which is the whole point of collecting it. The label/value rows are pure
+// text so they live here (testable) rather than inside the component (not
+// testable in a node environment).
+// ---------------------------------------------------------------------
+
+export type GarageDetailRow = { label: string; value: string };
+
+/** The registry facts one garage row expands to. */
+export function deviceDetailRows(
+  device: {
+    uniqueId: string;
+    fwVersion: string;
+    lastSeenAt: string | null;
+    model: {
+      displayName: string;
+      repo: string;
+      btName: string | null;
+      transports: string[];
+    } | null;
+  },
+  now: number = Date.now(),
+): GarageDetailRow[] {
+  const rows: GarageDetailRow[] = [];
+  rows.push({
+    label: "Model",
+    value: device.model ? device.model.displayName : "Not in the catalogue",
+  });
+  // The pairing name only earns a row when the OS would actually show a
+  // different string — repeating the model name is noise (same rule the
+  // card header already applies).
+  if (
+    device.model?.btName &&
+    device.model.btName !== device.model.displayName
+  ) {
+    rows.push({ label: "Pairs as", value: device.model.btName });
+  }
+  rows.push({
+    label: "Identity",
+    value: device.uniqueId || "Unknown",
+  });
+  rows.push({
+    label: "Firmware",
+    value: device.fwVersion || "Unknown",
+  });
+  if (device.model && device.model.transports.length > 0) {
+    rows.push({
+      label: "Transports",
+      value: device.model.transports.join(", "),
+    });
+  }
+  if (device.model) {
+    rows.push({ label: "Repo", value: device.model.repo });
+  }
+  rows.push({
+    label: "Last seen",
+    value: relativeTime(device.lastSeenAt, now),
+  });
+  return rows;
+}
