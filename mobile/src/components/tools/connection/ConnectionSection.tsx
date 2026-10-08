@@ -258,7 +258,7 @@ export function ConnectionSection({
   // ---- connect / disconnect ---------------------------------------------
 
   const connectBluetooth = useCallback(
-    async (address: string, name?: string | null) => {
+    async (address: string, name?: string | null, bonded?: boolean) => {
       tap();
       setBusy(true);
       setMessage(null);
@@ -266,11 +266,14 @@ export function ConnectionSection({
         // U-69: the handler REPORTS. Before this it swallowed the failure and
         // resolved normally, so this function announced success on a failed
         // connect — the owner's "bluetooth is not built in the app".
+        // U-97b: carry the device's REAL bonded flag. It was hardcoded false, so
+        // the app never knew the car was already paired and (on the native
+        // connect) could re-trigger the OS pairing dialog on every attempt.
         const outcome = await handleConnect({
           id: address,
           address,
           name: name ?? address,
-          bonded: false,
+          bonded: bonded === true,
         });
         setMessage(
           outcome.ok
@@ -876,7 +879,11 @@ function MethodSetup({
   /** U-70: a link is already up, so the scan affordances must be hidden. */
   linkLive: boolean;
   onScanBluetooth: () => void;
-  onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
+  onConnectBluetooth: (
+    address: string,
+    name?: string | null,
+    bonded?: boolean,
+  ) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
   /** U-74: the last router lease the car reported — the one-tap way back to it
    *  after the hotspot link drops. A HINT, never an authority. */
@@ -893,7 +900,10 @@ function MethodSetup({
   // Wi-Fi, the one unified list.
   if (hasAlternative && alternativeId) {
     return (
-      <ConnectionCard title={method.label} icon="wifi">
+      <ConnectionCard
+        title={method.label}
+        icon={method.id === "bluetooth" ? "bluetooth" : "wifi"}
+      >
         <SelectRow<ConnectionTargetId>
           label={
             method.id === "bluetooth"
@@ -924,50 +934,6 @@ function MethodSetup({
           onConnectBluetooth={onConnectBluetooth}
           onConnectWifi={onConnectWifi}
         />
-        {/*
-          U-74 (2026-10-02), owner: *"the drive deck doesnt open when on other
-          router is selected"*. When the car joins your router its hotspot moves
-          to that router's channel - one radio, one channel - so this phone loses
-          the link, and with no link the app has no address for the car. That is
-          the whole reason the deck will not open, and it is not fixable in this
-          screen alone.
-
-          What IS fixable today, with no native module and no APK: the car
-          broadcasts its router lease on the hotspot link for a moment before the
-          drop, so we REMEMBER it. When the link is down but we know an address,
-          offer it as one tap - once the phone is on the router. It is a HINT, not
-          an authority: if it does not answer, the error says so plainly rather
-          than pretending.
-        */}
-        {!linkLive && lastRouterIp ? (
-          <View className="mt-2.5">
-            {/* U-86: the explanatory paragraph under each of these is gone. The
-                button label already says what it does and the address it uses,
-                so the text underneath only repeated it. */}
-            <ActionButton
-              label={`Connect to the car (${lastRouterIp})`}
-              icon="link"
-              onPress={() => void onConnectRouterLease(lastRouterIp)}
-              disabled={busy}
-              testID="conn-router-lease"
-            />
-          </View>
-        ) : null}
-        {/* U-74b: no remembered lease, but we KNOW a car is reachable on this
-            network (the Access-point tab connects to it), so its address is
-            knowable in principle. Find it by sweeping this phone's own /24 -
-            no native module, so no APK. */}
-        {!linkLive && !lastRouterIp ? (
-          <View className="mt-2.5">
-            <ActionButton
-              label="Find the car on this network"
-              icon="search"
-              onPress={() => void onFindCarOnNetwork()}
-              disabled={busy}
-              testID="conn-find-car"
-            />
-          </View>
-        ) : null}
         {/* U-84: the "Switch the car to" dropdown is GONE. It was a SECOND
             control for the one action the Wi-Fi list now performs by tapping a
             row, which is what produced "which one do I press" - and the router
@@ -1001,6 +967,35 @@ function MethodSetup({
           onConnectWifi={onConnectWifi}
         />
       )}
+
+      {/* ---- U-97b: the Wi-Fi recovery actions belong to the Wi-Fi method ---
+          U-74 / U-74b (the remembered router lease + the bounded /24 sweep) are
+          Wi-Fi-only: they exist because the phone loses the car when the car
+          joins a router. They were previously rendered inside the Bluetooth
+          branch (the only `hasAlternative` method), so they appeared in the
+          Bluetooth card. They now render ONLY when the Wi-Fi method is selected
+          and no link is up - one method's content never leaks into another. */}
+      {method.id === "wifi" && !linkLive ? (
+        <View className="mt-2.5">
+          {lastRouterIp ? (
+            <ActionButton
+              label={`Connect to the car (${lastRouterIp})`}
+              icon="link"
+              onPress={() => void onConnectRouterLease(lastRouterIp)}
+              disabled={busy}
+              testID="conn-router-lease"
+            />
+          ) : (
+            <ActionButton
+              label="Find the car on this network"
+              icon="search"
+              onPress={() => void onFindCarOnNetwork()}
+              disabled={busy}
+              testID="conn-find-car"
+            />
+          )}
+        </View>
+      ) : null}
 
       {/* U-96: Bluetooth router management \u2014 switch/add/edit/delete routers over
           the live SPP link. The same ROUTERS;\u2026 commands the Wi-Fi panel sends,
@@ -1056,7 +1051,11 @@ function TargetBody({
   /** U-70: a link is already up, so the scan affordances must be hidden. */
   linkLive: boolean;
   onScanBluetooth: () => void;
-  onConnectBluetooth: (address: string, name?: string | null) => Promise<void>;
+  onConnectBluetooth: (
+    address: string,
+    name?: string | null,
+    bonded?: boolean,
+  ) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
 }) {
   const unavailable = targetUnavailableReason(target.id, {
@@ -1122,7 +1121,9 @@ function TargetBody({
                       key={d.id}
                       title={d.name || d.id}
                       subtitle={d.bonded ? "Paired" : d.id}
-                      onPress={() => void onConnectBluetooth(d.id, d.name)}
+                      onPress={() =>
+                        void onConnectBluetooth(d.id, d.name, d.bonded)
+                      }
                       testID={`conn-bt-device-${d.id}`}
                     />
                   ))}

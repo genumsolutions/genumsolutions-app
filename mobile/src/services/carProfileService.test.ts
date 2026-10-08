@@ -54,6 +54,7 @@ import {
   prefsFromCloudSettings,
   isFreshDefaultPrefs,
   mergeCloudProfile,
+  sanitizeDiagnostics,
   WIFI_HISTORY_CAP,
 } from "./carProfileService";
 
@@ -627,5 +628,67 @@ describe("pickBestRouter never returns the car's own network", () => {
 
   it("still picks a normal router when the own AP is absent", () => {
     expect(pickBestRouter({ saved: ["HomeNet"] })).toBe("HomeNet");
+  });
+});
+
+// ---- U-97: the restart/diagnostics snapshot on the car profile ----
+
+describe("diagnostics on the car profile", () => {
+  const base = {
+    name: "Car",
+    modeId: null,
+    speed: 0,
+    servo: 90,
+    steerLimit: 90,
+    trim: 0,
+    useJoystick: false,
+    fullscreen: true,
+    joystickLayout: "dual",
+    lastWifiSsid: null,
+    lastRouterIp: null,
+    savedRouters: [],
+  } as Omit<DevicePrefs, "address">;
+
+  it("carries the diagnostics snapshot into the cloud settings", () => {
+    const record = toCloudRecord(
+      {
+        address: "fw:1A2B3C",
+        diagnostics: { crashCount: 3, resetReason: "TASK_WDT", at: "t" },
+      } as DevicePrefs,
+      "fw:1A2B3C",
+    );
+    expect(record.settings.diagnostics).toMatchObject({
+      crashCount: 3,
+      resetReason: "TASK_WDT",
+    });
+  });
+
+  it("restores a valid snapshot from the cloud row", () => {
+    const prefs = prefsFromCloudSettings(
+      { diagnostics: { crashCount: 0, bootCount: 9 } },
+      base,
+    );
+    expect(prefs.diagnostics).toMatchObject({ crashCount: 0, bootCount: 9 });
+  });
+
+  it("treats an empty or foreign snapshot as absent, never as a clean bill", () => {
+    expect(sanitizeDiagnostics({})).toBeNull();
+    expect(sanitizeDiagnostics("nonsense")).toBeNull();
+    expect(sanitizeDiagnostics(null)).toBeNull();
+    // Every value the wrong type -> nothing usable -> absent.
+    expect(sanitizeDiagnostics({ crashCount: "3", resetReason: 7 })).toBeNull();
+  });
+
+  it("drops only the unusable fields of a partially corrupt snapshot", () => {
+    expect(
+      sanitizeDiagnostics({ crashCount: 2, resetReason: 42, at: "2026" }),
+    ).toEqual({
+      resetReason: null,
+      bootCount: null,
+      crashCount: 2,
+      lastCrashPhase: null,
+      lastCrashHeap: null,
+      at: "2026",
+    });
   });
 });
