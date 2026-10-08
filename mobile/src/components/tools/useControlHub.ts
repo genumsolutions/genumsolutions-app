@@ -58,6 +58,7 @@ import { PROJECT_CATEGORIES } from "../../config/project-catalog";
 import {
   DRIVE_CMD_MIN_INTERVAL_MS,
   SPP_RECONNECT_DELAYS_MS,
+  TELEMETRY_FLUSH_MS,
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
 import { ensureTransportsRegistered } from "../../transports/linkManagerHooks";
@@ -296,6 +297,13 @@ export function useControlHub(routeCategory?: string) {
     setDriveDir(d);
   }, []);
   const [telemetry, setTelemetry] = useState<CarTelemetry>({});
+  // U-97 (bluetooth lag): coalesce incoming telemetry into a bounded flush so a
+  // fast car broadcast (or two live links at once) cannot re-render the panel
+  // once per frame. The buffer holds the latest values; the timer flushes them.
+  const telemetryBufferRef = useRef<CarTelemetry | null>(null);
+  const telemetryFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // NAV state (ESP INPUT_NAV parity): while true the pads/joysticks navigate
   // the top-bar fields and NOTHING drives; the hub also stops mirroring the
@@ -915,6 +923,20 @@ export function useControlHub(routeCategory?: string) {
     ].join("|");
     if (crashReportKeyRef.current === key) return;
     crashReportKeyRef.current = key;
+    // U-97: also keep the latest restart record on the car's profile (local +
+    // cloud `car_profiles.settings`) so the diagnostics panel survives a power
+    // cycle and a second device sees the same history. The fleet push below is
+    // unchanged and still runs for both link methods.
+    persistPrefsRef.current?.({
+      diagnostics: {
+        resetReason: telemetry.resetReason ?? null,
+        bootCount: telemetry.bootCount ?? null,
+        crashCount: telemetry.crashCount ?? null,
+        lastCrashPhase: telemetry.lastCrashPhase ?? null,
+        lastCrashHeap: telemetry.lastCrashHeap ?? null,
+        at: new Date().toISOString(),
+      },
+    });
     void syncCrashReport({
       boardId,
       connectionMethod: connected ? "bluetooth" : "wifi",
@@ -1033,6 +1055,11 @@ export function useControlHub(routeCategory?: string) {
         clearTimeout(connectionMsgTimerRef.current);
         connectionMsgTimerRef.current = null;
       }
+      // U-97: drop any pending telemetry flush timer.
+      if (telemetryFlushTimerRef.current) {
+        clearTimeout(telemetryFlushTimerRef.current);
+        telemetryFlushTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -1049,7 +1076,23 @@ export function useControlHub(routeCategory?: string) {
   useEffect(() => {
     const applyTelemetry = (t: CarTelemetry) => {
       if (!mountedRef.current) return;
-      setTelemetry((prev) => ({ ...prev, ...t }));
+      // U-97 (bluetooth lag): buffer + flush on a bounded tick instead of a
+      // setState per frame. Merged against the previous buffer so nothing in a
+      // burst is lost; the state update itself stays functional.
+      telemetryBufferRef.current = {
+        ...(telemetryBufferRef.current ?? {}),
+        ...t,
+      };
+      if (telemetryFlushTimerRef.current == null) {
+        telemetryFlushTimerRef.current = setTimeout(() => {
+          telemetryFlushTimerRef.current = null;
+          const buffered = telemetryBufferRef.current;
+          telemetryBufferRef.current = null;
+          if (buffered && mountedRef.current) {
+            setTelemetry((prev) => ({ ...prev, ...buffered }));
+          }
+        }, TELEMETRY_FLUSH_MS);
+      }
       // Connections-Hub (profiles): remember the board-unique id. It changes
       // the stable memory key to `fw:<id>` (see addressForMemory) and lands
       // in the persisted profile as uniqueId.

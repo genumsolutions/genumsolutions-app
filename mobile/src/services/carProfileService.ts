@@ -17,7 +17,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../config/supabase";
 import { SPEED_MAX, SPEED_MIN, isOwnApName } from "./carProtocol";
-import type { DevicePrefs } from "../components/tools/types";
+import type { CarDiagnostics, DevicePrefs } from "../components/tools/types";
 
 export type WifiHistoryEntry = { ssid: string; lastSeen: number };
 
@@ -172,6 +172,9 @@ export function toCloudRecord(
     auto_join_router: prefs.autoJoinRouter ?? true,
     bt_ids: prefs.btIds ?? [],
     saved_routers: prefs.savedRouters ?? [],
+    // U-97: the last firmware restart record for this car, so the diagnostics
+    // panel survives a power cycle and a second device sees the same history.
+    diagnostics: prefs.diagnostics ?? null,
   };
   return {
     profile_key: profileKey,
@@ -190,6 +193,35 @@ export function toCloudRecord(
 // last-saved-wins with fresh default detection; NOTHING secret ever
 // leaves the phone (no wifi password, no keys — names only).
 // =====================================================================
+
+/**
+ * U-97: sanitize a diagnostics snapshot from a cloud row. A corrupt/foreign
+ * value is dropped rather than trusted; a snapshot with no usable field is
+ * treated as absent so an empty object never masks "nothing reported".
+ */
+export function sanitizeDiagnostics(v: unknown): CarDiagnostics | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const str = (x: unknown): string | undefined =>
+    typeof x === "string" && x.length > 0 && x.length <= 120 ? x : undefined;
+  const num = (x: unknown): number | null =>
+    typeof x === "number" && Number.isFinite(x) ? x : null;
+  const out: CarDiagnostics = {
+    resetReason: str(o.resetReason) ?? null,
+    bootCount: num(o.bootCount),
+    crashCount: num(o.crashCount),
+    lastCrashPhase: str(o.lastCrashPhase) ?? null,
+    lastCrashHeap: num(o.lastCrashHeap),
+    at: str(o.at),
+  };
+  const anyPresent =
+    out.resetReason != null ||
+    out.bootCount != null ||
+    out.crashCount != null ||
+    out.lastCrashPhase != null ||
+    out.lastCrashHeap != null;
+  return anyPresent ? out : null;
+}
 
 /** Settings keys eligible for cloud sync + the sanitizer per key. */
 const SYNCABLE_SETTINGS = {
@@ -226,6 +258,8 @@ const SYNCABLE_SETTINGS = {
     v.every((s) => typeof s === "string" && s.length > 0 && s.length <= 64)
       ? (v as string[])
       : null,
+  // U-97: last firmware diagnostics snapshot for this car.
+  diagnostics: (v: unknown): CarDiagnostics | null => sanitizeDiagnostics(v),
 } as const;
 
 /**
@@ -271,6 +305,8 @@ export function prefsFromCloudSettings(
       SYNCABLE_SETTINGS.auto_join_router(s.auto_join_router) ??
       base.autoJoinRouter ??
       true,
+    diagnostics:
+      SYNCABLE_SETTINGS.diagnostics(s.diagnostics) ?? base.diagnostics ?? null,
   } as DevicePrefs;
 }
 

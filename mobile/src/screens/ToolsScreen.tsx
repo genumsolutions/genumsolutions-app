@@ -441,13 +441,24 @@ export function ToolsScreen() {
                       ? "Bluetooth"
                       : null,
               }),
-              // U-95/F-79: the car's own record of why it rebooted. Appended,
-              // not interleaved, so the six fixed readings keep their order.
-              // `null` on pre-1.2.0 firmware — no row rather than a false "None".
-              ...(restartField ? [restartField] : []),
             ]}
           />
         </View>
+
+        {/* U-97: the car's restart record is diagnostics, not a headline reading.
+            It sat in the strip above and made every reconnect look like a fault.
+            It now lives in one quiet, collapsed row that only appears when the
+            car actually reported something — no row rather than a false "None". */}
+        {restartField ? (
+          <SectionDisclosure title="Diagnostics">
+            <View className="rounded-2xl border border-line bg-card p-4">
+              <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
+                Last restart record
+              </Text>
+              <TelemetryStrip fields={[restartField]} />
+            </View>
+          </SectionDisclosure>
+        ) : null}
 
         {/* Connections — the ONE connection surface (owner ①②). Placed
             directly under the car status because connecting IS the next

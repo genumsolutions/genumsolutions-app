@@ -39,6 +39,22 @@ export const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxTrim: 90,
 };
 
+/**
+ * U-97: the firmware restart/diagnostics record received from a car, kept on
+ * the car's profile (local + `car_profiles.settings`) so the record survives a
+ * power cycle and can be read back on the next connect. Values are the raw
+ * fields the car reported; `at` is when the app captured them.
+ */
+export type CarDiagnostics = {
+  resetReason?: string | null;
+  bootCount?: number | null;
+  crashCount?: number | null;
+  lastCrashPhase?: string | null;
+  lastCrashHeap?: number | null;
+  /** ISO timestamp of when the app received this record. */
+  at?: string;
+};
+
 /** Saved per-device preferences (mirrors the ESP remote remembered values). */
 export type DevicePrefs = {
   /** Last used SPP address so the app can re-select the same car. */
@@ -111,6 +127,8 @@ export type DevicePrefs = {
       (epoch ms). Feeds last-saved-wins merging against the cloud row's
       updated_at — the user's most recent save wins, wherever it happened. */
   savedAt?: number | null;
+  /** U-97: last firmware restart/diagnostics record reported by THIS car. */
+  diagnostics?: CarDiagnostics | null;
 };
 
 /** Per-device storage key prefix. */
