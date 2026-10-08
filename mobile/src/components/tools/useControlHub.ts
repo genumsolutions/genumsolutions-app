@@ -2356,11 +2356,14 @@ export function useControlHub(routeCategory?: string) {
   // `consumeRouterAnswer`. This helper now only mirrors a CONFIRMED deletion
   // for callers that have one.
   const routerDelete = useCallback(
-    (ssid: string) => {
+    async (ssid: string) => {
       const s = ssid.trim();
       if (!s) return;
       const next = carNetworks.filter((n) => n !== s);
       setCarNetworks(next);
+      // U-98: optimistic list update – always persist, even if the car
+      // doesn't acknowledge the deletion (the car's next echo will
+      // reconcile any discrepancy).
       persistPrefsRef.current?.({ savedRouters: next });
     },
     [carNetworks],
