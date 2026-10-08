@@ -1556,6 +1556,14 @@ export function useControlHub(routeCategory?: string) {
         setError(reason);
         return { ok: false, reason };
       }
+      // U‑98: if the car is already bonded, skip the pairing dialog – the
+      // native OS prompt should not appear again.
+      if (!device.bonded) {
+        setError(
+          "Car not paired – please pair the car in Android Settings → Bluetooth first.",
+        );
+        return { ok: false, reason: "Car not paired" };
+      }
       setConnectingAddress(device.address);
       setError(null);
       manualCloseRef.current = false;
