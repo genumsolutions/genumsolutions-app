@@ -631,6 +631,22 @@ export function ConnectionSection({
         icon="radio"
         tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
         testID="conn-status"
+        // U-98: the disconnect action lives on the TITLE row (the card's
+        // `right` slot), not as a loose full-width button under the status
+        // text — the card owns its own action, so the body stays status-only.
+        right={
+          anyLink ? (
+            <ActionButton
+              compact
+              label="Disconnect"
+              variant="quiet"
+              icon="power"
+              onPress={() => void disconnect()}
+              disabled={busy}
+              testID="conn-disconnect"
+            />
+          ) : null
+        }
       >
         {/* U-86: "The car is answering on this link." removed. The status line above
             already says Connected / Not connected with the network name, so
@@ -643,18 +659,6 @@ export function ConnectionSection({
             rendered here so no failure can be silent again. */}
         {!anyLink && hubError ? (
           <InlineMessage tone="error">{hubError}</InlineMessage>
-        ) : null}
-        {anyLink ? (
-          <View className="mt-2.5">
-            <ActionButton
-              label="Disconnect"
-              variant="quiet"
-              icon="power"
-              onPress={() => void disconnect()}
-              disabled={busy}
-              testID="conn-disconnect"
-            />
-          </View>
         ) : null}
         {showSppsRetry ? (
           <View className="mt-2.5 gap-2">

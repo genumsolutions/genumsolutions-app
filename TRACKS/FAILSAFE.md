@@ -50,6 +50,16 @@ Do-not-break invariants + recovery during the app·website sync effort. Master p
   413). The token is in `C:\bs\.env.local` (`SUPABASE_ACCESS_TOKEN`, gitignored, expires
   ~2026-11-07). Never print or commit it.
 
+- **One live link at a time, and each transport only speaks for itself (U-98).** `dropBluetoothForWifi`
+  is the ONLY sanctioned teardown of the other transport, it runs only on a Wi-Fi success path, and it
+  hands `connected` to the surviving socket (`setConnected(wifiService.isConnected)`) — never
+  `setConnected(false)`. The SPP status handler may clear `connected`/`linkVerified` only behind
+  `!wifiService.isConnected`: a failed Bluetooth attempt, or a deliberate teardown during a Wi-Fi
+  connect, must not un-verify a link Bluetooth does not own (symptom: status card stuck on
+  "Connecting…" with the 2 s REQ_STATE poll dead on a working link). Pinned by
+  `src/components/tools/oneActiveLink.test.ts` (raw source view, comments stripped, proven both
+  directions — 4 mutations, each caught by its own rule). Do not "simplify" those guards away.
+
 ## Recovery
 
 | Symptom                                            | Action                                                                                                                                     |

@@ -1,10 +1,68 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-08: U-97 fleet crash reports + 3 method cards)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-08: U-98 one active link · U-97 fleet crash reports + 3 method cards)
+
+> **READ FIRST (2026-10-08, U-98 — the last thing worked on, and the reason it mattered).**
+> The app kept BOTH transports connected at once: a Wi-Fi connect left the Bluetooth SPP socket
+> open (and `routeCommand` kept sending drive letters to it), a Bluetooth connect left the Wi-Fi
+> socket reachable, and each transport's status handler cleared the OTHER one's link truth. Three
+> defects, one round:
+>
+> - **Bluetooth never verified.** Only the Wi-Fi paths set `linkVerified`, so a Bluetooth connect
+>   left the Control Panel's Connection card on **"Connecting…" with the gold dot forever** while
+>   the Remote deck already said Connected. Now the SPP `connected` event sets it.
+> - **The teardown clobbered the survivor.** `dropBluetoothForWifi()` (the new helper that makes the
+>   picked method the ONLY live one) did `setConnected(false)` *after* `sppService.disconnect()` —
+>   which fires the status handler that clears `linkVerified` — on a Wi-Fi socket that was up and had
+>   just answered the car. Net result of a successful Wi-Fi connect: `connected=false` → the 2 s
+>   REQ_STATE poll (keyed on `connected`) stopped with a live link, and the status card read
+>   "Connecting…". **This was found by reading the WIP, not by a red gate.** Fixed twice over: the
+>   helper now hands `connected` to the surviving Wi-Fi socket
+>   (`setConnected(wifiService.isConnected)`), and the SPP handler only clears
+>   `connected`/`linkVerified` **when Bluetooth is the link it owns** (`!wifiService.isConnected`) —
+>   which also fixes a *failed* Bluetooth attempt un-verifying a working Wi-Fi link.
+> - **Disconnect was a loose button** under the status text. `ConnectionCard` gained a `right`
+>   title-row slot (+ `ActionButton compact`, same tokens/press rules, `h-7`/11px), and the
+>   Connection card owns its own Disconnect there. `testID` `conn-disconnect` is unchanged.
+>
+> **Regression net:** `src/components/tools/oneActiveLink.test.ts` (5 rules). It reads the **raw
+> `useControlHub.ts` source with comments stripped** — stated in the file header because this repo
+> has no component harness — and it was proven **both directions**: four mutations (helper claims no
+> link · clears unguarded · one teardown call dropped · stale `linkVerified` kept), each caught by
+> ITS OWN named rule, plus a wrong-anchor run that failed the "has sources" vacuity net rather than
+> passing silently. Restore → 5/5 green.
+>
+> **Gates:** tsc 0 · vitest **659/659** (45 files) · prettier clean. **JS-only → same-version OTA
+> 3.2.7/60, no APK.** Not device-verified: connect by Bluetooth, confirm the status card goes LIVE
+> (not stuck "Connecting…"), connect by Wi-Fi with Bluetooth up (the two must never be live
+> together), disconnect from the card header.
+
+## 1. U-98 — one active link at a time (2026-10-08, this session)
+
+What shipped, in code terms:
+
+- **`components/tools/useControlHub.ts`**
+  - SPP status `connected` → `setLinkVerified(true)` (the Bluetooth half of the card's truth).
+  - SPP status `disconnected`/`error` → clear `connected`/`linkVerified` **only if
+    `!wifiService.isConnected`**; `setDeviceName("")` stays unconditional (it is the BT name).
+  - New `dropBluetoothForWifi()` — BLE + SPP down, `manualClose` on both so neither auto-reconnects,
+    then `setConnected(wifiService.isConnected)`. Called from all **three** Wi-Fi success paths
+    (user address, stale-lease find, refused-connection find) — only on success, so a failed Wi-Fi
+    attempt never destroys a working Bluetooth link.
+  - `handleWifiDisconnect` → `setLinkVerified(false)` (one live link: dropping it leaves nothing
+    verified).
+- **`connection/ConnectionCard.tsx`** — `right` slot on the title row; `ActionButton` gains
+  `compact` (h-7 / px-2.5 / 11px, same variants and disabled rule — a compact SHAPE, not a new one).
+- **`connection/ConnectionSection.tsx`** — the status card renders Disconnect in `right` and no
+  longer carries it as a full-width body button.
+
+Deliberately NOT done: no `setLinkVerified` change in the **Wi-Fi** status handler (a Wi-Fi
+`disconnected` arriving during a Bluetooth session must not un-verify the Bluetooth link — the same
+defect, mirrored) and BLE is untouched (gated "Coming Soon", no dial path).
+
+## 2. U-97 — the restart record now goes to the fleet, not just the dash
 
 > **READ FIRST (2026-10-08).** U-95's restart record now leaves the phone: on connect the app
 > uploads it to Supabase so faults are tracked fleet-wide. Plus the Control Panel's connection
 > methods became three equal cards.
-
-## 1. U-97 — the restart record now goes to the fleet, not just the dash
 
 U-95/U-95b got the car's restart record (reset reason, boot/crash counts, last crash phase + heap)
 onto the phone and into the Restarts row. That is still a copy that dies with the phone. **U-97
@@ -34,7 +92,7 @@ uploads it.**
   then). The endpoint takes one query string; this migration was sent statement-by-statement because
   a single multi-statement body returns 413.
 
-## 2. U-97 — three equal method cards (owner 2026-10-08)
+## 3. U-97 — three equal method cards (owner 2026-10-08)
 
 Owner: *"show connection methods as three equal cards"*. `ConnectionSection`'s U-69 method dropdown is
 replaced by three equal, always-visible cards (Bluetooth / Wi-Fi / Internet) with a section heading
