@@ -33,6 +33,22 @@ Do-not-break invariants + recovery during the app·website sync effort. Master p
   imported), one asserted `typeof fn() === "boolean"`. Prefer asserting the real contract.
   When you discover the contract contradicts what you assumed, say so in the test comment —
   the wrong assumption is the thing future readers will repeat.
+- **U-97 crash reports: one row per RESTART RECORD, never per poll.** `crashReportService`
+  dedupes on `board_id|boot_count|crash_count|reset_reason` (the last-synced key in
+  AsyncStorage). Do not wire `syncCrashReport` to every `/status` frame — the car loops them
+  and it would flood `device_crash_reports`. Fire once on link-up per distinct record.
+- **Missing is unknown, never zero (U-97).** Old firmware sends no restart fields; the row must
+  keep them `null` and `has_crash` must come from a real `crashCount`, or the fleet table will
+  invent crashes. Never default `boot_count`/`crash_count` to `0`.
+- **Crash sync must never break a connection.** `syncCrashReport`/`flushCrashReports` catch
+  everything and return, and the hub calls them fire-and-forget (`void`). A diagnostics network
+  failure cannot fail a link. Keep it that way.
+- **`device_crash_reports` is APPLIED (2026-10-08)** to project `bkylfnlybtsujwzropru`, verified
+  (24 cols / 4 indexes / 3 RLS policies; anon insert tested then removed). To apply future
+  migrations without the CLI: `POST https://api.supabase.com/v1/projects/bkylfnlybtsujwzropru/database/query`
+  with `Authorization: Bearer <access token>`, ONE statement per request (multi-statement bodies
+  413). The token is in `C:\bs\.env.local` (`SUPABASE_ACCESS_TOKEN`, gitignored, expires
+  ~2026-11-07). Never print or commit it.
 
 ## Recovery
 

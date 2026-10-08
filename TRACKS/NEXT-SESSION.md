@@ -1,4 +1,48 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-06: U-95 crash telemetry now REACHES the phone; dead-code sweep)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-08: U-97 fleet crash reports + 3 method cards)
+
+> **READ FIRST (2026-10-08).** U-95's restart record now leaves the phone: on connect the app
+> uploads it to Supabase so faults are tracked fleet-wide. Plus the Control Panel's connection
+> methods became three equal cards.
+
+## 1. U-97 — the restart record now goes to the fleet, not just the dash
+
+U-95/U-95b got the car's restart record (reset reason, boot/crash counts, last crash phase + heap)
+onto the phone and into the Restarts row. That is still a copy that dies with the phone. **U-97
+uploads it.**
+
+- **New table** `public.device_crash_reports` — migration
+  `genumsolutions-website/supabase/migrations/20261008180000_device_crash_reports.sql`. One row per
+  connection session snapshot. RLS: signed-in users read/insert their own; `is_staff()` manages all;
+  anon may insert (honest diagnostics, no account required). `device_id` is resolved (best-effort)
+  from the board id to `devices.unique_id = 'fw:<boardId>'`; `user_id` is null for anon.
+- **New service** `services/crashReportService.ts` — pure `buildCrashReport` / `crashReportKey` /
+  `shouldSendReport`, plus `syncCrashReport` / `flushCrashReports`. Offline-first: a failed push
+  queues in AsyncStorage (`genum.crashReports.queue`, cap 50) and flushes on the next connect. The
+  last-synced key (`genum.crashReports.last`) dedupes so the looping `/status` frames cannot
+  re-report — **one row per restart record**, a new boot/crash/reason is a new row. Missing fields
+  stay `null`; `has_crash` is derived from a real `crashCount`, never defaulted. Pinned by
+  `crashReportService.test.ts` (19 tests).
+- **Wiring** `components/tools/useControlHub.ts` — one effect keyed on link-up + the restart fields;
+  fires once per distinct record per session. Missing board id or a pre-1.2.0 car → nothing sent.
+- **✅ Migration APPLIED 2026-10-08** to project `bkylfnlybtsujwzropru` via the Supabase Management API
+  (CLI not installed). Verified: table exists, 4 indexes, 3 RLS policies, empty (0 rows). Anon INSERT
+  confirmed working through RLS. No flash needed — this is app + website only.
+- **How to apply future migrations without the CLI:** PUT the SQL via
+  `POST https://api.supabase.com/v1/projects/bkylfnlybtsujwzropru/database/query` with
+  `Authorization: Bearer <access token>`. The personal access token lives in `C:\bs\.env.local`
+  (`SUPABASE_ACCESS_TOKEN`, gitignored, added 2026-10-08, **expires ~2026-11-07** — rotate before
+  then). The endpoint takes one query string; this migration was sent statement-by-statement because
+  a single multi-statement body returns 413.
+
+## 2. U-97 — three equal method cards (owner 2026-10-08)
+
+Owner: *"show connection methods as three equal cards"*. `ConnectionSection`'s U-69 method dropdown is
+replaced by three equal, always-visible cards (Bluetooth / Wi-Fi / Internet) with a section heading
+("Connect to your car"). Internet stays rendered but visibly disabled with its reason. Choosing a
+card swaps the setup card below exactly as the dropdown did. `methods.ts` gains real blurbs for
+Wi-Fi and Internet. Contrast guard still passes (tokens only).
+
+---
 
 > **READ FIRST (2026-10-06).** Two things closed the loop between this app and the 4WD4M car, plus a
 > dead-code pass. The firmware was **not compiling** at the start of that session — the car repo's own

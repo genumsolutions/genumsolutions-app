@@ -44,6 +44,10 @@ signing key changes.
     `versionCode` from `app.json` at runtime and derives the file name, size and notes.
 - Release builds run from `C:\bs` (LongPaths is disabled on `E:\`, so Gradle must run there); keep
   `C:\bs` as a mirror of `mobile/` (including `keystores/`).
+- `C:\bs\.env.local` also holds `SUPABASE_ACCESS_TOKEN` (a Supabase personal access token, launched
+  2026-10-08, **expires ~2026-11-07**) for applying migrations without the CLI via the Management API
+  `POST /v1/projects/bkylfnlybtsujwzropru/database/query` (one SQL statement per request). It is a
+  secret: never print or commit it; rotate before it expires.
 - Build the signed release APK from `C:\bs\android` via `gradlew assembleRelease`, then upload with
   `node scripts/upload-release.mjs` (secrets in `C:\bs\.env.local`). This pushes the APK + a
   `release.json` manifest to the `app-releases` Supabase bucket that both the website `/app` page
