@@ -69,6 +69,8 @@ export type WifiPanelProps = {
   onAdd: (ssid: string, pass: string) => void;
   onEdit: (ssid: string, newPass: string) => void;
   onScan: () => void;
+  /** Send a raw command to the car (e.g., ROUTERS;SCAN;CANCEL). */
+  sendCmd: (cmd: string) => void;
   onInputFocus?: (y: number) => void;
   /** Shown after a switch so the phone follows the car (Android cannot do it silently). */
   pendingSsid?: string | null;
@@ -94,6 +96,7 @@ export function WifiPanel({
   onAdd,
   onEdit,
   onScan,
+  sendCmd,
   onInputFocus,
   pendingSsid,
 }: WifiPanelProps) {
@@ -328,23 +331,36 @@ export function WifiPanel({
       {/* Scanning is how a new network is found — the phone's own "refresh".
           U-93: when it cannot work, it SAYS why (the owner's "router select
           not working sometime" — a silently dead button reads as a bug). */}
-      <Pressable
-        onPress={onScan}
-        disabled={busy || !reachable}
-        accessibilityRole="button"
-        accessibilityLabel="Search for networks"
-        className="mt-2.5 flex-row items-center justify-center gap-2 rounded-xl border border-line bg-card py-3"
-        testID="wifi-scan"
-      >
-        <Feather name="refresh-cw" size={14} color="#1e3a8a" />
-        <Text className="text-[13px] font-bold text-navy">
-          {busy
-            ? "Searching…"
-            : reachable
-              ? "Search for networks"
-              : "Connect to the car to search"}
-        </Text>
-      </Pressable>
+      <View className="mt-2.5 flex-row gap-2">
+        <Pressable
+          onPress={onScan}
+          disabled={busy || !reachable}
+          accessibilityRole="button"
+          accessibilityLabel="Search for networks"
+          className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-line bg-card py-3 ${busy ? "opacity-50" : ""}`}
+          testID="wifi-scan"
+        >
+          <Feather name="refresh-cw" size={14} color="#1e3a8a" />
+          <Text className="text-[13px] font-bold text-navy">
+            {busy
+              ? "Searching…"
+              : reachable
+                ? "Search for networks"
+                : "Connect to the car to search"}
+          </Text>
+        </Pressable>
+        {busy && (
+          <Pressable
+            onPress={() => sendCmd("ROUTERS;SCAN;CANCEL")}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel scan"
+            className="items-center rounded-xl border border-line bg-card px-4 py-3"
+            testID="wifi-scan-cancel"
+          >
+            <Text className="text-[13px] font-bold text-navy">Cancel</Text>
+          </Pressable>
+        )}
+      </View>
 
       {adding ? (
         <View className="mt-2.5 gap-2" testID="wifi-add-form">

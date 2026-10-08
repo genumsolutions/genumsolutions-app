@@ -162,6 +162,7 @@ export function ConnectionSection({
     // handler with the WiFi method card.
     routerSwitchNotice,
     dismissRouterSwitchNotice,
+    sendCommand,
   } = hub;
 
   const [targetId, setTargetId] = useState<ConnectionTargetId | null>(null);
@@ -804,6 +805,7 @@ export function ConnectionSection({
           busy={busy}
           reachable={anyLink}
           pendingSsid={pendingJoinSsid}
+          sendCmd={sendCommand}
           onSwitch={(s) => void switchRouter(s)}
           onForget={(s) => void deleteRouter(s)}
           onEdit={(s, p) => void editRouter(s, p)}
