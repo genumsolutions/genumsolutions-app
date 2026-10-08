@@ -1337,6 +1337,11 @@ export function useControlHub(routeCategory?: string) {
           // a silent auto-reconnect or retry that reached 'connected' left the
           // UI believing the link was down (dead Connect button on return).
           setConnected(true);
+          // U-98: a live SPP link IS a verified car link. Before this only the
+          // Wi-Fi paths set `linkVerified`, so a Bluetooth connect left the
+          // Control Panel's Connection card stuck on "Connecting…" forever
+          // (gold busy dot) while the Remote deck already showed "Connected".
+          setLinkVerified(true);
           // Force the car to broadcast its current STATE so the app
           // immediately picks up the active mode, speed, trim, etc.
           setTimeout(() => {
@@ -1346,8 +1351,17 @@ export function useControlHub(routeCategory?: string) {
         case "disconnected":
           setSppStatus("disconnected");
           setSppStatusMsg("");
-          setConnected(false);
           setDeviceName("");
+          // U-98: a Bluetooth event only owns `connected`/`linkVerified` while
+          // Bluetooth IS the live link. The Wi-Fi connect path tears SPP down
+          // on purpose (dropBluetoothForWifi) — and a FAILED Bluetooth attempt
+          // leaves the Wi-Fi socket up — so clearing here unconditionally put
+          // a live, answered Wi-Fi link back on "Connecting…" (gold dot) and
+          // stopped the REQ_STATE poll, which is keyed on `connected`.
+          if (!wifiService.isConnected) {
+            setConnected(false);
+            setLinkVerified(false);
+          }
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
           // Auto-reconnect on unexpected disconnect (ESP remote parity):
@@ -1364,8 +1378,13 @@ export function useControlHub(routeCategory?: string) {
           break;
         case "error":
           if (!burst) setSppStatusMsg(presentationMsg ?? "Connection error"); // burst: no flap
-          setConnected(false);
           setDeviceName("");
+          // U-98: same rule as "disconnected" — a failed Bluetooth attempt
+          // must not un-verify the Wi-Fi link that is still up.
+          if (!wifiService.isConnected) {
+            setConnected(false);
+            setLinkVerified(false);
+          }
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
           if (
@@ -1549,6 +1568,15 @@ export function useControlHub(routeCategory?: string) {
         setDeviceName(device.name);
         setConnecting(false);
         setConnectingAddress(null);
+        // U-98: making Bluetooth the live method drops any open Wi-Fi socket,
+        // so the two links can never both be live (see dropBluetoothForWifi).
+        if (wifiService.isConnected) {
+          try {
+            await wifiService.disconnect();
+          } catch {
+            /* ignore */
+          }
+        }
         setWifiConnected(false);
         showConnectionMessage(`Connected to ${device.name}`, "success");
         void sppService.requestState().catch(() => {});
@@ -1635,6 +1663,36 @@ export function useControlHub(routeCategory?: string) {
     }
   }, []);
 
+  // U-98: ONE active link at a time. The app never tore down the other
+  // transport, so a Wi-Fi shortcut left the Bluetooth SPP socket open and
+  // (with `chosenRadio` always null) `routeCommand` kept sending drive letters
+  // to BT; and a BT connect left the Wi-Fi socket live so the car could be
+  // reached on both. Tearing the other link down makes the method the user
+  // picked the ONLY live one, which is also what the routing core always
+  // intended. `sppService.disconnect()`/`wifiService.disconnect()` set the
+  // service-level manualClose so neither auto-reconnect fires afterwards.
+  const dropBluetoothForWifi = useCallback(async () => {
+    if (bleService.isConnected) {
+      try {
+        await bleService.disconnect();
+      } catch {
+        /* ignore */
+      }
+    }
+    manualCloseRef.current = true;
+    try {
+      await sppService.disconnect();
+    } catch {
+      /* ignore */
+    }
+    // The Wi-Fi socket is the link this teardown leaves standing, so it owns
+    // `connected` — never an unconditional false, which is what stopped the
+    // REQ_STATE poll and the status card's "live" dot on a working Wi-Fi link.
+    setConnected(wifiService.isConnected);
+    setSppStatus("disconnected");
+    setDeviceName("");
+  }, []);
+
   const handleWifiConnect = useCallback(
     async (overrideUrl?: string) => {
       setError(null);
@@ -1670,6 +1728,7 @@ export function useControlHub(routeCategory?: string) {
         }
         setLinkVerified(answered);
         if (answered) {
+          void dropBluetoothForWifi();
           setWifiConnected(true);
           setError(null);
           showConnectionMessage(`Connected to car via WiFi`, "success");
@@ -1691,6 +1750,7 @@ export function useControlHub(routeCategory?: string) {
               setWifiConnected(true);
               setLinkVerified(true);
               setError(null);
+              void dropBluetoothForWifi();
               showConnectionMessage(
                 `Car found automatically at ${lookedHalf.host} — connected.`,
                 "success",
@@ -1728,6 +1788,7 @@ export function useControlHub(routeCategory?: string) {
               setWifiConnected(true);
               setLinkVerified(true);
               setError(null);
+              void dropBluetoothForWifi();
               showConnectionMessage(
                 `Car found automatically at ${looked.host} — connected.`,
                 "success",
@@ -1761,7 +1822,7 @@ export function useControlHub(routeCategory?: string) {
         if (mountedRef.current) setConnecting(false);
       }
     },
-    [wifiUrl, showConnectionMessage],
+    [wifiUrl, showConnectionMessage, dropBluetoothForWifi],
   ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
 
   const handleWifiDisconnect = useCallback(async () => {
@@ -1781,6 +1842,10 @@ export function useControlHub(routeCategory?: string) {
     }
     await wifiService.disconnect();
     setWifiConnected(false);
+    // U-98: with one live link at a time, dropping the Wi-Fi link leaves
+    // NOTHING verified. Stale `true` here is what would let the next status
+    // read as "live" before any car has answered.
+    setLinkVerified(false);
     setError(null);
   }, []);
 

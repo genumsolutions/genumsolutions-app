@@ -59,6 +59,7 @@ export function ConnectionCard({
   tone = "idle",
   selected = false,
   onPress,
+  right,
   children,
   testID,
 }: {
@@ -68,6 +69,10 @@ export function ConnectionCard({
   tone?: CardTone;
   selected?: boolean;
   onPress?: () => void;
+  /** U-98: an optional inline action slot on the title row's right edge, so a
+      card can own a small action (e.g. Disconnect) WITHOUT a loose button
+      below it. Kept narrow so it never competes with the title. */
+  right?: React.ReactNode;
   children?: React.ReactNode;
   testID?: string;
 }) {
@@ -94,6 +99,7 @@ export function ConnectionCard({
           {title}
         </Text>
         <View className={`h-2 w-2 rounded-full ${TONE_DOT[tone]}`} />
+        {right ? <View>{right}</View> : null}
       </View>
       {subtitle ? (
         <Text className="mt-1 text-[11px] leading-4 text-muted">
@@ -138,6 +144,7 @@ export function ActionButton({
   disabled = false,
   icon,
   flex = false,
+  compact = false,
   testID,
 }: {
   label: string;
@@ -146,6 +153,9 @@ export function ActionButton({
   disabled?: boolean;
   icon?: React.ComponentProps<typeof Feather>["name"];
   flex?: boolean;
+  /** U-98: the same button, sized to sit in a card's TITLE row (the `right`
+      slot). Same tokens, same press rules — a compact shape, not a new one. */
+  compact?: boolean;
   testID?: string;
 }) {
   // Primary is navy with white ink in BOTH themes (navy is blue-900 light /
@@ -171,14 +181,16 @@ export function ActionButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
       testID={testID}
-      className={`h-11 ${flex ? "flex-1" : ""} flex-row items-center justify-center gap-1.5 rounded-full px-4 ${
-        tone
-      } ${disabled ? "opacity-50" : "active:opacity-70"}`}
+      className={`${compact ? "h-7 px-2.5 gap-1" : "h-11 px-4 gap-1.5"} ${
+        flex ? "flex-1" : ""
+      } flex-row items-center justify-center rounded-full ${tone} ${
+        disabled ? "opacity-50" : "active:opacity-70"
+      }`}
     >
       {icon ? (
         <Feather
           name={icon}
-          size={14}
+          size={compact ? 12 : 14}
           color={
             variant === "primary"
               ? "#ffffff"
@@ -188,7 +200,11 @@ export function ActionButton({
           }
         />
       ) : null}
-      <Text className={`text-[13px] font-black ${text}`}>{label}</Text>
+      <Text
+        className={`${compact ? "text-[11px]" : "text-[13px]"} font-black ${text}`}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
