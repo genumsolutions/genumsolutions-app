@@ -52,6 +52,7 @@ import {
   isModeToken,
   nextRemoteModeToken,
   sortRemoteModes,
+  REMOTE_MODE_ORDER,
 } from "../../config/roboCarCatalog";
 import { getCarModes } from "../../services/carModeService";
 import { PROJECT_CATEGORIES } from "../../config/project-catalog";
@@ -2717,18 +2718,19 @@ export function useControlHub(routeCategory?: string) {
   );
 
   const cycleMode = useCallback(() => {
-    // Remote fleet cycle order â€” always advances and wraps. Unknown tokens
-    // roll forward from the head of the order, never land on pool[0].
-    const pool =
-      carModes.length > 0 ? sortRemoteModes(carModes) : [...LOCAL_CAR_MODES];
+    // Remote fleet cycle order â€” always advances and wraps through
+    // ALL 9 firmware modes per REMOTE_MODE_ORDER. We do NOT filter by
+    // carModes (what the car currently broadcasts), because planned/CS
+    // modes must still be cyclable per owner ruling (R-10). The car
+    // will NACK if it truly rejects the token; the app must not pre-
+    // filter. The pool is the full REMOTE_MODE_ORDER mapped to CarMode.
+    const pool = REMOTE_MODE_ORDER.map((token) =>
+      LOCAL_CAR_MODES.find((m) => canonicalCarToken(m.token) === token),
+    ).filter((m): m is CarMode => m !== undefined);
     const nextToken = nextRemoteModeToken(activeMode.token);
-    const next =
-      pool.find((m) => canonicalCarToken(m.token) === nextToken) ??
-      [...LOCAL_CAR_MODES].find(
-        (m) => canonicalCarToken(m.token) === nextToken,
-      );
+    const next = pool.find((m) => canonicalCarToken(m.token) === nextToken);
     if (next) selectMode(next);
-  }, [activeMode, selectMode, carModes]);
+  }, [activeMode, selectMode]);
 
   const toggleRelay = useCallback(
     (i: number) => {
