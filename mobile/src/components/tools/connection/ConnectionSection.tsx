@@ -54,7 +54,7 @@
 // =====================================================================
 
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import {
@@ -103,6 +103,16 @@ const DEVICE_LIST_MAX_HEIGHT = 260;
 // (U-80) probeCarStatus moved to ./discovery.ts — the hub's automatic
 // discovery shares it, and the pure module is its home.
 // =====================================================================
+
+/** U-97: the icon for each of the three methods (there are exactly three). */
+const METHOD_ICON: Record<
+  ConnectionMethodId,
+  React.ComponentProps<typeof Feather>["name"]
+> = {
+  bluetooth: "bluetooth",
+  wifi: "wifi",
+  internet: "globe",
+};
 
 export type ConnectionSectionProps = {
   hub: Hub;
@@ -566,6 +576,10 @@ export function ConnectionSection({
 
   return (
     <View className="mt-3 gap-2.5">
+      {/* ---- U-97: the section had no heading (owner 2026-10-08). -------- */}
+      <Text className="text-[15px] font-black text-ink">
+        Connect to your car
+      </Text>
       {/* ---- U-80: the car moved networks — move this phone too ----------
           Set the moment the car answers ROUTERS;USED on any transport. The
           owner asked for it SIMPLE: one line, one action, no extra screens.
@@ -666,23 +680,70 @@ export function ConnectionSection({
         ) : null}
       </ConnectionCard>
 
-      {/* ---- ONE method dropdown (U-69) ---------------------------------- */}
-      <SelectRow<ConnectionMethodId>
-        label="Connection method"
-        value={method}
-        options={CONNECTION_METHODS.map((m) => ({
-          id: m.id,
-          label: m.label,
-          hint: m.targets.length > 1 ? `${m.targets.length} ways` : null,
-        }))}
-        onChange={(id) => {
-          tap();
-          onMethodChange(id);
-          setTargetId(null);
-          setMessage(null);
-        }}
-        testID="conn-method"
-      />
+      {/* ---- U-97: THREE EQUAL METHOD CARDS, not a dropdown ---------------
+          Owner (2026-10-08): *"show connection methods as three equal cards"*.
+          Bluetooth, Wi-Fi and Internet are now visible and comparable at a
+          glance; choosing one swaps the setup card below. This replaces the
+          U-69 dropdown, which hid two thirds of the choice behind a closed
+          row. Internet stays rendered (not hidden) but visibly disabled with
+          its reason — a missing option is an unexplained absence. */}
+      <View className="mt-1">
+        <Text className="text-[11px] font-black uppercase tracking-widest text-muted">
+          Connection method
+        </Text>
+        <View className="mt-2 flex-row gap-2" testID="conn-methods">
+          {CONNECTION_METHODS.map((m) => {
+            const selected = m.id === method;
+            const blocked = Boolean(m.unavailable);
+            return (
+              <Pressable
+                key={m.id}
+                onPress={() => {
+                  if (selected) return;
+                  tap();
+                  onMethodChange(m.id);
+                  setTargetId(null);
+                  setMessage(null);
+                }}
+                disabled={blocked}
+                accessibilityRole="button"
+                accessibilityLabel={m.label}
+                accessibilityState={{ selected, disabled: blocked }}
+                testID={`conn-method-${m.id}`}
+                className={`min-w-0 flex-1 items-center gap-1.5 rounded-xl border p-2.5 ${
+                  selected
+                    ? "border-select-ink bg-select-bg"
+                    : "border-line bg-card"
+                } ${blocked ? "opacity-60" : "active:opacity-70"}`}
+              >
+                <Feather
+                  name={METHOD_ICON[m.id]}
+                  size={18}
+                  color={selected ? "#1e3a8a" : "#475569"}
+                />
+                <Text
+                  numberOfLines={1}
+                  className={`text-[12px] font-black ${
+                    selected ? "text-select-ink" : "text-ink"
+                  }`}
+                >
+                  {m.label}
+                </Text>
+                <View
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    selected && !blocked ? "bg-success" : "bg-border"
+                  }`}
+                />
+              </Pressable>
+            );
+          })}
+        </View>
+        {methodDef && methodDef.blurb ? (
+          <Text className="mt-2 text-[11px] leading-4 text-muted">
+            {methodDef.blurb}
+          </Text>
+        ) : null}
+      </View>
 
       {/* ---- the selected method's setup, and nothing else ---------------- */}
       {methodDef && setupTarget ? (

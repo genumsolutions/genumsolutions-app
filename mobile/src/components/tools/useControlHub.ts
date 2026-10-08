@@ -39,6 +39,7 @@ import {
 } from "../../services/carProfileService";
 import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
 import { registerCurrentDevice } from "../../services/deviceRegistryService";
+import { syncCrashReport } from "../../services/crashReportService";
 import {
   encodeEnvelopeWire,
   isEnvelopeIntakeEnabled,
@@ -881,6 +882,72 @@ export function useControlHub(routeCategory?: string) {
       wifiJoinKeyRef.current = "";
     }
   }, [telemetry.connected, carSsid, linkVerified, wifiUrl, savedPrefs]);
+
+  // Crash-report sync (owner 2026-10-08): on a live link, share the car's last
+  // stored restart record (reset_reason / boot_count / crash_count /
+  // last_crash_phase / last_crash_heap) with the fleet's
+  // `device_crash_reports` table so firmware faults can be tracked and fixed.
+  //
+  // One report per RESTART RECORD per session: the guard ref is keyed on the
+  // record itself, so the looping `/status` frames cannot re-report and a new
+  // boot or a new crash still gets through. The service queues offline and
+  // dedupes globally; this effect only decides WHEN a session snapshot exists.
+  const crashReportKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const live = connected || wifiConnected;
+    if (!live) {
+      // A fresh link is a fresh session.
+      crashReportKeyRef.current = null;
+      return;
+    }
+    const boardId = telemetry.id ?? carFwIdRef.current ?? null;
+    // No restart record at all on old firmware: nothing honest to report.
+    const hasRecord =
+      telemetry.resetReason != null ||
+      telemetry.bootCount != null ||
+      telemetry.crashCount != null;
+    if (!hasRecord) return;
+    const key = [
+      boardId ?? "",
+      telemetry.bootCount ?? "",
+      telemetry.crashCount ?? "",
+      telemetry.resetReason ?? "",
+    ].join("|");
+    if (crashReportKeyRef.current === key) return;
+    crashReportKeyRef.current = key;
+    void syncCrashReport({
+      boardId,
+      connectionMethod: connected ? "bluetooth" : "wifi",
+      ssid: carSsid,
+      ip: telemetry.ip ?? null,
+      resetReason: telemetry.resetReason ?? null,
+      bootCount: telemetry.bootCount ?? null,
+      crashCount: telemetry.crashCount ?? null,
+      lastCrashPhase: telemetry.lastCrashPhase ?? null,
+      lastCrashHeap: telemetry.lastCrashHeap ?? null,
+      freeHeap: telemetry.freeHeap ?? null,
+      uptimeMs: telemetry.uptimeMs ?? null,
+      statusJson: {
+        mode: telemetry.mode ?? null,
+        fw: telemetry.id ?? null,
+        free_heap: telemetry.freeHeap ?? null,
+      },
+    });
+  }, [
+    connected,
+    wifiConnected,
+    carSsid,
+    telemetry.id,
+    telemetry.resetReason,
+    telemetry.bootCount,
+    telemetry.crashCount,
+    telemetry.lastCrashPhase,
+    telemetry.lastCrashHeap,
+    telemetry.freeHeap,
+    telemetry.uptimeMs,
+    telemetry.ip,
+    telemetry.mode,
+  ]);
 
   // Provisioning-reply handler mirror (defined below with useState deps).
   const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(
