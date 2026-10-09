@@ -11,10 +11,13 @@
 //
 // The live session is read via supabase.auth.getSession() and kept current
 // with onAuthStateChange (see AppContext). SecureStore is used to survive a
-// cold start when the OS clears the in-memory session.
+// cold start. The saved snapshot is REWRITTEN on every refresh so the stored
+// pair never goes stale, and transient/offline errors never delete it — the
+// session is only ever wiped by an explicit sign-out or a refresh the server
+// has genuinely rejected (see isRetryableAuthError).
 // =====================================================================
 import * as SecureStore from "expo-secure-store";
-import type { Session } from "@supabase/supabase-js";
+import { isAuthRetryableFetchError, type Session } from "@supabase/supabase-js";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import {
   googleConfigured,
@@ -24,6 +27,47 @@ import {
 } from "../config/supabase";
 
 const SESSION_KEY = "genum-native-session";
+
+/** The last-known signed-in user, cached next to the tokens so a session
+ *  can be restored optimistically while offline (tier/role are the fields
+ *  that gate Pro features, so they must survive a network hand-off). */
+export type StoredSessionUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  role: string;
+  tier: "free" | "pro";
+};
+
+/** The SecureStore snapshot. Older entries (v1) stored only the token pair;
+ *  `user` is optional so those still restore. */
+export type StoredSession = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number | null;
+  savedAt: number;
+  user: StoredSessionUser | null;
+};
+
+/**
+ * Decide whether an auth failure is worth retrying rather than treating as
+ * signed-out. A network/offline drop while the refresh token is still good is
+ * transient — wiping the session there is what forced the "sign in again"
+ * loop after Wi-Fi changes. A non-retryable error (refresh token revoked or
+ * expired server-side) is a genuine logout.
+ *
+ * Supabase wraps offline fetch failures in AuthRetryableFetchError; RN fetch
+ * can also surface a raw TypeError, so the message is checked too.
+ */
+export function isRetryableAuthError(error: unknown): boolean {
+  if (isAuthRetryableFetchError(error)) return true;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /network|fetch failed|failed to fetch|timeout|aborted|offline|no internet|connection|socket|ECONN/i.test(
+    message,
+  );
+}
 
 /** Map Supabase's server messages to user-friendly text. */
 export function mapAuthError(message: string): string {
@@ -162,31 +206,38 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
 // ---------------------------------------------------------------------
 // Session persistence (SecureStore) + logout
 // ---------------------------------------------------------------------
-export async function persistSession(session: Session): Promise<void> {
+export async function persistSession(
+  session: Session,
+  user?: StoredSessionUser | null,
+): Promise<void> {
   try {
-    const pair = {
+    const snapshot: StoredSession = {
       accessToken: session.access_token,
       refreshToken: session.refresh_token ?? "",
+      expiresAt: session.expires_at ?? null,
+      savedAt: Date.now(),
+      user: user ?? null,
     };
-    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(pair));
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(snapshot));
   } catch {
     /* SecureStore failure is non-fatal; the live session still counts */
   }
 }
 
-export async function loadStoredSession(): Promise<{
-  accessToken: string;
-  refreshToken: string;
-} | null> {
+export async function loadStoredSession(): Promise<StoredSession | null> {
   try {
     const raw = await SecureStore.getItemAsync(SESSION_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      accessToken: string;
-      refreshToken: string;
-    };
+    const parsed = JSON.parse(raw) as Partial<StoredSession>;
+    // v1 entries stored only the token pair; `user` is optional.
     if (!parsed?.accessToken) return null;
-    return parsed;
+    return {
+      accessToken: parsed.accessToken,
+      refreshToken: parsed.refreshToken ?? "",
+      expiresAt: parsed.expiresAt ?? null,
+      savedAt: parsed.savedAt ?? 0,
+      user: parsed.user ?? null,
+    };
   } catch {
     return null;
   }

@@ -14,8 +14,9 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Appearance, Platform } from "react-native";
+import { Appearance, AppState, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
 import { supabase, supabaseConfigured } from "../config/supabase";
 import * as auth from "../services/authService";
 import * as push from "../services/pushService";
@@ -157,6 +158,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [updatePill, setUpdatePill] = useState<UpdatePill | null>(null);
   const [appUpdated, setAppUpdated] = useState(false);
+  // True while a cached (offline) user is shown pending the real session; the
+  // auth listener must not blank that user on a startup INITIAL_SESSION(null).
+  const cachedRestoreRef = useRef(false);
 
   const setCart = useCallback((next: { count: number; size: number }) => {
     setCartCount(Math.max(0, next.count || 0));
@@ -166,12 +170,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // MUST be set up BEFORE the initial session restore so we don't miss
   // the SIGNED_IN event from setSession() during cold-start restoration.
   useEffect(() => {
-    const sub = supabase.auth.onAuthStateChange((_event, session) => {
+    const sub = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        void genumUserFromSession(session).then(setUser);
-        void settings.syncOnSignIn(applyThemeOnly);
+        cachedRestoreRef.current = false;
+        // Re-persist on every change (sign-in, restore, TOKEN_REFRESHED):
+        // the in-memory session is lost on restart and the access token is
+        // rotated ~hourly, so the SecureStore snapshot must always hold the
+        // CURRENT pair — otherwise a cold start would restore a stale token.
+        // (A transient offline refresh is preserved by GoTrue, so a session
+        // reaching this handler is always valid.)
+        void genumUserFromSession(session)
+          .then((g) => {
+            setUser(g);
+            return auth.persistSession(session, g);
+          })
+          .then(() => settings.syncOnSignIn(applyThemeOnly))
+          .catch((e: unknown) =>
+            logger.error("auth", "session event handling failed", e),
+          );
       } else {
-        setUser(null);
+        // SIGNED_OUT is the only event this branch deserves — a genuine
+        // sign-out or a server-rejected refresh. INITIAL_SESSION(null) at a
+        // cold start must NOT wipe SecureStore (the restore effect owns that
+        // decision) and must not blank a user being shown from cache.
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          void auth.clearStoredSession();
+        } else if (!cachedRestoreRef.current) {
+          setUser(null);
+        }
       }
       setSessionReady(true);
     });
@@ -179,55 +206,132 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --- restore the native session on launch ---
+  // Offline-tolerant: a transient network/refresh failure must NOT be treated
+  // as signed-out or wipe SecureStore. When the refresh cannot reach the
+  // server, the stored snapshot and its cached GenumUser are kept and the
+  // real session is re-attached the moment connectivity returns.
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        // First, check if Supabase already has a session in memory
+        // 1) Supabase already has a session in memory.
         const current = await supabase.auth.getSession();
         const session = current.data.session;
         if (session) {
-          if (active) setUser(await genumUserFromSession(session));
-          // Adopt the cloud-saved theme + settings (website parity: the
-          // same user sees the same look and feel on both clients).
+          if (active) {
+            setUser(await genumUserFromSession(session));
+            // Re-persist: the in-memory session may carry rotated tokens
+            // that have not been written to SecureStore yet.
+            void auth.persistSession(session);
+          }
           void settings.syncOnSignIn(applyThemeOnly);
-        } else {
-          // Try to restore from SecureStore so Google/email login survives
-          // an OS restart even if the client did not persist it.
-          const stored = await auth.loadStoredSession();
-          if (stored?.accessToken) {
-            const { data, error } = await supabase.auth.setSession({
-              access_token: stored.accessToken,
-              refresh_token: stored.refreshToken,
-            });
-            if (error) {
-              logger.error(
-                "auth",
-                "setSession failed, clearing stored tokens",
-                error,
-              );
-              await auth.clearStoredSession();
-            } else if (data.session && active) {
+          return;
+        }
+
+        // 2) Fall back to the SecureStore snapshot.
+        const stored = await auth.loadStoredSession();
+        if (stored?.accessToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: stored.accessToken,
+            refresh_token: stored.refreshToken,
+          });
+          if (!error && data.session) {
+            if (active) {
               setUser(await genumUserFromSession(data.session));
-              void settings.syncOnSignIn(applyThemeOnly);
-            } else if (active) {
-              // setSession succeeded but no session returned — tokens may be stale
-              logger.warn(
-                "auth",
-                "setSession returned no session, clearing stored tokens",
-              );
-              await auth.clearStoredSession();
+              void auth.persistSession(data.session);
             }
+            void settings.syncOnSignIn(applyThemeOnly);
+          } else if (!error) {
+            // setSession succeeded but produced no session — the pair is junk.
+            logger.warn(
+              "auth",
+              "setSession returned no session, clearing stored tokens",
+            );
+            await auth.clearStoredSession();
+          } else if (auth.isRetryableAuthError(error)) {
+            // Offline / Wi-Fi hand-off. KEEP the stored session and restore
+            // the cached user so the app stays signed-in; re-attach the real
+            // session when the network is back.
+            logger.warn(
+              "auth",
+              "session restore stalled (offline/transient), keeping stored session",
+              error,
+            );
+            if (active) {
+              if (stored.user) {
+                cachedRestoreRef.current = true;
+                setUser(stored.user);
+              }
+              await retryStoredSessionWhenOnline(stored);
+            }
+          } else {
+            // Rejected for real — refresh token revoked/expired server-side.
+            logger.error(
+              "auth",
+              "session restore rejected, clearing stored tokens",
+              error,
+            );
+            await auth.clearStoredSession();
           }
         }
       } catch (e) {
-        // C8: was silent — session-restore failures looked like signed-out
-        // state with no trace. Log so field reports are diagnosable.
         logger.error("auth", "session restore failed", e);
       } finally {
         if (active) setSessionReady(true);
       }
     })();
+
+    /** Re-attach a stalled stored session once connectivity returns.
+     *  NetInfo fires the instant the network is back; AppState 'active'
+     *  covers re-foregrounds while the device already reports "connected". */
+    async function retryStoredSessionWhenOnline(stored: auth.StoredSession) {
+      let unsubNet: (() => void) | null = null;
+      let unsubApp: (() => void) | null = null;
+      const done = () => {
+        unsubNet?.();
+        unsubApp?.();
+      };
+      const attempt = async (): Promise<boolean> => {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: stored.accessToken,
+          refresh_token: stored.refreshToken,
+        });
+        if (!error && data.session) {
+          done();
+          cachedRestoreRef.current = false;
+          setUser(await genumUserFromSession(data.session));
+          void auth.persistSession(data.session);
+          void settings.syncOnSignIn(applyThemeOnly);
+          return true;
+        }
+        if (error && !auth.isRetryableAuthError(error)) {
+          done();
+          cachedRestoreRef.current = false;
+          setUser(null);
+          await auth.clearStoredSession();
+          return true;
+        }
+        return false; // still transient — keep waiting for connectivity
+      };
+
+      if (await attempt()) return;
+      unsubNet = NetInfo.addEventListener((state) => {
+        if (state.isConnected && state.isInternetReachable !== false) {
+          void attempt().then((attached) => {
+            if (attached) unsubNet?.();
+          });
+        }
+      });
+      const appSub = AppState.addEventListener("change", (status) => {
+        if (status === "active") {
+          void attempt().then((attached) => {
+            if (attached) appSub.remove();
+          });
+        }
+      });
+      unsubApp = () => appSub.remove();
+    }
+
     return () => {
       active = false;
     };
