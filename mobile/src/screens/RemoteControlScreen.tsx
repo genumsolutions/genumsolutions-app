@@ -214,6 +214,46 @@ function ValueStrip({
   );
 }
 
+/** ProGate wrapper — runs effects even when not Pro, but shows upsell UI. */
+function ProGate({
+  children,
+  isPro,
+  isSignedIn,
+  onBack,
+}: {
+  children: React.ReactNode;
+  isPro: boolean;
+  isSignedIn: boolean;
+  onBack: () => void;
+}) {
+  if (isPro) return <>{children}</>;
+
+  // Show upsell UI but still allow effects to run in parent
+  return (
+    <View className="flex-1 items-center justify-center bg-surface px-8">
+      <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
+        <Feather name="lock" size={26} color="#ffffff" />
+      </View>
+      <Text className="mt-4 font-display text-xl font-bold text-ink">
+        Remote window is a Pro feature
+      </Text>
+      <Text className="mt-2 text-center text-sm leading-6 text-muted">
+        {isSignedIn
+          ? "Upgrade your account to Pro to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls."
+          : "Sign in with a Pro account to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls."}
+      </Text>
+      <Pressable
+        onPress={onBack}
+        className="mt-6 rounded-full bg-navy px-6 py-3"
+      >
+        <Text className="text-sm font-black text-white">
+          Back to Control Panel
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function RemoteControlScreen({ navigation }: Props) {
   const route = useRoute<Route>();
   const routeCategory = route.params?.category;
@@ -221,36 +261,6 @@ export function RemoteControlScreen({ navigation }: Props) {
   const { width, height, isLandscape } = useViewport();
   const insets = useSafeAreaInsets();
   const { themeMode, setThemeMode, isPro, isSignedIn } = useApp();
-
-  // PRO GATE (2026-09-22): the immersive remote window is a Pro feature.
-  // Rendered as an early return BEFORE the hub UI so free/guest users can
-  // never reach the controls; the Control Panel itself stays available to
-  // everyone (connection + category organizer are not gated).
-  if (!isPro) {
-    return (
-      <View className="flex-1 items-center justify-center bg-surface px-8">
-        <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
-          <Feather name="lock" size={26} color="#ffffff" />
-        </View>
-        <Text className="mt-4 font-display text-xl font-bold text-ink">
-          Remote window is a Pro feature
-        </Text>
-        <Text className="mt-2 text-center text-sm leading-6 text-muted">
-          {isSignedIn
-            ? "Upgrade your account to Pro to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls."
-            : "Sign in with a Pro account to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls."}
-        </Text>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          className="mt-6 rounded-full bg-navy px-6 py-3"
-        >
-          <Text className="text-sm font-black text-white">
-            Back to Control Panel
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   const {
     connected,
@@ -292,8 +302,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     previewMode,
     setPreviewMode,
     pidKp,
-    pidKi,
     pidKd,
+    pidKi,
     pidOut,
     pidOff,
     gimbalPan,
@@ -646,255 +656,303 @@ export function RemoteControlScreen({ navigation }: Props) {
     </View>
   ) : null;
 
-  return (
-    <View className="flex-1 bg-surface">
+  const renderReconnectBanner = () => {
+    if (!showSppsRetry) return null;
+    return (
       <View
-        className="flex-1 overflow-hidden px-3 pb-2"
-        style={{ paddingTop: Math.max(insets.top, 8) + 4 }}
+        className="mx-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5"
+        style={{ marginBottom: Math.max(insets.bottom, 8) }}
       >
-        {/* ── Chrome row ── */}
-        <View className="flex-shrink-0 flex-row items-center justify-between">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text className="text-xs font-bold text-amber-800">
+              Connection lost
+            </Text>
+            <Text className="text-[10px] text-amber-600">
+              Reconnect to your car?
+            </Text>
+          </View>
+        </View>
+        <View className="flex-row gap-2">
           <Pressable
-            onPress={handleBack}
-            accessibilityRole="button"
-            accessibilityLabel={`${backLabel}`}
-            hitSlop={10}
-            android_ripple={{
-              color: "rgba(255,255,255,0.15)",
-              borderless: true,
-              radius: 40,
+            onPress={() => {
+              feedbackTap();
+              void handleSppsRetry();
             }}
+            className="rounded-full bg-gold px-3 py-1"
+            hitSlop={6}
           >
-            <View className="rounded-full border border-line bg-card px-4 py-2.5">
-              <Text className="text-sm font-bold text-ink dark:text-white">
-                {backLabel}
-              </Text>
-            </View>
+            <Text className="text-[10px] font-bold text-white">Reconnect</Text>
           </Pressable>
-
           <Pressable
-            onPress={handleSelect}
-            disabled={!isRobocar}
-            accessibilityRole="button"
-            accessibilityLabel="Select"
-            hitSlop={10}
-            android_ripple={{
-              color: "rgba(255,255,255,0.2)",
-              borderless: true,
-              radius: 40,
+            onPress={() => {
+              feedbackTap();
+              handleReconnectPromptCancel();
             }}
-            className={isRobocar ? "" : "opacity-40"}
+            className="rounded-full border border-line bg-card px-3 py-1"
+            hitSlop={6}
           >
-            <View
-              className={`rounded-full px-4 py-2.5 ${navActive ? "bg-navy-light" : "border border-line bg-card"}`}
+            <Text className="text-[10px] font-bold text-muted">Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <ProGate
+      isPro={isPro}
+      isSignedIn={isSignedIn}
+      onBack={() => navigation.goBack()}
+    >
+      <View className="flex-1 bg-surface">
+        <View
+          className="flex-1 overflow-hidden px-3 pb-2"
+          style={{ paddingTop: Math.max(insets.top, 8) + 4 }}
+        >
+          {/* ── Chrome row ── */}
+          <View className="flex-shrink-0 flex-row items-center justify-between">
+            <Pressable
+              onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel={`${backLabel}`}
+              hitSlop={10}
+              android_ripple={{
+                color: "rgba(255,255,255,0.15)",
+                borderless: true,
+                radius: 40,
+              }}
             >
-              <Text
-                className={`text-sm font-bold ${navActive ? "text-navy-dark" : "text-ink dark:text-white"}`}
+              <View className="rounded-full border border-line bg-card px-4 py-2.5">
+                <Text className="text-sm font-bold text-ink dark:text-white">
+                  {backLabel}
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={handleSelect}
+              disabled={!isRobocar}
+              accessibilityRole="button"
+              accessibilityLabel="Select"
+              hitSlop={10}
+              android_ripple={{
+                color: "rgba(255,255,255,0.2)",
+                borderless: true,
+                radius: 40,
+              }}
+              className={isRobocar ? "" : "opacity-40"}
+            >
+              <View
+                className={`rounded-full px-4 py-2.5 ${navActive ? "bg-navy-light" : "border border-line bg-card"}`}
               >
-                Select
-              </Text>
-            </View>
-          </Pressable>
+                <Text
+                  className={`text-sm font-bold ${navActive ? "text-navy-dark" : "text-ink dark:text-white"}`}
+                >
+                  Select
+                </Text>
+              </View>
+            </Pressable>
 
-          <Text className="text-sm font-black uppercase tracking-[0.2em] text-muted">
-            Remote
-          </Text>
+            <Text className="text-sm font-black uppercase tracking-[0.2em] text-muted">
+              Remote
+            </Text>
 
-          {/* A-25: friendly BT name right of "Remote" — NEVER a raw hex
+            {/* A-25: friendly BT name right of "Remote" — NEVER a raw hex
               address (sppService falls back to the MAC when a scan reports
               no name). Underscores prettify to spaces: WIRELESS_CAR →
               WIRELESS CAR. Over WiFi there is no BT name: tag the transport
               + live address so the deck always identifies which link it is
               on (a stale BT name from a former session must never label a
               WiFi link). */}
-          <Text
-            numberOfLines={1}
-            className="max-w-[120px] shrink-0 text-[11px] font-bold text-navy dark:text-sky-300"
-          >
-            {connected
-              ? friendlyBtName(deviceName) || "Connected"
-              : wifiConnected
-                ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
-                : "No link"}
-          </Text>
+            <Text
+              numberOfLines={1}
+              className="max-w-[120px] shrink-0 text-[11px] font-bold text-navy dark:text-sky-300"
+            >
+              {connected
+                ? friendlyBtName(deviceName) || "Connected"
+                : wifiConnected
+                  ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
+                  : "No link"}
+            </Text>
 
-          {isRobocar && (
-            <View className="flex-row items-center gap-2">
-              <ModeChooser
-                activeMode={activeMode}
-                canControl={canControl}
-                onSelect={selectMode}
-                onCycle={cycleMode}
-                modes={carModes}
-                carStubMap={carStubMap}
-                carAvailMap={carAvailMap}
-                highlighted={topField === "mode"}
-                previewMode={previewMode}
-                locked={navActiveBool}
-              />
-              {/* R-20 (owner): the top strip is the DEFAULT SPEED slider in
+            {isRobocar && (
+              <View className="flex-row items-center gap-2">
+                <ModeChooser
+                  activeMode={activeMode}
+                  canControl={canControl}
+                  onSelect={selectMode}
+                  onCycle={cycleMode}
+                  modes={carModes}
+                  carStubMap={carStubMap}
+                  carAvailMap={carAvailMap}
+                  highlighted={topField === "mode"}
+                  previewMode={previewMode}
+                  locked={navActiveBool}
+                />
+                {/* R-20 (owner): the top strip is the DEFAULT SPEED slider in
                   every mode — the 2WD1M steering slider is gone. Steering
                   limit + trim are edited in the Settings menu only. */}
-              <ValueStrip
-                label="Spd"
-                value={clampStep(speed, SPEED_MIN, SPEED_MAX, SPEED_STEP)}
-                min={SPEED_MIN}
-                max={SPEED_MAX}
-                canControl={canControl}
-                locked={navActiveBool}
-                highlight={topField === "speed"}
-                onChange={handleSpeed}
-                onCommit={commitSpeed}
-                dark={themeMode === "dark"}
-              />
-            </View>
-          )}
+                <ValueStrip
+                  label="Spd"
+                  value={clampStep(speed, SPEED_MIN, SPEED_MAX, SPEED_STEP)}
+                  min={SPEED_MIN}
+                  max={SPEED_MAX}
+                  canControl={canControl}
+                  locked={navActiveBool}
+                  highlight={topField === "speed"}
+                  onChange={handleSpeed}
+                  onCommit={commitSpeed}
+                  dark={themeMode === "dark"}
+                />
+              </View>
+            )}
 
-          {isRobocar && (
-            <View className="flex-row items-center gap-2">
-              <Pressable
-                onPress={() => setShowSettings((v) => !v)}
-                accessibilityRole="button"
-                accessibilityLabel="Settings"
-                hitSlop={10}
-                android_ripple={{
-                  color: "rgba(255,255,255,0.2)",
-                  borderless: true,
-                  radius: 28,
-                }}
-              >
-                <View
-                  className={`h-12 w-12 items-center justify-center rounded-full bg-navy ${showSettings ? "bg-navy-dark" : ""}`}
+            {isRobocar && (
+              <View className="flex-row items-center gap-2">
+                <Pressable
+                  onPress={() => setShowSettings((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Settings"
+                  hitSlop={10}
+                  android_ripple={{
+                    color: "rgba(255,255,255,0.2)",
+                    borderless: true,
+                    radius: 28,
+                  }}
                 >
-                  <Feather name="settings" size={20} color="#fff" />
-                </View>
-              </Pressable>
-            </View>
-          )}
-        </View>
+                  <View
+                    className={`h-12 w-12 items-center justify-center rounded-full bg-navy ${showSettings ? "bg-navy-dark" : ""}`}
+                  >
+                    <Feather name="settings" size={20} color="#fff" />
+                  </View>
+                </Pressable>
+              </View>
+            )}
+          </View>
 
-        {/* ── A-25 sub-header: friendly name above the tappable broadcasting
+          {/* ── A-25 sub-header: friendly name above the tappable broadcasting
             IP. Round-6: rendered for EVERY robocar mode at a CONSTANT height
             (h-7) so the drive deck never shifts when the ESP_SER-only IP chip
             mounts/unmounts — the old conditional band pushed the joystick
             down as soon as the website-server mode appeared. ── */}
-        {isRobocar && (
-          <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center justify-between px-1">
-            <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
-              <View
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
-              />
-              <Text
-                numberOfLines={1}
-                ellipsizeMode="middle"
-                className="min-w-0 flex-1 text-[10px] font-bold text-muted dark:text-slate-300"
-              >
-                {connected
-                  ? friendlyBtName(deviceName) || "Connected"
-                  : wifiConnected
-                    ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
-                    : "No link"}
-              </Text>
+          {isRobocar && (
+            <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center justify-between px-1">
+              <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+                <View
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
+                />
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                  className="min-w-0 flex-1 text-[10px] font-bold text-muted dark:text-slate-300"
+                >
+                  {connected
+                    ? friendlyBtName(deviceName) || "Connected"
+                    : wifiConnected
+                      ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
+                      : "No link"}
+                </Text>
+              </View>
+              {activeMode.id === "website-server" || wifiConnected ? (
+                <Pressable
+                  onPress={handleOpenWebPage}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open car web page at ${telemetry.ip || DEFAULT_AP_IP}`}
+                  hitSlop={6}
+                  className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                >
+                  <Feather
+                    name={wifiConnected ? "external-link" : "wifi"}
+                    size={10}
+                    color={wifiConnected ? "#0284c7" : "#64748b"}
+                  />
+                  <Text
+                    className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
+                    numberOfLines={1}
+                  >
+                    {telemetry.ip || DEFAULT_AP_IP}
+                    {!telemetry.ip ? " (AP)" : ""}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {linked ? (
+                <Pressable
+                  onPress={confirmDisconnect}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect from the car"
+                  hitSlop={6}
+                  className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                >
+                  <Feather
+                    name="power"
+                    size={10}
+                    color={wifiConnected ? "#dc2626" : "#64748b"}
+                  />
+                  <Text
+                    className={`text-[9px] font-black uppercase tracking-wide ${linked ? "text-red-600 dark:text-red-400" : "text-muted"}`}
+                    numberOfLines={1}
+                  >
+                    Disconnect
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
-            {activeMode.id === "website-server" || wifiConnected ? (
-              <Pressable
-                onPress={handleOpenWebPage}
-                accessibilityRole="link"
-                accessibilityLabel={`Open car web page at ${telemetry.ip || DEFAULT_AP_IP}`}
-                hitSlop={6}
-                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-              >
-                <Feather
-                  name={wifiConnected ? "external-link" : "wifi"}
-                  size={10}
-                  color={wifiConnected ? "#0284c7" : "#64748b"}
-                />
-                <Text
-                  className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
-                  numberOfLines={1}
-                >
-                  {telemetry.ip || DEFAULT_AP_IP}
-                  {!telemetry.ip ? " (AP)" : ""}
-                </Text>
-              </Pressable>
-            ) : null}
-            {linked ? (
-              <Pressable
-                onPress={confirmDisconnect}
-                accessibilityRole="button"
-                accessibilityLabel="Disconnect from the car"
-                hitSlop={6}
-                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-              >
-                <Feather
-                  name="power"
-                  size={10}
-                  color={wifiConnected ? "#dc2626" : "#64748b"}
-                />
-                <Text
-                  className={`text-[9px] font-black uppercase tracking-wide ${linked ? "text-red-600 dark:text-red-400" : "text-muted"}`}
-                  numberOfLines={1}
-                >
-                  Disconnect
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        )}
+          )}
 
-        {/* ── D-pad / Joystick / Hide toggle — below top bar (A-19) ── */}
-        {isRobocar && (
-          <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(true);
-                setUseJoystick(false);
-              }}
-              className={`rounded-full px-3 py-1 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
+          {/* ── D-pad / Joystick / Hide toggle — below top bar (A-19) ── */}
+          {isRobocar && (
+            <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(true);
+                  setUseJoystick(false);
+                }}
+                className={`rounded-full px-3 py-1 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"}`}
               >
-                D-pad
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(true);
-                setUseJoystick(true);
-              }}
-              className={`rounded-full px-3 py-1 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
+                <Text
+                  className={`text-[10px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
+                >
+                  D-pad
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(true);
+                  setUseJoystick(true);
+                }}
+                className={`rounded-full px-3 py-1 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"}`}
               >
-                Joystick
-              </Text>
-            </Pressable>
-            {/* A-50 (round-11): the third pill is TELEMETRY, not "Hide" — it
+                <Text
+                  className={`text-[10px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
+                >
+                  Joystick
+                </Text>
+              </Pressable>
+              {/* A-50 (round-11): the third pill is TELEMETRY, not "Hide" — it
                 opens the mode's readout panels (PID dashboard / router manager
                 / full OLED mirror) instead of a pointless "Pad hidden" card. */}
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(false);
-              }}
-              className={`rounded-full px-3 py-1 ${!showJoystick ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${!showJoystick ? "text-white" : "text-muted"}`}
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(false);
+                }}
+                className={`rounded-full px-3 py-1 ${!showJoystick ? "bg-navy" : "border border-line bg-card"}`}
               >
-                Telemetry
-              </Text>
-            </Pressable>
-          </View>
-        )}
+                <Text
+                  className={`text-[10px] font-bold ${!showJoystick ? "text-white" : "text-muted"}`}
+                >
+                  Telemetry
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
-        {/* ── Content area ── */}
-        {isDrone || isNonRobocar ? (
-          /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
+          {/* ── Content area ── */}
+          {isDrone || isNonRobocar ? (
+            /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
              in the landscape view"): the old branch was unbounded — the row had
              no flex height (so the OLED's max-h-[55%] resolved against an
              indefinite parent and was IGNORED), the deck card overflowed the
@@ -904,167 +962,167 @@ export function RemoteControlScreen({ navigation }: Props) {
              min-h-0 (bounded heights), the OLED is a fixed 2:1 aspect column
              (width-share, self-start), and the deck owns its ONE card, filling
              the column. Robocar branch untouched. */
-          <View className="mt-2 min-h-0 flex-1 flex-row items-stretch gap-3">
-            {/* OLED mirror column — fixed 2:1 shape, top-anchored (same
+            <View className="mt-2 min-h-0 flex-1 flex-row items-stretch gap-3">
+              {/* OLED mirror column — fixed 2:1 shape, top-anchored (same
                 aspect-ratio idiom as the robocar telemetry view). */}
-            <View
-              className="aspect-[2/1] shrink-0 self-start overflow-hidden rounded-lg"
-              style={{ width: "30%", maxWidth: 280 }}
-            >
-              <OledDisplay {...oledCommonProps} />
-            </View>
-            <View className="min-h-0 min-w-0 flex-1">
-              {isDrone ? (
-                <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
-                  <DroneControls
-                    canControl={canControl}
-                    targetAltitude={targetAltitude}
-                    gimbalPan={gimbalPan}
-                    gimbalTilt={gimbalTilt}
-                    onAltitude={handleAltitude}
-                    onGimbalPan={handleGimbalPan}
-                    onGimbalTilt={handleGimbalTilt}
-                    onCommand={(c) => hub.sendCommand(c)}
-                    onSetAltitude={(v) => handleAltitude(v)}
-                  />
-                </View>
-              ) : hasDeck(activeCategory) ? (
-                /* PLAN-2026-09-29 step ②: dedicated per-category deck —
+              <View
+                className="aspect-[2/1] shrink-0 self-start overflow-hidden rounded-lg"
+                style={{ width: "30%", maxWidth: 280 }}
+              >
+                <OledDisplay {...oledCommonProps} />
+              </View>
+              <View className="min-h-0 min-w-0 flex-1">
+                {isDrone ? (
+                  <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
+                    <DroneControls
+                      canControl={canControl}
+                      targetAltitude={targetAltitude}
+                      gimbalPan={gimbalPan}
+                      gimbalTilt={gimbalTilt}
+                      onAltitude={handleAltitude}
+                      onGimbalPan={handleGimbalPan}
+                      onGimbalTilt={handleGimbalTilt}
+                      onCommand={(c) => hub.sendCommand(c)}
+                      onSetAltitude={(v) => handleAltitude(v)}
+                    />
+                  </View>
+                ) : hasDeck(activeCategory) ? (
+                  /* PLAN-2026-09-29 step ②: dedicated per-category deck —
                    ONLY this category's tiles, never the shared SensorGrid
                    fallback (owner decision ③). Every non-robocar, non-drone
                    category has a built deck; the screen maps slug →
                    deck component (tripwire cleared in deckkit.ts).
                    U-58: the deck draws its OWN DeckCard (flex={1} fills this
                    bounded column) — no second screen-level card wrapper. */
-                (() => {
-                  switch (activeCategory) {
-                    case "smart-farm":
-                      return (
-                        <SmartFarmDeck
-                          sensorData={sensorData}
-                          relays={relays}
-                          canControl={canControl}
-                          onToggleRelay={toggleRelay}
-                        />
-                      );
-                    case "smart-city":
-                      return (
-                        <SmartCityDeck
-                          sensorData={sensorData}
-                          relays={relays}
-                          canControl={canControl}
-                          onToggleRelay={toggleRelay}
-                        />
-                      );
-                    case "smart-dustbin":
-                      return (
-                        <SmartDustbinDeck
-                          sensorData={sensorData}
-                          relays={relays}
-                          canControl={canControl}
-                          onToggleRelay={toggleRelay}
-                        />
-                      );
-                    case "remote-controller":
-                      return (
-                        <HandheldDeck
-                          sensorData={sensorData}
-                          relays={relays}
-                          canControl={canControl}
-                          onToggleRelay={toggleRelay}
-                        />
-                      );
-                    default:
-                      return (
-                        <SmartHomeDeck
-                          sensorData={sensorData}
-                          relays={relays}
-                          canControl={canControl}
-                          onToggleRelay={toggleRelay}
-                        />
-                      );
-                  }
-                })()
-              ) : (
-                <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
-                  <SensorGrid
-                    canControl={canControl}
-                    isDrone={false}
-                    isNonRobocar
-                    activeCategory={activeCategory}
-                    sensorData={sensorData}
-                    relays={relays}
-                    telemetry={telemetry}
-                    onToggleRelay={toggleRelay}
-                  />
-                </View>
-              )}
+                  (() => {
+                    switch (activeCategory) {
+                      case "smart-farm":
+                        return (
+                          <SmartFarmDeck
+                            sensorData={sensorData}
+                            relays={relays}
+                            canControl={canControl}
+                            onToggleRelay={toggleRelay}
+                          />
+                        );
+                      case "smart-city":
+                        return (
+                          <SmartCityDeck
+                            sensorData={sensorData}
+                            relays={relays}
+                            canControl={canControl}
+                            onToggleRelay={toggleRelay}
+                          />
+                        );
+                      case "smart-dustbin":
+                        return (
+                          <SmartDustbinDeck
+                            sensorData={sensorData}
+                            relays={relays}
+                            canControl={canControl}
+                            onToggleRelay={toggleRelay}
+                          />
+                        );
+                      case "remote-controller":
+                        return (
+                          <HandheldDeck
+                            sensorData={sensorData}
+                            relays={relays}
+                            canControl={canControl}
+                            onToggleRelay={toggleRelay}
+                          />
+                        );
+                      default:
+                        return (
+                          <SmartHomeDeck
+                            sensorData={sensorData}
+                            relays={relays}
+                            canControl={canControl}
+                            onToggleRelay={toggleRelay}
+                          />
+                        );
+                    }
+                  })()
+                ) : (
+                  <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
+                    <SensorGrid
+                      canControl={canControl}
+                      isDrone={false}
+                      isNonRobocar
+                      activeCategory={activeCategory}
+                      sensorData={sensorData}
+                      relays={relays}
+                      telemetry={telemetry}
+                      onToggleRelay={toggleRelay}
+                    />
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        ) : (
-          /* ── Robocar drive deck ── */
-          <View key={boardKey} className="relative mt-2 min-h-0 flex-1">
-            {showJoystick ? (
-              <>
-                <DriveControls
+          ) : (
+            /* ── Robocar drive deck ── */
+            <View key={boardKey} className="relative mt-2 min-h-0 flex-1">
+              {showJoystick ? (
+                <>
+                  <DriveControls
+                    canControl={canControl}
+                    isDrone={isDrone}
+                    activeMode={activeMode}
+                    speed={speed}
+                    servo={servo}
+                    pidKp={pidKp}
+                    pidKi={pidKi}
+                    pidKd={pidKd}
+                    pidOut={pidOut}
+                    pidOff={pidOff}
+                    useJoystick={useJoystick}
+                    onDirection={handleDirection}
+                    onSpeed={handleSpeed}
+                    onServo={handleServo}
+                    onPid={applyPid}
+                    onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
+                    steerLimit={is2wd1mActive ? steerLimit : undefined}
+                    safetyLimits={hub.safetyLimits}
+                    compact
+                    navActiveRef={navActiveRef}
+                    onNavInput={navInput}
+                    oledSlot={oledSlot}
+                  />
+                </>
+              ) : activeMode.controls.includes("pid-auto") ? (
+                <BalanceControls
                   canControl={canControl}
-                  isDrone={isDrone}
-                  activeMode={activeMode}
-                  speed={speed}
-                  servo={servo}
-                  pidKp={pidKp}
-                  pidKi={pidKi}
-                  pidKd={pidKd}
-                  pidOut={pidOut}
-                  pidOff={pidOff}
-                  useJoystick={useJoystick}
-                  onDirection={handleDirection}
-                  onSpeed={handleSpeed}
-                  onServo={handleServo}
+                  angle={telemetry.angle ?? null}
+                  telemetry={telemetry}
+                  kp={pidKp}
+                  ki={pidKi}
+                  kd={pidKd}
+                  out={pidOut}
+                  off={pidOff}
                   onPid={applyPid}
-                  onSignedDrive={is2wd1mActive ? handleStickDrive : undefined}
-                  steerLimit={is2wd1mActive ? steerLimit : undefined}
-                  safetyLimits={hub.safetyLimits}
                   compact
-                  navActiveRef={navActiveRef}
-                  onNavInput={navInput}
                   oledSlot={oledSlot}
                 />
-              </>
-            ) : activeMode.controls.includes("pid-auto") ? (
-              <BalanceControls
-                canControl={canControl}
-                angle={telemetry.angle ?? null}
-                telemetry={telemetry}
-                kp={pidKp}
-                ki={pidKi}
-                kd={pidKd}
-                out={pidOut}
-                off={pidOff}
-                onPid={applyPid}
-                compact
-                oledSlot={oledSlot}
-              />
-            ) : activeMode.id === "website-server" ? (
-              /* The ONE organized WiFi & Router panel — round-6: ONLY shown in
+              ) : activeMode.id === "website-server" ? (
+                /* The ONE organized WiFi & Router panel — round-6: ONLY shown in
                  the web-server mode (that's the mode whose page this manages).
                  Hidden non-web modes get a tidy placeholder below instead of a
                  Router panel that leaked into every mode. */
-              <RouterPanel
-                canControl={canControl}
-                linked={linked}
-                carSsid={hub.carSsid}
-                carApName={hub.carApName}
-                ip={telemetry.ip ?? null}
-                networks={hub.carNetworks}
-                onUse={routerUse}
-                onAdd={routerAdd}
-                onDelete={routerDelete}
-                onClear={routerClearAll}
-                onOpenWebPage={handleOpenWebPage}
-              />
-            ) : (
-              /* A-50 (round-11): hidden modes without a dedicated panel now
+                <RouterPanel
+                  canControl={canControl}
+                  linked={linked}
+                  carSsid={hub.carSsid}
+                  carApName={hub.carApName}
+                  ip={telemetry.ip ?? null}
+                  networks={hub.carNetworks}
+                  onUse={routerUse}
+                  onAdd={routerAdd}
+                  onDelete={routerDelete}
+                  onClear={routerClearAll}
+                  onOpenWebPage={handleOpenWebPage}
+                />
+              ) : (
+                /* A-50 (round-11): hidden modes without a dedicated panel now
                  mirror the FULL OLED readout (the same mirror the robotics
                  screens show) — the "Pad hidden" placeholder is gone.
                  R-15 (owner review 2026-09-18 — "telemetry screen is not
@@ -1072,257 +1130,216 @@ export function RemoteControlScreen({ navigation }: Props) {
                  now sits BESIDE a live readout column (mode / speed or
                  steer / direction / link / IP) instead of one narrow
                  centered column, so the landscape deck is used properly. */
-              <View className="min-h-0 flex-1 flex-row items-center justify-center gap-4 px-4 py-2">
-                <View
-                  className="aspect-[2/1] max-h-full shrink"
-                  style={{ width: "46%", maxWidth: 480 }}
-                >
-                  <OledDisplay
-                    {...oledCommonProps}
-                    topField={topField}
-                    previewMode={previewMode}
-                    previewModeAvail={
-                      previewMode
-                        ? modeAvailStatus(
-                            previewMode.token,
-                            carStubMap,
-                            carAvailMap,
-                          )
-                        : undefined
-                    }
-                    steerLimit={steerLimit}
-                  />
-                </View>
-                <View className="min-w-[150px] max-w-[280px] flex-1 justify-center gap-2.5">
-                  <Text
-                    numberOfLines={2}
-                    className="text-lg font-black uppercase tracking-wide text-ink dark:text-white"
+                <View className="min-h-0 flex-1 flex-row items-center justify-center gap-4 px-4 py-2">
+                  <View
+                    className="aspect-[2/1] max-h-full shrink"
+                    style={{ width: "46%", maxWidth: 480 }}
                   >
-                    {shownMode.name.split("·")[0].trim()}
-                  </Text>
-                  {/* R-20: the readout column shows SPEED in every mode (the
-                      steering limit lives in Settings). */}
-                  <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
-                    <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                      Speed
-                    </Text>
-                    <Text className="font-mono text-base font-bold text-ink dark:text-white">
-                      {speed}
-                    </Text>
+                    <OledDisplay
+                      {...oledCommonProps}
+                      topField={topField}
+                      previewMode={previewMode}
+                      previewModeAvail={
+                        previewMode
+                          ? modeAvailStatus(
+                              previewMode.token,
+                              carStubMap,
+                              carAvailMap,
+                            )
+                          : undefined
+                      }
+                      steerLimit={steerLimit}
+                    />
                   </View>
-                  {isShown2wd1m && (
-                    <>
-                      {/* R-19 (FIN-45): car-truth trip + max steer (STATE TRIP=/MSTEER=) */}
-                      <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
-                        <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                          Trip
-                        </Text>
-                        <Text className="font-mono text-base font-bold text-ink dark:text-white">
-                          {tripAvg || "—"}
-                        </Text>
-                      </View>
-                      <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
-                        <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                          Max steer
-                        </Text>
-                        <Text className="font-mono text-base font-bold text-ink dark:text-white">
-                          {maxSteer ? `${maxSteer}°` : "—"}
-                        </Text>
-                      </View>
-                    </>
-                  )}
-                  <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
-                    <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                      Dir
-                    </Text>
+                  <View className="min-w-[150px] max-w-[280px] flex-1 justify-center gap-2.5">
                     <Text
-                      numberOfLines={1}
-                      className="font-mono text-base font-bold text-ink dark:text-white"
+                      numberOfLines={2}
+                      className="text-lg font-black uppercase tracking-wide text-ink dark:text-white"
                     >
-                      {driveStatus || "Stop"}
+                      {shownMode.name.split("·")[0].trim()}
                     </Text>
-                  </View>
-                  <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
-                    <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                      Link
-                    </Text>
-                    <Text className="font-mono text-base font-bold text-ink dark:text-white">
-                      {connected ? "Bluetooth" : wifiConnected ? "WiFi" : "—"}
-                    </Text>
-                  </View>
-                  {(telemetry.ip || wifiConnected) && (
-                    <View className="flex-row items-baseline justify-between gap-2">
+                    {/* R-20: the readout column shows SPEED in every mode (the
+                      steering limit lives in Settings). */}
+                    <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
                       <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                        IP
+                        Speed
+                      </Text>
+                      <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                        {speed}
+                      </Text>
+                    </View>
+                    {isShown2wd1m && (
+                      <>
+                        {/* R-19 (FIN-45): car-truth trip + max steer (STATE TRIP=/MSTEER=) */}
+                        <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                            Trip
+                          </Text>
+                          <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                            {tripAvg || "—"}
+                          </Text>
+                        </View>
+                        <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                            Max steer
+                          </Text>
+                          <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                            {maxSteer ? `${maxSteer}°` : "—"}
+                          </Text>
+                        </View>
+                      </>
+                    )}
+                    <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                      <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                        Dir
                       </Text>
                       <Text
                         numberOfLines={1}
                         className="font-mono text-base font-bold text-ink dark:text-white"
                       >
-                        {telemetry.ip || DEFAULT_AP_IP}
+                        {driveStatus || "Stop"}
                       </Text>
                     </View>
-                  )}
+                    <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
+                      <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                        Link
+                      </Text>
+                      <Text className="font-mono text-base font-bold text-ink dark:text-white">
+                        {connected ? "Bluetooth" : wifiConnected ? "WiFi" : "—"}
+                      </Text>
+                    </View>
+                    {(telemetry.ip || wifiConnected) && (
+                      <View className="flex-row items-baseline justify-between gap-2">
+                        <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                          IP
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          className="font-mono text-base font-bold text-ink dark:text-white"
+                        >
+                          {telemetry.ip || DEFAULT_AP_IP}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
+              )}
+            </View>
+          )}
+        </View>
 
-      {/* ── Settings dropdown ── */}
-      {showSettings && (
-        <>
-          <Pressable
-            className="absolute inset-0 z-30 bg-black/40"
-            onPress={() => setShowSettings(false)}
-            accessibilityLabel="Close settings"
-          />
-          <ScrollView
-            className="absolute right-3 z-40 w-64 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
-            style={{
-              top: Math.max(insets.top, 8) + 48,
-              maxHeight: height - 96,
-            }}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="middle"
-              className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-muted"
+        {/* ── Settings dropdown ── */}
+        {showSettings && (
+          <>
+            <Pressable
+              className="absolute inset-0 z-30 bg-black/40"
+              onPress={() => setShowSettings(false)}
+              accessibilityLabel="Close settings"
+            />
+            <ScrollView
+              className="absolute right-3 z-40 w-64 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
+              style={{
+                top: Math.max(insets.top, 8) + 48,
+                maxHeight: height - 96,
+              }}
+              showsVerticalScrollIndicator={false}
             >
-              Settings ·{" "}
-              {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
-            </Text>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="middle"
+                className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-muted"
+              >
+                Settings ·{" "}
+                {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
+              </Text>
 
-            {/* Round-6: dark-theme toggle mirrors the Account/Menu Appearance
+              {/* Round-6: dark-theme toggle mirrors the Account/Menu Appearance
                 switch — drives AppContext.setThemeMode, which flips the
                 semantic tokens (this screen + RouterPanel skin along with it). */}
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather
-                  name={themeMode === "dark" ? "moon" : "sun"}
-                  size={14}
-                  color="#64748b"
+              <View className="mt-1 flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <Feather
+                    name={themeMode === "dark" ? "moon" : "sun"}
+                    size={14}
+                    color="#64748b"
+                  />
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Dark theme
+                  </Text>
+                </View>
+                <Switch
+                  value={themeMode === "dark"}
+                  onValueChange={(on) => setThemeMode(on ? "dark" : "light")}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Toggle dark theme"
                 />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Dark theme
-                </Text>
               </View>
-              <Switch
-                value={themeMode === "dark"}
-                onValueChange={(on) => setThemeMode(on ? "dark" : "light")}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="Toggle dark theme"
-              />
-            </View>
 
-            {/* Steering limit + Trim (2WD1M only) */}
-            <View
-              className={`${is2wd1mActive ? "" : "opacity-40"}`}
-              pointerEvents={is2wd1mActive ? "auto" : "none"}
-            >
-              <View className="mt-1.5 flex-row items-center justify-between">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Steering
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
-                    {steerLimit}°
+              {/* Steering limit + Trim (2WD1M only) */}
+              <View
+                className={`${is2wd1mActive ? "" : "opacity-40"}`}
+                pointerEvents={is2wd1mActive ? "auto" : "none"}
+              >
+                <View className="mt-1.5 flex-row items-center justify-between">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Steering
                   </Text>
-                  <View className="flex-row gap-1">
-                    <StepperPill
-                      onPress={() => adjustSteerLimit(-5)}
-                      disabled={!canControl}
-                      icon="minus"
-                    />
-                    <StepperPill
-                      onPress={() => adjustSteerLimit(5)}
-                      disabled={!canControl}
-                      icon="plus"
-                    />
+                  <View className="flex-row items-center gap-2">
+                    <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
+                      {steerLimit}°
+                    </Text>
+                    <View className="flex-row gap-1">
+                      <StepperPill
+                        onPress={() => adjustSteerLimit(-5)}
+                        disabled={!canControl}
+                        icon="minus"
+                      />
+                      <StepperPill
+                        onPress={() => adjustSteerLimit(5)}
+                        disabled={!canControl}
+                        icon="plus"
+                      />
+                    </View>
+                  </View>
+                </View>
+                <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Trim
+                  </Text>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
+                      {trim > 0 ? `+${trim}` : trim}°
+                    </Text>
+                    <View className="flex-row gap-1">
+                      <StepperPill
+                        onPress={() => adjustTrim(-1)}
+                        disabled={!canControl}
+                        icon="minus"
+                      />
+                      <StepperPill
+                        onPress={() => adjustTrim(1)}
+                        disabled={!canControl}
+                        icon="plus"
+                      />
+                    </View>
                   </View>
                 </View>
               </View>
-              <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Trim
+              {!is2wd1mActive && (
+                <Text className="mt-1 text-[9px] leading-3 text-muted">
+                  Steering &amp; trim: 2WD1M only.
                 </Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
-                    {trim > 0 ? `+${trim}` : trim}°
-                  </Text>
-                  <View className="flex-row gap-1">
-                    <StepperPill
-                      onPress={() => adjustTrim(-1)}
-                      disabled={!canControl}
-                      icon="minus"
-                    />
-                    <StepperPill
-                      onPress={() => adjustTrim(1)}
-                      disabled={!canControl}
-                      icon="plus"
-                    />
-                  </View>
-                </View>
-              </View>
-            </View>
-            {!is2wd1mActive && (
-              <Text className="mt-1 text-[9px] leading-3 text-muted">
-                Steering &amp; trim: 2WD1M only.
-              </Text>
-            )}
-          </ScrollView>
-        </>
-      )}
+              )}
+            </ScrollView>
+          </>
+        )}
 
-      {/* Reconnect banner — anchored to the bottom so it never collides with
-          the phone status bar/notch in landscape. Shows when connection
-          drops and auto-reconnect is exhausted. */}
-      {showSppsRetry && (
-        <View
-          className="mx-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5"
-          style={{ marginBottom: Math.max(insets.bottom, 8) }}
-        >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-xs font-bold text-amber-800">
-                Connection lost
-              </Text>
-              <Text className="text-[10px] text-amber-600">
-                Reconnect to your car?
-              </Text>
-            </View>
-            <View className="flex-row gap-2">
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  void handleSppsRetry();
-                }}
-                className="rounded-full bg-gold px-3 py-1"
-                hitSlop={6}
-              >
-                <Text className="text-[10px] font-bold text-white">
-                  Reconnect
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  handleReconnectPromptCancel();
-                }}
-                className="rounded-full border border-line bg-card px-3 py-1"
-                hitSlop={6}
-              >
-                <Text className="text-[10px] font-bold text-muted">Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Disconnect removed — owner rule: disconnect only via Control Panel. */}
-    </View>
+        {/* Reconnect banner — anchored to the bottom so it never collides with
+            the phone status bar/notch in landscape. Shows when connection
+            drops and auto-reconnect is exhausted. */}
+        {renderReconnectBanner()}
+      </View>
+    </ProGate>
   );
 }
