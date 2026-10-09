@@ -162,11 +162,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCartCount(Math.max(0, next.count || 0));
   }, []);
 
+  // --- keep the session current (sign-in / sign-out / refresh) ---
+  // MUST be set up BEFORE the initial session restore so we don't miss
+  // the SIGNED_IN event from setSession() during cold-start restoration.
+  useEffect(() => {
+    const sub = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        void genumUserFromSession(session).then(setUser);
+        void settings.syncOnSignIn(applyThemeOnly);
+      } else {
+        setUser(null);
+      }
+      setSessionReady(true);
+    });
+    return () => sub.data.subscription.unsubscribe();
+  }, []);
+
   // --- restore the native session on launch ---
   useEffect(() => {
     let active = true;
     (async () => {
       try {
+        // First, check if Supabase already has a session in memory
         const current = await supabase.auth.getSession();
         const session = current.data.session;
         if (session) {
@@ -179,12 +196,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // an OS restart even if the client did not persist it.
           const stored = await auth.loadStoredSession();
           if (stored?.accessToken) {
-            const { data } = await supabase.auth.setSession({
+            const { data, error } = await supabase.auth.setSession({
               access_token: stored.accessToken,
               refresh_token: stored.refreshToken,
             });
-            if (data.session && active)
+            if (error) {
+              logger.error(
+                "auth",
+                "setSession failed, clearing stored tokens",
+                error,
+              );
+              await auth.clearStoredSession();
+            } else if (data.session && active) {
               setUser(await genumUserFromSession(data.session));
+              void settings.syncOnSignIn(applyThemeOnly);
+            } else if (active) {
+              // setSession succeeded but no session returned — tokens may be stale
+              logger.warn(
+                "auth",
+                "setSession returned no session, clearing stored tokens",
+              );
+              await auth.clearStoredSession();
+            }
           }
         }
       } catch (e) {
@@ -264,20 +297,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void runLaunchUpdateCheck();
   }, [runLaunchUpdateCheck]);
-
-  // --- keep the session current (sign-in / sign-out / refresh) ---
-  useEffect(() => {
-    const sub = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        void genumUserFromSession(session).then(setUser);
-        void settings.syncOnSignIn(applyThemeOnly);
-      } else {
-        setUser(null);
-      }
-      setSessionReady(true);
-    });
-    return () => sub.data.subscription.unsubscribe();
-  }, []);
 
   // --- order-status push token: register on sign-in, drop on sign-out ---
   useEffect(() => {
