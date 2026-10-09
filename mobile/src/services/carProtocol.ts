@@ -348,9 +348,15 @@ export function buildRouterCommand(
  * 4WD4M and keep every transport live while joining; donor-firmware cars
  * still switch themselves to ESP_SER. An empty password provisions an open
  * network. The password must never be logged.
+ *
+ * Semicolons are stripped from SSID/password, exactly as buildRouterCommand()
+ * does: the car's parser (WebServerComm::handleWifiConfigCommand) splits on
+ * the FIRST ';', so a stray semicolon would truncate the SSID (or silently
+ * mangle the password). The SSID is also trimmed; the password is not.
  */
 export function buildWifiConfigLine(ssid: string, password: string): string {
-  return `WIFICFG;${ssid};${password}`;
+  const s = ssid.replace(/;/g, "").trim();
+  return `WIFICFG;${s};${password.replace(/;/g, "")}`;
 }
 
 // -------------------------------------------------------------------

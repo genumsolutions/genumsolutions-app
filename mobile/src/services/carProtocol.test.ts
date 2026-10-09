@@ -684,6 +684,12 @@ describe("buildWifiConfigLine (v1.4.0 provisioning)", () => {
   it("allows an empty password (open network)", () => {
     expect(buildWifiConfigLine("OpenNet", "")).toBe("WIFICFG;OpenNet;");
   });
+
+  it("strips semicolons (car splits on the first ';') and trims the SSID", () => {
+    expect(buildWifiConfigLine("Ho;me Net", "se;cret")).toBe(
+      "WIFICFG;Home Net;secret",
+    );
+  });
 });
 
 describe("isCompleteJsonObject", () => {
