@@ -1,4 +1,21 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-08: U-98 one active link · U-97 fleet crash reports + 3 method cards)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-09: main verified pushed 0d6604d; backup branch refreshed; no source change)
+
+## This session (2026-10-09) — no source change; main verified, backup refreshing records
+
+- **main is pushed and up to date.** The auth keep-signed-in fix (`0d6604d`) from the
+  previous session is on origin: local `main` == `origin/main` == GitHub
+  `refs/heads/main` == `0d6604d`, 0 ahead/0 behind, clean tree, no stashes. There was
+  nothing forgotten — confirmed by fetch + `ls-remote`.
+- **The `backup` branch was refreshed to `0d6604d`** on origin (was `d630122`), so the
+  app repo's backup snapshot now matches `main`. Dated snapshots
+  (`backup-2026-09-25-round`, `backup-2026-09-27-pre-bump`) are untouched.
+- The car-side partner work this session was the 4WD4M OLED network lines
+  (`Genum_4WD4M_CAR` v1.2.4, commits `7731f2b`+`0285eee`, backup branch added) — **still
+  not flashed**, and the app's device pass (`mobile/TESTING.md` U-93-1..5, U-98
+  one-active-link checks) still awaits that flash.
+
+Gates/state unchanged from `d495839` round: tsc 0 · vitest 660/660 · prettier clean;
+JS-only, no OTA published this session.
 
 > **READ FIRST (2026-10-08, U-98 — the last thing worked on, and the reason it mattered).**
 > The app kept BOTH transports connected at once: a Wi-Fi connect left the Bluetooth SPP socket
