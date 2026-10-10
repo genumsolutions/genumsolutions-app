@@ -580,55 +580,13 @@ export function ConnectionSection({
 
   return (
     <View className="mt-3 gap-2.5">
-      {/* ---- U-97: the section had no heading (owner 2026-10-08). -------- */}
+      {/* ---- available networks caption ---- */}
       <Text className="text-[15px] font-black text-ink">
-        Connect to your car
+        Available networks
       </Text>
-      {/* ---- U-80: the car moved networks — move this phone too ----------
-          Set the moment the car answers ROUTERS;USED on any transport. The
-          owner asked for it SIMPLE: one line, one action, no extra screens.
-          The AP link dropping during the switch is expected (one radio, one
-          channel — U-74), so this prompt is exactly what the user needs when
-          everything else appears to "stop working". */}
-      {routerSwitchNotice ? (
-        <ConnectionCard
-          title={`Join "${routerSwitchNotice}"`}
-          icon="wifi"
-          tone="busy"
-          testID="conn-phone-switch-prompt"
-        >
-          {/* U-86: one line, and it is an instruction the user has to act on -
-              not a description of what just happened. The card title carries
-              the network name, so the body does not repeat it. */}
-          <Text className="text-[13px] leading-5 text-ink">
-            The car is on that network now. Open this phone&apos;s Wi-Fi
-            settings and join it to stay connected.
-          </Text>
-          <View className="mt-2 flex-row gap-2">
-            <ActionButton
-              flex
-              label="I joined — find the car"
-              icon="search"
-              onPress={() => void findCarOnThisNetwork()}
-              disabled={busy}
-              testID="conn-phone-switch-find"
-            />
-            <ActionButton
-              label="Dismiss"
-              variant="quiet"
-              onPress={() => {
-                tap();
-                dismissRouterSwitchNotice();
-              }}
-              testID="conn-phone-switch-dismiss"
-            />
-          </View>
-        </ConnectionCard>
-      ) : null}
       {/* ---- status ------------------------------------------------------ */}
       <ConnectionCard
         title="Connection"
-        subtitle={statusLabel}
         icon="radio"
         tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
         testID="conn-status"
@@ -661,31 +619,6 @@ export function ConnectionSection({
         {!anyLink && hubError ? (
           <InlineMessage tone="error">{hubError}</InlineMessage>
         ) : null}
-        {showSppsRetry ? (
-          <View className="mt-2.5 gap-2">
-            <InlineMessage tone="info">
-              The car&apos;s Bluetooth link dropped. Reconnect to it?
-            </InlineMessage>
-            <View className="flex-row gap-2">
-              <ActionButton
-                flex
-                label="Reconnect"
-                icon="refresh-cw"
-                onPress={() => void handleSppsRetry()}
-                disabled={busy}
-                testID="conn-bt-retry"
-              />
-              <ActionButton
-                label="Not now"
-                variant="quiet"
-                onPress={() => {
-                  tap();
-                  handleReconnectPromptCancel();
-                }}
-              />
-            </View>
-          </View>
-        ) : null}
       </ConnectionCard>
 
       {/* ---- U-97: THREE EQUAL METHOD CARDS, not a dropdown ---------------
@@ -696,9 +629,6 @@ export function ConnectionSection({
           row. Internet stays rendered (not hidden) but visibly disabled with
           its reason — a missing option is an unexplained absence. */}
       <View className="mt-1">
-        <Text className="text-[11px] font-black uppercase tracking-widest text-muted">
-          Connection method
-        </Text>
         <View className="mt-2 flex-row gap-2" testID="conn-methods">
           {CONNECTION_METHODS.map((m) => {
             const selected = m.id === method;
@@ -746,14 +676,7 @@ export function ConnectionSection({
             );
           })}
         </View>
-        {methodDef && methodDef.blurb ? (
-          <Text className="mt-2 text-[11px] leading-4 text-muted">
-            {methodDef.blurb}
-          </Text>
-        ) : null}
       </View>
-
-      {/* ---- the selected method's setup, and nothing else ---------------- */}
       {methodDef && setupTarget ? (
         <MethodSetup
           method={methodDef}
