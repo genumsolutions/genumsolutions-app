@@ -95,11 +95,12 @@ describe("U-98 — one live link, and each transport only speaks for itself", ()
   });
 
   it("every Wi-Fi success path drops the Bluetooth link it would otherwise leave up", () => {
-    // Three ways a Wi-Fi link becomes live: the address the user gave, and the
-    // two automatic finds (stale-lease rescue + refused-connection rescue).
-    // Each must tear Bluetooth down or the car stays reachable on both.
+    // Four ways a Wi-Fi link becomes live: the address the user gave, the two
+    // automatic finds (stale-lease rescue + refused-connection rescue), and
+    // U-80b's phone-network-change auto-find. Each must tear Bluetooth down or
+    // the car stays reachable on both.
     const calls = code.match(/dropBluetoothForWifi\(\)/g) ?? [];
-    expect(calls.length).toBe(3);
+    expect(calls.length).toBe(4);
   });
 
   it("dropping the Wi-Fi link leaves nothing verified", () => {

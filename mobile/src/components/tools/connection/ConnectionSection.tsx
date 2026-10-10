@@ -782,6 +782,14 @@ export function ConnectionSection({
         />
       ) : null}
 
+      {/* ---- ONE message surface for the whole section --------------------
+          U-97c: moved ABOVE the Wi-Fi list. At the bottom it sat below the
+          fold once the list was long, so a confirmation or a failure could be
+          off-screen. One surface — but where it can actually be seen. */}
+      {message ? (
+        <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
+      ) : null}
+
       {/* ---- U-84: Wi-Fi is ONE list ---------------------------------------
           Owner: the Wi-Fi half was "too messy", full of "guidance text in
           subtitles", and split into a pointless "car hotspot vs home router"
@@ -797,8 +805,12 @@ export function ConnectionSection({
 
           Shown whenever the Wi-Fi method is chosen — not only when a link is
           up — because "search for networks" is the first thing a user does,
-          and it used to be hidden exactly when it was needed. */}
-      {method === "wifi" ? (
+          and it used to be hidden exactly when it was needed.
+
+          U-96: the SAME list is the Bluetooth method's router management (the
+          "Routers" target). The ROUTERS;… commands ride whatever link is live,
+          so one list serves both methods. */}
+      {method === "wifi" || (targetId === "bt-routers" && anyLink) ? (
         <WifiPanel
           routers={routers}
           scanned={carScan ?? []}
@@ -837,11 +849,6 @@ export function ConnectionSection({
           onScan={() => void scanNearby()}
           onInputFocus={onInputFocus}
         />
-      ) : null}
-
-      {/* ---- ONE message surface for the whole section -------------------- */}
-      {message ? (
-        <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
       ) : null}
     </View>
   );
@@ -1003,31 +1010,18 @@ function MethodSetup({
         </View>
       ) : null}
 
-      {/* U-96: Bluetooth router management \u2014 switch/add/edit/delete routers over
-          the live SPP link. The same ROUTERS;\u2026 commands the Wi-Fi panel sends,
-          but reached from the Bluetooth method card when the car is already
-          connected. */}
-      {target.id === "bt-routers" ? (
+      {/* U-96: Bluetooth router management — switch/add/edit/delete routers over
+          the live SPP link. The SAME ROUTERS;\u2026 commands the Wi-Fi panel sends,
+          so the ONE unified Wi-Fi list above IS this method's router surface
+          (rendered whenever the "Routers" target is picked and a link is up).
+          All this card owes the user is the honest state when there is no link
+          yet — the dead "Manage saved routers" button that used to live here
+          did nothing at all. */}
+      {target.id === "bt-routers" && !linkLive ? (
         <View className="mt-2.5">
-          {!linkLive ? (
-            <InlineMessage tone="error">
-              Connect to the car over Bluetooth first, then manage its routers.
-            </InlineMessage>
-          ) : (
-            <ActionButton
-              label="Manage saved routers"
-              icon="settings"
-              onPress={() => {
-                /* The full router panel (list + add/edit/delete) lives in the
-                   Wi-Fi method card and the Remote screen's RouterPanel. From
-                   the Bluetooth card we hand the user to the Tools \u2192 Routers
-                   screen, which reuses the same hub actions over the live SPP
-                   link. */
-              }}
-              disabled={busy}
-              testID="conn-bt-routers"
-            />
-          )}
+          <InlineMessage tone="error">
+            Connect to the car over Bluetooth first, then manage its routers.
+          </InlineMessage>
         </View>
       ) : null}
     </ConnectionCard>
