@@ -529,6 +529,10 @@ export function useControlHub(routeCategory?: string) {
   );
   const sppLastAddressRef = useRef<string | null>(null);
 
+  // W5: refs to track previous telemetry IP/SSID for network switch detection
+  const prevIpRef = useRef<string | undefined>(undefined);
+  const prevSsidRef = useRef<string | undefined>(undefined);
+
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES);
 
@@ -1520,12 +1524,51 @@ export function useControlHub(routeCategory?: string) {
       offWifi();
       offWifiStatus();
     };
-    // NOTE: deps are intentionally empty â€” activeMode is read via
+    // NOTE: deps are intentionally empty — activeMode is read via
     // carModesRef (fresh on every telemetry frame) and setActiveMode is a
     // stable setState.  The old [activeMode] dependency tore down and
     // re-created the subscription on every mode change, which caused the
-    // app to miss STATE;MODE=â€¦ frames from the car during the gap.
+    // app to miss STATE;MODE=... frames from the car during the gap.
   }, []);
+
+  // W5: Detect car-side network switch from telemetry changes.
+  // When the car reports a new IP or SSID (meaning it moved to a different
+  // router), trigger a fresh REQ_STATE so the UI updates without requiring
+  // the user to leave/re-enter the Control Panel.
+  useEffect(() => {
+    const ip = telemetry.ip;
+    const ssid = telemetry.ssid;
+
+    // Initialize refs on first meaningful value
+    if (prevIpRef.current === undefined && ip !== undefined) {
+      prevIpRef.current = ip;
+    }
+    if (prevSsidRef.current === undefined && ssid !== undefined) {
+      prevSsidRef.current = ssid;
+    }
+
+    // Detect change: car reported a different IP or SSID
+    const ipChanged = ip !== undefined && prevIpRef.current !== ip;
+    const ssidChanged = ssid !== undefined && prevSsidRef.current !== ssid;
+
+    if (ipChanged || ssidChanged) {
+      console.log("[W5] Car network switch detected:", {
+        prevIp: prevIpRef.current,
+        newIp: ip,
+        prevSsid: prevSsidRef.current,
+        newSsid: ssid,
+      });
+      // Update refs
+      if (ip !== undefined) prevIpRef.current = ip;
+      if (ssid !== undefined) prevSsidRef.current = ssid;
+      // Trigger a fresh state request so the UI gets the new network info
+      if (wifiService.isConnected) {
+        wifiService.requestState().catch(() => {});
+      } else if (sppService.isConnected) {
+        sppService.requestState().catch(() => {});
+      }
+    }
+  }, [telemetry.ip, telemetry.ssid]);
 
   // Check if SPP is supported on this device
   const sppSupported = sppService.supported;
@@ -1970,7 +2013,7 @@ export function useControlHub(routeCategory?: string) {
       try {
         await wifiService.sendLine("S");
       } catch {
-        /* ignore â€” link may already be dead */
+        /* ignore — link may already be dead */
       }
       try {
         await wifiService.sendLine("SPD0");
@@ -1985,6 +2028,13 @@ export function useControlHub(routeCategory?: string) {
     // read as "live" before any car has answered.
     setLinkVerified(false);
     setError(null);
+    // W5: clear stale telemetry so the UI doesn't show old IP/SSID after disconnect
+    setTelemetry((prev) => ({
+      ...prev,
+      ip: undefined,
+      ssid: undefined,
+      connected: undefined,
+    }));
   }, []);
 
   // ---- v1.4.0 WiFi provisioning (app â†’ BT â†’ car) ----
@@ -2195,6 +2245,13 @@ export function useControlHub(routeCategory?: string) {
       await wifiService.disconnect();
     }
     await sppService.disconnect();
+    // W5: clear stale telemetry so the UI doesn't show old IP/SSID after full disconnect
+    setTelemetry((prev) => ({
+      ...prev,
+      ip: undefined,
+      ssid: undefined,
+      connected: undefined,
+    }));
     // Drive UI reset: only the live drive state â€” speed / servo / PID /
     // gimbal / telemetry stay at their current values so they restore on
     // reconnect (bug fix 2026-09-15: "remember after power cycle").

@@ -66,6 +66,10 @@ import { planSwitch, normalizeRouters } from "../components/tools/connection";
 import type { RouterOutcome } from "../components/tools/connection/commands";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
 import {
+  isCarApGateway,
+  carIsOnOwnHotspot,
+} from "../components/tools/connection/dial";
+import {
   LOCAL_CAR_MODES,
   type CarMode,
   sortRemoteModes,
@@ -283,6 +287,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     driveStatus,
     driveDir,
     telemetry,
+    carApName,
+    carSsid,
     tripAvg,
     maxSteer,
     handleDirection,
@@ -327,6 +333,24 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   const linked = connected || wifiConnected;
   const isRobocar = !isDrone && !isNonRobocar;
+
+  // W5: determine if car is on its own hotspot and the correct IP to display
+  const onOwnHotspot = carIsOnOwnHotspot({
+    reportedSsid: telemetry.ssid ?? null,
+    ownApName: carApName ?? null,
+  });
+  // Car is on router if WiFi connected and NOT on own hotspot
+  const carOnRouter = wifiConnected && !onOwnHotspot;
+  // Display IP: use telemetry.ip if available and valid; otherwise show AP IP only
+  // when we know car is on its own hotspot; otherwise show placeholder
+  const displayIp = telemetry.ip
+    ? telemetry.ip
+    : onOwnHotspot
+      ? DEFAULT_AP_IP
+      : carOnRouter
+        ? "—"
+        : DEFAULT_AP_IP;
+  const showIp = telemetry.ip !== undefined || onOwnHotspot;
 
   // A-43b (round-9): the sub-header Disconnect pill — confirm, then tear down
   // EVERY live link (BT + WS) via the hub, which safely stops the car first.
@@ -480,11 +504,17 @@ export function RemoteControlScreen({ navigation }: Props) {
   // (v2 default: the 4WD4M car's 192.168.245.1; donor cars use .244), so
   // "nothing happens" is gone even unconnected.
   const handleOpenWebPage = useCallback(() => {
-    const url = telemetry.ip
-      ? `http://${telemetry.ip}`
-      : `http://${DEFAULT_AP_IP}`;
-    void Linking.openURL(url).catch(() => undefined);
-  }, [telemetry.ip]);
+    let url: string | null = null;
+    if (telemetry.ip) {
+      url = `http://${telemetry.ip}`;
+    } else if (onOwnHotspot) {
+      url = `http://${DEFAULT_AP_IP}`;
+    }
+    // If on router but no IP yet, don't open anything (url stays null)
+    if (url) {
+      void Linking.openURL(url).catch(() => undefined);
+    }
+  }, [telemetry.ip, onOwnHotspot]);
 
   // ---- U-81: this screen's router actions go through the ACK-CONSUMING path
   //
@@ -772,7 +802,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               {connected
                 ? friendlyBtName(deviceName) || "Connected"
                 : wifiConnected
-                  ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
+                  ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
                   : "No link"}
             </Text>
 
@@ -850,7 +880,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   {connected
                     ? friendlyBtName(deviceName) || "Connected"
                     : wifiConnected
-                      ? `WiFi · ${telemetry.ip || hub.carSsid || DEFAULT_AP_IP}`
+                      ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
                       : "No link"}
                 </Text>
               </View>
@@ -858,7 +888,13 @@ export function RemoteControlScreen({ navigation }: Props) {
                 <Pressable
                   onPress={handleOpenWebPage}
                   accessibilityRole="link"
-                  accessibilityLabel={`Open car web page at ${telemetry.ip || DEFAULT_AP_IP}`}
+                  accessibilityLabel={
+                    telemetry.ip
+                      ? `Open car web page at ${telemetry.ip}`
+                      : onOwnHotspot
+                        ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
+                        : "Car IP not available yet"
+                  }
                   hitSlop={6}
                   className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
                 >
@@ -871,8 +907,11 @@ export function RemoteControlScreen({ navigation }: Props) {
                     className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
                     numberOfLines={1}
                   >
-                    {telemetry.ip || DEFAULT_AP_IP}
-                    {!telemetry.ip ? " (AP)" : ""}
+                    {telemetry.ip
+                      ? telemetry.ip
+                      : onOwnHotspot
+                        ? `${DEFAULT_AP_IP} (AP)`
+                        : "—"}
                   </Text>
                 </Pressable>
               ) : null}
@@ -1217,7 +1256,13 @@ export function RemoteControlScreen({ navigation }: Props) {
                           numberOfLines={1}
                           className="font-mono text-base font-bold text-ink dark:text-white"
                         >
-                          {telemetry.ip || DEFAULT_AP_IP}
+                          {telemetry.ip
+                            ? telemetry.ip
+                            : onOwnHotspot
+                              ? `${DEFAULT_AP_IP} (AP)`
+                              : carOnRouter
+                                ? "—"
+                                : DEFAULT_AP_IP}
                         </Text>
                       </View>
                     )}

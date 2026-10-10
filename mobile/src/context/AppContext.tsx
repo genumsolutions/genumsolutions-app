@@ -28,6 +28,15 @@ import type { CartLine } from "../types";
 import type { CarMode } from "../config/roboCarCatalog";
 import { checkForAnyUpdate } from "../services/updateService";
 
+// W6: 48-hour offline grace period for entitlement cache
+const OFFLINE_GRACE_MS = 48 * 60 * 60 * 1000;
+
+/** Check if a stored session is within the offline grace period. */
+function isWithinOfflineGrace(savedAt: number | undefined | null): boolean {
+  if (!savedAt) return false;
+  return Date.now() - savedAt < OFFLINE_GRACE_MS;
+}
+
 export type GenumUser = {
   id: string;
   name: string;
@@ -85,36 +94,77 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-async function genumUserFromSession(session: Session): Promise<GenumUser> {
+/**
+ * Build a GenumUser from a Supabase session. If the profile fetch fails
+ * (e.g., offline), fall back to the session's user_metadata/app_metadata so
+ * the cached tier/role survive network hand-offs (W6: 48-hour offline grace).
+ */
+async function genumUserFromSession(
+  session: Session,
+  fallbackUser?: auth.StoredSessionUser | null,
+): Promise<auth.StoredSessionUser> {
   const meta = session.user?.user_metadata ?? {};
   const app = session.user?.app_metadata ?? {};
-  const profileResult = await supabase
-    .from("profiles")
-    .select("name, phone, address, role, tier")
-    .eq("id", session.user.id)
-    .maybeSingle();
-  const profile = profileResult.data;
+  let profile: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    role?: string;
+    tier?: "free" | "pro";
+  } | null = null;
+
+  try {
+    const profileResult = await supabase
+      .from("profiles")
+      .select("name, phone, address, role, tier")
+      .eq("id", session.user.id)
+      .maybeSingle();
+    profile = profileResult.data;
+  } catch {
+    // Offline or network error: profile is null, will fall back to metadata
+  }
+
   const rawRole = String(profile?.role || app.role || "customer");
+  const tier: "free" | "pro" =
+    rawRole === "staff" ||
+    rawRole === "admin" ||
+    rawRole === "owner" ||
+    profile?.tier === "pro"
+      ? "pro"
+      : "free";
+
+  // If profile fetch failed and we have a cached user, use its tier/role
+  // (offline grace: cached entitlement survives network failure)
+  const effectiveTier = profile ? tier : (fallbackUser?.tier ?? tier);
+  const effectiveRole = profile ? rawRole : (fallbackUser?.role ?? rawRole);
+
   return {
     id: session.user?.id ?? "",
-    name: profile?.name || (typeof meta.name === "string" ? meta.name : ""),
+    name:
+      (profile?.name ||
+        (typeof meta.name === "string" ? meta.name : "") ||
+        fallbackUser?.name) ??
+      "",
     email: session.user?.email ?? "",
-    phone: profile?.phone || session.user?.user_metadata?.phone || "",
-    address: profile?.address || session.user?.user_metadata?.address || "",
+    phone:
+      (profile?.phone ||
+        session.user?.user_metadata?.phone ||
+        "" ||
+        fallbackUser?.phone) ??
+      "",
+    address:
+      (profile?.address ||
+        session.user?.user_metadata?.address ||
+        "" ||
+        fallbackUser?.address) ??
+      "",
     role:
-      rawRole === "staff" || rawRole === "admin" || rawRole === "owner"
-        ? rawRole
+      effectiveRole === "staff" ||
+      effectiveRole === "admin" ||
+      effectiveRole === "owner"
+        ? effectiveRole
         : "customer",
-    // Admins and above always enjoy Pro capabilities; customers need
-    // profiles.tier='pro' (set by an admin — the protect_tier_column
-    // trigger blocks self-service).
-    tier:
-      rawRole === "staff" ||
-      rawRole === "admin" ||
-      rawRole === "owner" ||
-      profile?.tier === "pro"
-        ? "pro"
-        : "free",
+    tier: effectiveTier,
   };
 }
 
@@ -219,7 +269,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const session = current.data.session;
         if (session) {
           if (active) {
-            setUser(await genumUserFromSession(session));
+            // Load stored session for fallback user (offline grace)
+            const stored = await auth.loadStoredSession();
+            const fallbackUser =
+              stored?.user && isWithinOfflineGrace(stored.savedAt)
+                ? stored.user
+                : null;
+            setUser(await genumUserFromSession(session, fallbackUser));
             // Re-persist: the in-memory session may carry rotated tokens
             // that have not been written to SecureStore yet.
             void auth.persistSession(session);
@@ -237,7 +293,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
           if (!error && data.session) {
             if (active) {
-              setUser(await genumUserFromSession(data.session));
+              const fallbackUser =
+                stored.user && isWithinOfflineGrace(stored.savedAt)
+                  ? stored.user
+                  : null;
+              setUser(await genumUserFromSession(data.session, fallbackUser));
               void auth.persistSession(data.session);
             }
             void settings.syncOnSignIn(applyThemeOnly);
@@ -258,9 +318,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
               error,
             );
             if (active) {
-              if (stored.user) {
+              if (stored.user && isWithinOfflineGrace(stored.savedAt)) {
                 cachedRestoreRef.current = true;
                 setUser(stored.user);
+              } else if (stored.user) {
+                // Grace period expired — don't use cached entitlement
+                logger.warn(
+                  "auth",
+                  "offline grace period expired, clearing user",
+                );
+                setUser(null);
               }
               await retryStoredSessionWhenOnline(stored);
             }
@@ -299,7 +366,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!error && data.session) {
           done();
           cachedRestoreRef.current = false;
-          setUser(await genumUserFromSession(data.session));
+          const fallbackUser =
+            stored.user && isWithinOfflineGrace(stored.savedAt)
+              ? stored.user
+              : null;
+          setUser(await genumUserFromSession(data.session, fallbackUser));
           void auth.persistSession(data.session);
           void settings.syncOnSignIn(applyThemeOnly);
           return true;
