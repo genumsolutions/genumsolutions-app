@@ -143,7 +143,7 @@ export const CONNECTION_METHODS: readonly ConnectionMethod[] = [
   {
     id: "wifi",
     label: "Wi-Fi",
-    blurb: "Reach the car over Wi-Fi — its own hotspot or your router.",
+    blurb: "Reach the car over Wi-Fi, on whatever network it is on.",
     targets: [CAR_WIFI],
   },
   {

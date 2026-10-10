@@ -29,5 +29,9 @@ export function effectiveMethod(input: {
   if (input.chosen) return input.chosen;
   if (input.wifiConnected) return "wifi";
   if (input.bluetoothConnected) return "bluetooth";
-  return null;
+  // Owner: "connection method with wifi first". With nothing chosen and no
+  // link, open on Wi-Fi — the method that is there to configure the car's
+  // network — instead of a blank page with no setup card and no list. The
+  // Wi-Fi method's own controls degrade honestly when the car is unreachable.
+  return "wifi";
 }

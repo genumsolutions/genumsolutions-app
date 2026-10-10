@@ -39,7 +39,7 @@
 // are not invented (F-62).
 // =====================================================================
 import React, { useMemo, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import { InlineMessage } from "./ConnectionCard";
@@ -55,6 +55,17 @@ export type ScannedNetwork = {
   readonly rssi: number;
   readonly open: boolean;
 };
+
+/**
+ * U-70 parity (owner: *"the item list of the exposed router needs the scrolling
+ * bar not open long list of the items"*). The saved + scanned list is a BOUNDED
+ * scrolling window with its own scrollbar — roughly six rows. Without this it
+ * rendered inline in the page ScrollView, so a long list grew the whole page
+ * and pushed the actions off the bottom. This mirrors DEVICE_LIST_MAX_HEIGHT in
+ * ConnectionSection: a nested vertical scroller of unbounded height just grows
+ * forever, so the outer page scroller cannot do this job.
+ */
+const ROUTER_LIST_MAX_HEIGHT = 320;
 
 export type WifiPanelProps = {
   /** Exactly what the car reported in NETW;… — the only source of truth. */
@@ -232,7 +243,13 @@ export function WifiPanel({
       {rows.length === 0 ? (
         <Text className="py-1 text-[13px] text-muted">No networks yet.</Text>
       ) : (
-        <View className="overflow-hidden rounded-xl border border-line bg-card">
+        <ScrollView
+          className="overflow-hidden rounded-xl border border-line bg-card"
+          style={{ maxHeight: ROUTER_LIST_MAX_HEIGHT }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+        >
           {rows.map((r, i) => (
             <View
               key={`${r.ssid}-${i}`}
@@ -325,7 +342,7 @@ export function WifiPanel({
               </View>
             </View>
           ))}
-        </View>
+        </ScrollView>
       )}
 
       {/* Scanning is how a new network is found — the phone's own "refresh".

@@ -147,7 +147,7 @@ const EVERY_LINK_COMMANDS = new Set([
 import { deviceMemory } from "./types";
 import type { CarTelemetry } from "../../services/carProtocol";
 import { DEFAULT_WS_URL, OWN_AP_NAME } from "../../services/carProtocol";
-import NetInfo from "@react-native-community/netinfo";
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { findCarOnNetwork, subnetCandidates } from "./connection/discovery";
 import type { SensorData } from "./types";
 
@@ -173,6 +173,40 @@ type Route = RouteProp<RootStackParamList, "Tools">;
  */
 export type ConnectOutcome =
   { ok: true; message: string } | { ok: false; reason: string };
+
+// ---- Phone-network watcher (U-80b, owner report 2026-10-09) -------
+// The only signal the app can observe when the car is switched to another
+// router FROM THE CAR'S OWN WEBPAGE is the phone landing on a new network
+// (an app-issued ROUTERS;USE is the one that surfaces routerSwitchNotice; a
+// web-page switch is invisible to the hub). Whenever the phone moves onto a
+// new Wi-Fi network while no car link is up, look for the car on it
+// automatically instead of waiting for a re-entry + a tap.
+//
+// Shared, not per-instance: the Control Panel and the Remote window each run
+// a hub, and one phone has one network — so one sweep budget keeps two open
+// windows from firing two sweeps at the same moment.
+let phoneNetDiscoverInflight = false;
+let phoneNetDiscoverAt = 0;
+const PHONE_NET_DISCOVER_COOLDOWN_MS = 10000;
+
+/** A stable key for "which network is this phone on right now". */
+function phoneNetworkKey(state: NetInfoState): string {
+  if (state.type !== "wifi" || state.isConnected !== true) {
+    return state.type ?? "none";
+  }
+  const details = state.details as unknown as
+    Record<string, unknown> | undefined;
+  const ssid =
+    typeof details?.["ssid"] === "string" ? details["ssid"].trim() : "";
+  if (ssid) return `wifi:${ssid}`;
+  const ip =
+    typeof details?.["ipAddress"] === "string"
+      ? details["ipAddress"].trim()
+      : "";
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\./.exec(ip);
+  if (m) return `wifi:${m[1]}.${m[2]}.${m[3]}`;
+  return ip ? `wifi:${ip}` : "wifi:unknown";
+}
 
 export function useControlHub(routeCategory?: string) {
   // U-68 (2026-10-02): the transport registry used to be registered LAZILY,
@@ -375,6 +409,9 @@ export function useControlHub(routeCategory?: string) {
   const [carScan, setCarScan] = useState<ScanNetwork[] | null>(null);
   // U-74: the last router lease the car reported (see DevicePrefs.lastRouterIp).
   const [lastRouterIp, setLastRouterIp] = useState<string | null>(null);
+  // Live mirror for the phone-network watcher (avoids a stale closure).
+  const lastRouterIpRef = useRef<string | null>(null);
+  lastRouterIpRef.current = lastRouterIp;
   // U-80: "the car switched to <ssid> - join it on this phone" prompt. Set the
   // moment the car confirms a router switch (ROUTERS;USED) on ANY transport;
   // auto-expires; dismissed by the renderer.
@@ -547,6 +584,9 @@ export function useControlHub(routeCategory?: string) {
   const profileKey = addressForMemory;
   const carScanRef = useRef<ScanNetwork[] | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
+  // Live mirror for the phone-network watcher (avoids a stale closure).
+  const savedPrefsRef = useRef(savedPrefs);
+  savedPrefsRef.current = savedPrefs;
   // Profiles-sync: last cloud mirror attempt for the current car profile
   // ("synced" = pushed to the user's account; "offline" = kept local only;
   // null = no attempt yet this session).
@@ -1833,6 +1873,95 @@ export function useControlHub(routeCategory?: string) {
     },
     [wifiUrl, showConnectionMessage, dropBluetoothForWifi],
   ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
+
+  // U-80b: AUTO-discover when the PHONE lands on a new network.
+  //
+  // handleWifiConnect's two rescues only run when the user taps connect. The
+  // owner's "the car was switched from its own webpage" path never taps, so
+  // the app sat on a dead link until the page was re-entered. This is the
+  // missing half: watch the phone's network and, the moment it changes onto a
+  // new Wi-Fi while no car link is up (and the link was not closed by the
+  // user), run the SAME bounded discovery and reconnect by itself.
+  //
+  // Narrow on purpose: it never dials an address the car did not report
+  // (a discovery hit IS the car's own /status — D4), it never fires while a
+  // link (Wi-Fi or Bluetooth) is live, and it never reopens a link the user
+  // closed.
+  const autoDiscoverAndConnect = useCallback(async (): Promise<void> => {
+    if (wifiService.isConnected || wifiService.isConnecting) return;
+    // A live Bluetooth car link must never be torn down by a background
+    // sweep — auto-discovery only follows the Wi-Fi method.
+    if (sppService.isConnected || bleService.isConnected) return;
+    // The user closed the link themselves: respect it, never surprise-reopen.
+    if (manualCloseRef.current) return;
+    // Only when this phone actually has a Wi-Fi relationship with this car.
+    const wifiInterest =
+      savedPrefsRef.current?.lastWifiUrl != null ||
+      savedPrefsRef.current?.lastWifiSsid != null ||
+      savedNetworksRef.current.length > 0 ||
+      lastRouterIpRef.current != null;
+    if (!wifiInterest) return;
+    // Shared budget across hub instances + a floor so a flapping phone cannot
+    // hammer the network.
+    if (phoneNetDiscoverInflight) return;
+    if (Date.now() - phoneNetDiscoverAt < PHONE_NET_DISCOVER_COOLDOWN_MS)
+      return;
+
+    phoneNetDiscoverInflight = true;
+    try {
+      const looked = await findCarForUser();
+      if (looked.ok && looked.host) {
+        try {
+          await wifiService.connect(CAR_WS_URL(looked.host));
+          const answered = await wifiService.waitForCarAnswer();
+          if (answered && mountedRef.current) {
+            setWifiConnected(true);
+            setLinkVerified(true);
+            setError(null);
+            setWifiUrl(CAR_WS_URL(looked.host));
+            void dropBluetoothForWifi();
+            showConnectionMessage(
+              `Phone joined a new network — found the car automatically at ${looked.host}.`,
+              "success",
+            );
+            setTimeout(() => {
+              wifiService.requestState().catch(() => {});
+            }, 200);
+            return;
+          }
+        } catch {
+          /* fall through to the honest message below */
+        }
+      }
+      // Nothing on this network (or it did not answer): say so plainly, so a
+      // silent empty screen never reads as "the app is broken".
+      if (!wifiService.isConnected) {
+        setError(
+          `The phone joined a new Wi-Fi network, but this car was not found on it. ` +
+            `Join ${OWN_AP_NAME} (the car's hotspot) or the car's router — the app keeps looking.`,
+        );
+      }
+    } finally {
+      phoneNetDiscoverInflight = false;
+      phoneNetDiscoverAt = Date.now();
+    }
+  }, [findCarForUser, dropBluetoothForWifi, showConnectionMessage]);
+
+  // The phone-network watcher itself. The FIRST observation only records where
+  // we are (a mount must never trigger a sweep); a genuine move onto another
+  // Wi-Fi network re-finds the car.
+  const phoneNetworkKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    phoneNetworkKeyRef.current = null;
+    return NetInfo.addEventListener((state) => {
+      const next = phoneNetworkKey(state);
+      const prev = phoneNetworkKeyRef.current;
+      phoneNetworkKeyRef.current = next;
+      if (prev === null || prev === next) return;
+      if (state.type !== "wifi" || state.isConnected !== true) return;
+      void autoDiscoverAndConnect();
+    });
+  }, [autoDiscoverAndConnect]);
 
   const handleWifiDisconnect = useCallback(async () => {
     manualCloseRef.current = true;

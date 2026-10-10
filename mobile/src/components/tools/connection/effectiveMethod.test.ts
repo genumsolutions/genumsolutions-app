@@ -44,8 +44,11 @@ describe("effectiveMethod", () => {
     ).toBe("wifi");
   });
 
-  it("shows nothing when idle and nothing chosen", () => {
-    expect(effectiveMethod(idle)).toBeNull();
+  it("opens on Wi-Fi when idle and nothing chosen", () => {
+    // Owner: "connection method with wifi first". An idle open shows the Wi-Fi
+    // method so its controls (and the saved-network list) are on screen from
+    // the start, rather than an empty page with no setup card.
+    expect(effectiveMethod(idle)).toBe("wifi");
   });
 
   it("NEVER overrides a deliberate choice", () => {
