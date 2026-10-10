@@ -64,6 +64,18 @@ mistaken for a pass again.)
 **Gates:** tsc 0 · prettier clean · vitest **664/664** (45 files, was 660). JS-only → same-version
 OTA 3.2.7/60, no APK.
 
+**Shipped this session (2026-10-10).** `main` = `370a963`, pushed. Actions all green: CI ✓
+`38069776382`, OTA Guard ✓ `38069776388`, OTA Only ✓ `38069776295` — the bundle was published to
+`--branch main` and the manifest synced, so the owner's next close+reopen installs it. No APK
+rebuild: nothing under `release.yml`'s native path changed.
+
+**TWO CAR REPOS — the next AI will hit this.** `Genum_4WD4M_CAR` is the LIVE car firmware;
+`Genum_WIRELESS_CAR` is frozen at 1.8.4 (`d0bf8c0`, 2026-09-26), kept only as the baseline this
+project was bootstrapped from. The owner's *"the car repo says no recent commits but which is not
+true"* (2026-10-10) was that OLD repo, not lost work. Verified via the GitHub API:
+`Genum_4WD4M_CAR` HEAD on `main` == local HEAD == `c5b8b9d`, all eight `genumsolutions` repos are
+in sync with their remotes, and no clone in the workspace had unpushed commits.
+
 **NOT device-verified (F-61).** The reconnect-refinds-the-car path needs the owner's bench: switch
 the car's router from its own page while the app is connected, and confirm the app re-finds it
 without a manual disconnect.
