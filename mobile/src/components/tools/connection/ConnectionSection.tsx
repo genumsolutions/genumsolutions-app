@@ -58,18 +58,12 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import {
-  CAR_STATUS_URL,
-  CAR_WS_URL,
   CONNECTION_METHODS,
-  PROBE_TIMEOUT_MS,
   carIsOnOwnHotspot,
-  findCarOnNetwork,
   methodOfTarget,
   normalizeRouters,
-  probeCarStatus,
   planSwitch,
   resolveDial,
-  subnetCandidates,
   targetUnavailableReason,
   validateRouterInput,
   type ConnectionMethodId,
@@ -84,7 +78,14 @@ import {
 } from "./ConnectionCard";
 import { WifiPanel } from "./WifiPanel";
 import type { useControlHub } from "../useControlHub";
-import NetInfo from "@react-native-community/netinfo";
+
+// 2026-10-10: NetInfo / CAR_WS_URL / CAR_STATUS_URL / PROBE_TIMEOUT_MS /
+// findCarOnNetwork / probeCarStatus / subnetCandidates are gone from this file.
+// They existed only for `findCarOnThisNetwork`, which was a second copy of the
+// hub's `findCarForUser` — same NetInfo read, same /24 sweep, same /status
+// probe — and it had its own button, which is the "multiple things" the owner
+// objected to. The hub's copy stays and runs automatically on both connect
+// failure paths, so the discovery is still there; only the duplicate is not.
 
 type Hub = ReturnType<typeof useControlHub>;
 
@@ -142,13 +143,10 @@ export function ConnectionSection({
     sppStatusMsg,
     sppDevices,
     sppSupported,
-    showSppsRetry,
     wifiConnected,
     linkVerified,
     error: hubError,
     handleScan,
-    handleSppsRetry,
-    handleReconnectPromptCancel,
     handleConnect,
     handleDisconnect,
     handleWifiConnect,
@@ -156,12 +154,7 @@ export function ConnectionSection({
     requestRouter,
     runSwitchPlan,
     requestScan,
-    lastRouterIp,
     routerDelete,
-    // U-80: the car-switched-networks prompt + automatic discovery share this
-    // handler with the WiFi method card.
-    routerSwitchNotice,
-    dismissRouterSwitchNotice,
     sendCommand,
   } = hub;
 
@@ -339,141 +332,6 @@ export function ConnectionSection({
     [carApName, handleWifiConnect, reportedIp, reportedSsid, tap],
   );
 
-  /**
-   * U-74: dial the router lease the car last reported.
-   *
-   * This is the ONE piece of the "the drive deck doesn't open on the router"
-   * problem that can be solved without a native module, so it is worth being
-   * precise about what it is and is not. The phone loses the car when the car
-   * joins a router (the hotspot moves to the router's channel — one radio, one
-   * channel), so the app needs an address it did not have. The car broadcasts
-   * its lease for a moment before that happens, so we remembered it, and this
-   * dials it.
-   *
-   * It goes through the same `handleWifiConnect` every other WiFi dial uses, so
-   * it is bounded, verified the same way, and reports a real failure — a lease
-   * that has gone stale produces an honest error, not a fake "Connected".
-   * Bypassing `resolveDial` here is deliberate and safe: `resolveDial` refuses
-   * addresses that are not car-reported, and this IS a car-reported address,
-   * just remembered from a moment ago.
-   */
-  const connectRouterLease = useCallback(
-    async (ip: string) => {
-      const host = ip.trim();
-      if (!host) return;
-      tap();
-      setBusy(true);
-      setMessage(null);
-      try {
-        const outcome = await handleWifiConnect(`ws://${host}:81`);
-        setMessage(
-          outcome.ok
-            ? { tone: "ok", text: outcome.message }
-            : {
-                tone: "error",
-                text:
-                  outcome.reason ||
-                  "Could not reach the car at that address. It may have been given a new one — check the car's screen.",
-              },
-        );
-      } finally {
-        setBusy(false);
-      }
-    },
-    [handleWifiConnect, tap],
-  );
-
-  /**
-   * U-74b: find the car on whatever network this phone is on, with no native
-   * module and therefore no APK.
-   *
-   * Why this exists rather than the elegant fix: the car advertises
-   * `genum-car.local` over mDNS (car U-74), but React Native cannot resolve a
-   * `.local` name without a NATIVE MODULE, and a native module cannot be
-   * delivered by an OTA. So this is the fallback that ships today — it uses two
-   * things the app already has:
-   *
-   *   - `NetInfo` (already a dependency, already in the APK) to learn the PHONE's
-   *     address, which tells us the /24 the car must be inside; and
-   *   - the car's own `GET /status` on port 80 to tell our car from the router,
-   *     the laptop and the printer that also answer there.
-   *
-   * Nothing invented: a DHCP lease is knowable exactly one way, and that is it.
-   *
-   * The bounds are deliberate and are the reason this is safe to leave in the
-   * app: it runs only on an explicit tap, only on the user's own network, only
-   * against the /24 the phone is genuinely on, only on port 80, in parallel,
-   * with a short per-probe timeout, and it stops at the first hit.
-   */
-  const findCarOnThisNetwork = useCallback(async () => {
-    tap();
-    setBusy(true);
-    setMessage(null);
-    try {
-      const state = await NetInfo.fetch();
-      // Read defensively rather than narrowing: NetInfo's `details` type is a
-      // loose union across transports, and only the WiFi shape carries
-      // `ipAddress`. `subnetCandidates` re-validates it anyway, so anything
-      // unusable simply falls through to an honest "no usable address" error.
-      const details = state.details as Record<string, unknown> | undefined;
-      const rawIp = details?.["ipAddress"];
-      const phoneIp = typeof rawIp === "string" ? rawIp : null;
-      const candidates = subnetCandidates(phoneIp);
-      if (candidates.length === 0) {
-        setMessage({
-          tone: "error",
-          text: "This phone has no usable WiFi address, so there is nothing to search. Join your router on this phone, then try again.",
-        });
-        return;
-      }
-
-      setMessage({
-        tone: "info",
-        text: `Looking for the car on your network (${candidates.length} addresses to check)...`,
-      });
-
-      const host = await findCarOnNetwork({
-        candidates,
-        // The AP name is what makes this work before the phone has ever paired
-        // with this car - which is the case that actually matters, because the
-        // phone has no profile for a car it has never seen.
-        expect: { apName: "4WDCar_Wifi" },
-        fetchJson: probeCarStatus,
-      });
-
-      if (!host) {
-        setMessage({
-          tone: "error",
-          text: "No car answered on this network. Check the car's screen — it needs to be switched ON and joined to this same router.",
-        });
-        return;
-      }
-
-      const outcome = await handleWifiConnect(CAR_WS_URL(host));
-      setMessage(
-        outcome.ok
-          ? { tone: "ok", text: outcome.message }
-          : {
-              tone: "error",
-              text:
-                outcome.reason ||
-                `Found a car at ${host}, but the drive link did not open.`,
-            },
-      );
-    } catch {
-      setMessage({
-        tone: "error",
-        text: "Could not search this network. Check that this phone is on your router's WiFi, then try again.",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [handleWifiConnect, tap]);
-
-  /**
-   * Fetch one `/status`, bounded. A closed port is the expected majority, so the
-   * caller treats a rejection as "not the car" rather than as an error.
-   */
   const disconnect = useCallback(async () => {
     try {
       if (btLive) await handleDisconnect();
@@ -580,10 +438,6 @@ export function ConnectionSection({
 
   return (
     <View className="mt-3 gap-2.5">
-      {/* ---- available networks caption ---- */}
-      <Text className="text-[15px] font-black text-ink">
-        Available networks
-      </Text>
       {/* ---- status ------------------------------------------------------ */}
       <ConnectionCard
         title="Connection"
@@ -699,9 +553,6 @@ export function ConnectionSection({
           onScanBluetooth={() => void scanBluetooth()}
           onConnectBluetooth={connectBluetooth}
           onConnectWifi={connectWifi}
-          lastRouterIp={lastRouterIp}
-          onConnectRouterLease={connectRouterLease}
-          onFindCarOnNetwork={findCarOnThisNetwork}
         />
       ) : null}
 
@@ -734,44 +585,53 @@ export function ConnectionSection({
           "Routers" target). The ROUTERS;… commands ride whatever link is live,
           so one list serves both methods. */}
       {method === "wifi" || (targetId === "bt-routers" && anyLink) ? (
-        <WifiPanel
-          routers={routers}
-          scanned={carScan ?? []}
-          busy={busy}
-          reachable={anyLink}
-          pendingSsid={pendingJoinSsid}
-          sendCmd={sendCommand}
-          onSwitch={(s) => void switchRouter(s)}
-          onForget={(s) => void deleteRouter(s)}
-          onEdit={(s, p) => void editRouter(s, p)}
-          onAdd={(ssid, pass) =>
-            void (async () => {
-              const plan = planSwitch({
-                target: ssid,
-                pass,
-                entries: routers,
-                ownApName: carApName,
-              });
-              if (!plan) {
-                setMessage({
-                  tone: "error",
-                  text: "That network cannot be used.",
+        <>
+          {/* The caption belongs HERE — above the list it names. It used to sit
+              at the very top of the section, labelling the status card, while
+              this list rendered with no heading at all (owner: "the list of the
+              available network without their caption heading"). */}
+          <Text className="text-[15px] font-black text-ink">
+            Available networks
+          </Text>
+          <WifiPanel
+            routers={routers}
+            scanned={carScan ?? []}
+            busy={busy}
+            reachable={anyLink}
+            pendingSsid={pendingJoinSsid}
+            sendCmd={sendCommand}
+            onSwitch={(s) => void switchRouter(s)}
+            onForget={(s) => void deleteRouter(s)}
+            onEdit={(s, p) => void editRouter(s, p)}
+            onAdd={(ssid, pass) =>
+              void (async () => {
+                const plan = planSwitch({
+                  target: ssid,
+                  pass,
+                  entries: routers,
+                  ownApName: carApName,
                 });
-                return;
-              }
-              const ok = await runOutcome(() => runSwitchPlan(plan));
-              if (ok) {
-                setPendingJoinSsid(ssid);
-                setMessage({
-                  tone: "ok",
-                  text: `The car is switching to “${ssid}”.`,
-                });
-              }
-            })()
-          }
-          onScan={() => void scanNearby()}
-          onInputFocus={onInputFocus}
-        />
+                if (!plan) {
+                  setMessage({
+                    tone: "error",
+                    text: "That network cannot be used.",
+                  });
+                  return;
+                }
+                const ok = await runOutcome(() => runSwitchPlan(plan));
+                if (ok) {
+                  setPendingJoinSsid(ssid);
+                  setMessage({
+                    tone: "ok",
+                    text: `The car is switching to “${ssid}”.`,
+                  });
+                }
+              })()
+            }
+            onScan={() => void scanNearby()}
+            onInputFocus={onInputFocus}
+          />
+        </>
       ) : null}
     </View>
   );
@@ -797,9 +657,6 @@ function MethodSetup({
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
-  lastRouterIp,
-  onConnectRouterLease,
-  onFindCarOnNetwork,
 }: {
   method: (typeof CONNECTION_METHODS)[number];
   target: ConnectionTarget;
@@ -821,12 +678,6 @@ function MethodSetup({
     bonded?: boolean,
   ) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
-  /** U-74: the last router lease the car reported — the one-tap way back to it
-   *  after the hotspot link drops. A HINT, never an authority. */
-  lastRouterIp: string | null;
-  onConnectRouterLease: (ip: string) => Promise<void>;
-  /** U-74b: sweep this phone's own /24 for the car. No native module. */
-  onFindCarOnNetwork: () => Promise<void>;
 }) {
   // U-84: the "Where is the car?" split is GONE. It asked the user to choose
   // between "The car's hotspot" and "Your home router" before they could do
@@ -904,34 +755,13 @@ function MethodSetup({
         />
       )}
 
-      {/* ---- U-97b: the Wi-Fi recovery actions belong to the Wi-Fi method ---
-          U-74 / U-74b (the remembered router lease + the bounded /24 sweep) are
-          Wi-Fi-only: they exist because the phone loses the car when the car
-          joins a router. They were previously rendered inside the Bluetooth
-          branch (the only `hasAlternative` method), so they appeared in the
-          Bluetooth card. They now render ONLY when the Wi-Fi method is selected
-          and no link is up - one method's content never leaks into another. */}
-      {method.id === "wifi" && !linkLive ? (
-        <View className="mt-2.5">
-          {lastRouterIp ? (
-            <ActionButton
-              label={`Connect to the car (${lastRouterIp})`}
-              icon="link"
-              onPress={() => void onConnectRouterLease(lastRouterIp)}
-              disabled={busy}
-              testID="conn-router-lease"
-            />
-          ) : (
-            <ActionButton
-              label="Find the car on this network"
-              icon="search"
-              onPress={() => void onFindCarOnNetwork()}
-              disabled={busy}
-              testID="conn-find-car"
-            />
-          )}
-        </View>
-      ) : null}
+      {/* 2026-10-10 (owner: "it show multiple things like connect and find
+          the car on the network ..."). The two buttons that used to sit here -
+          "Connect to the car (<ip>)" and "Find the car on this network" - were
+          redundant, not extra capability: handleWifiConnect already runs the
+          same remembered-lease + /24 sweep on BOTH failure paths (refused and
+          half-open), and resolveDial already dials the car-reported lease.
+          Connect is now the single action, and it covers what both did. */}
 
       {/* U-96: Bluetooth router management — switch/add/edit/delete routers over
           the live SPP link. The SAME ROUTERS;\u2026 commands the Wi-Fi panel sends,
@@ -991,7 +821,6 @@ function TargetBody({
           text describing the control directly beneath it — the owner named
           subtitles like this as part of the mess. If a target genuinely cannot
           be used, TargetBody says why in place, where it applies. */}
-
       {target.id === "bt-spp" && !linkLive ? (
         <View className="mt-2.5 gap-2">
           {/* U-69: if classic Bluetooth is not in this build, say so HERE with
@@ -1055,8 +884,7 @@ function TargetBody({
             </View>
           ) : null}
         </View>
-      ) : null}
-
+      ) : null}{" "}
       {/* U-86: one Connect action, whatever network the car is on. */}
       {target.id === "car-wifi" ? (
         <View className="mt-2.5">
@@ -1069,12 +897,6 @@ function TargetBody({
           />
           {unavailable ? (
             <InlineMessage tone="info">{unavailable}</InlineMessage>
-          ) : null}
-          {/* U-86: name the network the CAR reports, not "your home router". */}
-          {carOnRouter && reportedSsid ? (
-            <InlineMessage tone="ok">
-              The car is on “{reportedSsid}”.
-            </InlineMessage>
           ) : null}
         </View>
       ) : null}

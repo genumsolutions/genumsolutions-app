@@ -1,4 +1,72 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-09: main verified pushed 0d6604d; backup branch refreshed; no source change)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-10: the WiFi section is one action, a lost link is noticed, and a dead address is no longer retried forever)
+
+## This session (2026-10-10) — the app stopped noticing a dead link, and kept the WiFi section honest
+
+Owner: *"the car has changed the network through the browser control of its own hotspot and also
+through the app also but the app is still in the old state on that network part … the app wait
+for the same network to connect with previous state of the visual of the data and state.
+Following this i have to manualy disconnect previous connection and rejoin again or go back
+outside from the control pane and again enter inside."* Plus: *"the connection method is still
+confusing specially for the wifi method … it show multiple things like connect and find the car
+on the network … and the list of the available network without their caption heading. Also i dont
+want subtitle texts at all."*
+
+Two earlier commits (`a8b335d`, `60dfe69`) had already landed the NetInfo watcher and removed the
+phone-switch prompt — but left the two real defects below, plus a pile of unused destructures.
+
+- **THE STALE-VISUAL HALF.** `wifiService.onStatus`'s `disconnected` and `error` cases never
+  cleared `linkVerified`, so a dropped link kept the OLD truth and the next paint could read
+  live before any car had answered. Both now clear it.
+- **THE "I HAVE TO REJOIN BY HAND" HALF — the real one.** `wifiService.scheduleReconnect(url)`
+  re-dials the **same url** `MAX_RECONNECTS` times, then emits `error` and stops. When the car
+  moved routers that address is dead *by definition*, so every retry can only fail — and then
+  the app sat there until the user disconnected and rejoined, or left and re-entered the Control
+  Panel. The `error` case now hands off to `autoDiscoverAndConnect()`, which already exists and
+  is already guarded (inflight + 10 s cooldown + `manualClose` + a "does this phone have any
+  Wi-Fi history with this car" test), and which runs the same remembered-lease + bounded /24
+  sweep. It is read through `autoDiscoverRef` because that subscription is created with **empty
+  deps** and cannot close over a callback defined further down; the ref is published by a
+  `useEffect`, not a render-phase write.
+- **The WiFi section is now ONE action.** "Connect to the car (`<ip>`)" and "Find the car on this
+  network" were **redundant, not extra capability**: `handleWifiConnect` already runs the same
+  sweep on *both* failure paths (refused and half-open), and `resolveDial` already dials the
+  car-reported lease. `connectRouterLease()` and `findCarOnThisNetwork()` are deleted, along with
+  their props — and `findCarOnThisNetwork` was a second copy of the hub's `findCarForUser` (same
+  NetInfo read, same /24 sweep, same `/status` probe), so the deletion also removes the
+  duplicate. Seven imports went with it (`NetInfo`, `CAR_WS_URL`, `CAR_STATUS_URL`,
+  `PROBE_TIMEOUT_MS`, `findCarOnNetwork`, `probeCarStatus`, `subnetCandidates`) — all still used
+  elsewhere in the repo, none orphaned by this.
+- **"Available networks" now labels the list it names.** `60dfe69` had replaced "Connect to your
+  car" with that caption at the **top** of the section — where it labelled the status card —
+  while the actual list rendered below with no heading at all (the owner's *"the list of the
+  available network without their caption heading"*). The caption moved down to sit directly
+  above `WifiPanel`.
+- **No guidance subtitles.** The switch prompt in `WifiPanel` was a two-line paragraph; it is now
+  the single imperative line `Join <ssid> on this phone`. Android will not join silently, so it
+  stays — it is an action the user must take, not narration.
+- **Residue `60dfe69` left behind, removed:** `showSppsRetry`, `handleSppsRetry`,
+  `handleReconnectPromptCancel`, `lastRouterIp`, `routerSwitchNotice`,
+  `dismissRouterSwitchNotice` (all destructure-only), a `console.log("[W5] …")`, and a doc
+  comment above `disconnect()` describing a `/status` probe that is not what that function does.
+- **Phone-network detection already worked, verified not assumed:** `phoneNetworkKey` uses the
+  SSID when Android grants it (both location permissions are in `app.json`) and otherwise falls
+  back to the phone's /24 — the right granularity for "did this phone move".
+
+**Gate.** `oneActiveLink.test.ts` (the comment-stripped source reader, per its own header — this
+repo has no component harness) gains three rules: every WiFi status case that ends the link must
+clear `linkVerified`; the `error` case must hand off to `autoDiscoverRef.current?.()`; and the
+ref must be published inside a `useEffect`. **Proven in BOTH directions** — each was mutated in
+turn, each failed by name, restore verified byte-exact. (First attempt at mutant 1 was a false
+negative: vitest exited 1 on "No test files found" because the run was launched from the wrong
+cwd. Re-run correctly, it fails on the rule as intended. Recorded so the same trap is not
+mistaken for a pass again.)
+
+**Gates:** tsc 0 · prettier clean · vitest **664/664** (45 files, was 660). JS-only → same-version
+OTA 3.2.7/60, no APK.
+
+**NOT device-verified (F-61).** The reconnect-refinds-the-car path needs the owner's bench: switch
+the car's router from its own page while the app is connected, and confirm the app re-finds it
+without a manual disconnect.
 
 ## This session (2026-10-09) — no source change; main verified, backup refreshing records
 

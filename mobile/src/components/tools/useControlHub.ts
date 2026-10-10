@@ -533,6 +533,12 @@ export function useControlHub(routeCategory?: string) {
   const prevIpRef = useRef<string | undefined>(undefined);
   const prevSsidRef = useRef<string | undefined>(undefined);
 
+  // Set once autoDiscoverAndConnect is defined further down, and read by the
+  // status subscription above it (which is registered with empty deps, so it
+  // cannot close over the callback directly). See the "reconnection failed"
+  // branch of offWifiStatus.
+  const autoDiscoverRef = useRef<(() => Promise<void>) | null>(null);
+
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES);
 
@@ -1497,6 +1503,11 @@ export function useControlHub(routeCategory?: string) {
         case "disconnected":
           setWifiConnected(false);
           setConnecting(false);
+          // The link that was verified is gone. Leaving this true would let the
+          // next status frame read as "live" before any car had answered —
+          // which is exactly the stale-visual report ("the app is still in the
+          // old state").
+          setLinkVerified(false);
           // Only clear the global "connected" if SPP/BLE are also down.
           if (!sppService.isConnected && !bleService.isConnected) {
             setConnected(false);
@@ -1506,11 +1517,20 @@ export function useControlHub(routeCategory?: string) {
         case "error":
           setWifiConnected(false);
           setConnecting(false);
+          setLinkVerified(false);
           setError(message ?? "WiFi connection lost");
           if (!sppService.isConnected && !bleService.isConnected) {
             setConnected(false);
             setDeviceName("");
           }
+          // wifiService auto-reconnect re-dials the SAME url up to
+          // MAX_RECONNECTS and then gives up. When the car moved routers that
+          // address is dead, so retrying it can never succeed — and the owner's
+          // report was precisely "the app wait for the same network to connect",
+          // then a manual disconnect + rejoin. Look for the car instead: the
+          // sweep already has inflight/cooldown/manual-close guards, so this
+          // cannot hammer the network or reopen a link the user closed.
+          autoDiscoverRef.current?.();
           break;
         default:
           break;
@@ -1552,12 +1572,6 @@ export function useControlHub(routeCategory?: string) {
     const ssidChanged = ssid !== undefined && prevSsidRef.current !== ssid;
 
     if (ipChanged || ssidChanged) {
-      console.log("[W5] Car network switch detected:", {
-        prevIp: prevIpRef.current,
-        newIp: ip,
-        prevSsid: prevSsidRef.current,
-        newSsid: ssid,
-      });
       // Update refs
       if (ip !== undefined) prevIpRef.current = ip;
       if (ssid !== undefined) prevSsidRef.current = ssid;
@@ -1989,6 +2003,15 @@ export function useControlHub(routeCategory?: string) {
       phoneNetDiscoverAt = Date.now();
     }
   }, [findCarForUser, dropBluetoothForWifi, showConnectionMessage]);
+
+  // Publish it for the status subscription registered near the top of the hook.
+  // That subscription is created with empty deps (it must not tear down and
+  // re-create on every render), so it reads this ref instead of closing over
+  // the callback. An effect — not a render-phase assignment — so a Strict-Mode
+  // double render never writes a stale value.
+  useEffect(() => {
+    autoDiscoverRef.current = autoDiscoverAndConnect;
+  }, [autoDiscoverAndConnect]);
 
   // The phone-network watcher itself. The FIRST observation only records where
   // we are (a mount must never trigger a sweep); a genuine move onto another
