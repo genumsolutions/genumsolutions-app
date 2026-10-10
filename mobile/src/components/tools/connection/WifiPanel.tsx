@@ -225,16 +225,17 @@ export function WifiPanel({
 
   return (
     <View testID="wifi-panel">
-      {/* After a switch the phone is on the wrong network, so say so plainly
-          and once. Android will not join a Wi-Fi network silently. */}
+      {/* After a switch the phone is on the wrong network, so say so once.
+          Android will not join a Wi-Fi network silently, so this is an action
+          the user has to take — but owner 2026-10-10: no guidance subtitles,
+          short and minimal. One imperative line, no paragraph. */}
       {pendingSsid ? (
         <View className="mb-2.5 rounded-xl border border-line bg-card p-3">
-          <View className="flex-row items-start gap-2">
+          <View className="flex-row items-center gap-2">
             <Feather name="smartphone" size={15} color="#1e3a8a" />
             <Text className="flex-1 text-[13px] leading-5 text-ink">
-              The car is switching to{" "}
-              <Text className="font-bold">{pendingSsid}</Text>. Join that
-              network on this phone to stay connected to the car.
+              Join <Text className="font-bold">{pendingSsid}</Text> on this
+              phone
             </Text>
           </View>
         </View>

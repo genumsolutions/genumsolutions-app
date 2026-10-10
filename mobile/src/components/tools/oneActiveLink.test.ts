@@ -45,6 +45,18 @@ function body(name: string, nextName: string): string {
   return code.slice(start, end);
 }
 
+/** The switch cases of the WiFi status handler (its own subscription). */
+function wifiStatusCases(): string[] {
+  const start = code.indexOf("const offWifiStatus = wifiService.onStatus");
+  const end = code.indexOf("return () => {", start);
+  if (start < 0 || end <= start) return [];
+  const slice = code.slice(start, end);
+  return slice
+    .split(/case "/)
+    .slice(1)
+    .map((c) => c.split(/case "|default:/)[0] ?? c);
+}
+
 /** The switch cases of the SPP status handler (its own subscription). */
 function sppStatusCases(): string[] {
   const start = code.indexOf("const offStatus = sppService.onStatus");
@@ -109,5 +121,74 @@ describe("U-98 — one live link, and each transport only speaks for itself", ()
     // status paint before any car has answered.
     const helper = body("handleWifiDisconnect", "handleWifiProvision");
     expect(helper).toContain("setLinkVerified(false)");
+  });
+});
+
+// =====================================================================
+// 2026-10-10 — a lost link must not leave the app believing it, and a dead
+// address must not be dialled forever.
+//
+// Owner: "the car has changed the network ... but the app is still in the old
+// state on that network part ... the app wait for the same network to connect
+// with previous state of the visual of the data and state. Following this i
+// have to manualy disconnect previous connection and rejoin again or go back
+// outside from the control pane and again enter inside."
+//
+// Both halves of that are source-shape facts, so the same comment-stripped
+// view of useControlHub.ts is the right thing to read.
+// =====================================================================
+describe("2026-10-10 — a dropped link is noticed, and recovery re-finds the car", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    const cases = wifiStatusCases();
+    expect(cases.length).toBeGreaterThanOrEqual(4);
+    expect(cases.some((c) => c.includes("disconnected"))).toBe(true);
+    expect(cases.some((c) => c.includes("error"))).toBe(true);
+  });
+
+  it("every WiFi status case that ends the link also clears linkVerified", () => {
+    // wifiService's auto-reconnect gives up after MAX_RECONNECTS and emits
+    // "error"; "disconnected" arrives after a manual close or a dead socket.
+    // Neither used to clear `linkVerified`, so the card kept the OLD truth and
+    // the next frame read as live before any car had answered — the owner's
+    // "previous state of the visual of the data and state".
+    const cases = wifiStatusCases();
+    const ending = cases.filter((c) => c.includes("setWifiConnected(false)"));
+    expect(ending.length).toBeGreaterThanOrEqual(2);
+    for (const c of ending) {
+      expect(c).toContain("setLinkVerified(false)");
+    }
+  });
+
+  it("giving up on reconnect re-finds the car instead of retrying the dead address", () => {
+    // THE DEFECT: wifiService.scheduleReconnect(url) re-dials the SAME url
+    // MAX_RECONNECTS times. When the car moved routers that address is dead by
+    // definition, so every retry can only fail — and then the app stopped,
+    // leaving the user to disconnect and rejoin by hand. The hub already owns
+    // a guarded sweep (findCarForUser: remembered lease + bounded /24, with
+    // inflight/cooldown/manual-close guards), so the "error" case hands off
+    // to it. Note it is read through a ref: this subscription is created with
+    // empty deps and cannot close over a callback defined further down.
+    const cases = wifiStatusCases();
+    const errored = cases.find(
+      (c) => c.includes("setWifiConnected(false)") && c.includes("setError("),
+    );
+    expect(errored).toBeTruthy();
+    expect(errored).toContain("autoDiscoverRef.current?.()");
+  });
+
+  it("the ref is published by an effect, never by a render-phase write", () => {
+    // A render-phase assignment would let a Strict-Mode double render publish
+    // a stale callback; and the subscription above has empty deps, so it MUST
+    // go through the ref rather than the callback.
+    const flat = code.replace(/\s+/g, " ");
+    expect(flat).toContain("autoDiscoverRef.current = autoDiscoverAndConnect;");
+    expect(flat).toContain("}, [autoDiscoverAndConnect]);");
+    // …and it must sit inside a useEffect, not run during render.
+    const at = flat.indexOf(
+      "autoDiscoverRef.current = autoDiscoverAndConnect;",
+    );
+    const enclosing = flat.lastIndexOf("useEffect(", at);
+    expect(enclosing).toBeGreaterThanOrEqual(0);
+    expect(at - enclosing).toBeLessThan(200);
   });
 });
