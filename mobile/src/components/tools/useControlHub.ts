@@ -990,6 +990,9 @@ export function useControlHub(routeCategory?: string) {
     });
     void syncCrashReport({
       boardId,
+      // U-96i: the car's OWN reported version, not the catalog guess. Missing
+      // on pre-1.2.5 firmware → null → the row stores "", never a fabricated one.
+      fwVersion: telemetry.fwVersion ?? null,
       connectionMethod: connected ? "bluetooth" : "wifi",
       ssid: carSsid,
       ip: telemetry.ip ?? null,
@@ -1002,7 +1005,9 @@ export function useControlHub(routeCategory?: string) {
       uptimeMs: telemetry.uptimeMs ?? null,
       statusJson: {
         mode: telemetry.mode ?? null,
-        fw: telemetry.id ?? null,
+        // U-96i: this used to carry telemetry.id — the BOARD ID under a key
+        // named fw. Identity has its own column (board_id); fw is the version.
+        fw: telemetry.fwVersion ?? null,
         free_heap: telemetry.freeHeap ?? null,
       },
     });
@@ -1020,6 +1025,7 @@ export function useControlHub(routeCategory?: string) {
     telemetry.uptimeMs,
     telemetry.ip,
     telemetry.mode,
+    telemetry.fwVersion,
   ]);
 
   // Provisioning-reply handler mirror (defined below with useState deps).
