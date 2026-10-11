@@ -1,4 +1,38 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: U-99 WifiPanel list dedup; APP CHANGES COMMITTED this session)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild Phase 2 DONE — Remote "Connectivity" panel)
+
+## This session (2026-10-12, connectivity-rebuild Phase 2) — APP: Remote "Connectivity" panel; Control Panel stripped
+
+Phase 2 of `TRACKS/PLAN-2026-10-12-connectivity-rebuild.md` — commit **`15718a8`** (pushed). All
+connection UI is now in ONE panel on the Remote screen, named **Connectivity**.
+
+- **`screens/RemoteControlScreen.tsx`** — the Router pill + the Settings row renamed **Connectivity**;
+  both open `ConnectionSection` (with the new `manage` prop = full add/edit/forget Wi-Fi manager)
+  instead of `RouterPanel`, wrapped in `KeyboardAvoidingView` + `ScrollView`
+  (`nestedScrollEnabled`) so it fits landscape. Per-link disconnect: `confirmDisconnectBt` /
+  `confirmDisconnectWifi` render one button per LIVE link (`connected` → BT, `wifiConnected` → WiFi).
+  The **Select** button + `handleSelect` are gone, along with the now-dead router callbacks
+  (`routerUse`/`routerAdd`/`routerDelete`/`routerClearAll`/`routerEntries`). New local
+  `connMethod` state is owned by the screen so the section's choice survives re-renders. Settings
+  gains a **Hotspot power-save** `Switch` → `hub.apPowerSave` / `setCarApPowerSave` /
+  `queryCarApPowerSave`, and a `useEffect` queries the car when `linked`.
+- **`screens/ToolsScreen.tsx`** — stripped to catalogue + Saved settings: the Car telemetry card +
+  `TelemetryStrip`, the Diagnostics row, and the Connect heading + `ConnectionSection` are removed,
+  with their now-dead imports/locals (`ConnectionSection`, `ConnectionMethodId`, `resolveMethod`,
+  `CarStatusLine`, `TelemetryStrip`, `buildCarTelemetry`, `buildRestartField`, `describeCar`,
+  `connMethod`, `effectiveMethod`, `scrollRef`, `scrollInputIntoView`, `restartField`,
+  `anyLinked`, `linkVerified`, `sppSupported`).
+- **`connection/ConnectionSection.tsx`** — new optional `manage?: boolean` prop (default false),
+  passed to `WifiPanel`, replacing the hardcoded `manage={false}`.
+- **`useControlHub.ts`** — `apPowerSave` state (`:241`), `WIFICFG;APSAVE;` parse in
+  `handleWifiProvisionReply`, and a `sendSystemLine` spp→ble→wifi fan-out + `setCarApPowerSave` /
+  `queryCarApPowerSave` (exported). `WIFICFG;APSAVE` is a SYSTEM command (never routed via
+  `sendCommand`, which follows the active mode's transports).
+- **`RouterPanel.tsx` left UNMOUNTED** (its pure module + `routerPanelOutcome.test.ts` stay green);
+  deletion deferred. `oneActiveLink.test.ts` unchanged (Phase 4).
+
+**Gate:** tsc 0 · vitest **673/673** (45 files) · prettier clean. **NOT device-verified (F-61)** —
+needs flash 1.3.0 + the Remote Connectivity panel checked in landscape. Next: **Phase 3** (remove
+`OledDisplay` everywhere + telemetry around the drive controls).
 
 ## This session (2026-10-12, connectivity-rebuild Phase 1) — APP: no code change needed
 
