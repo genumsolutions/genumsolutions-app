@@ -594,6 +594,11 @@ export function RemoteControlScreen({ navigation }: Props) {
   // Pads are the primary drive surface — show them by default for every mode;
   // users can still hide via Settings (choice lives for the session only).
   const [showJoystick, setShowJoystick] = useState(true);
+  // Owner (2026-10-11): the WiFi & Router panel used to be reachable ONLY in
+  // the website-server mode. It is now reachable from EVERY robocar mode via
+  // the Router pill (and a Settings row). This state only opens the SAME panel
+  // from other modes — its content and handlers are unchanged.
+  const [showRouter, setShowRouter] = useState(false);
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null);
@@ -624,6 +629,12 @@ export function RemoteControlScreen({ navigation }: Props) {
       }
     };
   }, []);
+
+  // The router panel manages the car over a live link; if the link drops the
+  // panel has nothing to act on, so close it and fall back to the deck.
+  useEffect(() => {
+    if (!linked) setShowRouter(false);
+  }, [linked]);
 
   // ── Derived values ──
   const limits: SafetyLimits = hub.safetyLimits ?? DEFAULT_SAFETY_LIMITS;
@@ -971,19 +982,43 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </Pressable>
               {/* A-50 (round-11): the third pill is TELEMETRY, not "Hide" — it
-                opens the mode's readout panels (PID dashboard / router manager
-                / full OLED mirror) instead of a pointless "Pad hidden" card. */}
+                opens the mode's readout panels (PID dashboard / full OLED
+                mirror) instead of a pointless "Pad hidden" card. Owner
+                (2026-10-11): it now also closes the router view, so the two
+                are clearly one-or-the-other. */}
               <Pressable
                 onPress={() => {
                   feedbackTap();
                   setShowJoystick(false);
+                  setShowRouter(false);
                 }}
-                className={`rounded-full px-3 py-1 ${!showJoystick ? "bg-navy" : "border border-line bg-card"}`}
+                className={`rounded-full px-3 py-1 ${!showJoystick && !showRouter ? "bg-navy" : "border border-line bg-card"}`}
               >
                 <Text
-                  className={`text-[10px] font-bold ${!showJoystick ? "text-white" : "text-muted"}`}
+                  className={`text-[10px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
                 >
                   Telemetry
+                </Text>
+              </Pressable>
+              {/* Owner (2026-10-11): a small Router pill — the same WiFi &
+                Router panel that used to be website-server-only, now one tap
+                away in EVERY linked robocar mode. */}
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(false);
+                  setShowRouter(true);
+                }}
+                disabled={!linked}
+                accessibilityRole="button"
+                accessibilityLabel="WiFi and router management"
+                accessibilityState={{ disabled: !linked, selected: showRouter }}
+                className={`rounded-full px-3 py-1 ${showRouter ? "bg-navy" : "border border-line bg-card"} ${!linked ? "opacity-40" : ""}`}
+              >
+                <Text
+                  className={`text-[10px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
+                >
+                  Router
                 </Text>
               </Pressable>
             </View>
@@ -1128,6 +1163,25 @@ export function RemoteControlScreen({ navigation }: Props) {
                     oledSlot={oledSlot}
                   />
                 </>
+              ) : showRouter || activeMode.id === "website-server" ? (
+                /* The ONE organized WiFi & Router panel. Round-6 kept it in the
+                   website-server mode only (that's the mode whose page it
+                   manages); owner (2026-10-11) wanted it reachable from ANY
+                   mode, so `showRouter` opens it from other modes too — the
+                   panel and its handlers are unchanged. */
+                <RouterPanel
+                  canControl={canControl}
+                  linked={linked}
+                  carSsid={hub.carSsid}
+                  carApName={hub.carApName}
+                  ip={telemetry.ip ?? null}
+                  networks={hub.carNetworks}
+                  onUse={routerUse}
+                  onAdd={routerAdd}
+                  onDelete={routerDelete}
+                  onClear={routerClearAll}
+                  onOpenWebPage={handleOpenWebPage}
+                />
               ) : activeMode.controls.includes("pid-auto") ? (
                 <BalanceControls
                   canControl={canControl}
@@ -1141,24 +1195,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                   onPid={applyPid}
                   compact
                   oledSlot={oledSlot}
-                />
-              ) : activeMode.id === "website-server" ? (
-                /* The ONE organized WiFi & Router panel — round-6: ONLY shown in
-                 the web-server mode (that's the mode whose page this manages).
-                 Hidden non-web modes get a tidy placeholder below instead of a
-                 Router panel that leaked into every mode. */
-                <RouterPanel
-                  canControl={canControl}
-                  linked={linked}
-                  carSsid={hub.carSsid}
-                  carApName={hub.carApName}
-                  ip={telemetry.ip ?? null}
-                  networks={hub.carNetworks}
-                  onUse={routerUse}
-                  onAdd={routerAdd}
-                  onDelete={routerDelete}
-                  onClear={routerClearAll}
-                  onOpenWebPage={handleOpenWebPage}
                 />
               ) : (
                 /* A-50 (round-11): hidden modes without a dedicated panel now
@@ -1320,6 +1356,32 @@ export function RemoteControlScreen({ navigation }: Props) {
                   accessibilityLabel="Toggle dark theme"
                 />
               </View>
+
+              {/* Owner (2026-10-11): a Settings entry to the WiFi & Router
+                panel — the small "router management button" on the remote. It
+                is the SAME panel the website-server mode shows; this only makes
+                it reachable from every mode. Needs a live link. */}
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowSettings(false);
+                  setShowJoystick(false);
+                  setShowRouter(true);
+                }}
+                disabled={!linked}
+                accessibilityRole="button"
+                accessibilityLabel="WiFi and router management"
+                accessibilityState={{ disabled: !linked }}
+                className={`mt-1 flex-row items-center justify-between rounded-lg border border-line bg-card px-2 py-1.5 ${!linked ? "opacity-40" : "active:opacity-70"}`}
+              >
+                <View className="flex-row items-center gap-2">
+                  <Feather name="wifi" size={14} color="#64748b" />
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    WiFi &amp; Router
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={14} color="#64748b" />
+              </Pressable>
 
               {/* Steering limit + Trim (2WD1M only) */}
               <View
