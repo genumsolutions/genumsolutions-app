@@ -132,6 +132,13 @@ export function WifiPanel({
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
+    // ONE key for the whole builder: case-insensitive and empty-safe. The car
+    // can report the same network with different casing, and a scan row can
+    // arrive with an empty SSID (a hidden beacon). Matching raw strings let
+    // BOTH through — a second copy of a network already listed, and a nameless
+    // "nearby" row (a blank Wi-Fi entry with no name). Normalising the key
+    // here is what keeps every network to exactly one row.
+    const keyOf = (s: string) => (s ?? "").trim().toUpperCase();
     const seen = new Set<string>();
     // Derived here (not from the outer scope) so this memo does not depend on
     // an array that is rebuilt on every render.
@@ -143,8 +150,9 @@ export function WifiPanel({
     // non-active entry must NOT be consumed here, or the pass below would
     // treat it as already listed and silently drop it.
     for (const r of routers) {
-      if (seen.has(r.ssid) || !r.isActive) continue;
-      seen.add(r.ssid);
+      const k = keyOf(r.ssid);
+      if (!k || seen.has(k) || !r.isActive) continue;
+      seen.add(k);
       out.push({
         ssid: r.ssid,
         state: "active",
@@ -154,8 +162,9 @@ export function WifiPanel({
       });
     }
     for (const r of routers) {
-      if (seen.has(r.ssid)) continue;
-      seen.add(r.ssid);
+      const k = keyOf(r.ssid);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
       if (r.isOwnAp) {
         // U-86: the hotspot is a normal, tappable row again. It used to be
         // listed but permanently disabled, so there was no way back to it from
@@ -184,8 +193,9 @@ export function WifiPanel({
     // Nearby networks the car can see. Anything already listed is skipped, so
     // the same network never appears twice with two meanings.
     for (const n of scanned) {
-      if (seen.has(n.ssid)) continue;
-      seen.add(n.ssid);
+      const k = keyOf(n.ssid);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
       out.push({
         ssid: n.ssid,
         state: "nearby",

@@ -1,4 +1,25 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-11, third round: two connection defects + Control Panel/Remote router dedup; APP CHANGES COMMITTED at 09cf86a)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: U-99 WifiPanel list dedup; APP CHANGES COMMITTED this session)
+
+## This session (2026-10-12) — U-99: the Wi-Fi list shows each network ONCE (no nameless row, no case-variant duplicate)
+
+Same owner report as the car's U-99 (*"the same esp's hotspot two times one is blank … keep only the
+proper one … and dont break other things"*): the app half was checked and one latent list defect
+fixed.
+
+- **`connection/WifiPanel.tsx`** — the `rows` builder deduped the scanned list with the RAW SSID
+  (`seen.has(n.ssid)`) and did not skip empties. A scan row with an empty SSID (a hidden/blank
+  beacon) therefore slipped past the dedupe as a nameless "nearby" row, and a network the car
+  reported with different casing got a second row. Fixed with ONE key for the whole builder
+  (`keyOf = trim().toUpperCase()`, skip empty) so the active/saved/hotspot/nearby passes all share a
+  case-insensitive, empty-safe identity.
+- **`connection/wifiPanelShape.test.ts`** — the pure `shape()` mirror updated the same way, plus two
+  new cases: a blank/whitespace scan entry adds no row, and a case-variant of a saved network (incl.
+  the car's own hotspot) collapses to one row. Prettier/tsc/vitest all green.
+- **NOT changed, deliberately:** `dial.ts` `CAR_AP_GATEWAYS` still excludes `192.168.4.1` — FIN-48
+  forbids `.4.x` fleet-wide, so the app must NOT treat it as the car's AP. The car (U-99) now reports
+  its real `192.168.245.1`, which matches `DEFAULT_AP_IP`.
+- **Gate:** tsc 0 · vitest **673/673** (45 files, was 671) · prettier clean. **NOT device-verified
+  (F-61).**
 
 ## This session (2026-10-11, third round) — Bluetooth could never pair, WiFi auto-discovery was self-killing, and the two router managers are now ONE (Remote) with a reduced Control Panel list
 
