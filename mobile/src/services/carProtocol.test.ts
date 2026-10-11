@@ -311,6 +311,33 @@ describe("parseTelemetryLine", () => {
     });
   });
 
+  // ---- U-96i: the firmware's own version ----
+
+  // The car reports its version on the same /status object. Before this the
+  // phone had NO version fact: the bundled catalog value (a static guess) was
+  // presented as truth and the fleet crash table's fw_version was filled from
+  // it. `fw` is the version; `id` is the board — the app once conflated them
+  // (`fw: telemetry.id`), so this test pins both halves of the separation.
+  it("parses fw as the firmware version — never from the board id", () => {
+    const line =
+      '{"status":"OK","mode":"4WD4M","id":"A1B2C3","fw":"1.2.5","free_heap":1203456}';
+    expect(parseTelemetryLine(line)).toEqual({
+      status: "OK",
+      mode: "4WD4M",
+      id: "A1B2C3",
+      fwVersion: "1.2.5",
+      freeHeap: 1203456,
+    });
+  });
+
+  // Pre-1.2.5 firmware sends no fw. "Missing" must stay missing (consumers
+  // treat absent as unknown) — never defaulted to the catalog value.
+  it("leaves fwVersion absent when the car reports no fw", () => {
+    const t = parseTelemetryLine('{"status":"OK","id":"A1B2C3"}');
+    expect(t.id).toBe("A1B2C3");
+    expect(t.fwVersion).toBeUndefined();
+  });
+
   // ---- U-95/F-79: the restart record ----
 
   // These six arrived in the SAME JSON object as free_heap two assertions up and

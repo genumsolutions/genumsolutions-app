@@ -192,3 +192,48 @@ describe("2026-10-10 — a dropped link is noticed, and recovery re-finds the ca
     expect(at - enclosing).toBeLessThan(200);
   });
 });
+
+describe("U-96i — the crash report carries the car's OWN version, never the board id", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(code.length).toBeGreaterThan(1000);
+    expect(code).toContain("syncCrashReport({");
+  });
+
+  it("syncCrashReport receives telemetry.fwVersion", () => {
+    // THE DEFECT: CrashReportInput has always had an fwVersion field, but the
+    // hub never passed one — so the fleet table's fw_version column was filled
+    // with "" on every row while the UI presented a static catalog guess as
+    // the car's version. The car now reports its version on /status (`fw`);
+    // this rule pins the wiring from the parsed telemetry into the report.
+    const at = code.indexOf("syncCrashReport({");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const call = code.slice(at, code.indexOf("});", at));
+    expect(call).toContain("fwVersion: telemetry.fwVersion");
+  });
+
+  it("statusJson.fw is the version — the board id must never wear that key", () => {
+    // The original wiring was `fw: telemetry.id` — identity in a field NAMED
+    // fw. Identity has its own column (board_id); fw is the version. Feeding
+    // the id back in would tell the fleet a car's efuseMac is its firmware.
+    const at = code.indexOf("syncCrashReport({");
+    const call = code.slice(at, code.indexOf("});", at));
+    expect(call).toContain("fw: telemetry.fwVersion");
+    expect(call).not.toContain("fw: telemetry.id");
+  });
+
+  it("telemetry.fwVersion is in the effect's dependency list", () => {
+    // A missing dep means a car that reports its version after connect never
+    // gets its version into the report for that session.
+    // The slice starts at the deps array itself ("}, ["), NOT at the call:
+    // `telemetry.fwVersion` appears inside the call body too, so searching
+    // from the call made this rule pass over a DELETED dep (mutant-proven
+    // 2026-10-11 — the exact vacuous-pass shape this repo keeps finding).
+    const at = code.indexOf("syncCrashReport({");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const depsAt = code.indexOf("}, [", at);
+    const end = code.indexOf("]);", at);
+    expect(depsAt).toBeGreaterThan(at);
+    expect(end).toBeGreaterThan(depsAt);
+    expect(code.slice(depsAt, end)).toContain("telemetry.fwVersion");
+  });
+});

@@ -64,6 +64,15 @@ export type CarTelemetry = {
   /** Free heap bytes (JSON `free_heap`) — low heap = car running tight. */
   freeHeap?: number;
   /**
+   * U-96i: the firmware's OWN version (JSON `fw`, car `/status`). Before this
+   * the phone had no way to know what firmware a car runs — the bundled catalog
+   * value (a static guess) was presented as truth, and the fleet crash table's
+   * `fw_version` was filled from it. Absent on firmware older than 1.2.5 — treat
+   * "missing" as "unknown". It is NOT the board id (`j.id`): identity and
+   * version are separate facts (the app once conflated them: `fw: telemetry.id`).
+   */
+  fwVersion?: string;
+  /**
    * U-95/F-79 restart record. The car persisted *why* it rebooted and sends the
    * record on `/status`; before this the phone parsed `free_heap` out of the very
    * same JSON and silently dropped these, so the evidence U-95 was built to
@@ -699,6 +708,8 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.signal === "number") telemetry.signal = j.signal;
       if (typeof j.uptime_ms === "number") telemetry.uptimeMs = j.uptime_ms;
       if (typeof j.free_heap === "number") telemetry.freeHeap = j.free_heap;
+      // U-96i: the firmware version the car reports about itself.
+      if (typeof j.fw === "string") telemetry.fwVersion = j.fw;
       // U-95/F-79 restart record. Same JSON, same transport — these were being
       // discarded here while free_heap two lines up was honoured. The firmware
       // sends `phase` (the LIVE phase) too; it is not mapped because it changes

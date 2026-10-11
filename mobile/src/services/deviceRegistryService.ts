@@ -64,7 +64,10 @@ export const BUNDLED_DEVICE_MODELS: DeviceModel[] = [
     displayName: "4WD 4-Motor Car",
     repo: "Genum_4WD4M_CAR",
     fwName: "4WD4M Car",
-    fwVersion: "1.0.0",
+    // Catalog baseline (Config.h FW_VERSION when last synced). A model fact,
+    // NOT a claim about any live car — U-96i: the live version rides /status
+    // `fw` (telemetry.fwVersion) and must never be overwritten by this value.
+    fwVersion: "1.2.4",
     btName: "4WD CAR",
     apSsid: "4WDCar_Wifi",
     apIp: "192.168.245.1",

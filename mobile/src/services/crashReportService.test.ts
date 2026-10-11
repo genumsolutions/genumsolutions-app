@@ -138,6 +138,22 @@ describe("buildCrashReport — missing is unknown, never zero", () => {
     expect(row.ssid).toBe("Home");
   });
 
+  // U-96i: fw_version is the car's OWN reported version. Absent (pre-1.2.5
+  // firmware) → "", never the bundled catalog guess — a fabricated version in a
+  // fleet diagnostics table is worse than an empty one.
+  it("carries the car-reported fw version; absent stays empty", () => {
+    const reported = buildCrashReport(
+      { boardId: "A1", connectionMethod: "wifi", fwVersion: "1.2.5" },
+      { now: FIXED_NOW },
+    );
+    expect(reported.fw_version).toBe("1.2.5");
+    const absent = buildCrashReport(
+      { boardId: "A1", connectionMethod: "wifi" },
+      { now: FIXED_NOW },
+    );
+    expect(absent.fw_version).toBe("");
+  });
+
   it("rejects non-finite numeric junk", () => {
     const row = buildCrashReport(
       {
