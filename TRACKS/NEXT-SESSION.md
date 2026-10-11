@@ -1,9 +1,50 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-11, later: the version handshake is DONE both repos — /status carries `fw`; app reads it; still OTA 3.2.7/60, nothing flashed)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-11, third round: two connection defects + Control Panel/Remote router dedup; APP CHANGES UNCOMMITTED)
+
+## This session (2026-10-11, third round) — Bluetooth could never pair, WiFi auto-discovery was self-killing, and the two router managers are now ONE (Remote) with a reduced Control Panel list
+
+Owner: *"the wifi and the bluetooth are not working and not even connecting … also the ui of the app
+is also not proper. please redesign all as i said before."* Decisions gathered: primary methods =
+**all of them**; the router-manager home = **use the perfect website-server RouterPanel, reach it from
+the Remote in every mode, and keep a REDUCED router surface on the Control Panel**; Internet/relay
+stays disabled/dummy ("clean it out of the app for now for confusion … but we have plan to integrate
+that too but later").
+
+**The two connection bugs (both in `components/tools/useControlHub.ts`, both found by reading code, no device):**
+1. **BT connect was hard-blocked for unbonded cars.** `handleConnect` refused every `!device.bonded`
+   car with "Car not paired – please pair the car in Android Settings first." The native
+   `react-native-bluetooth-classic` `connectToDevice` bonds on demand (raises the Android pairing
+   dialog, PIN 1234), so the U-98 guard made any factory-reset/unbonded car unconnectable. Removed;
+   `bonded` is presentation-only now (the "Paired" row labels).
+2. **A SUCCESSFUL WiFi connect killed the auto-recovery.** `dropBluetoothForWifi` set hub-wide
+   `manualCloseRef.current = true`; that flag is the exact gate the WiFi auto-discovery watcher
+   (`autoDiscoverAndConnect`, `if (manualCloseRef.current) return`) reads to skip "re-find the car".
+   So every successful connect disabled the "phone joined a new network → find the car" rescue — the
+   owner's *"have to rejoin by hand"*. SPP auto-reconnect still gates (service-level `manualClose` via
+   `sppService.disconnect()`) and user-initiated WiFi close (`handleWifiDisconnect`) still sets it.
+
+**The UI round (dedup + nesting), per owner's answers:**
+3. **`screens/ToolsScreen.tsx`** — the Connect section wrapped `ConnectionSection` in a
+   `rounded-2xl border bg-card` card; the section already renders its OWN cards (status, three
+   methods, setup), so the page was a card-inside-a-card. Now a plain heading identical to "Projects".
+4. **`screens/RemoteControlScreen.tsx`** — the WiFi & Router panel (`RouterPanel`) was reachable ONLY
+   in `website-server` mode. New `showRouter` state: a **Router pill** (in the D-pad/Joystick/Telemetry
+   row) and a **Settings → "WiFi & Router" row** open the SAME panel from ANY linked robocar mode
+   (`showRouter || activeMode.id === "website-server"`); Telemetry pill clears it; the view auto-closes
+   if the link drops. Panel content/handlers untouched.
+5. **`connection/WifiPanel.tsx` + `ConnectionSection.tsx`** — the Control Panel list is REDUCED
+   (`manage={false}`): list + tap-to-switch + scan only. Per-row Edit/Forget and the "Add network"
+   form moved to the Remote's RouterPanel (one manager, no duplicate state); a one-line pointer
+   names where they went.
+
+**Gate:** tsc 0 · vitest **671/671** (45 files) · prettier clean. `oneActiveLink.test.ts` still green
+(`dropBluetoothForWifi()` appears exactly 4× — unchanged by fix #2). **NOT committed** (owner did not
+ask); **NOT device-verified (F-61)** — flash 1.2.4 and run the TESTING.md rows for U-98/BT-pair and
+the WiFi re-find path on the bench before claiming fixed.
 
 ## This session (2026-10-11, second round) — U-96i done: the app learns the firmware version from the car, not from a catalog guess
 
 - **The car now reports its OWN version on `/status`** (`"fw":"<FW_VERSION>"`, `Genum_4WD4M_CAR`
-  `3168cac` + `3a8cf6c`). The app had NO version fact — the bundled registry catalog value
+  commits `3168cac` + `3a8cf6c`). The app had NO version fact — the bundled registry catalog value
   (a static guess, `fwVersion: "1.0.0"` against firmware that was already `1.2.4`) was presented
   as truth, the fleet crash table's `fw_version` was always `""`, and `statusJson.fw` carried the
   board id (`telemetry.id` in a key NAMED fw). That pairing is the same class as the board-id-as-

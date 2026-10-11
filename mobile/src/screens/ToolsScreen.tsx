@@ -462,30 +462,35 @@ export function ToolsScreen() {
 
         {/* Connections — the ONE connection surface (owner ①②). Placed
             directly under the car status because connecting IS the next
-            action, not something to scroll to. */}
-        <View className="mt-4 rounded-2xl border border-line bg-card p-4">
-          <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
-            Connect
-          </Text>
+            action, not something to scroll to.
 
-          {/* U-68 (2026-10-02): the connection layer, rebuilt. This ONE
-              section replaces ConnectionBanner, the F-59 handoff card,
-              TransportPicker and RouterPanel on this page - they were four
-              card shapes with four behaviours (F-67). The Remote screen still
-              mounts RouterPanel and is deliberately untouched.
+            2026-10-11: the section label is a plain heading, NOT a wrapper
+            card. U-68 wrapped ConnectionSection in a `rounded-2xl border
+            bg-card` card, but the section already renders its OWN cards inside
+            (the status card, the method cards, the selected setup card), so the
+            page showed a card inside a card inside a card — the exact
+            non-uniform card noise the owner kept objecting to. The heading now
+            matches the "Projects" section below: a bare label, then the cards. */}
+        <Text className="mt-6 text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
+          Connect
+        </Text>
 
-              `keyboardShouldPersistTaps="handled"` + the scroll-into-view
-              handler above are F-69: the tap that focuses a field must not be
-              eaten by the keyboard opening, and the focused field must end up
-              above it. */}
-          <ConnectionSection
-            hub={hub}
-            onMethodChange={setConnMethod}
-            method={effectiveMethod}
-            onInputFocus={scrollInputIntoView}
-            feedbackTap={feedbackTap}
-          />
-        </View>
+        {/* U-68 (2026-10-02): the connection layer, rebuilt. This ONE section
+            replaces ConnectionBanner, the F-59 handoff card, TransportPicker
+            and RouterPanel on this page - they were four card shapes with four
+            behaviours (F-67). The Remote screen still mounts RouterPanel and is
+            deliberately untouched.
+
+            `keyboardShouldPersistTaps="handled"` + the scroll-into-view handler
+            above are F-69: the tap that focuses a field must not be eaten by
+            the keyboard opening, and the focused field must end up above it. */}
+        <ConnectionSection
+          hub={hub}
+          onMethodChange={setConnMethod}
+          method={effectiveMethod}
+          onInputFocus={scrollInputIntoView}
+          feedbackTap={feedbackTap}
+        />
 
         {/* ---- Projects: the catalog, now BELOW the car (U-81). ----
             Unchanged in behaviour — same pills, same order, same detail card

@@ -1660,14 +1660,14 @@ export function useControlHub(routeCategory?: string) {
         setError(reason);
         return { ok: false, reason };
       }
-      // U‑98: if the car is already bonded, skip the pairing dialog – the
-      // native OS prompt should not appear again.
-      if (!device.bonded) {
-        setError(
-          "Car not paired – please pair the car in Android Settings → Bluetooth first.",
-        );
-        return { ok: false, reason: "Car not paired" };
-      }
+      // A fresh, unbonded car is NORMAL and must connect here: the native
+      // classic-BT layer bonds on demand (react-native-bluetooth-classic's
+      // connectToDevice calls createBond() and waits), which is what raises
+      // Android's pairing dialog (PIN 1234 on the cars). The old U-98 guard
+      // REFUSED any unbonded device with "pair the car in Android Settings
+      // first" — so a brand-new car, or one that had been factory-reset, could
+      // never be connected from the app at all. `bonded` is now presentation
+      // only (it labels a row "Paired"); it never gates the connect.
       setConnectingAddress(device.address);
       setError(null);
       manualCloseRef.current = false;
@@ -1791,7 +1791,15 @@ export function useControlHub(routeCategory?: string) {
         /* ignore */
       }
     }
-    manualCloseRef.current = true;
+    // NOTE: do NOT set the hub-wide manualCloseRef here. `sppService.disconnect()`
+    // already sets the SERVICE-level `sppService.manualClose`, which is what the
+    // SPP auto-reconnect guards read — and the hub flag is ALSO the gate the Wi-Fi
+    // auto-discovery watcher checks ("the user closed the link, never surprise-
+    // reopen"). Setting it after a SUCCESSFUL Wi-Fi connect (this path runs on
+    // every Wi-Fi success) wrongly told that watcher the user had closed Wi-Fi, so
+    // the "phone joined a new network → re-find the car" recovery was dead for the
+    // rest of the session — the owner's "have to rejoin by hand". A user-initiated
+    // Wi-Fi close still sets it (handleWifiDisconnect).
     try {
       await sppService.disconnect();
     } catch {

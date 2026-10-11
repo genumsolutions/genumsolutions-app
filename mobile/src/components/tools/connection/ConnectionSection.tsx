@@ -599,6 +599,11 @@ export function ConnectionSection({
             busy={busy}
             reachable={anyLink}
             pendingSsid={pendingJoinSsid}
+            // Owner (2026-10-11): this Control Panel list is for CONNECTING —
+            // the full add/edit/delete manager lives on the Remote screen
+            // (RouterPanel, one tap from any mode). Reduced mode avoids a
+            // second manager with its own state here.
+            manage={false}
             sendCmd={sendCommand}
             onSwitch={(s) => void switchRouter(s)}
             onForget={(s) => void deleteRouter(s)}

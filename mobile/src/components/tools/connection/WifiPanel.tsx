@@ -85,6 +85,12 @@ export type WifiPanelProps = {
   onInputFocus?: (y: number) => void;
   /** Shown after a switch so the phone follows the car (Android cannot do it silently). */
   pendingSsid?: string | null;
+  /** Owner (2026-10-11): the Control Panel list is REDUCED — it keeps the
+      connect/switch/scan actions and drops the add/edit/delete cluster, which
+      now lives on the Remote screen's RouterPanel (one manager, no duplicate).
+      When `false`, the per-row Edit/Forget and the "Add network" form are not
+      rendered; a short pointer names where they moved. */
+  manage?: boolean;
 };
 
 type Row = {
@@ -110,6 +116,7 @@ export function WifiPanel({
   sendCmd,
   onInputFocus,
   pendingSsid,
+  manage = true,
 }: WifiPanelProps) {
   const [adding, setAdding] = useState(false);
   // U-93: editing an existing entry = setting a NEW password for it (the car
@@ -306,8 +313,10 @@ export function WifiPanel({
                   ) : null}
                 </Pressable>
                 {/* Forgetting is per-row and deliberately quiet: it must not
-                    compete with the one action that matters, switching. */}
-                {r.state === "saved" ? (
+                    compete with the one action that matters, switching. Only
+                    rendered when this list owns management (Remote RouterPanel
+                    does it now — see `manage`). */}
+                {r.state === "saved" && manage ? (
                   <>
                     {/* U-93: Edit = set a new password for this network. */}
                     <Pressable
@@ -380,92 +389,114 @@ export function WifiPanel({
         )}
       </View>
 
-      {adding ? (
-        <View className="mt-2.5 gap-2" testID="wifi-add-form">
-          {editingSsid ? (
-            <Text
-              className="text-[13px] font-bold text-ink"
-              testID="wifi-edit-title"
-            >
-              Set a new password for “{editingSsid}”
-            </Text>
-          ) : null}
-          <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
-            <TextInput
-              value={ssid}
-              onChangeText={(v) => {
-                setSsid(v);
-                setError(null);
-              }}
-              placeholder="Network name"
-              placeholderTextColor="#64748b"
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Network name"
-              maxLength={40}
-              returnKeyType="next"
-              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
-              testID="wifi-ssid"
-            />
-          </View>
-          <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
-            <TextInput
-              value={pass}
-              onChangeText={(v) => {
-                setPass(v);
-                setError(null);
-              }}
-              placeholder="Password"
-              placeholderTextColor="#64748b"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              accessibilityLabel="Network password"
-              maxLength={72}
-              returnKeyType="done"
-              onSubmitEditing={submit}
-              className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
-              testID="wifi-pass"
-            />
-          </View>
-          {error ? <InlineMessage tone="error">{error}</InlineMessage> : null}
-          <View className="flex-row gap-2">
+      {manage ? (
+        <>
+          {adding ? (
+            <View className="mt-2.5 gap-2" testID="wifi-add-form">
+              {editingSsid ? (
+                <Text
+                  className="text-[13px] font-bold text-ink"
+                  testID="wifi-edit-title"
+                >
+                  Set a new password for “{editingSsid}”
+                </Text>
+              ) : null}
+              <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
+                <TextInput
+                  value={ssid}
+                  onChangeText={(v) => {
+                    setSsid(v);
+                    setError(null);
+                  }}
+                  placeholder="Network name"
+                  placeholderTextColor="#64748b"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel="Network name"
+                  maxLength={40}
+                  returnKeyType="next"
+                  className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
+                  testID="wifi-ssid"
+                />
+              </View>
+              <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
+                <TextInput
+                  value={pass}
+                  onChangeText={(v) => {
+                    setPass(v);
+                    setError(null);
+                  }}
+                  placeholder="Password"
+                  placeholderTextColor="#64748b"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  accessibilityLabel="Network password"
+                  maxLength={72}
+                  returnKeyType="done"
+                  onSubmitEditing={submit}
+                  className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
+                  testID="wifi-pass"
+                />
+              </View>
+              {error ? (
+                <InlineMessage tone="error">{error}</InlineMessage>
+              ) : null}
+              <View className="flex-row gap-2">
+                <Pressable
+                  onPress={submit}
+                  disabled={
+                    busy ||
+                    !ssid.trim() ||
+                    (editingSsid != null && !pass.trim())
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Save network"
+                  className="flex-1 items-center rounded-full bg-navy py-3"
+                  testID="wifi-add-submit"
+                >
+                  <Text className="text-[13px] font-black text-white">
+                    {editingSsid ? "Save password" : "Save"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={cancel}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                  className="items-center rounded-full border border-line bg-card px-5 py-3"
+                >
+                  <Text className="text-[13px] font-bold text-navy">
+                    Cancel
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
             <Pressable
-              onPress={submit}
-              disabled={
-                busy || !ssid.trim() || (editingSsid != null && !pass.trim())
-              }
+              onPress={() => setAdding(true)}
+              disabled={!canAdd}
               accessibilityRole="button"
-              accessibilityLabel="Save network"
-              className="flex-1 items-center rounded-full bg-navy py-3"
-              testID="wifi-add-submit"
+              accessibilityLabel="Add network"
+              className="mt-2 flex-row items-center justify-center gap-2 py-2"
+              testID="wifi-add-open"
             >
-              <Text className="text-[13px] font-black text-white">
-                {editingSsid ? "Save password" : "Save"}
+              <Feather name="plus" size={15} color="#1e3a8a" />
+              <Text className="text-[13px] font-bold text-navy">
+                Add network
               </Text>
             </Pressable>
-            <Pressable
-              onPress={cancel}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel"
-              className="items-center rounded-full border border-line bg-card px-5 py-3"
-            >
-              <Text className="text-[13px] font-bold text-navy">Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
+          )}
+        </>
       ) : (
-        <Pressable
-          onPress={() => setAdding(true)}
-          disabled={!canAdd}
-          accessibilityRole="button"
-          accessibilityLabel="Add network"
-          className="mt-2 flex-row items-center justify-center gap-2 py-2"
-          testID="wifi-add-open"
-        >
-          <Feather name="plus" size={15} color="#1e3a8a" />
-          <Text className="text-[13px] font-bold text-navy">Add network</Text>
-        </Pressable>
+        /* Reduced mode (owner 2026-10-11): the list stays here for connecting
+           and switching; add/edit/delete moved to the Remote screen's Router
+           panel, so this copy points there instead of re-rendering a second
+           manager. One short line, no paragraph. */
+        <View className="mt-2.5 rounded-lg border border-line bg-card px-3 py-2">
+          <Text className="text-[11px] leading-4 text-muted">
+            Add, edit and forget networks from the Remote screen (Router).
+          </Text>
+        </View>
       )}
     </View>
   );
