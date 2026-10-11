@@ -124,6 +124,13 @@ export type ConnectionSectionProps = {
   onInputFocus?: (y: number) => void;
   /** haptics/tap feedback, matching the rest of the page. */
   feedbackTap?: () => void;
+  /**
+   * Phase 2 (owner 2026-10-12): this section is the ONE Connectivity panel and
+   * now lives on the Remote screen, so the Wi-Fi list owns the full manager
+   * (add/edit/forget) there. The Control Panel no longer mounts this section.
+   * Default false keeps any reduced-mode caller honest.
+   */
+  manage?: boolean;
 };
 
 export function ConnectionSection({
@@ -132,6 +139,7 @@ export function ConnectionSection({
   onMethodChange,
   onInputFocus,
   feedbackTap,
+  manage = false,
 }: ConnectionSectionProps) {
   const {
     telemetry,
@@ -599,11 +607,10 @@ export function ConnectionSection({
             busy={busy}
             reachable={anyLink}
             pendingSsid={pendingJoinSsid}
-            // Owner (2026-10-11): this Control Panel list is for CONNECTING —
-            // the full add/edit/delete manager lives on the Remote screen
-            // (RouterPanel, one tap from any mode). Reduced mode avoids a
-            // second manager with its own state here.
-            manage={false}
+            // Phase 2 (owner 2026-10-12): the Connectivity panel is now the
+            // ONE connection surface (Remote screen), so it owns add/edit/forget
+            // — RouterPanel's duplicate manager is retired.
+            manage={manage}
             sendCmd={sendCommand}
             onSwitch={(s) => void switchRouter(s)}
             onForget={(s) => void deleteRouter(s)}

@@ -238,6 +238,11 @@ export function useControlHub(routeCategory?: string) {
     null,
   );
   const [wifiConnected, setWifiConnected] = useState(false);
+  // U-100 (owner 2026-10-12): the car's own-hotspot POWER-SAVE switch. The car
+  // ships it OFF (its own hotspot is always reachable); ON restores the parking
+  // power saving. `null` = not yet read from the car. Mirrors the car's NVS
+  // `botcfg/ap_psave` via `WIFICFG;APSAVE;ON|OFF` / `?`.
+  const [apPowerSave, setApPowerSave] = useState<boolean | null>(null);
   // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
   // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
   // user-editable and the remembered per-device URL wins when present.
@@ -2146,6 +2151,12 @@ export function useControlHub(routeCategory?: string) {
         setError(`Car rejected WiFi settings: ${reply}`);
       } else if (reply.startsWith("WIFICFG;SSID;")) {
         setCarSsid(reply.slice("WIFICFG;SSID;".length).trim() || null);
+      } else if (reply.startsWith("WIFICFG;APSAVE;")) {
+        // U-100: the car's own-hotspot power-save switch (ON|OFF), answered to
+        // both a bare `WIFICFG;APSAVE;?` query and an ON/OFF set.
+        setApPowerSave(
+          reply.slice("WIFICFG;APSAVE;".length).trim().toUpperCase() === "ON",
+        );
       }
       lastProvisionReplyRef.current = reply;
     },
@@ -2353,6 +2364,31 @@ export function useControlHub(routeCategory?: string) {
     },
     [connected, wifiConnected, activeMode],
   );
+
+  // U-100: the own-hotspot power-save switch. Like the ROUTERS;… system
+  // commands, WIFICFG;APSAVE is a SYSTEM command (switches the car's own
+  // behaviour, never drives) and can ride WHATEVER link is live. `sendCommand`
+  // routes by the ACTIVE mode's transports, which would strand the command when
+  // the mode's radio is not the one that is up; so this fan-out targets every
+  // live transport directly (spp → ble → wifi), no duplicate sends.
+  const sendSystemLine = useCallback((line: string) => {
+    if (sppService.isConnected) void sppService.sendLine(line).catch(() => {});
+    if (bleService.isConnected) void bleService.sendLine(line).catch(() => {});
+    if (wifiService.isConnected)
+      void wifiService.sendLine(line).catch(() => {});
+  }, []);
+  const setCarApPowerSave = useCallback(
+    (on: boolean) => {
+      // Optimistic: the car's `WIFICFG;APSAVE;ON|OFF` reply re-confirms (or
+      // corrects) this through handleWifiProvisionReply.
+      setApPowerSave(on);
+      sendSystemLine(`WIFICFG;APSAVE;${on ? "ON" : "OFF"}`);
+    },
+    [sendSystemLine],
+  );
+  const queryCarApPowerSave = useCallback(() => {
+    sendSystemLine("WIFICFG;APSAVE;?");
+  }, [sendSystemLine]);
 
   // ---- Connection-Manager Phase B: the ONE opt-in envelope intake ----
   //
@@ -3123,6 +3159,10 @@ export function useControlHub(routeCategory?: string) {
     setWifiPassword,
     wifiProvisioning,
     handleWifiProvision,
+    // U-100: the car's own-hotspot power-save switch (default OFF on the car).
+    apPowerSave,
+    setCarApPowerSave,
+    queryCarApPowerSave,
     carApName,
     carSsid,
     carStubMap,

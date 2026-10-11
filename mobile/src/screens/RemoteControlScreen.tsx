@@ -30,6 +30,7 @@ import React, {
 } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -61,9 +62,10 @@ import { SmartCityDeck } from "../components/tools/decks/SmartCityDeck";
 import { SmartDustbinDeck } from "../components/tools/decks/SmartDustbinDeck";
 import { HandheldDeck } from "../components/tools/decks/HandheldDeck";
 import { DroneControls } from "../components/tools/DroneControls";
-import { RouterPanel } from "../components/tools/RouterPanel";
-import { planSwitch, normalizeRouters } from "../components/tools/connection";
-import type { RouterOutcome } from "../components/tools/connection/commands";
+import {
+  ConnectionSection,
+  type ConnectionMethodId,
+} from "../components/tools/connection";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
 import {
   isCarApGateway,
@@ -300,6 +302,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     commitSpeed,
     adjustTrim,
     handleDisconnect,
+    handleWifiDisconnect,
     navActive,
     setNavActive,
     navActiveRef,
@@ -352,12 +355,14 @@ export function RemoteControlScreen({ navigation }: Props) {
         : DEFAULT_AP_IP;
   const showIp = telemetry.ip !== undefined || onOwnHotspot;
 
-  // A-43b (round-9): the sub-header Disconnect pill — confirm, then tear down
-  // EVERY live link (BT + WS) via the hub, which safely stops the car first.
-  const confirmDisconnect = () => {
+  // Phase 2 (owner 2026-10-12): per-link disconnect — a Bluetooth drop and a
+  // Wi-Fi drop are separate now, so the owner can close ONE link without the
+  // other. Each confirms first and stops the car safely (the hub's handlers
+  // send the safe-stop before tearing the link down).
+  const confirmDisconnectBt = () => {
     Alert.alert(
-      "Disconnect?",
-      "The car will stop safely and the link will close.",
+      "Disconnect Bluetooth?",
+      "The car will stop safely and the Bluetooth link will close.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -365,6 +370,23 @@ export function RemoteControlScreen({ navigation }: Props) {
           style: "destructive",
           onPress: () => {
             void handleDisconnect();
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmDisconnectWifi = () => {
+    Alert.alert(
+      "Disconnect Wi-Fi?",
+      "The car will stop safely and the Wi-Fi link will close.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: () => {
+            void handleWifiDisconnect();
           },
         },
       ],
@@ -447,43 +469,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     ],
   );
 
-  const handleSelect = useCallback(() => {
-    feedbackTap();
-    if (!navActive) {
-      setNavActive(true);
-      setPreviewMode(activeMode);
-      setNavField("mode");
-      return;
-    }
-    if (navField === "mode") {
-      const target = previewMode ?? activeMode;
-      setPreviewMode(null);
-      setNavActive(false);
-      setNavField("none");
-      if (target.id !== activeMode.id) selectMode(target);
-      return;
-    }
-    if (navField === "speed") {
-      commitSpeed();
-      setNavActive(false);
-      setNavField("none");
-      return;
-    }
-    // R-20: no NAV steer commit — steering edits live in Settings only.
-    setNavActive(false);
-    setNavField("none");
-  }, [
-    navActive,
-    navField,
-    previewMode,
-    activeMode,
-    selectMode,
-    commitSpeed,
-    setNavActive,
-    setNavField,
-    setPreviewMode,
-  ]);
-
   const handleBack = useCallback(() => {
     feedbackTap();
     if (navActive) {
@@ -516,89 +501,22 @@ export function RemoteControlScreen({ navigation }: Props) {
     }
   }, [telemetry.ip, onOwnHotspot]);
 
-  // ---- U-81: this screen's router actions go through the ACK-CONSUMING path
-  //
-  // It used to hand `RouterPanel` the optimistic `routerUse` / `routerAdd` /
-  // `routerDelete` / `routerClearAll`, which fire a line and assume it landed —
-  // so on this screen a `ROUTERS;FULL`, a `Reserved` name, an over-long
-  // password and a plain timeout all looked and felt like a success. The
-  // Control Panel was moved onto `requestRouter` / `runSwitchPlan` in U-68;
-  // this screen was left behind and is now on the same contract.
-  //
-  // `planSwitch` builds the SAME step list the Control Panel builds (including
-  // its "this network cannot be switched to" refusal), so both surfaces now
-  // derive a router request from one engine rather than two hand-rolled pairs.
-  // The hub persists the list from the car's ANSWER on all of these, so
-  // add/switch/delete/clear are remembered here exactly as they are there.
-  // One derivation of the router list, shared with the Control Panel's
-  // `normalizeRouters` — a plain `string[]` cannot express "this is the car's
-  // own AP" or "this one is already active", which is what makes a switch safe.
-  const routerEntries = useMemo(
-    () =>
-      normalizeRouters(hub.carNetworks, {
-        ownApName: hub.carApName,
-        activeSsid: hub.carSsid,
-      }),
-    [hub.carNetworks, hub.carApName, hub.carSsid],
-  );
-
-  const routerUse = useCallback(
-    async (target: string): Promise<RouterOutcome> => {
-      const plan = planSwitch({
-        target,
-        entries: routerEntries,
-        ownApName: hub.carApName,
-      });
-      if (!plan) {
-        return { ok: false, reason: "That network cannot be switched to." };
-      }
-      return hub.runSwitchPlan(plan);
-    },
-    [hub, routerEntries],
-  );
-
-  const routerAdd = useCallback(
-    async (name: string, password: string): Promise<RouterOutcome> => {
-      const plan = planSwitch({
-        target: name,
-        pass: password,
-        entries: routerEntries,
-        ownApName: hub.carApName,
-      });
-      if (!plan) {
-        return { ok: false, reason: "That network cannot be used." };
-      }
-      return hub.runSwitchPlan(plan);
-    },
-    [hub, routerEntries],
-  );
-
-  const routerDelete = useCallback(
-    async (name: string): Promise<RouterOutcome> => {
-      const outcome = await hub.requestRouter({ kind: "del", ssid: name });
-      // Only the car's own DELETED answer may remove it from the local mirror.
-      if (outcome.ok) hub.routerDelete(name);
-      return outcome;
-    },
-    [hub],
-  );
-
-  const routerClearAll = useCallback(async (): Promise<RouterOutcome> => {
-    const outcome = await hub.requestRouter({ kind: "clear" });
-    if (outcome.ok) hub.routerClearAll();
-    return outcome;
-  }, [hub]);
+  // Phase 2 (owner 2026-10-12): the router callbacks that used to feed
+  // RouterPanel are gone — the Connectivity panel now renders ConnectionSection,
+  // which drives the SAME ack-consuming hub API (`runSwitchPlan` / `requestRouter`
+  // / `routerDelete`) itself. One connection surface, one manager.
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false);
   // Pads are the primary drive surface — show them by default for every mode;
   // users can still hide via Settings (choice lives for the session only).
   const [showJoystick, setShowJoystick] = useState(true);
-  // Owner (2026-10-11): the WiFi & Router panel used to be reachable ONLY in
-  // the website-server mode. It is now reachable from EVERY robocar mode via
-  // the Router pill (and a Settings row). This state only opens the SAME panel
-  // from other modes — its content and handlers are unchanged.
+  // Phase 2 (owner 2026-10-12): `showRouter` now opens the CONNECTIVITY panel
+  // (BT + Wi-Fi + router management in one place). The connection method the
+  // embedded ConnectionSection shows is owned HERE so the choice survives the
+  // section re-rendering as car truth arrives.
   const [showRouter, setShowRouter] = useState(false);
+  const [connMethod, setConnMethod] = useState<ConnectionMethodId | null>(null);
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null);
@@ -634,6 +552,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   // panel has nothing to act on, so close it and fall back to the deck.
   useEffect(() => {
     if (!linked) setShowRouter(false);
+  }, [linked]);
+
+  // U-100: read the car's own-hotspot power-save switch once a link is up, so
+  // the Settings row reflects CAR truth (null until the car answers).
+  useEffect(() => {
+    if (linked) hub.queryCarApPowerSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
 
   // ── Derived values ──
@@ -771,30 +696,6 @@ export function RemoteControlScreen({ navigation }: Props) {
               </View>
             </Pressable>
 
-            <Pressable
-              onPress={handleSelect}
-              disabled={!isRobocar}
-              accessibilityRole="button"
-              accessibilityLabel="Select"
-              hitSlop={10}
-              android_ripple={{
-                color: "rgba(255,255,255,0.2)",
-                borderless: true,
-                radius: 40,
-              }}
-              className={isRobocar ? "" : "opacity-40"}
-            >
-              <View
-                className={`rounded-full px-4 py-2.5 ${navActive ? "bg-navy-light" : "border border-line bg-card"}`}
-              >
-                <Text
-                  className={`text-sm font-bold ${navActive ? "text-navy-dark" : "text-ink dark:text-white"}`}
-                >
-                  Select
-                </Text>
-              </View>
-            </Pressable>
-
             <Text className="text-sm font-black uppercase tracking-[0.2em] text-muted">
               Remote
             </Text>
@@ -926,24 +827,40 @@ export function RemoteControlScreen({ navigation }: Props) {
                   </Text>
                 </Pressable>
               ) : null}
-              {linked ? (
+              {/* Phase 2 (owner 2026-10-12): per-link disconnect — one button
+                  per LIVE link, so Bluetooth and Wi-Fi can be dropped
+                  independently. */}
+              {connected ? (
                 <Pressable
-                  onPress={confirmDisconnect}
+                  onPress={confirmDisconnectBt}
                   accessibilityRole="button"
-                  accessibilityLabel="Disconnect from the car"
+                  accessibilityLabel="Disconnect Bluetooth"
                   hitSlop={6}
                   className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
                 >
-                  <Feather
-                    name="power"
-                    size={10}
-                    color={wifiConnected ? "#dc2626" : "#64748b"}
-                  />
+                  <Feather name="power" size={10} color="#64748b" />
                   <Text
-                    className={`text-[9px] font-black uppercase tracking-wide ${linked ? "text-red-600 dark:text-red-400" : "text-muted"}`}
+                    className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
                     numberOfLines={1}
                   >
-                    Disconnect
+                    BT
+                  </Text>
+                </Pressable>
+              ) : null}
+              {wifiConnected ? (
+                <Pressable
+                  onPress={confirmDisconnectWifi}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect Wi-Fi"
+                  hitSlop={6}
+                  className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                >
+                  <Feather name="power" size={10} color="#dc2626" />
+                  <Text
+                    className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
+                    numberOfLines={1}
+                  >
+                    WiFi
                   </Text>
                 </Pressable>
               ) : null}
@@ -1000,9 +917,9 @@ export function RemoteControlScreen({ navigation }: Props) {
                   Telemetry
                 </Text>
               </Pressable>
-              {/* Owner (2026-10-11): a small Router pill — the same WiFi &
-                Router panel that used to be website-server-only, now one tap
-                away in EVERY linked robocar mode. */}
+              {/* Phase 2 (owner 2026-10-12): the Connectivity pill opens the
+                ONE connection panel (Bluetooth + Wi-Fi + router management) in
+                every linked robocar mode. */}
               <Pressable
                 onPress={() => {
                   feedbackTap();
@@ -1011,14 +928,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                 }}
                 disabled={!linked}
                 accessibilityRole="button"
-                accessibilityLabel="WiFi and router management"
+                accessibilityLabel="Connectivity"
                 accessibilityState={{ disabled: !linked, selected: showRouter }}
                 className={`rounded-full px-3 py-1 ${showRouter ? "bg-navy" : "border border-line bg-card"} ${!linked ? "opacity-40" : ""}`}
               >
                 <Text
                   className={`text-[10px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
                 >
-                  Router
+                  Connectivity
                 </Text>
               </Pressable>
             </View>
@@ -1164,24 +1081,35 @@ export function RemoteControlScreen({ navigation }: Props) {
                   />
                 </>
               ) : showRouter || activeMode.id === "website-server" ? (
-                /* The ONE organized WiFi & Router panel. Round-6 kept it in the
-                   website-server mode only (that's the mode whose page it
-                   manages); owner (2026-10-11) wanted it reachable from ANY
-                   mode, so `showRouter` opens it from other modes too — the
-                   panel and its handlers are unchanged. */
-                <RouterPanel
-                  canControl={canControl}
-                  linked={linked}
-                  carSsid={hub.carSsid}
-                  carApName={hub.carApName}
-                  ip={telemetry.ip ?? null}
-                  networks={hub.carNetworks}
-                  onUse={routerUse}
-                  onAdd={routerAdd}
-                  onDelete={routerDelete}
-                  onClear={routerClearAll}
-                  onOpenWebPage={handleOpenWebPage}
-                />
+                /* Phase 2 (owner 2026-10-12): the ONE "Connectivity" panel —
+                   Bluetooth + Wi-Fi + router management in one place, renamed
+                   from "WiFi & Router". Renders the same connection layer the
+                   Control Panel used to, now with the full manager (it is the
+                   single connection surface). */
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "padding" : "height"}
+                  style={{ flex: 1 }}
+                  className="min-h-0"
+                >
+                  <ScrollView
+                    className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card"
+                    contentContainerStyle={{ padding: 12, gap: 8 }}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled
+                  >
+                    <Text className="px-1 text-[13px] font-black uppercase tracking-widest text-navy">
+                      Connectivity
+                    </Text>
+                    <ConnectionSection
+                      hub={hub}
+                      method={connMethod}
+                      onMethodChange={setConnMethod}
+                      feedbackTap={feedbackTap}
+                      manage
+                    />
+                  </ScrollView>
+                </KeyboardAvoidingView>
               ) : activeMode.controls.includes("pid-auto") ? (
                 <BalanceControls
                   canControl={canControl}
@@ -1357,10 +1285,9 @@ export function RemoteControlScreen({ navigation }: Props) {
                 />
               </View>
 
-              {/* Owner (2026-10-11): a Settings entry to the WiFi & Router
-                panel — the small "router management button" on the remote. It
-                is the SAME panel the website-server mode shows; this only makes
-                it reachable from every mode. Needs a live link. */}
+              {/* Phase 2 (owner 2026-10-12): a Settings entry to the
+                CONNECTIVITY panel (Bluetooth + Wi-Fi + router management) —
+                reachable from every mode. Needs a live link. */}
               <Pressable
                 onPress={() => {
                   feedbackTap();
@@ -1370,18 +1297,43 @@ export function RemoteControlScreen({ navigation }: Props) {
                 }}
                 disabled={!linked}
                 accessibilityRole="button"
-                accessibilityLabel="WiFi and router management"
+                accessibilityLabel="Connectivity"
                 accessibilityState={{ disabled: !linked }}
                 className={`mt-1 flex-row items-center justify-between rounded-lg border border-line bg-card px-2 py-1.5 ${!linked ? "opacity-40" : "active:opacity-70"}`}
               >
                 <View className="flex-row items-center gap-2">
                   <Feather name="wifi" size={14} color="#64748b" />
                   <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    WiFi &amp; Router
+                    Connectivity
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={14} color="#64748b" />
               </Pressable>
+
+              {/* U-100 (owner 2026-10-12): *"always have the feature to turn
+                those off through the app's remote screen through the setting."*
+                The car's own hotspot ships ALWAYS reachable (power save OFF);
+                this restores the parking power saving when switched ON, and
+                reflects CAR truth once the link answers `WIFICFG;APSAVE;?`. */}
+              <View className="mt-1 flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <Feather name="battery-charging" size={14} color="#64748b" />
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Hotspot power-save
+                  </Text>
+                </View>
+                <Switch
+                  value={hub.apPowerSave === true}
+                  onValueChange={(on) => {
+                    feedbackTap();
+                    hub.setCarApPowerSave(on);
+                  }}
+                  disabled={!linked}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Toggle the car's own-hotspot power saving"
+                />
+              </View>
 
               {/* Steering limit + Trim (2WD1M only) */}
               <View
