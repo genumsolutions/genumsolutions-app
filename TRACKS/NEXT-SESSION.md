@@ -1,4 +1,28 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-10: the WiFi section is one action, a lost link is noticed, and a dead address is no longer retried forever)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-11, later: the version handshake is DONE both repos — /status carries `fw`; app reads it; still OTA 3.2.7/60, nothing flashed)
+
+## This session (2026-10-11, second round) — U-96i done: the app learns the firmware version from the car, not from a catalog guess
+
+- **The car now reports its OWN version on `/status`** (`"fw":"<FW_VERSION>"`, `Genum_4WD4M_CAR`
+  `3168cac` + `3a8cf6c`). The app had NO version fact — the bundled registry catalog value
+  (a static guess, `fwVersion: "1.0.0"` against firmware that was already `1.2.4`) was presented
+  as truth, the fleet crash table's `fw_version` was always `""`, and `statusJson.fw` carried the
+  board id (`telemetry.id` in a key NAMED fw). That pairing is the same class as the board-id-as-
+  version bug the car had at the protocol layer (identity in a version slot). Gate rule `status-fw`
+  pins both halves on the car side: the slot exists AND FW_VERSION feeds it in that slot's
+  snprintf position; key on the raw view, pairing on the code view; mutants M66 + M67, harness
+  67/67 (car repo).
+- **App half — commit `25e72a9`** (`genumsolutions-app`). `parseTelemetryLine` maps `j.fw` →
+  `telemetry.fwVersion`, absent on pre-1.2.5 firmware → unknown (never a catalog default). The
+effect that drives `syncCrashReport` now receives `fwVersion: telemetry.fwVersion`; `statusJson.fw`
+is the version, not the id; `telemetry.fwVersion` joins the deps list. The bundled `4wd4m`
+  catalog row synced to `fwVersion: "1.2.4"` (mirror of Config.h) as a commented MODEL fact, not
+  a claim about any live car. Three source-reader rules + one service test, all mutation-proven —
+  including one that initially PASSED over a deleted dep (the slice included the call body; narrowed
+  to the deps array — the recurring vacuous-pass class, recorded here too).
+- **Gates, both repos:** car syntax 10/10 · page-js · relay-contract (incl. status-fw) ·
+  mutate-gates 67/67 byte-exact · app tsc 0 / vitest 671/671 / prettier clean.
+- **Pre-1.2.5 cars send no `fw`** — the app treats absent as unknown. Only a flash makes the
+  handshake live; F-61 stands (proven by gates, not a device).
 
 ## This session (2026-10-10) — the app stopped noticing a dead link, and kept the WiFi section honest
 
