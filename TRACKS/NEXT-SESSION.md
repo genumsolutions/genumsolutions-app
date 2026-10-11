@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-11, third round: two connection defects + Control Panel/Remote router dedup; APP CHANGES UNCOMMITTED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-11, third round: two connection defects + Control Panel/Remote router dedup; APP CHANGES COMMITTED at 09cf86a)
 
 ## This session (2026-10-11, third round) — Bluetooth could never pair, WiFi auto-discovery was self-killing, and the two router managers are now ONE (Remote) with a reduced Control Panel list
 
@@ -37,14 +37,13 @@ that too but later").
    names where they went.
 
 **Gate:** tsc 0 · vitest **671/671** (45 files) · prettier clean. `oneActiveLink.test.ts` still green
-(`dropBluetoothForWifi()` appears exactly 4× — unchanged by fix #2). **NOT committed** (owner did not
-ask); **NOT device-verified (F-61)** — flash 1.2.4 and run the TESTING.md rows for U-98/BT-pair and
+(`dropBluetoothForWifi()` appears exactly 4× — unchanged by fix #2). **Committed** at `09cf86a` (owner asked to push); **NOT device-verified (F-61)** — flash 1.3.0 and run the TESTING.md rows for U-98/BT-pair and
 the WiFi re-find path on the bench before claiming fixed.
 
 ## This session (2026-10-11, second round) — U-96i done: the app learns the firmware version from the car, not from a catalog guess
 
 - **The car now reports its OWN version on `/status`** (`"fw":"<FW_VERSION>"`, `Genum_4WD4M_CAR`
-  commits `3168cac` + `3a8cf6c`). The app had NO version fact — the bundled registry catalog value
+  commit `3168cac`). The app had NO version fact — the bundled registry catalog value
   (a static guess, `fwVersion: "1.0.0"` against firmware that was already `1.2.4`) was presented
   as truth, the fleet crash table's `fw_version` was always `""`, and `statusJson.fw` carried the
   board id (`telemetry.id` in a key NAMED fw). That pairing is the same class as the board-id-as-
