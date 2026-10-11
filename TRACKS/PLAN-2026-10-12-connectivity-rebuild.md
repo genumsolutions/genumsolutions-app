@@ -11,13 +11,31 @@ connection sections; enable parallel BT+WiFi with a power-saving toggle (default
 Strict scope: *"dont change other thing that i havent asked to you"*.
 
 ## RESUME HERE
-> **Phase 1 app half: none needed.** The auto-discovery the owner asked for already ships
-> (U-80b): `useControlHub.ts` `findCarForUser` (:1756) + a NetInfo network-change watcher
-> (:2030-2044) already re-find the car when the phone's network changes. The fixing half of
-> Phase 1 is car-side (U-100 — own hotspot always reachable), on the mirrored car doc.
-> The one new app surface from Phase 1 — the Remote-settings toggle that sends
-> `WIFICFG;APSAVE;ON|OFF` — is folded into **Phase 2** (it belongs with the Connectivity
-> rebuild). Next action: **Phase 2**.
+> **Phase 2 app half: DONE — `app 15718a8` (pushed).** Committed + pushed:
+> - Remote pill + Settings row renamed **Connectivity**; the panel now mounts the shared
+>   `ConnectionSection` with `manage` (full add/edit/forget Wi-Fi manager) instead of
+>   `RouterPanel`; the panel is wrapped in `KeyboardAvoidingView` + `ScrollView`
+>   (`nestedScrollEnabled`) so it fits landscape.
+> - Per-link disconnect: `confirmDisconnectBt` / `confirmDisconnectWifi` render one button
+>   per LIVE link (`connected` → BT, `wifiConnected` → WiFi).
+> - **Select** button + `handleSelect` removed; the now-dead router callbacks
+>   (`routerUse`/`routerAdd`/`routerDelete`/`routerClearAll`/`routerEntries`) retired.
+> - Remote Settings: new **Hotspot power-save** `Switch` → `hub.apPowerSave` /
+>   `hub.setCarApPowerSave` / `hub.queryCarApPowerSave`; a `useEffect` queries the car when
+>   `linked`.
+> - Control Panel (`ToolsScreen.tsx`): Car card + `TelemetryStrip`, Diagnostics row, Connect
+>   heading + `ConnectionSection` removed; page is catalogue + Saved settings only.
+> - `ConnectionSection`: new optional `manage` prop (default false) replacing the hardcoded
+>   `manage={false}`.
+> - `useControlHub.ts`: `apPowerSave` state (:241), `WIFICFG;APSAVE;` parse in
+>   `handleWifiProvisionReply`, and a `sendSystemLine` spp→ble→wifi fan-out +
+>   `setCarApPowerSave` / `queryCarApPowerSave`, exported.
+>
+> Gates: `npm run typecheck` clean · `npm run test` **673/673** · `npm run format:check` clean.
+> `RouterPanel.tsx` is left UNMOUNTED (its pure module + `routerPanelOutcome.test.ts` stay
+> green); its deletion is deferred. Next action: **Phase 3** (remove `OledDisplay` everywhere
+> + telemetry around the drive controls). NOTE: `RESUME-ME.md` at the workspace root mirrors
+> this.
 
 ## Phases
 - [x] **Phase 1 — car-on-router reachability (app half).** No code change: `findCarForUser`
@@ -25,20 +43,17 @@ Strict scope: *"dont change other thing that i havent asked to you"*.
       always-on hotspot (U-100). NOTE: `findCarForUser` does NOT yet try the remembered
       `lastRouterIp` first despite its doc comment (it only sweeps the phone's /24) — low
       value to change (the sweep covers it); left as-is.
-- [ ] **Phase 2 — Remote UI restructure.**
-      - Rename → **Connectivity**: `RouterPanel.tsx:185` header, Remote Router pill
-        (`RemoteControlScreen.tsx:1003-1023`), Settings row (`:1360-1384`).
-      - Move the BT+WiFi connection layer (`ConnectionSection`, `manage={true}`) into
-        the Remote's Connectivity panel (landscape-adapted); retire the duplicate
-        router management.
-      - Remove the **Select** button (`:774-796`) and its handler.
-      - Add per-link disconnect (BT + WiFi) replacing the single `Disconnect`
-        (`:929-949`), wired to `handleDisconnect`/`handleWifiDisconnect`.
-      - Strip Control Panel (`ToolsScreen.tsx`): Car card + `TelemetryStrip`
-        (`:405-446`), Diagnostics block (`:452-461`), `ConnectionSection` (`:474-493`).
-      - **NEW (U-100): "Own hotspot power-save" toggle** in the Connectivity settings —
-        sends `WIFICFG;APSAVE;ON|OFF`, reflects the car via the `WIFICFG;APSAVE;ON|OFF`
-        reply (parse in `handleWifiProvisionReply`), defaults OFF.
+- [x] **Phase 2 — Remote UI restructure.** DONE (`app 15718a8`).
+      - Renamed → **Connectivity**: Remote Router pill + Settings row.
+      - Moved the BT+WiFi connection layer (`ConnectionSection`, `manage`) into the Remote's
+        Connectivity panel (landscape-adapted via `KeyboardAvoidingView`+`ScrollView`);
+        the duplicate router management (`RouterPanel` mount) is retired (module left unused).
+      - Removed the **Select** button and its handler.
+      - Added per-link disconnect (BT + WiFi) replacing the single `Disconnect`.
+      - Stripped Control Panel (`ToolsScreen.tsx`): Car card + `TelemetryStrip`, Diagnostics
+        block, `ConnectionSection`.
+      - **U-100: "Hotspot power-save" toggle** in the Connectivity settings — sends
+        `WIFICFG;APSAVE;ON|OFF`, reflects the car via the reply, defaults OFF.
 - [ ] **Phase 3 — remove OLED mirror + telemetry around drive controls.**
       Delete `OledDisplay.tsx` + usages: `RemoteControlScreen.tsx:685` (compact slot),
       `:1046` (drone/non-robocar column), `:1213` (hidden-mode mirror); `types.ts:223`;
