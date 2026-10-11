@@ -2,8 +2,11 @@
 // RouterPanel — the ONE "WiFi & Router" panel of the game-remote deck
 // (device-round-5, A-26/A-27/A-28; R-15 layout rebuild 2026-09-18).
 //
-// Shown when the drive pads are HIDDEN (ESP_SER / website-server modes
-// only — round-6: other hidden modes show the full OLED mirror instead).
+// Shown when the drive pads are HIDDEN: in the website-server mode by
+// default, and in EVERY other robocar mode since 2026-10-11 via the Router
+// pill / Settings row on the Remote screen (the drive pads hidden, the full
+// OLED mirror otherwise — this panel is what takes their place when the
+// user opens router management).
 // Renders:
 //   • the active connection (car SSID + reachable IP, IP tappable → the
 //     car's hosted web page),
