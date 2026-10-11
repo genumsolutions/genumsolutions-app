@@ -1,5 +1,20 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-12: U-99 WifiPanel list dedup; APP CHANGES COMMITTED this session)
 
+## This session (2026-10-12, connectivity-rebuild Phase 1) — APP: no code change needed
+
+Phase 1 of the connectivity rebuild (`TRACKS/PLAN-2026-10-12-connectivity-rebuild.md`) is the
+"car-on-router reachability" fix. The app half the owner asked for **already ships** — the NetInfo
+network-change watcher + `findCarForUser` that re-find the car when the phone's network changes
+(`useControlHub.ts:2030-2044`, `:1756`; U-80b). The half that was actually broken is the car's own
+hotspot going unreachable, fixed car-side as U-100 (own hotspot always reachable; parking opt-in).
+
+The one new app surface from this owner ruling — *"always have the feature to turn those off
+through the app's remote screen through the setting"* — is the toggle that sends
+`WIFICFG;APSAVE;ON|OFF`. It belongs with the Remote **Connectivity** rebuild and lands in
+**Phase 2** (parse the `WIFICFG;APSAVE;ON|OFF` reply in `handleWifiProvisionReply`; default OFF).
+
+No app commit for Phase 1 beyond this doc/plan note.
+
 ## This session (2026-10-12) — U-99: the Wi-Fi list shows each network ONCE (no nameless row, no case-variant duplicate)
 
 Same owner report as the car's U-99 (*"the same esp's hotspot two times one is blank … keep only the
