@@ -19,6 +19,7 @@ function shape(
   routers: readonly RouterEntry[],
   scanned: readonly { ssid: string }[] = [],
 ) {
+  const keyOf = (s: string) => (s ?? "").trim().toUpperCase();
   const seen = new Set<string>();
   const canSwitch = new Set(
     switchableRouters(routers as RouterEntry[]).map((r) => r.ssid),
@@ -26,21 +27,24 @@ function shape(
   const out: { ssid: string; state: string; switchable: boolean }[] = [];
 
   for (const r of routers) {
-    if (seen.has(r.ssid) || !r.isActive) continue;
-    seen.add(r.ssid);
+    const k = keyOf(r.ssid);
+    if (!k || seen.has(k) || !r.isActive) continue;
+    seen.add(k);
     out.push({ ssid: r.ssid, state: "active", switchable: false });
   }
   for (const r of routers) {
-    if (seen.has(r.ssid)) continue;
-    seen.add(r.ssid);
+    const k = keyOf(r.ssid);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
     if (r.isOwnAp)
       out.push({ ssid: r.ssid, state: "hotspot", switchable: false });
     else if (canSwitch.has(r.ssid))
       out.push({ ssid: r.ssid, state: "saved", switchable: true });
   }
   for (const n of scanned) {
-    if (seen.has(n.ssid)) continue;
-    seen.add(n.ssid);
+    const k = keyOf(n.ssid);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
     out.push({ ssid: n.ssid, state: "nearby", switchable: false });
   }
   return out;
@@ -95,6 +99,30 @@ describe("wifi list shape (U-84)", () => {
   it("de-duplicates a network the car reports twice", () => {
     const rows = shape([entry("HomeNet"), entry("HomeNet", true)]);
     expect(rows.filter((r) => r.ssid === "HomeNet")).toHaveLength(1);
+  });
+
+  it("never shows a nameless row for a blank scan entry", () => {
+    // A hidden/blank beacon arrives with an empty SSID. Without an empty-safe
+    // key it slipped past the dedupe as a nameless "nearby" row.
+    const rows = shape([entry("HomeNet")], [{ ssid: "" }, { ssid: "   " }]);
+    expect(rows.every((r) => r.ssid.trim().length > 0)).toBe(true);
+    expect(rows.map((r) => r.ssid)).toEqual(["HomeNet"]);
+  });
+
+  it("collapses a scanned network whose case differs from the saved list", () => {
+    // The same network reported as "HomeNet" (saved) and "homenet" (scan) is
+    // ONE router - a case-sensitive key showed it twice, and for the car's own
+    // hotspot that was the visible duplicate.
+    const rows = shape(
+      [entry("HomeNet"), entry("4WDCar_Wifi")],
+      [{ ssid: "homenet" }, { ssid: "4wdcar_wifi" }],
+    );
+    expect(rows.filter((r) => r.ssid.toUpperCase() === "HOMENET")).toHaveLength(
+      1,
+    );
+    expect(
+      rows.filter((r) => r.ssid.toUpperCase() === "4WDCAR_WIFI"),
+    ).toHaveLength(1);
   });
 });
 
