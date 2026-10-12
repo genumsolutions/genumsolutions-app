@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild COMPLETE — all phases done, app half 43d57c6 / car half 1cfc913)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: Remote layout round — Connectivity panel compacted + two-pane, telemetry 2×2 grid, app `c7a0db7`)
 
 ## Connectivity-rebuild 2026-10-12 — ALL PHASES DONE (app half); owner flash + device test owed
 
@@ -9,6 +9,61 @@ parallel BT+WiFi default OFF), Phase 5 (ledgers + root `RESUME-ME.md`). No app v
 same-version OTA, F-32). **Owner action:** flash the car to **1.3.0** then work through
 `mobile/TESTING.md` + the car's `TRACKS/DEVICE-TESTS.md` (incl. the new parallel/BT+WiFi round).
 **F-61**: every gate is green and none of it is device evidence.
+
+## This session (2026-10-12, Remote layout round) — Connectivity panel compacted + two-pane; telemetry readout redesigned (U-99)
+
+Owner report after the follow-up round: on the Remote the Connectivity area's *"fonts are too big
+and the sections are hogging up all the space"*; asked to *"use the split screen in landscape view,
+don't elongate everything across the big width"*; and said the middle telemetry/status area
+(link/uptime/heap/signal) was *"too small and not perfectly managed."* One app commit **`c7a0db7`**
+(pushed; ledger follow-up). The Remote is landscape-locked, so the section is now a two-pane
+layout and the telemetry is a proper 2×2 grid.
+
+1. **`components/tools/connection/ConnectionCard.tsx` — the shared card is compact.** Icon 14→11,
+   title `text-[13px]`→`text-[11px]`, gap-2→1.5, status dot `h-2 w-2`→`h-1.5 w-1.5`, subtitle
+   `text-[11px] leading-4 mt-1`→`text-[10px] leading-3 mt-0.5`, body spacing `mt-2.5`→`mt-1.5`,
+   frame `rounded-xl p-3`→`rounded-lg p-2`. `ActionButton` compact `h-7 px-2.5`→`h-6 px-2`,
+   normal `h-11 px-4`→`h-8 px-3`, labels `text-[13px]`→`text-[11px]`. `InlineMessage`
+   `rounded-lg px-3 py-2 text-[11px]`→`rounded-md px-2 py-1.5 text-[10px]`. `SelectRow`
+   `p-3`→`p-2`, labels `text-[13px]`→`text-[11px]`, chevron 16→13, options `px-3 py-2.5`→`px-2 py-1.5`.
+2. **`components/tools/connection/ConnectionSection.tsx` — two-pane split, compact pills.** Root is
+   now `mt-2 flex-row flex-wrap items-start gap-2`. LEFT pane (`min-w-[220px] flex-1 gap-2`): status
+   card + three method pills + `MethodSetup` + the one message surface. RIGHT pane
+   (`min-w-[240px] flex-1 gap-1.5`): the "Available networks" caption + `WifiPanel`, rendered only
+   when `method === "wifi" || (targetId === "bt-routers" && anyLink)` — the left pane keeps full
+   width otherwise. Method pills `p-2.5`→`px-1.5 py-1.5`, gap-1.5→gap-1, icon 18→13, label
+   `text-[12px]`→`text-[10px]`, dot `h-1.5 w-1.5`→`h-1 w-1`, `rounded-xl`→`rounded-lg`;
+   `DEVICE_LIST_MAX_HEIGHT` 260→200. Header doc rewritten to the new shape (U-99).
+3. **`components/tools/connection/WifiPanel.tsx` — the one networks list is compact.**
+   `ROUTER_LIST_MAX_HEIGHT` 320→240; rows `gap-2.5 px-3 py-3`→`gap-2 px-2 py-1.5`, name
+   `text-[14px]`→`text-[12px]`, meta `text-[12px]`→`text-[10px]`; edit/forget and scan/cancel rows
+   `py-3`→`py-1.5`, `text-[13px]`→`text-[11px]`, `rounded-xl`→`rounded-lg`; add-form inputs
+   `h-11 rounded-lg px-3 text-[14px]`→`h-8 rounded-md px-2 text-[12px]`; pending/reduced notes
+   tightened. **No testIDs or data-model shapes changed** — `contrast.guard.test.ts` and the
+   connection tests (`methods`, `wifiPanelShape`, `routerList`) are layout-agnostic, so this is free.
+4. **`screens/RemoteControlScreen.tsx` — the Connectivity wrapper tightened.** Header
+   `text-[13px]`→`text-[11px]`; the panel `ScrollView` `contentContainerStyle` `padding 12 gap 8`→
+   `padding 10 gap 6`.
+5. **`components/tools/DriveTelemetry.tsx` — the middle readout is a managed 2×2 grid.** Both
+   variants (`compact` = gamepad center gap, default = telemetry view) now render the same four
+   readings as a 2×2 grid of tiles with a per-tile `bg-slate-800/70` surface, instead of the default
+   variant's single `grow basis-[22%]` row that elongated across the wide column. Compact labels
+   `text-[8px]`→`text-[9px]`, values `text-[11px]`→`text-[13px]`; default labels `text-[9px]`→
+   `text-[10px]`, values `text-sm`→`text-[15px]`; labels `text-slate-500`→`text-slate-400`.
+6. **`components/tools/DriveControls.tsx` — the center-gap telemetry slot grows 180×90→200×100.**
+   Both `DualDpad` (`translateX -90→-100`, `translateY -45→-50`) and `DualJoystick` (`geo.w*0.5-90`→
+   `-100`, `geo.h*0.5-45`→`-50`) so the bigger readout fits the free center gap (≈204px on the
+   D-pad, so ≤200px is safe).
+
+**Also in this commit (uncommitted from the follow-up round): `screens/ToolsScreen.tsx` dedup** —
+removed the duplicated top Car status card (`CarStatusLine`/`buildCarTelemetry`/`describeCar`), the
+Connect heading + `<ConnectionSection>` block, and the now-dead code (`connMethod`/`effectiveMethod`/
+`resolveMethod`, `scrollRef`/`scrollInputIntoView`, `anyLinked`/`linkVerified`, dead imports);
+re-ordered the panel (Projects lead → Diagnostics disclosure → Saved settings → About).
+
+**Gate:** tsc 0 · vitest **678/678** (45 files) · prettier clean · lint-staged/pre-commit green.
+**NOT device-verified (F-61)** — owner re-flashes the JS OTA (no version bump, F-32) and confirms
+the Remote's connectivity panel reads well in landscape and the center telemetry is legible.
 
 ## This session (2026-10-12, follow-up round) — Control Panel expanded; Connectivity always initiable; Remote un-gated from Pro
 
