@@ -77,12 +77,7 @@ import {
   type ConnectionTarget,
   type ConnectionTargetId,
 } from "./index";
-import {
-  ActionButton,
-  ConnectionCard,
-  InlineMessage,
-  SelectRow,
-} from "./ConnectionCard";
+import { ActionButton, ConnectionCard, InlineMessage } from "./ConnectionCard";
 import { WifiPanel } from "./WifiPanel";
 import type { useControlHub } from "../useControlHub";
 
@@ -127,8 +122,9 @@ export type ConnectionSectionProps = {
   /** Selected method — owned by the screen so it survives this section. */
   method: ConnectionMethodId | null;
   onMethodChange: (m: ConnectionMethodId | null) => void;
-  /** Scroll the focused input into view (F-69). */
-  onInputFocus?: (y: number) => void;
+  /** Scroll the focused input into view (F-69). No argument: the host scrolls
+      its own pane to keep the keyboard off the field. */
+  onInputFocus?: () => void;
   /** haptics/tap feedback, matching the rest of the page. */
   feedbackTap?: () => void;
   /**
@@ -173,7 +169,6 @@ export function ConnectionSection({
     sendCommand,
   } = hub;
 
-  const [targetId, setTargetId] = useState<ConnectionTargetId | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   // U-84: after the car moves to another network this phone is on the wrong
@@ -214,7 +209,10 @@ export function ConnectionSection({
     [method],
   );
 
-  /** Only the SELECTED method's target is rendered (U-69). */
+  /** Only the SELECTED method's own connect target is rendered (U-69). Each
+      method now has exactly one (or, for Internet, none), so there is no
+      per-method choice left: the live link's target when it belongs to this
+      method, otherwise the method's first target. */
   const setupTarget: ConnectionTarget | null = useMemo(() => {
     if (!methodDef) return null;
     if (liveTarget && methodOfTarget(liveTarget) === methodDef.id) {
@@ -224,14 +222,8 @@ export function ConnectionSection({
         ) ?? null
       );
     }
-    const chosen =
-      targetId && methodOfTarget(targetId) === methodDef.id ? targetId : null;
-    const id = chosen ?? methodDef.targets[0]?.id ?? null;
-    return (
-      CONNECTION_METHODS.flatMap((m) => m.targets).find((t) => t.id === id) ??
-      null
-    );
-  }, [liveTarget, methodDef, targetId]);
+    return methodDef.targets[0] ?? null;
+  }, [liveTarget, methodDef]);
 
   const routers = useMemo(
     () =>
@@ -510,7 +502,6 @@ export function ConnectionSection({
                   if (selected) return;
                   tap();
                   onMethodChange(m.id);
-                  setTargetId(null);
                   setMessage(null);
                 }}
                 disabled={blocked}
@@ -551,14 +542,6 @@ export function ConnectionSection({
             method={methodDef}
             target={setupTarget}
             busy={busy}
-            hasAlternative={methodDef.targets.length > 1}
-            alternativeId={
-              methodDef.targets.find((t) => t.id !== setupTarget.id)?.id ?? null
-            }
-            onPickTarget={(id) => {
-              tap();
-              setTargetId(id);
-            }}
             carOnRouter={carOnRouter}
             reportedSsid={reportedSsid}
             sppSupported={sppSupported}
@@ -581,12 +564,12 @@ export function ConnectionSection({
       </View>
 
       {/* ── RIGHT pane: the ONE networks list ──
-          U-96: the SAME list is the Bluetooth method's router management (the
-          "Routers" target). The ROUTERS;… commands ride whatever link is live,
-          so one list serves both methods. It renders only when a method that
-          owns a network list is chosen — the left pane keeps the full width
-          otherwise (e.g. Bluetooth pairing has no list to show). */}
-      {method === "wifi" || (targetId === "bt-routers" && anyLink) ? (
+          2026-10-12 (owner): Bluetooth gets the SAME split as Wi-Fi — connect
+          on the left, the networks / "switch to" list on the right — so the
+          Bluetooth view is no longer one full-width column. The list is the
+          SAME ROUTERS;… surface (it doubles as Bluetooth router management);
+          when no link is up it shows its honest empty state. */}
+      {method === "wifi" || method === "bluetooth" ? (
         <View className="min-w-[240px] flex-1 gap-1.5">
           {/* The caption belongs HERE — above the list it names. */}
           <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
@@ -645,9 +628,6 @@ function MethodSetup({
   method,
   target,
   busy,
-  hasAlternative,
-  alternativeId,
-  onPickTarget,
   carOnRouter,
   reportedSsid,
   sppSupported,
@@ -661,9 +641,6 @@ function MethodSetup({
   method: (typeof CONNECTION_METHODS)[number];
   target: ConnectionTarget;
   busy: boolean;
-  hasAlternative: boolean;
-  alternativeId: ConnectionTargetId | null;
-  onPickTarget: (id: ConnectionTargetId) => void;
   carOnRouter: boolean;
   reportedSsid: string | null;
   sppSupported: boolean;
@@ -679,57 +656,12 @@ function MethodSetup({
   ) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
 }) {
-  // U-84: the "Where is the car?" split is GONE. It asked the user to choose
-  // between "The car's hotspot" and "Your home router" before they could do
-  // anything, which is not a choice a person makes — a phone's Wi-Fi list does
-  // not separate the hotspot from the router, it lists networks, and so does
-  // this now. What remains below is the single connection action plus, for
-  // Wi-Fi, the one unified list.
-  if (hasAlternative && alternativeId) {
-    return (
-      <ConnectionCard
-        title={method.label}
-        icon={method.id === "bluetooth" ? "bluetooth" : "wifi"}
-      >
-        <SelectRow<ConnectionTargetId>
-          label={
-            method.id === "bluetooth"
-              ? "What do you want to do?"
-              : "Where is the car?"
-          }
-          value={target.id}
-          options={method.targets.map((t) => ({
-            id: t.id,
-            label: t.label,
-            hint: targetUnavailableReason(t.id, { carOnOwnRouter: carOnRouter })
-              ? "not ready"
-              : null,
-          }))}
-          onChange={onPickTarget}
-          testID="conn-target"
-        />
-        <TargetBody
-          target={target}
-          busy={busy}
-          carOnRouter={carOnRouter}
-          reportedSsid={reportedSsid}
-          sppSupported={sppSupported}
-          sppStatus={sppStatus}
-          sppDevices={sppDevices}
-          linkLive={linkLive}
-          onScanBluetooth={onScanBluetooth}
-          onConnectBluetooth={onConnectBluetooth}
-          onConnectWifi={onConnectWifi}
-        />
-        {/* U-84: the "Switch the car to" dropdown is GONE. It was a SECOND
-            control for the one action the Wi-Fi list now performs by tapping a
-            row, which is what produced "which one do I press" - and the router
-            manager used to answer that question with a paragraph of guidance
-            text. One list, one tap, one meaning. */}
-      </ConnectionCard>
-    );
-  }
-
+  // U-84: the "Where is the car?" split is GONE, and 2026-10-12 the Bluetooth
+  // "What do you want to do?" chooser is gone with it. Each method now renders
+  // ONE connect card on the LEFT; the router / "switch to" list lives on the
+  // RIGHT pane (the section renders it for both Wi-Fi AND Bluetooth). One
+  // action per method, one list — the same shape for both, exactly like the
+  // phone's own Wi-Fi settings.
   return (
     <ConnectionCard
       title={method.label}
@@ -763,20 +695,9 @@ function MethodSetup({
           half-open), and resolveDial already dials the car-reported lease.
           Connect is now the single action, and it covers what both did. */}
 
-      {/* U-96: Bluetooth router management — switch/add/edit/delete routers over
-          the live SPP link. The SAME ROUTERS;\u2026 commands the Wi-Fi panel sends,
-          so the ONE unified Wi-Fi list above IS this method's router surface
-          (rendered whenever the "Routers" target is picked and a link is up).
-          All this card owes the user is the honest state when there is no link
-          yet — the dead "Manage saved routers" button that used to live here
-          did nothing at all. */}
-      {target.id === "bt-routers" && !linkLive ? (
-        <View className="mt-2">
-          <InlineMessage tone="error">
-            Connect to the car over Bluetooth first, then manage its routers.
-          </InlineMessage>
-        </View>
-      ) : null}
+      {/* 2026-10-12: the Bluetooth router surface moved OUT of this card — the
+          SAME networks list (ROUTERS;… commands over the live link) now always
+          renders in the section's RIGHT pane for Bluetooth, mirroring Wi-Fi. */}
     </ConnectionCard>
   );
 }

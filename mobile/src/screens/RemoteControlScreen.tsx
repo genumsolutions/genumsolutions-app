@@ -5,10 +5,10 @@
 // Standard gamepad layout (landscape):
 //   [Back] [Select]  REMOTE  ●CarName  Mode▸  Spd═══  [🎮] [⚙]
 //   ┌─────┐                     ┌─────┐
-//   │  ↑  │    ┌───────────┐    │  ↑  │
-//   │← ● →│    │ TELEMETRY │    │← ● →│
-//   │  ↓  │    │ L/U/H/SIG │    │  ↓  │
-//   └─────┘    └───────────┘    └─────┘
+//   │  ↑  │     ┌─────────┐    │  ↑  │
+//   │← ● →│     │  OLED   │    │← ● →│
+//   │  ↓  │     │ 128×64  │    │  ↓  │
+//   └─────┘     └─────────┘    └─────┘
 //   L joystick                R joystick
 //
 // Phase 1 rebuild: clean chrome row (no ScrollView), standard gamepad
@@ -53,7 +53,11 @@ import { DriveControls } from "../components/tools/DriveControls";
 import { BalanceControls, PID_DEFS } from "../components/tools/BalanceControls";
 import type { PidKey } from "../components/tools/BalanceControls";
 import { ModeChooser } from "../components/tools/ModeChooser";
-import { DriveTelemetry } from "../components/tools/DriveTelemetry";
+import { OledDisplay } from "../components/tools/OledDisplay";
+import {
+  DriveTelemetry,
+  TelemetryLine,
+} from "../components/tools/DriveTelemetry";
 import { SensorGrid } from "../components/tools/SensorGrid";
 import { hasDeck } from "../components/tools/decks/deckkit";
 import { SmartHomeDeck } from "../components/tools/decks/SmartHomeDeck";
@@ -81,6 +85,7 @@ import {
   SPEED_MAX,
   SPEED_STEP,
   canonicalCarToken,
+  modeAvailStatus,
 } from "../services/carProtocol";
 import { feedbackTap } from "../services/hapticsService";
 import type { SafetyLimits } from "../components/tools/types";
@@ -371,6 +376,10 @@ export function RemoteControlScreen({ navigation }: Props) {
   // ── NAV state machine ──
   const modeList = carModes.length > 0 ? carModes : LOCAL_CAR_MODES;
   const lastNavAtRef = useRef(0);
+  // Keyboard support (owner 2026-10-12): the Wi-Fi add/edit form lives at the
+  // bottom of the Connectivity panel, so when a field is focused we scroll that
+  // panel to the end to keep the field clear of the keyboard.
+  const connScrollRef = useRef<ScrollView | null>(null);
 
   const navInput = useCallback(
     (axis: "x" | "y", value: -1 | 0 | 1) => {
@@ -546,12 +555,11 @@ export function RemoteControlScreen({ navigation }: Props) {
       ? ("speed" as const)
       : ("mode" as const);
 
-  // ── Telemetry readout (Phase 3, owner 2026-10-12) ──
-  // The OLED mirror is REMOVED everywhere. Where the compact mirror used to
-  // sit — the gamepad's center gap — the CAR's own readings now show: link /
-  // uptime / heap / signal. Formatting comes from the pure, tested
-  // `telemetryFormat.ts`, so an unknown reading dashes instead of rendering as
-  // 0 and a real zero (a stopped car, 0 s uptime) is shown as itself.
+  // ── Telemetry + OLED mirror (owner 2026-10-12 follow-up) ──
+  // The CAR's own readings (uptime / heap / signal) now live on the top
+  // connection-status line as `TelemetryLine`; formatting still comes from the
+  // pure, tested `telemetryFormat.ts`. The gamepad's centre gap shows the
+  // compact OLED mirror again (RESTORED) — the readings no longer sit there.
   const linkLabel = connected
     ? "Bluetooth"
     : wifiConnected
@@ -565,8 +573,51 @@ export function RemoteControlScreen({ navigation }: Props) {
     uptimeMs: telemetry.uptimeMs,
     freeHeap: telemetry.freeHeap,
   };
-  const telemetrySlot = isRobocar ? (
-    <DriveTelemetry {...driveTelemetryArgs} compact />
+  const oledCommonProps = {
+    connected,
+    wifiConnected,
+    deviceName,
+    activeMode,
+    speed,
+    servo,
+    driveStatus,
+    driveDir,
+    targetAltitude,
+    gimbalPan,
+    gimbalTilt,
+    sensorData,
+    telemetry,
+    isDrone,
+    isNonRobocar,
+    linkKind: connected
+      ? ("spp" as const)
+      : wifiConnected
+        ? ("wifi" as const)
+        : undefined,
+    trim,
+  };
+  const oledSlot = isRobocar ? (
+    /* R-17 (owner): the mirror reads best a little BIGGER — 180x90 keeps the
+       2:1 aspect of the physical 128x64 OLED while giving the compact
+       pixel-faithful rendering more room (A-49 single-scale rows still fit
+       with margin). */
+    <View
+      style={{ width: 180, height: 90 }}
+      className="overflow-hidden rounded-lg"
+    >
+      <OledDisplay
+        {...oledCommonProps}
+        compact
+        topField={topField}
+        previewMode={previewMode}
+        previewModeAvail={
+          previewMode
+            ? modeAvailStatus(previewMode.token, carStubMap, carAvailMap)
+            : undefined
+        }
+        steerLimit={steerLimit}
+      />
+    </View>
   ) : null;
 
   const renderReconnectBanner = () => {
@@ -721,15 +772,15 @@ export function RemoteControlScreen({ navigation }: Props) {
             mounts/unmounts — the old conditional band pushed the joystick
             down as soon as the website-server mode appeared. ── */}
         {isRobocar && (
-          <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center justify-between px-1">
-            <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+          <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center gap-2 px-1">
+            <View className="min-w-0 shrink flex-row items-center gap-1.5">
               <View
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
               />
               <Text
                 numberOfLines={1}
                 ellipsizeMode="middle"
-                className="min-w-0 flex-1 text-[10px] font-bold text-muted dark:text-slate-300"
+                className="min-w-0 shrink text-[10px] font-bold text-muted dark:text-slate-300"
               >
                 {connected
                   ? friendlyBtName(deviceName) || "Connected"
@@ -738,6 +789,11 @@ export function RemoteControlScreen({ navigation }: Props) {
                     : "No link"}
               </Text>
             </View>
+            {/* Owner 2026-10-12: the CAR's own readings live on this status
+                line now (uptime / heap / signal); the gamepad centre shows the
+                OLED mirror again. Dashes when nothing is reporting. */}
+            <TelemetryLine {...driveTelemetryArgs} />
+            <View className="min-w-0 flex-1" />
             {activeMode.id === "website-server" || wifiConnected ? (
               <Pressable
                 onPress={handleOpenWebPage}
@@ -1014,7 +1070,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   compact
                   navActiveRef={navActiveRef}
                   onNavInput={navInput}
-                  telemetrySlot={telemetrySlot}
+                  telemetrySlot={oledSlot}
                 />
               </>
             ) : showRouter || activeMode.id === "website-server" ? (
@@ -1024,11 +1080,12 @@ export function RemoteControlScreen({ navigation }: Props) {
                    Control Panel used to, now with the full manager (it is the
                    single connection surface). */
               <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={{ flex: 1 }}
                 className="min-h-0"
               >
                 <ScrollView
+                  ref={connScrollRef}
                   className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card"
                   contentContainerStyle={{ padding: 10, gap: 6 }}
                   keyboardShouldPersistTaps="handled"
@@ -1043,6 +1100,9 @@ export function RemoteControlScreen({ navigation }: Props) {
                     method={connMethod}
                     onMethodChange={setConnMethod}
                     feedbackTap={feedbackTap}
+                    onInputFocus={() =>
+                      connScrollRef.current?.scrollToEnd({ animated: true })
+                    }
                     manage
                   />
                 </ScrollView>

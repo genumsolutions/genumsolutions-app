@@ -2,7 +2,7 @@
 // ToolsScreen holds all state and passes subsets down as props.
 import React from "react";
 import { Platform } from "react-native";
-import type { CarTelemetry } from "../../services/carProtocol";
+import type { CarTelemetry, ModeAvailReport } from "../../services/carProtocol";
 import type { CarMode } from "../../config/roboCarCatalog";
 
 export type SensorData = {
@@ -222,6 +222,49 @@ export type ModeChooserProps = {
    * either way — the states only change the badge style.
    */
   carAvailMap?: Record<string, string>;
+};
+
+export type OledDisplayProps = {
+  connected: boolean;
+  wifiConnected: boolean;
+  deviceName: string;
+  activeMode: CarMode;
+  speed: number;
+  servo: number;
+  driveStatus: string;
+  targetAltitude: number;
+  gimbalPan: number;
+  gimbalTilt: number;
+  sensorData: SensorData;
+  telemetry: CarTelemetry;
+  isDrone: boolean;
+  isNonRobocar: boolean;
+  /** Link label for the status chip; defaults to 'SPP LINK' / 'WiFi WS'. */
+  linkKind?: "spp" | "wifi";
+  /** Renders at the physical 1.3" OLED's 2:1 shape for the game remote:
+      tighter padding/fonts and only the essential lines (no PID/Angle/echo). */
+  compact?: boolean;
+  /** ESP-remote dashboard parity (ui.md): which top-bar field is highlighted
+      in NAV mode ('none' = DRIVE). Inverted-box highlight mirrors u8g2. */
+  topField?: "mode" | "speed" | "steer" | "none";
+  /** While browsing modes in NAV, the PREVIEWED mode is shown (top bar +
+      body title / dashboard preview) before Select confirms — exactly like
+      previewModeIndex on the physical remote. */
+  previewMode?: CarMode | null;
+  /** Unavailable firmware modes preview as COMING SOON (ui.md screen 9). */
+  previewComingSoon?: boolean;
+  /**
+   * R-10 (replaces relying on the boolean alone): the previewed mode's car
+   * truth availability — LIVE draws the real dashboard, WIP draws
+   * "WORK IN PROGRESS", CS draws "COMING SOON" (remote drawAvailMarkBody
+   * parity). Falls back to previewComingSoon when undef.
+   */
+  previewModeAvail?: ModeAvailReport;
+  /** 2WD1M: the user-set MAX steer limit for the top bar — the ESP remote
+      top bar shows the LIMIT, never the live servo angle. */
+  steerLimit?: number;
+  /** 2WD1M: the user-set trim offset (-90..90) for top bar display. */
+  trim?: number;
 };
 
 export type BalanceControlsProps = {

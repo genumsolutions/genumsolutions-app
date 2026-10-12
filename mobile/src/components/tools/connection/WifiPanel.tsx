@@ -38,7 +38,7 @@
 // Everything shown here is something the car actually reported. Unknown values
 // are not invented (F-62).
 // =====================================================================
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
@@ -67,6 +67,16 @@ export type ScannedNetwork = {
  */
 const ROUTER_LIST_MAX_HEIGHT = 240;
 
+/**
+ * 2026-10-12 (owner): *"add the router has too less space ... give the
+ * scrolling thing."* The add/edit form used to render inline below the list
+ * with no height of its own, so in landscape it was squeezed against the panel
+ * edge (and the keyboard). It now lives in its OWN bounded scroller with a
+ * minimum height, so the fields stay reachable and scroll independently.
+ */
+const ADD_FORM_MAX_HEIGHT = 190;
+const ADD_FORM_MIN_HEIGHT = 132;
+
 export type WifiPanelProps = {
   /** Exactly what the car reported in NETW;… — the only source of truth. */
   routers: readonly RouterEntry[];
@@ -82,7 +92,9 @@ export type WifiPanelProps = {
   onScan: () => void;
   /** Send a raw command to the car (e.g., ROUTERS;SCAN;CANCEL). */
   sendCmd: (cmd: string) => void;
-  onInputFocus?: (y: number) => void;
+  /** Called when a text field gains focus, so the host can scroll it clear of
+      the keyboard (F-69). No argument: the host scrolls its own pane. */
+  onInputFocus?: () => void;
   /** Shown after a switch so the phone follows the car (Android cannot do it silently). */
   pendingSsid?: string | null;
   /** Owner (2026-10-11): the Control Panel list is REDUCED — it keeps the
@@ -126,6 +138,8 @@ export function WifiPanel({
   const [ssid, setSsid] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Keyboard-return flow: SSID "next" moves focus to the password field.
+  const passRef = useRef<TextInput>(null);
 
   // Only the car's own reserved network is excluded from switching (F-63).
   const ownAp = routers.find((r) => r.isOwnAp);
@@ -403,42 +417,57 @@ export function WifiPanel({
       {manage ? (
         <>
           {adding ? (
-            <View className="mt-1.5 gap-1.5" testID="wifi-add-form">
-              {editingSsid ? (
-                <Text
-                  className="text-[11px] font-bold text-ink"
-                  testID="wifi-edit-title"
-                >
-                  Set a new password for “{editingSsid}”
-                </Text>
-              ) : null}
-              <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
+            <ScrollView
+              className="mt-1.5 overflow-hidden rounded-lg border border-line bg-card"
+              style={{
+                maxHeight: ADD_FORM_MAX_HEIGHT,
+                minHeight: ADD_FORM_MIN_HEIGHT,
+              }}
+              contentContainerStyle={{ padding: 8, gap: 6 }}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <View className="gap-1.5" testID="wifi-add-form">
+                {editingSsid ? (
+                  <Text
+                    className="text-[11px] font-bold text-ink"
+                    testID="wifi-edit-title"
+                  >
+                    Set a new password for “{editingSsid}”
+                  </Text>
+                ) : null}
                 <TextInput
                   value={ssid}
                   onChangeText={(v) => {
                     setSsid(v);
                     setError(null);
                   }}
+                  onFocus={() => onInputFocus?.()}
                   placeholder="Network name"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor="#94a3b8"
+                  selectionColor="#1e3a8a"
                   autoCapitalize="none"
                   autoCorrect={false}
                   accessibilityLabel="Network name"
                   maxLength={40}
                   returnKeyType="next"
-                  className="h-8 rounded-md border border-line bg-card px-2 text-[12px] text-ink"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => passRef.current?.focus()}
+                  className="h-9 rounded-md border border-line bg-card px-2.5 text-[13px] text-ink"
                   testID="wifi-ssid"
                 />
-              </View>
-              <View onLayout={(e) => onInputFocus?.(e.nativeEvent.layout.y)}>
                 <TextInput
+                  ref={passRef}
                   value={pass}
                   onChangeText={(v) => {
                     setPass(v);
                     setError(null);
                   }}
+                  onFocus={() => onInputFocus?.()}
                   placeholder="Password"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor="#94a3b8"
+                  selectionColor="#1e3a8a"
                   autoCapitalize="none"
                   autoCorrect={false}
                   secureTextEntry
@@ -446,42 +475,42 @@ export function WifiPanel({
                   maxLength={72}
                   returnKeyType="done"
                   onSubmitEditing={submit}
-                  className="h-8 rounded-md border border-line bg-card px-2 text-[12px] text-ink"
+                  className="h-9 rounded-md border border-line bg-card px-2.5 text-[13px] text-ink"
                   testID="wifi-pass"
                 />
+                {error ? (
+                  <InlineMessage tone="error">{error}</InlineMessage>
+                ) : null}
+                <View className="flex-row gap-1.5">
+                  <Pressable
+                    onPress={submit}
+                    disabled={
+                      busy ||
+                      !ssid.trim() ||
+                      (editingSsid != null && !pass.trim())
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel="Save network"
+                    className="flex-1 items-center rounded-full bg-navy py-1.5"
+                    testID="wifi-add-submit"
+                  >
+                    <Text className="text-[11px] font-black text-white">
+                      {editingSsid ? "Save password" : "Save"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={cancel}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel"
+                    className="items-center rounded-full border border-line bg-card px-4 py-1.5"
+                  >
+                    <Text className="text-[11px] font-bold text-navy">
+                      Cancel
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-              {error ? (
-                <InlineMessage tone="error">{error}</InlineMessage>
-              ) : null}
-              <View className="flex-row gap-1.5">
-                <Pressable
-                  onPress={submit}
-                  disabled={
-                    busy ||
-                    !ssid.trim() ||
-                    (editingSsid != null && !pass.trim())
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="Save network"
-                  className="flex-1 items-center rounded-full bg-navy py-1.5"
-                  testID="wifi-add-submit"
-                >
-                  <Text className="text-[11px] font-black text-white">
-                    {editingSsid ? "Save password" : "Save"}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={cancel}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel"
-                  className="items-center rounded-full border border-line bg-card px-4 py-1.5"
-                >
-                  <Text className="text-[11px] font-bold text-navy">
-                    Cancel
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
+            </ScrollView>
           ) : (
             <Pressable
               onPress={() => setAdding(true)}
