@@ -623,6 +623,24 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       } else if (key === "RSSI") {
         const n = Number(val);
         if (val !== "" && Number.isFinite(n)) telemetry.rssi = n;
+      } else if (key === "RST") {
+        // U-R3 (1.3.2): the persisted restart record now rides the STATE line —
+        // same fields as the WS JSON's reset_reason/boot_count/crash_count/
+        // last_crash_phase/last_crash_heap, so a Bluetooth link reports WHY the
+        // car reset without this phone ever seeing /status. This is what lets
+        // the crash-report fleet sync (useControlHub) fire over SPP too.
+        if (val !== "") telemetry.resetReason = val;
+      } else if (key === "BC") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.bootCount = n;
+      } else if (key === "CC") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.crashCount = n;
+      } else if (key === "PH") {
+        if (val !== "") telemetry.lastCrashPhase = val;
+      } else if (key === "LH") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.lastCrashHeap = n;
       }
     }
     return telemetry;

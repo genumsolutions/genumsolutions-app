@@ -232,6 +232,45 @@ describe("parseTelemetryLine", () => {
     ).toEqual({ mode: "4WD4M", status: "Ready" });
   });
 
+  it("parses STATE RST=/BC=/CC=/PH=/LH= restart record (U-R3, Bluetooth diagnostics)", () => {
+    expect(
+      parseTelemetryLine(
+        "STATE;MODE=4WD4M;SPD=0;TRIM=0;STATUS=Ready;RST=TASK_WDT;BC=41;CC=3;PH=http-root;LH=56789",
+      ),
+    ).toEqual({
+      mode: "4WD4M",
+      speed: 0,
+      trim: 0,
+      status: "Ready",
+      resetReason: "TASK_WDT",
+      bootCount: 41,
+      crashCount: 3,
+      lastCrashPhase: "http-root",
+      lastCrashHeap: 56789,
+    });
+  });
+
+  it("omits blank restart-record STATE values (old firmware sends none)", () => {
+    expect(
+      parseTelemetryLine("STATE;MODE=4WD4M;RST=;BC=;CC=;PH=;LH=;STATUS=Ready"),
+    ).toEqual({ mode: "4WD4M", status: "Ready" });
+  });
+
+  it("parses STATE RST= with no phase but keeps the counters", () => {
+    expect(
+      parseTelemetryLine(
+        "STATE;MODE=4WD4M;STATUS=Ready;RST=POWER_ON;BC=6;CC=0;LH=82000",
+      ),
+    ).toEqual({
+      mode: "4WD4M",
+      status: "Ready",
+      resetReason: "POWER_ON",
+      bootCount: 6,
+      crashCount: 0,
+      lastCrashHeap: 82000,
+    });
+  });
+
   it("does not invent telemetry when STATE omits the new keys", () => {
     expect(parseTelemetryLine("STATE;MODE=BT;SPD=150;TRIM=0")).toEqual({
       mode: "BT",

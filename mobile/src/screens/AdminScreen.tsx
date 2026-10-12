@@ -1,6 +1,7 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs (8): Dashboard · Orders · Electronic Products · 3D Products · Projects · Content · Users · Settings.
+// Tabs (9): Dashboard · Orders · Electronic Products · 3D Products · Projects · Content · Users · System Logs · Settings.
+// U-R3 (2026-10-12): "System Logs" added (fleet crash reports + app logs).
 // This line used to say "Catalog" and "6 tabs" — Catalog was split into three.
 // =====================================================================
 import React, {
@@ -71,6 +72,8 @@ import {
   fetchDashboardStats,
   fetchAdminAnalytics,
   listAdminActivity,
+  listDeviceCrashReports,
+  listAppLogs,
   listAdminJournalPosts,
   upsertAdminJournalPost,
   deleteAdminJournalPost,
@@ -98,6 +101,8 @@ import {
   type DashboardStats,
   type AdminAnalytics,
   type ActivityEntry,
+  type AdminCrashReport,
+  type AdminAppLog,
   type ProjectComponentLink,
   listProjectComponents,
   saveProjectComponents,
@@ -119,6 +124,7 @@ type Tab =
   | "Projects"
   | "Content"
   | "Users"
+  | "System Logs"
   | "Settings";
 
 // U-44 (2026-09-26, owner): the Catalog tab becomes THREE tabs mirroring the
@@ -134,6 +140,7 @@ const TABS: Tab[] = [
   "Projects",
   "Content",
   "Users",
+  "System Logs",
   "Settings",
 ];
 
@@ -295,6 +302,16 @@ export function AdminScreen() {
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityTotalPages, setActivityTotalPages] = useState(1);
 
+  // System Logs (U-R3): fleet crash reports + app log lines
+  const [crashReports, setCrashReports] = useState<AdminCrashReport[]>([]);
+  const [crashReportPage, setCrashReportPage] = useState(1);
+  const [crashReportTotal, setCrashReportTotal] = useState(0);
+  const [crashReportTotalPages, setCrashReportTotalPages] = useState(1);
+  const [appLogs, setAppLogs] = useState<AdminAppLog[]>([]);
+  const [appLogPage, setAppLogPage] = useState(1);
+  const [appLogTotal, setAppLogTotal] = useState(0);
+  const [appLogTotalPages, setAppLogTotalPages] = useState(1);
+
   // Settings (company + programs)
   const [companyInfo, setCompanyInfo] = useState<AdminCompanyInfo | null>(null);
   const [trainingPrograms, setTrainingPrograms] = useState<
@@ -448,6 +465,9 @@ export function AdminScreen() {
       } else if (tab === "Users") {
         void loadUsers(1);
         void loadMessages(1);
+      } else if (tab === "System Logs") {
+        void loadCrashReports(1);
+        void loadAppLogs(1);
       } else if (tab === "Settings") {
         setCompanyInfo(await getCompanyInfo());
         setTrainingPrograms(await listAdminTrainingPrograms());
@@ -971,6 +991,23 @@ export function AdminScreen() {
     setActivityTotalPages(result.totalPages);
   }
 
+  // System Logs pagination (U-R3): newest-first crash reports + app log lines.
+  async function loadCrashReports(page: number) {
+    const result = await listDeviceCrashReports(page, 20);
+    setCrashReports(result.entries);
+    setCrashReportPage(result.page);
+    setCrashReportTotal(result.total);
+    setCrashReportTotalPages(result.totalPages);
+  }
+
+  async function loadAppLogs(page: number) {
+    const result = await listAppLogs(page, 20);
+    setAppLogs(result.entries);
+    setAppLogPage(result.page);
+    setAppLogTotal(result.total);
+    setAppLogTotalPages(result.totalPages);
+  }
+
   function handleDeleteUser(user: AdminUser) {
     if (!isOwner) return;
     Alert.alert(
@@ -1271,6 +1308,21 @@ export function AdminScreen() {
               onMarkReplied={handleMarkReplied}
             />
           </Sub>
+        );
+      case "System Logs":
+        return (
+          <SystemLogsTab
+            crashes={crashReports}
+            crashPage={crashReportPage}
+            crashTotal={crashReportTotal}
+            crashTotalPages={crashReportTotalPages}
+            onLoadCrashes={(p) => void loadCrashReports(p)}
+            logs={appLogs}
+            logPage={appLogPage}
+            logTotal={appLogTotal}
+            logTotalPages={appLogTotalPages}
+            onLoadLogs={(p) => void loadAppLogs(p)}
+          />
         );
       case "Settings":
         return (
@@ -4232,6 +4284,181 @@ function ActivityTab({
             onPage={onLoadMore}
             label="event"
             totalItems={total}
+          />
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+// U-R3 (2026-10-12): the "System Logs" tab — two newest-first lists read from
+// the shared research DB: the fleet crash/restart reports (device_crash_reports,
+// one row per connection session) and the app log lines (app_logs, the flushed
+// ring buffer of logger + appLogService). A restart fault now surfaces here no
+// matter which transport linked the car, and any device error is a row, not a
+// console nobody was watching.
+function SystemLogsTab({
+  crashes,
+  crashPage,
+  crashTotal,
+  crashTotalPages,
+  onLoadCrashes,
+  logs,
+  logPage,
+  logTotal,
+  logTotalPages,
+  onLoadLogs,
+}: {
+  crashes: AdminCrashReport[];
+  crashPage: number;
+  crashTotal: number;
+  crashTotalPages: number;
+  onLoadCrashes: (page: number) => void;
+  logs: AdminAppLog[];
+  logPage: number;
+  logTotal: number;
+  logTotalPages: number;
+  onLoadLogs: (page: number) => void;
+}) {
+  return (
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+    >
+      <Text className="mb-1 text-base font-black text-ink">
+        Car crash / restart reports
+      </Text>
+      <Text className="mb-3 text-xs text-muted">
+        One row per connection session, synced by the app from each car&apos;s
+        stored restart record.
+      </Text>
+      {crashes.length === 0 ? (
+        <View className="items-center py-8">
+          <Feather name="alert-triangle" size={32} color="#cbd5e1" />
+          <Text className="mt-3 text-sm text-muted">
+            No crash reports synced yet.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {crashes.map((row) => (
+            <View
+              key={row.id}
+              className="mb-2 rounded-xl border border-line bg-card px-4 py-3"
+            >
+              <View className="flex-row items-center gap-2">
+                <View
+                  className={`rounded px-1.5 py-0.5 ${
+                    row.hasCrash ? "bg-red-100" : "bg-slate-200"
+                  }`}
+                >
+                  <Text
+                    className={`text-[10px] font-black uppercase tracking-wide ${
+                      row.hasCrash ? "text-red-700" : "text-slate-500"
+                    }`}
+                  >
+                    {row.hasCrash ? "crash" : "clean"}
+                  </Text>
+                </View>
+                <Text className="font-mono text-sm font-bold text-ink">
+                  {row.boardId || "(no board id)"}
+                </Text>
+                {row.modelId ? (
+                  <Text className="text-xs text-muted">{row.modelId}</Text>
+                ) : null}
+                <Text className="text-xs text-muted">
+                  FW {row.fwVersion || "?"}
+                </Text>
+              </View>
+              {row.hasCrash && (
+                <Text className="mt-1 text-sm">
+                  <Text className="font-bold text-red-700">
+                    {row.resetReason ?? "UNKNOWN"}
+                  </Text>
+                  <Text className="text-muted">
+                    {row.crashCount != null
+                      ? ` · ${row.crashCount} crash${row.crashCount === 1 ? "" : "es"}`
+                      : ""}
+                    {row.lastCrashPhase ? ` @ ${row.lastCrashPhase}` : ""}
+                    {row.lastCrashHeap != null
+                      ? ` · heap ${row.lastCrashHeap} B`
+                      : ""}
+                  </Text>
+                </Text>
+              )}
+              <Text className="mt-1 text-xs text-muted">
+                boot #{row.bootCount ?? "?"} · {row.connectionMethod} ·{" "}
+                {new Date(row.reportedAt).toLocaleString()}
+              </Text>
+            </View>
+          ))}
+          <PagePager
+            page={crashPage}
+            totalPages={crashTotalPages}
+            onPage={onLoadCrashes}
+            label="report"
+            totalItems={crashTotal}
+          />
+        </>
+      )}
+
+      <Text className="mb-1 mt-5 text-base font-black text-ink">App logs</Text>
+      <Text className="mb-3 text-xs text-muted">
+        Warn/error lines flushed from phones&apos; ring buffer, newest first.
+      </Text>
+      {logs.length === 0 ? (
+        <View className="items-center py-8">
+          <Feather name="code" size={32} color="#cbd5e1" />
+          <Text className="mt-3 text-sm text-muted">
+            No app logs uploaded yet.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {logs.map((row) => (
+            <View
+              key={row.id}
+              className="mb-2 rounded-xl border border-line bg-card px-4 py-3"
+              style={{
+                borderLeftWidth: 4,
+                borderLeftColor:
+                  row.level === "error"
+                    ? "#dc2626"
+                    : row.level === "warn"
+                      ? "#d97706"
+                      : "#1e3a8a",
+              }}
+            >
+              <View className="flex-row items-center gap-2">
+                <Text className="font-mono text-xs uppercase text-muted">
+                  {row.level}
+                </Text>
+                <Text className="font-mono text-xs text-muted">
+                  [{row.scope}]
+                </Text>
+                <Text className="ml-auto text-xs text-muted">
+                  app v{row.appVersion || "?"}
+                </Text>
+              </View>
+              <Text className="mt-0.5 break-words text-sm text-ink">
+                {row.message}
+              </Text>
+              {row.detail && Object.keys(row.detail).length > 0 && (
+                <Text className="mt-0.5 break-words text-xs text-muted">
+                  {JSON.stringify(row.detail)}
+                </Text>
+              )}
+              <Text className="mt-0.5 text-xs text-muted">
+                {new Date(row.createdAt).toLocaleString()}
+              </Text>
+            </View>
+          ))}
+          <PagePager
+            page={logPage}
+            totalPages={logTotalPages}
+            onPage={onLoadLogs}
+            label="log"
+            totalItems={logTotal}
           />
         </>
       )}
