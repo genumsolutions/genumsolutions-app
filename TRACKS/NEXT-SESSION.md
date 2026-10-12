@@ -10,6 +10,44 @@ same-version OTA, F-32). **Owner action:** flash the car to **1.3.0** then work 
 `mobile/TESTING.md` + the car's `TRACKS/DEVICE-TESTS.md` (incl. the new parallel/BT+WiFi round).
 **F-61**: every gate is green and none of it is device evidence.
 
+## This session (2026-10-12, follow-up round) — Control Panel expanded; Connectivity always initiable; Remote un-gated from Pro
+
+Owner report after flashing the connectivity rebuild: the Control Panel window *"shows too little
+data / collapsed things of the completed window"* and the connectivity section was *"disabled and
+dim, not able to initiate the connection"*; the Remote was Pro-only. Three fixes, one app commit
+**`27ec68c`** (pushed):
+
+1. **`screens/ToolsScreen.tsx` — the Control Panel shows everything again.** Phase 2 (`15718a8`)
+   had stripped it to catalogue + Saved settings, but the owner wants the data visible without
+   hunting. Section disclosures now DEFAULT OPEN (`useState(true)`); the category view defaults to
+   "details" (`showCategoryDetails` true on mount + on every `selectCategory`). Restored from the
+   Phase 2 deletion: the Car card (`CarStatusLine` + `TelemetryStrip` fed by
+   `buildCarTelemetry`/`describeCar`, plus `restartField` via `buildRestartField`), the Diagnostics
+   row, and the Connect heading + `<ConnectionSection>` with `manage` (full add/edit/forget — the
+   owner must be able to initiate BT + Wi‑Fi and manage saved routers from the Control Panel, not
+   only from a linked Remote). `scrollRef`/`scrollInputIntoView` wiring restored so the Wi‑Fi form
+   scrolls focused inputs into view.
+2. **`screens/RemoteControlScreen.tsx` — connectivity is ALWAYS openable.** The Connectivity pill
+   and the Settings "Connectivity" row were `disabled={!linked}` + `opacity-40`, and a `useEffect`
+   auto-closed the panel (`setShowRouter(false)`) the instant the link dropped — so unlinked users
+   could not reach the ONE surface where a connection is initiated. Both now open the panel in any
+   state; only the Hotspot power-save / Parallel toggles stay link-gated (they act on a live link).
+   The router-panel auto-close is gone.
+3. **Remote is no longer a Pro feature.** `ProGate` (component + wrapper + the `isPro`/
+   `isSignedIn` destructure) removed — every account, signed-in or not, reaches the Remote via the
+   Control Panel's Open, the floating remote button, or the connection screen. **Diff note:** the
+   wrapper removal drops one JSX level, so Prettier re-indented the whole screen (~1277 diff lines,
+   but the whitespace-ignoring `git diff -w` is exactly the three hunks above — plus the tools panel
+   hunks). Per-robot preference profiles STAY Pro-only; `UserPreferencesScreen`/`AdminScreen`/
+   `AppContext` copy updated so nothing claims the Remote is Pro-gated anymore. The `WifiPanel` scan
+   button still demands a live link (`busy || !reachable` — scanning needs the car's radios); the
+   Connect/switch buttons are the initiable ones.
+
+**Gate:** tsc 0 · vitest **678/678** (45 files) · prettier clean · lint-staged/pre-commit green.
+**NOT device-verified (F-61)** — owner re-flashes the JS OTA (no version bump, F-32) and works the
+Control Panel, the UNLINKED Connectivity panel (initiate BT scan / Wi‑Fi connect), and a FREE
+account opening the Remote.
+
 ## This session (2026-10-12, connectivity-rebuild Phase 4) — APP: parallel Bluetooth + Wi-Fi (default OFF)
 
 Phase 4 of `TRACKS/PLAN-2026-10-12-connectivity-rebuild.md` — commit **`43d57c6`** (pushed).
