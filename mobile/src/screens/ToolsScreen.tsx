@@ -39,7 +39,21 @@ import type { ComponentProps } from "react";
 import type { RootStackParamList } from "../navigation/types";
 import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
+import {
+  ConnectionSection,
+  type ConnectionMethodId,
+} from "../components/tools/connection";
+import { effectiveMethod as resolveMethod } from "../components/tools/connection/effectiveMethod";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
+import {
+  CarStatusLine,
+  TelemetryStrip,
+} from "../components/tools/TelemetryStrip";
+import {
+  buildCarTelemetry,
+  buildRestartField,
+  describeCar,
+} from "../components/tools/telemetryFormat";
 import { feedbackTap } from "../services/hapticsService";
 import {
   KIND_GROUPS,
@@ -63,6 +77,10 @@ type FeatherIcon = ComponentProps<typeof Feather>["name"];
  * fold away behind a section header row, so the page LEADS with control.
  * Deliberately NOT a card — it sits on the page like the Connections header
  * (double-card nesting would add back the noise this removes).
+ *
+ * 2026-10-12 follow-up (owner: *"everything is collapsed, please expand those
+ * things and show all the data"*): sections now START OPEN — the data is
+ * visible; the header row still lets the user fold a section away.
  */
 function SectionDisclosure({
   title,
@@ -71,7 +89,7 @@ function SectionDisclosure({
   title: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   return (
     <View className="mt-6">
       <Pressable
@@ -177,13 +195,42 @@ export function ToolsScreen() {
     carSsid,
   } = hub;
 
-  // Phase 2 (owner 2026-10-12): the connection UI moved to the Remote screen's
-  // Connectivity panel. This page is now the catalog + saved settings only; it
-  // no longer reads `anyLinked` / `linkVerified` (those fed the removed cards).
+  // U-68 (2026-10-02): the connection truth used to be read in three places
+  // on this page — a banner, a picker, and the hub's own state (the first two
+  // read it through `useActiveTransport`, which no longer exists). That is
+  // how "connected but the UI says no" happened. There is now ONE reader: the
+  // ConnectionSection derives everything from the hub's state, and the hub
+  // registers the transport registry itself (see `ensureTransportsRegistered`
+  // in useControlHub) so the manager never depends on a screen being mounted.
+  // `anyLinked`/`linkVerified` stay here only for the Saved-settings card.
+  const anyLinked = sppStatus === "connected" || wifiConnected;
+  const linkVerified = hub.linkVerified || sppStatus === "connected";
 
-  // Phase 2 (owner 2026-10-12): the connection-method selection and the
-  // effective-method resolution that fed ConnectionSection are gone with the
-  // section — the Remote's Connectivity panel owns them now.
+  // U-68 (2026-10-02): the connection method the new ConnectionSection shows.
+  // Kept here rather than inside the section so the choice survives the
+  // section re-rendering as car truth arrives. It is a SELECTION, never a
+  // claim about what is connected — the section derives that from the link.
+  const [connMethod, setConnMethod] = useState<ConnectionMethodId | null>(null);
+
+  // U-89 (owner: *"the wifi method is not built well and complete, not
+  // everything works"*). The Wi-Fi list — every saved router, the switch, the
+  // search and the add form — renders ONLY when the selected method is "wifi",
+  // and the selected method was set ONLY by tapping a dropdown. So a user who
+  // connected by any other route (automatic discovery, the Connect button, a
+  // link that was already up) got a working connection and NO Wi-Fi controls at
+  // all: the list, the switch and the add form were simply not on the screen.
+  //
+  // Connecting worked; configuring the car did not exist. That is the whole
+  // report.
+  //
+  // Fix: fall back to the link that is ACTUALLY in use, so the controls for the
+  // way you are connected appear on their own. An explicit choice still wins —
+  // this only fills in a method the user has not chosen.
+  const effectiveMethod = resolveMethod({
+    chosen: connMethod,
+    wifiConnected,
+    bluetoothConnected: sppStatus === "connected",
+  });
 
   // F-57 / round-close: when the transport disconnects, reset the selected category
   // so the control panel returns to a clean default state rather than staying
@@ -214,7 +261,10 @@ export function ToolsScreen() {
   // ①: the category detail card leads COMPACT (name · tagline · hardware);
   // the long description + capability checklist hide behind a Details toggle
   // and reset when the category changes (each category's card starts clean).
-  const [showCategoryDetails, setShowCategoryDetails] = useState(false);
+  // 2026-10-12 follow-up (owner: everything is collapsed — show all the data):
+  // the card starts EXPANDED so the description and capability checklist are
+  // visible; "Details" still folds it away.
+  const [showCategoryDetails, setShowCategoryDetails] = useState(true);
   // UX-3 (2026-10-02 audit): a pill tap is USER INTENT. The reset below is
   // for TRANSPORT LOSS only — this flag lets it tell the difference, so a
   // mount/refresh cycle can no longer snap a chosen category back to the
@@ -222,7 +272,7 @@ export function ToolsScreen() {
   const userTouchedSelectionRef = useRef(false);
   const selectCategory = useCallback((slug: string) => {
     userTouchedSelectionRef.current = true;
-    setShowCategoryDetails(false);
+    setShowCategoryDetails(true);
     setSelectedSlug(slug);
   }, []);
   const category: ProjectCategory =
@@ -266,6 +316,22 @@ export function ToolsScreen() {
 
   // Phase 2 (owner 2026-10-12): `scrollRef` / `scrollInputIntoView` and
   // `restartField` went with the connection cards moved to the Remote screen.
+  // The 2026-10-12 follow-up round restores the full Control Panel, so they
+  // are back: F-69 (the keyboard used to cover the field being typed into)
+  // and U-95/F-79 (the car's restart record, resolved once).
+  const scrollRef = useRef<ScrollView | null>(null);
+  const scrollInputIntoView = useCallback((y: number) => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
+  }, []);
+
+  const restartField = buildRestartField({
+    connected,
+    resetReason: telemetry.resetReason,
+    bootCount: telemetry.bootCount,
+    crashCount: telemetry.crashCount,
+    lastCrashPhase: telemetry.lastCrashPhase,
+    lastCrashHeap: telemetry.lastCrashHeap,
+  });
 
   return (
     // F-47: a flex-1 SCREEN-WIDE root wrapping the ScrollView. The disconnect
@@ -293,6 +359,7 @@ export function ToolsScreen() {
         </Text>
       </View>
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         className="flex-1"
@@ -301,9 +368,122 @@ export function ToolsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Phase 2 (owner 2026-10-12): the car telemetry card, the Diagnostics
-            row and the Connect section moved to the Remote screen. This page is
-            the catalogue + saved settings only. */}
+        {/* ---- U-81: the CAR leads. ------------------------------------
+            The page used to open with the project catalog — kind headers,
+            seven category pills, then a detail card carrying a tagline, a
+            description and a capability checklist — and only reached the car
+            after all of it. For someone asking "where is my car / the router
+            I just added is not there", that is the exact wrong first screen:
+            three screens of product copy, then the one fact they came for.
+
+            So the order is now car -> connect -> catalogue. The catalog is
+            still here and still does its job (it picks which deck opens); it
+            just stopped being the thing you read first.
+
+            Visual language is the website's RoboCar control panel
+            (genumsolutions-website/components/RoboCarControl.tsx): a status
+            dot, hairline tiles, uppercase micro-labels, monospaced values.
+            Every reading is either something the car said or an em dash. */}
+        {/* U-86: the panel no longer repeats the screen title. It used to say
+            "Control Panel" here as well, so the word appeared twice within a
+            few centimetres — the "many things with the same meaning" complaint,
+            in its most literal form. The header above owns the name now. */}
+        <View className="rounded-2xl border border-line bg-card p-4">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
+              Car
+            </Text>
+            <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
+              {connected ? "Live" : "No link"}
+            </Text>
+          </View>
+          <CarStatusLine
+            connected={connected}
+            summary={describeCar({
+              id: telemetry.id,
+              mode: telemetry.mode,
+              ssid: telemetry.ssid ?? carSsid,
+              ip: telemetry.ip,
+            })}
+          />
+          <TelemetryStrip
+            fields={[
+              ...buildCarTelemetry({
+                connected,
+                // The car's REPORTED mode, not `activeMode` — the app can be
+                // showing a mode the car has not confirmed, and the strip is
+                // where that difference has to be visible.
+                mode: telemetry.mode,
+                speed: telemetry.speed,
+                rssi: telemetry.rssi,
+                signal: telemetry.signal,
+                uptimeMs: telemetry.uptimeMs,
+                freeHeap: telemetry.freeHeap,
+                linkLabel: wifiConnected
+                  ? "Wi-Fi"
+                  : sppStatus === "connected"
+                    ? "Bluetooth"
+                    : deviceName
+                      ? "Bluetooth"
+                      : null,
+              }),
+            ]}
+          />
+        </View>
+
+        {/* U-97: the car's restart record is diagnostics, not a headline reading.
+            It sat in the strip above and made every reconnect look like a fault.
+            It now lives in one quiet, collapsed row that only appears when the
+            car actually reported something — no row rather than a false "None". */}
+        {restartField ? (
+          <SectionDisclosure title="Diagnostics">
+            <View className="rounded-2xl border border-line bg-card p-4">
+              <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
+                Last restart record
+              </Text>
+              <TelemetryStrip fields={[restartField]} />
+            </View>
+          </SectionDisclosure>
+        ) : null}
+
+        {/* Connections — the ONE connection surface (owner ①②). Placed
+            directly under the car status because connecting IS the next
+            action, not something to scroll to.
+
+            2026-10-11: the section label is a plain heading, NOT a wrapper
+            card. U-68 wrapped ConnectionSection in a `rounded-2xl border
+            bg-card` card, but the section already renders its OWN cards inside
+            (the status card, the method cards, the selected setup card), so the
+            page showed a card inside a card inside a card — the exact
+            non-uniform card noise the owner kept objecting to. The heading now
+            matches the "Projects" section below: a bare label, then the cards. */}
+        <Text className="mt-6 text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
+          Connect
+        </Text>
+
+        {/* U-68 (2026-10-02): the connection layer, rebuilt. This ONE section
+            replaces ConnectionBanner, the F-59 handoff card, TransportPicker
+            and RouterPanel on this page - they were four card shapes with four
+            behaviours (F-67).
+
+            Phase 2 (owner 2026-10-12) moved this to the Remote screen's
+            Connectivity panel; the 2026-10-12 follow-up round restores it HERE
+            too — the Control Panel is the first place a user arrives, and it
+            must be able to initiate Bluetooth + Wi-Fi and manage saved routers
+            without first opening a linked Remote window. `manage` owns the full
+            add/edit/forget manager, mirroring the Remote panel.
+
+            `keyboardShouldPersistTaps="handled"` + the scroll-into-view handler
+            above are F-69: the tap that focuses a field must not be eaten by
+            the keyboard opening, and the focused field must end up above it. */}
+        <ConnectionSection
+          hub={hub}
+          onMethodChange={setConnMethod}
+          method={effectiveMethod}
+          onInputFocus={scrollInputIntoView}
+          feedbackTap={feedbackTap}
+          manage
+        />
 
         {/* ---- Projects: the catalog, now BELOW the car (U-81). ----
             Unchanged in behaviour — same pills, same order, same detail card

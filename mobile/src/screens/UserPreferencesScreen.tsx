@@ -303,8 +303,7 @@ export function UserPreferencesScreen() {
           <Text className="mt-2 text-sm leading-5 text-muted">
             Upgrade your account to Pro to save per-robot profiles: custom
             command values, PID and speed parameters, and the telemetry channels
-            you care about. The Remote window unlocks with Pro too. Contact
-            GENUM Solutions to upgrade
+            you care about. Contact GENUM Solutions to upgrade
             {user?.email ? ` (account: ${user.email})` : ""}.
           </Text>
         </View>
