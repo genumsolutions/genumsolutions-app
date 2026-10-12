@@ -1,8 +1,8 @@
 // U-90 (2026-10-04): the app's ONE responsive idiom.
 //
 // Before this module every screen derived its own layout facts:
-// RouterPanel had `isWide = width >= 640`, RemoteControlScreen had
-// `isLandscape = width > height`, AccountSheet/ModeChooser each called
+// the wide-layout screens used a private `width >= 640`, RemoteControlScreen
+// had `isLandscape = width > height`, AccountSheet/ModeChooser each called
 // useWindowDimensions themselves, and HomeScreen froze its card width at
 // MODULE LOAD (`Dimensions.get("window")` at import time — after a rotation,
 // on a tablet, or on the web build after any window resize, the home strips
@@ -18,9 +18,9 @@
 import { useWindowDimensions } from "react-native";
 
 /**
- * The single layout breakpoint. 640 is Tailwind's `sm`, which is what
- * RouterPanel already used — keeping it means no screen changes size today;
- * this module only makes the threshold shared and pinned by test.
+ * The single layout breakpoint. 640 is Tailwind's `sm` — the threshold the
+ * wide-layout screens already used — keeping it means no screen changes size
+ * today; this module only makes the threshold shared and pinned by test.
  */
 export const WIDE_BREAKPOINT = 640;
 

@@ -1,6 +1,6 @@
 // U-90 - the ONE responsive idiom, pinned. Before this module every screen
-// derived its own threshold (RouterPanel's 640, RemoteControlScreen's own
-// landscape compare) and HomeScreen froze its card width at module load —
+// derived its own threshold (a private 640 wide threshold, RemoteControlScreen's
+// own landscape compare) and HomeScreen froze its card width at module load —
 // see viewport.ts. These tests pin the shared semantics so no future screen
 // reintroduces a private threshold or a frozen read.
 import { readFileSync } from "node:fs";
@@ -24,7 +24,7 @@ import {
 } from "./viewport";
 
 describe("U-90 - isWideLayout: the single breakpoint", () => {
-  it("unlocks two-column layouts at 640 (RouterPanel's existing sm)", () => {
+  it("unlocks two-column layouts at 640 (Tailwind's sm)", () => {
     expect(WIDE_BREAKPOINT).toBe(640);
     expect(isWideLayout(640)).toBe(true);
     expect(isWideLayout(641)).toBe(true);

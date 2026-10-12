@@ -4,7 +4,7 @@
 // Split out of `TelemetryStrip.tsx` so it can be tested: this project's vitest
 // setup does not transform `react-native`, so a test may not import a `.tsx`
 // component. The convention throughout the tools/ folder is the same —
-// `routerMemory.ts`, `routerPanelOutcome.ts`, `commands.ts` are all pure `.ts`
+// `routerMemory.ts`, `commands.ts` are all pure `.ts`
 // with the view on top.
 //
 // The formatting rules are the substance here, and each is a place a UI like

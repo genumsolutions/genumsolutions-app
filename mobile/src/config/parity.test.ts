@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import appJson from "../../app.json";
+import pkgJson from "../../package.json";
 import { APP_VERSION } from "./site";
 import { LOCAL_CAR_MODES } from "./roboCarCatalog";
 import { APK_URL, RELEASE_MANIFEST_URL } from "./update";
@@ -17,6 +18,14 @@ describe("release version parity (app.json <-> src/config/site.ts)", () => {
   // APP_VERSION in site.ts must be bumped together on every release.
   it("matches APP_VERSION to the app.json version", () => {
     expect(APP_VERSION).toBe(appJson.expo.version);
+  });
+
+  // 2026-10-12: the v3.2.7 bump (`5c993570`) updated app.json + site.ts but left
+  // package.json / package-lock.json at 3.2.6 — a manual bump that skipped the
+  // copies `scripts/bump-version.mjs` is documented to rewrite. Pinned so the
+  // next hand-edit cannot drift the npm manifest away from the app manifest.
+  it("matches the package.json version to the app.json version", () => {
+    expect(pkgJson.version).toBe(appJson.expo.version);
   });
 
   it("uses a semver version and a positive versionCode", () => {

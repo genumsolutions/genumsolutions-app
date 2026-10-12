@@ -2,9 +2,10 @@
 // connection/ConnectionSection — the Control Panel's connection layer
 // (U-68 rebuild, revised by U-69 on the owner's second review).
 //
-// Replaces, on the Control Panel only: ConnectionBanner, the F-59 handoff
-// card, TransportPicker and RouterPanel. The drive decks, the Remote screen
-// and every other page are untouched.
+// Replaces the retired ConnectionBanner, the F-59 handoff card and
+// TransportPicker. Since the 2026-10-12 connectivity rebuild it is the ONE
+// connection surface, mounted on the Remote screen's Connectivity panel and on
+// the Control Panel; the old RouterPanel is deleted (U-101).
 //
 // THE SHAPE. On the Remote screen this is a LANDSCAPE surface, so it is a
 // two-pane layout rather than one full-width column that stretches every card

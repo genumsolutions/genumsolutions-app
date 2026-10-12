@@ -1179,7 +1179,7 @@ export function RemoteControlScreen({ navigation }: Props) {
 
             {/* Round-6: dark-theme toggle mirrors the Account/Menu Appearance
                 switch — drives AppContext.setThemeMode, which flips the
-                semantic tokens (this screen + RouterPanel skin along with it). */}
+                semantic tokens (this screen + the shared tool surfaces). */}
             <View className="mt-1 flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Feather
