@@ -130,7 +130,7 @@ function DualDpad({
   compact,
   navActiveRef,
   onNavInput,
-  oledSlot,
+  telemetrySlot,
 }: {
   canControl: boolean;
   speed: number;
@@ -143,7 +143,7 @@ function DualDpad({
   compact?: boolean;
   navActiveRef?: { current: boolean };
   onNavInput?: (a: "x" | "y", v: -1 | 0 | 1) => void;
-  oledSlot?: React.ReactNode;
+  telemetrySlot?: React.ReactNode;
 }) {
   const [surf, setSurf] = useState<{ w: number; h: number } | null>(null);
   const [activeCells, setActiveCells] = useState<
@@ -484,7 +484,7 @@ function DualDpad({
         className="relative min-h-0 flex-1 flex-row items-center justify-center gap-2"
       >
         {padView("L")}
-        {oledSlot && (
+        {telemetrySlot && (
           <View
             pointerEvents="none"
             className="absolute items-center justify-center"
@@ -496,7 +496,7 @@ function DualDpad({
               height: 90,
             }}
           >
-            {oledSlot}
+            {telemetrySlot}
           </View>
         )}
         {padView("R")}
@@ -519,7 +519,7 @@ function DualJoystick({
   fill = false,
   navActiveRef,
   onNavInput,
-  oledSlot,
+  telemetrySlot,
 }: {
   canControl: boolean;
   rightEnabled: boolean;
@@ -528,7 +528,7 @@ function DualJoystick({
   fill?: boolean;
   navActiveRef?: { current: boolean };
   onNavInput?: (a: "x" | "y", v: -1 | 0 | 1) => void;
-  oledSlot?: React.ReactNode;
+  telemetrySlot?: React.ReactNode;
 }) {
   const [geo, setGeo] = useState<{ w: number; h: number } | null>(null);
   const touchesRef = useRef(new Map<string, { stick: "L" | "R" }>());
@@ -849,7 +849,7 @@ function DualJoystick({
               </View>
             );
           })}
-          {oledSlot && geo && (
+          {telemetrySlot && geo && (
             <View
               pointerEvents="none"
               style={{
@@ -860,7 +860,7 @@ function DualJoystick({
                 height: 90,
               }}
             >
-              {oledSlot}
+              {telemetrySlot}
             </View>
           )}
         </>
@@ -896,7 +896,7 @@ export function DriveControls({
   compact = false,
   navActiveRef,
   onNavInput,
-  oledSlot,
+  telemetrySlot,
 }: DriveControlsProps & { safetyLimits?: SafetyLimits }) {
   const limits = safetyLimits ?? DEFAULT_LIMITS;
   const showSpeed =
@@ -1016,7 +1016,7 @@ export function DriveControls({
             fill={compact}
             navActiveRef={navActiveRef}
             onNavInput={onNavInput}
-            oledSlot={oledSlot}
+            telemetrySlot={telemetrySlot}
           />
           {!compact && (
             <Text className="mt-3 text-center text-sm text-muted">
@@ -1042,7 +1042,7 @@ export function DriveControls({
             compact={compact}
             navActiveRef={navActiveRef}
             onNavInput={onNavInput}
-            oledSlot={oledSlot}
+            telemetrySlot={telemetrySlot}
           />
           {!compact && (
             <View className="mt-3 flex-row items-center justify-center">

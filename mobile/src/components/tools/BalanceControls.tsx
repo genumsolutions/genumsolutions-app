@@ -4,7 +4,7 @@
 //
 // Compact layout (immersive remote):
 //   Left:  [ANGLE +12.3° / ●BAL / OUT:50]   (single hero card)
-//   Right: [OLED 180×90]
+//   Right: [link/uptime/heap/signal readout]
 //   Grid:  Kp/Ki/Kd/OFF with fine + coarse ± buttons
 //
 // Step sizes match the firmware's significant bits.
@@ -150,7 +150,7 @@ export function BalanceControls({
   off,
   onPid,
   compact,
-  oledSlot,
+  telemetrySlot,
 }: BalanceControlsProps) {
   const st = pidStatus(angle);
   const angleText =
@@ -166,7 +166,7 @@ export function BalanceControls({
     <View
       className={`rounded-2xl border border-line bg-card shadow-card ${compact ? "px-1.5 pt-1.5 pb-2" : "mt-4 p-5"}`}
     >
-      {/* ── Top section: angle/OUT cards + OLED ── */}
+      {/* ── Top section: angle/OUT cards + telemetry ── */}
       <View className="flex-row gap-2">
         {/* Left: angle + OUT single hero card */}
         <View className="flex-1 rounded-xl bg-slate-900 px-4 py-3">
@@ -189,9 +189,11 @@ export function BalanceControls({
           </View>
         </View>
 
-        {/* Right: OLED slot (flex-1, centered) */}
-        {oledSlot && (
-          <View className="flex-1 items-center justify-center">{oledSlot}</View>
+        {/* Right: telemetry readout slot (flex-1, centered) */}
+        {telemetrySlot && (
+          <View className="flex-1 items-center justify-center">
+            {telemetrySlot}
+          </View>
         )}
       </View>
 
