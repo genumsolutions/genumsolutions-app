@@ -1030,12 +1030,12 @@ export function RemoteControlScreen({ navigation }: Props) {
               >
                 <ScrollView
                   className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card"
-                  contentContainerStyle={{ padding: 12, gap: 8 }}
+                  contentContainerStyle={{ padding: 10, gap: 6 }}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
                 >
-                  <Text className="px-1 text-[13px] font-black uppercase tracking-widest text-navy">
+                  <Text className="px-1 text-[11px] font-black uppercase tracking-widest text-navy">
                     Connectivity
                   </Text>
                   <ConnectionSection

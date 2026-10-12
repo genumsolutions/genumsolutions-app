@@ -491,9 +491,9 @@ function DualDpad({
             style={{
               left: "50%",
               top: "50%",
-              transform: [{ translateX: -90 }, { translateY: -45 }],
-              width: 180,
-              height: 90,
+              transform: [{ translateX: -100 }, { translateY: -50 }],
+              width: 200,
+              height: 100,
             }}
           >
             {telemetrySlot}
@@ -854,10 +854,10 @@ function DualJoystick({
               pointerEvents="none"
               style={{
                 position: "absolute",
-                left: geo.w * 0.5 - 90,
-                top: geo.h * 0.5 - 45,
-                width: 180,
-                height: 90,
+                left: geo.w * 0.5 - 100,
+                top: geo.h * 0.5 - 50,
+                width: 200,
+                height: 100,
               }}
             >
               {telemetrySlot}

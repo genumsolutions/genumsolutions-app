@@ -65,7 +65,7 @@ export type ScannedNetwork = {
  * ConnectionSection: a nested vertical scroller of unbounded height just grows
  * forever, so the outer page scroller cannot do this job.
  */
-const ROUTER_LIST_MAX_HEIGHT = 320;
+const ROUTER_LIST_MAX_HEIGHT = 240;
 
 export type WifiPanelProps = {
   /** Exactly what the car reported in NETW;… — the only source of truth. */
@@ -247,10 +247,10 @@ export function WifiPanel({
           the user has to take — but owner 2026-10-10: no guidance subtitles,
           short and minimal. One imperative line, no paragraph. */}
       {pendingSsid ? (
-        <View className="mb-2.5 rounded-xl border border-line bg-card p-3">
-          <View className="flex-row items-center gap-2">
-            <Feather name="smartphone" size={15} color="#1e3a8a" />
-            <Text className="flex-1 text-[13px] leading-5 text-ink">
+        <View className="mb-2 rounded-lg border border-line bg-card p-2">
+          <View className="flex-row items-center gap-1.5">
+            <Feather name="smartphone" size={12} color="#1e3a8a" />
+            <Text className="flex-1 text-[11px] leading-4 text-ink">
               Join <Text className="font-bold">{pendingSsid}</Text> on this
               phone
             </Text>
@@ -259,10 +259,10 @@ export function WifiPanel({
       ) : null}
 
       {rows.length === 0 ? (
-        <Text className="py-1 text-[13px] text-muted">No networks yet.</Text>
+        <Text className="py-0.5 text-[11px] text-muted">No networks yet.</Text>
       ) : (
         <ScrollView
-          className="overflow-hidden rounded-xl border border-line bg-card"
+          className="overflow-hidden rounded-lg border border-line bg-card"
           style={{ maxHeight: ROUTER_LIST_MAX_HEIGHT }}
           nestedScrollEnabled
           showsVerticalScrollIndicator
@@ -290,7 +290,7 @@ export function WifiPanel({
                     selected: r.state === "active",
                     disabled: !r.switchable,
                   }}
-                  className="flex-1 flex-row items-center gap-2.5 px-3 py-3"
+                  className="flex-1 flex-row items-center gap-2 px-2 py-1.5"
                   testID={`wifi-row-${r.ssid}`}
                 >
                   <Feather
@@ -303,12 +303,12 @@ export function WifiPanel({
                             ? "search"
                             : "wifi"
                     }
-                    size={16}
+                    size={13}
                     color={r.state === "active" ? "#059669" : "#1e3a8a"}
                   />
                   <Text
                     numberOfLines={1}
-                    className={`flex-1 text-[14px] ${
+                    className={`flex-1 text-[12px] ${
                       r.state === "active"
                         ? "font-bold text-ink"
                         : r.switchable
@@ -319,7 +319,7 @@ export function WifiPanel({
                     {r.ssid}
                   </Text>
                   {r.meta ? (
-                    <Text className="text-[12px] text-muted">{r.meta}</Text>
+                    <Text className="text-[10px] text-muted">{r.meta}</Text>
                   ) : null}
                 </Pressable>
                 {/* Forgetting is per-row and deliberately quiet: it must not
@@ -340,10 +340,10 @@ export function WifiPanel({
                       disabled={busy}
                       accessibilityRole="button"
                       accessibilityLabel={`Edit ${r.ssid}`}
-                      className="px-3 py-3"
+                      className="px-2 py-1.5"
                       testID={`wifi-edit-${r.ssid}`}
                     >
-                      <Feather name="edit-2" size={15} color="#1e3a8a" />
+                      <Feather name="edit-2" size={12} color="#1e3a8a" />
                     </Pressable>
                     {/* Forgetting is per-row and deliberately quiet: it must not
                         compete with the one action that matters, switching. */}
@@ -352,10 +352,10 @@ export function WifiPanel({
                       disabled={busy}
                       accessibilityRole="button"
                       accessibilityLabel={`Forget ${r.ssid}`}
-                      className="px-3 py-3"
+                      className="px-2 py-1.5"
                       testID={`wifi-forget-${r.ssid}`}
                     >
-                      <Feather name="trash-2" size={15} color="#64748b" />
+                      <Feather name="trash-2" size={12} color="#64748b" />
                     </Pressable>
                   </>
                 ) : null}
@@ -368,17 +368,17 @@ export function WifiPanel({
       {/* Scanning is how a new network is found — the phone's own "refresh".
           U-93: when it cannot work, it SAYS why (the owner's "router select
           not working sometime" — a silently dead button reads as a bug). */}
-      <View className="mt-2.5 flex-row gap-2">
+      <View className="mt-1.5 flex-row gap-1.5">
         <Pressable
           onPress={onScan}
           disabled={busy || !reachable}
           accessibilityRole="button"
           accessibilityLabel="Search for networks"
-          className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-line bg-card py-3 ${busy ? "opacity-50" : ""}`}
+          className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg border border-line bg-card py-1.5 ${busy ? "opacity-50" : ""}`}
           testID="wifi-scan"
         >
-          <Feather name="refresh-cw" size={14} color="#1e3a8a" />
-          <Text className="text-[13px] font-bold text-navy">
+          <Feather name="refresh-cw" size={12} color="#1e3a8a" />
+          <Text className="text-[11px] font-bold text-navy">
             {busy
               ? "Searching…"
               : reachable
@@ -391,10 +391,10 @@ export function WifiPanel({
             onPress={() => sendCmd("ROUTERS;SCAN;CANCEL")}
             accessibilityRole="button"
             accessibilityLabel="Cancel scan"
-            className="items-center rounded-xl border border-line bg-card px-4 py-3"
+            className="items-center rounded-lg border border-line bg-card px-3 py-1.5"
             testID="wifi-scan-cancel"
           >
-            <Text className="text-[13px] font-bold text-navy">Cancel</Text>
+            <Text className="text-[11px] font-bold text-navy">Cancel</Text>
           </Pressable>
         )}
       </View>
@@ -402,10 +402,10 @@ export function WifiPanel({
       {manage ? (
         <>
           {adding ? (
-            <View className="mt-2.5 gap-2" testID="wifi-add-form">
+            <View className="mt-1.5 gap-1.5" testID="wifi-add-form">
               {editingSsid ? (
                 <Text
-                  className="text-[13px] font-bold text-ink"
+                  className="text-[11px] font-bold text-ink"
                   testID="wifi-edit-title"
                 >
                   Set a new password for “{editingSsid}”
@@ -425,7 +425,7 @@ export function WifiPanel({
                   accessibilityLabel="Network name"
                   maxLength={40}
                   returnKeyType="next"
-                  className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
+                  className="h-8 rounded-md border border-line bg-card px-2 text-[12px] text-ink"
                   testID="wifi-ssid"
                 />
               </View>
@@ -445,14 +445,14 @@ export function WifiPanel({
                   maxLength={72}
                   returnKeyType="done"
                   onSubmitEditing={submit}
-                  className="h-11 rounded-lg border border-line bg-card px-3 text-[14px] text-ink"
+                  className="h-8 rounded-md border border-line bg-card px-2 text-[12px] text-ink"
                   testID="wifi-pass"
                 />
               </View>
               {error ? (
                 <InlineMessage tone="error">{error}</InlineMessage>
               ) : null}
-              <View className="flex-row gap-2">
+              <View className="flex-row gap-1.5">
                 <Pressable
                   onPress={submit}
                   disabled={
@@ -462,10 +462,10 @@ export function WifiPanel({
                   }
                   accessibilityRole="button"
                   accessibilityLabel="Save network"
-                  className="flex-1 items-center rounded-full bg-navy py-3"
+                  className="flex-1 items-center rounded-full bg-navy py-1.5"
                   testID="wifi-add-submit"
                 >
-                  <Text className="text-[13px] font-black text-white">
+                  <Text className="text-[11px] font-black text-white">
                     {editingSsid ? "Save password" : "Save"}
                   </Text>
                 </Pressable>
@@ -473,9 +473,9 @@ export function WifiPanel({
                   onPress={cancel}
                   accessibilityRole="button"
                   accessibilityLabel="Cancel"
-                  className="items-center rounded-full border border-line bg-card px-5 py-3"
+                  className="items-center rounded-full border border-line bg-card px-4 py-1.5"
                 >
-                  <Text className="text-[13px] font-bold text-navy">
+                  <Text className="text-[11px] font-bold text-navy">
                     Cancel
                   </Text>
                 </Pressable>
@@ -487,11 +487,11 @@ export function WifiPanel({
               disabled={!canAdd}
               accessibilityRole="button"
               accessibilityLabel="Add network"
-              className="mt-2 flex-row items-center justify-center gap-2 py-2"
+              className="mt-1.5 flex-row items-center justify-center gap-1.5 py-1"
               testID="wifi-add-open"
             >
-              <Feather name="plus" size={15} color="#1e3a8a" />
-              <Text className="text-[13px] font-bold text-navy">
+              <Feather name="plus" size={12} color="#1e3a8a" />
+              <Text className="text-[11px] font-bold text-navy">
                 Add network
               </Text>
             </Pressable>
@@ -502,8 +502,8 @@ export function WifiPanel({
            and switching; add/edit/delete moved to the Remote screen's Router
            panel, so this copy points there instead of re-rendering a second
            manager. One short line, no paragraph. */
-        <View className="mt-2.5 rounded-lg border border-line bg-card px-3 py-2">
-          <Text className="text-[11px] leading-4 text-muted">
+        <View className="mt-1.5 rounded-md border border-line bg-card px-2 py-1">
+          <Text className="text-[10px] leading-3 text-muted">
             Add, edit and forget networks from the Remote screen (Router).
           </Text>
         </View>
