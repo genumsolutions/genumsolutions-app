@@ -1,4 +1,14 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild Phase 4 DONE — parallel BT+WiFi toggle)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild COMPLETE — all phases done, app half 43d57c6 / car half 1cfc913)
+
+## Connectivity-rebuild 2026-10-12 — ALL PHASES DONE (app half); owner flash + device test owed
+
+The multi-repo "connectivity rebuild" (`TRACKS/PLAN-2026-10-12-connectivity-rebuild.md`) is complete
+on the app side: Phase 1 (no code change), Phase 2 (`15718a8`, Remote **Connectivity** panel),
+Phase 3 (`5285df6`, OLED mirror removed; telemetry around the drive controls), Phase 4 (`43d57c6`,
+parallel BT+WiFi default OFF), Phase 5 (ledgers + root `RESUME-ME.md`). No app version bump (JS-only →
+same-version OTA, F-32). **Owner action:** flash the car to **1.3.0** then work through
+`mobile/TESTING.md` + the car's `TRACKS/DEVICE-TESTS.md` (incl. the new parallel/BT+WiFi round).
+**F-61**: every gate is green and none of it is device evidence.
 
 ## This session (2026-10-12, connectivity-rebuild Phase 4) — APP: parallel Bluetooth + Wi-Fi (default OFF)
 
@@ -30,8 +40,8 @@ NVS `botcfg/allow_parallel`) is `Genum_4WD4M_CAR` `1cfc913`.
   rules mutant-proven (guard polarity ×2, reply prefix) → red, restore → green.
 
 **Gate:** tsc 0 · vitest **678/678** (45 files; +5) · prettier clean. **NOT device-verified (F-61)** —
-needs flash 1.3.0 + both transports up at once checked on the Remote Settings drawer. Next: **Phase 5**
-(final sweep — ledgers, root `RESUME-ME.md`).
+needs flash 1.3.0 + both transports up at once checked on the Remote Settings drawer. **Phase 5**
+(ledgers + root `RESUME-ME.md`) — **DONE**.
 
 ## This session (2026-10-12, connectivity-rebuild Phase 3) — APP: the OLED mirror is gone; link/uptime/heap/signal telemetry sits around the drive controls
 

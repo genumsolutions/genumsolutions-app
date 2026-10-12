@@ -11,6 +11,11 @@ connection sections; enable parallel BT+WiFi with a power-saving toggle (default
 Strict scope: *"dont change other thing that i havent asked to you"*.
 
 ## RESUME HERE
+> **ALL PHASES DONE — the connectivity rebuild is complete (app half).** No app version bump
+> (JS-only → same-version OTA, F-32). Device verification is owed: flash the car to **1.3.0** and
+> run `mobile/TESTING.md` / the car's `TRACKS/DEVICE-TESTS.md`. Phase 4 app half = **`app 43d57c6`**
+> (docs `66c1d78`), car half = **`car 1cfc913`**. Summary of Phase 4 in the block below.
+
 > **Phase 4 app half: DONE.** Committed + pushed (app code commit, docs commit). Shipped:
 > - `DevicePrefs.allowParallelLinks?: boolean` (default false) in `types.ts`.
 > - `useControlHub.ts`: `allowParallelLinks` state + `allowParallelLinksRef` (:241-252);
@@ -98,7 +103,9 @@ Strict scope: *"dont change other thing that i havent asked to you"*.
       one-active-link relaxed when ON (skips `previous.disconnect()`); `oneActiveLink.test.ts`
       + `linkManager.test.ts` updated. Car half: `WIFICFG;PARALLEL;ON|OFF` + NVS
       `botcfg/allow_parallel`, U-79 loop parallel branch (car `1cfc913`).
-- [ ] **Phase 5 — final sweep** (ledgers, `RESUME-ME.md`).
+- [x] **Phase 5 — final sweep.** DONE. No app version bump (JS-only changes ship as same-version OTA,
+      F-32); ledgers (`NEXT-SESSION.md`) + root `RESUME-ME.md` finalised with the one flash + test run.
+      All five phases complete.
 
 ## Gates to run (app, from `genumsolutions-app\mobile`)
 ```
