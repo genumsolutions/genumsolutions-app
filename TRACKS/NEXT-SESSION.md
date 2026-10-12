@@ -42,7 +42,8 @@ full `REPLY=` (and now the restart record) would be dropped whole. Shipped fix s
 **Gates (all green):** app `tsc` 0 · vitest **679/679** (44 files; +3) · prettier + `format:check` clean;
 website vitest **288/288** (incl. parity + car-relay after the 512 bump); car `check-relay-contract.mjs`
 (`outbound cap 512`) · `check-webpage-js.mjs` · `check-firmware-syntax.ps1` (10/10 TUs). **Commits:** app
-`<app-hash>` + docs `<docs-hash>`; car `<car-hash>`. **UNFLASHED** — owner must flash 1.3.2 (and 1.3.1).
+`503af36` + docs `21bf1dd`; website `ee982f2`; car `cb47dbb` (+ docs `10424c2`). **OTA published**
+(runtime 3.2.7, group `20021e40`, Android `01a12fa5`). **UNFLASHED** — owner must flash 1.3.2 (and 1.3.1).
 
 ## This session (2026-10-12, Remote feedback follow-up) — the mode cycle button works in every mode; telemetry rides Bluetooth (firmware 1.3.1 + app); Connectivity is ONE immediate split, no duplicate Settings row; AUTO mode fits one landscape screen
 
