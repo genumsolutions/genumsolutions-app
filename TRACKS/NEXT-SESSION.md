@@ -1,4 +1,59 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: Remote OLED-mirror restore + top-line telemetry, Bluetooth Wi-Fi-style split, Wi-Fi form/keyboard round)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: mode button fixed for every mode, telemetry over Bluetooth, Connectivity unified into one split, AUTO telemetry restored to fit one screen)
+
+## This session (2026-10-12, Remote feedback follow-up) — the mode cycle button works in every mode; telemetry rides Bluetooth (firmware 1.3.1 + app); Connectivity is ONE immediate split, no duplicate Settings row; AUTO mode fits one landscape screen
+
+Owner follow-up on `f7262c4`: the mode button still *"working inconsistently"*; the readings should
+reach the app over Bluetooth (not just Wi-Fi); Connectivity had *"two separate format running"* → unify
+into one split that shows directly; the gear dropdown no longer needs its own Connectivity row (the
+pill is always visible); and AUTO's telemetry *"elongated across the landscape view"* → restore the old
+telemetry setup (the OLED mirror) to fit a single screen without scrolling. App commit **`f808dfb`**
+(this ledger + the `TESTING.md` rows are the follow-up) plus a **car firmware 1.3.1 UNFLASHED** (F-61).
+
+1. **`components/tools/ModeChooser.tsx` — the cycle button works for ALL modes.** `canControl` was
+   gating the whole control (button + dropdown rows) while the car was running, so in connected
+   ROBOCAR/AUTO the button dead-clicked — that was the "working inconsistently". The cycle button is
+   now `disabled={locked}` (same rule as the dropdown rows) and spins (Animated 0→360°) on press.
+   `types.ts` dropped `canControl` from `ModeChooserProps`; `RemoteControlScreen.tsx:718` no longer
+   passes it.
+2. **`services/carProtocol.ts` — telemetry over Bluetooth.** The STATE branch now parses
+   `UP`/`UPTIME`→`uptimeMs`, `HEAP`→`freeHeap`, `SIG`/`SIGNAL`→`signal`, `RSSI`→`rssi` (guarded
+   `val !== "" && Number.isFinite(n)`). `carProtocol.test.ts`: 3 new cases (parses `UP=`/`HEAP=`/
+   `SIG=`/`RSSI=`; empty values stay unknown; absent keys invent nothing). The top status line
+   (`TelemetryLine`) now lights up over a Bluetooth data link, not just Wi-Fi.
+3. **Car firmware `..\Genum_4WD4M_CAR` — 1.3.1 (UNFLASHED).** `ModeManager.cpp` appends
+   `;UP=<millis>;HEAP=<ESP.getFreeHeap()>` to every STATE line (buffer 448→512, `wifiKeys` 160→224,
+   `#include <WiFi.h>`) and `;SIG=<pct 0-100>;RSSI=<dBm>` only when `WiFi.status() == WL_CONNECTED` —
+   so a BT-only car reports `--` for Sig (the owner's "dashed" rule), mirroring `buildStatusJson`.
+   `Config.h` `FW_VERSION` 1.3.0→1.3.1; `TRACKS/CHANGELOG.md` entry added.
+4. **`components/tools/connection/ConnectionSection.tsx` — ONE split, shown immediately.** The panel
+   is now a permanent two-pane row: status card full-width on top; LEFT (min-w 210 / w-42% / max-w 300)
+   = "Connection method" caption + the three pills + the method's single `MethodSetup` card + ONE
+   message surface; RIGHT (min-w 240, flex-1) = the method's own caption ("Cars found · networks" /
+   "Networks"), Bluetooth paired/added devices OUTSIDE the scroller (`conn-bt-paired`), the rest in
+   the bounded `DEVICE_LIST_MAX_HEIGHT` window (`conn-bt-list`), then `WifiPanel` (wifi+bluetooth) or
+   the honest Internet card. The device list was REMOVED from `TargetBody` (it moved to the right
+   pane); `sppDevices` dropped from `MethodSetup`/`TargetBody` props. `RemoteControlScreen.tsx`
+   defaults `connMethod` to `"bluetooth"` so the split renders on open (was `null` → one column →
+   "two formats").
+5. **`screens/RemoteControlScreen.tsx` — gear dropdown no longer lists Connectivity.** The divider+
+   Pressable that opened the ConnectionSection from Settings was a duplicate of the always-visible
+   corner pill; deleted (backdrop + Dark theme + Hotspot power-save rows stay). No state was orphaned
+   (`showRouter` is still the pill's).
+6. **AUTO mode telemetry restored — fits one landscape screen.** `RemoteControlScreen.tsx` gives
+   `BalanceControls` the OLED mirror (`oledSlot`) as its telemetry slot instead of the
+   `DriveTelemetry` grid; `BalanceControls.tsx` hero is width-capped (max-w 240) and compacted
+   (30px angle, tighter rows) so mirror + hero + 2×2 PID grid fit. `DriveTelemetry.tsx` grid fix:
+   the old `flex-wrap` + `basis-1/2` + gap wrapped EVERY tile to its own row (50%+50%+gap > 100% →
+   the "elongated" column); now an explicit 2×2 of `flex-1` cells (gap-safe). Other modes keep the
+   2×2 grid exactly as before.
+7. **Docs.** `mobile/TESTING.md` → new `U-102` follow-up section (rows 6–10, DEVICE VERIFY PENDING);
+   `TRACKS/NEXT-SESSION.md` → this entry.
+
+**Deviation from the approved plan:** none — owner approved the full set during the round and the plan
+was executed as signed off.
+
+**Gate:** tsc 0 · vitest **676/676** (44 files) · prettier clean. **Not device-verified (F-61).** No
+version bump (JS-only app + same-version OTA, F-32). **Car 1.3.1 unflashed — flash owed (F-61).**
 
 ## This session (2026-10-12, Remote feedback round) — OLED mirror restored in the gamepad centre; readings moved to the top status line; Bluetooth gets the Wi-Fi split; Wi-Fi add-form scroller + keyboard/focus fixed
 
