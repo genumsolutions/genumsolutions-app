@@ -46,6 +46,9 @@ is landscape-locked, so the Bluetooth "split" is a two-column layout inside the 
    `select-ink` stay, still used by the method pills), and the **dead `reportedSsid` prop chain**
    removed from `MethodSetup` / `TargetBody` (declared + threaded but never read; the local
    `reportedSsid` variable is still used for the routers context).
+8. **Device-test rows added: `mobile/TESTING.md` → new top section `U-102`** (5 rows: OLED mirror
+   back, readings on the status line, Bluetooth split, Wi-Fi form scroll + keyboard, regressions).
+   Still UNCHECKED — device verify pending (F-61).
 
 **Deviation from the approved plan (owner signed off during the round):** the plan said *retire
 `bt-routers`*, but it was KEPT in the connection model — the UI can no longer select it (the chooser is

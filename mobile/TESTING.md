@@ -1,5 +1,33 @@
 # TESTING — Physical Device Test Checklist
 
+## U-102 round — Remote feedback follow-up: OLED mirror back, readings on the status line, Bluetooth split, Wi-Fi form + keyboard (2026-10-12, OTA `f7262c4` + `78e6412` — DEVICE VERIFY PENDING)
+
+> Owner: the middle readings were _"too small and not perfectly managed"_ → restore the old OLED
+> mirror there and move the readings to the top status line; _"mirror WiFi: connect left, list
+> right"_ for Bluetooth; and the Wi-Fi form _"has too less space … give the scrolling thing"_ with
+> the keyboard/inputs feeling _"weird and not proper."_ JS-only OTA — no firmware change. Force-close
+> and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **U-102-1 — the OLED mirror is back in the gamepad centre.** In robocar mode the gap between
+      the sticks shows the compact 128×64 mirror (2:1), NOT the readings. It renders the same
+      dashboard the pre-rebuild Remote did (mode, speed, steer, link).
+- [ ] **U-102-2 — the readings are on the top status line.** Just under the chrome row, right of the
+      CarName/link chip, the line shows `Up` / `Heap` / `Sig`; all three dash (`--`) with no link,
+      a real 0 s uptime shows `0s` (not a dash). The line and the IP/BT/Wi-Fi chips do not overflow
+      or overlap at the smallest landscape width.
+- [ ] **U-102-3 — Bluetooth is connect-left / list-right.** Choosing Bluetooth shows the connect card
+      on the LEFT and the networks ("Available networks") list on the RIGHT — the same shape as
+      Wi-Fi. There is NO "What do you want to do?" dropdown any more. With no link the right list
+      shows its honest empty state ("Connect to the car to search"), not a dead button.
+- [ ] **U-102-4 — the Wi-Fi add/edit form scrolls and the keyboard behaves.** Open the add form in
+      landscape: it has its own bounded box with the Save/Cancel row reachable. Tapping a field
+      raises the keyboard WITHOUT covering the field (the Connectivity panel scrolls it clear);
+      SSID "next" moves focus to the password; Enter on the password saves. Editing a saved router
+      still pre-fills the name and empties the password.
+- [ ] **U-102-5 — regressions.** The three method pills still switch methods; Disconnect still works
+      from the status card; switching a saved router still works; the non-robocar Telemetry view
+      still shows the 2×2 readings grid (`DriveTelemetry`), not the OLED mirror.
+
 ## U-93 round — the router actions, honestly (2026-10-04, OTA — DEVICE VERIFY PENDING)
 
 > Owner: _"the router select is not working sometime … the connect device button doesnt work …
