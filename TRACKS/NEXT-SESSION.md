@@ -1,4 +1,54 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: cleanup + doc-hygiene round — RouterPanel removed, version-mirror drift fixed, docs refreshed)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: Remote OLED-mirror restore + top-line telemetry, Bluetooth Wi-Fi-style split, Wi-Fi form/keyboard round)
+
+## This session (2026-10-12, Remote feedback round) — OLED mirror restored in the gamepad centre; readings moved to the top status line; Bluetooth gets the Wi-Fi split; Wi-Fi add-form scroller + keyboard/focus fixed
+
+Owner feedback on the just-shipped Remote: the car readings in the gamepad centre were *"too small and
+not perfectly managed"* → *"restore what there was there in the middle yesterday and days before"*; the
+Bluetooth view was one full-width column unlike Wi-Fi → make it *"mirror WiFi: connect left, list
+right"*; and *"add the router has too less space … give the scrolling thing"* with the keyboard/inputs
+feeling *"weird and not proper."* One app commit **`f7262c4`** (this ledger is the follow-up). The Remote
+is landscape-locked, so the Bluetooth "split" is a two-column layout inside the Connectivity panel.
+
+1. **`components/tools/OledDisplay.tsx` RESTORED** from the pre-Phase-3 commit (`5285df6^`) plus its
+   `OledDisplayProps` re-added to `types.ts` (with a `ModeAvailReport` import). The compact mirror
+   (180×90, the physical 128×64 OLED's 2:1 shape) is back in the gamepad centre — RESTORED exactly as
+   it was before connectivity-rebuild Phase 3 removed it.
+2. **`components/tools/DriveTelemetry.tsx` — new `TelemetryLine` export.** The SAME readings
+   (Up / Heap / Sig) in one compact horizontal line for the top status line; "Link" is dropped because
+   that line already names the link. `DriveTelemetry` itself is unchanged (still the 2×2 grid used by
+   the Telemetry view and `BalanceControls`). Honesty rules unchanged (unknown dashes, real zero shows
+   as itself) — formatting still comes from the tested `telemetryFormat.ts`.
+3. **`screens/RemoteControlScreen.tsx`.** The `isRobocar` sub-header now carries `<TelemetryLine>`
+   between the friendly-name chip and the IP/BT/Wi-Fi chips (left group `shrink`, `flex-1` spacer).
+   `DriveControls` centre slot is `oledSlot` (a 180×90 `<OledDisplay compact>`); `BalanceControls` +
+   the Telemetry view keep `DriveTelemetry`. Added `connScrollRef` + wired `onInputFocus` to scroll the
+   Connectivity panel to the end when a form field focuses. Android `KeyboardAvoidingView`
+   behavior `"height"`→`undefined` (rely on `softwareKeyboardLayoutMode: "resize"`; the double-resize
+   was the "weird" keyboard).
+4. **`components/tools/DriveControls.tsx`.** Centre-slot geometry reverted 200×100 → 180×90 (DualDpad
+   `translateX/Y` −100/−50 → −90/−45; DualJoystick `geo.w*0.5−90` / `geo.h*0.5−45`) so the restored
+   mirror sits in the same gap it used to.
+5. **`components/tools/connection/ConnectionSection.tsx` — Bluetooth split parity.** The right pane
+   (the "Available networks" list = the Bluetooth router surface) now renders for
+   `method === "wifi" || method === "bluetooth"` (was gated on `targetId === "bt-routers" && anyLink`).
+   The Bluetooth *"What do you want to do?"* `SelectRow` chooser, the `targetId` state and its
+   `setTargetId` wiring are GONE — each method now renders ONE connect card on the left;
+   `onInputFocus` signature `(y: number) => void` → `() => void`.
+6. **`components/tools/connection/WifiPanel.tsx` — form space + keyboard/focus.** The add/edit form now
+   lives in its OWN bounded `ScrollView` (`ADD_FORM_MAX_HEIGHT 190` / `ADD_FORM_MIN_HEIGHT 132`,
+   `nestedScrollEnabled`, `keyboardShouldPersistTaps="handled"`); inputs `h-8 text-[12px] px-2` →
+   `h-9 text-[13px] px-2.5` with `selectionColor` and a lighter placeholder; SSID `returnKeyType="next"`
+   now focuses the password field (`passRef`); `onInputFocus` fires on the field's `onFocus` (was a
+   misleading `onLayout`, which also sent a parent-relative Y).
+
+**Deviation from the approved plan (owner signed off during the round):** the plan said *retire
+`bt-routers`*, but it was KEPT in the connection model — the UI can no longer select it (the chooser is
+gone) and the Bluetooth right pane IS the router surface, but two test files pin it as the F-65
+`reprovisionsCar` discriminator (`methods.test.ts`, `contrast.guard.test.ts`). Keeping it avoided
+churning those tests; it is inert in the UI.
+
+**Gate:** tsc 0 · vitest **673/673** (44 files) · prettier clean. **Not device-verified (F-61).** No
+version bump (JS-only → same-version OTA, F-32).
 
 ## This session (2026-10-12, cleanup round) — RouterPanel + its orphaned helper deleted; version-mirror drift fixed; stale docs refreshed
 
