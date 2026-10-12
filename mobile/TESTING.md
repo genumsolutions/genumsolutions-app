@@ -1,6 +1,6 @@
 # TESTING — Physical Device Test Checklist
 
-## U-R3 round — fleet diagnostics: the restart record over Bluetooth + a shared app/device log medium (2026-10-12 — DEVICE VERIFY PENDING)
+## U-R3 round — fleet diagnostics: the restart record over Bluetooth + a shared app/device log medium (2026-10-12, OTA `503af36` — DEVICE VERIFY PENDING)
 
 > Owner: the car "restarts/freezes" and the app has no place to read its own errors → make the
 > error/log medium efficient and reachable via the DB/app/remote across cars and projects. App
