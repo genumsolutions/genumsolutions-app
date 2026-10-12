@@ -1,4 +1,39 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: Remote layout round (U-101) — Connectivity panel compacted + two-pane, telemetry 2×2 grid, app `c7a0db7`)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: cleanup + doc-hygiene round — RouterPanel removed, version-mirror drift fixed, docs refreshed)
+
+## This session (2026-10-12, cleanup round) — RouterPanel + its orphaned helper deleted; version-mirror drift fixed; stale docs refreshed
+
+Followed the "what next" analysis: with the connectivity rebuild and U-101 both source-only and
+device-unverified (F-61), the owner chose **cleanup + doc hygiene** over starting new feature work.
+No product behaviour changed. One app commit **`556a3b3`** (pushed; this ledger is the follow-up).
+
+1. **`components/tools/RouterPanel.tsx` DELETED** (485 lines) — the "WiFi & Router" panel was left
+   UNMOUNTED by connectivity-rebuild Phase 2 (`15718a8`); the Remote's Connectivity panel renders
+   `ConnectionSection` instead. Its only importer was itself (comments + a viewport test named it as
+   history). `RouterPanelProps` removed from `types.ts` (with its now-unused `RouterOutcome` import).
+2. **`components/tools/connection/routerPanelOutcome.ts` + `.test.ts` DELETED** — `panelOutcomeFor` /
+   `PanelOutcome` / `RouterVerb` were consumed ONLY by `RouterPanel`; with the component gone the
+   pure module had no production consumer (the FAILSAFE "a dead reference is worse than a missing
+   feature" rule). `RouterOutcome` itself stays (used by `useControlHub` / `commands.ts`).
+3. **Stale comments fixed** (FAILSAFE: "when removing something, fix the comments that described
+   it"): `ConnectionSection.tsx` header (drop RouterPanel from the replaced-list; it is now on the
+   Remote too), `WifiPanel.tsx` ("Remote RouterPanel" → "Remote's Connectivity panel"),
+   `telemetryFormat.ts` (drop `routerPanelOutcome.ts` from the pure-module examples), `viewport.ts`
+   / `viewport.test.ts` (the 640 breakpoint is "Tailwind's `sm`", not "RouterPanel's"), and
+   `RemoteControlScreen.tsx` (theme toggle skins "the shared tool surfaces", not "RouterPanel").
+   The two remaining mentions are past-tense explanations of the removal.
+4. **Version-mirror DRIFT FIXED.** The v3.2.7 bump (`5c993570`, U-49) hand-edited `app.json` +
+   `site.ts` but left **`package.json` and `package-lock.json` at 3.2.6** — despite
+   `scripts/bump-version.mjs` being documented to rewrite them. Aligned both to **3.2.7**, and
+   **strengthened `src/config/parity.test.ts`** with `pkgJson.version === appJson.expo.version`
+   (the old parity test only pinned `APP_VERSION ↔ app.json`, which is how the drift survived a
+   green suite).
+5. **Stale docs refreshed:** app `TRACKS/INDEX.md` notes said "Current: 3.2.1 / 54" → now
+   **3.2.7 / versionCode 60**; workspace-root `CONTINUITY.md` (frozen at 2026-10-06/U-95, a local
+   untracked file) gained a superseded banner naming the current state + the authoritative ledgers.
+
+**Gate:** tsc 0 · vitest **673/673** (44 files; −6 from the deleted `routerPanelOutcome` suite, +1
+new parity assertion) · prettier clean. **Not device-verified (F-61)** — but this round is
+behaviour-neutral (dead-code removal + a config/doc align).
 
 ## Connectivity-rebuild 2026-10-12 — ALL PHASES DONE (app half); owner flash + device test owed
 
