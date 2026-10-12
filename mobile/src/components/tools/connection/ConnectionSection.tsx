@@ -543,7 +543,6 @@ export function ConnectionSection({
             target={setupTarget}
             busy={busy}
             carOnRouter={carOnRouter}
-            reportedSsid={reportedSsid}
             sppSupported={sppSupported}
             sppStatus={sppStatus}
             sppDevices={sppDevices}
@@ -629,7 +628,6 @@ function MethodSetup({
   target,
   busy,
   carOnRouter,
-  reportedSsid,
   sppSupported,
   sppStatus,
   sppDevices,
@@ -642,7 +640,6 @@ function MethodSetup({
   target: ConnectionTarget;
   busy: boolean;
   carOnRouter: boolean;
-  reportedSsid: string | null;
   sppSupported: boolean;
   sppStatus: string;
   sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
@@ -676,7 +673,6 @@ function MethodSetup({
           target={target}
           busy={busy}
           carOnRouter={carOnRouter}
-          reportedSsid={reportedSsid}
           sppSupported={sppSupported}
           sppStatus={sppStatus}
           sppDevices={sppDevices}
@@ -706,7 +702,6 @@ function TargetBody({
   target,
   busy,
   carOnRouter,
-  reportedSsid,
   sppSupported,
   sppStatus,
   sppDevices,
@@ -718,7 +713,6 @@ function TargetBody({
   target: ConnectionTarget;
   busy: boolean;
   carOnRouter: boolean;
-  reportedSsid: string | null;
   sppSupported: boolean;
   sppStatus: string;
   sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
