@@ -125,6 +125,56 @@ describe("U-98 — one live link, and each transport only speaks for itself", ()
 });
 
 // =====================================================================
+// U-100 Phase 4 (owner 2026-10-12) — parallel Bluetooth + Wi-Fi.
+//
+// Default OFF: the U-98 one-active-link policy above still holds. When the
+// user opts in (per-car pref `allowParallelLinks`, mirrored to the car's NVS
+// `botcfg/allow_parallel`), the app does NOT tear one link down to raise the
+// other. Both halves of that teardown are gated; this pins each gate so a
+// later edit cannot silently restore the unconditional tear-down.
+// =====================================================================
+describe("U-100 Phase 4 — parallel Bluetooth + Wi-Fi", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(code).toContain("allowParallelLinksRef");
+    expect(body("dropBluetoothForWifi", "handleWifiConnect")).toContain(
+      "allowParallelLinksRef.current",
+    );
+  });
+
+  it("raising Wi-Fi does not tear Bluetooth down when parallel links are ON", () => {
+    // With parallel ON, `dropBluetoothForWifi` returns BEFORE touching BLE/SPP
+    // so both links stay live. Pin the exact early-return guard (polarity
+    // included — a flipped `!` would restore the unconditional tear-down).
+    const helper = body("dropBluetoothForWifi", "handleWifiConnect");
+    const guard = helper.indexOf("allowParallelLinksRef.current");
+    const teardown = helper.indexOf("bleService.disconnect()");
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(teardown).toBeGreaterThanOrEqual(0);
+    expect(guard).toBeLessThan(teardown);
+    expect(helper).toContain("if (allowParallelLinksRef.current) return;");
+  });
+
+  it("raising Bluetooth does not tear Wi-Fi down when parallel links are ON", () => {
+    // The symmetric half: handleConnect gates its wifiService.disconnect() AND
+    // its setWifiConnected(false) behind `!allowParallelLinksRef.current`, so a
+    // BT connect keeps an open Wi-Fi socket live.
+    const flat = code.replace(/\s+/g, " ");
+    const at = flat.indexOf("!allowParallelLinksRef.current");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const guardBlock = flat.slice(at, at + 240);
+    expect(guardBlock).toContain("wifiService.isConnected");
+    expect(guardBlock).toContain("wifiService.disconnect()");
+    expect(guardBlock).toContain("setWifiConnected(false)");
+  });
+
+  it("the setter mirrors the flag to the car over WIFICFG;PARALLEL", () => {
+    // The wire contract: ON/OFF set + a `?` query, both through sendSystemLine.
+    expect(code).toContain("WIFICFG;PARALLEL;");
+    expect(code).toContain('reply.startsWith("WIFICFG;PARALLEL;")');
+  });
+});
+
+// =====================================================================
 // 2026-10-10 — a lost link must not leave the app believing it, and a dead
 // address must not be dialled forever.
 //
