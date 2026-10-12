@@ -11,6 +11,19 @@ connection sections; enable parallel BT+WiFi with a power-saving toggle (default
 Strict scope: *"dont change other thing that i havent asked to you"*.
 
 ## RESUME HERE
+> **Phase 3 app half: DONE — `app 5285df6` (pushed).** Committed + pushed:
+> - `OledDisplay.tsx` **deleted** + `OledDisplayProps` removed from `types.ts`; `oledCommonProps` /
+>   `oledSlot` and the dead `modeAvailStatus` import gone from `RemoteControlScreen.tsx`.
+> - NEW `components/tools/DriveTelemetry.tsx`: the link/uptime/heap/signal readout (formatted by the
+>   tested `telemetryFormat.ts` — unknown dashes, real zero shows). **compact** 2×2 grid fills the
+>   gamepad's center gap (DualDpad + DualJoystick); the full row renders in the pid-auto card and the
+>   hidden-mode telemetry view. The drone / non-robocar branch lost its mirror column (deck fills).
+> - `oledSlot` prop renamed → `telemetrySlot` on `DriveControls` / `BalanceControls`; the telemetry
+>   view's readout column dropped its now-duplicated Link row.
+> - Gates: tsc 0 · vitest **673/673** · prettier clean · lint hook green. Next: **Phase 4** (parallel
+>   BT+WiFi toggle — app `allowParallelLinks` default false, drop `dropBluetoothForWifi`, relax
+>   linkManager one-active-link; car NVS `allow_parallel`).
+
 > **Phase 2 app half: DONE — `app 15718a8` (pushed).** Committed + pushed:
 > - Remote pill + Settings row renamed **Connectivity**; the panel now mounts the shared
 >   `ConnectionSection` with `manage` (full add/edit/forget Wi-Fi manager) instead of
@@ -54,11 +67,11 @@ Strict scope: *"dont change other thing that i havent asked to you"*.
         block, `ConnectionSection`.
       - **U-100: "Hotspot power-save" toggle** in the Connectivity settings — sends
         `WIFICFG;APSAVE;ON|OFF`, reflects the car via the reply, defaults OFF.
-- [ ] **Phase 3 — remove OLED mirror + telemetry around drive controls.**
-      Delete `OledDisplay.tsx` + usages: `RemoteControlScreen.tsx:685` (compact slot),
-      `:1046` (drone/non-robocar column), `:1213` (hidden-mode mirror); `types.ts:223`;
-      the `oledSlot` prop on `DriveControls`/`BalanceControls`. Replace with a compact
-      link/uptime/heap/signal readout around the drive buttons.
+- [x] **Phase 3 — remove OLED mirror + telemetry around drive controls.** DONE (`app 5285df6`).
+      `OledDisplay.tsx` + `OledDisplayProps` deleted; the `oledSlot` plumbing/prop renamed →
+      `telemetrySlot`; new `DriveTelemetry.tsx` (link/uptime/heap/signal) fills the gamepad's center
+      gap, the pid-auto card and the hidden-mode telemetry view; the drone/non-robocar mirror column
+      is gone (deck fills the row).
 - [ ] **Phase 4 — parallel BT+WiFi toggle** (app half: persisted `allowParallelLinks`
       default false + Remote Settings toggle; stop `dropBluetoothForWifi`
       (`useControlHub.ts:1786`) and relax `linkManager` one-active-link

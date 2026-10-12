@@ -1,4 +1,25 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild Phase 2 DONE — Remote "Connectivity" panel)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild Phase 3 DONE — OLED mirror removed everywhere)
+
+## This session (2026-10-12, connectivity-rebuild Phase 3) — APP: the OLED mirror is gone; link/uptime/heap/signal telemetry sits around the drive controls
+
+Phase 3 of `TRACKS/PLAN-2026-10-12-connectivity-rebuild.md` — commit **`5285df6`** (pushed). Owner
+item (3): *"remove the app's OLED mirror (every usage) and place telemetry (link / uptime / heap /
+signal) around the drive controls."*
+
+- **`components/tools/OledDisplay.tsx` DELETED** (346 lines) + `OledDisplayProps` removed from
+  `types.ts`; `oledCommonProps`/`oledSlot` plumbing and the now-unused `modeAvailStatus` import are
+  gone from `screens/RemoteControlScreen.tsx`.
+- **NEW `components/tools/DriveTelemetry.tsx`** — the four readings (link / uptime / heap / signal)
+  formatted by the pure, tested `telemetryFormat.ts` (unknown → dash, real zero → shown). `compact`
+  = 2×2 grid for the gamepad's center gap; full = wider row for the telemetry view / pid-auto card.
+  The gamepad center (DualDpad + DualJoystick), `BalanceControls` and the hidden-mode telemetry view
+  all show it now; the drone / non-robocar branch lost its mirror column (deck fills the row).
+- **`DriveControls.tsx` / `BalanceControls.tsx`** — `oledSlot` prop renamed → `telemetrySlot`.
+- The full telemetry view's readout column dropped its Link row (the left telemetry panel owns it).
+
+**Gate:** tsc 0 · vitest **673/673** (45 files, unchanged) · prettier clean · lint hook green.
+**NOT device-verified (F-61)** — needs the owner to eyeball the Remote in landscape after flashing
+1.3.0. Next: **Phase 4** (parallel BT+WiFi toggle, app + car).
 
 ## This session (2026-10-12, connectivity-rebuild Phase 2) — APP: Remote "Connectivity" panel; Control Panel stripped
 
