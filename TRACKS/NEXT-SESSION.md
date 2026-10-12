@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: Remote layout round — Connectivity panel compacted + two-pane, telemetry 2×2 grid, app `c7a0db7`)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: Remote layout round (U-101) — Connectivity panel compacted + two-pane, telemetry 2×2 grid, app `c7a0db7`)
 
 ## Connectivity-rebuild 2026-10-12 — ALL PHASES DONE (app half); owner flash + device test owed
 
@@ -10,14 +10,15 @@ same-version OTA, F-32). **Owner action:** flash the car to **1.3.0** then work 
 `mobile/TESTING.md` + the car's `TRACKS/DEVICE-TESTS.md` (incl. the new parallel/BT+WiFi round).
 **F-61**: every gate is green and none of it is device evidence.
 
-## This session (2026-10-12, Remote layout round) — Connectivity panel compacted + two-pane; telemetry readout redesigned (U-99)
+## This session (2026-10-12, Remote layout round) — Connectivity panel compacted + two-pane; telemetry readout redesigned (U-101)
 
 Owner report after the follow-up round: on the Remote the Connectivity area's *"fonts are too big
 and the sections are hogging up all the space"*; asked to *"use the split screen in landscape view,
 don't elongate everything across the big width"*; and said the middle telemetry/status area
 (link/uptime/heap/signal) was *"too small and not perfectly managed."* One app commit **`c7a0db7`**
-(pushed; ledger follow-up). The Remote is landscape-locked, so the section is now a two-pane
-layout and the telemetry is a proper 2×2 grid.
+(pushed; ledger follow-up) plus a one-line ID fix `704b092` (this round was first mislabelled U-99 —
+colliding with the Wi-Fi-list U-99 — now **U-101**, the next free ID after U-100). The Remote is
+landscape-locked, so the section is now a two-pane layout and the telemetry is a proper 2×2 grid.
 
 1. **`components/tools/connection/ConnectionCard.tsx` — the shared card is compact.** Icon 14→11,
    title `text-[13px]`→`text-[11px]`, gap-2→1.5, status dot `h-2 w-2`→`h-1.5 w-1.5`, subtitle
@@ -33,7 +34,7 @@ layout and the telemetry is a proper 2×2 grid.
    when `method === "wifi" || (targetId === "bt-routers" && anyLink)` — the left pane keeps full
    width otherwise. Method pills `p-2.5`→`px-1.5 py-1.5`, gap-1.5→gap-1, icon 18→13, label
    `text-[12px]`→`text-[10px]`, dot `h-1.5 w-1.5`→`h-1 w-1`, `rounded-xl`→`rounded-lg`;
-   `DEVICE_LIST_MAX_HEIGHT` 260→200. Header doc rewritten to the new shape (U-99).
+   `DEVICE_LIST_MAX_HEIGHT` 260→200. Header doc rewritten to the new shape (U-101).
 3. **`components/tools/connection/WifiPanel.tsx` — the one networks list is compact.**
    `ROUTER_LIST_MAX_HEIGHT` 320→240; rows `gap-2.5 px-3 py-3`→`gap-2 px-2 py-1.5`, name
    `text-[14px]`→`text-[12px]`, meta `text-[12px]`→`text-[10px]`; edit/forget and scan/cancel rows
