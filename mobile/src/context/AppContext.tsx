@@ -45,7 +45,7 @@ export type GenumUser = {
   address: string;
   role: string;
   /** Account tier from profiles.tier (admin-managed). Pro unlocks the
-   *  Remote window + per-robot preference profiles. */
+   *  per-robot preference profiles (the Remote window is open to all). */
   tier: "free" | "pro";
 };
 

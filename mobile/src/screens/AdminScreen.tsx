@@ -904,7 +904,7 @@ export function AdminScreen() {
     Alert.alert(
       "Change tier",
       nextTier === "pro"
-        ? `Upgrade ${user.email} to PRO? (Pro unlocks the remote window and robot preference profiles.)`
+        ? `Upgrade ${user.email} to PRO? (Pro unlocks per-robot preference profiles.)`
         : `Downgrade ${user.email} to FREE? (Robot preference rows are kept but become read-only.)`,
       [
         { text: "Cancel", style: "cancel" },
