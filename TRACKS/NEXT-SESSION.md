@@ -1,4 +1,48 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: mode button fixed for every mode, telemetry over Bluetooth, Connectivity unified into one split, AUTO telemetry restored to fit one screen)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: fleet diagnostics — the restart record over Bluetooth + a shared app/device log medium)
+
+## This session (2026-10-12, U-R3 — fleet diagnostics: fixes the car restart/freeze reporting hole and gives the app's errors a real DB medium)
+
+Owner directive: the car "restarts/freezes" and the app has no way to read its own errors — make the
+error/log medium efficient and reachable via the **database, app, remote, across cars and projects**.
+Two exploration passes first (app log/error surface; car reboot-trigger catalog). Findings that shaped
+the fix: there are **no `esp_restart()` calls** in the firmware — resets come from the task watchdog
+(`LOOP_TASK_WDT_TIMEOUT_MS` 10 s, `trigger_panic=false` → chip reset + `ESP_RST_TASK_WDT`), bootloader
+WDT, panic→reboot, brownout; **no dedicated error-log screen** existed (`logger.ts` was console-only);
+and the **relay admitted only 448 bytes** while the STATE line is built into 512 — so a STATE carrying a
+full `REPLY=` (and now the restart record) would be dropped whole. Shipped fix set:
+
+1. **Car firmware `..\Genum_4WD4M_CAR` — 1.3.2 (UNFLASHED, F-61).** `ModeManager.cpp` `sendStateOn()`
+   appends the persisted restart record to **every** STATE line: `;RST=<reason>;BC=<boot count>;
+   CC=<crash count>;PH=<phase>;LH=<heap at boot>` (from `crashLogInfo()`, `#include "CrashLog.h"`);
+   `wifiKeys` 224→288, `tKeys` 96→176. **Relay byte budget 448→512** in lockstep: `Config.h`
+   `RELAY_MAX_OUT_BYTES`, `RelayComm.h::kOutLineLen`, both `static_assert`s, `tools/check-relay-contract.mjs`
+   (pin `512`) and the website relay's `maxBytesCarToController`. `FW_VERSION` 1.3.1→1.3.2; `CHANGELOG.md`
+   entry added.
+2. **`services/carProtocol.ts` — STATE restart record.** New keys `RST`→`resetReason`, `BC`→`bootCount`,
+   `CC`→`crashCount`, `PH`→`lastCrashPhase`, `LH`→`lastCrashHeap` (blank values stay unknown). This is
+   what lights the Diagnostics restart row AND lets the fleet crash sync
+   (`useControlHub` → `syncCrashReport`) fire over **Bluetooth**, not just Wi-Fi.
+   `carProtocol.test.ts`: 3 new cases.
+3. **`services/appLogService.ts` (new) + `services/logger.ts`.** A bounded AsyncStorage ring (250 lines)
+   + offline upload queue (50) flushed to the new `app_logs` table, mirroring `crashReportService`
+   (offline-first, never throws). `logger` now appends every printed line via a **lazy `import()`** +
+   `.catch` — a static import would drag `react-native` into pure node test suites (`catalogFilters`
+   was the canary). `useControlHub` flushes the queue on link-up.
+4. **`services/adminService.ts` + `screens/AdminScreen.tsx` — the "System Logs" admin tab.**
+   `listDeviceCrashReports()` / `listAppLogs()` + a `SystemLogsTab` (two newest-first lists with
+   pagers). `config/adminTabs.ts` + both `admin-parity.test.ts` updated together.
+5. **Database — `app_logs` (applied live).** Migration `20261012100000_app_logs.sql` (website repo):
+   user/device/version/platform/scope/level/message/detail/created_at, RLS (own+staff read, insert
+   own-or-anon, staff update/delete), 4 indexes. Applied to project `bkylfnlybtsujwzropru` via the
+   Management API; verified `rowsecurity=true` + 4 policies.
+6. **Website — mirror.** `lib/logs.ts`, `app/api/admin/logs/route.ts` (staff-gated `kind=crash|app`),
+   `components/admin/AdminLogs.tsx`, `AdminPanel.tsx` ("System Logs" tab + `Terminal` icon),
+   `admin-types.ts` TABS, `tests/admin-parity.test.ts`.
+
+**Gates (all green):** app `tsc` 0 · vitest **679/679** (44 files; +3) · prettier + `format:check` clean;
+website vitest **288/288** (incl. parity + car-relay after the 512 bump); car `check-relay-contract.mjs`
+(`outbound cap 512`) · `check-webpage-js.mjs` · `check-firmware-syntax.ps1` (10/10 TUs). **Commits:** app
+`<app-hash>` + docs `<docs-hash>`; car `<car-hash>`. **UNFLASHED** — owner must flash 1.3.2 (and 1.3.1).
 
 ## This session (2026-10-12, Remote feedback follow-up) — the mode cycle button works in every mode; telemetry rides Bluetooth (firmware 1.3.1 + app); Connectivity is ONE immediate split, no duplicate Settings row; AUTO mode fits one landscape screen
 

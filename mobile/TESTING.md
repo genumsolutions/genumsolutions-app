@@ -1,5 +1,34 @@
 # TESTING — Physical Device Test Checklist
 
+## U-R3 round — fleet diagnostics: the restart record over Bluetooth + a shared app/device log medium (2026-10-12 — DEVICE VERIFY PENDING)
+
+> Owner: the car "restarts/freezes" and the app has no place to read its own errors → make the
+> error/log medium efficient and reachable via the DB/app/remote across cars and projects. App
+> JS-only (no version bump); **car firmware 1.3.2 UNFLASHED** (F-61). The restart-record STATE
+> fields and the relay byte-budget change need the flash before the Bluetooth half can show numbers.
+> Force-close and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **U-R3-1 — the restart record rides the Bluetooth STATE line (needs firmware 1.3.2 flash).**
+      Connected over Bluetooth SPP to a car on 1.3.2, the Remote's Diagnostics row ("Last restart
+      record") shows a real reason (e.g. `TASK_WDT`) + phase after a reset — previously it stayed
+      empty over Bluetooth (only the Wi-Fi `/status` JSON carried it). The fleet crash report also
+      syncs over Bluetooth now (`device_crash_reports` gains a row on connect).
+- [ ] **U-R3-2 — a long STATE is no longer dropped by the relay.** A STATE line carrying the record
+      plus a full `REPLY=` exceeds 448 bytes; with the relay cap raised to 512 it reaches the phone
+      instead of vanishing. Over the relay transport the Remote still updates (no "paired into
+      silence"). `check-relay-contract.mjs` reports `outbound cap 512`.
+- [ ] **U-R3-3 — Admin → System Logs (app).** Signed in as staff, the Admin console has a **System
+      Logs** tab with two newest-first lists: **Car crash / restart reports** (board id, reason,
+      counts, phase, connection method) and **App logs** (level, `[scope]`, message, app version).
+      A deliberate app error (e.g. pull the network) appears as an `error` row; paging works on both.
+- [ ] **U-R3-4 — Admin → System Logs (website).** The website `/admin` panel has the same **System
+      Logs** tab showing both lists (`device_crash_reports` + `app_logs`) with the same fields and a
+      crash badge. Staff see all rows; a non-staff user is refused (`401`).
+- [ ] **U-R3-5 — regressions.** The tab strip order is Dashboard · Orders · Electronic Products · 3D
+      Products · Projects · Content · Users · **System Logs** · Settings on BOTH clients (parity tests
+      pin it); the other tabs still load; the app never blocks or crashes when a log flush fails
+      offline (the row stays queued and uploads on the next link).
+
 ## U-102 round — Remote feedback follow-up: OLED mirror back, readings on the status line, Bluetooth split, Wi-Fi form + keyboard (2026-10-12, OTA `f7262c4` + `78e6412` — DEVICE VERIFY PENDING)
 
 > Owner: the middle readings were _"too small and not perfectly managed"_ → restore the old OLED
