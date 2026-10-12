@@ -40,6 +40,12 @@ is landscape-locked, so the Bluetooth "split" is a two-column layout inside the 
    `h-9 text-[13px] px-2.5` with `selectionColor` and a lighter placeholder; SSID `returnKeyType="next"`
    now focuses the password field (`passRef`); `onInputFocus` fires on the field's `onFocus` (was a
    misleading `onLayout`, which also sent a parent-relative Y).
+7. **Follow-up cleanup (`78e6412`, same round).** Rechecking after commit found two orphans from the
+   chooser removal: **`SelectRow` DELETED** from `ConnectionCard.tsx` (129 lines — the Bluetooth
+   chooser was its only consumer and it was not re-exported by `connection/index.ts`; `select-bg` /
+   `select-ink` stay, still used by the method pills), and the **dead `reportedSsid` prop chain**
+   removed from `MethodSetup` / `TargetBody` (declared + threaded but never read; the local
+   `reportedSsid` variable is still used for the routers context).
 
 **Deviation from the approved plan (owner signed off during the round):** the plan said *retire
 `bt-routers`*, but it was KEPT in the connection model — the UI can no longer select it (the chooser is
