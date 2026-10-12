@@ -20,7 +20,7 @@
 //             Bluetooth router management). Kept narrow and bounded so it does
 //             not elongate across the screen.
 //
-// U-99 (owner 2026-10-12): *"the fonts are too big and the sections are hogging
+// U-101 (owner 2026-10-12): *"the fonts are too big and the sections are hogging
 // up all the space ... use the split screen in landscape view, don't elongate
 // everything across the big width."* So every card/pill/row here is compact
 // (smaller type and padding), and the section splits into two flex panes that
