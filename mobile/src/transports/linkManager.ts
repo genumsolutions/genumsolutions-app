@@ -97,6 +97,15 @@ export class LinkManager {
   private error: string | null = null;
   private verified = false;
 
+  // U-100 Phase 4 (owner 2026-10-12): parallel Bluetooth + WiFi. When true,
+  // activating a transport does NOT disconnect the previously active one — both
+  // links stay live. OFF (the default, set by the hub from the per-car
+  // `allowParallelLinks` pref) keeps the one-active-link policy: selecting a
+  // method tears the other down. The manager still tracks a single `activeId`
+  // (the picker's selection / routing tie-breaker); parallel only relaxes the
+  // TEARDOWN, which is the destructive half.
+  private allowParallel = false;
+
   // Options are remembered per transport so switching WiFi AP <-> router
   // (or a second car) does not force the user to retype the address.
   private options = new Map<TransportId, TransportConnectOptions>();
@@ -122,6 +131,19 @@ export class LinkManager {
 
   get(id: TransportId): Transport | undefined {
     return this.transports.get(id);
+  }
+
+  /**
+   * U-100 Phase 4: mirror the per-car "parallel links" pref into the manager.
+   * ON stops `activate()` from tearing the previous transport down, so both
+   * links can be live at once. OFF restores the one-active-link policy.
+   */
+  setAllowParallel(on: boolean): void {
+    this.allowParallel = on;
+  }
+
+  isParallel(): boolean {
+    return this.allowParallel;
   }
 
   getActive(): Transport | null {
@@ -281,7 +303,7 @@ export class LinkManager {
     const merged = this.options.get(id) ?? {};
 
     const previous = this.getActive();
-    if (previous && previous.id !== id) {
+    if (previous && previous.id !== id && !this.allowParallel) {
       // Best-effort: a link that fails to close must not block the switch.
       try {
         await previous.disconnect();

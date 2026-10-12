@@ -118,6 +118,28 @@ describe("LinkManager — one active transport at a time", () => {
     await expect(m.sendLine("F")).rejects.toThrow(/No active connection/i);
   });
 
+  it("keeps the previous link up when parallel links are ON (U-100 Phase 4)", async () => {
+    const m = new LinkManager();
+    const bt = fakeTransport("bt-classic");
+    const wifi = fakeTransport("wifi-ap-ws");
+    m.register(bt);
+    m.register(wifi);
+
+    await m.activate("bt-classic");
+    m.setAllowParallel(true);
+    expect(m.isParallel()).toBe(true);
+
+    await m.activate("wifi-ap-ws");
+    // Parallel: the previous link is NOT torn down — both stay live.
+    expect(bt.disconnects).toBe(0);
+    expect(m.getActive()?.id).toBe("wifi-ap-ws");
+
+    // Turning it back OFF restores the one-active-link teardown.
+    m.setAllowParallel(false);
+    await m.activate("bt-classic");
+    expect(wifi.disconnects).toBe(1);
+  });
+
   it("sendSafe never throws", async () => {
     const m = new LinkManager();
     await expect(m.sendSafe("F")).resolves.toBeUndefined();

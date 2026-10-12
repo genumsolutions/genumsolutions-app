@@ -556,7 +556,11 @@ export function RemoteControlScreen({ navigation }: Props) {
   // U-100: read the car's own-hotspot power-save switch once a link is up, so
   // the Settings row reflects CAR truth (null until the car answers).
   useEffect(() => {
-    if (linked) hub.queryCarApPowerSave();
+    if (linked) {
+      hub.queryCarApPowerSave();
+      // U-100 Phase 4: also read the car's parallel BT+WiFi switch.
+      hub.queryCarParallel();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
 
@@ -1276,6 +1280,30 @@ export function RemoteControlScreen({ navigation }: Props) {
                   trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                   thumbColor="#ffffff"
                   accessibilityLabel="Toggle the car's own-hotspot power saving"
+                />
+              </View>
+
+              {/* U-100 Phase 4 (owner 2026-10-12): parallel Bluetooth + WiFi.
+                Default OFF keeps the one-active-link policy (bringing one link
+                up tears the other down). ON keeps BOTH links live at once and
+                mirrors the flag to the car's NVS `botcfg/allow_parallel`. */}
+              <View className="mt-1 flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <Feather name="bluetooth" size={14} color="#64748b" />
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Parallel BT + Wi-Fi
+                  </Text>
+                </View>
+                <Switch
+                  value={hub.allowParallelLinks === true}
+                  onValueChange={(on) => {
+                    feedbackTap();
+                    hub.setCarParallelLinks(on);
+                  }}
+                  disabled={!linked}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Keep Bluetooth and Wi-Fi up together"
                 />
               </View>
 

@@ -243,6 +243,15 @@ export function useControlHub(routeCategory?: string) {
   // power saving. `null` = not yet read from the car. Mirrors the car's NVS
   // `botcfg/ap_psave` via `WIFICFG;APSAVE;ON|OFF` / `?`.
   const [apPowerSave, setApPowerSave] = useState<boolean | null>(null);
+  // U-100 Phase 4 (owner 2026-10-12): keep Bluetooth AND WiFi up together.
+  // Default false keeps the app's one-active-link policy (bringing one link up
+  // tears the other down). When ON the app does NOT drop one link to raise the
+  // other, and it mirrors the flag to the car's NVS `botcfg/allow_parallel` via
+  // `WIFICFG;PARALLEL;ON|OFF`. The ref mirror lets the `[]`-dep teardown
+  // callbacks read the live value without being re-created.
+  const [allowParallelLinks, setAllowParallelLinks] = useState<boolean>(false);
+  const allowParallelLinksRef = useRef(false);
+  allowParallelLinksRef.current = allowParallelLinks;
   // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
   // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
   // user-editable and the remembered per-device URL wins when present.
@@ -672,6 +681,12 @@ export function useControlHub(routeCategory?: string) {
             setUseJoystick(resolved.useJoystick);
           if (resolved.autoJoinRouter != null)
             setAutoJoinRouter(resolved.autoJoinRouter);
+          // U-100 Phase 4: restore the per-car parallel-links pref and push it
+          // into the link manager before any link is brought up this session.
+          if (resolved.allowParallelLinks != null) {
+            setAllowParallelLinks(resolved.allowParallelLinks);
+            linkManager.setAllowParallel(resolved.allowParallelLinks);
+          }
           // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
           // (never the password â€” that lives only in flight + the car's NVS).
           if (resolved.lastWifiSsid)
@@ -803,6 +818,12 @@ export function useControlHub(routeCategory?: string) {
         setJoystickLayoutId(merged.prefs.joystickLayout);
       if (merged.prefs.autoJoinRouter != null)
         setAutoJoinRouter(merged.prefs.autoJoinRouter);
+      // U-100 Phase 4: an adopted (cloud/newer) profile carries the
+      // parallel-links pref too; mirror it into the link manager.
+      if (merged.prefs.allowParallelLinks != null) {
+        setAllowParallelLinks(merged.prefs.allowParallelLinks);
+        linkManager.setAllowParallel(merged.prefs.allowParallelLinks);
+      }
       if (merged.prefs.savedRouters && merged.prefs.savedRouters.length > 0) {
         setCarNetworks((cur) =>
           cur.length > 0 ? cur : (merged.prefs.savedRouters ?? []),
@@ -870,6 +891,9 @@ export function useControlHub(routeCategory?: string) {
             "",
         ),
         autoJoinRouter,
+        // U-100 Phase 4: carry the live parallel-links pref so a narrow patch
+        // (speed/mode/router) never wipes it.
+        allowParallelLinks,
         // Profiles-sync round: carry fields a narrow patch must NOT wipe
         // (previously a speed/mode persist erased wifiHistory + fullscreen
         // because the base record omitted them entirely).
@@ -920,6 +944,7 @@ export function useControlHub(routeCategory?: string) {
       carFwIdRef.current,
       savedPrefs?.btIds,
       autoJoinRouter,
+      allowParallelLinks,
     ],
   );
 
@@ -1687,14 +1712,18 @@ export function useControlHub(routeCategory?: string) {
         setConnectingAddress(null);
         // U-98: making Bluetooth the live method drops any open Wi-Fi socket,
         // so the two links can never both be live (see dropBluetoothForWifi).
-        if (wifiService.isConnected) {
-          try {
-            await wifiService.disconnect();
-          } catch {
-            /* ignore */
+        // U-100 Phase 4: unless the user opted into parallel links, in which
+        // case Bluetooth is raised WITHOUT tearing the Wi-Fi socket down.
+        if (!allowParallelLinksRef.current) {
+          if (wifiService.isConnected) {
+            try {
+              await wifiService.disconnect();
+            } catch {
+              /* ignore */
+            }
           }
+          setWifiConnected(false);
         }
-        setWifiConnected(false);
         showConnectionMessage(`Connected to ${device.name}`, "success");
         void sppService.requestState().catch(() => {});
         return {
@@ -1789,6 +1818,10 @@ export function useControlHub(routeCategory?: string) {
   // intended. `sppService.disconnect()`/`wifiService.disconnect()` set the
   // service-level manualClose so neither auto-reconnect fires afterwards.
   const dropBluetoothForWifi = useCallback(async () => {
+    // U-100 Phase 4: with parallel links ON, raising Wi-Fi does NOT tear
+    // Bluetooth down — both links are meant to stay live. OFF (the default)
+    // keeps the U-98 one-active-link policy.
+    if (allowParallelLinksRef.current) return;
     if (bleService.isConnected) {
       try {
         await bleService.disconnect();
@@ -2157,6 +2190,15 @@ export function useControlHub(routeCategory?: string) {
         setApPowerSave(
           reply.slice("WIFICFG;APSAVE;".length).trim().toUpperCase() === "ON",
         );
+      } else if (reply.startsWith("WIFICFG;PARALLEL;")) {
+        // U-100 Phase 4: the car's parallel BT+WiFi switch (ON|OFF), answered to
+        // both a bare `WIFICFG;PARALLEL;?` query and an ON/OFF set. Car truth
+        // wins: adopt it into the per-car pref AND the link manager.
+        const on =
+          reply.slice("WIFICFG;PARALLEL;".length).trim().toUpperCase() === "ON";
+        setAllowParallelLinks(on);
+        linkManager.setAllowParallel(on);
+        persistPrefs({ allowParallelLinks: on });
       }
       lastProvisionReplyRef.current = reply;
     },
@@ -2388,6 +2430,21 @@ export function useControlHub(routeCategory?: string) {
   );
   const queryCarApPowerSave = useCallback(() => {
     sendSystemLine("WIFICFG;APSAVE;?");
+  }, [sendSystemLine]);
+  // U-100 Phase 4: parallel Bluetooth + WiFi. Persisted per car (default OFF)
+  // and mirrored to the car's NVS `botcfg/allow_parallel`. The car's
+  // `WIFICFG;PARALLEL;ON|OFF` reply re-confirms or corrects the optimistic set.
+  const setCarParallelLinks = useCallback(
+    (on: boolean) => {
+      setAllowParallelLinks(on);
+      linkManager.setAllowParallel(on);
+      persistPrefsRef.current?.({ allowParallelLinks: on });
+      sendSystemLine(`WIFICFG;PARALLEL;${on ? "ON" : "OFF"}`);
+    },
+    [sendSystemLine],
+  );
+  const queryCarParallel = useCallback(() => {
+    sendSystemLine("WIFICFG;PARALLEL;?");
   }, [sendSystemLine]);
 
   // ---- Connection-Manager Phase B: the ONE opt-in envelope intake ----
@@ -3163,6 +3220,10 @@ export function useControlHub(routeCategory?: string) {
     apPowerSave,
     setCarApPowerSave,
     queryCarApPowerSave,
+    // U-100 Phase 4: keep Bluetooth + WiFi up together (default OFF).
+    allowParallelLinks,
+    setCarParallelLinks,
+    queryCarParallel,
     carApName,
     carSsid,
     carStubMap,

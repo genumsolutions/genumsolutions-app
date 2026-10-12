@@ -123,6 +123,13 @@ export type DevicePrefs = {
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
+  /** U-100 Phase 4 (owner 2026-10-12): keep Bluetooth AND WiFi up together.
+      Default false (the car ships with both up, but the app keeps its
+      one-active-link policy: bringing one link up tears the other down).
+      When true the app does NOT drop one link to raise the other, and it
+      mirrors the flag to the car's NVS `botcfg/allow_parallel` via
+      `WIFICFG;PARALLEL;ON|OFF`. */
+  allowParallelLinks?: boolean;
   /** Profiles-sync round: when this record was last saved locally
       (epoch ms). Feeds last-saved-wins merging against the cloud row's
       updated_at — the user's most recent save wins, wherever it happened. */
