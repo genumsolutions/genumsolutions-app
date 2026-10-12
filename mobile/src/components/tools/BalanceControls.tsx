@@ -167,22 +167,23 @@ export function BalanceControls({
       className={`rounded-2xl border border-line bg-card shadow-card ${compact ? "px-1.5 pt-1.5 pb-2" : "mt-4 p-5"}`}
     >
       {/* ── Top section: angle/OUT cards + telemetry ── */}
-      <View className="flex-row gap-2">
-        {/* Left: angle + OUT single hero card */}
-        <View className="flex-1 rounded-xl bg-slate-900 px-4 py-3">
+      <View className="flex-row gap-1.5">
+        {/* Left: angle + OUT single hero card (width-capped so a wide
+            landscape does not stretch it; U-102 fit pass). */}
+        <View className="max-w-[240px] flex-1 rounded-xl bg-slate-900 px-3 py-2">
           <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
             Angle
           </Text>
-          <Text className="mt-1 font-mono text-[42px] font-black leading-none text-emerald-300">
+          <Text className="mt-1 font-mono text-[30px] font-black leading-none text-emerald-300">
             {angleText}
           </Text>
-          <View className="mt-2 flex-row items-center gap-1.5">
+          <View className="mt-1.5 flex-row items-center gap-1.5">
             <View className={`rounded-full ${st.dot} h-2 w-2`} />
             <Text className={`text-[11px] font-black ${st.text}`}>
               {st.label}
             </Text>
           </View>
-          <View className="mt-2 border-t border-white/10 pt-2">
+          <View className="mt-1.5 border-t border-white/10 pt-1.5">
             <Text className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
               OUT : {out}
             </Text>
@@ -198,8 +199,8 @@ export function BalanceControls({
       </View>
 
       {/* ── PID grid: explicit 2×2 columns ── */}
-      <View className="mt-1.5 gap-1.5">
-        <View className="flex-row gap-1.5">
+      <View className="mt-1 gap-1">
+        <View className="flex-row gap-1">
           <PidRow
             pidKey="kp"
             value={kp}
@@ -215,7 +216,7 @@ export function BalanceControls({
             onOpenModal={setModalKey}
           />
         </View>
-        <View className="flex-row gap-1.5">
+        <View className="flex-row gap-1">
           <PidRow
             pidKey="kd"
             value={kd}

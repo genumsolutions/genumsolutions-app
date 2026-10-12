@@ -97,44 +97,55 @@ export function DriveTelemetry(props: DriveTelemetryProps) {
   const items = readings(props);
   const compact = props.compact === true;
 
+  // U-102 (owner: the AUTO-mode telemetry screen "elongated" into a single
+  // column): the old grid used flex-wrap with `basis-1/2` tiles PLUS a gap, so
+  // 50% + 50% + gap always exceeded 100% and every tile wrapped to its own row
+  // (four rows tall). Fixed as an EXPLICIT 2×2: rows of two `flex-1` cells —
+  // equal, gap-safe at any width, no percentage math to tip over.
+  const rows: Reading[][] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2));
+  }
+
   return (
     <View
       className={
         compact
-          ? "h-full w-full flex-row flex-wrap content-center rounded-lg bg-slate-900 px-1 py-1"
-          : "w-full flex-row flex-wrap rounded-xl bg-slate-900 p-2"
+          ? "h-full w-full rounded-lg bg-slate-900 px-1 py-1"
+          : "w-full rounded-xl bg-slate-900 p-2"
       }
       style={{ gap: compact ? 2 : 8 }}
     >
-      {items.map((it) => (
-        <View
-          key={it.label}
-          className={compact ? "basis-1/2 px-0.5" : "basis-1/2"}
-        >
-          <View
-            className={
-              compact
-                ? "rounded-md bg-slate-800/70 px-1.5 py-1"
-                : "rounded-lg bg-slate-800/70 px-2 py-1.5"
-            }
-          >
-            <Text
-              numberOfLines={1}
-              className={`font-black uppercase tracking-[0.16em] text-slate-400 ${
-                compact ? "text-[9px]" : "text-[10px]"
-              }`}
-            >
-              {it.label}
-            </Text>
-            <Text
-              numberOfLines={1}
-              className={`mt-0.5 font-mono font-bold text-emerald-300 ${
-                compact ? "text-[13px]" : "text-[15px]"
-              }`}
-            >
-              {it.value}
-            </Text>
-          </View>
+      {rows.map((row, ri) => (
+        <View key={ri} className="flex-row" style={{ gap: compact ? 2 : 8 }}>
+          {row.map((it) => (
+            <View key={it.label} className="flex-1">
+              <View
+                className={
+                  compact
+                    ? "rounded-md bg-slate-800/70 px-1.5 py-1"
+                    : "rounded-lg bg-slate-800/70 px-2 py-1.5"
+                }
+              >
+                <Text
+                  numberOfLines={1}
+                  className={`font-black uppercase tracking-[0.16em] text-slate-400 ${
+                    compact ? "text-[9px]" : "text-[10px]"
+                  }`}
+                >
+                  {it.label}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  className={`mt-0.5 font-mono font-bold text-emerald-300 ${
+                    compact ? "text-[13px]" : "text-[15px]"
+                  }`}
+                >
+                  {it.value}
+                </Text>
+              </View>
+            </View>
+          ))}
         </View>
       ))}
     </View>

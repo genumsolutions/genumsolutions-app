@@ -207,6 +207,39 @@ describe("parseTelemetryLine", () => {
     });
   });
 
+  it("parses STATE UP=/HEAP=/SIG=/RSSI= (U-102, telemetry via Bluetooth)", () => {
+    expect(
+      parseTelemetryLine(
+        "STATE;MODE=4WD4M;SPD=0;TRIM=0;STATUS=Ready;UP=1234;HEAP=204800;SIG=78;RSSI=-61",
+      ),
+    ).toEqual({
+      mode: "4WD4M",
+      speed: 0,
+      trim: 0,
+      status: "Ready",
+      uptimeMs: 1234,
+      freeHeap: 204800,
+      signal: 78,
+      rssi: -61,
+    });
+  });
+
+  it("ignores empty/blank UP/HEAP/SIG/RSSI values in STATE", () => {
+    expect(
+      parseTelemetryLine(
+        "STATE;MODE=4WD4M;UP=--;HEAP=;SIG=abc;RSSI=oops;STATUS=Ready",
+      ),
+    ).toEqual({ mode: "4WD4M", status: "Ready" });
+  });
+
+  it("does not invent telemetry when STATE omits the new keys", () => {
+    expect(parseTelemetryLine("STATE;MODE=BT;SPD=150;TRIM=0")).toEqual({
+      mode: "BT",
+      speed: 150,
+      trim: 0,
+    });
+  });
+
   it("parses AUTO PID telemetry (TEL)", () => {
     expect(
       parseTelemetryLine(

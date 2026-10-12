@@ -492,7 +492,11 @@ export function RemoteControlScreen({ navigation }: Props) {
   // embedded ConnectionSection shows is owned HERE so the choice survives the
   // section re-rendering as car truth arrives.
   const [showRouter, setShowRouter] = useState(false);
-  const [connMethod, setConnMethod] = useState<ConnectionMethodId | null>(null);
+  // U-102 (owner: the Connectivity screen must open as the split DIRECTLY):
+  // default the method to Bluetooth so the left=method / right=network panes
+  // both render on open — a null default left the panel as one full-width
+  // column until a method was picked ("two separate formats").
+  const [connMethod, setConnMethod] = useState<ConnectionMethodId>("bluetooth");
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null);
@@ -715,7 +719,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             <View className="flex-row items-center gap-2">
               <ModeChooser
                 activeMode={activeMode}
-                canControl={canControl}
                 onSelect={selectMode}
                 onCycle={cycleMode}
                 modes={carModes}
@@ -1098,7 +1101,9 @@ export function RemoteControlScreen({ navigation }: Props) {
                   <ConnectionSection
                     hub={hub}
                     method={connMethod}
-                    onMethodChange={setConnMethod}
+                    onMethodChange={(m) => {
+                      if (m != null) setConnMethod(m);
+                    }}
                     feedbackTap={feedbackTap}
                     onInputFocus={() =>
                       connScrollRef.current?.scrollToEnd({ animated: true })
@@ -1119,7 +1124,12 @@ export function RemoteControlScreen({ navigation }: Props) {
                 off={pidOff}
                 onPid={applyPid}
                 compact
-                telemetrySlot={<DriveTelemetry {...driveTelemetryArgs} />}
+                /* U-102 (owner: restore the AUTO telemetry dashboard in the
+                   AUTO mode): the deck shows the OLED mirror again (the AUTO
+                   Angle/P/D/OUT/I/OFF rows) instead of the readings grid that
+                   wrapped into a tall column. Up/Heap/Sig live on the top
+                   status line for every robocar mode already. */
+                telemetrySlot={oledSlot}
               />
             ) : (
               /* A-50 (round-11): hidden modes without a dedicated panel show
@@ -1259,32 +1269,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityLabel="Toggle dark theme"
               />
             </View>
-
-            {/* Phase 2 (owner 2026-10-12): a Settings entry to the
-                CONNECTIVITY panel (Bluetooth + Wi-Fi + router management) —
-                reachable from every mode. 2026-10-12 follow-up: always enabled
-                so a connection can be initiated from here, not only managed
-                once one is live. */}
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowSettings(false);
-                setShowJoystick(false);
-                setShowRouter(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Connectivity"
-              accessibilityState={{ selected: showRouter }}
-              className="mt-1 flex-row items-center justify-between rounded-lg border border-line bg-card px-2 py-1.5 active:opacity-70"
-            >
-              <View className="flex-row items-center gap-2">
-                <Feather name="wifi" size={14} color="#64748b" />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Connectivity
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={14} color="#64748b" />
-            </Pressable>
 
             {/* U-100 (owner 2026-10-12): *"always have the feature to turn
                 those off through the app's remote screen through the setting."*

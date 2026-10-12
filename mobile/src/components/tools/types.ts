@@ -198,7 +198,6 @@ export const deviceMemory = {
 
 export type ModeChooserProps = {
   activeMode: CarMode;
-  canControl: boolean;
   onSelect: (mode: CarMode) => void;
   onCycle: () => void;
   /** NAV highlight: draw the ESP-style inverted box around the trigger

@@ -2,7 +2,15 @@
 // Mode order, names, and available status match the remote firmware
 // (state.cpp MODE_CMDS[] / MODE_NAMES[], ui_core.cpp isModeAvailable()).
 import React, { useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useViewport } from "../../lib/viewport";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -24,7 +32,6 @@ import type { ModeChooserProps } from "./types";
 
 export function ModeChooser({
   activeMode,
-  canControl,
   onSelect,
   onCycle,
   modes,
@@ -43,6 +50,11 @@ export function ModeChooser({
   // mode — matching the ESP32 remote's hardware UI this component mirrors.
   const { themeMode } = useApp();
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES;
+  const spin = useRef(new Animated.Value(0)).current;
+  const spinDeg = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
   // A-37: while the dropdown is open we freeze the shown selection to the mode
   // captured at open time (previewMode still wins in NAV) — a stale car echo
   // arriving mid-open can't snap the highlight back to the old mode.
@@ -120,22 +132,34 @@ export function ModeChooser({
         />
       </Pressable>
 
-      {/* Cycle button — walks the remote's mode order like the physical remote */}
+      {/* Cycle button — walks the remote's mode order like the physical remote.
+          Owner U-102: gated exactly like the dropdown rows (locked only) so it
+          advances for every listed mode even before a link is live; the icon
+          spins a full turn on each press so the "rotate" is visible. */}
       <Pressable
         onPress={() => {
           feedbackTap();
+          spin.setValue(0);
+          Animated.timing(spin, {
+            toValue: 1,
+            duration: 500,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }).start();
           onCycle();
         }}
-        disabled={!canControl || locked}
+        disabled={locked}
         accessibilityRole="button"
         accessibilityLabel="Cycle mode"
-        className="h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-card disabled:opacity-40"
+        className={`h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-card disabled:opacity-40 active:opacity-70`}
       >
-        <Feather
-          name="rotate-ccw"
-          size={16}
-          color={themeMode === "dark" ? "#e2e8f0" : "#334155"}
-        />
+        <Animated.View style={{ transform: [{ rotate: spinDeg }] }}>
+          <Feather
+            name="rotate-ccw"
+            size={16}
+            color={themeMode === "dark" ? "#e2e8f0" : "#334155"}
+          />
+        </Animated.View>
       </Pressable>
 
       {/* Dropdown — Modal with flex:1 root so the overlay covers the screen */}

@@ -609,6 +609,21 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       else if (key === "SSID") telemetry.ssid = val;
       else if (key === "IP") telemetry.ip = val;
       else if (key === "ID") telemetry.id = val;
+      else if (key === "UP" || key === "UPTIME") {
+        // U-102: the STATE line now carries the same uptime/heap/signal the WS
+        // JSON does, so a Bluetooth link renders the top-line telemetry too.
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.uptimeMs = n;
+      } else if (key === "HEAP") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.freeHeap = n;
+      } else if (key === "SIG" || key === "SIGNAL") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.signal = n;
+      } else if (key === "RSSI") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.rssi = n;
+      }
     }
     return telemetry;
   }
