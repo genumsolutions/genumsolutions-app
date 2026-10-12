@@ -40,6 +40,7 @@ import {
 import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
 import { registerCurrentDevice } from "../../services/deviceRegistryService";
 import { syncCrashReport } from "../../services/crashReportService";
+import { flushAppLogs } from "../../services/appLogService";
 import {
   encodeEnvelopeWire,
   isEnvelopeIntakeEnabled,
@@ -982,6 +983,13 @@ export function useControlHub(routeCategory?: string) {
   // boot or a new crash still gets through. The service queues offline and
   // dedupes globally; this effect only decides WHEN a session snapshot exists.
   const crashReportKeyRef = useRef<string | null>(null);
+  // U-R3: a link-up is the natural flush moment for the app log queue (same
+  // offline-first retry cadence as crash reports). Fire-and-forget, gated on
+  // the LIVE transition so it runs once per connection, not per telemetry frame.
+  useEffect(() => {
+    if (!(connected || wifiConnected)) return;
+    void flushAppLogs().catch(() => {});
+  }, [connected, wifiConnected]);
   useEffect(() => {
     const live = connected || wifiConnected;
     if (!live) {

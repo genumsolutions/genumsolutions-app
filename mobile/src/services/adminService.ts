@@ -976,6 +976,129 @@ export async function listAdminActivity(
   };
 }
 
+// --- System Logs (U-R3 2026-10-12): fleet diagnostics behind the Admin
+// "System Logs" tab — one shared medium for what the cars and the phones did.
+// Read paths mirror the website's /api/admin/logs. RLS: staff/admin may read
+// device_crash_reports + app_logs; the app reads with the signed-in session.
+
+export type AdminCrashReport = {
+  id: string;
+  boardId: string;
+  deviceId: string | null;
+  modelId: string | null;
+  fwVersion: string;
+  appVersion: string;
+  platform: string;
+  connectionMethod: string;
+  ssid: string | null;
+  ip: string | null;
+  resetReason: string | null;
+  bootCount: number | null;
+  crashCount: number | null;
+  lastCrashPhase: string | null;
+  lastCrashHeap: number | null;
+  hasCrash: boolean;
+  reportedAt: string;
+};
+
+export function mapCrashReportRow(row: RawRow): AdminCrashReport {
+  return {
+    id: String(row.id ?? ""),
+    boardId: String(row.board_id ?? ""),
+    deviceId: row.device_id != null ? String(row.device_id) : null,
+    modelId: row.model_id != null ? String(row.model_id) : null,
+    fwVersion: String(row.fw_version ?? ""),
+    appVersion: String(row.app_version ?? ""),
+    platform: String(row.platform ?? ""),
+    connectionMethod: String(row.connection_method ?? ""),
+    ssid: row.ssid != null ? String(row.ssid) : null,
+    ip: row.ip != null ? String(row.ip) : null,
+    resetReason: row.reset_reason != null ? String(row.reset_reason) : null,
+    bootCount: typeof row.boot_count === "number" ? row.boot_count : null,
+    crashCount: typeof row.crash_count === "number" ? row.crash_count : null,
+    lastCrashPhase:
+      row.last_crash_phase != null ? String(row.last_crash_phase) : null,
+    lastCrashHeap:
+      typeof row.last_crash_heap === "number" ? row.last_crash_heap : null,
+    hasCrash: Boolean(row.has_crash),
+    reportedAt: String(row.reported_at ?? ""),
+  };
+}
+
+export type AdminAppLog = {
+  id: string;
+  userId: string | null;
+  appVersion: string;
+  platform: string;
+  scope: string;
+  level: "info" | "warn" | "error";
+  message: string;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export function mapAppLogRow(row: RawRow): AdminAppLog {
+  return {
+    id: String(row.id ?? ""),
+    userId: row.user_id != null ? String(row.user_id) : null,
+    appVersion: String(row.app_version ?? ""),
+    platform: String(row.platform ?? ""),
+    scope: String(row.scope ?? ""),
+    level: (["info", "warn", "error"] as const).includes(row.level as never)
+      ? (row.level as "info" | "warn" | "error")
+      : "error",
+    message: String(row.message ?? ""),
+    detail: (row.detail as Record<string, unknown> | null) ?? null,
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listDeviceCrashReports(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminCrashReport[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("device_crash_reports")
+    .select("*", { count: "exact" })
+    .order("reported_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapCrashReportRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function listAppLogs(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminAppLog[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("app_logs")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapAppLogRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
 // --- Dashboard analytics (page_views) ---
 // Mirrors the website's getPageViewStats: total/today views, top paths, and
 // a per-day traffic series. RLS: admins may read page_views.
