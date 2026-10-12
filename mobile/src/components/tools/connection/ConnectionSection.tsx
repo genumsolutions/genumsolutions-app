@@ -443,19 +443,35 @@ export function ConnectionSection({
         ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
         : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
 
+  // U-102 (owner 2026-10-12): the panel is an immediate, always-on SPLIT —
+  // left hands the communication-method choice + its single connect action;
+  // right renders ONLY that method's own network things. The old layout defaulted
+  // method to null, so the right pane did not exist and the whole section drew
+  // as one full-width column ("two separate formats"); with a default method the
+  // split shows on open and every method (even Internet) keeps its own pane.
+  const rightTitle =
+    method === "bluetooth"
+      ? "Cars found · networks"
+      : method === "wifi"
+        ? "Networks"
+        : null;
+
+  // Primary-first (owner 2026-10-12: "only display the added or paired device
+  // and others next items after scrolling only"): PAIRED/added devices render
+  // OUTSIDE the scroller, always visible; the rest stay behind one bounded
+  // scroll window. Scan results are hidden once a link is up (U-70).
+  const pairedDevices = sppDevices.filter((d) => d.bonded);
+  const restDevices = sppDevices.filter((d) => !d.bonded);
+
   return (
-    <View className="mt-2 flex-row flex-wrap items-start gap-2">
-      {/* ── LEFT pane: one truth + the chosen method ── */}
-      <View className="min-w-[220px] flex-1 gap-2">
-        {/* ---- status ------------------------------------------------------ */}
+    <View className="mt-2 flex-wrap flex-row items-start gap-2">
+      {/* ── STATUS: one bar, one truth — spans the whole width above the split ── */}
+      <View className="min-w-[220px] w-full">
         <ConnectionCard
           title="Connection"
           icon="radio"
           tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
           testID="conn-status"
-          // U-98: the disconnect action lives on the TITLE row (the card's
-          // `right` slot), not as a loose full-width button under the status
-          // text — the card owns its own action, so the body stays status-only.
           right={
             anyLink ? (
               <ActionButton
@@ -470,27 +486,23 @@ export function ConnectionSection({
             ) : null
           }
         >
-          {/* U-86: "The car is answering on this link." removed. The status line above
-              already says Connected / Not connected with the network name, so
-              this restated it in a second place with different words. */}
           {anyLink && !linkVerified ? (
             <InlineMessage tone="info">Connecting…</InlineMessage>
           ) : null}
-          {/* U-69: the hub's own error had NO surface once ConnectionBanner was
-              deleted, which is how a failed connect became invisible. It is
-              rendered here so no failure can be silent again. */}
           {!anyLink && hubError ? (
             <InlineMessage tone="error">{hubError}</InlineMessage>
           ) : null}
         </ConnectionCard>
+      </View>
 
-        {/* ---- U-97: THREE COMPACT METHOD PILLS -------------------------------
-            Owner (2026-10-08): *"show connection methods as three equal cards"*.
-            Bluetooth, Wi-Fi and Internet are now visible and comparable at a
-            glance; choosing one swaps the setup card below. This replaces the
-            U-69 dropdown, which hid two thirds of the choice behind a closed
-            row. Internet stays rendered (not hidden) but visibly disabled with
-            its reason — a missing option is an unexplained absence. */}
+      {/* ── The split: method select (LEFT) / the method's own content (RIGHT) ── */}
+      <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
+        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+          Connection method
+        </Text>
+
+        {/* U-97: the three methods, equal cards. Choosing one swaps the setup
+            card below (and the right pane follows). */}
         <View className="flex-row gap-1.5" testID="conn-methods">
           {CONNECTION_METHODS.map((m) => {
             const selected = m.id === method;
@@ -537,6 +549,7 @@ export function ConnectionSection({
             );
           })}
         </View>
+
         {methodDef && setupTarget ? (
           <MethodSetup
             method={methodDef}
@@ -545,7 +558,6 @@ export function ConnectionSection({
             carOnRouter={carOnRouter}
             sppSupported={sppSupported}
             sppStatus={sppStatus}
-            sppDevices={sppDevices}
             linkLive={anyLink}
             onScanBluetooth={() => void scanBluetooth()}
             onConnectBluetooth={connectBluetooth}
@@ -553,27 +565,69 @@ export function ConnectionSection({
           />
         ) : null}
 
-        {/* ---- ONE message surface for the whole section --------------------
-            U-97c: moved ABOVE the Wi-Fi list. At the bottom it sat below the
-            fold once the list was long, so a confirmation or a failure could be
-            off-screen. One surface — but where it can actually be seen. */}
+        {/* ONE message surface for the whole section — above the right pane so a
+            confirmation or a failure is never below the fold. */}
         {message ? (
           <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
         ) : null}
       </View>
 
-      {/* ── RIGHT pane: the ONE networks list ──
-          2026-10-12 (owner): Bluetooth gets the SAME split as Wi-Fi — connect
-          on the left, the networks / "switch to" list on the right — so the
-          Bluetooth view is no longer one full-width column. The list is the
-          SAME ROUTERS;… surface (it doubles as Bluetooth router management);
-          when no link is up it shows its honest empty state. */}
-      {method === "wifi" || method === "bluetooth" ? (
-        <View className="min-w-[240px] flex-1 gap-1.5">
-          {/* The caption belongs HERE — above the list it names. */}
+      {/* ── RIGHT pane: ONLY the selected method's own network things ──
+          Bluetooth: the cars it found (paired/added first, then a bounded scroll)
+          plus the network manager — the same routers surface as Wi-Fi, since it
+          doubles as Bluetooth router management. Wi-Fi: just the networks.
+          Internet: its honest reason, nothing else. One list, one caption, the
+          shared token look — no second visual language. */}
+      <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
+        {rightTitle ? (
           <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-            Available networks
+            {rightTitle}
           </Text>
+        ) : null}
+
+        {method === "bluetooth" && !anyLink && pairedDevices.length > 0 ? (
+          <View className="gap-1" testID="conn-bt-paired">
+            {pairedDevices.map((d) => (
+              <ConnectionCard
+                key={d.id}
+                title={d.name || d.id}
+                subtitle="Paired"
+                onPress={() => void connectBluetooth(d.id, d.name, d.bonded)}
+                testID={`conn-bt-device-${d.id}`}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {method === "bluetooth" && !anyLink && restDevices.length > 0 ? (
+          <View
+            className="mt-1"
+            testID="conn-bt-list"
+            style={{ maxHeight: DEVICE_LIST_MAX_HEIGHT }}
+          >
+            <ScrollView
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
+              <View className="gap-1 pr-1">
+                {restDevices.map((d) => (
+                  <ConnectionCard
+                    key={d.id}
+                    title={d.name || d.id}
+                    subtitle={d.id}
+                    onPress={() =>
+                      void connectBluetooth(d.id, d.name, d.bonded)
+                    }
+                    testID={`conn-bt-device-${d.id}`}
+                  />
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {(method === "wifi" || method === "bluetooth") && (
           <WifiPanel
             routers={routers}
             scanned={carScan ?? []}
@@ -613,8 +667,16 @@ export function ConnectionSection({
             onScan={() => void scanNearby()}
             onInputFocus={onInputFocus}
           />
-        </View>
-      ) : null}
+        )}
+
+        {method === "internet" ? (
+          <View className="rounded-lg border border-line bg-card p-2">
+            <InlineMessage tone="info">
+              {methodDef?.unavailable ?? "Not available yet."}
+            </InlineMessage>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -630,7 +692,6 @@ function MethodSetup({
   carOnRouter,
   sppSupported,
   sppStatus,
-  sppDevices,
   linkLive,
   onScanBluetooth,
   onConnectBluetooth,
@@ -642,7 +703,6 @@ function MethodSetup({
   carOnRouter: boolean;
   sppSupported: boolean;
   sppStatus: string;
-  sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
   /** U-70: a link is already up, so the scan affordances must be hidden. */
   linkLive: boolean;
   onScanBluetooth: () => void;
@@ -675,7 +735,6 @@ function MethodSetup({
           carOnRouter={carOnRouter}
           sppSupported={sppSupported}
           sppStatus={sppStatus}
-          sppDevices={sppDevices}
           linkLive={linkLive}
           onScanBluetooth={onScanBluetooth}
           onConnectBluetooth={onConnectBluetooth}
@@ -704,7 +763,6 @@ function TargetBody({
   carOnRouter,
   sppSupported,
   sppStatus,
-  sppDevices,
   linkLive,
   onScanBluetooth,
   onConnectBluetooth,
@@ -715,7 +773,6 @@ function TargetBody({
   carOnRouter: boolean;
   sppSupported: boolean;
   sppStatus: string;
-  sppDevices: readonly { id: string; name: string; bonded?: boolean }[];
   /** U-70: a link is already up, so the scan affordances must be hidden. */
   linkLive: boolean;
   onScanBluetooth: () => void;
@@ -755,49 +812,12 @@ function TargetBody({
               testID="conn-bt-scan"
             />
           )}
-          {/*
-            U-70 (2026-10-02): *"the list of the bluetooth device found while
-            scanning are too long, please keep all those in a scrolling window.
-            and also the list shoulnt be displayed when connected to any one of
-            those devices."*
-
-            Two fixes, both about the list being a page-ful rather than a
-            control:
-              - a BOUNDED scrolling window (maxHeight + its own ScrollView), so
-                twenty nearby devices cannot push the rest of the page off the
-                screen. The outer page ScrollView cannot do this job: a nested
-                vertical scroller of unbounded height just grows forever.
-              - hidden entirely once a link is up, along with the scan button. A
-                scan list next to a live connection is not information, it is a
-                way to connect a SECOND car to a session that already has one.
-          */}
-          {sppDevices.length > 0 ? (
-            <View
-              className="mt-1"
-              testID="conn-bt-list"
-              style={{ maxHeight: DEVICE_LIST_MAX_HEIGHT }}
-            >
-              <ScrollView
-                nestedScrollEnabled
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-              >
-                <View className="gap-1 pr-1">
-                  {sppDevices.map((d) => (
-                    <ConnectionCard
-                      key={d.id}
-                      title={d.name || d.id}
-                      subtitle={d.bonded ? "Paired" : d.id}
-                      onPress={() =>
-                        void onConnectBluetooth(d.id, d.name, d.bonded)
-                      }
-                      testID={`conn-bt-device-${d.id}`}
-                    />
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-          ) : null}
+          {/* U-70: the FOUND-device LIST moved to the section's RIGHT pane
+              (2026-10-12): left = the method + this one action, right = the
+              method's own results. Paired/added devices render above the scroll,
+              the rest behind one bounded window; and the whole list hides once a
+              link is up (connecting a second car to a live session is not a
+              wanted state). */}
         </View>
       ) : null}{" "}
       {/* U-86: one Connect action, whatever network the car is on. */}
