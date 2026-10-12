@@ -28,6 +28,38 @@
       from the status card; switching a saved router still works; the non-robocar Telemetry view
       still shows the 2×2 readings grid (`DriveTelemetry`), not the OLED mirror.
 
+## U-102 round (follow-up): the mode button works in every mode, telemetry rides Bluetooth, Connectivity is one split, AUTO fits one screen (2026-10-12 — DEVICE VERIFY PENDING)
+
+> Owner: the mode switch control was _"working inconsistently"_; the telemetry should reach the app
+> over Bluetooth (firmware + app); the Connectivity tab showed _"two separate format running"_ → unify
+> it into one immediate split (methods left / the method's own stuff right, paired/added car first,
+> the rest behind a scroll); the settings **gear no longer needs its own Connectivity row** (the pill
+> is always visible); and AUTO mode's telemetry screen had _"elongated across the landscape view"_ →
+> restore the old telemetry setup (the OLED mirror) to fit a single screen without scrolling.
+> App JS-only; **car firmware 1.3.1 UNFLASHED** (F-61) — the `UP`/`HEAP`/`SIG`/`RSSI` STATE fields
+> need the flash before telemetry over Bluetooth can show numbers. Force-close + reopen the app ×2.
+
+- [ ] **U-102-6 — the mode button works in ALL modes.** The circular rotate-arrows button in the mode
+      selector cycles through the modes from every mode (including a live ROBOCAR and AUTO run) and
+      spins; it is only disabled while the car is locked/unlinked (like the dropdown rows).
+- [ ] **U-102-7 — telemetry over Bluetooth (needs firmware 1.3.1 flash).** Connected via Bluetooth SPP
+      with the car on 1.3.1, the top status line shows real `Up` (counting up), `Heap`, and `Sig` —
+      the same values the Wi-Fi socket showed. Sig shows `--` (dashed) when the car is NOT on a router
+      (`WL_CONNECTED` false → no `SIG`/`RSSI` in the STATE line). `carProtocol.test.ts` snaps the
+      parse (`UP=`/`HEAP=`/`SIG=`/`RSSI=`; empty/omitted keys stay unknown).
+- [ ] **U-102-8 — Connectivity opens DIRECTLY as the split.** Opening the Connectivity panel shows
+      both panes at once: LEFT = "Connection method" pills (Bluetooth preselected) + the one connect
+      card; RIGHT = "Cars found · networks" with the paired/added device first, the rest inside the
+      bounded scroll (the whole list hides once a link is up). No one-column blank-then-two-column
+      state. Every method — Bluetooth, Wi-Fi, Internet — renders this same split look.
+- [ ] **U-102-9 — the Settings gear has no Connectivity row.** The Remote's ⚙ dropdown lists Dark
+      theme / the rest but NOT Connectivity (that is the corner pill). Tapping the gear never opens
+      a duplicate/other connection panel.
+- [ ] **U-102-10 — AUTO mode fits one landscape screen.** AUTO shows the OLED mirror dashboard
+      (the AUTO Angle / P / D / OUT / I / OFF rows) in the PID deck — the old telemetry look with the
+      new data — inside ONE screen: no tall single column, no scrolling. On other modes the Telemetry
+      view still shows the 2×2 `DriveTelemetry` grid (unchanged).
+
 ## U-93 round — the router actions, honestly (2026-10-04, OTA — DEVICE VERIFY PENDING)
 
 > Owner: _"the router select is not working sometime … the connect device button doesnt work …
