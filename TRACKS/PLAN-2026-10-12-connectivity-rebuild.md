@@ -1,6 +1,6 @@
 # PLAN 2026-10-12 — Remote "Connectivity" rebuild + car-on-router reachability (APP half)
 
-Status: **IN PROGRESS — phased.** Resume point mirrors
+Status: **COMPLETE — all five phases done.** Resume point mirrors
 `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-12-connectivity-rebuild.md`.
 
 Owner request (2026-10-12): move ALL connection UI (Bluetooth + WiFi) into the Remote
@@ -16,7 +16,7 @@ Strict scope: *"dont change other thing that i havent asked to you"*.
 > run `mobile/TESTING.md` / the car's `TRACKS/DEVICE-TESTS.md`. Phase 4 app half = **`app 43d57c6`**
 > (docs `66c1d78`), car half = **`car 1cfc913`**. Summary of Phase 4 in the block below.
 
-> **Phase 4 app half: DONE.** Committed + pushed (app code commit, docs commit). Shipped:
+> **Phase 4 app half: DONE — `app 43d57c6` (docs `66c1d78`).** Committed + pushed. Shipped:
 > - `DevicePrefs.allowParallelLinks?: boolean` (default false) in `types.ts`.
 > - `useControlHub.ts`: `allowParallelLinks` state + `allowParallelLinksRef` (:241-252);
 >   restored from BOTH prefs-apply sites (local memory + adopted cloud profile) into
