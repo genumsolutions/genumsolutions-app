@@ -453,11 +453,6 @@ export function ToolsScreen() {
           <CarProfileCard
             profileKey={hub.profileKey}
             savedPrefs={hub.savedPrefs}
-            autoJoinRouter={hub.autoJoinRouter}
-            setAutoJoinRouter={(v) => {
-              feedbackTap();
-              hub.setAutoJoinRouter(v);
-            }}
             profileSync={hub.profileSync}
             modeName={
               hub.savedPrefs?.modeId

@@ -29,6 +29,38 @@
       pin it); the other tabs still load; the app never blocks or crashes when a log flush fails
       offline (the row stays queued and uploads on the next link).
 
+## U-R3 round (connectivity rebuild): auto-join in Remote Settings, smart disconnect, compact Connectivity panel, OLED blink (2026-10-12 — DEVICE VERIFY PENDING)
+
+> Owner: consolidate settings (auto-join → Remote gear; dark theme → Menu only); smart disconnect
+> by Parallel state; compact Connectivity panel (no full-width status line, status+disconnect right
+> of method pills, no "Connectivity" header); rename right-pane headers; Bluetooth shows only paired
+> cars; OLED blinks last two rows (network + IP). Car firmware 1.3.2 UNFLASHED (F-61) for ap_psave/
+> allow_parallel in STATE + /status.
+
+- [ ] **U-R3-6 — Auto-join saved router lives in Remote Settings gear.** Open Remote Settings (gear)
+      on a linked car; the "Auto-join saved router" toggle appears below Parallel BT+Wi-Fi, mirrors
+      DevicePrefs and cloud profile. Toggling it updates the car via `WIFICFG;PARALLEL`? No — auto-join
+      is app-side smart-link; the toggle is `autoJoinRouter` (DevicePrefs). Removed from Control Panel
+      Saved settings card and User Preferences per-device editor — exactly one control now.
+
+- [ ] **U-R3-7 — Dark theme only in Menu → Appearance.** Remote Settings gear no longer has a Dark
+      theme toggle; the Menu tab → Appearance group is the single source of truth.
+
+- [ ] **U-R3-8 — Smart disconnect by Parallel state.** Parallel OFF: Remote header shows one
+      "Disconnect" pill (drops both links); Connectivity panel status card shows one "Disconnect"
+      button. Parallel ON: Remote header shows separate "BT" and "WiFi" pills; Connectivity panel
+      shows "BT" and "WiFi" buttons side-by-side. Both honor the `allowParallelLinks` flag.
+
+- [ ] **U-R3-9 — Compact Connectivity panel.** Full-width "Connection" status line removed.
+      Status text + disconnect buttons now sit on the right of the method pills row (left pane).
+      "Connectivity" header text removed. Right-pane headers: "Paired cars" (Bluetooth) /
+      "Networks on the car" (Wi-Fi). Bluetooth list shows ONLY paired/known devices — no scan
+      results list. Layout fits single screen without scrolling.
+
+- [ ] **U-R3-10 — OLED blinks last two rows.** Car on 1.3.2: the last two OLED body rows
+      (network method + IP) blink at ~1 Hz (500 ms toggle) to indicate live connectivity.
+      First two rows (Status, Speed) remain steady.
+
 ## U-102 round — Remote feedback follow-up: OLED mirror back, readings on the status line, Bluetooth split, Wi-Fi form + keyboard (2026-10-12, OTA `f7262c4` + `78e6412` — DEVICE VERIFY PENDING)
 
 > Owner: the middle readings were _"too small and not perfectly managed"_ → restore the old OLED

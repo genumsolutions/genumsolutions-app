@@ -1,4 +1,25 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: fleet diagnostics — the restart record over Bluetooth + a shared app/device log medium)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: U-R3 connectivity rebuild — auto-join in Remote Settings, smart disconnect, compact Connectivity, OLED blink + fleet diagnostics)
+
+## This session (2026-10-12, U-R3 connectivity rebuild) — auto-join moved to Remote Settings, smart disconnect by Parallel, compact Connectivity panel, OLED blink, plus fleet diagnostics
+
+Owner directive: consolidate settings, smart disconnect by Parallel, compact Connectivity, OLED blink, plus the car restart/freeze reporting hole and app error/log medium.
+
+**Connectivity rebuild (app):**
+1. **Auto-join → Remote Settings gear.** Moved "Auto-join saved router" toggle from Control Panel (ToolsScreen → CarProfileCard) and UserPreferencesScreen into Remote screen's Settings dropdown, below Parallel BT+Wi-Fi. Control Panel Saved settings card and per-device editor no longer show it — exactly one control.
+2. **Dark theme → Menu only.** Removed Dark theme toggle from Remote Settings; Menu tab → Appearance is the single source of truth.
+3. **Smart disconnect by Parallel state.** Parallel OFF: one "Disconnect" (drops both links). Parallel ON: separate "BT" and "WiFi" pills/buttons. Implemented in Remote header pills AND Connectivity panel status card, both reading `allowParallelLinks`.
+4. **Compact Connectivity panel.** Removed full-width "Connection" status line. Status text + disconnect buttons moved to right of method pills row (left pane). Removed "Connectivity" header text. Right-pane headers renamed: "Paired cars" (Bluetooth) / "Networks on the car" (Wi-Fi). Bluetooth list shows ONLY paired/known devices (no scan results). Layout fits single screen.
+5. **OLED blink.** Car firmware 1.3.2: last two OLED body rows (network + IP) blink at ~1 Hz.
+
+**Fleet diagnostics (from prior U-R3):**
+6. **Car firmware 1.3.2 (UNFLASHED, F-61).** `sendStateOn()` appends restart record (`;RST=...;BC=...;CC=...;PH=...;LH=...`) + ap_psave + allow_parallel to every STATE line. Relay budget 448→512. `FW_VERSION` 1.3.2.
+7. **App STATE parsing.** `carProtocol.ts` adds `RST/BC/CC/PH/LH` + `APSAVE/PARALLEL` keys.
+8. **App log medium.** `appLogService.ts` (ring + queue), `logger.ts` lazy import, `useControlHub` flush on link-up.
+9. **Admin System Logs tab.** `adminService.ts` lists, `AdminScreen.tsx` tab with crash + app logs.
+10. **Database `app_logs`.** Migration applied live, RLS + 4 policies.
+11. **Website mirror.** `lib/logs.ts`, `/api/admin/logs`, `AdminLogs.tsx`, `AdminPanel.tsx`.
+
+**Gates (all green):** app `tsc` 0 · vitest **679/679** · prettier + `format:check` clean; website vitest **288/288**; car `check-relay-contract` (cap 512) · `check-webpage-js` · `check-firmware-syntax` 10/10 TUs. **Commits:** app `503af36` + docs `21bf1dd` + docs-hash-fix `e117dd1` + connectivity-rebuild `NEW`; website `ee982f2`; car `cb47dbb` (+ docs `10424c2`). **OTA published** (runtime 3.2.7, group `20021e40`, Android `01a12fa5`). **UNFLASHED** — owner must flash 1.3.2 (and 1.3.1).
 
 ## This session (2026-10-12, U-R3 — fleet diagnostics: fixes the car restart/freeze reporting hole and gives the app's errors a real DB medium)
 
