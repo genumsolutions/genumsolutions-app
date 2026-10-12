@@ -304,6 +304,9 @@ export function RemoteControlScreen({ navigation }: Props) {
     showSppsRetry,
     handleSppsRetry,
     handleReconnectPromptCancel,
+    autoJoinRouter,
+    setAutoJoinRouter,
+    allowParallelLinks,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -358,6 +361,24 @@ export function RemoteControlScreen({ navigation }: Props) {
           text: "Disconnect",
           style: "destructive",
           onPress: () => {
+            void handleWifiDisconnect();
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmDisconnectAll = () => {
+    Alert.alert(
+      "Disconnect all links?",
+      "The car will stop safely and both Bluetooth and Wi-Fi links will close.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: () => {
+            void handleDisconnect();
             void handleWifiDisconnect();
           },
         },
@@ -769,178 +790,184 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ── A-25 sub-header: friendly name above the tappable broadcasting
-            IP. Round-6: rendered for EVERY robocar mode at a CONSTANT height
-            (h-7) so the drive deck never shifts when the ESP_SER-only IP chip
-            mounts/unmounts — the old conditional band pushed the joystick
-            down as soon as the website-server mode appeared. ── */}
+        {/* ── A-25 sub-header: friendly name + status + telemetry + pills.
+            Two compact lines: (1) link status + disconnect, (2) telemetry + control pills.
+            Constant height so drive deck never shifts. */}
         {isRobocar && (
-          <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center gap-2 px-1">
-            <View className="min-w-0 shrink flex-row items-center gap-1.5">
-              <View
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
-              />
-              <Text
-                numberOfLines={1}
-                ellipsizeMode="middle"
-                className="min-w-0 shrink text-[10px] font-bold text-muted dark:text-slate-300"
-              >
-                {connected
-                  ? friendlyBtName(deviceName) || "Connected"
-                  : wifiConnected
-                    ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
-                    : "No link"}
-              </Text>
-            </View>
-            {/* Owner 2026-10-12: the CAR's own readings live on this status
-                line now (uptime / heap / signal); the gamepad centre shows the
-                OLED mirror again. Dashes when nothing is reporting. */}
-            <TelemetryLine {...driveTelemetryArgs} />
-            <View className="min-w-0 flex-1" />
-            {activeMode.id === "website-server" || wifiConnected ? (
-              <Pressable
-                onPress={handleOpenWebPage}
-                accessibilityRole="link"
-                accessibilityLabel={
-                  telemetry.ip
-                    ? `Open car web page at ${telemetry.ip}`
-                    : onOwnHotspot
-                      ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
-                      : "Car IP not available yet"
-                }
-                hitSlop={6}
-                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-              >
-                <Feather
-                  name={wifiConnected ? "external-link" : "wifi"}
-                  size={10}
-                  color={wifiConnected ? "#0284c7" : "#64748b"}
+          <View className="mt-1 flex-shrink-0">
+            {/* Line 1: link status + smart disconnect */}
+            <View className="flex h-7 flex-shrink-0 flex-row items-center gap-2 px-1">
+              <View className="min-w-0 shrink flex-row items-center gap-1.5">
+                <View
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
                 />
                 <Text
-                  className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
                   numberOfLines={1}
+                  ellipsizeMode="middle"
+                  className="min-w-0 shrink text-[10px] font-bold text-muted dark:text-slate-300"
                 >
-                  {telemetry.ip
-                    ? telemetry.ip
-                    : onOwnHotspot
-                      ? `${DEFAULT_AP_IP} (AP)`
-                      : "—"}
+                  {connected
+                    ? friendlyBtName(deviceName) || "Connected"
+                    : wifiConnected
+                      ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
+                      : "No link"}
                 </Text>
-              </Pressable>
-            ) : null}
-            {/* Phase 2 (owner 2026-10-12): per-link disconnect — one button
-                  per LIVE link, so Bluetooth and Wi-Fi can be dropped
-                  independently. */}
-            {connected ? (
-              <Pressable
-                onPress={confirmDisconnectBt}
-                accessibilityRole="button"
-                accessibilityLabel="Disconnect Bluetooth"
-                hitSlop={6}
-                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-              >
-                <Feather name="power" size={10} color="#64748b" />
-                <Text
-                  className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
-                  numberOfLines={1}
-                >
-                  BT
-                </Text>
-              </Pressable>
-            ) : null}
-            {wifiConnected ? (
-              <Pressable
-                onPress={confirmDisconnectWifi}
-                accessibilityRole="button"
-                accessibilityLabel="Disconnect Wi-Fi"
-                hitSlop={6}
-                className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-              >
-                <Feather name="power" size={10} color="#dc2626" />
-                <Text
-                  className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
-                  numberOfLines={1}
-                >
-                  WiFi
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        )}
+              </View>
+              {/* Smart disconnect — Parallel OFF: single Disconnect. Parallel ON: per-link BT / WiFi. */}
+              {linked ? (
+                allowParallelLinks ? (
+                  <>
+                    {connected && (
+                      <Pressable
+                        onPress={confirmDisconnectBt}
+                        accessibilityRole="button"
+                        accessibilityLabel="Disconnect Bluetooth"
+                        hitSlop={6}
+                        className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                      >
+                        <Feather name="power" size={10} color="#64748b" />
+                        <Text
+                          className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
+                          numberOfLines={1}
+                        >
+                          BT
+                        </Text>
+                      </Pressable>
+                    )}
+                    {wifiConnected && (
+                      <Pressable
+                        onPress={confirmDisconnectWifi}
+                        accessibilityRole="button"
+                        accessibilityLabel="Disconnect Wi-Fi"
+                        hitSlop={6}
+                        className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                      >
+                        <Feather name="power" size={10} color="#dc2626" />
+                        <Text
+                          className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
+                          numberOfLines={1}
+                        >
+                          WiFi
+                        </Text>
+                      </Pressable>
+                    )}
+                  </>
+                ) : (
+                  <Pressable
+                    onPress={confirmDisconnectAll}
+                    accessibilityRole="button"
+                    accessibilityLabel="Disconnect all links"
+                    hitSlop={6}
+                    className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                  >
+                    <Feather name="power" size={10} color="#dc2626" />
+                    <Text
+                      className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
+                      numberOfLines={1}
+                    >
+                      Disconnect
+                    </Text>
+                  </Pressable>
+                )
+              ) : null}
+            </View>
 
-        {/* ── D-pad / Joystick / Hide toggle — below top bar (A-19) ── */}
-        {isRobocar && (
-          <View className="flex-shrink-0 flex-row items-center justify-center gap-2 py-1">
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(true);
-                setUseJoystick(false);
-              }}
-              className={`rounded-full px-3 py-1 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
+            {/* Line 2: telemetry + control pills (D-pad / Joystick / Telemetry / Connectivity) */}
+            <View className="flex h-7 flex-shrink-0 flex-row items-center gap-1 px-1">
+              <TelemetryLine {...driveTelemetryArgs} />
+              <View className="min-w-0 flex-1" />
+              {activeMode.id === "website-server" || wifiConnected ? (
+                <Pressable
+                  onPress={handleOpenWebPage}
+                  accessibilityRole="link"
+                  accessibilityLabel={
+                    telemetry.ip
+                      ? `Open car web page at ${telemetry.ip}`
+                      : onOwnHotspot
+                        ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
+                        : "Car IP not available yet"
+                  }
+                  hitSlop={6}
+                  className="shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
+                >
+                  <Feather
+                    name={wifiConnected ? "external-link" : "wifi"}
+                    size={10}
+                    color={wifiConnected ? "#0284c7" : "#64748b"}
+                  />
+                  <Text
+                    className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
+                    numberOfLines={1}
+                  >
+                    {telemetry.ip
+                      ? telemetry.ip
+                      : onOwnHotspot
+                        ? `${DEFAULT_AP_IP} (AP)`
+                        : "—"}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {/* Control pills */}
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(true);
+                  setUseJoystick(false);
+                }}
+                className={`rounded-full px-2.5 py-0.5 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"}`}
               >
-                D-pad
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(true);
-                setUseJoystick(true);
-              }}
-              className={`rounded-full px-3 py-1 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
+                <Text
+                  className={`text-[9px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
+                >
+                  D-pad
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(true);
+                  setUseJoystick(true);
+                }}
+                className={`rounded-full px-2.5 py-0.5 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"}`}
               >
-                Joystick
-              </Text>
-            </Pressable>
-            {/* A-50 (round-11): the third pill is TELEMETRY, not "Hide" — it
-                opens the mode's readout panels (PID dashboard / live
-                link/uptime/heap/signal telemetry) instead of a pointless
-                "Pad hidden" card. Owner (2026-10-11): it now also closes the
-                router view, so the two are clearly one-or-the-other. */}
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(false);
-                setShowRouter(false);
-              }}
-              className={`rounded-full px-3 py-1 ${!showJoystick && !showRouter ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
+                <Text
+                  className={`text-[9px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
+                >
+                  Joystick
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(false);
+                  setShowRouter(false);
+                }}
+                className={`rounded-full px-2.5 py-0.5 ${!showJoystick && !showRouter ? "bg-navy" : "border border-line bg-card"}`}
               >
-                Telemetry
-              </Text>
-            </Pressable>
-            {/* Phase 2 (owner 2026-10-12): the Connectivity pill opens the
-                 ONE connection panel (Bluetooth + Wi-Fi + router management) in
-                 every linked robocar mode. 2026-10-12 follow-up: the `disabled`
-                 + dim state is gone — a user must be able to open this panel to
-                 INITIATE a link (scan Bluetooth, connect Wi-Fi), not only to
-                 manage one that already exists. */}
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                setShowJoystick(false);
-                setShowRouter(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Connectivity"
-              accessibilityState={{ selected: showRouter }}
-              className={`rounded-full px-3 py-1 ${showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
-            >
-              <Text
-                className={`text-[10px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
+                <Text
+                  className={`text-[9px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
+                >
+                  Telemetry
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  feedbackTap();
+                  setShowJoystick(false);
+                  setShowRouter(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Connectivity"
+                accessibilityState={{ selected: showRouter }}
+                className={`rounded-full px-2.5 py-0.5 ${showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
               >
-                Connectivity
-              </Text>
-            </Pressable>
+                <Text
+                  className={`text-[9px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
+                >
+                  Connectivity
+                </Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -1095,9 +1122,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
                 >
-                  <Text className="px-1 text-[11px] font-black uppercase tracking-widest text-navy">
-                    Connectivity
-                  </Text>
                   <ConnectionSection
                     hub={hub}
                     method={connMethod}
@@ -1247,29 +1271,6 @@ export function RemoteControlScreen({ navigation }: Props) {
               {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
             </Text>
 
-            {/* Round-6: dark-theme toggle mirrors the Account/Menu Appearance
-                switch — drives AppContext.setThemeMode, which flips the
-                semantic tokens (this screen + the shared tool surfaces). */}
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather
-                  name={themeMode === "dark" ? "moon" : "sun"}
-                  size={14}
-                  color="#64748b"
-                />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Dark theme
-                </Text>
-              </View>
-              <Switch
-                value={themeMode === "dark"}
-                onValueChange={(on) => setThemeMode(on ? "dark" : "light")}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="Toggle dark theme"
-              />
-            </View>
-
             {/* U-100 (owner 2026-10-12): *"always have the feature to turn
                 those off through the app's remote screen through the setting."*
                 The car's own hotspot ships ALWAYS reachable (power save OFF);
@@ -1316,6 +1317,29 @@ export function RemoteControlScreen({ navigation }: Props) {
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
                 accessibilityLabel="Keep Bluetooth and Wi-Fi up together"
+              />
+            </View>
+
+            {/* U-R3 (owner 2026-10-12): smart-link auto-join — on car selection
+                join the strongest saved router the car hears, else stay on its
+                own access point. Mirrors DevicePrefs and cloud profile. */}
+            <View className="mt-1 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Feather name="zap" size={14} color="#64748b" />
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                  Auto-join saved router
+                </Text>
+              </View>
+              <Switch
+                value={autoJoinRouter}
+                onValueChange={(on) => {
+                  feedbackTap();
+                  setAutoJoinRouter(on);
+                }}
+                disabled={!linked}
+                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                thumbColor="#ffffff"
+                accessibilityLabel="Auto-join saved router on connect"
               />
             </View>
 

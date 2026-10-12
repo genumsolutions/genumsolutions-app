@@ -21,9 +21,9 @@ export type CarProfileCardProps = {
   profileKey: string | null;
   /** This car's remembered device prefs (restored on link). */
   savedPrefs: DevicePrefs | null;
-  /** Smart-link toggle: auto-join a saved router on car selection. */
-  autoJoinRouter: boolean;
-  setAutoJoinRouter: (value: boolean) => void;
+  /** Smart-link toggle: auto-join a saved router on car selection. Optional — only shown when provided. */
+  autoJoinRouter?: boolean;
+  setAutoJoinRouter?: (value: boolean) => void;
   /** Live identity from the open link (banner already shows it). */
   carLabel: string | null;
   carId: string | null;
@@ -97,6 +97,8 @@ export function CarProfileCard({
   profileSync,
   modeName,
 }: CarProfileCardProps) {
+  const showAutoJoin =
+    autoJoinRouter !== undefined && setAutoJoinRouter !== undefined;
   const routers = savedPrefs?.savedRouters ?? [];
   const history = savedPrefs?.wifiHistory ?? [];
   const onRouter = !!staSsid;
@@ -277,26 +279,28 @@ export function CarProfileCard({
         </View>
       )}
 
-      {/* Smart-link toggle — the user's control for auto-join (owner ③). */}
-      <View className="mt-3 flex-row items-center gap-3 border-t border-line pt-3">
-        <View className="min-w-0 flex-1">
-          <Text className="text-xs font-bold text-ink">
-            Auto-join saved router
-          </Text>
-          <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-            On car selection: join the strongest saved router the car hears —
-            else stay on its own access point.
-          </Text>
+      {/* Smart-link toggle — the user's control for auto-join (owner ③). Only rendered when props are provided. */}
+      {showAutoJoin && (
+        <View className="mt-3 flex-row items-center gap-3 border-t border-line pt-3">
+          <View className="min-w-0 flex-1">
+            <Text className="text-xs font-bold text-ink">
+              Auto-join saved router
+            </Text>
+            <Text className="mt-0.5 text-[11px] leading-4 text-muted">
+              On car selection: join the strongest saved router the car hears —
+              else stay on its own access point.
+            </Text>
+          </View>
+          <Switch
+            value={autoJoinRouter}
+            onValueChange={(v) => {
+              setAutoJoinRouter(v);
+            }}
+            disabled={!profileKey}
+            trackColor={{ true: "#1e3a8a", false: "#e2e8f0" }}
+          />
         </View>
-        <Switch
-          value={autoJoinRouter}
-          onValueChange={(v) => {
-            setAutoJoinRouter(v);
-          }}
-          disabled={!profileKey}
-          trackColor={{ true: "#1e3a8a", false: "#e2e8f0" }}
-        />
-      </View>
+      )}
     </View>
   );
 }

@@ -157,24 +157,6 @@ export function UserPreferencesScreen() {
     );
   }
 
-  // EDIT: toggles the router auto-join preference from the hub (a real,
-  // editable device preference) — the drive settings themselves belong to
-  // the live Control Panel; the hub edits identity + preferences.
-  async function toggleAutoJoin(device: KnownDevice) {
-    const current = device.settings?.autoJoinRouter ?? true;
-    setDeviceBusy(true);
-    const result = await editDevice(device.profileKey, {
-      autoJoinRouter: !current,
-    });
-    setDeviceBusy(false);
-    void loadDevices();
-    if (!result.ok) {
-      Alert.alert("Could not update", result.error ?? "Try again.");
-      return;
-    }
-    feedbackTap();
-  }
-
   function startCreate() {
     setEditingId("");
     setDraftRobotId("");
@@ -412,9 +394,6 @@ export function UserPreferencesScreen() {
                           {device.settings.speed != null
                             ? ` · speed ${device.settings.speed}/255`
                             : ""}
-                          {device.settings.autoJoinRouter != null
-                            ? ` · auto-join ${device.settings.autoJoinRouter ? "on" : "off"}`
-                            : ""}
                         </Text>
                       ) : (
                         <Text className="mt-1.5 text-[11px] text-muted">
@@ -472,21 +451,6 @@ export function UserPreferencesScreen() {
                           >
                             <Text className="text-xs font-bold text-navy">
                               Set name
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => {
-                              void toggleAutoJoin(device);
-                            }}
-                            disabled={deviceBusy}
-                            className="rounded-full border border-line px-3 py-1.5 disabled:opacity-50"
-                            hitSlop={6}
-                          >
-                            <Text className="text-xs font-bold text-navy">
-                              Auto-join:{" "}
-                              {device.settings?.autoJoinRouter === false
-                                ? "off"
-                                : "on"}
                             </Text>
                           </Pressable>
                           <Pressable

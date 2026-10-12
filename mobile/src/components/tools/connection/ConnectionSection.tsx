@@ -167,6 +167,7 @@ export function ConnectionSection({
     requestScan,
     routerDelete,
     sendCommand,
+    allowParallelLinks,
   } = hub;
 
   const [busy, setBusy] = useState(false);
@@ -451,55 +452,75 @@ export function ConnectionSection({
   // split shows on open and every method (even Internet) keeps its own pane.
   const rightTitle =
     method === "bluetooth"
-      ? "Cars found · networks"
+      ? "Paired cars"
       : method === "wifi"
-        ? "Networks"
+        ? "Networks on the car"
         : null;
 
-  // Primary-first (owner 2026-10-12: "only display the added or paired device
-  // and others next items after scrolling only"): PAIRED/added devices render
-  // OUTSIDE the scroller, always visible; the rest stay behind one bounded
-  // scroll window. Scan results are hidden once a link is up (U-70).
-  const pairedDevices = sppDevices.filter((d) => d.bonded);
-  const restDevices = sppDevices.filter((d) => !d.bonded);
+  // Only paired/known devices for Bluetooth — no scan results list.
+  // Pairing is done in phone Settings; the app observes bonded devices.
+  const knownDevices = sppDevices.filter((d) => d.bonded);
+
+  // Status line for the left pane (shown next to method pills when linked)
+  const statusText = !anyLink
+    ? "Not connected"
+    : liveTarget === "bt-spp"
+      ? `Bluetooth · ${sppStatusMsg || "the car"}`
+      : onOwnHotspot
+        ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
+        : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
 
   return (
     <View className="mt-2 flex-wrap flex-row items-start gap-2">
-      {/* ── STATUS: one bar, one truth — spans the whole width above the split ── */}
-      <View className="min-w-[220px] w-full">
-        <ConnectionCard
-          title="Connection"
-          icon="radio"
-          tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
-          testID="conn-status"
-          right={
-            anyLink ? (
-              <ActionButton
-                compact
-                label="Disconnect"
-                variant="quiet"
-                icon="power"
-                onPress={() => void disconnect()}
-                disabled={busy}
-                testID="conn-disconnect"
-              />
-            ) : null
-          }
-        >
-          {anyLink && !linkVerified ? (
-            <InlineMessage tone="info">Connecting…</InlineMessage>
-          ) : null}
-          {!anyLink && hubError ? (
-            <InlineMessage tone="error">{hubError}</InlineMessage>
-          ) : null}
-        </ConnectionCard>
-      </View>
-
-      {/* ── The split: method select (LEFT) / the method's own content (RIGHT) ── */}
+      {/* ── LEFT pane: method select + status + setup ── */}
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
-        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-          Connection method
-        </Text>
+        {/* Method pills row with status + disconnect on the right */}
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+            Connection method
+          </Text>
+          {anyLink && (
+            <View className="flex-row items-center gap-1.5 flex-wrap">
+              <Text className="text-[10px] text-muted">{statusText}</Text>
+              {allowParallelLinks ? (
+                <>
+                  {btLive && (
+                    <ActionButton
+                      compact
+                      label="BT"
+                      variant="quiet"
+                      icon="power"
+                      onPress={() => void handleDisconnect()}
+                      disabled={busy}
+                      testID="conn-disconnect-bt"
+                    />
+                  )}
+                  {wifiConnected && (
+                    <ActionButton
+                      compact
+                      label="WiFi"
+                      variant="quiet"
+                      icon="power"
+                      onPress={() => void handleWifiDisconnect()}
+                      disabled={busy}
+                      testID="conn-disconnect-wifi"
+                    />
+                  )}
+                </>
+              ) : (
+                <ActionButton
+                  compact
+                  label="Disconnect"
+                  variant="quiet"
+                  icon="power"
+                  onPress={() => void disconnect()}
+                  disabled={busy}
+                  testID="conn-disconnect"
+                />
+              )}
+            </View>
+          )}
+        </View>
 
         {/* U-97: the three methods, equal cards. Choosing one swaps the setup
             card below (and the right pane follows). */}
@@ -573,11 +594,9 @@ export function ConnectionSection({
       </View>
 
       {/* ── RIGHT pane: ONLY the selected method's own network things ──
-          Bluetooth: the cars it found (paired/added first, then a bounded scroll)
-          plus the network manager — the same routers surface as Wi-Fi, since it
-          doubles as Bluetooth router management. Wi-Fi: just the networks.
-          Internet: its honest reason, nothing else. One list, one caption, the
-          shared token look — no second visual language. */}
+          Bluetooth: paired cars only (no scan results)
+          Wi-Fi: networks list
+          Internet: its honest reason, nothing else. */}
       <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
         {rightTitle ? (
           <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
@@ -585,9 +604,9 @@ export function ConnectionSection({
           </Text>
         ) : null}
 
-        {method === "bluetooth" && !anyLink && pairedDevices.length > 0 ? (
+        {method === "bluetooth" && !anyLink && knownDevices.length > 0 ? (
           <View className="gap-1" testID="conn-bt-paired">
-            {pairedDevices.map((d) => (
+            {knownDevices.map((d) => (
               <ConnectionCard
                 key={d.id}
                 title={d.name || d.id}
@@ -596,34 +615,6 @@ export function ConnectionSection({
                 testID={`conn-bt-device-${d.id}`}
               />
             ))}
-          </View>
-        ) : null}
-
-        {method === "bluetooth" && !anyLink && restDevices.length > 0 ? (
-          <View
-            className="mt-1"
-            testID="conn-bt-list"
-            style={{ maxHeight: DEVICE_LIST_MAX_HEIGHT }}
-          >
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-            >
-              <View className="gap-1 pr-1">
-                {restDevices.map((d) => (
-                  <ConnectionCard
-                    key={d.id}
-                    title={d.name || d.id}
-                    subtitle={d.id}
-                    onPress={() =>
-                      void connectBluetooth(d.id, d.name, d.bonded)
-                    }
-                    testID={`conn-bt-device-${d.id}`}
-                  />
-                ))}
-              </View>
-            </ScrollView>
           </View>
         ) : null}
 
