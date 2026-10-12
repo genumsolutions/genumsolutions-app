@@ -12,7 +12,7 @@
 //   L joystick                R joystick
 //
 // Phase 1 rebuild: clean chrome row (no ScrollView), standard gamepad
-// layout, disconnect dialog, settings dropdown. Drive controls
+// layout, settings dropdown. Drive controls
 // (joystick/d-pad) are delegated to DriveControls.
 //
 // NO E-STOP CONTROL IS RENDERED, despite what the diagram above used to show.
@@ -29,7 +29,6 @@ import React, {
   useState,
 } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -273,8 +272,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     adjustSteerLimit,
     commitSpeed,
     adjustTrim,
-    handleDisconnect,
-    handleWifiDisconnect,
     navActive,
     setNavActive,
     navActiveRef,
@@ -306,7 +303,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     handleReconnectPromptCancel,
     autoJoinRouter,
     setAutoJoinRouter,
-    allowParallelLinks,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -329,62 +325,6 @@ export function RemoteControlScreen({ navigation }: Props) {
         ? "—"
         : DEFAULT_AP_IP;
   const showIp = telemetry.ip !== undefined || onOwnHotspot;
-
-  // Phase 2 (owner 2026-10-12): per-link disconnect — a Bluetooth drop and a
-  // Wi-Fi drop are separate now, so the owner can close ONE link without the
-  // other. Each confirms first and stops the car safely (the hub's handlers
-  // send the safe-stop before tearing the link down).
-  const confirmDisconnectBt = () => {
-    Alert.alert(
-      "Disconnect Bluetooth?",
-      "The car will stop safely and the Bluetooth link will close.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Disconnect",
-          style: "destructive",
-          onPress: () => {
-            void handleDisconnect();
-          },
-        },
-      ],
-    );
-  };
-
-  const confirmDisconnectWifi = () => {
-    Alert.alert(
-      "Disconnect Wi-Fi?",
-      "The car will stop safely and the Wi-Fi link will close.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Disconnect",
-          style: "destructive",
-          onPress: () => {
-            void handleWifiDisconnect();
-          },
-        },
-      ],
-    );
-  };
-
-  const confirmDisconnectAll = () => {
-    Alert.alert(
-      "Disconnect all links?",
-      "The car will stop safely and both Bluetooth and Wi-Fi links will close.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Disconnect",
-          style: "destructive",
-          onPress: () => {
-            void handleDisconnect();
-            void handleWifiDisconnect();
-          },
-        },
-      ],
-    );
-  };
 
   // Restore joystick layout choice per device.
   useEffect(() => {
@@ -791,11 +731,13 @@ export function RemoteControlScreen({ navigation }: Props) {
         </View>
 
         {/* ── A-25 sub-header: friendly name + status + telemetry + pills.
-            Two compact lines: (1) link status + disconnect, (2) telemetry + control pills.
-            Constant height so drive deck never shifts. */}
+            Two compact lines: (1) link status, (2) telemetry + control pills.
+            Constant height so drive deck never shifts.
+            Phase 1 (owner 2026-10-12): NO disconnect here — the Connectivity
+            panel's per-link BT / WiFi buttons are the ONE disconnect place. */}
         {isRobocar && (
           <View className="mt-1 flex-shrink-0">
-            {/* Line 1: link status + smart disconnect */}
+            {/* Line 1: link status only (disconnect lives in Connectivity) */}
             <View className="flex h-7 flex-shrink-0 flex-row items-center gap-2 px-1">
               <View className="min-w-0 shrink flex-row items-center gap-1.5">
                 <View
@@ -813,63 +755,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                       : "No link"}
                 </Text>
               </View>
-              {/* Smart disconnect — Parallel OFF: single Disconnect. Parallel ON: per-link BT / WiFi. */}
-              {linked ? (
-                allowParallelLinks ? (
-                  <>
-                    {connected && (
-                      <Pressable
-                        onPress={confirmDisconnectBt}
-                        accessibilityRole="button"
-                        accessibilityLabel="Disconnect Bluetooth"
-                        hitSlop={6}
-                        className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-                      >
-                        <Feather name="power" size={10} color="#64748b" />
-                        <Text
-                          className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
-                          numberOfLines={1}
-                        >
-                          BT
-                        </Text>
-                      </Pressable>
-                    )}
-                    {wifiConnected && (
-                      <Pressable
-                        onPress={confirmDisconnectWifi}
-                        accessibilityRole="button"
-                        accessibilityLabel="Disconnect Wi-Fi"
-                        hitSlop={6}
-                        className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-                      >
-                        <Feather name="power" size={10} color="#dc2626" />
-                        <Text
-                          className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
-                          numberOfLines={1}
-                        >
-                          WiFi
-                        </Text>
-                      </Pressable>
-                    )}
-                  </>
-                ) : (
-                  <Pressable
-                    onPress={confirmDisconnectAll}
-                    accessibilityRole="button"
-                    accessibilityLabel="Disconnect all links"
-                    hitSlop={6}
-                    className="ml-2 shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-                  >
-                    <Feather name="power" size={10} color="#dc2626" />
-                    <Text
-                      className="text-[9px] font-black uppercase tracking-wide text-red-600 dark:text-red-400"
-                      numberOfLines={1}
-                    >
-                      Disconnect
-                    </Text>
-                  </Pressable>
-                )
-              ) : null}
             </View>
 
             {/* Line 2: telemetry + control pills (D-pad / Joystick / Telemetry / Connectivity) */}
