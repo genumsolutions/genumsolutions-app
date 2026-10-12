@@ -1,4 +1,37 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild Phase 3 DONE — OLED mirror removed everywhere)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-12: connectivity-rebuild Phase 4 DONE — parallel BT+WiFi toggle)
+
+## This session (2026-10-12, connectivity-rebuild Phase 4) — APP: parallel Bluetooth + Wi-Fi (default OFF)
+
+Phase 4 of `TRACKS/PLAN-2026-10-12-connectivity-rebuild.md` — commit **`43d57c6`** (pushed).
+Owner item: *"enable parallel BT+WiFi with a power-saving toggle (default OFF)."* The app half keeps
+its U-98 one-active-link policy unless the user opts in; the car half (`WIFICFG;PARALLEL;ON|OFF`,
+NVS `botcfg/allow_parallel`) is `Genum_4WD4M_CAR` `1cfc913`.
+
+- **`components/tools/types.ts`** — `DevicePrefs.allowParallelLinks?: boolean` (default false).
+- **`components/tools/useControlHub.ts`** —
+  - `allowParallelLinks` state + `allowParallelLinksRef` (render-phase mirror for the `[]`-dep
+    teardown callbacks).
+  - Restored from BOTH prefs-apply sites (local memory load + adopted cloud profile) into
+    `linkManager.setAllowParallel(...)`.
+  - Carried in the `persistPrefs` base record + deps (a narrow speed/mode patch can't wipe it).
+  - `dropBluetoothForWifi` now **early-returns when ON** — raising Wi-Fi never tears BT down.
+  - The symmetric `handleConnect` WiFi-teardown + `setWifiConnected(false)` is gated behind
+    `!allowParallelLinksRef.current` — raising BT never tears Wi-Fi down when ON.
+  - `WIFICFG;PARALLEL;` parsed in `handleWifiProvisionReply` (car truth wins → pref + link manager).
+  - New `setCarParallelLinks` (optimistic set + persist + `WIFICFG;PARALLEL;ON|OFF`) /
+    `queryCarParallel` (`WIFICFG;PARALLEL;?`), both via `sendSystemLine`; exported with the state.
+- **`transports/linkManager.ts`** — `allowParallel` flag + `setAllowParallel` / `isParallel`;
+  `activateWith` skips `previous.disconnect()` when ON (single `activeId` retained — parallel only
+  relaxes the destructive teardown).
+- **`screens/RemoteControlScreen.tsx`** — new **Parallel BT + Wi-Fi** `Switch` in the Remote Settings
+  drawer beside Hotspot power-save; `queryCarParallel()` fired on link.
+- **Tests** — `oneActiveLink.test.ts` new "U-100 Phase 4" suite (4 source-shape rules);
+  `linkManager.test.ts` new "keeps the previous link up when parallel links are ON". Three of the new
+  rules mutant-proven (guard polarity ×2, reply prefix) → red, restore → green.
+
+**Gate:** tsc 0 · vitest **678/678** (45 files; +5) · prettier clean. **NOT device-verified (F-61)** —
+needs flash 1.3.0 + both transports up at once checked on the Remote Settings drawer. Next: **Phase 5**
+(final sweep — ledgers, root `RESUME-ME.md`).
 
 ## This session (2026-10-12, connectivity-rebuild Phase 3) — APP: the OLED mirror is gone; link/uptime/heap/signal telemetry sits around the drive controls
 

@@ -11,6 +11,26 @@ connection sections; enable parallel BT+WiFi with a power-saving toggle (default
 Strict scope: *"dont change other thing that i havent asked to you"*.
 
 ## RESUME HERE
+> **Phase 4 app half: DONE.** Committed + pushed (app code commit, docs commit). Shipped:
+> - `DevicePrefs.allowParallelLinks?: boolean` (default false) in `types.ts`.
+> - `useControlHub.ts`: `allowParallelLinks` state + `allowParallelLinksRef` (:241-252);
+>   restored from BOTH prefs-apply sites (local memory + adopted cloud profile) into
+>   `linkManager.setAllowParallel(...)`; carried in `persistPrefs` base + deps; the U-98
+>   `dropBluetoothForWifi` now early-returns when ON (:1818) AND the symmetric
+>   `handleConnect` WiFi-teardown is gated behind `!allowParallelLinksRef.current` (:1712);
+>   `WIFICFG;PARALLEL;` parse in `handleWifiProvisionReply`; new `setCarParallelLinks` /
+>   `queryCarParallel` via `sendSystemLine`; exported `allowParallelLinks` /
+>   `setCarParallelLinks` / `queryCarParallel`.
+> - `transports/linkManager.ts`: `allowParallel` flag + `setAllowParallel`/`isParallel`;
+>   `activateWith` skips `previous.disconnect()` when ON (single `activeId` retained).
+> - `RemoteControlScreen.tsx`: **Parallel BT + Wi-Fi** `Switch` in the Remote Settings
+>   drawer next to Hotspot power-save; `queryCarParallel()` on link.
+> - Tests: `oneActiveLink.test.ts` new "Phase 4" suite (4 rules); `linkManager.test.ts` new
+>   "keeps the previous link up when parallel links are ON". 3 new source-shape rules
+>   mutant-proven (guard polarity ×2, reply prefix) → red, restore → green.
+> - Gates: tsc 0 · vitest **678/678** · prettier clean. Next: **Phase 5** (final sweep —
+>   ledgers, cloud/car `fw_version`, root `RESUME-ME.md`).
+
 > **Phase 3 app half: DONE — `app 5285df6` (pushed).** Committed + pushed:
 > - `OledDisplay.tsx` **deleted** + `OledDisplayProps` removed from `types.ts`; `oledCommonProps` /
 >   `oledSlot` and the dead `modeAvailStatus` import gone from `RemoteControlScreen.tsx`.
@@ -72,10 +92,12 @@ Strict scope: *"dont change other thing that i havent asked to you"*.
       `telemetrySlot`; new `DriveTelemetry.tsx` (link/uptime/heap/signal) fills the gamepad's center
       gap, the pid-auto card and the hidden-mode telemetry view; the drone/non-robocar mirror column
       is gone (deck fills the row).
-- [ ] **Phase 4 — parallel BT+WiFi toggle** (app half: persisted `allowParallelLinks`
-      default false + Remote Settings toggle; stop `dropBluetoothForWifi`
-      (`useControlHub.ts:1786`) and relax `linkManager` one-active-link
-      (`transports/linkManager.ts:237-291`) when ON; update `oneActiveLink.test.ts`).
+- [x] **Phase 4 — parallel BT+WiFi toggle.** DONE. App half: persisted
+      `allowParallelLinks` (default false) + Remote Settings toggle; `dropBluetoothForWifi`
+      and the symmetric `handleConnect` WiFi-teardown both gated on the flag; `linkManager`
+      one-active-link relaxed when ON (skips `previous.disconnect()`); `oneActiveLink.test.ts`
+      + `linkManager.test.ts` updated. Car half: `WIFICFG;PARALLEL;ON|OFF` + NVS
+      `botcfg/allow_parallel`, U-79 loop parallel branch (car `1cfc913`).
 - [ ] **Phase 5 — final sweep** (ledgers, `RESUME-ME.md`).
 
 ## Gates to run (app, from `genumsolutions-app\mobile`)
