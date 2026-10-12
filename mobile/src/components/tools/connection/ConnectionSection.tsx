@@ -6,19 +6,25 @@
 // card, TransportPicker and RouterPanel. The drive decks, the Remote screen
 // and every other page are untouched.
 //
-// THE SHAPE, and the three owner complaints that produced it:
+// THE SHAPE. On the Remote screen this is a LANDSCAPE surface, so it is a
+// two-pane layout rather than one full-width column that stretches every card
+// across the whole width:
 //
 //   status  → one bar, one truth, derived from the hub only
-//   METHOD  → ONE dropdown. U-69: *"connections methods are scattered all over
-//              the page. please only show one method at a time and use the drop
-//              down menu for that and dont populate contents unnecessary."*
-//              So there is no longer a card per method: there is one selector
-//              showing the current method, and only that method's setup card.
+//   METHOD  → three compact pills. U-97: *"show connection methods as three
+//             equal cards"* — visible and comparable at a glance, and only the
+//             selected method's setup card renders below them. Internet stays
+//             rendered but visibly disabled with its reason.
 //   setup   → the selected method's job, and nothing else
-//   routers → ONE dropdown for "switch to a saved router" (six rows is
-//              "overly populated"), with add/edit/remove behind one explicit
-//              action — U-69: *"use the drop down menu where ever the things
-//              are overly populated."*
+//   routers → the ONE unified networks list, in the RIGHT pane (it doubles as
+//             Bluetooth router management). Kept narrow and bounded so it does
+//             not elongate across the screen.
+//
+// U-99 (owner 2026-10-12): *"the fonts are too big and the sections are hogging
+// up all the space ... use the split screen in landscape view, don't elongate
+// everything across the big width."* So every card/pill/row here is compact
+// (smaller type and padding), and the section splits into two flex panes that
+// wrap on narrow screens and sit side-by-side in landscape.
 //
 // Every decision comes from the pure model in this folder. This file renders it
 // and calls the hub; it never holds a second opinion about what is connected
@@ -98,7 +104,7 @@ type Message = { tone: "error" | "ok" | "info"; text: string };
  * page keeps its shape whatever the phone finds nearby, and the list scrolls
  * inside itself.
  */
-const DEVICE_LIST_MAX_HEIGHT = 260;
+const DEVICE_LIST_MAX_HEIGHT = 200;
 
 // =====================================================================
 // (U-80) probeCarStatus moved to ./discovery.ts — the hub's automatic
@@ -445,53 +451,54 @@ export function ConnectionSection({
         : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
 
   return (
-    <View className="mt-3 gap-2.5">
-      {/* ---- status ------------------------------------------------------ */}
-      <ConnectionCard
-        title="Connection"
-        icon="radio"
-        tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
-        testID="conn-status"
-        // U-98: the disconnect action lives on the TITLE row (the card's
-        // `right` slot), not as a loose full-width button under the status
-        // text — the card owns its own action, so the body stays status-only.
-        right={
-          anyLink ? (
-            <ActionButton
-              compact
-              label="Disconnect"
-              variant="quiet"
-              icon="power"
-              onPress={() => void disconnect()}
-              disabled={busy}
-              testID="conn-disconnect"
-            />
-          ) : null
-        }
-      >
-        {/* U-86: "The car is answering on this link." removed. The status line above
-            already says Connected / Not connected with the network name, so
-            this restated it in a second place with different words. */}
-        {anyLink && !linkVerified ? (
-          <InlineMessage tone="info">Connecting…</InlineMessage>
-        ) : null}
-        {/* U-69: the hub's own error had NO surface once ConnectionBanner was
-            deleted, which is how a failed connect became invisible. It is
-            rendered here so no failure can be silent again. */}
-        {!anyLink && hubError ? (
-          <InlineMessage tone="error">{hubError}</InlineMessage>
-        ) : null}
-      </ConnectionCard>
+    <View className="mt-2 flex-row flex-wrap items-start gap-2">
+      {/* ── LEFT pane: one truth + the chosen method ── */}
+      <View className="min-w-[220px] flex-1 gap-2">
+        {/* ---- status ------------------------------------------------------ */}
+        <ConnectionCard
+          title="Connection"
+          icon="radio"
+          tone={!anyLink ? "idle" : linkVerified ? "live" : "busy"}
+          testID="conn-status"
+          // U-98: the disconnect action lives on the TITLE row (the card's
+          // `right` slot), not as a loose full-width button under the status
+          // text — the card owns its own action, so the body stays status-only.
+          right={
+            anyLink ? (
+              <ActionButton
+                compact
+                label="Disconnect"
+                variant="quiet"
+                icon="power"
+                onPress={() => void disconnect()}
+                disabled={busy}
+                testID="conn-disconnect"
+              />
+            ) : null
+          }
+        >
+          {/* U-86: "The car is answering on this link." removed. The status line above
+              already says Connected / Not connected with the network name, so
+              this restated it in a second place with different words. */}
+          {anyLink && !linkVerified ? (
+            <InlineMessage tone="info">Connecting…</InlineMessage>
+          ) : null}
+          {/* U-69: the hub's own error had NO surface once ConnectionBanner was
+              deleted, which is how a failed connect became invisible. It is
+              rendered here so no failure can be silent again. */}
+          {!anyLink && hubError ? (
+            <InlineMessage tone="error">{hubError}</InlineMessage>
+          ) : null}
+        </ConnectionCard>
 
-      {/* ---- U-97: THREE EQUAL METHOD CARDS, not a dropdown ---------------
-          Owner (2026-10-08): *"show connection methods as three equal cards"*.
-          Bluetooth, Wi-Fi and Internet are now visible and comparable at a
-          glance; choosing one swaps the setup card below. This replaces the
-          U-69 dropdown, which hid two thirds of the choice behind a closed
-          row. Internet stays rendered (not hidden) but visibly disabled with
-          its reason — a missing option is an unexplained absence. */}
-      <View className="mt-1">
-        <View className="mt-2 flex-row gap-2" testID="conn-methods">
+        {/* ---- U-97: THREE COMPACT METHOD PILLS -------------------------------
+            Owner (2026-10-08): *"show connection methods as three equal cards"*.
+            Bluetooth, Wi-Fi and Internet are now visible and comparable at a
+            glance; choosing one swaps the setup card below. This replaces the
+            U-69 dropdown, which hid two thirds of the choice behind a closed
+            row. Internet stays rendered (not hidden) but visibly disabled with
+            its reason — a missing option is an unexplained absence. */}
+        <View className="flex-row gap-1.5" testID="conn-methods">
           {CONNECTION_METHODS.map((m) => {
             const selected = m.id === method;
             const blocked = Boolean(m.unavailable);
@@ -510,7 +517,7 @@ export function ConnectionSection({
                 accessibilityLabel={m.label}
                 accessibilityState={{ selected, disabled: blocked }}
                 testID={`conn-method-${m.id}`}
-                className={`min-w-0 flex-1 items-center gap-1.5 rounded-xl border p-2.5 ${
+                className={`min-w-0 flex-1 items-center gap-1 rounded-lg border px-1.5 py-1.5 ${
                   selected
                     ? "border-select-ink bg-select-bg"
                     : "border-line bg-card"
@@ -518,19 +525,19 @@ export function ConnectionSection({
               >
                 <Feather
                   name={METHOD_ICON[m.id]}
-                  size={18}
+                  size={13}
                   color={selected ? "#1e3a8a" : "#475569"}
                 />
                 <Text
                   numberOfLines={1}
-                  className={`text-[12px] font-black ${
+                  className={`text-[10px] font-black ${
                     selected ? "text-select-ink" : "text-ink"
                   }`}
                 >
                   {m.label}
                 </Text>
                 <View
-                  className={`h-1.5 w-1.5 rounded-full ${
+                  className={`h-1 w-1 rounded-full ${
                     selected && !blocked ? "bg-success" : "bg-border"
                   }`}
                 />
@@ -538,67 +545,50 @@ export function ConnectionSection({
             );
           })}
         </View>
+        {methodDef && setupTarget ? (
+          <MethodSetup
+            method={methodDef}
+            target={setupTarget}
+            busy={busy}
+            hasAlternative={methodDef.targets.length > 1}
+            alternativeId={
+              methodDef.targets.find((t) => t.id !== setupTarget.id)?.id ?? null
+            }
+            onPickTarget={(id) => {
+              tap();
+              setTargetId(id);
+            }}
+            carOnRouter={carOnRouter}
+            reportedSsid={reportedSsid}
+            sppSupported={sppSupported}
+            sppStatus={sppStatus}
+            sppDevices={sppDevices}
+            linkLive={anyLink}
+            onScanBluetooth={() => void scanBluetooth()}
+            onConnectBluetooth={connectBluetooth}
+            onConnectWifi={connectWifi}
+          />
+        ) : null}
+
+        {/* ---- ONE message surface for the whole section --------------------
+            U-97c: moved ABOVE the Wi-Fi list. At the bottom it sat below the
+            fold once the list was long, so a confirmation or a failure could be
+            off-screen. One surface — but where it can actually be seen. */}
+        {message ? (
+          <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
+        ) : null}
       </View>
-      {methodDef && setupTarget ? (
-        <MethodSetup
-          method={methodDef}
-          target={setupTarget}
-          busy={busy}
-          hasAlternative={methodDef.targets.length > 1}
-          alternativeId={
-            methodDef.targets.find((t) => t.id !== setupTarget.id)?.id ?? null
-          }
-          onPickTarget={(id) => {
-            tap();
-            setTargetId(id);
-          }}
-          carOnRouter={carOnRouter}
-          reportedSsid={reportedSsid}
-          sppSupported={sppSupported}
-          sppStatus={sppStatus}
-          sppDevices={sppDevices}
-          linkLive={anyLink}
-          onScanBluetooth={() => void scanBluetooth()}
-          onConnectBluetooth={connectBluetooth}
-          onConnectWifi={connectWifi}
-        />
-      ) : null}
 
-      {/* ---- ONE message surface for the whole section --------------------
-          U-97c: moved ABOVE the Wi-Fi list. At the bottom it sat below the
-          fold once the list was long, so a confirmation or a failure could be
-          off-screen. One surface — but where it can actually be seen. */}
-      {message ? (
-        <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
-      ) : null}
-
-      {/* ---- U-84: Wi-Fi is ONE list ---------------------------------------
-          Owner: the Wi-Fi half was "too messy", full of "guidance text in
-          subtitles", and split into a pointless "car hotspot vs home router"
-          choice. Three controls did one job — the "Where is the car?" target
-          dropdown, a "Connect to …" button for the chosen side, and the router
-          manager's own scan/add/switch cluster — while four InlineMessages
-          narrated the layout back at the user.
-
-          All of it is now one list. Tapping a row switches the car; there is no
-          second dropdown and no instruction text. The car's own hotspot stays
-          visible in the same list, tagged, and is deliberately not a switch
-          target (F-63).
-
-          Shown whenever the Wi-Fi method is chosen — not only when a link is
-          up — because "search for networks" is the first thing a user does,
-          and it used to be hidden exactly when it was needed.
-
+      {/* ── RIGHT pane: the ONE networks list ──
           U-96: the SAME list is the Bluetooth method's router management (the
           "Routers" target). The ROUTERS;… commands ride whatever link is live,
-          so one list serves both methods. */}
+          so one list serves both methods. It renders only when a method that
+          owns a network list is chosen — the left pane keeps the full width
+          otherwise (e.g. Bluetooth pairing has no list to show). */}
       {method === "wifi" || (targetId === "bt-routers" && anyLink) ? (
-        <>
-          {/* The caption belongs HERE — above the list it names. It used to sit
-              at the very top of the section, labelling the status card, while
-              this list rendered with no heading at all (owner: "the list of the
-              available network without their caption heading"). */}
-          <Text className="text-[15px] font-black text-ink">
+        <View className="min-w-[240px] flex-1 gap-1.5">
+          {/* The caption belongs HERE — above the list it names. */}
+          <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
             Available networks
           </Text>
           <WifiPanel
@@ -607,9 +597,6 @@ export function ConnectionSection({
             busy={busy}
             reachable={anyLink}
             pendingSsid={pendingJoinSsid}
-            // Phase 2 (owner 2026-10-12): the Connectivity panel is now the
-            // ONE connection surface (Remote screen), so it owns add/edit/forget
-            // — RouterPanel's duplicate manager is retired.
             manage={manage}
             sendCmd={sendCommand}
             onSwitch={(s) => void switchRouter(s)}
@@ -643,7 +630,7 @@ export function ConnectionSection({
             onScan={() => void scanNearby()}
             onInputFocus={onInputFocus}
           />
-        </>
+        </View>
       ) : null}
     </View>
   );
@@ -783,7 +770,7 @@ function MethodSetup({
           yet — the dead "Manage saved routers" button that used to live here
           did nothing at all. */}
       {target.id === "bt-routers" && !linkLive ? (
-        <View className="mt-2.5">
+        <View className="mt-2">
           <InlineMessage tone="error">
             Connect to the car over Bluetooth first, then manage its routers.
           </InlineMessage>
@@ -834,7 +821,7 @@ function TargetBody({
           subtitles like this as part of the mess. If a target genuinely cannot
           be used, TargetBody says why in place, where it applies. */}
       {target.id === "bt-spp" && !linkLive ? (
-        <View className="mt-2.5 gap-2">
+        <View className="mt-2 gap-1.5">
           {/* U-69: if classic Bluetooth is not in this build, say so HERE with
               the reason, instead of offering a button that can only fail. */}
           {sppSupported === false ? (
@@ -879,7 +866,7 @@ function TargetBody({
                 showsVerticalScrollIndicator
                 keyboardShouldPersistTaps="handled"
               >
-                <View className="gap-1.5 pr-1">
+                <View className="gap-1 pr-1">
                   {sppDevices.map((d) => (
                     <ConnectionCard
                       key={d.id}
@@ -899,7 +886,7 @@ function TargetBody({
       ) : null}{" "}
       {/* U-86: one Connect action, whatever network the car is on. */}
       {target.id === "car-wifi" ? (
-        <View className="mt-2.5">
+        <View className="mt-2">
           <ActionButton
             label="Connect"
             icon="wifi"

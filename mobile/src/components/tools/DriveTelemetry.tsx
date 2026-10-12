@@ -33,7 +33,8 @@ export type DriveTelemetryProps = {
   uptimeMs?: number | null;
   /** Car's free heap bytes (JSON `free_heap`). */
   freeHeap?: number | null;
-  /** Tighter 2×2 tile grid for the gamepad's center gap; default single row. */
+  /** Tighter 2×2 tile grid for the gamepad's center gap; the default is a
+      roomier 2×2 grid of the same readings for the telemetry view. */
   compact?: boolean;
 };
 
@@ -61,32 +62,40 @@ export function DriveTelemetry(props: DriveTelemetryProps) {
     <View
       className={
         compact
-          ? "h-full w-full flex-row flex-wrap content-center rounded-lg bg-slate-900 px-1.5 py-1"
-          : "w-full flex-row flex-wrap rounded-xl bg-slate-900 p-2.5"
+          ? "h-full w-full flex-row flex-wrap content-center rounded-lg bg-slate-900 px-1 py-1"
+          : "w-full flex-row flex-wrap rounded-xl bg-slate-900 p-2"
       }
-      style={{ gap: compact ? 2 : 10 }}
+      style={{ gap: compact ? 2 : 8 }}
     >
       {items.map((it) => (
         <View
           key={it.label}
-          className={compact ? "basis-1/2 px-0.5" : "grow basis-[22%]"}
+          className={compact ? "basis-1/2 px-0.5" : "basis-1/2"}
         >
-          <Text
-            numberOfLines={1}
-            className={`font-black uppercase tracking-[0.18em] text-slate-500 ${
-              compact ? "text-[8px]" : "text-[9px]"
-            }`}
+          <View
+            className={
+              compact
+                ? "rounded-md bg-slate-800/70 px-1.5 py-1"
+                : "rounded-lg bg-slate-800/70 px-2 py-1.5"
+            }
           >
-            {it.label}
-          </Text>
-          <Text
-            numberOfLines={1}
-            className={`font-mono font-bold text-emerald-300 ${
-              compact ? "text-[11px]" : "text-sm"
-            }`}
-          >
-            {it.value}
-          </Text>
+            <Text
+              numberOfLines={1}
+              className={`font-black uppercase tracking-[0.16em] text-slate-400 ${
+                compact ? "text-[9px]" : "text-[10px]"
+              }`}
+            >
+              {it.label}
+            </Text>
+            <Text
+              numberOfLines={1}
+              className={`mt-0.5 font-mono font-bold text-emerald-300 ${
+                compact ? "text-[13px]" : "text-[15px]"
+              }`}
+            >
+              {it.value}
+            </Text>
+          </View>
         </View>
       ))}
     </View>

@@ -78,11 +78,11 @@ export function ConnectionCard({
 }) {
   const body = (
     <>
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-center gap-1.5">
         {icon ? (
           <Feather
             name={icon}
-            size={14}
+            size={11}
             // Semantic only: `ink` is the highest-contrast foreground in both
             // themes, so the icon can never be the thing that disappears.
             color={selected ? "#1e3a8a" : "#475569"}
@@ -92,28 +92,28 @@ export function ConnectionCard({
           // Selected uses select-ink ON select-bg (8.4:1 both themes); normal
           // uses ink on card (13:1 light, 12:1 dark). Never an off-palette
           // shade, never a `dark:` override — the tokens already flip.
-          className={`min-w-0 flex-1 text-[13px] font-black ${
+          className={`min-w-0 flex-1 text-[11px] font-black ${
             selected ? "text-select-ink" : "text-ink"
           }`}
         >
           {title}
         </Text>
-        <View className={`h-2 w-2 rounded-full ${TONE_DOT[tone]}`} />
+        <View className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]}`} />
         {right ? <View>{right}</View> : null}
       </View>
       {subtitle ? (
-        <Text className="mt-1 text-[11px] leading-4 text-muted">
+        <Text className="mt-0.5 text-[10px] leading-3 text-muted">
           {subtitle}
         </Text>
       ) : null}
-      {children ? <View className="mt-2.5">{children}</View> : null}
+      {children ? <View className="mt-1.5">{children}</View> : null}
     </>
   );
 
   // Selected is a FILLED pair (select-bg + select-ink), not a faint tint with a
   // darker label — a 5%-alpha background is exactly the kind of near-invisible
   // surface that produced the original complaint.
-  const frame = `rounded-xl border p-3 ${
+  const frame = `rounded-lg border p-2 ${
     selected
       ? "border-select-ink bg-select-bg"
       : tone === "error"
@@ -181,7 +181,7 @@ export function ActionButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
       testID={testID}
-      className={`${compact ? "h-7 px-2.5 gap-1" : "h-11 px-4 gap-1.5"} ${
+      className={`${compact ? "h-6 px-2 gap-1" : "h-8 px-3 gap-1"} ${
         flex ? "flex-1" : ""
       } flex-row items-center justify-center rounded-full ${tone} ${
         disabled ? "opacity-50" : "active:opacity-70"
@@ -190,7 +190,7 @@ export function ActionButton({
       {icon ? (
         <Feather
           name={icon}
-          size={compact ? 12 : 14}
+          size={compact ? 10 : 12}
           color={
             variant === "primary"
               ? "#ffffff"
@@ -201,7 +201,7 @@ export function ActionButton({
         />
       ) : null}
       <Text
-        className={`${compact ? "text-[11px]" : "text-[13px]"} font-black ${text}`}
+        className={`${compact ? "text-[10px]" : "text-[11px]"} font-black ${text}`}
       >
         {label}
       </Text>
@@ -236,8 +236,8 @@ export function InlineMessage({
         ? "text-success"
         : "text-muted";
   return (
-    <View className={`mt-2 rounded-lg border px-3 py-2 ${toneClass}`}>
-      <Text className={`text-[11px] leading-4 ${textClass}`}>{children}</Text>
+    <View className={`mt-1.5 rounded-md border px-2 py-1 ${toneClass}`}>
+      <Text className={`text-[10px] leading-3 ${textClass}`}>{children}</Text>
     </View>
   );
 }
@@ -296,7 +296,7 @@ export function SelectRow<T extends string>({
         accessibilityLabel={`${label}: ${current?.label ?? "none selected"}`}
         accessibilityState={{ disabled: blocked, expanded: open }}
         testID={testID}
-        className={`flex-row items-center gap-2 rounded-xl border p-3 ${
+        className={`flex-row items-center gap-2 rounded-lg border p-2 ${
           blocked
             ? "border-line bg-card opacity-60"
             : open
@@ -304,12 +304,12 @@ export function SelectRow<T extends string>({
               : "border-line bg-card"
         }`}
       >
-        <Text className="min-w-0 flex-1 text-[13px] font-black text-ink">
+        <Text className="min-w-0 flex-1 text-[11px] font-black text-ink">
           {label}
         </Text>
         <Text
           numberOfLines={1}
-          className={`max-w-[55%] text-[13px] font-bold ${
+          className={`max-w-[55%] text-[11px] font-bold ${
             current ? "text-select-ink" : "text-muted"
           }`}
         >
@@ -317,19 +317,19 @@ export function SelectRow<T extends string>({
         </Text>
         <Feather
           name={open ? "chevron-up" : "chevron-down"}
-          size={16}
+          size={13}
           color="#475569"
         />
       </Pressable>
 
       {blocked && disabledReason ? (
-        <Text className="mt-1.5 text-[11px] leading-4 text-muted">
+        <Text className="mt-1 text-[10px] leading-3 text-muted">
           {disabledReason}
         </Text>
       ) : null}
 
       {open && !blocked ? (
-        <View className="mt-1.5 gap-1.5" testID={`${testID ?? label}-options`}>
+        <View className="mt-1 gap-1" testID={`${testID ?? label}-options`}>
           {options.map((o) => {
             const isCurrent = o.id === value;
             return (
@@ -343,24 +343,24 @@ export function SelectRow<T extends string>({
                 accessibilityLabel={o.label}
                 accessibilityState={{ selected: isCurrent }}
                 testID={`${testID ?? label}-opt-${o.id}`}
-                className={`flex-row items-center gap-2 rounded-lg border px-3 py-2.5 ${
+                className={`flex-row items-center gap-2 rounded-md border px-2 py-1.5 ${
                   isCurrent
                     ? "border-select-ink bg-select-bg"
                     : "border-line bg-card"
                 }`}
               >
                 <Text
-                  className={`min-w-0 flex-1 text-[13px] font-bold ${
+                  className={`min-w-0 flex-1 text-[11px] font-bold ${
                     isCurrent ? "text-select-ink" : "text-ink"
                   }`}
                 >
                   {o.label}
                 </Text>
                 {o.hint ? (
-                  <Text className="text-[11px] text-muted">{o.hint}</Text>
+                  <Text className="text-[10px] text-muted">{o.hint}</Text>
                 ) : null}
                 {isCurrent ? (
-                  <Feather name="check" size={14} color="#1e3a8a" />
+                  <Feather name="check" size={12} color="#1e3a8a" />
                 ) : null}
               </Pressable>
             );
