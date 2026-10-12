@@ -87,7 +87,8 @@ export type WifiPanelProps = {
   pendingSsid?: string | null;
   /** Owner (2026-10-11): the Control Panel list is REDUCED — it keeps the
       connect/switch/scan actions and drops the add/edit/delete cluster, which
-      now lives on the Remote screen's RouterPanel (one manager, no duplicate).
+      now lives on the Remote screen's Connectivity panel (one manager, no
+      duplicate).
       When `false`, the per-row Edit/Forget and the "Add network" form are not
       rendered; a short pointer names where they moved. */
   manage?: boolean;
@@ -324,8 +325,8 @@ export function WifiPanel({
                 </Pressable>
                 {/* Forgetting is per-row and deliberately quiet: it must not
                     compete with the one action that matters, switching. Only
-                    rendered when this list owns management (Remote RouterPanel
-                    does it now — see `manage`). */}
+                    rendered when this list owns management (the Remote's
+                    Connectivity panel does it now — see `manage`). */}
                 {r.state === "saved" && manage ? (
                   <>
                     {/* U-93: Edit = set a new password for this network. */}

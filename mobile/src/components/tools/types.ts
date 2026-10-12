@@ -4,7 +4,6 @@ import React from "react";
 import { Platform } from "react-native";
 import type { CarTelemetry } from "../../services/carProtocol";
 import type { CarMode } from "../../config/roboCarCatalog";
-import type { RouterOutcome } from "./connection/commands";
 
 export type SensorData = {
   temperature: number;
@@ -243,62 +242,6 @@ export type BalanceControlsProps = {
   compact?: boolean;
   /** Optional telemetry readout rendered next to the angle card. */
   telemetrySlot?: React.ReactNode;
-};
-
-/**
- * A-26/A-27/A-28 (device-round-5): the ONE "WiFi & Router" panel shown when
- * the drive pads are hidden — saved-router list (car truth names, with
- * switch + delete), an Add form (SSID + password) and the active SSID/IP.
- * Replaces the retired Settings WiFi card + WeblinkControls card + the
- * "Pad hidden" placeholder. Keyboard-safe (keyboardShouldPersistTaps).
- */
-export type RouterPanelProps = {
-  canControl: boolean;
-  /** True when any transport is live (BT or WS) — gates the send buttons. */
-  linked: boolean;
-  /** Car's active SSID (JSON `ssid` / optimistic provisioning) — null when
-      the car is on its compile-time default / AP fallback. */
-  carSsid: string | null;
-  /** Car's AP-fallback broadcast id (JSON `ap`). */
-  carApName: string | null;
-  /** Car's reachable IP (tappable → opens the hosted web page). */
-  ip: string | null;
-  /** Saved-router names mirror (car `networks` JSON, optimistic edits,
-      per-device savedRouters). Names only — never passwords. */
-  networks: string[];
-  // ---- U-81: every router action returns the CAR'S ANSWER -------------
-  //
-  // These used to be `=> void`. That is what let this panel lie: it fired a
-  // command, cleared its form on a 600 ms timer and showed the new name,
-  // without ever finding out whether the car had accepted it — so `ROUTERS;FULL`,
-  // `Reserved`, `Password too long`, `SSID length`, `Syntax` and a plain timeout
-  // were all pixel-identical to a success. The Control Panel had already been
-  // moved onto the ack-consuming API in U-68; this shared panel is now on it too
-  // (`requestRouter` / `runSwitchPlan`). Returning the outcome is what makes the
-  // panel able to tell the truth — see `connection/routerPanelOutcome.ts`.
-  /** Switch the car to a saved router. Resolves once the car answers. */
-  onUse: (ssid: string) => Promise<RouterOutcome>;
-  /** Add (or re-add, upsert) a router. Resolves once the car answers. */
-  onAdd: (ssid: string, pass: string) => Promise<RouterOutcome>;
-  /** Delete one saved router. Resolves once the car answers. */
-  onDelete: (ssid: string) => Promise<RouterOutcome>;
-  /** A-42 (round-9): fires on "Clear all" (after the confirm) —
-      ROUTERS;CLEAR wipes every saved router + the active pair on car+remote
-      and reverts to the car's OWN network (T-62). Resolves on the answer. */
-  onClear: () => Promise<RouterOutcome>;
-  onOpenWebPage: () => void;
-  /**
-   * R4-4 (owner: add/edit/delete saved routers): opens the EDIT view for one
-   * saved router — pre-fills the SSID + password fields (password never comes
-   * from the car; it stays blank unless the user retypes one) and routes the
-   * save through onAdd, because the car stores ONE password per SSID: an edit
-   * IS a re-ADD upsert (T-48a). Optional — the panel renders the per-row
-   * Edit button only when supplied.
-   */
-  onStartEdit?: (ssid: string) => void;
-  /** Whether the edit form is currently open for the given SSID (drives the
-      row's "Editing" chip). Optional — omit for the remote's plain list. */
-  editingSsid?: string | null;
 };
 
 export type DriveControlsProps = {
