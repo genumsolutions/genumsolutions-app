@@ -54,6 +54,45 @@ function readings(p: DriveTelemetryProps): Reading[] {
   ];
 }
 
+/**
+ * 2026-10-12 (owner): the top connection-status line now carries the readings,
+ * so the gamepad's centre gap is free to show the OLED mirror again (restored
+ * there). `TelemetryLine` is the compact horizontal form of the SAME readings —
+ * uptime / heap / signal — laid inline so it reads as one status line rather
+ * than a box. "Link" is dropped here because the line already names the link
+ * (the friendly device name / WiFi address just to the left).
+ *
+ * Honesty rules are unchanged: an unknown reading still dashes, a real zero is
+ * still shown as itself, and nothing is inferred from the app's own state.
+ */
+export function TelemetryLine(props: DriveTelemetryProps) {
+  const off = !props.linked;
+  const sig = formatSignal({ rssi: props.rssi, signal: props.signal });
+  const parts: Reading[] = [
+    { label: "Up", value: off ? DASH : formatUptime(props.uptimeMs) },
+    { label: "Heap", value: off ? DASH : formatHeap(props.freeHeap) },
+    { label: "Sig", value: off ? DASH : sig.value },
+  ];
+
+  return (
+    <View className="min-w-0 flex-row items-center gap-2.5">
+      {parts.map((p) => (
+        <View key={p.label} className="flex-row items-center gap-1">
+          <Text className="text-[8px] font-black uppercase tracking-[0.14em] text-muted">
+            {p.label}
+          </Text>
+          <Text
+            numberOfLines={1}
+            className="font-mono text-[11px] font-bold text-ink dark:text-white"
+          >
+            {p.value}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function DriveTelemetry(props: DriveTelemetryProps) {
   const items = readings(props);
   const compact = props.compact === true;
