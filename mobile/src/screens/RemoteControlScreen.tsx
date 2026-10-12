@@ -5,10 +5,10 @@
 // Standard gamepad layout (landscape):
 //   [Back] [Select]  REMOTE  ●CarName  Mode▸  Spd═══  [🎮] [⚙]
 //   ┌─────┐                     ┌─────┐
-//   │  ↑  │     ┌─────────┐    │  ↑  │
-//   │← ● →│     │  OLED   │    │← ● →│
-//   │  ↓  │     │ 128×64  │    │  ↓  │
-//   └─────┘     └─────────┘    └─────┘
+//   │  ↑  │    ┌───────────┐    │  ↑  │
+//   │← ● →│    │ TELEMETRY │    │← ● →│
+//   │  ↓  │    │ L/U/H/SIG │    │  ↓  │
+//   └─────┘    └───────────┘    └─────┘
 //   L joystick                R joystick
 //
 // Phase 1 rebuild: clean chrome row (no ScrollView), standard gamepad
@@ -53,7 +53,7 @@ import { DriveControls } from "../components/tools/DriveControls";
 import { BalanceControls, PID_DEFS } from "../components/tools/BalanceControls";
 import type { PidKey } from "../components/tools/BalanceControls";
 import { ModeChooser } from "../components/tools/ModeChooser";
-import { OledDisplay } from "../components/tools/OledDisplay";
+import { DriveTelemetry } from "../components/tools/DriveTelemetry";
 import { SensorGrid } from "../components/tools/SensorGrid";
 import { hasDeck } from "../components/tools/decks/deckkit";
 import { SmartHomeDeck } from "../components/tools/decks/SmartHomeDeck";
@@ -81,7 +81,6 @@ import {
   SPEED_MAX,
   SPEED_STEP,
   canonicalCarToken,
-  modeAvailStatus,
 } from "../services/carProtocol";
 import { feedbackTap } from "../services/hapticsService";
 import type { SafetyLimits } from "../components/tools/types";
@@ -245,8 +244,8 @@ function ProGate({
       </Text>
       <Text className="mt-2 text-center text-sm leading-6 text-muted">
         {isSignedIn
-          ? "Upgrade your account to Pro to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls."
-          : "Sign in with a Pro account to unlock the immersive remote window with the full drive deck, OLED mirror, and tuning controls."}
+          ? "Upgrade your account to Pro to unlock the immersive remote window with the full drive deck, live telemetry, and tuning controls."
+          : "Sign in with a Pro account to unlock the immersive remote window with the full drive deck, live telemetry, and tuning controls."}
       </Text>
       <Pressable
         onPress={onBack}
@@ -573,53 +572,27 @@ export function RemoteControlScreen({ navigation }: Props) {
       ? ("speed" as const)
       : ("mode" as const);
 
-  // ── OLED props ──
-  const oledCommonProps = {
-    connected,
-    wifiConnected,
-    deviceName,
-    activeMode,
-    speed,
-    servo,
-    driveStatus,
-    driveDir,
-    targetAltitude,
-    gimbalPan,
-    gimbalTilt,
-    sensorData,
-    telemetry,
-    isDrone,
-    isNonRobocar,
-    linkKind: connected
-      ? ("spp" as const)
-      : wifiConnected
-        ? ("wifi" as const)
-        : undefined,
-    trim,
+  // ── Telemetry readout (Phase 3, owner 2026-10-12) ──
+  // The OLED mirror is REMOVED everywhere. Where the compact mirror used to
+  // sit — the gamepad's center gap — the CAR's own readings now show: link /
+  // uptime / heap / signal. Formatting comes from the pure, tested
+  // `telemetryFormat.ts`, so an unknown reading dashes instead of rendering as
+  // 0 and a real zero (a stopped car, 0 s uptime) is shown as itself.
+  const linkLabel = connected
+    ? "Bluetooth"
+    : wifiConnected
+      ? "WiFi"
+      : "Offline";
+  const driveTelemetryArgs = {
+    linked,
+    linkLabel,
+    rssi: telemetry.rssi,
+    signal: telemetry.signal,
+    uptimeMs: telemetry.uptimeMs,
+    freeHeap: telemetry.freeHeap,
   };
-
-  const oledSlot = isRobocar ? (
-    /* R-17 (owner): the mirror reads best a little BIGGER — 180x90 keeps the
-       2:1 aspect of the physical 128x64 OLED while giving the compact
-       pixel-faithful rendering more room (A-49 single-scale rows still fit
-       with margin). */
-    <View
-      style={{ width: 180, height: 90 }}
-      className="overflow-hidden rounded-lg"
-    >
-      <OledDisplay
-        {...oledCommonProps}
-        compact
-        topField={topField}
-        previewMode={previewMode}
-        previewModeAvail={
-          previewMode
-            ? modeAvailStatus(previewMode.token, carStubMap, carAvailMap)
-            : undefined
-        }
-        steerLimit={steerLimit}
-      />
-    </View>
+  const telemetrySlot = isRobocar ? (
+    <DriveTelemetry {...driveTelemetryArgs} compact />
   ) : null;
 
   const renderReconnectBanner = () => {
@@ -899,10 +872,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </Pressable>
               {/* A-50 (round-11): the third pill is TELEMETRY, not "Hide" — it
-                opens the mode's readout panels (PID dashboard / full OLED
-                mirror) instead of a pointless "Pad hidden" card. Owner
-                (2026-10-11): it now also closes the router view, so the two
-                are clearly one-or-the-other. */}
+                opens the mode's readout panels (PID dashboard / live
+                link/uptime/heap/signal telemetry) instead of a pointless
+                "Pad hidden" card. Owner (2026-10-11): it now also closes the
+                router view, so the two are clearly one-or-the-other. */}
               <Pressable
                 onPress={() => {
                   feedbackTap();
@@ -945,23 +918,16 @@ export function RemoteControlScreen({ navigation }: Props) {
           {isDrone || isNonRobocar ? (
             /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
              in the landscape view"): the old branch was unbounded — the row had
-             no flex height (so the OLED's max-h-[55%] resolved against an
+             no flex height (so the mirror's max-h-[55%] resolved against an
              indefinite parent and was IGNORED), the deck card overflowed the
              screen bottom (clipped by overflow-hidden → "merged"), and decks
              drew their own DeckCard INSIDE the screen's card (double borders).
              Rebuilt with the robocar telemetry-view idiom: the row is flex-1
-             min-h-0 (bounded heights), the OLED is a fixed 2:1 aspect column
-             (width-share, self-start), and the deck owns its ONE card, filling
-             the column. Robocar branch untouched. */
+             min-h-0 (bounded heights) and the deck owns its ONE card, filling
+             the row. Phase 3 (owner 2026-10-12): the OLED mirror column is
+             REMOVED — the deck now fills the whole row. Robocar branch
+             untouched. */
             <View className="mt-2 min-h-0 flex-1 flex-row items-stretch gap-3">
-              {/* OLED mirror column — fixed 2:1 shape, top-anchored (same
-                aspect-ratio idiom as the robocar telemetry view). */}
-              <View
-                className="aspect-[2/1] shrink-0 self-start overflow-hidden rounded-lg"
-                style={{ width: "30%", maxWidth: 280 }}
-              >
-                <OledDisplay {...oledCommonProps} />
-              </View>
               <View className="min-h-0 min-w-0 flex-1">
                 {isDrone ? (
                   <View className="h-full rounded-2xl border border-line bg-card p-3 shadow-card dark:bg-black/20">
@@ -1077,7 +1043,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                     compact
                     navActiveRef={navActiveRef}
                     onNavInput={navInput}
-                    oledSlot={oledSlot}
+                    telemetrySlot={telemetrySlot}
                   />
                 </>
               ) : showRouter || activeMode.id === "website-server" ? (
@@ -1122,37 +1088,23 @@ export function RemoteControlScreen({ navigation }: Props) {
                   off={pidOff}
                   onPid={applyPid}
                   compact
-                  oledSlot={oledSlot}
+                  telemetrySlot={<DriveTelemetry {...driveTelemetryArgs} />}
                 />
               ) : (
-                /* A-50 (round-11): hidden modes without a dedicated panel now
-                 mirror the FULL OLED readout (the same mirror the robotics
-                 screens show) — the "Pad hidden" placeholder is gone.
+                /* A-50 (round-11): hidden modes without a dedicated panel show
+                 the live readout — the "Pad hidden" placeholder is gone.
                  R-15 (owner review 2026-09-18 — "telemetry screen is not
-                 standard, monotonous, does not use the space"): the mirror
-                 now sits BESIDE a live readout column (mode / speed or
-                 steer / direction / link / IP) instead of one narrow
-                 centered column, so the landscape deck is used properly. */
+                 standard, monotonous, does not use the space"): the readout
+                 sits BESIDE a live column (mode / speed or steer / direction /
+                 IP), so the landscape deck is used properly.
+                 Phase 3 (owner 2026-10-12): the OLED mirror is REMOVED — the
+                 left column is now the CAR's link/uptime/heap/signal telemetry. */
                 <View className="min-h-0 flex-1 flex-row items-center justify-center gap-4 px-4 py-2">
                   <View
-                    className="aspect-[2/1] max-h-full shrink"
+                    className="max-h-full shrink self-center"
                     style={{ width: "46%", maxWidth: 480 }}
                   >
-                    <OledDisplay
-                      {...oledCommonProps}
-                      topField={topField}
-                      previewMode={previewMode}
-                      previewModeAvail={
-                        previewMode
-                          ? modeAvailStatus(
-                              previewMode.token,
-                              carStubMap,
-                              carAvailMap,
-                            )
-                          : undefined
-                      }
-                      steerLimit={steerLimit}
-                    />
+                    <DriveTelemetry {...driveTelemetryArgs} />
                   </View>
                   <View className="min-w-[150px] max-w-[280px] flex-1 justify-center gap-2.5">
                     <Text
@@ -1201,14 +1153,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                         className="font-mono text-base font-bold text-ink dark:text-white"
                       >
                         {driveStatus || "Stop"}
-                      </Text>
-                    </View>
-                    <View className="flex-row items-baseline justify-between gap-2 border-b border-line pb-1">
-                      <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                        Link
-                      </Text>
-                      <Text className="font-mono text-base font-bold text-ink dark:text-white">
-                        {connected ? "Bluetooth" : wifiConnected ? "WiFi" : "—"}
                       </Text>
                     </View>
                     {(telemetry.ip || wifiConnected) && (
