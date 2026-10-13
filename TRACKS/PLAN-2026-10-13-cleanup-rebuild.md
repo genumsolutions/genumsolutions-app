@@ -1,6 +1,6 @@
 # PLAN 2026-10-13 — Field-fix + cleanup round (APP half, mirror)
 
-Status: **PHASES 0 + 3 DONE — phases 4..9 pending.** This is the app-side mirror of the
+Status: **PHASES 0 + 3 + 4 DONE — phases 5..9 pending.** This is the app-side mirror of the
 car master plan `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-13-cleanup-rebuild.md`. Shared records
 reference: `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. Cross-repo round log: root
 `RESUME-HERE.md`.
@@ -33,15 +33,23 @@ sub-header status ~L754-767, IP chip ~L796, layout/padding L648-652), plus
 - [x] IP chip alternates **network name ⇄ IP** ~1 s (mirrors the car OLED).
 - Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
-### Phase 4 — connection truth + restart prompt
+### Phase 4 — connection truth + restart prompt — **DONE (U-108 Phase 4)**
 Files: `components\tools\useControlHub.ts` (SPP reconnect/backoff ~L3151-3220,
 `setShowSppsRetry`; NetInfo watcher ~L2127-2139; `handleWifiDisconnect` ~L2141-2170),
 `connection\ConnectionSection.tsx` (`phoneWifiSsid` NetInfo ~L127/L230).
-- Both transports always report real status (clear the do-needful states).
-- The app always knows **which network the phone is on** (safe switching).
-- Detect car restart via boot-count change; show **Reconnect / Leave / Cancel**.
-- Carry the restart info on the next connect attempt (not only after backoff exhaustion —
-  today only the SPP retry prompt exists).
+- [x] The app always knows **which network the phone is on** (`phoneSsidOf` + `phoneSsid` state,
+      refreshed on every NetInfo event); surfaced as the `phone-net` chip on the Remote disconnect
+      row (`on <ssid>` / `phone Wi-Fi off`).
+- [x] Detect car restart via boot-count change (`lastBootSeenRef`, seeded from the persisted
+      `savedPrefs.diagnostics.bootCount` so it survives an app restart; first observation only
+      seeds — never a false prompt); shows a **Reconnect / Leave / Cancel** banner carrying
+      `Boot prev → boot · reset <reason> · N crashes`.
+- [x] Carry the restart info on the next connect (the notice persists in the hub until acted on —
+      not only after SPP backoff exhaustion, which stays as the separate "Connection lost" banner).
+- [x] Real transport status: the "do-needful" states are cleared by the existing `linkVerified`
+      contract; no new stub was introduced (both `connected` and `wifiConnected` remain
+      transport-truth, `linkVerified` = the car actually answered). Verify on device.
+- Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
 ### Phase 5 — SSID exact literal
 Files: `services\carProtocol.ts` (`OWN_AP_NAME`/`OWN_AP_NAMES`), `screens\DeviceConnectionScreen.tsx`
@@ -68,7 +76,6 @@ Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
 ## RESUME HERE
-> Phases 0 + 3 DONE. Next app work is **Phase 4** (connection truth + restart prompt: both
-> transports report real status; the app always knows which network the phone is on; detect a car
-> restart via the boot-count change and show Reconnect / Leave / Cancel, carrying the restart info
-> on the next connect). Phases 5/6/7 follow (SSID literal, auto-join labels, fresh start + stamps).
+> Phases 0 + 3 + 4 DONE. Next app work is **Phase 5** (SSID exact literal `4WD4MCar_WiFi` in
+> `carProtocol.ts` + `DeviceConnectionScreen.tsx` + fixtures/docs). Phases 6/7 follow (auto-join
+> labels, fresh start + timestamps).

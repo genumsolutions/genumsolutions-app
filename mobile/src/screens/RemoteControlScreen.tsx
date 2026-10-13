@@ -301,6 +301,11 @@ export function RemoteControlScreen({ navigation }: Props) {
     showSppsRetry,
     handleSppsRetry,
     handleReconnectPromptCancel,
+    // U-108 Phase 4: phone-network truth + the detected car-restart prompt.
+    phoneSsid,
+    carRestartNotice,
+    handleRestartReconnect,
+    handleRestartDismiss,
     autoJoinRouter,
     setAutoJoinRouter,
     handleDisconnect,
@@ -664,6 +669,73 @@ export function RemoteControlScreen({ navigation }: Props) {
     );
   };
 
+  const renderRestartBanner = () => {
+    if (!carRestartNotice) return null;
+    const reason = carRestartNotice.resetReason?.trim() || "unknown";
+    return (
+      <View
+        className="mx-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5"
+        style={{ marginBottom: Math.max(insets.bottom, 8) }}
+      >
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text className="text-xs font-bold text-sky-800">
+              Car restarted
+            </Text>
+            <Text className="text-[10px] text-sky-700">
+              {carRestartNotice.prevBoot != null
+                ? `Boot ${carRestartNotice.prevBoot} → ${carRestartNotice.boot}`
+                : `Boot ${carRestartNotice.boot}`}
+              {" · reset "}
+              {reason}
+              {carRestartNotice.crashCount != null
+                ? ` · ${carRestartNotice.crashCount} crash${
+                    carRestartNotice.crashCount === 1 ? "" : "es"
+                  }`
+                : ""}
+            </Text>
+          </View>
+        </View>
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              void handleRestartReconnect();
+            }}
+            className="rounded-full bg-gold px-3 py-1"
+            hitSlop={6}
+            testID="restart-reconnect"
+          >
+            <Text className="text-[10px] font-bold text-white">Reconnect</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              handleRestartDismiss();
+              navigation.goBack();
+            }}
+            className="rounded-full border border-line bg-card px-3 py-1"
+            hitSlop={6}
+            testID="restart-leave"
+          >
+            <Text className="text-[10px] font-bold text-muted">Leave</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              handleRestartDismiss();
+            }}
+            className="rounded-full border border-line bg-card px-3 py-1"
+            hitSlop={6}
+            testID="restart-cancel"
+          >
+            <Text className="text-[10px] font-bold text-muted">Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View className="flex-1 bg-surface">
       <View
@@ -807,6 +879,22 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Text className="text-[9px] font-bold text-muted">Wi-Fi</Text>
             </Pressable>
           ) : null}
+          {/* U-108 Phase 4: the app always knows which network the PHONE is on
+              (safe switching) — shown right of the disconnect buttons. */}
+          <View className="min-w-0 flex-1" />
+          <View
+            className="shrink-0 flex-row items-center gap-1"
+            testID="phone-net"
+          >
+            <Feather name="smartphone" size={9} color="#94a3b8" />
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="middle"
+              className="max-w-[110px] text-[9px] font-bold text-muted"
+            >
+              {phoneSsid ? `on ${phoneSsid}` : "phone Wi-Fi off"}
+            </Text>
+          </View>
         </View>
 
         {isRobocar && (
@@ -1360,6 +1448,10 @@ export function RemoteControlScreen({ navigation }: Props) {
             the phone status bar/notch in landscape. Shows when connection
             drops and auto-reconnect is exhausted. */}
       {renderReconnectBanner()}
+
+      {/* U-108 Phase 4: car-restart prompt (boot-count change), carrying the
+            reset reason + crash count on the next connect. */}
+      {renderRestartBanner()}
     </View>
   );
 }
