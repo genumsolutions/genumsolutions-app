@@ -10,10 +10,13 @@
 // socket. Exactly ONE WebSocket must exist per car, shared by every hub
 // instance — same pattern as sppService / bleService.
 //
-// The service owns the socket lifecycle + silent auto-reconnect (remote
-// parity: 5 quiet retries at 3 s, then an error status the UI turns into
-// a banner). `disconnect()` is the only manual close; unmounting a screen
-// must NEVER kill a shared link (navigation-survivable, like SPP/BLE).
+// The service owns the socket lifecycle + auto-reconnect. After an UNEXPECTED
+// close it announces "reconnecting" (so every hub drops the false green
+// immediately) and quietly re-dials the same URL once at RECONNECT_DELAY_MS.
+// A re-dial that fails surfaces an "error" status — the old address is dead,
+// so the app must SWEEP for the car, not keep dialing a corpse. `disconnect()`
+// is the only manual close; unmounting a screen must NEVER kill a shared link
+// (navigation-survivable, like SPP/BLE).
 //
 // Every inbound frame runs the shared carProtocol parser (STATE / SPD /
 // TEL / CAPS / NACK / JSON), so all consumers see identical telemetry.
@@ -27,7 +30,7 @@ import { logger } from "./logger";
 
 type TelemetryCallback = (t: CarTelemetry) => void;
 type StatusCallback = (
-  kind: "connecting" | "connected" | "disconnected" | "error",
+  kind: "connecting" | "connected" | "disconnected" | "reconnecting" | "error",
   message?: string,
 ) => void;
 
@@ -92,7 +95,8 @@ export class WifiService {
   }
 
   private emitStatus(
-    kind: "connecting" | "connected" | "disconnected" | "error",
+    kind:
+      "connecting" | "connected" | "disconnected" | "reconnecting" | "error",
     message?: string,
   ) {
     this.statusCallbacks.forEach((cb) => {
@@ -232,6 +236,15 @@ export class WifiService {
         this.emitStatus("disconnected");
         return;
       }
+      // F-65 (2026-10-13): an UNEXPECTED close used to schedule the quiet
+      // re-dial with NO status event, so every hub kept `wifiConnected` true
+      // and the app looked green while commands vanished (the owner's
+      // freeze/no-reply report). The verification died with the socket — say
+      // so and announce "reconnecting" BEFORE the re-dial: the hub flips the
+      // link to false immediately and "connected"/"error" follow within
+      // seconds. Honest transient state beats a fake green.
+      this.verified = false;
+      this.emitStatus("reconnecting", url);
       this.scheduleReconnect(url);
     };
 
@@ -240,7 +253,17 @@ export class WifiService {
     };
   }
 
-  /** Silent auto-reconnect: 5 retries at RECONNECT_DELAY_MS, then error. */
+  /**
+   * Quiet re-dial after an unexpected close — ONE retry at RECONNECT_DELAY_MS.
+   *
+   * A retry that fails surfaces the reachability "error" (the dial's own
+   * CONNECT_TIMEOUT_MS teardown), because after the old address is dead the
+   * app must SWEEP for the car on the phone's current network instead of
+   * dialing a corpse again. There is deliberately no 5-in-a-row loop here:
+   * every `connect()` dial zeroes `reconnectAttempts`, so each unexpected
+   * close gets exactly one retry by construction and `MAX_RECONNECTS` sits
+   * above `scheduleReconnect` only as a defensive cap.
+   */
   private scheduleReconnect(url: string) {
     if (this.reconnectAttempts >= MAX_RECONNECTS) {
       this.emitStatus("error", "WiFi connection lost — reconnection failed.");

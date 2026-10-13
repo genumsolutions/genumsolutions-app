@@ -220,4 +220,39 @@ describe("WifiService link verification (R1)", () => {
     expect(service.isConnected).toBe(false);
     expect(service.linkVerified).toBe(false);
   });
+
+  it("announces 'reconnecting' + clears verification on an UNEXPECTED close (F-65)", async () => {
+    // The car half disappears mid-session: the socket dies without a manual
+    // close. The service must SAY the link dropped (not sit on a fake green
+    // while commands vanish) before it quietly re-dials.
+    vi.useFakeTimers();
+    const service = new WifiService();
+    const statuses: string[] = [];
+    service.onStatus((kind) => statuses.push(kind));
+    const pending = service.connect("ws://192.168.245.1:81");
+    open(latest());
+    await pending;
+    feed(latest(), "STATE;MODE=4WD4M;SPD=0;STATUS=Stopped");
+    expect(service.linkVerified).toBe(true);
+
+    latest().close();
+    latest().onclose?.();
+
+    expect(service.isConnected).toBe(false);
+    expect(service.linkVerified).toBe(false);
+    expect(statuses).toContain("reconnecting");
+  });
+
+  it("does NOT announce 'reconnecting' on a manual disconnect", async () => {
+    vi.useFakeTimers();
+    const service = new WifiService();
+    const statuses: string[] = [];
+    service.onStatus((kind) => statuses.push(kind));
+    const pending = service.connect("ws://192.168.245.1:81");
+    open(latest());
+    await pending;
+    await service.disconnect();
+    expect(statuses).toContain("disconnected");
+    expect(statuses).not.toContain("reconnecting");
+  });
 });

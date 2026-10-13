@@ -101,6 +101,26 @@ describe("only something recognisably OUR car is accepted", () => {
     expect(looksLikeOurCar(carJson, { apName: "4wdcar_wifi" })).toBe(true);
   });
 
+  it("accepts ANY fleet own-AP name via apNames - the 4WD4M fix (F-65)", () => {
+    // The hub's sweep passes the whole fleet registry, so a donor car
+    // (WirelessCar_Wifi) AND the 4WD4M car (4WDCar_Wifi) both match. Before
+    // this, the sweep looked only for the DONOR name and never found a 4WD4M
+    // car on a router — the "car not found" loop after every drop or reboot.
+    const fleet = ["WirelessCar_Wifi", "4WDCar_Wifi"];
+    expect(looksLikeOurCar(carJson, { apNames: fleet })).toBe(true);
+    expect(
+      looksLikeOurCar(
+        { ...carJson, ap: "wirelesscar_wifi" },
+        { apNames: fleet },
+      ),
+    ).toBe(true);
+    expect(
+      looksLikeOurCar({ ...carJson, ap: "Not_Our_Car" }, { apNames: fleet }),
+    ).toBe(false);
+    // An empty/unknown registry still accepts nothing.
+    expect(looksLikeOurCar(carJson, { apNames: [] })).toBe(false);
+  });
+
   it("REJECTS a device that merely answered on port 80", () => {
     // Routers, laptops, printers and NAS boxes all answer HTTP.
     expect(
@@ -144,6 +164,18 @@ describe("the sweep tolerates dead hosts and stops at the first hit", () => {
     expect(hit).toBe("192.168.1.50");
     // It stopped early rather than probing all 200.
     expect(probed.length).toBeLessThan(200);
+  });
+
+  it("finds the car by ANY fleet own-AP name (apNames, F-65)", async () => {
+    const hit = await findCarOnNetwork({
+      candidates: ["192.168.1.10", "192.168.1.42"],
+      expect: { apNames: ["WirelessCar_Wifi", "4WDCar_Wifi"] },
+      fetchJson: async (url) => {
+        if (!url.includes("192.168.1.42")) throw new Error("ECONNREFUSED");
+        return carJson;
+      },
+    });
+    expect(hit).toBe("192.168.1.42");
   });
 
   it("returns null when nothing on the network is our car", async () => {
