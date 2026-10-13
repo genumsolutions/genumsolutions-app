@@ -1,5 +1,51 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-105 rework — fleet own-hotspot is ONE name `4WD4MCar_WiFi`; Parallel + power-save (APSAVE) REMOVED, replaced by Wi-Fi/BT/boot-auto-join toggles; NO one-active-link teardown; delete-network-stays-deleted; JS-only OTA, version 3.2.7 unchanged)
 
+## This session (2026-10-13, U-108 Phase 7b — Reset car data + on-connect epoch sync; JS-only OTA, version 3.2.7/60 UNCHANGED)
+
+Owner round 4, Phase 7b (app half of the fresh-start pair). Two deliverables:
+
+- **On-connect clock sync:** `carProtocol.ts` exports `buildTimeLine(epoch)` and
+  `FACTORY_RESET_LINE` (`"FACTORY;RESET"`). Every connect (SPP / BLE / WiFi) now
+  sends `TIME;<unixEpoch>` alongside `REQ_STATE` so the car can stamp its config
+  writes with a real epoch (`botcfg/config_epoch`). The car firmware (Phase 7a)
+  adopts this via `WebServerComm::handleFactoryCommand` → `syncEpoch()`.
+
+- **Reset car data action (`resetCarData` in `useControlHub.ts`):** sends
+  `FACTORY;RESET` to the car over every live transport, then wipes ALL car-related
+  AsyncStorage keys (`genum.device.index`, `genum.lastDevice`,
+  `genum-car-profiles-v1`, `genum.crashReports.queue`, `genum.crashReports.last`,
+  `genum.activeTransport.v1`, `genum.app.logs.ring`, `genum.app.logs.pending`,
+  plus every per-device `genum.device.<key>` via the index), and resets the hub's
+  in-memory state (transport toggles → ON, network lists cleared). Exposed in the
+  hook return.
+
+- **UI:** Remote screen settings panel (below the two auto-join toggles) gets a
+  red "Reset car data" button with a destructive confirmation dialog
+  (`testID: reset-car-data`).
+
+- Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version
+  3.2.7/60 unchanged).
+
+- **DB migration (Phase 7c)** still pending: additive SQL that deletes this car
+  (`1FB608`) + owner's car-related rows and adds retention.
+
+## This session (2026-10-13, U-108 Phase 6 — clearer auto-join labels; JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
+
+Owner round 4, Phase 6. Both auto-join toggles KEPT (never merged); they are now unmistakable.
+
+- **`screens/RemoteControlScreen.tsx`**: the CAR boot auto-join is now **“Boot auto-join (car)”**
+  (`power` icon) with a caption (“On power-up the CAR rejoins its last router - off keeps it on its
+  own hotspot.”); the APP smart-link toggle is now **“Auto-join saved router (app)”** (`refresh-cw`
+  icon) with a caption (“When you open the car, the APP switches it to the strongest saved router it
+  hears.”). Distinct icons + distinct accessibility labels; keep both, no merge.
+- **`components/tools/CarProfileCard.tsx`**: label aligned to "Auto-join saved router (app)" and
+  cross-references the separate car setting.
+- **`components/tools/useControlHub.ts`**: the smart-link toast now says
+  "... Auto-join saved router (app)."
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (F-32): version
+3.2.7 / versionCode 60 unchanged.
+
 ## PLAN 2026-10-13 (Phase 0) — field-fix + cleanup round, notes-first, phased
 
 New owner round, mirrored from the car master plan. App work: **Remote layout** (status only right

@@ -76,14 +76,37 @@ give them clearer distinct labels (no merge).
       setting; the smart-link toast in `useControlHub.ts` updated to the new label.
 - Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
-### Phase 7 — fresh start + timestamps (app side)
-Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.lastDevice`,
-`genum.device.*`), `services\carProfileService.ts` (`genum-car-profiles-v1`),
-`services\crashReportService.ts` (`genum.crashReports.*`), `transports\linkManager.ts`
-(`genum.activeTransport.v1`).
-- A **Reset car data** action that clears the car-related AsyncStorage keys listed in
-  `RECORDS-INVENTORY.md` §2.
-- Write `updatedAt` on the remaining car records so staleness is provable.
+### Phase 7b — Reset car data (app half) — **DONE (U-108 Phase 7b)**
+
+**Owner round 4 / Phase 7b:** the "Reset car data" action that pairs with the car's
+`FACTORY;RESET` (Phase 7a).
+
+- **On-connect clock sync:** every link-up (SPP / BLE / WiFi) now sends
+  `TIME;<unixEpoch>` so the car can stamp its config writes with a real epoch
+  (`botcfg/config_epoch`). Implemented in `useControlHub.ts` by adding a
+  `buildTimeLine` send alongside `REQ_STATE` in all three connect handlers.
+  `carProtocol.ts` exports `buildTimeLine(epoch)` and `FACTORY_RESET_LINE`.
+
+- **Reset car data action (`resetCarData`):** new function in `useControlHub.ts`
+  that (1) sends `FACTORY;RESET` to the car over every live transport,
+  (2) wipes ALL car-related AsyncStorage keys:
+  `genum.device.index`, `genum.lastDevice`, `genum-car-profiles-v1`,
+  `genum.crashReports.queue`, `genum.crashReports.last`,
+  `genum.activeTransport.v1`, `genum.app.logs.ring`, `genum.app.logs.pending`,
+  plus every per-device `genum.device.<key>` via the index, (3) resets the
+  hub's in-memory state (transport toggles → defaults, network lists cleared).
+  Exposed in the hook return.
+
+- **UI:** Remote screen settings panel (below the two auto-join toggles) gets a
+  red "Reset car data" button with a destructive confirmation dialog (`testID:
+  reset-car-data`). The button is always visible but only enabled when a car is
+  linked (`linked` gate).
+
+- Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version
+  3.2.7/60 unchanged).
+
+- **DB migration (Phase 7c)** still pending: additive SQL that deletes this car
+  (`1FB608`) + owner's car-related rows and adds retention.
 
 ### Phases 1 / 2 / 9 (app halves)
 - Phase 1: app side is unchanged (car ships the crash record; app already parses
@@ -93,7 +116,6 @@ Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
 ## RESUME HERE
-> Phases 0 + 3 + 4 + 5 + 6 DONE. Next app work is **Phase 7** (fresh start + timestamps: a “Reset
-> car data” action clearing the car-related AsyncStorage keys in `RECORDS-INVENTORY.md` §2, plus
-> `updatedAt` stamps on the remaining car records; DB purge of this car + the owner's account is the
-> paired surface). Then Phase 9 (docs/TESTING/DEVICE-TESTS rows).
+> Phases 0 + 3 + 4 + 5 + 6 + 7b DONE. Next app work is **Phase 7c** (DB additive migration:
+> delete this car `1FB608` + owner's car-related rows + retention). Then Phase 9
+> (docs/TESTING/DEVICE-TESTS rows).

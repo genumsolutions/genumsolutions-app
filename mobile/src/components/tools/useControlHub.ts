@@ -96,6 +96,8 @@ import {
   STEER_LIMIT_MIN,
   STEER_LIMIT_MAX,
   buildSteer,
+  buildTimeLine,
+  FACTORY_RESET_LINE,
   type ScanNetwork,
 } from "../../services/carProtocol";
 import { MODE_NAMES as ESP_MODE_NAMES } from "../../config/roboCarCatalog";
@@ -1555,7 +1557,11 @@ export function useControlHub(routeCategory?: string) {
           setLinkVerified(true);
           // Force the car to broadcast its current STATE so the app
           // immediately picks up the active mode, speed, trim, etc.
+          // Also sync the app's clock so the car can stamp config writes.
           setTimeout(() => {
+            sppService
+              .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
+              .catch(() => {});
             sppService.requestState().catch(() => {});
           }, 200);
           break;
@@ -1622,6 +1628,9 @@ export function useControlHub(routeCategory?: string) {
         setConnected(true);
         setDeviceName(bleService.deviceName ?? "Car");
         setTimeout(() => {
+          bleService
+            .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
+            .catch(() => {});
           bleService.requestState().catch(() => {});
         }, 200);
       } else if (kind === "disconnected") {
@@ -1662,6 +1671,9 @@ export function useControlHub(routeCategory?: string) {
           setCarAvailMap({});
           showConnectionMessage("WiFi connected", "success");
           setTimeout(() => {
+            wifiService
+              .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
+              .catch(() => {});
             wifiService.requestState().catch(() => {});
           }, 200);
           break;
@@ -3317,6 +3329,89 @@ export function useControlHub(routeCategory?: string) {
     };
   }, []);
 
+  /**
+   * Reset car data — sends FACTORY;RESET to the car and wipes all car-related
+   * local storage (device registry, car profile cache, active transport, crash
+   * queue). The DB migration (Phase 7c) handles the cloud-side wipe for this
+   * car + owner. Called from the Remote screen settings panel.
+   */
+  const resetCarData = useCallback(async (): Promise<{
+    ok: boolean;
+    error?: string;
+  }> => {
+    try {
+      // 1) Send FACTORY;RESET to the car if connected.
+      if (connected) {
+        try {
+          await sppService.sendLine(FACTORY_RESET_LINE).catch(() => {});
+        } catch {
+          /* ignore send failure */
+        }
+      }
+      if (wifiConnected) {
+        try {
+          await wifiService.sendLine(FACTORY_RESET_LINE).catch(() => {});
+        } catch {
+          /* ignore send failure */
+        }
+      }
+      if (bleService.isConnected) {
+        try {
+          await bleService.sendLine(FACTORY_RESET_LINE).catch(() => {});
+        } catch {
+          /* ignore send failure */
+        }
+      }
+
+      // 2) Clear local car-related AsyncStorage keys.
+      const keysToRemove: string[] = [
+        "genum.device.index",
+        "genum.lastDevice",
+        "genum-car-profiles-v1",
+        "genum.crashReports.queue",
+        "genum.crashReports.last",
+        "genum.activeTransport.v1",
+        "genum.app.logs.ring",
+        "genum.app.logs.pending",
+      ];
+      await Promise.all(
+        keysToRemove.map((k) => AsyncStorage.removeItem(k).catch(() => {})),
+      );
+
+      // 3) Also clear all per-device prefs (genum.device.*) via the index.
+      try {
+        const indexRaw = await AsyncStorage.getItem("genum.device.index");
+        if (indexRaw) {
+          const index = JSON.parse(indexRaw) as string[];
+          if (Array.isArray(index)) {
+            await Promise.all(
+              index.map((k) => AsyncStorage.removeItem(k).catch(() => {})),
+            );
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      // 4) Refresh the hub's in-memory state so the UI updates immediately.
+      setCarStubMap({});
+      setCarAvailMap({});
+      setCarNetworks([]);
+      setCarRestartNotice(null);
+      // Reset transport toggles to defaults (car will be fresh).
+      setWifiEnabled(true);
+      setBtEnabled(true);
+      setBootAutojoin(true);
+      // The savedPrefs persist will be overwritten on next save.
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Reset failed",
+      };
+    }
+  }, [connected, wifiConnected]);
+
   // Derived helpers
   const usesBtComm =
     activeMode.transport.includes("classic-bt") ||
@@ -3397,6 +3492,8 @@ export function useControlHub(routeCategory?: string) {
     runSwitchPlan,
     requestScan,
     consumeRouterAnswer,
+    // Reset car data (Phase 7b)
+    resetCarData,
     // U-74: the last router lease the car reported, so the Control Panel can offer
     // a one-tap reconnect after the hotspot link drops.
     lastRouterIp,
