@@ -11,10 +11,12 @@
 // two-pane layout rather than one full-width column that stretches every card
 // across the whole width:
 //
-//   status  → one full-width bar, one truth: live link name (or "Bluetooth +
-//             Wi-Fi" under parallel), with the per-link BT / WiFi disconnect
-//             buttons. M1 (owner 2026-10-13): this is the ONE disconnect
-//             place and the "Connection method" box is the method only.
+//   status  → U-108 (owner 2026-10-13): the old full-width status+disconnect
+//             bar is GONE from this panel. The ONE link status now lives in the
+//             Remote chrome (right of Back), and the per-link Bluetooth / Wi-Fi
+//             disconnect buttons moved to the row right below Back (testIDs
+//             `remote-disconnect-bt` / `remote-disconnect-wifi`). The
+//             "Connection method" box is the method only.
 //   METHOD  → three compact pills. U-97: *"show connection methods as three
 //             equal cards"* — visible and comparable at a glance, and only the
 //             selected method's setup card renders below them. Internet stays
@@ -190,7 +192,6 @@ export function ConnectionSection({
     carNetworks,
     carScan,
     sppStatus,
-    sppStatusMsg,
     sppDevices,
     sppSupported,
     wifiConnected,
@@ -198,9 +199,7 @@ export function ConnectionSection({
     error: hubError,
     handleScan,
     handleConnect,
-    handleDisconnect,
     handleWifiConnect,
-    handleWifiDisconnect,
     requestRouter,
     runSwitchPlan,
     requestScan,
@@ -397,16 +396,6 @@ export function ConnectionSection({
     [carApName, handleWifiConnect, reportedIp, reportedSsid, tap],
   );
 
-  const disconnect = useCallback(async () => {
-    try {
-      if (btLive) await handleDisconnect();
-      if (wifiConnected) await handleWifiDisconnect();
-      setMessage({ tone: "info", text: "Disconnected." });
-    } finally {
-      setBusy(false);
-    }
-  }, [btLive, handleDisconnect, handleWifiDisconnect, tap, wifiConnected]);
-
   // ---- router actions, all through the ack-consuming API ----------------
 
   const switchRouter = useCallback(
@@ -491,23 +480,11 @@ export function ConnectionSection({
   }, [requestScan, runOutcome, tap]);
 
   // -----------------------------------------------------------------------
-  // STATUS — one bar, one truth
+  // STATUS — U-108 (owner 2026-10-13): this panel no longer draws a status bar.
+  // The ONE link status lives in the Remote chrome (right of Back); the panel is
+  // method / setup / inventory only. `anyLink` and `btLive` stay for the
+  // reachability gates below.
   // -----------------------------------------------------------------------
-  // U-86: the status names the network the CAR reports, never a generic
-  // "home router" - that phrase is exactly what the owner objected to, because
-  // it was shown even when the car was joined to something else.
-  // U-105 (1.3.5): Bluetooth AND Wi-Fi stay live together BY DEFAULT (the
-  // parallel/power-save settings are gone) — when both are open the status
-  // names both, the same two transports the car keeps up at once.
-  const statusLabel = !anyLink
-    ? "Not connected"
-    : btLive && wifiConnected
-      ? "Bluetooth + Wi-Fi"
-      : liveTarget === "bt-spp"
-        ? `Bluetooth · ${sppStatusMsg || "the car"}`
-        : onOwnHotspot
-          ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
-          : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
 
   // Only paired/known devices for Bluetooth — no scan results list.
   // Pairing is done in phone Settings; the app observes bonded devices.
@@ -515,68 +492,11 @@ export function ConnectionSection({
 
   return (
     <View className="mt-2 flex-wrap flex-row items-start gap-2">
-      {/* ── STATUS + DISCONNECT strip: the ONE truth and the ONE disconnect
-          place (M1). The "Connection method" box above/below is the method
-          only; per-link BT / WiFi buttons (bigger icons) live here. */}
-      <View className="min-w-full" testID="conn-status-strip">
-        <View className="flex-row items-center justify-between gap-2 rounded-lg border border-line bg-card px-2 py-1.5">
-          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
-            <View
-              className={`h-2 w-2 shrink-0 rounded-full ${
-                anyLink ? "bg-success" : "bg-border"
-              }`}
-            />
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="middle"
-              testID="conn-status"
-              className="min-w-0 flex-1 text-[11px] font-bold text-ink"
-            >
-              {statusLabel}
-            </Text>
-          </View>
-          {anyLink ? (
-            <View className="shrink-0 flex-row items-center gap-1.5">
-              {btLive && wifiConnected ? (
-                <>
-                  {btLive && (
-                    <ActionButton
-                      label="Bluetooth"
-                      variant="quiet"
-                      icon="bluetooth"
-                      iconSize={13}
-                      onPress={() => void handleDisconnect()}
-                      disabled={busy}
-                      testID="conn-disconnect-bt"
-                    />
-                  )}
-                  {wifiConnected && (
-                    <ActionButton
-                      label="Wi-Fi"
-                      variant="quiet"
-                      icon="wifi"
-                      iconSize={13}
-                      onPress={() => void handleWifiDisconnect()}
-                      disabled={busy}
-                      testID="conn-disconnect-wifi"
-                    />
-                  )}
-                </>
-              ) : (
-                <ActionButton
-                  label="Disconnect"
-                  variant="quiet"
-                  icon="power"
-                  iconSize={13}
-                  onPress={() => void disconnect()}
-                  disabled={busy}
-                  testID="conn-disconnect"
-                />
-              )}
-            </View>
-          ) : null}
-        </View>
-      </View>
+      {/* U-108 (owner 2026-10-13): the status + disconnect strip that used to
+          sit here is gone — the link status is in the Remote chrome (right of
+          Back) and the Bluetooth / Wi-Fi disconnect buttons are on the row
+          right below Back (`remote-disconnect-bt` / `remote-disconnect-wifi`).
+          This panel is method / setup / inventory only. */}
 
       {/* ── LEFT pane: method select + setup + the this-car inventory ── */}
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
