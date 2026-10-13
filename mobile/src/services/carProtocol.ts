@@ -291,6 +291,14 @@ export function buildTrim(value: number): string {
 export const ESTOP_LINE = "ESTOP";
 export const REQ_STATE_LINE = "REQ_STATE";
 
+/** Build the on-connect epoch sync line: TIME;<unixEpoch>. */
+export function buildTimeLine(epochSeconds: number): string {
+  return `TIME;${Math.floor(epochSeconds)}`;
+}
+
+/** Build the factory reset command for the car: FACTORY;RESET. */
+export const FACTORY_RESET_LINE = "FACTORY;RESET";
+
 /**
  * A-46 (round-9): the car's OWN network — its default + protected entry.
  * The car broadcasts this name first on every list (NETW; / `networks` JSON),

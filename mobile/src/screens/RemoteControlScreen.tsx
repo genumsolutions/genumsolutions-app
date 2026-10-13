@@ -37,6 +37,8 @@ import {
   Switch,
   Text,
   View,
+  Alert,
+  TouchableOpacity,
 } from "react-native";
 import { useViewport } from "../lib/viewport";
 import { useRoute, type RouteProp } from "@react-navigation/native";
@@ -1401,6 +1403,57 @@ export function RemoteControlScreen({ navigation }: Props) {
                 thumbColor="#ffffff"
                 accessibilityLabel="App auto-join: on connect, switch the car to the strongest saved router it hears"
               />
+            </View>
+
+            {/* U-108 Phase 7b (owner 2026-10-13): Reset car data — sends
+                FACTORY;RESET to the car (wipes its NVS, restores defaults) and
+                clears all car-related local storage on the phone. Destructive. */}
+            <View className="mt-2.5 flex-row items-center justify-between">
+              <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                <Feather name="trash-2" size={14} color="#ef4444" />
+                <View className="min-w-0 flex-1">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+                    Reset car data
+                  </Text>
+                  <Text className="text-[9px] leading-tight text-muted">
+                    Sends FACTORY;RESET to the car + clears all local car data.
+                    Irreversible.
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                testID="reset-car-data"
+                onPress={async () => {
+                  Alert.alert(
+                    "Reset car data?",
+                    "This sends FACTORY;RESET to the car (wipes its config) and clears all car data from this phone. This cannot be undone.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Reset",
+                        style: "destructive",
+                        onPress: async () => {
+                          const result = await hub.resetCarData();
+                          if (!result.ok) {
+                            Alert.alert(
+                              "Reset failed",
+                              result.error ?? "unknown",
+                            );
+                          } else {
+                            hub.showConnectionMessage(
+                              "Car data reset — power cycle the car for a fresh start",
+                              "success",
+                            );
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+                className="px-2 py-1 border border-red-500 rounded text-[10px] font-bold text-red-500"
+              >
+                Reset
+              </TouchableOpacity>
             </View>
 
             {/* Steering limit + Trim (2WD1M only) */}
