@@ -303,6 +303,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     handleReconnectPromptCancel,
     autoJoinRouter,
     setAutoJoinRouter,
+    handleDisconnect,
+    handleWifiDisconnect,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -330,6 +332,23 @@ export function RemoteControlScreen({ navigation }: Props) {
         ? "—"
         : DEFAULT_AP_IP;
   const showIp = telemetry.ip !== undefined || onOwnHotspot;
+
+  // U-108 (owner 2026-10-13): the IP chip alternates the NETWORK NAME ⇄ the IP
+  // (~1 s), mirroring the car OLED's Wi-Fi frame, so the deck always names the
+  // network it is on and its address without a second tap.
+  const ipChipText = telemetry.ip
+    ? telemetry.ip
+    : onOwnHotspot
+      ? `${DEFAULT_AP_IP} (AP)`
+      : "—";
+  const netNameText = onOwnHotspot
+    ? (carApName ?? "Car hotspot")
+    : (telemetry.ssid ?? carSsid ?? "—");
+  const [ipChipPhase, setIpChipPhase] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setIpChipPhase((p) => !p), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Restore joystick layout choice per device.
   useEffect(() => {
@@ -649,10 +668,10 @@ export function RemoteControlScreen({ navigation }: Props) {
     <View className="flex-1 bg-surface">
       <View
         className="flex-1 overflow-hidden px-3 pb-2"
-        style={{ paddingTop: Math.max(insets.top, 8) + 4 }}
+        style={{ paddingTop: Math.max(insets.top, 8) }}
       >
         {/* ── Chrome row ── */}
-        <View className="flex-shrink-0 flex-row items-center justify-between">
+        <View className="flex-shrink-0 flex-row items-center gap-2">
           <Pressable
             onPress={handleBack}
             accessibilityRole="button"
@@ -671,26 +690,32 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </Pressable>
 
-          <Text className="text-sm font-black uppercase tracking-[0.2em] text-muted">
+          {/* U-108 (owner 2026-10-13): the ONE link status lives RIGHT OF BACK —
+              never duplicated in a sub-header line or the Connectivity panel.
+              A-25: friendly names only; a stale BT name must never label a WiFi
+              link, and a raw hex MAC never appears here. */}
+          <View className="min-w-0 shrink flex-row items-center gap-1.5">
+            <View
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
+            />
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="middle"
+              testID="deck-link-status"
+              className="min-w-0 shrink text-[11px] font-bold text-navy dark:text-sky-300"
+            >
+              {deckLinkLabel}
+            </Text>
+          </View>
+
+          <Text className="shrink-0 text-sm font-black uppercase tracking-[0.2em] text-muted">
             Remote
           </Text>
 
-          {/* A-25: friendly BT name right of "Remote" — NEVER a raw hex
-              address (sppService falls back to the MAC when a scan reports
-              no name). Underscores prettify to spaces: WIRELESS_CAR →
-              WIRELESS CAR. Over WiFi there is no BT name: tag the transport
-              + live address so the deck always identifies which link it is
-              on (a stale BT name from a former session must never label a
-              WiFi link). */}
-          <Text
-            numberOfLines={1}
-            className="max-w-[120px] shrink-0 text-[11px] font-bold text-navy dark:text-sky-300"
-          >
-            {deckLinkLabel}
-          </Text>
+          <View className="min-w-0 flex-1" />
 
           {isRobocar && (
-            <View className="flex-row items-center gap-2">
+            <View className="shrink-0 flex-row items-center gap-2">
               <ModeChooser
                 activeMode={activeMode}
                 onSelect={selectMode}
@@ -721,7 +746,7 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
 
           {isRobocar && (
-            <View className="flex-row items-center gap-2">
+            <View className="shrink-0 flex-row items-center gap-2">
               <Pressable
                 onPress={() => setShowSettings((v) => !v)}
                 accessibilityRole="button"
@@ -743,30 +768,50 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ── A-25 sub-header: friendly name + status + telemetry + pills.
-            Two compact lines: (1) link status, (2) telemetry + control pills.
-            Constant height so drive deck never shifts.
-            Phase 1 (owner 2026-10-12): NO disconnect here — the Connectivity
-            panel's per-link BT / WiFi buttons are the ONE disconnect place. */}
-        {isRobocar && (
-          <View className="mt-1 flex-shrink-0">
-            {/* Line 1: link status only (disconnect lives in Connectivity) */}
-            <View className="flex h-7 flex-shrink-0 flex-row items-center gap-2 px-1">
-              <View className="min-w-0 shrink flex-row items-center gap-1.5">
-                <View
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
-                />
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                  className="min-w-0 shrink text-[10px] font-bold text-muted dark:text-slate-300"
-                >
-                  {deckLinkLabel}
-                </Text>
-              </View>
-            </View>
+        {/* ── U-108 disconnect row (owner 2026-10-13): the ONLY disconnect place
+            on this screen — separate Bluetooth and Wi-Fi buttons on the line
+            right below Back, for every car category. The old duplicate
+            link-status line and the Connectivity panel's status+disconnect strip
+            are gone; the ONE status lives in the chrome row. Constant height so
+            the drive deck never shifts. */}
+        <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center gap-1.5 px-1">
+          {connected ? (
+            <Pressable
+              onPress={() => {
+                feedbackTap();
+                void handleDisconnect();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Disconnect Bluetooth"
+              testID="remote-disconnect-bt"
+              hitSlop={6}
+              className="shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5 active:opacity-70"
+            >
+              <Feather name="bluetooth" size={10} color="#64748b" />
+              <Text className="text-[9px] font-bold text-muted">Bluetooth</Text>
+            </Pressable>
+          ) : null}
+          {wifiConnected ? (
+            <Pressable
+              onPress={() => {
+                feedbackTap();
+                void handleWifiDisconnect();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Disconnect Wi-Fi"
+              testID="remote-disconnect-wifi"
+              hitSlop={6}
+              className="shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5 active:opacity-70"
+            >
+              <Feather name="wifi" size={10} color="#64748b" />
+              <Text className="text-[9px] font-bold text-muted">Wi-Fi</Text>
+            </Pressable>
+          ) : null}
+        </View>
 
-            {/* Line 2: telemetry + control pills (D-pad / Joystick / Telemetry / Connectivity) */}
+        {isRobocar && (
+          <View className="flex-shrink-0">
+            {/* Telemetry + control pills (D-pad / Joystick / Telemetry / Connectivity) */}
             <View className="flex h-7 flex-shrink-0 flex-row items-center gap-1 px-1">
               <TelemetryLine {...driveTelemetryArgs} />
               <View className="min-w-0 flex-1" />
@@ -793,11 +838,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                     className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
                     numberOfLines={1}
                   >
-                    {telemetry.ip
-                      ? telemetry.ip
-                      : onOwnHotspot
-                        ? `${DEFAULT_AP_IP} (AP)`
-                        : "—"}
+                    {ipChipPhase ? ipChipText : netNameText}
                   </Text>
                 </Pressable>
               ) : null}

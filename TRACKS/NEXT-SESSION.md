@@ -13,6 +13,31 @@ Full plan: `TRACKS/PLAN-2026-10-13-cleanup-rebuild.md`; records reference (car r
 `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. JS-only OTA rules stay (**version 3.2.7/60
 unchanged**). **No code changed yet (Phase 0 = notes).**
 
+## This session (2026-10-13, U-108 Remote layout — JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
+
+Owner round 4, Phase 3. The Remote screen's top chrome is decluttered and the ONE disconnect place
+moved to the row below Back.
+
+**`screens/RemoteControlScreen.tsx`:**
+1. **Status right of Back, once.** The link status (testID `deck-link-status`, dot + friendly
+   label) now sits immediately right of the Back button; the duplicate A-25 sub-header status line
+   is removed. `deckLinkLabel` is unchanged (still the ONE label).
+2. **Disconnect row below Back** (every car category): separate **Bluetooth**
+   (`remote-disconnect-bt` → `handleDisconnect`) and **Wi-Fi** (`remote-disconnect-wifi` →
+   `handleWifiDisconnect`) pill buttons, shown per live link. Constant `h-7` so the deck never
+   shifts.
+3. **IP chip rotates name ⇄ IP** every 1 s (`ipChipPhase`), mirroring the car OLED's Wi-Fi frame.
+4. **Less top padding** (`Math.max(insets.top, 8) + 4` → `Math.max(insets.top, 8)`).
+
+**`components/tools/connection/ConnectionSection.tsx`:** the status + disconnect strip
+(`conn-status-strip` / `conn-status` / `conn-disconnect-bt` / `conn-disconnect-wifi`) is REMOVED —
+status and disconnect now live only on the Remote chrome/row. The panel is method / setup /
+inventory only; the now-unused `disconnect()` callback and the `sppStatusMsg` / `handleDisconnect` /
+`handleWifiDisconnect` hub bindings were dropped.
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (F-32): version
+3.2.7 / versionCode 60 unchanged.
+
 ## This session (2026-10-13, U-105 rework — JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
 
 Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live

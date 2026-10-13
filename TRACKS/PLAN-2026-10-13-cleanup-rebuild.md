@@ -1,6 +1,6 @@
 # PLAN 2026-10-13 — Field-fix + cleanup round (APP half, mirror)
 
-Status: **PHASE 0 DONE (notes) — phases 1..9 pending.** This is the app-side mirror of the
+Status: **PHASES 0 + 3 DONE — phases 4..9 pending.** This is the app-side mirror of the
 car master plan `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-13-cleanup-rebuild.md`. Shared records
 reference: `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. Cross-repo round log: root
 `RESUME-HERE.md`.
@@ -20,15 +20,18 @@ Delivery rules that bind this repo:
 
 ## Phases (app work)
 
-### Phase 3 — Remote screen layout + IP ⇄ name rotation
+### Phase 3 — Remote screen layout + IP ⇄ name rotation — **DONE (U-108)**
 File: `mobile\src\screens\RemoteControlScreen.tsx` (chrome row ~L689, duplicate A-25
 sub-header status ~L754-767, IP chip ~L796, layout/padding L648-652), plus
 `components\tools\connection\ConnectionSection.tsx`.
-- Remove the top-most "Not connected/Connected" line + its disconnect-button space.
-- Remove extra top padding; give the freed space to content below.
-- Status only **right of the Back button** (no duplication).
-- New row **below Back** with separate **Bluetooth** and **Wi-Fi** disconnect buttons.
-- IP chip alternates **network name ⇄ IP** ~1 s (mirrors the car OLED).
+- [x] Status now lives **only right of the Back button** (`deck-link-status`); the duplicate
+      sub-header status line is gone, and the Connectivity panel's status+disconnect strip
+      (`conn-status-strip`) is removed.
+- [x] Extra top padding dropped (`+4` removed); the freed row is the new disconnect row.
+- [x] New row **below Back** with separate **Bluetooth** (`remote-disconnect-bt`) and **Wi-Fi**
+      (`remote-disconnect-wifi`) disconnect buttons, for every car category.
+- [x] IP chip alternates **network name ⇄ IP** ~1 s (mirrors the car OLED).
+- Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
 ### Phase 4 — connection truth + restart prompt
 Files: `components\tools\useControlHub.ts` (SPP reconnect/backoff ~L3151-3220,
@@ -65,5 +68,7 @@ Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
 ## RESUME HERE
-> Phase 0 (notes) committed/pushed. Next app work is Phase 3 (Remote layout) once the car
-> Phase 1/2 firmware direction is fixed, so both sides agree on the status contract.
+> Phases 0 + 3 DONE. Next app work is **Phase 4** (connection truth + restart prompt: both
+> transports report real status; the app always knows which network the phone is on; detect a car
+> restart via the boot-count change and show Reconnect / Leave / Cancel, carrying the restart info
+> on the next connect). Phases 5/6/7 follow (SSID literal, auto-join labels, fresh start + stamps).
