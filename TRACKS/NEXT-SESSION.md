@@ -1,4 +1,30 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-13: M1+M2 connectivity round — status strip, always-visible inventories, gated scan, parallel link labels; JS-only OTA, version unchanged)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-13: F-65 reconnect rebuild — fleet-AP discovery, honest reconnecting, bounded keep-looking; JS-only OTA, version 3.2.7 unchanged)
+
+## This session (2026-10-13, F-65 reconnect rebuild — `bc9062c`, PUSHED, JS-only OTA, version 3.2.7 unchanged)
+
+Owner's post-1.3.3 field failures after the U-R4 code round: "car won't connect, restarts after
+connecting, flaky WiFi/parallel display, car page missing, restart/freeze". Root-caused chain
+(full round: `RESUME-HERE.md`):
+
+1. **The app's rescue sweep hunted the WRONG AP name.** The sweep passed the donor-only
+   `OWN_AP_NAME = "WirelessCar_Wifi"`, so a 4WD4M car (`4WDCar_Wifi`) was never re-found on the
+   phone's network — every rescue path (auto-discover, keep-looking) dead-ended. `discovery.ts`
+   `looksLikeOurCar`/`findCarOnNetwork` now take a plural `apNames` registry (`OWN_AP_NAMES`) and
+   `useControlHub.ts` passes it in — the regression test pins a `4WDCar_Wifi` car being found.
+2. **The WebSocket close was SILENT.** `wifiService.ts` re-dialed without announcing anything, so
+   the UI kept its fake green link and commands vanished ("freeze"). On an UNEXPECTED close the
+   service now emits `reconnecting` (every hub drops `wifiConnected`/`connected` instantly, no
+   banner) and re-dials ONCE; a failed re-dial surfaces `error` — the old address is a corpse, so
+   the app SWEEPS rather than keeps dialing.
+3. **One sweep after a drop is not enough when the car is mid-reboot.** A brownout-car is
+   invisible for a whole boot round (~15-30 s). The hub now owns a bounded keep-looking budget:
+   `armPhoneNetDiscoverRetry`/`resetPhoneNetDiscoverBudget` (15 s × 6 ≈ 90 s) wired into
+   auto-discover success/failure, the connected handler and NetInfo changes.
+
+**Gates (all green):** app `tsc` 0 · vitest **683/683** (44 files) · prettier + lint clean.
+**Commits:** app `bc9062c` (F-65). **Car (separate repo):** `02e1081` (U-104, firmware 1.3.4
+UNFLASHED, F-61 — one WDT feed + the version label). **Next:** owner flashes 1.3.4 + runs
+TESTING.md U-R4 device pass (flash target updated 1.3.3 → **1.3.4**) and the new F-65 rows.
 
 ## This session (2026-10-13, M1+M2 connectivity round — `08f0351`, PUSHED, JS-only OTA, version 3.2.7 unchanged)
 
