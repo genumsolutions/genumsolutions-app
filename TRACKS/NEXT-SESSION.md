@@ -13,6 +13,23 @@ Full plan: `TRACKS/PLAN-2026-10-13-cleanup-rebuild.md`; records reference (car r
 `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. JS-only OTA rules stay (**version 3.2.7/60
 unchanged**). **No code changed yet (Phase 0 = notes).**
 
+## This session (2026-10-13, U-108 Phase 6 — clearer auto-join labels; JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
+
+Owner round 4, Phase 6. Both auto-join toggles KEPT (never merged); they are now unmistakable.
+
+- **`screens/RemoteControlScreen.tsx`**: the CAR boot auto-join is now **“Boot auto-join (car)”**
+  (`power` icon) with a caption (“On power-up the CAR rejoins its last router — off keeps it on its
+  own hotspot.”); the APP smart-link toggle is now **“Auto-join saved router (app)”** (`refresh-cw`
+  icon) with a caption (“When you open the car, the APP switches it to the strongest saved router it
+  hears.”). Distinct icons + distinct accessibility labels.
+- **`components/tools/CarProfileCard.tsx`**: label aligned to “Auto-join saved router (app)” and
+  cross-references the separate car setting.
+- **`components/tools/useControlHub.ts`**: the smart-link toast now says “… Auto-join saved router
+  (app).”
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (F-32): version
+3.2.7 / versionCode 60 unchanged.
+
 ## This session (2026-10-13, U-108 Phase 5 — SSID exact literal `4WD4MCar_WiFi`; JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
 
 Owner round 4, Phase 5. The fleet own-hotspot literal is now exactly **`4WD4MCar_WiFi`**.

@@ -1342,12 +1342,23 @@ export function RemoteControlScreen({ navigation }: Props) {
               />
             </View>
 
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather name="zap" size={14} color="#64748b" />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Boot auto-join
-                </Text>
+            {/* U-108 Phase 6 (owner 2026-10-13): TWO auto-join settings, clearly
+                labelled and never merged. (1) this one is the CAR's own boot
+                auto-join (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) — a firmware
+                setting that decides whether the CAR rejoins its last router on
+                power-up. (2) the smart-link toggle below is the APP's setting. */}
+            <View className="mt-1.5 flex-row items-center justify-between gap-2">
+              <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                <Feather name="power" size={14} color="#64748b" />
+                <View className="min-w-0 flex-1">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Boot auto-join (car)
+                  </Text>
+                  <Text className="text-[9px] leading-tight text-muted">
+                    On power-up the CAR rejoins its last router — off keeps it
+                    on its own hotspot.
+                  </Text>
+                </View>
               </View>
               <Switch
                 value={hub.bootAutojoin === true}
@@ -1358,19 +1369,26 @@ export function RemoteControlScreen({ navigation }: Props) {
                 disabled={!linked}
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
-                accessibilityLabel="Join the last router on power-up, else stay on the car's own hotspot"
+                accessibilityLabel="Car boot auto-join: on power-up the car rejoins its last router, else stays on its own hotspot"
               />
             </View>
 
-            {/* U-R3 (owner 2026-10-12): smart-link auto-join — on car selection
-                join the strongest saved router the car hears, else stay on its
-                own access point. Mirrors DevicePrefs and cloud profile. */}
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather name="zap" size={14} color="#64748b" />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Auto-join saved router
-                </Text>
+            {/* U-R3 (owner 2026-10-12): smart-link auto-join — the APP's setting.
+                On car selection the app joins the strongest saved router the car
+                hears, else stays on its own access point. Mirrors DevicePrefs and
+                the cloud profile. Distinct from the CAR boot auto-join above. */}
+            <View className="mt-1.5 flex-row items-center justify-between gap-2">
+              <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                <Feather name="refresh-cw" size={14} color="#64748b" />
+                <View className="min-w-0 flex-1">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                    Auto-join saved router (app)
+                  </Text>
+                  <Text className="text-[9px] leading-tight text-muted">
+                    When you open the car, the APP switches it to the strongest
+                    saved router it hears.
+                  </Text>
+                </View>
               </View>
               <Switch
                 value={autoJoinRouter}
@@ -1381,7 +1399,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 disabled={!linked}
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
-                accessibilityLabel="Auto-join saved router on connect"
+                accessibilityLabel="App auto-join: on connect, switch the car to the strongest saved router it hears"
               />
             </View>
 
