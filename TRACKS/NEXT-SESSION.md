@@ -1,4 +1,40 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-12: U-R3 connectivity rebuild — auto-join in Remote Settings, smart disconnect, compact Connectivity, OLED blink + fleet diagnostics)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-13: M1+M2 connectivity round — status strip, always-visible inventories, gated scan, parallel link labels; JS-only OTA, version unchanged)
+
+## This session (2026-10-13, M1+M2 connectivity round — `08f0351`, PUSHED, JS-only OTA, version 3.2.7 unchanged)
+
+Owner's second review of the 2026-10-12 Connectivity build — implement, one phase at a time, pushing
+at each milestone. All app work below is JS-only (same-version OTA rule, F-32).
+
+**M1 — Connectivity panel restructure (`ConnectionSection.tsx`, `WifiPanel.tsx`, `ConnectionCard.tsx`):**
+1. **One status + disconnect strip** (full width, `conn-status-strip`, `conn-status`): status dot +
+   live-link truth, plus the ONE disconnect place — bigger per-link `Bluetooth`/`Wi-Fi` buttons
+   (`conn-disconnect-bt`/`conn-disconnect-wifi`) when parallel is ON, single `Disconnect`
+   (`conn-disconnect`) otherwise. ActionButton gained `iconSize` for the bigger visible icons.
+2. **The "Connection method" box is the method only** — statusText and the old compact disconnect
+   pills are gone from the method row.
+3. **Left-bottom inventories, always visible** (no `!anyLink` vanish): Bluetooth → `conn-bt-paired`
+   "Paired cars" (friendly names only; a raw hex MAC renders as "Paired car"); Wi-Fi →
+   `conn-added-networks` "Added networks" (hotspot + saved routers, tapped rows switch when reachable).
+4. **Right pane = ONE manager for both methods**: fixed "Switch networks" heading over WifiPanel,
+   plus the "Other ESP / IoT projects" card (`conn-iot-entry`) whose "Add a network" opens the same
+   add form in place (WifiPanel `addRequestKey`).
+5. **Nearby scan rows gated behind an explicit Search** (WifiPanel `showScanned`; `scanShown` set on
+   a confirmed `requestScan` ack, cleared on method change) — "keep only paired or saved network list
+   after the search".
+6. **Auto-sync on phone network change**: NetInfo listener clears `pendingJoinSsid` the moment the
+   phone actually joins that SSID.
+
+**M2 — Remote parallel display (`RemoteControlScreen.tsx`):** chrome row + sub-header line 1 show
+`BT · <name> + WiFi · <ip>` when `allowParallelLinks && connected && wifiConnected` (friendly names
+only); TelemetryLine reports `BT+WiFi`. Car OLED matches (`Parallel : BT+WiFi`, car `d1e33bc`).
+
+**Freeze/reset DB read (owner ask):** `device_crash_reports` board `1FB608` = 929 boots / 746
+crashes (PANIC + BROWNOUT), `last_crash_phase` NULL on every row. No safe code fix — the phase
+capture needs the 1.3.3 flash (TESTING.md U-R4).
+
+**Gates (all green):** app `tsc` 0 · vitest **679/679** (44 files) · prettier + lint clean.
+**Commits:** app `08f0351` (M1+M2). **Car (separate repo):** `d1e33bc` (M3, firmware 1.3.3 UNFLASHED,
+F-61). **Next:** owner flashes 1.3.3 + runs TESTING.md U-R4 device pass.
 
 ## This session (2026-10-12, U-R3 connectivity rebuild) — auto-join moved to Remote Settings, smart disconnect by Parallel, compact Connectivity panel, OLED blink, plus fleet diagnostics
 
