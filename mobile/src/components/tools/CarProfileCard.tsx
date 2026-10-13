@@ -284,11 +284,12 @@ export function CarProfileCard({
         <View className="mt-3 flex-row items-center gap-3 border-t border-line pt-3">
           <View className="min-w-0 flex-1">
             <Text className="text-xs font-bold text-ink">
-              Auto-join saved router
+              Auto-join saved router (app)
             </Text>
             <Text className="mt-0.5 text-[11px] leading-4 text-muted">
               On car selection: join the strongest saved router the car hears —
-              else stay on its own access point.
+              else stay on its own access point. (The car's own power-up rejoin
+              is the separate “Boot auto-join (car)” setting.)
             </Text>
           </View>
           <Switch

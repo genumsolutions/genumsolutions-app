@@ -2868,7 +2868,7 @@ export function useControlHub(routeCategory?: string) {
       // same narration-hides-an-action failure F-59's confirm rule fixed,
       // in its automation form.
       showConnectionMessage(
-        `Smart-link joined "${ssid}" automatically — connect your phone to it to drive. Turn this off under Saved settings → Auto-join saved router.`,
+        `Smart-link joined "${ssid}" automatically — connect your phone to it to drive. Turn this off under Saved settings → Auto-join saved router (app).`,
         "success",
       );
     },

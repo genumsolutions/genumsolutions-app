@@ -1,6 +1,6 @@
 # PLAN 2026-10-13 — Field-fix + cleanup round (APP half, mirror)
 
-Status: **PHASES 0 + 3 + 4 + 5 DONE — phases 6..9 pending.** This is the app-side mirror of the
+Status: **PHASES 0 + 3 + 4 + 5 + 6 DONE — phases 7..9 pending.** This is the app-side mirror of the
 car master plan `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-13-cleanup-rebuild.md`. Shared records
 reference: `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. Cross-repo round log: root
 `RESUME-HERE.md`.
@@ -62,9 +62,19 @@ Files: `services\carProtocol.ts` (`OWN_AP_NAME`/`OWN_AP_NAMES`), `screens\Device
       case-insensitive, so the app keeps working against a car still on the old casing.
 - Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
-### Phase 6 — auto-join labels
+### Phase 6 — auto-join labels — **DONE (U-108 Phase 6)**
 File: `screens\RemoteControlScreen.tsx` settings toggles (~L1176-1257). Keep both toggles,
 give them clearer distinct labels (no merge).
+- [x] Kept BOTH toggles (never merged). The CAR boot auto-join (`WIFICFG;AUTOJOIN`, NVS
+      `boot_autojoin`) is now **“Boot auto-join (car)”** with a `power` icon and a caption (“On
+      power-up the CAR rejoins its last router — off keeps it on its own hotspot.”).
+- [x] The APP smart-link toggle is now **“Auto-join saved router (app)”** with a `refresh-cw` icon
+      and a caption (“When you open the car, the APP switches it to the strongest saved router it
+      hears.”).
+- [x] Distinct icons (`power` vs `refresh-cw`), distinct accessibility labels, and a one-line
+      caption each. `CarProfileCard.tsx` label matches (“(app)”) and cross-references the car
+      setting; the smart-link toast in `useControlHub.ts` updated to the new label.
+- Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
 ### Phase 7 — fresh start + timestamps (app side)
 Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.lastDevice`,
@@ -83,6 +93,7 @@ Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
 ## RESUME HERE
-> Phases 0 + 3 + 4 + 5 DONE. Next app work is **Phase 6** (clearer labels on the two auto-join
-> toggles — boot auto-join vs auto-join saved router; keep both, no merge). Then Phase 7 (fresh start
-> + timestamps).
+> Phases 0 + 3 + 4 + 5 + 6 DONE. Next app work is **Phase 7** (fresh start + timestamps: a “Reset
+> car data” action clearing the car-related AsyncStorage keys in `RECORDS-INVENTORY.md` §2, plus
+> `updatedAt` stamps on the remaining car records; DB purge of this car + the owner's account is the
+> paired surface). Then Phase 9 (docs/TESTING/DEVICE-TESTS rows).
