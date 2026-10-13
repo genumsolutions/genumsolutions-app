@@ -122,13 +122,19 @@ export type DevicePrefs = {
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
-  /** U-100 Phase 4 (owner 2026-10-12): keep Bluetooth AND WiFi up together.
-      Default false (the car ships with both up, but the app keeps its
-      one-active-link policy: bringing one link up tears the other down).
-      When true the app does NOT drop one link to raise the other, and it
-      mirrors the flag to the car's NVS `botcfg/allow_parallel` via
-      `WIFICFG;PARALLEL;ON|OFF`. */
-  allowParallelLinks?: boolean;
+  /**
+   * U-105 (1.3.5): the car's THREE persisted transport toggles, mirrored per
+   * device. Wi-Fi (`wifi_enabled`), Bluetooth (`bt_enabled`) and boot
+   * auto-join (`boot_autojoin`) replace the removed parallel-links /
+   * power-save pair (that flag, `allowParallelLinks`, and its `WIFICFG;PARALLEL`
+   * command are GONE). The app mirrors them to the car's NVS via
+   * `WIFICFG;WIFI;ON|OFF` / `WIFICFG;BT;ON|OFF` / `WIFICFG;AUTOJOIN;ON|OFF`.
+   * Wi-Fi and Bluetooth default ON and can never both be OFF (clamped car-side
+   * and in the UI). Absent = "don't know" (older firmware), never OFF.
+   */
+  wifiEnabled?: boolean;
+  btEnabled?: boolean;
+  bootAutojoin?: boolean;
   /** Profiles-sync round: when this record was last saved locally
       (epoch ms). Feeds last-saved-wins merging against the cloud row's
       updated_at — the user's most recent save wins, wherever it happened. */

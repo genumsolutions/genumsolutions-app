@@ -90,7 +90,7 @@ export function carIsOnOwnHotspot(ctx: {
 }
 
 const CAR_AP_NAMES_UPPER: ReadonlySet<string> = new Set(
-  ["WirelessCar_Wifi", "4WDCar_Wifi"].map((n) => n.toUpperCase()),
+  ["4wd4mCar_Wifi"].map((n) => n.toUpperCase()),
 );
 
 /**

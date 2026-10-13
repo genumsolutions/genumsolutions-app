@@ -1,5 +1,17 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-10-13 (latest) — U-105 SHIPPED (JS-only → same-version OTA 3.2.7/60, UNPUSHED
+> pending commit): ONE fleet own-hotspot `4wd4mCar_Wifi` (donor `WirelessCar_Wifi` + old
+> `4WDCar_Wifi` purged); Parallel + Hotspot power-save (APSAVE) settings REMOVED, replaced by
+> the car's **Wi-Fi / Bluetooth / Boot auto-join** toggles (`WIFICFG;WIFI|BT|AUTOJOIN`, NVS
+> `t_wifi`/`t_bt`/`boot_autojoin`, cloud `wifi_enabled`/`bt_enabled`/`boot_autojoin`); the
+> one-active-link teardown is GONE (both transports stay live by default); delete-a-network
+> now STAYS deleted (car `ROUTERS;DEL` case-insensitive). Gates: tsc 0 · vitest **688/688** ·
+> prettier clean. Car firmware **1.3.5** gates green — **UNFLASHED** (the SSID rename needs the
+> flash). Device rows: `mobile/TESTING.md` **U-105-0..8** + car `TRACKS/DEVICE-TESTS.md`
+> **U-105-1..8**. An `4WDCar_Wifi`/`WirelessCar_Wifi` mention below an entry = that ROUND's
+> history, never current state.
+
 > ✅ **2026-09-30 (latest) — DECKS ②+③ SHIPPED: ALL FIVE CATEGORY DECKS + KIND HEADERS
 > (JS-only → same-version OTA 3.2.7/60, `c40e3be` + `f05cdaf`).** Owner approved the pilot →
 > SmartFarm/SmartCity/SmartDustbin/Handheld decks landed (live relay switches + honest
