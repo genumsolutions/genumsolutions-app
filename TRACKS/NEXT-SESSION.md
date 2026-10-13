@@ -42,7 +42,7 @@ app registry and every current-state surface. Full cross-repo round: `../RESUME-
 **Gates (all green):** app `tsc` 0 · vitest **688/688** (44 files) · prettier clean. Car repo
 **1.3.5** firmware (single AP `4wd4mCar_Wifi`, `WIFICFG;WIFI|BT|AUTOJOIN`, `ROUTERS;DEL`
 case-insensitive, no Parallel/APSAVE) gates green — **UNFLASHED** (the SSID rename needs the flash).
-**Commits:** app `c0067d1` (U-105, JS-only OTA rules: no `app.json`/versionCode bump). **Next:**
+**Commits:** app `4cc5b7e` (U-105, JS-only OTA rules: no `app.json`/versionCode bump). **Next:**
 owner flash grid → car FW **1.3.5**, force-close ×2 for the app OTA, then the U-105 device rows
 (`mobile/TESTING.md` top section + car `TRACKS/DEVICE-TESTS.md` U-105-1..8).
 
