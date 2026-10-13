@@ -282,20 +282,19 @@ export function useControlHub(routeCategory?: string) {
     null,
   );
   const [wifiConnected, setWifiConnected] = useState(false);
-  // U-100 (owner 2026-10-12): the car's own-hotspot POWER-SAVE switch. The car
-  // ships it OFF (its own hotspot is always reachable); ON restores the parking
-  // power saving. `null` = not yet read from the car. Mirrors the car's NVS
-  // `botcfg/ap_psave` via `WIFICFG;APSAVE;ON|OFF` / `?`.
-  const [apPowerSave, setApPowerSave] = useState<boolean | null>(null);
-  // U-100 Phase 4 (owner 2026-10-12): keep Bluetooth AND WiFi up together.
-  // Default false keeps the app's one-active-link policy (bringing one link up
-  // tears the other down). When ON the app does NOT drop one link to raise the
-  // other, and it mirrors the flag to the car's NVS `botcfg/allow_parallel` via
-  // `WIFICFG;PARALLEL;ON|OFF`. The ref mirror lets the `[]`-dep teardown
-  // callbacks read the live value without being re-created.
-  const [allowParallelLinks, setAllowParallelLinks] = useState<boolean>(false);
-  const allowParallelLinksRef = useRef(false);
-  allowParallelLinksRef.current = allowParallelLinks;
+  // U-105 (1.3.5, owner 2026-10-13): the car's THREE persisted transport
+  // toggles. `WIFICFG;WIFI;ON|OFF` (NVS `botcfg/t_wifi`), `WIFICFG;BT;ON|OFF`
+  // (NVS `botcfg/t_bt`) and `WIFICFG;AUTOJOIN;ON|OFF` (NVS
+  // `botcfg/boot_autojoin`) replaced the removed parallel-links / power-save
+  // pair (`WIFICFG;PARALLEL` / `WIFICFG;APSAVE` and their `ap_psave` /
+  // `allow_parallel` NVS keys are GONE). `null` = not yet read from the car.
+  // Wi-Fi and Bluetooth default ON and can never both be OFF — the car clamps
+  // the both-off request, and the UI disables the last live toggle. Both
+  // transports stay up SIMULTANEOUSLY when enabled (no one-active-link
+  // teardown anywhere).
+  const [wifiEnabled, setWifiEnabled] = useState<boolean | null>(null);
+  const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
+  const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
   // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
   // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
   // user-editable and the remembered per-device URL wins when present.
@@ -725,12 +724,16 @@ export function useControlHub(routeCategory?: string) {
             setUseJoystick(resolved.useJoystick);
           if (resolved.autoJoinRouter != null)
             setAutoJoinRouter(resolved.autoJoinRouter);
-          // U-100 Phase 4: restore the per-car parallel-links pref and push it
-          // into the link manager before any link is brought up this session.
-          if (resolved.allowParallelLinks != null) {
-            setAllowParallelLinks(resolved.allowParallelLinks);
-            linkManager.setAllowParallel(resolved.allowParallelLinks);
-          }
+          // U-105 (1.3.5): restore the per-car transport toggles (Wi-Fi /
+          // Bluetooth / boot auto-join) when their profile is resolved, so the
+          // panel shows car truth before any link is brought up. `undefined`
+          // (older firmware / never persisted) stays "don't know", never OFF.
+          if (typeof resolved.wifiEnabled === "boolean")
+            setWifiEnabled(resolved.wifiEnabled);
+          if (typeof resolved.btEnabled === "boolean")
+            setBtEnabled(resolved.btEnabled);
+          if (typeof resolved.bootAutojoin === "boolean")
+            setBootAutojoin(resolved.bootAutojoin);
           // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
           // (never the password â€” that lives only in flight + the car's NVS).
           if (resolved.lastWifiSsid)
@@ -862,12 +865,14 @@ export function useControlHub(routeCategory?: string) {
         setJoystickLayoutId(merged.prefs.joystickLayout);
       if (merged.prefs.autoJoinRouter != null)
         setAutoJoinRouter(merged.prefs.autoJoinRouter);
-      // U-100 Phase 4: an adopted (cloud/newer) profile carries the
-      // parallel-links pref too; mirror it into the link manager.
-      if (merged.prefs.allowParallelLinks != null) {
-        setAllowParallelLinks(merged.prefs.allowParallelLinks);
-        linkManager.setAllowParallel(merged.prefs.allowParallelLinks);
-      }
+      // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
+      // toggle mirror too; restore it so the panel agrees with car truth.
+      if (typeof merged.prefs.wifiEnabled === "boolean")
+        setWifiEnabled(merged.prefs.wifiEnabled);
+      if (typeof merged.prefs.btEnabled === "boolean")
+        setBtEnabled(merged.prefs.btEnabled);
+      if (typeof merged.prefs.bootAutojoin === "boolean")
+        setBootAutojoin(merged.prefs.bootAutojoin);
       if (merged.prefs.savedRouters && merged.prefs.savedRouters.length > 0) {
         setCarNetworks((cur) =>
           cur.length > 0 ? cur : (merged.prefs.savedRouters ?? []),
@@ -935,9 +940,11 @@ export function useControlHub(routeCategory?: string) {
             "",
         ),
         autoJoinRouter,
-        // U-100 Phase 4: carry the live parallel-links pref so a narrow patch
-        // (speed/mode/router) never wipes it.
-        allowParallelLinks,
+        // U-105 (1.3.5): carry the live transport toggles so a narrow patch
+        // (speed/mode/router) never wipes them.
+        wifiEnabled: wifiEnabled ?? undefined,
+        btEnabled: btEnabled ?? undefined,
+        bootAutojoin: bootAutojoin ?? undefined,
         // Profiles-sync round: carry fields a narrow patch must NOT wipe
         // (previously a speed/mode persist erased wifiHistory + fullscreen
         // because the base record omitted them entirely).
@@ -988,7 +995,9 @@ export function useControlHub(routeCategory?: string) {
       carFwIdRef.current,
       savedPrefs?.btIds,
       autoJoinRouter,
-      allowParallelLinks,
+      wifiEnabled,
+      btEnabled,
+      bootAutojoin,
     ],
   );
 
@@ -1490,12 +1499,14 @@ export function useControlHub(routeCategory?: string) {
           setSppStatus("disconnected");
           setSppStatusMsg("");
           setDeviceName("");
-          // U-98: a Bluetooth event only owns `connected`/`linkVerified` while
-          // Bluetooth IS the live link. The Wi-Fi connect path tears SPP down
-          // on purpose (dropBluetoothForWifi) — and a FAILED Bluetooth attempt
-          // leaves the Wi-Fi socket up — so clearing here unconditionally put
-          // a live, answered Wi-Fi link back on "Connecting…" (gold dot) and
-          // stopped the REQ_STATE poll, which is keyed on `connected`.
+          // U-98 → U-105 (1.3.5): Bluetooth events used to fight over `connected`
+          // with a Wi-Fi connect that tore SPP down on purpose; that teardown is
+          // gone (both links stay live). A Bluetooth event still only owns
+          // `connected`/`linkVerified` below as long as no answered Wi-Fi link
+          // is up — a FAILED Bluetooth attempt leaves the Wi-Fi socket up, so
+          // clearing here unconditionally would put a live, answered Wi-Fi link
+          // back on "Connecting…" (gold dot) and stop the REQ_STATE poll, which
+          // is keyed on `connected`.
           if (!wifiService.isConnected) {
             setConnected(false);
             setLinkVerified(false);
@@ -1782,20 +1793,10 @@ export function useControlHub(routeCategory?: string) {
         setDeviceName(device.name);
         setConnecting(false);
         setConnectingAddress(null);
-        // U-98: making Bluetooth the live method drops any open Wi-Fi socket,
-        // so the two links can never both be live (see dropBluetoothForWifi).
-        // U-100 Phase 4: unless the user opted into parallel links, in which
-        // case Bluetooth is raised WITHOUT tearing the Wi-Fi socket down.
-        if (!allowParallelLinksRef.current) {
-          if (wifiService.isConnected) {
-            try {
-              await wifiService.disconnect();
-            } catch {
-              /* ignore */
-            }
-          }
-          setWifiConnected(false);
-        }
+        // U-98 → U-105 (1.3.5): those lines tore an open Wi-Fi socket down
+        // "so the two links can never both be live". The owner ruled that out —
+        // the car now keeps Bluetooth AND Wi-Fi up simultaneously by design, so
+        // raising Bluetooth here NEVER drops Wi-Fi (and vice versa).
         showConnectionMessage(`Connected to ${device.name}`, "success");
         void sppService.requestState().catch(() => {});
         return {
@@ -1888,48 +1889,10 @@ export function useControlHub(routeCategory?: string) {
     }
   }, []);
 
-  // U-98: ONE active link at a time. The app never tore down the other
-  // transport, so a Wi-Fi shortcut left the Bluetooth SPP socket open and
-  // (with `chosenRadio` always null) `routeCommand` kept sending drive letters
-  // to BT; and a BT connect left the Wi-Fi socket live so the car could be
-  // reached on both. Tearing the other link down makes the method the user
-  // picked the ONLY live one, which is also what the routing core always
-  // intended. `sppService.disconnect()`/`wifiService.disconnect()` set the
-  // service-level manualClose so neither auto-reconnect fires afterwards.
-  const dropBluetoothForWifi = useCallback(async () => {
-    // U-100 Phase 4: with parallel links ON, raising Wi-Fi does NOT tear
-    // Bluetooth down — both links are meant to stay live. OFF (the default)
-    // keeps the U-98 one-active-link policy.
-    if (allowParallelLinksRef.current) return;
-    if (bleService.isConnected) {
-      try {
-        await bleService.disconnect();
-      } catch {
-        /* ignore */
-      }
-    }
-    // NOTE: do NOT set the hub-wide manualCloseRef here. `sppService.disconnect()`
-    // already sets the SERVICE-level `sppService.manualClose`, which is what the
-    // SPP auto-reconnect guards read — and the hub flag is ALSO the gate the Wi-Fi
-    // auto-discovery watcher checks ("the user closed the link, never surprise-
-    // reopen"). Setting it after a SUCCESSFUL Wi-Fi connect (this path runs on
-    // every Wi-Fi success) wrongly told that watcher the user had closed Wi-Fi, so
-    // the "phone joined a new network → re-find the car" recovery was dead for the
-    // rest of the session — the owner's "have to rejoin by hand". A user-initiated
-    // Wi-Fi close still sets it (handleWifiDisconnect).
-    try {
-      await sppService.disconnect();
-    } catch {
-      /* ignore */
-    }
-    // The Wi-Fi socket is the link this teardown leaves standing, so it owns
-    // `connected` — never an unconditional false, which is what stopped the
-    // REQ_STATE poll and the status card's "live" dot on a working Wi-Fi link.
-    setConnected(wifiService.isConnected);
-    setSppStatus("disconnected");
-    setDeviceName("");
-  }, []);
-
+  // U-98 → U-105 (1.3.5): the one-active-link teardown is GONE. `dropBluetoothForWifi`
+  // used to prove it, but the owner ruled parallel transport down OUT ("keep both");
+  // the car keeps Bluetooth + Wi-Fi live simultaneously and the app never tears
+  // either down to raise the other. All call sites removed.
   const handleWifiConnect = useCallback(
     async (overrideUrl?: string) => {
       setError(null);
@@ -1965,7 +1928,6 @@ export function useControlHub(routeCategory?: string) {
         }
         setLinkVerified(answered);
         if (answered) {
-          void dropBluetoothForWifi();
           setWifiConnected(true);
           setError(null);
           showConnectionMessage(`Connected to car via WiFi`, "success");
@@ -1987,7 +1949,6 @@ export function useControlHub(routeCategory?: string) {
               setWifiConnected(true);
               setLinkVerified(true);
               setError(null);
-              void dropBluetoothForWifi();
               showConnectionMessage(
                 `Car found automatically at ${lookedHalf.host} — connected.`,
                 "success",
@@ -2025,7 +1986,6 @@ export function useControlHub(routeCategory?: string) {
               setWifiConnected(true);
               setLinkVerified(true);
               setError(null);
-              void dropBluetoothForWifi();
               showConnectionMessage(
                 `Car found automatically at ${looked.host} — connected.`,
                 "success",
@@ -2059,7 +2019,7 @@ export function useControlHub(routeCategory?: string) {
         if (mountedRef.current) setConnecting(false);
       }
     },
-    [wifiUrl, showConnectionMessage, dropBluetoothForWifi],
+    [wifiUrl, showConnectionMessage],
   ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
 
   // U-80b: AUTO-discover when the PHONE lands on a new network.
@@ -2112,7 +2072,6 @@ export function useControlHub(routeCategory?: string) {
             setLinkVerified(true);
             setError(null);
             setWifiUrl(CAR_WS_URL(looked.host));
-            void dropBluetoothForWifi();
             showConnectionMessage(
               `Phone joined a new network — found the car automatically at ${looked.host}.`,
               "success",
@@ -2150,7 +2109,7 @@ export function useControlHub(routeCategory?: string) {
       phoneNetDiscoverInflight = false;
       phoneNetDiscoverAt = Date.now();
     }
-  }, [findCarForUser, dropBluetoothForWifi, showConnectionMessage]);
+  }, [findCarForUser, showConnectionMessage]);
 
   // Publish it for the status subscription registered near the top of the hook.
   // That subscription is created with empty deps (it must not tear down and
@@ -2282,21 +2241,25 @@ export function useControlHub(routeCategory?: string) {
         setError(`Car rejected WiFi settings: ${reply}`);
       } else if (reply.startsWith("WIFICFG;SSID;")) {
         setCarSsid(reply.slice("WIFICFG;SSID;".length).trim() || null);
-      } else if (reply.startsWith("WIFICFG;APSAVE;")) {
-        // U-100: the car's own-hotspot power-save switch (ON|OFF), answered to
-        // both a bare `WIFICFG;APSAVE;?` query and an ON/OFF set.
-        setApPowerSave(
-          reply.slice("WIFICFG;APSAVE;".length).trim().toUpperCase() === "ON",
-        );
-      } else if (reply.startsWith("WIFICFG;PARALLEL;")) {
-        // U-100 Phase 4: the car's parallel BT+WiFi switch (ON|OFF), answered to
-        // both a bare `WIFICFG;PARALLEL;?` query and an ON/OFF set. Car truth
-        // wins: adopt it into the per-car pref AND the link manager.
+      } else if (reply.startsWith("WIFICFG;WIFI;")) {
+        // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered to
+        // both a bare `WIFICFG;WIFI;?` query and an ON/OFF set. Car truth wins:
+        // adopt it into the per-car pref too. (The removed APSAVE/PARALLEL
+        // branches died with the settings the owner ruled out.)
         const on =
-          reply.slice("WIFICFG;PARALLEL;".length).trim().toUpperCase() === "ON";
-        setAllowParallelLinks(on);
-        linkManager.setAllowParallel(on);
-        persistPrefs({ allowParallelLinks: on });
+          reply.slice("WIFICFG;WIFI;".length).trim().toUpperCase() === "ON";
+        setWifiEnabled(on);
+        persistPrefs({ wifiEnabled: on });
+      } else if (reply.startsWith("WIFICFG;BT;")) {
+        const on =
+          reply.slice("WIFICFG;BT;".length).trim().toUpperCase() === "ON";
+        setBtEnabled(on);
+        persistPrefs({ btEnabled: on });
+      } else if (reply.startsWith("WIFICFG;AUTOJOIN;")) {
+        const on =
+          reply.slice("WIFICFG;AUTOJOIN;".length).trim().toUpperCase() === "ON";
+        setBootAutojoin(on);
+        persistPrefs({ bootAutojoin: on });
       }
       lastProvisionReplyRef.current = reply;
     },
@@ -2505,9 +2468,9 @@ export function useControlHub(routeCategory?: string) {
     [connected, wifiConnected, activeMode],
   );
 
-  // U-100: the own-hotspot power-save switch. Like the ROUTERS;… system
-  // commands, WIFICFG;APSAVE is a SYSTEM command (switches the car's own
-  // behaviour, never drives) and can ride WHATEVER link is live. `sendCommand`
+  // U-105 (1.3.5): the car's three transport toggles. Like the ROUTERS;… system
+  // commands, WIFICFG;WIFI/BT/AUTOJOIN are SYSTEM commands (switch the car's own
+  // behaviour, never drive) and can ride WHATEVER link is live. `sendCommand`
   // routes by the ACTIVE mode's transports, which would strand the command when
   // the mode's radio is not the one that is up; so this fan-out targets every
   // live transport directly (spp → ble → wifi), no duplicate sends.
@@ -2517,33 +2480,30 @@ export function useControlHub(routeCategory?: string) {
     if (wifiService.isConnected)
       void wifiService.sendLine(line).catch(() => {});
   }, []);
-  const setCarApPowerSave = useCallback(
-    (on: boolean) => {
-      // Optimistic: the car's `WIFICFG;APSAVE;ON|OFF` reply re-confirms (or
-      // corrects) this through handleWifiProvisionReply.
-      setApPowerSave(on);
-      sendSystemLine(`WIFICFG;APSAVE;${on ? "ON" : "OFF"}`);
+  // One generic setter/query pair for the three keys — ON/OFF toggles that
+  // persist on the car. Optimistic: the car's reply re-confirms (or corrects)
+  // through handleWifiProvisionReply, which also updates the per-car pref.
+  const setCarTransportToggle = useCallback(
+    (which: "WIFI" | "BT" | "AUTOJOIN", on: boolean) => {
+      const patch = {
+        WIFI: "wifiEnabled",
+        BT: "btEnabled",
+        AUTOJOIN: "bootAutojoin",
+      }[which] as "wifiEnabled" | "btEnabled" | "bootAutojoin";
+      if (patch === "wifiEnabled") setWifiEnabled(on);
+      else if (patch === "btEnabled") setBtEnabled(on);
+      else setBootAutojoin(on);
+      persistPrefsRef.current?.({ [patch]: on });
+      sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`);
     },
     [sendSystemLine],
   );
-  const queryCarApPowerSave = useCallback(() => {
-    sendSystemLine("WIFICFG;APSAVE;?");
-  }, [sendSystemLine]);
-  // U-100 Phase 4: parallel Bluetooth + WiFi. Persisted per car (default OFF)
-  // and mirrored to the car's NVS `botcfg/allow_parallel`. The car's
-  // `WIFICFG;PARALLEL;ON|OFF` reply re-confirms or corrects the optimistic set.
-  const setCarParallelLinks = useCallback(
-    (on: boolean) => {
-      setAllowParallelLinks(on);
-      linkManager.setAllowParallel(on);
-      persistPrefsRef.current?.({ allowParallelLinks: on });
-      sendSystemLine(`WIFICFG;PARALLEL;${on ? "ON" : "OFF"}`);
+  const queryCarTransportToggle = useCallback(
+    (which: "WIFI" | "BT" | "AUTOJOIN") => {
+      sendSystemLine(`WIFICFG;${which};?`);
     },
     [sendSystemLine],
   );
-  const queryCarParallel = useCallback(() => {
-    sendSystemLine("WIFICFG;PARALLEL;?");
-  }, [sendSystemLine]);
 
   // ---- Connection-Manager Phase B: the ONE opt-in envelope intake ----
   //
@@ -2787,7 +2747,7 @@ export function useControlHub(routeCategory?: string) {
   const routerClearAll = useCallback(() => {
     // A-41 (round-9): wipe EVERY saved router + the stored active pair on the
     // car and remote (ROUTERS;CLEAR over every link, T-62). Optimistic reset
-    // to an empty list — the car's own network (WirelessCar_Wifi) is virtual;
+    // to an empty list — the car's own network (4wd4mCar_Wifi) is virtual;
     // the car's next `networks` echo re-appends it as the leading, protected
     // entry (T-66). Never touches the car's own AP.
     sendCommand(buildRouterCommand("CLEAR", ""));
@@ -3314,14 +3274,14 @@ export function useControlHub(routeCategory?: string) {
     setWifiPassword,
     wifiProvisioning,
     handleWifiProvision,
-    // U-100: the car's own-hotspot power-save switch (default OFF on the car).
-    apPowerSave,
-    setCarApPowerSave,
-    queryCarApPowerSave,
-    // U-100 Phase 4: keep Bluetooth + WiFi up together (default OFF).
-    allowParallelLinks,
-    setCarParallelLinks,
-    queryCarParallel,
+    // U-105 (1.3.5): the car's three transport toggles — Wi-Fi / Bluetooth /
+    // boot auto-join. Both transports stay live together when enabled; never
+    // both OFF (car-clamped + UI-disabled). `null` = not yet read.
+    wifiEnabled,
+    btEnabled,
+    bootAutojoin,
+    setCarTransportToggle,
+    queryCarTransportToggle,
     carApName,
     carSsid,
     carStubMap,

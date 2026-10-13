@@ -248,7 +248,7 @@ export function ToolsScreen() {
     telemetry.connected === true
       ? telemetry.ssid?.trim() || carSsid || null
       : null;
-  const apName = staSsid ? null : carApName?.trim() || "4WDCar_Wifi";
+  const apName = staSsid ? null : carApName?.trim() || "4wd4mCar_Wifi";
 
   // U-95/F-79: the car's restart record, resolved once. Shown in the
   // Diagnostics disclosure only when the car actually reported real values.

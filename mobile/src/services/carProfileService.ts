@@ -170,6 +170,11 @@ export function toCloudRecord(
     // only — never passwords.
     last_wifi_ssid: prefs.lastWifiSsid ?? null,
     auto_join_router: prefs.autoJoinRouter ?? true,
+    // U-105 (1.3.5): the car's transport toggles mirror (null = never read /
+    // older firmware — consumers must NOT treat that as a preference for OFF).
+    wifi_enabled: prefs.wifiEnabled ?? null,
+    bt_enabled: prefs.btEnabled ?? null,
+    boot_autojoin: prefs.bootAutojoin ?? null,
     bt_ids: prefs.btIds ?? [],
     saved_routers: prefs.savedRouters ?? [],
     // U-97: the last firmware restart record for this car, so the diagnostics
@@ -246,6 +251,14 @@ const SYNCABLE_SETTINGS = {
     typeof v === "string" && v.length > 0 && v.length <= 64 ? v : null,
   auto_join_router: (v: unknown): boolean | null =>
     typeof v === "boolean" ? v : null,
+  // U-105 (1.3.5): transport toggles — strict booleans; a corrupt/foreign row
+  // may never flash an instant OFF.
+  wifi_enabled: (v: unknown): boolean | null =>
+    typeof v === "boolean" ? v : null,
+  bt_enabled: (v: unknown): boolean | null =>
+    typeof v === "boolean" ? v : null,
+  boot_autojoin: (v: unknown): boolean | null =>
+    typeof v === "boolean" ? v : null,
   bt_ids: (v: unknown): string[] | null =>
     Array.isArray(v) &&
     v.length <= 20 &&
@@ -305,6 +318,11 @@ export function prefsFromCloudSettings(
       SYNCABLE_SETTINGS.auto_join_router(s.auto_join_router) ??
       base.autoJoinRouter ??
       true,
+    wifiEnabled:
+      SYNCABLE_SETTINGS.wifi_enabled(s.wifi_enabled) ?? base.wifiEnabled,
+    btEnabled: SYNCABLE_SETTINGS.bt_enabled(s.bt_enabled) ?? base.btEnabled,
+    bootAutojoin:
+      SYNCABLE_SETTINGS.boot_autojoin(s.boot_autojoin) ?? base.bootAutojoin,
     diagnostics:
       SYNCABLE_SETTINGS.diagnostics(s.diagnostics) ?? base.diagnostics ?? null,
   } as DevicePrefs;

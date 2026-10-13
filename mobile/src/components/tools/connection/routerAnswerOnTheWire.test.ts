@@ -62,8 +62,8 @@ describe("U-81 - a router answer survives the wire (the seam, not just the parse
     expect(t.reply).toBe(reply);
 
     // hop 2 + 3: and it must land in the list the user is shown
-    const next = remembered(["4WDCar_Wifi"], t.reply!);
-    expect(next!.next).toEqual(["4WDCar_Wifi", "HomeNet"]);
+    const next = remembered(["4wd4mCar_Wifi"], t.reply!);
+    expect(next!.next).toEqual(["4wd4mCar_Wifi", "HomeNet"]);
     // U-71: an add is remembered as an add, so the field pre-fills next time.
     expect(next!.lastSsid).toBe("HomeNet");
   });
@@ -71,8 +71,8 @@ describe("U-81 - a router answer survives the wire (the seam, not just the parse
   it("USE: the switch answer is both remembered AND reported to the user", () => {
     const reply = "ROUTERS;USED;HomeNet"; // WebServerComm.cpp:296
     const t = parseTelemetryLine(stateLineWithReply(reply));
-    expect(remembered(["4WDCar_Wifi"], t.reply!)!.next).toEqual([
-      "4WDCar_Wifi",
+    expect(remembered(["4wd4mCar_Wifi"], t.reply!)!.next).toEqual([
+      "4wd4mCar_Wifi",
       "HomeNet",
     ]);
     // U-80: this answer is what raises the "join <ssid> on this phone" card.
@@ -90,13 +90,13 @@ describe("U-81 - a router answer survives the wire (the seam, not just the parse
     const del = parseTelemetryLine(
       stateLineWithReply("ROUTERS;DELETED;HomeNet"),
     );
-    expect(remembered(["4WDCar_Wifi", "HomeNet"], del.reply!)!.next).toEqual([
-      "4WDCar_Wifi",
+    expect(remembered(["4wd4mCar_Wifi", "HomeNet"], del.reply!)!.next).toEqual([
+      "4wd4mCar_Wifi",
     ]);
     const clear = parseTelemetryLine(stateLineWithReply("ROUTERS;CLEARED"));
-    expect(remembered(["4WDCar_Wifi", "HomeNet"], clear.reply!)!.next).toEqual(
-      [],
-    );
+    expect(
+      remembered(["4wd4mCar_Wifi", "HomeNet"], clear.reply!)!.next,
+    ).toEqual([]);
   });
 
   it("every REFUSAL is reported as a refusal and remembers nothing", () => {
@@ -115,7 +115,7 @@ describe("U-81 - a router answer survives the wire (the seam, not just the parse
       const t = parseTelemetryLine(stateLineWithReply(reply));
       expect(t.reply, reply).toBe(reply);
       // remembered list untouched ...
-      expect(remembered(["4WDCar_Wifi"], t.reply!), reply).toBeNull();
+      expect(remembered(["4wd4mCar_Wifi"], t.reply!), reply).toBeNull();
       // ... and the user is told why, never shown a success.
       const outcome = outcomeFor(parseRouterAnswer(t.reply!)!, {
         kind: "add",
@@ -154,11 +154,11 @@ describe("U-81 - a router answer survives the wire (the seam, not just the parse
     // parsing alongside them, or the whole telemetry deck would go dark.
     const j = parseTelemetryLine(
       '{"status":"4WD4M","mode":"4WD4M","speed":170,"ip":"192.168.1.57",' +
-        '"ssid":"HomeNet","want":"","ap":"4WDCar_Wifi","id":"8A3F2B",' +
-        '"networks":["4WDCar_Wifi","HomeNet"],"connected":true}',
+        '"ssid":"HomeNet","want":"","ap":"4wd4mCar_Wifi","id":"8A3F2B",' +
+        '"networks":["4wd4mCar_Wifi","HomeNet"],"connected":true}',
     );
     expect(j.mode).toBe("4WD4M");
-    expect(j.networks).toEqual(["4WDCar_Wifi", "HomeNet"]);
+    expect(j.networks).toEqual(["4wd4mCar_Wifi", "HomeNet"]);
     expect(j.id).toBe("8A3F2B");
   });
 });

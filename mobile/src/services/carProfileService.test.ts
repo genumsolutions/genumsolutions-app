@@ -189,6 +189,9 @@ describe("toCloudRecord", () => {
       wifiHistory: [{ ssid: "Home", lastSeen: 1 }],
       lastWifiUrl: "ws://192.168.1.5:81",
       autoJoinRouter: true,
+      wifiEnabled: true,
+      btEnabled: false,
+      bootAutojoin: true,
     } as never;
     const record = toCloudRecord(prefs, "fw:1A2B3C");
     expect(record.profile_key).toBe("fw:1A2B3C");
@@ -198,7 +201,21 @@ describe("toCloudRecord", () => {
     expect(record.settings.auto_join_router).toBe(true);
     expect(record.settings.saved_routers).toEqual(["Home", "Office"]);
     expect(record.settings.bt_ids).toEqual(["AA:00:00:00:00:01"]);
+    // U-105 (1.3.5): the transport toggles ride the cloud row too.
+    expect(record.settings.wifi_enabled).toBe(true);
+    expect(record.settings.bt_enabled).toBe(false);
+    expect(record.settings.boot_autojoin).toBe(true);
     expect(record.updated_at).toBeTruthy();
+  });
+
+  it("U-105: an unread toggle serializes as null, never a forged OFF", () => {
+    const record = toCloudRecord(
+      { address: "fw:1A2B3C", name: "4WD4M" } as never,
+      "fw:1A2B3C",
+    );
+    expect(record.settings.wifi_enabled).toBeNull();
+    expect(record.settings.bt_enabled).toBeNull();
+    expect(record.settings.boot_autojoin).toBeNull();
   });
 });
 
@@ -585,7 +602,7 @@ describe("R4-5: last-used router sync", () => {
 // unable to return it - otherwise smart-link fires ROUTERS;USE;<ownAp> and
 // the firmware erases the stored credentials and reverts the car to itself.
 describe("pickBestRouter never returns the car's own network", () => {
-  const AP = "4WDCar_Wifi";
+  const AP = "4wd4mCar_Wifi";
 
   it("skips the own AP even when it is the only saved name", () => {
     expect(pickBestRouter({ saved: [AP] })).toBeNull();
@@ -598,7 +615,7 @@ describe("pickBestRouter never returns the car's own network", () => {
 
   it("skips it case-insensitively (F-64)", () => {
     expect(
-      pickBestRouter({ saved: ["4w dcar_wifi".replace(" ", ""), "HomeNet"] }),
+      pickBestRouter({ saved: ["4wd 4mcar_wifi".replace(" ", ""), "HomeNet"] }),
     ).toBe("HomeNet");
   });
 

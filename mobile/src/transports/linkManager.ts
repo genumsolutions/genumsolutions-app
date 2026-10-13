@@ -1,5 +1,6 @@
 // =====================================================================
-// transports/linkManager — ONE active link, chosen by the user.
+// transports/linkManager — the user's chosen transport(s) and the routing
+// link.
 //
 // The Control Panel used to have no concept of a selected transport at
 // all: `sendCommand` in useControlHub reached for Bluetooth first and
@@ -8,10 +9,13 @@
 // and why a WiFi-only run was impossible without manually disconnecting
 // Bluetooth in another screen first.
 //
-// This module inverts that: the user picks a transport, the manager
-// commits to it, and exactly one link is live at a time. Activating a
-// transport tears the others down, so "WiFi selected" genuinely means
-// "traffic goes over WiFi".
+// This module inverts that: the user picks a transport and the manager
+// commits to it. Since U-105 (1.3.5) activating a transport is ADDITIVE —
+// both links can be open at once (the car keeps BT + WiFi live
+// simultaneously) — the destructive "one active link, selecting a method
+// tears the others down" policy is gone. `activeId` remains the ROUTING
+// link (the picker's selection / the link commands go over), never a claim
+// that only one link exists.
 //
 // It is deliberately plain TypeScript with a subscribe() API (no React
 // imports) so it can be unit-tested in the node vitest environment.
@@ -97,15 +101,6 @@ export class LinkManager {
   private error: string | null = null;
   private verified = false;
 
-  // U-100 Phase 4 (owner 2026-10-12): parallel Bluetooth + WiFi. When true,
-  // activating a transport does NOT disconnect the previously active one — both
-  // links stay live. OFF (the default, set by the hub from the per-car
-  // `allowParallelLinks` pref) keeps the one-active-link policy: selecting a
-  // method tears the other down. The manager still tracks a single `activeId`
-  // (the picker's selection / routing tie-breaker); parallel only relaxes the
-  // TEARDOWN, which is the destructive half.
-  private allowParallel = false;
-
   // Options are remembered per transport so switching WiFi AP <-> router
   // (or a second car) does not force the user to retype the address.
   private options = new Map<TransportId, TransportConnectOptions>();
@@ -131,19 +126,6 @@ export class LinkManager {
 
   get(id: TransportId): Transport | undefined {
     return this.transports.get(id);
-  }
-
-  /**
-   * U-100 Phase 4: mirror the per-car "parallel links" pref into the manager.
-   * ON stops `activate()` from tearing the previous transport down, so both
-   * links can be live at once. OFF restores the one-active-link policy.
-   */
-  setAllowParallel(on: boolean): void {
-    this.allowParallel = on;
-  }
-
-  isParallel(): boolean {
-    return this.allowParallel;
   }
 
   getActive(): Transport | null {
@@ -257,12 +239,14 @@ export class LinkManager {
   }
 
   /**
-   * Adopt `transport` as the one live link: tear the previous one down,
-   * wire the new one's telemetry/status through, then connect.
+   * Adopt `transport` as the routing link: wire its telemetry/status through,
+   * then connect.
    *
-   * Disconnecting the old link first is the whole point — it is what makes
-   * selecting WiFi actually route traffic over WiFi instead of letting the
-   * old Bluetooth preference swallow the commands.
+   * U-105 (1.3.5): this is ADDITIVE — a previously active link is left up, so
+   * Bluetooth and WiFi can both stay open at once (the car keeps both
+   * transports live simultaneously by design). The old one-active-link
+   * "disconnect the previous transport first" policy was removed with the
+   * parallel/power-save settings the owner ruled out.
    */
   async activate(
     id: TransportId,
@@ -302,16 +286,9 @@ export class LinkManager {
     }
     const merged = this.options.get(id) ?? {};
 
-    const previous = this.getActive();
-    if (previous && previous.id !== id && !this.allowParallel) {
-      // Best-effort: a link that fails to close must not block the switch.
-      try {
-        await previous.disconnect();
-      } catch {
-        /* ignore */
-      }
-    }
-
+    // U-105: no teardown of the previously active link — both transports may
+    // stay live at once. (The old `allowParallel ? keep : disconnect` policy
+    // and its `previous.disconnect()` call were removed with the setting.)
     this.detach();
     this.activeId = id;
     this.error = null;

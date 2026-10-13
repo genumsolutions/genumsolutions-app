@@ -1,12 +1,14 @@
 // =====================================================================
-// U-98 — ONE active link at a time.
+// U-105 (1.3.5) — both transports stay live; there is no teardown; the three
+// car-side toggles ride.
 //
-// The app used to leave BOTH transports connected: a Wi-Fi connect kept the
-// Bluetooth SPP socket open (and `routeCommand` kept sending drive letters to
-// it), and a Bluetooth connect kept the Wi-Fi socket reachable. Each transport's
-// status handler then cleared the OTHER one's link truth, so a live, answered
-// Wi-Fi link could read "Connecting…" forever while the REQ_STATE poll — keyed
-// on `connected` — stopped running.
+// U-98 (2026-10-03) introduced ONE active link: a Wi-Fi connect tore the
+// Bluetooth SPP socket down (and vice versa) because the OLD firmware
+// arbitrated transports. The owner ruled that whole design out in the
+// 2026-10-12/13 Q&A: "keep both" — the car keeps Bluetooth + Wi-Fi live
+// SIMULTANEOUSLY by default, and `WIFICFG;PARALLEL` / `WIFICFG;APSAVE` (the
+// settings that relaxed/restored the teardown) are REMOVED entirely, replaced
+// by `WIFICFG;WIFI;ON|OFF` / `WIFICFG;BT;ON|OFF` / `WIFICFG;AUTOJOIN;ON|OFF`.
 //
 // WHICH VIEW THIS READS, and why (F-83): the RAW TypeScript source of
 // `useControlHub.ts`, with block and line comments stripped. These rules are
@@ -15,7 +17,7 @@
 // so a rendered assertion is not available and a runtime double would have to
 // fake the whole hub. The rule therefore reads `code()`, never the comment
 // stream, and every rule below was proven in BOTH directions (mutate → red,
-// restore → green) — results recorded in the commit body and the app ledger.
+// restore → green) when the file was written.
 // =====================================================================
 
 import { readFileSync } from "node:fs";
@@ -35,12 +37,12 @@ const code = RAW.replace(/\/\*[\s\S]*?\*\//g, "")
   .join("\n");
 
 /** The body of a `const <name> = useCallback(` … up to the next top-level
-    `const <other> =` at the same indentation. Anchor-based: if the anchor is
-    missing the slice is EMPTY and the rule that needs it fails loudly
-    ("has sources to check"), never vacuously. */
+    `const <other> = useCallback(`. Anchor-based: if the anchor is missing the
+    slice is EMPTY and the rule that needs it fails loudly ("has sources to
+    check"), never vacuously. */
 function body(name: string, nextName: string): string {
-  const start = code.indexOf(`const ${name} =`);
-  const end = code.indexOf(`const ${nextName} =`);
+  const start = code.indexOf(`const ${name} = useCallback(`);
+  const end = code.indexOf(`const ${nextName} = useCallback(`);
   if (start < 0 || end < 0 || end <= start) return "";
   return code.slice(start, end);
 }
@@ -69,31 +71,44 @@ function sppStatusCases(): string[] {
     .map((c) => c.split(/case "|default:/)[0] ?? c);
 }
 
-describe("U-98 — one live link, and each transport only speaks for itself", () => {
+describe("U-105 — the one-active-link teardown is GONE (both transports stay live)", () => {
   it("has sources to check (the rules must not pass vacuously)", () => {
     expect(code.length).toBeGreaterThan(1000);
-    expect(
-      body("dropBluetoothForWifi", "handleWifiConnect").length,
-    ).toBeGreaterThan(100);
+    expect(body("handleConnect", "handleSppsRetry").length).toBeGreaterThan(
+      100,
+    );
     expect(sppStatusCases().length).toBeGreaterThanOrEqual(3);
   });
 
-  it("tearing Bluetooth down for Wi-Fi never claims there is no link", () => {
-    // THE BUG: `setConnected(false)` after `sppService.disconnect()` ran on a
-    // Wi-Fi socket that was still up and had already answered the car — so the
-    // status card went back to "Connecting…" (gold dot) and the 2 s REQ_STATE
-    // poll, keyed on `connected`, stopped with a working link. The surviving
-    // link owns `connected`.
-    const helper = body("dropBluetoothForWifi", "handleWifiConnect");
-    expect(helper).toContain("setConnected(wifiService.isConnected)");
-    expect(helper).not.toContain("setConnected(false)");
+  it("the hub defines no teardown helper at all", () => {
+    // U-98's `dropBluetoothForWifi` and U-100's `allowParallelLinksRef` gates
+    // are DELETED with the parallel/power-save settings — their whole job was
+    // "tear the other link down". An empty search is the honest assertion:
+    // reintroducing either symbol breaks this rule.
+    expect(code).not.toContain("const dropBluetoothForWifi =");
+    expect(code).not.toContain("dropBluetoothForWifi()");
+    expect(code).not.toContain("allowParallelLinksRef");
+    expect(code).not.toContain("setAllowParallel");
+  });
+
+  it("raising Bluetooth never disconnects an open Wi-Fi socket", () => {
+    // The old BT-connect success path ran `wifiService.disconnect()` +
+    // `setWifiConnected(false)` behind `!allowParallelLinksRef.current`. Under
+    // U-105 the BT connect body must not touch the Wi-Fi socket at all.
+    const connectBody = body("handleConnect", "handleSppsRetry");
+    expect(connectBody).toContain(
+      'showConnectionMessage(`Connected to ${device.name}`, "success")',
+    );
+    expect(connectBody).not.toContain("wifiService.disconnect()");
+    expect(connectBody).not.toContain("setWifiConnected(false)");
   });
 
   it("the Bluetooth handler clears the link truth only when Bluetooth IS the link", () => {
     // Every SPP case that clears `connected`/`linkVerified` must sit behind
     // `!wifiService.isConnected`: a FAILED Bluetooth attempt leaves the Wi-Fi
-    // socket up, and the Wi-Fi connect path tears SPP down deliberately —
-    // neither may un-verify a link Bluetooth does not own.
+    // socket up, and no Wi-Fi connect path tears SPP down anymore — but that
+    // guard is what stops a dead BT attempt from un-verifying a live Wi-Fi
+    // link. (Kept from the U-98 suite — it still holds.)
     const cases = sppStatusCases();
     const clearing = cases.filter((c) => c.includes("setLinkVerified(false)"));
     expect(clearing.length).toBeGreaterThanOrEqual(2);
@@ -106,71 +121,66 @@ describe("U-98 — one live link, and each transport only speaks for itself", ()
     }
   });
 
-  it("every Wi-Fi success path drops the Bluetooth link it would otherwise leave up", () => {
-    // Four ways a Wi-Fi link becomes live: the address the user gave, the two
-    // automatic finds (stale-lease rescue + refused-connection rescue), and
-    // U-80b's phone-network-change auto-find. Each must tear Bluetooth down or
-    // the car stays reachable on both.
-    const calls = code.match(/dropBluetoothForWifi\(\)/g) ?? [];
-    expect(calls.length).toBe(4);
-  });
-
   it("dropping the Wi-Fi link leaves nothing verified", () => {
-    // With one live link at a time, a manual Wi-Fi disconnect ends the
-    // session: a stale `linkVerified = true` would read as "live" on the next
-    // status paint before any car has answered.
+    // A manual Wi-Fi disconnect genuinely ends that link: a stale
+    // `linkVerified = true` would read as "live" on the next status paint
+    // before any car has answered.
     const helper = body("handleWifiDisconnect", "handleWifiProvision");
     expect(helper).toContain("setLinkVerified(false)");
   });
 });
 
 // =====================================================================
-// U-100 Phase 4 (owner 2026-10-12) — parallel Bluetooth + Wi-Fi.
+// U-105 (1.3.5) — the three transport toggles.
 //
-// Default OFF: the U-98 one-active-link policy above still holds. When the
-// user opts in (per-car pref `allowParallelLinks`, mirrored to the car's NVS
-// `botcfg/allow_parallel`), the app does NOT tear one link down to raise the
-// other. Both halves of that teardown are gated; this pins each gate so a
-// later edit cannot silently restore the unconditional tear-down.
+// `WIFICFG;WIFI;ON|OFF` (NVS `botcfg/t_wifi`), `WIFICFG;BT;ON|OFF` (NVS
+// `botcfg/t_bt`) and `WIFICFG;AUTOJOIN;ON|OFF` (NVS `botcfg/boot_autojoin`)
+// replace the removed parallel + power-save settings. All default ON; Wi-Fi
+// and Bluetooth can never BOTH be off (clamped car-side and in the UI). The
+// hub mirrors them per-car (DevicePrefs + cloud `wifi_enabled`/`bt_enabled`/
+// `boot_autojoin`) and rides car truth back from the reply parser.
 // =====================================================================
-describe("U-100 Phase 4 — parallel Bluetooth + Wi-Fi", () => {
+describe("U-105 — the three transport toggles ride", () => {
   it("has sources to check (the rules must not pass vacuously)", () => {
-    expect(code).toContain("allowParallelLinksRef");
-    expect(body("dropBluetoothForWifi", "handleWifiConnect")).toContain(
-      "allowParallelLinksRef.current",
+    expect(code).toContain("const setCarTransportToggle = useCallback");
+    expect(code).toContain("const queryCarTransportToggle = useCallback");
+    expect(code).toContain("const [wifiEnabled, setWifiEnabled] = useState");
+    expect(code).toContain("const [btEnabled, setBtEnabled] = useState");
+    expect(code).toContain("const [bootAutojoin, setBootAutojoin] = useState");
+  });
+
+  it("the setter rides every live transport and sends the ON/OFF wire form", () => {
+    // WIFI/BT/AUTOJOIN are SYSTEM commands (they switch the car's own
+    // behaviour, never drive), so they fan out over every live link — the same
+    // rule the removed APSAVE/PARALLEL setters followed.
+    expect(code).toContain(
+      'sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`)',
     );
+    expect(code).toContain("persistPrefsRef.current?.({ [patch]: on })");
   });
 
-  it("raising Wi-Fi does not tear Bluetooth down when parallel links are ON", () => {
-    // With parallel ON, `dropBluetoothForWifi` returns BEFORE touching BLE/SPP
-    // so both links stay live. Pin the exact early-return guard (polarity
-    // included — a flipped `!` would restore the unconditional tear-down).
-    const helper = body("dropBluetoothForWifi", "handleWifiConnect");
-    const guard = helper.indexOf("allowParallelLinksRef.current");
-    const teardown = helper.indexOf("bleService.disconnect()");
-    expect(guard).toBeGreaterThanOrEqual(0);
-    expect(teardown).toBeGreaterThanOrEqual(0);
-    expect(guard).toBeLessThan(teardown);
-    expect(helper).toContain("if (allowParallelLinksRef.current) return;");
+  it("the query uses the same `;?` shape the car answers", () => {
+    expect(code).toContain("sendSystemLine(`WIFICFG;${which};?`)");
   });
 
-  it("raising Bluetooth does not tear Wi-Fi down when parallel links are ON", () => {
-    // The symmetric half: handleConnect gates its wifiService.disconnect() AND
-    // its setWifiConnected(false) behind `!allowParallelLinksRef.current`, so a
-    // BT connect keeps an open Wi-Fi socket live.
-    const flat = code.replace(/\s+/g, " ");
-    const at = flat.indexOf("!allowParallelLinksRef.current");
-    expect(at).toBeGreaterThanOrEqual(0);
-    const guardBlock = flat.slice(at, at + 240);
-    expect(guardBlock).toContain("wifiService.isConnected");
-    expect(guardBlock).toContain("wifiService.disconnect()");
-    expect(guardBlock).toContain("setWifiConnected(false)");
+  it("the reply parser adopts car truth into the per-car pref", () => {
+    // The car's answer to a bare query OR an ON/OFF set re-confirms (or
+    // corrects) the optimistic state AND persists it per-car so the panel
+    // survives a power cycle on the same phone.
+    expect(code).toContain('reply.startsWith("WIFICFG;WIFI;")');
+    expect(code).toContain('reply.startsWith("WIFICFG;BT;")');
+    expect(code).toContain('reply.startsWith("WIFICFG;AUTOJOIN;")');
+    expect(code).toContain("persistPrefs({ wifiEnabled: on })");
+    expect(code).toContain("persistPrefs({ btEnabled: on })");
+    expect(code).toContain("persistPrefs({ bootAutojoin: on })");
   });
 
-  it("the setter mirrors the flag to the car over WIFICFG;PARALLEL", () => {
-    // The wire contract: ON/OFF set + a `?` query, both through sendSystemLine.
-    expect(code).toContain("WIFICFG;PARALLEL;");
-    expect(code).toContain('reply.startsWith("WIFICFG;PARALLEL;")');
+  it("the removed settings are GONE from the wire and the state", () => {
+    expect(code).not.toContain("WIFICFG;PARALLEL;");
+    expect(code).not.toContain("WIFICFG;APSAVE;");
+    expect(code).not.toContain("setCarParallelLinks");
+    expect(code).not.toContain("setCarApPowerSave");
+    expect(code).not.toContain("apPowerSave");
   });
 });
 

@@ -127,21 +127,26 @@ describe("router-registry commands + protected own network (A-40/A-46)", () => {
   });
 
   it("A-46: exports the car OWN network the UI pins as its protected default", () => {
-    expect(OWN_AP_NAME).toBe("WirelessCar_Wifi");
+    expect(OWN_AP_NAME).toBe("4wd4mCar_Wifi");
     expect(buildRouterCommand("DEL", OWN_AP_NAME)).toBe(
-      "ROUTERS;DEL;WirelessCar_Wifi",
+      "ROUTERS;DEL;4wd4mCar_Wifi",
     );
   });
 
-  // v2 (Genum_4WD4M_CAR, owner plan 2026-09-28): unique on-air names per car
-  // + per-car AP subnets. The own-AP registry + helpers are the contract.
-  it("v2: own-AP registry covers both car generations and trims input", () => {
-    expect(OWN_AP_NAMES).toContain("WirelessCar_Wifi");
-    expect(OWN_AP_NAMES).toContain("4WDCar_Wifi");
-    expect(isOwnApName("WirelessCar_Wifi")).toBe(true);
-    expect(isOwnApName(" 4WDCar_Wifi ")).toBe(true);
+  // U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
+  // `4wd4mCar_Wifi`. The donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
+  // are purged from the registry: a stray legacy name may never match again.
+  it("U-105: the own-AP registry is the single fleet name, trimmed case-insensitively", () => {
+    expect(OWN_AP_NAMES).toEqual(["4wd4mCar_Wifi"]);
+    expect(OWN_AP_NAMES).toContain("4wd4mCar_Wifi");
+    expect(isOwnApName("4wd4mCar_Wifi")).toBe(true);
+    expect(isOwnApName(" 4wd4mCar_Wifi ")).toBe(true);
+    expect(isOwnApName("4WD4MCAR_WIFI")).toBe(true);
     expect(isOwnApName("HomeNet")).toBe(false);
     expect(isOwnApName("")).toBe(false);
+    // Legacy names are NOT our own network any more.
+    expect(isOwnApName("WirelessCar_Wifi")).toBe(false);
+    expect(isOwnApName("4WDCar_Wifi")).toBe(false);
   });
 
   it("v2: AP defaults point at the NEW car subnet (.245), never .4.x or .244", () => {
@@ -354,6 +359,47 @@ describe("parseTelemetryLine", () => {
       ap: "ESP32_Car_1",
       ssid: "HomeNet",
     });
+  });
+
+  // ---- U-105 (1.3.5): the three transport toggles ride every STATE ----
+
+  it("parses the WIFI= / BT= / AUTOJOIN= toggles on STATE lines", () => {
+    expect(
+      parseTelemetryLine(
+        "STATE;MODE=4WD4M;WIFI=OFF;BT=ON;AUTOJOIN=OFF;SPD=120",
+      ),
+    ).toEqual({
+      mode: "4WD4M",
+      wifiEnabled: false,
+      btEnabled: true,
+      bootAutojoin: false,
+      speed: 120,
+    });
+    // Uppercase keys, any case; absent keys stay absent (older firmware).
+    const full = parseTelemetryLine("STATE;MODE=BT;wifi=on;bt=on;autojoin=on");
+    expect(full.wifiEnabled).toBe(true);
+    expect(full.btEnabled).toBe(true);
+    expect(full.bootAutojoin).toBe(true);
+    expect(parseTelemetryLine("STATE;MODE=4WD4M").wifiEnabled).toBeUndefined();
+  });
+
+  it("parses wifi_enabled / bt_enabled / boot_autojoin from the WS JSON", () => {
+    const t = parseTelemetryLine(
+      '{"status":"OK","mode":"4WD4M","wifi_enabled":true,"bt_enabled":false,"boot_autojoin":true}',
+    );
+    expect(t.wifiEnabled).toBe(true);
+    expect(t.btEnabled).toBe(false);
+    expect(t.bootAutojoin).toBe(true);
+    expect(t.status).toBe("OK");
+  });
+
+  it("ignores non-boolean toggle junk in the WS JSON (strict types)", () => {
+    const t = parseTelemetryLine(
+      '{"wifi_enabled":"ON","bt_enabled":1,"boot_autojoin":null}',
+    );
+    expect(t.wifiEnabled).toBeUndefined();
+    expect(t.btEnabled).toBeUndefined();
+    expect(t.bootAutojoin).toBeUndefined();
   });
 
   // ---- R-13: the car announces its live reachable IP ----
@@ -850,14 +896,14 @@ describe("fleet mode-cycle order (roboCarCatalog REMOTE_MODE_ORDER)", () => {
 // stale local mirror - the router feature existed on WiFi only.
 describe("parseTelemetryLine - the NETW saved-router line (all transports)", () => {
   it("parses the registry, own AP first, names only", () => {
-    const t = parseTelemetryLine("NETW;4WDCar_Wifi;HomeNet;OfficeNet");
-    expect(t.networks).toEqual(["4WDCar_Wifi", "HomeNet", "OfficeNet"]);
+    const t = parseTelemetryLine("NETW;4wd4mCar_Wifi;HomeNet;OfficeNet");
+    expect(t.networks).toEqual(["4wd4mCar_Wifi", "HomeNet", "OfficeNet"]);
   });
 
   it("accepts the ':' separator and stray spacing", () => {
-    expect(parseTelemetryLine("NETW: 4WDCar_Wifi ; HomeNet ").networks).toEqual(
-      ["4WDCar_Wifi", "HomeNet"],
-    );
+    expect(
+      parseTelemetryLine("NETW: 4wd4mCar_Wifi ; HomeNet ").networks,
+    ).toEqual(["4wd4mCar_Wifi", "HomeNet"]);
   });
 
   it("an empty registry is an empty list, not a missing field", () => {

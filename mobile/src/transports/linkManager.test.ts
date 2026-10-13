@@ -76,7 +76,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("LinkManager — one active transport at a time", () => {
+describe("LinkManager — selected transport routes, links stay additive (U-105)", () => {
   it("routes sendLine only to the selected transport", async () => {
     const m = new LinkManager();
     const bt = fakeTransport("bt-classic");
@@ -96,7 +96,7 @@ describe("LinkManager — one active transport at a time", () => {
     expect(bt.sent).toEqual(["F"]);
   });
 
-  it("disconnects the previous link when switching", async () => {
+  it("keeps the previous link LIVE when switching (additive, U-105)", async () => {
     const m = new LinkManager();
     const bt = fakeTransport("bt-classic");
     const wifi = fakeTransport("wifi-ap-ws");
@@ -106,9 +106,12 @@ describe("LinkManager — one active transport at a time", () => {
     await m.activate("bt-classic");
     await m.activate("wifi-ap-ws");
 
-    // This is the fix for the silent `goBt ?? goWs` preference: selecting
-    // WiFi genuinely tears Bluetooth down.
-    expect(bt.disconnects).toBe(1);
+    // U-105 (1.3.5): selecting a transport is ADDITIVE — the old
+    // one-active-link teardown (`allowParallel ? keep : drop` + the
+    // parallel/power-save settings) is gone, so Bluetooth is NOT torn down
+    // when Wi-Fi becomes the routing link. Both stay open at once; the car
+    // keeps both transports live simultaneously by design.
+    expect(bt.disconnects).toBe(0);
     expect(m.getActive()?.id).toBe("wifi-ap-ws");
   });
 
@@ -118,7 +121,7 @@ describe("LinkManager — one active transport at a time", () => {
     await expect(m.sendLine("F")).rejects.toThrow(/No active connection/i);
   });
 
-  it("keeps the previous link up when parallel links are ON (U-100 Phase 4)", async () => {
+  it("never tears a link down — switching back and forth keeps BOTH up (U-105)", async () => {
     const m = new LinkManager();
     const bt = fakeTransport("bt-classic");
     const wifi = fakeTransport("wifi-ap-ws");
@@ -126,18 +129,16 @@ describe("LinkManager — one active transport at a time", () => {
     m.register(wifi);
 
     await m.activate("bt-classic");
-    m.setAllowParallel(true);
-    expect(m.isParallel()).toBe(true);
-
     await m.activate("wifi-ap-ws");
-    // Parallel: the previous link is NOT torn down — both stay live.
+    // The previous link is NOT torn down — both stay live.
     expect(bt.disconnects).toBe(0);
     expect(m.getActive()?.id).toBe("wifi-ap-ws");
 
-    // Turning it back OFF restores the one-active-link teardown.
-    m.setAllowParallel(false);
+    // Switching back to Bluetooth likewise leaves Wi-Fi open: no teardown,
+    // no `setAllowParallel` preference to consult (it no longer exists).
     await m.activate("bt-classic");
-    expect(wifi.disconnects).toBe(1);
+    expect(wifi.disconnects).toBe(0);
+    expect(m.getActive()?.id).toBe("bt-classic");
   });
 
   it("sendSafe never throws", async () => {
@@ -303,7 +304,7 @@ describe("LinkManager — adopt() (F-17 bridge: hub already dialed, no re-dial)"
     expect(m.getState().id).toBe("wifi-ap-ws");
   });
 
-  it("evicts a previous explicit link when adopting a new one", async () => {
+  it("never evicts a previous explicit link when adopting a new one", async () => {
     const m = new LinkManager();
     const bt = fakeTransport("bt-classic");
     const wifi = fakeTransport("wifi-ap-ws");
@@ -313,7 +314,9 @@ describe("LinkManager — adopt() (F-17 bridge: hub already dialed, no re-dial)"
     await m.activate("bt-classic"); // manager dialed this one
     await m.adopt("wifi-ap-ws"); // bridge brought WiFi up
 
-    expect(bt.disconnects).toBe(1);
+    // U-105: adopt is additive like activate — the previously dialed link
+    // stays up (no one-active-link eviction).
+    expect(bt.disconnects).toBe(0);
     expect(m.getActive()?.id).toBe("wifi-ap-ws");
   });
 

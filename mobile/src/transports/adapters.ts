@@ -277,14 +277,14 @@ function createWifiWsTransport(
 
 const WIFI_AP_TEACHING: TransportTeaching = {
   intro:
-    "The car runs its own access point (4WDCar_Wifi on 192.168.245.1). The phone joins that hotspot directly, so no router or home internet is needed at all — the car IS the network.",
+    "The car runs its own access point (4wd4mCar_Wifi on 192.168.245.1). The phone joins that hotspot directly, so no router or home internet is needed at all — the car IS the network.",
   needs:
-    "A WiFi phone. The car powered on and broadcasting 4WDCar_Wifi (it always does unless it joined a home router and you prefer that).",
+    "A WiFi phone. The car powered on and broadcasting 4wd4mCar_Wifi (it always does unless it joined a home router and you prefer that).",
   when: "The easy WiFi default: it works anywhere, no router, no passwords. Use it whenever the car is not already joined to your home router.",
   serverClient:
     "The car is the SERVER and the phone is the CLIENT: the car creates the network and publishes a fixed address (192.168.245.1), then waits for the phone to dial in. The phone must therefore be the one that connects. Because the car chose the network, there is no router, no password and no internet — but only one such car is reachable at a time from a given phone.",
   steps: [
-    "Join 4WDCar_Wifi from the phone's WiFi settings (no password).",
+    "Join 4wd4mCar_Wifi from the phone's WiFi settings (no password).",
     "In Connections → Car access point (WiFi), keep the default ws://192.168.245.1:81 and press Connect.",
     "The row turns Connected once the car answers a STATE request ('verified').",
   ],
@@ -340,7 +340,7 @@ const HTTP_TEACHING: TransportTeaching = {
   intro:
     "The car's built-in web server answers plain HTTP on port 80: /forward, /backward, /left, /right, /stop, /speed?val=, /mode?val= and /status. REST is the same text protocol without a persistent socket — every command is one request, so any browser or script can drive the car.",
   needs:
-    "HTTP reachability only. Same as the AP method when phone is on 4WDCar_Wifi (http://192.168.245.1:80), or the car's LAN address when both are on a router.",
+    "HTTP reachability only. Same as the AP method when phone is on 4wd4mCar_Wifi (http://192.168.245.1:80), or the car's LAN address when both are on a router.",
   when: "Great for scripts, browser tests and quick link checks. Telemetry is polled (/status), not pushed, so prefer the WebSocket methods for continuous driving.",
   serverClient:
     "The car is the HTTP SERVER and the phone is the CLIENT — this is the clearest example of the split. The car listens on port 80 and holds nothing open; the phone sends one request per command and the car answers immediately, then the connection closes. Two consequences worth knowing: because nothing stays open, the car can never push to the phone (so telemetry must be polled at /status, which is why this method is for checks and scripts rather than driving), and because each command is a separate request, a lost packet loses exactly one command instead of a queued batch.",

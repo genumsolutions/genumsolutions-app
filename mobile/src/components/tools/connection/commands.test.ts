@@ -19,7 +19,7 @@ import {
 } from "./commands";
 import { normalizeRouters } from "./routerList";
 
-const AP = "4WDCar_Wifi";
+const AP = "4wd4mCar_Wifi";
 
 describe("requests use the one grammar owner (no forked wire strings)", () => {
   it("builds each request's exact line", () => {
@@ -260,7 +260,7 @@ describe("the switch plan - ADD before USE, and USE-only for the own AP", () => 
 
   it("matches the hotspot case- and space-insensitively, as a USE-only step", () => {
     const entries = normalizeRouters([AP, "HomeNet"]);
-    const messy = "4w dcar_wifi".replace(" ", "");
+    const messy = "4wd 4mcar_wifi".replace(" ", "");
     const plan = planSwitch({ target: messy, entries });
     expect(plan).not.toBeNull();
     expect(plan!.steps).toEqual([{ kind: "use", ssid: messy }]);

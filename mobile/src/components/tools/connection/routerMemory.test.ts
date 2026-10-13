@@ -29,7 +29,7 @@ import { deriveRouters } from "./routerMemory";
 
 const applyAnswer = deriveRouters;
 
-const AP = "4WDCar_Wifi";
+const AP = "4wd4mCar_Wifi";
 const START = [AP, "HomeNet"];
 
 describe("U-71 — a confirmed change is remembered, a failed one is not", () => {

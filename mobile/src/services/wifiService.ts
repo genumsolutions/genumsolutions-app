@@ -192,7 +192,7 @@ export class WifiService {
       }
       this.emitStatus(
         "error",
-        `Car not reachable at ${url} within ${CONNECT_TIMEOUT_MS / 1000}s. Check: phone joined the car's Wi-Fi (4WDCar_Wifi), the car is powered, and the IP/port are correct.`,
+        `Car not reachable at ${url} within ${CONNECT_TIMEOUT_MS / 1000}s. Check: phone joined the car's Wi-Fi (4wd4mCar_Wifi), the car is powered, and the IP/port are correct.`,
       );
     }, CONNECT_TIMEOUT_MS);
 

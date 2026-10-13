@@ -101,6 +101,17 @@ export type CarTelemetry = {
   ssid?: string;
   stub?: boolean;
   /**
+   * U-105 (1.3.5): the car's persisted transport toggles — Wi-Fi (`WIFICFG;WIFI`,
+   * NVS `t_wifi`), Bluetooth (`WIFICFG;BT`, NVS `t_bt`) and boot auto-join
+   * (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`). Ridden on STATE lines as
+   * `;WIFI=ON|OFF` / `;BT=ON|OFF` / `;AUTOJOIN=ON|OFF` and in the WS JSON as
+   * `wifi_enabled` / `bt_enabled` / `boot_autojoin`. Absent on firmware older
+   * than 1.3.5 — consumers must treat "missing" as "don't know", never as OFF.
+   */
+  wifiEnabled?: boolean;
+  btEnabled?: boolean;
+  bootAutojoin?: boolean;
+  /**
    * R-4 fleet parity: the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>` (or
    * `:` separators) when it does not recognize a sent mode token. The app
    * surfaces the rejection like the remote (comms.cpp:482-513) and parks the
@@ -291,19 +302,23 @@ export const REQ_STATE_LINE = "REQ_STATE";
  * `4WDCar_Wifi`. The list below is the fleet registry of own-AP names; use
  * `isOwnApName()` everywhere the app must treat a car's own network specially
  * (never a bare constant).
+ *
+ * U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
+ * `4wd4mCar_Wifi` — the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
+ * are purged from the registry (both firmware and app). `OWN_AP_NAMES` is kept
+ * as a one-element array so every existing caller (`isOwnApName()`, discovery,
+ * dial, DevicePrefs) keeps working untouched while a stray legacy name can
+ * never match again.
  */
-export const OWN_AP_NAME = "WirelessCar_Wifi";
-export const OWN_AP_NAMES: readonly string[] = [
-  "WirelessCar_Wifi",
-  "4WDCar_Wifi",
-];
+export const OWN_AP_NAME = "4wd4mCar_Wifi";
+export const OWN_AP_NAMES: readonly string[] = ["4wd4mCar_Wifi"];
 
 /**
  * True when `name` is ANY car's own AP (protected, never deletable).
  *
  * F-64 (2026-10-02): this was case-SENSITIVE while a second helper
  * (`staHandoff.isOwnApSsid`, since removed) was case-insensitive — two helpers, one job, one of them wrong. A car that
- * reported its AP as `4wdcar_wifi` therefore rendered Switch/Delete on its own
+ * reported its AP as `4wd4mcar_wifi` therefore rendered Switch/Delete on its own
  * network and earned a `ROUTERS;ERROR;Reserved`. The registry is folded once
  * here and every layer uses this function.
  */
@@ -609,7 +624,16 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       else if (key === "SSID") telemetry.ssid = val;
       else if (key === "IP") telemetry.ip = val;
       else if (key === "ID") telemetry.id = val;
-      else if (key === "UP" || key === "UPTIME") {
+      else if (key === "WIFI") {
+        // U-105: the Wi-Fi transport toggle rides STATE as `;WIFI=ON|OFF`.
+        telemetry.wifiEnabled = val.toUpperCase() === "ON";
+      } else if (key === "BT") {
+        // U-105: Bluetooth transport toggle `;BT=ON|OFF`.
+        telemetry.btEnabled = val.toUpperCase() === "ON";
+      } else if (key === "AUTOJOIN") {
+        // U-105: boot auto-join toggle `;AUTOJOIN=ON|OFF`.
+        telemetry.bootAutojoin = val.toUpperCase() === "ON";
+      } else if (key === "UP" || key === "UPTIME") {
         // U-102: the STATE line now carries the same uptime/heap/signal the WS
         // JSON does, so a Bluetooth link renders the top-line telemetry too.
         const n = Number(val);
@@ -761,6 +785,14 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.ssid === "string") telemetry.ssid = j.ssid;
       if (typeof j.ap === "string") telemetry.ap = j.ap;
       if (typeof j.stub === "boolean") telemetry.stub = j.stub;
+      // U-105 (1.3.5): transport toggles in the WS JSON — `wifi_enabled` /
+      // `bt_enabled` / `boot_autojoin`. Same three facts the STATE line carries
+      // so a Bluetooth-only remote reads them without a WS round-trip.
+      if (typeof j.wifi_enabled === "boolean")
+        telemetry.wifiEnabled = j.wifi_enabled;
+      if (typeof j.bt_enabled === "boolean") telemetry.btEnabled = j.bt_enabled;
+      if (typeof j.boot_autojoin === "boolean")
+        telemetry.bootAutojoin = j.boot_autojoin;
       // Connections-Hub round: board-unique id (ESP.getEfuseMac(), last 6).
       if (typeof j.id === "string") telemetry.id = j.id;
       // Connections-Hub round: car-side WiFi scan (reply to ROUTERS;SCAN).

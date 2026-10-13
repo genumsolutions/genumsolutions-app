@@ -206,7 +206,6 @@ export function ConnectionSection({
     requestScan,
     routerDelete,
     sendCommand,
-    allowParallelLinks,
   } = hub;
 
   const [busy, setBusy] = useState(false);
@@ -497,11 +496,12 @@ export function ConnectionSection({
   // U-86: the status names the network the CAR reports, never a generic
   // "home router" - that phrase is exactly what the owner objected to, because
   // it was shown even when the car was joined to something else.
-  // M1: under parallel BT+Wi-Fi, with BOTH links live, the status names both
-  // at once — the car shows the same on its OLED (ModeManager.currentLink()).
+  // U-105 (1.3.5): Bluetooth AND Wi-Fi stay live together BY DEFAULT (the
+  // parallel/power-save settings are gone) — when both are open the status
+  // names both, the same two transports the car keeps up at once.
   const statusLabel = !anyLink
     ? "Not connected"
-    : allowParallelLinks && btLive && wifiConnected
+    : btLive && wifiConnected
       ? "Bluetooth + Wi-Fi"
       : liveTarget === "bt-spp"
         ? `Bluetooth · ${sppStatusMsg || "the car"}`
@@ -537,7 +537,7 @@ export function ConnectionSection({
           </View>
           {anyLink ? (
             <View className="shrink-0 flex-row items-center gap-1.5">
-              {allowParallelLinks ? (
+              {btLive && wifiConnected ? (
                 <>
                   {btLive && (
                     <ActionButton

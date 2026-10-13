@@ -68,8 +68,8 @@ describe("wifi list shape (U-84)", () => {
   });
 
   it("shows the car's own hotspot as a normal row, not a separate section", () => {
-    const rows = shape([entry("HomeNet"), entry("4WDCar_Wifi")]);
-    const ap = rows.find((r) => r.ssid === "4WDCar_Wifi");
+    const rows = shape([entry("HomeNet"), entry("4wd4mCar_Wifi")]);
+    const ap = rows.find((r) => r.ssid === "4wd4mCar_Wifi");
     expect(ap).toBeDefined();
     expect(ap!.state).toBe("hotspot");
     // Same list as everything else — no grouping, no separate heading.
@@ -77,8 +77,10 @@ describe("wifi list shape (U-84)", () => {
   });
 
   it("never lets the car's own hotspot be a switch target (F-63)", () => {
-    const rows = shape([entry("HomeNet"), entry("4WDCar_Wifi")]);
-    expect(rows.find((r) => r.ssid === "4WDCar_Wifi")!.switchable).toBe(false);
+    const rows = shape([entry("HomeNet"), entry("4wd4mCar_Wifi")]);
+    expect(rows.find((r) => r.ssid === "4wd4mCar_Wifi")!.switchable).toBe(
+      false,
+    );
     expect(rows.find((r) => r.ssid === "HomeNet")!.switchable).toBe(true);
   });
 
@@ -114,14 +116,14 @@ describe("wifi list shape (U-84)", () => {
     // ONE router - a case-sensitive key showed it twice, and for the car's own
     // hotspot that was the visible duplicate.
     const rows = shape(
-      [entry("HomeNet"), entry("4WDCar_Wifi")],
-      [{ ssid: "homenet" }, { ssid: "4wdcar_wifi" }],
+      [entry("HomeNet"), entry("4wd4mCar_Wifi")],
+      [{ ssid: "homenet" }, { ssid: "4wd4mcar_wifi" }],
     );
     expect(rows.filter((r) => r.ssid.toUpperCase() === "HOMENET")).toHaveLength(
       1,
     );
     expect(
-      rows.filter((r) => r.ssid.toUpperCase() === "4WDCAR_WIFI"),
+      rows.filter((r) => r.ssid.toUpperCase() === "4WD4MCAR_WIFI"),
     ).toHaveLength(1);
   });
 });
@@ -130,11 +132,13 @@ describe("car truth (U-84)", () => {
   it("marks the network the car says it joined as active", () => {
     // The active SSID comes from the telemetry `ssid` field, not from the
     // NETW list - that is where the car reports it.
-    const entries = normalizeRouters(["4WDCar_Wifi", "HomeNet"], {
+    const entries = normalizeRouters(["4wd4mCar_Wifi", "HomeNet"], {
       activeSsid: "HomeNet",
     });
     expect(entries.find((e) => e.ssid === "HomeNet")?.isActive).toBe(true);
-    expect(entries.find((e) => e.ssid === "4WDCar_Wifi")?.isActive).toBe(false);
+    expect(entries.find((e) => e.ssid === "4wd4mCar_Wifi")?.isActive).toBe(
+      false,
+    );
   });
 
   it("collapses a case-variant duplicate the car reported", () => {

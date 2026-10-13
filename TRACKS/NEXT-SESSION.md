@@ -1,4 +1,50 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-13: F-65 reconnect rebuild — fleet-AP discovery, honest reconnecting, bounded keep-looking; JS-only OTA, version 3.2.7 unchanged)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-105 rework — fleet own-hotspot is ONE name `4wd4mCar_Wifi`; Parallel + power-save (APSAVE) REMOVED, replaced by Wi-Fi/BT/boot-auto-join toggles; NO one-active-link teardown; delete-network-stays-deleted; JS-only OTA, version 3.2.7 unchanged)
+
+## This session (2026-10-13, U-105 rework — JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
+
+Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live
+**simultaneously by default**, so the app's parallel + own-hotspot power-save settings and the whole
+one-active-link teardown are **removed**, not relabelled. The fleet own-hotspot name is **ONE** —
+`4wd4mCar_Wifi` — with the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi` purged from the
+app registry and every current-state surface. Full cross-repo round: `../RESUME-HERE.md` (root).
+
+**App changes (this file's repo):**
+1. **`services/carProtocol.ts` — the single own-AP name + the three toggles.** `OWN_AP_NAME` and
+   `OWN_AP_NAMES` are now `4wd4mCar_Wifi` ONLY; `isOwnApName` rejects legacy names
+   (`WirelessCar_Wifi` / `4WDCar_Wifi`). Telemetry gains `wifiEnabled` / `btEnabled` / `bootAutojoin`
+   from STATE `;WIFI=` / `;BT=` / `;AUTOJOIN=` keys AND the WS JSON `wifi_enabled` / `bt_enabled` /
+   `boot_autojoin` (strict booleans — junk never flashes an instant OFF).
+2. **`components/tools/useControlHub.ts` — the toggles replace the removed pair.** State
+   `wifiEnabled` / `btEnabled` / `bootAutojoin` (all `null` = not yet read) replace `apPowerSave` /
+   `allowParallelLinks` + the `allowParallelLinksRef`. `dropBluetoothForWifi` and BOTH teardowns
+   (BT-connect drops Wi-Fi; Wi-Fi-success drops BT) are DELETED — the old U-98/U-100 one-active-link
+   rules are gone, not gated. `WIFICFG;WIFI;?` / `WIFICFG;BT;?` / `WIFICFG;AUTOJOIN;?` ride every
+   live transport via `sendSystemLine`; the reply parser adopts car truth into per-car prefs.
+   `WIFICFG;APSAVE;` / `WIFICFG;PARALLEL;` parse branches removed.
+3. **`services/carProfileService.ts` — cloud mirror.** `wifi_enabled` / `bt_enabled` /
+   `boot_autojoin` now ride the `settings` cloud row (validators strict-boolean; unread serializes as
+   null, never a forged OFF) and restore into prefs from an adopted profile.
+4. **`screens/RemoteControlScreen.tsx`** — Settings now has THREE linked-gated `Switch` rows
+   (**Wi-Fi**, **Bluetooth**, **Boot auto-join**). Wi-Fi/BT can never BOTH be off: the toggle that
+   would leave the pair at two-OFFs is disabled; the car clamps a both-off request too. The
+   `BT + WiFi` combined chrome/sub-header label is now unconditional on both links being open.
+5. **`components/tools/connection/ConnectionSection.tsx`** — one status strip, one truth: the
+   "Bluetooth + Wi-Fi" status + per-link disconnect buttons render whenever BOTH links are live
+   (`allowParallelLinks` dependency gone). `discovery.ts` doc updated (single-name registry).
+6. **`transports/linkManager.ts`** (already Phase-B): `activate()`/`adopt()` are **additive** — no
+   previous-link teardown; `setAllowParallel`/`isParallel` removed.
+7. **Tests rewritten for the new contract.** `oneActiveLink.test.ts` fully rewritten to U-105
+   (teardown-GONE + toggle-wiring source rules); `linkManager.test.ts` switches to additive
+   assertions; `carProtocol.test.ts` OWN-AP assertions single-name + 3 new toggle-parse cases;
+   `carProfileService.test.ts` cloud-toggle cases; all `4WDCar_Wifi`/`WirelessCar_Wifi` fixtures
+   purged from discovery/dial/commands/router*.ts/realCarBytes/wifiPanelShape suites.
+
+**Gates (all green):** app `tsc` 0 · vitest **688/688** (44 files) · prettier clean. Car repo
+**1.3.5** firmware (single AP `4wd4mCar_Wifi`, `WIFICFG;WIFI|BT|AUTOJOIN`, `ROUTERS;DEL`
+case-insensitive, no Parallel/APSAVE) gates green — **UNFLASHED** (the SSID rename needs the flash).
+**Commits:** app `c0067d1` (U-105, JS-only OTA rules: no `app.json`/versionCode bump). **Next:**
+owner flash grid → car FW **1.3.5**, force-close ×2 for the app OTA, then the U-105 device rows
+(`mobile/TESTING.md` top section + car `TRACKS/DEVICE-TESTS.md` U-105-1..8).
 
 ## This session (2026-10-13, F-65 reconnect rebuild — `bc9062c`, PUSHED, JS-only OTA, version 3.2.7 unchanged)
 

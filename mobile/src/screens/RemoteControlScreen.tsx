@@ -306,11 +306,11 @@ export function RemoteControlScreen({ navigation }: Props) {
   } = hub;
 
   const linked = connected || wifiConnected;
-  // M2 (owner 2026-10-13): parallel BT+Wi-Fi must NAME BOTH links at once —
-  // the strip and sub-header show "BT · <car> + WiFi · <ip>" instead of only
-  // the Bluetooth name (the car's OLED says the same via currentLink()).
-  const parallelBoth =
-    hub.allowParallelLinks === true && connected && wifiConnected;
+  // U-105 (1.3.5, owner 2026-10-13): Bluetooth and Wi-Fi stay live TOGETHER by
+  // default — the parallel + power-save settings are gone. Whenever both links
+  // are open the strip and sub-header name BOTH at once (the car's OLED says
+  // the same), not just the Bluetooth name.
+  const parallelBoth = connected && wifiConnected;
   const isRobocar = !isDrone && !isNonRobocar;
 
   // W5: determine if car is on its own hotspot and the correct IP to display
@@ -502,13 +502,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   // connection"). Opening it is always allowed; the connection cards inside
   // say honestly what needs a live link.
 
-  // U-100: read the car's own-hotspot power-save switch once a link is up, so
-  // the Settings row reflects CAR truth (null until the car answers).
+  // U-105 (1.3.5): read the car's three transport toggles once a link is up, so
+  // the Settings rows reflect CAR truth (null until the car answers).
   useEffect(() => {
     if (linked) {
-      hub.queryCarApPowerSave();
-      // U-100 Phase 4: also read the car's parallel BT+WiFi switch.
-      hub.queryCarParallel();
+      hub.queryCarTransportToggle("WIFI");
+      hub.queryCarTransportToggle("BT");
+      hub.queryCarTransportToggle("AUTOJOIN");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
@@ -1165,52 +1165,71 @@ export function RemoteControlScreen({ navigation }: Props) {
               {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
             </Text>
 
-            {/* U-100 (owner 2026-10-12): *"always have the feature to turn
-                those off through the app's remote screen through the setting."*
-                The car's own hotspot ships ALWAYS reachable (power save OFF);
-                this restores the parking power saving when switched ON, and
-                reflects CAR truth once the link answers `WIFICFG;APSAVE;?`. */}
+            {/* U-105 (owner 2026-10-13): the car's THREE transport toggles replace the
+                removed parallel + power-save settings (`WIFICFG;PARALLEL` /
+                `WIFICFG;APSAVE` and their NVS keys are gone). Wi-Fi (`t_wifi`)
+                and Bluetooth (`t_bt`) can never BOTH be off — the car clamps a
+                both-off request, and here the toggle that would leave the pair
+                at two-OFFs is disabled. Auto-join gates the boot hop to the
+                last-switched router (`boot_autojoin`). Each mirrors the car's
+                NVS and rides to DevicePrefs + cloud. */}
             <View className="mt-1 flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
-                <Feather name="battery-charging" size={14} color="#64748b" />
+                <Feather name="wifi" size={14} color="#64748b" />
                 <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Hotspot power-save
+                  Wi-Fi
                 </Text>
               </View>
               <Switch
-                value={hub.apPowerSave === true}
+                value={hub.wifiEnabled === true}
                 onValueChange={(on) => {
                   feedbackTap();
-                  hub.setCarApPowerSave(on);
+                  hub.setCarTransportToggle("WIFI", on);
                 }}
-                disabled={!linked}
+                disabled={!linked || hub.btEnabled === false}
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
-                accessibilityLabel="Toggle the car's own-hotspot power saving"
+                accessibilityLabel="Turn the car's Wi-Fi transport on or off"
               />
             </View>
 
-            {/* U-100 Phase 4 (owner 2026-10-12): parallel Bluetooth + WiFi.
-                Default OFF keeps the one-active-link policy (bringing one link
-                up tears the other down). ON keeps BOTH links live at once and
-                mirrors the flag to the car's NVS `botcfg/allow_parallel`. */}
             <View className="mt-1 flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Feather name="bluetooth" size={14} color="#64748b" />
                 <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Parallel BT + Wi-Fi
+                  Bluetooth
                 </Text>
               </View>
               <Switch
-                value={hub.allowParallelLinks === true}
+                value={hub.btEnabled === true}
                 onValueChange={(on) => {
                   feedbackTap();
-                  hub.setCarParallelLinks(on);
+                  hub.setCarTransportToggle("BT", on);
+                }}
+                disabled={!linked || hub.wifiEnabled === false}
+                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                thumbColor="#ffffff"
+                accessibilityLabel="Turn the car's Bluetooth transport on or off"
+              />
+            </View>
+
+            <View className="mt-1 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Feather name="zap" size={14} color="#64748b" />
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                  Boot auto-join
+                </Text>
+              </View>
+              <Switch
+                value={hub.bootAutojoin === true}
+                onValueChange={(on) => {
+                  feedbackTap();
+                  hub.setCarTransportToggle("AUTOJOIN", on);
                 }}
                 disabled={!linked}
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
-                accessibilityLabel="Keep Bluetooth and Wi-Fi up together"
+                accessibilityLabel="Join the last router on power-up, else stay on the car's own hotspot"
               />
             </View>
 
