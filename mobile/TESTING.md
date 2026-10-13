@@ -1,17 +1,41 @@
 # TESTING — Physical Device Test Checklist
 
+## F-65 round — reconnect rebuild: fleet-AP discovery, honest reconnecting, bounded keep-looking (2026-10-13, OTA `bc9062c` — DEVICE VERIFY PENDING)
+
+> Owner's post-1.3.3 field failures: car won't (re)connect, car restarts after connecting, flaky
+> WiFi/parallel display, absent car page, restart/freeze. App JS-only OTA (version 3.2.7 unchanged,
+> `bc9062c`); **car firmware 1.3.4 UNFLASHED** (`02e1081` — 1.3.4 contains 1.3.3; it is THE flash
+> target for this pass). Force-close and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **F-65-1 — a 4WD4M car is re-found on the phone's network.** Phone on a router the car has
+      saved, car on 1.3.4 in router mode: after the car reboots, the WiFi link drops, or a
+      force-close + reopen of the app, the app must find the car by `4WDCar_Wifi` (the fleet
+      registry) — it must NEVER hang on the donor `WirelessCar_Wifi` name.
+- [ ] **F-65-2 — a dropped socket stops lying.** Car connected over WiFi; kill the car (or pull it
+      off the router): within ~1 s the app drops the green link — status "Reconnecting" (no
+      banner), steering stops, commands are NOT silently swallowed. If the car returns, the app
+      re-dials the same address once and re-syncs.
+- [ ] **F-65-3 — keep-looking re-sweeps (brownout round-trip).** With the car OFF, the app sweeps
+      every ~15 s for ~90 s and CONNECTS the moment the car's boot round finishes and it reappears
+      on the router — no manual retry. After ~90 s with no find it errors out honestly (the car is
+      gone, not merely rebooting).
+- [ ] **F-65-4 — no regression on U-R4 connectivity.** The status strip, one disconnect place,
+      parallel BT+WiFi display and the Restarts row all behave as before this OTA (re-run the
+      U-R4 checks against 1.3.4).
+
 ## U-R4 round — connectivity restructure + parallel display (2026-10-13 — DEVICE VERIFY PENDING, F-61)
 
 > Owner: implement the second connectivity review — one status/disconnect strip and exactly one
 > disconnect place, always-visible paired/added inventories, networks list WITHOUT random nearby
 > beacons, an entry for other ESP/IoT projects, and parallel BT+Wi-Fi displaying BOTH links on the
 > app and the car. App JS-only OTA (version 3.2.7 unchanged) pushed as `08f0351`; **car firmware
-> 1.3.3 UNFLASHED** (`d1e33bc`) — bench car is still 1.0.5 (F-61). Flash BEFORE the panel/OLED
-> checks below that depend on firmware. Force-close and reopen the app ×2 for the OTA (`A-2`).
+> 1.3.4 UNFLASHED** (`02e1081` — 1.3.4 contains 1.3.3) — bench car is still 1.0.5 (F-61). Flash
+> BEFORE the panel/OLED checks below that depend on firmware. Force-close and reopen the app ×2 for
+> the OTA (`A-2`).
 
-- [ ] **U-R4-0 — bring the car up to 1.3.3.** Bench is on 1.0.5; every firmware-dependent check
-      below (parallel truth, OLED row, crash phase) needs 1.3.3 flashed. Note on the flash screen
-      that 1.3.3 = 1.3.0 + 1.3.1 + 1.3.2 + this round's M3.
+- [ ] **U-R4-0 — bring the car up to 1.3.4.** Bench is on 1.0.5; every firmware-dependent check
+      below (parallel truth, OLED row, crash phase) needs 1.3.4 flashed. Note on the flash screen
+      that 1.3.4 = 1.3.0 + 1.3.1 + 1.3.2 + M3 (currentLink parallel truth) + U-104's WDT feed.
 - [ ] **U-R4-1 — OTA the app round.** Remote → verify the Connectivity panel shows the full-width
       status strip on top, "Connection method" pills are the method ONLY, and there is exactly ONE
       disconnect place (the strip). Force-close/reopen ×2 first.
@@ -29,11 +53,11 @@
       "Join <ssid> on this phone" notice clears ITSELF once the phone joins that network.
 - [ ] **U-R4-5 — other ESP/IoT entry.** The "Other ESP / IoT projects" card is under the manager;
       "Add a network" opens the same add form and a saved network is switchable for the fleet.
-- [ ] **U-R4-6 — parallel shows BOTH links (needs 1.3.3).** Parallel ON, Bluetooth + Wi-Fi both
+- [ ] **U-R4-6 — parallel shows BOTH links (needs 1.3.4).** Parallel ON, Bluetooth + Wi-Fi both
       connected: Remote chrome row + sub-header line 1 show `BT · <name> + WiFi · <ip>`;
       Connectivity strip status says "Bluetooth + Wi-Fi"; car OLED row shows `Parallel : BT+WiFi`;
       TelemetryLine reports `BT+WiFi`.
-- [ ] **U-R4-7 — freeze/reset follow-up (needs 1.3.3).** The DB currently records a reset loop on
+- [ ] **U-R4-7 — freeze/reset follow-up (needs 1.3.4).** The DB currently records a reset loop on
       `1FB608` (929 boots / 746 crashes, PANIC + BROWNOUT, no crash phase captured). After flashing,
       drive + switch networks + run parallel, then read Tools → Restarts row: `RST`, `BC`, `CC`,
       `PH`, `LH` must report real values; note whether a PANIC row now carries a phase. A BROWNOUT
