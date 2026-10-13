@@ -1,5 +1,18 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-105 rework — fleet own-hotspot is ONE name `4wd4mCar_Wifi`; Parallel + power-save (APSAVE) REMOVED, replaced by Wi-Fi/BT/boot-auto-join toggles; NO one-active-link teardown; delete-network-stays-deleted; JS-only OTA, version 3.2.7 unchanged)
 
+## PLAN 2026-10-13 (Phase 0) — field-fix + cleanup round, notes-first, phased
+
+New owner round, mirrored from the car master plan. App work: **Remote layout** (status only right
+of Back, per-transport Bluetooth/Wi-Fi disconnect row **under Back**, remove the duplicate top
+status line + extra padding, IP ⇄ network name rotation); **connection truth + restart prompt**
+(Reconnect / Leave / Cancel, carry the restart info on the next connect); SSID exact
+**`4WD4MCar_WiFi`**; **keep both** auto-join toggles with clearer labels; **fresh-start cleanup** of
+car-related AsyncStorage records with timestamps + a "Reset car data" action.
+
+Full plan: `TRACKS/PLAN-2026-10-13-cleanup-rebuild.md`; records reference (car repo)
+`Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. JS-only OTA rules stay (**version 3.2.7/60
+unchanged**). **No code changed yet (Phase 0 = notes).**
+
 ## This session (2026-10-13, U-105 rework — JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
 
 Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live
