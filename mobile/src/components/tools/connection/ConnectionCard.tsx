@@ -145,6 +145,7 @@ export function ActionButton({
   icon,
   flex = false,
   compact = false,
+  iconSize,
   testID,
 }: {
   label: string;
@@ -156,6 +157,10 @@ export function ActionButton({
   /** U-98: the same button, sized to sit in a card's TITLE row (the `right`
       slot). Same tokens, same press rules — a compact shape, not a new one. */
   compact?: boolean;
+  /** M1 (owner 2026-10-13): a per-instance icon override for the ONE prominent
+      disconnect strip — the never-looser icon size than the default the same
+      shape would draw. Still semantic colours, still one button shape. */
+  iconSize?: number;
   testID?: string;
 }) {
   // Primary is navy with white ink in BOTH themes (navy is blue-900 light /
@@ -190,7 +195,7 @@ export function ActionButton({
       {icon ? (
         <Feather
           name={icon}
-          size={compact ? 10 : 12}
+          size={iconSize ?? (compact ? 10 : 12)}
           color={
             variant === "primary"
               ? "#ffffff"

@@ -11,15 +11,22 @@
 // two-pane layout rather than one full-width column that stretches every card
 // across the whole width:
 //
-//   status  → one bar, one truth, derived from the hub only
+//   status  → one full-width bar, one truth: live link name (or "Bluetooth +
+//             Wi-Fi" under parallel), with the per-link BT / WiFi disconnect
+//             buttons. M1 (owner 2026-10-13): this is the ONE disconnect
+//             place and the "Connection method" box is the method only.
 //   METHOD  → three compact pills. U-97: *"show connection methods as three
 //             equal cards"* — visible and comparable at a glance, and only the
 //             selected method's setup card renders below them. Internet stays
 //             rendered but visibly disabled with its reason.
 //   setup   → the selected method's job, and nothing else
-//   routers → the ONE unified networks list, in the RIGHT pane (it doubles as
-//             Bluetooth router management). Kept narrow and bounded so it does
-//             not elongate across the screen.
+//   left-bottom → the THIS-CAR inventory, always visible (M1): paired cars
+//             (Bluetooth, friendly names only) or added networks (Wi-Fi).
+//   right   → the ONE manager for BOTH methods: "Switch networks" + add
+//             (over a live BT link it manages the same registry), plus the
+//             entry card for other ESP / IoT projects. M1 gives it a fixed
+//             heading so the list never appears heading-less, and the "nearby"
+//             scan rows only appear after an explicit Search.
 //
 // U-101 (owner 2026-10-12): *"the fonts are too big and the sections are hogging
 // up all the space ... use the split screen in landscape view, don't elongate
@@ -60,9 +67,10 @@
 //     outcome here rather than leaving an empty box.
 // =====================================================================
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 
 import {
   CONNECTION_METHODS,
@@ -76,6 +84,7 @@ import {
   type ConnectionMethodId,
   type ConnectionTarget,
   type ConnectionTargetId,
+  type RouterEntry,
 } from "./index";
 import { ActionButton, ConnectionCard, InlineMessage } from "./ConnectionCard";
 import { WifiPanel } from "./WifiPanel";
@@ -101,6 +110,36 @@ type Message = { tone: "error" | "ok" | "info"; text: string };
  * inside itself.
  */
 const DEVICE_LIST_MAX_HEIGHT = 200;
+
+// M1 (owner 2026-10-13): the Connectivity list and the Remote must never show
+// a raw Bluetooth MAC address — that belongs on a profile/control surface, not
+// here. sppService falls back to the MAC when a scan reports no friendly
+// name, so a MAC-shaped string is rendered as a neutral generonym instead.
+const MAC_ADDRESS_RE =
+  /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$|^([0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}$/;
+
+function friendlyBtDeviceName(name: string | null | undefined): string {
+  const n = (name ?? "").trim();
+  if (!n || MAC_ADDRESS_RE.test(n) || n.length <= 2) return "Paired car";
+  return n.replace(/_/g, " ");
+}
+
+/** The SSID this phone is currently joined to, if any (NetInfo truth). */
+function phoneWifiSsid(state: NetInfoState): string | null {
+  if (state.type !== "wifi" || state.isConnected !== true || !state.details) {
+    return null;
+  }
+  const d = state.details as { ssid?: string | null };
+  return typeof d.ssid === "string" && d.ssid ? d.ssid : null;
+}
+
+/** The structural subset of an SPP device the inventories need. */
+type KnownBtDevice = {
+  id: string;
+  name: string;
+  address: string;
+  bonded: boolean;
+};
 
 // =====================================================================
 // (U-80) probeCarStatus moved to ./discovery.ts — the hub's automatic
@@ -177,6 +216,25 @@ export function ConnectionSection({
   // the list can say so ONCE, in one place, with one action — instead of the
   // old narration that told the user which other control to press.
   const [pendingJoinSsid, setPendingJoinSsid] = useState<string | null>(null);
+  // M1 (owner 2026-10-13): the "nearby networks" scan rows only render after
+  // an EXPLICIT "Search for networks" tap — never because the car broadcast
+  // its own antennas' results at link-up (smart-link). Reset on method change.
+  const [scanShown, setScanShown] = useState(false);
+  // M1: bumped by the "Other ESP / IoT projects" card to open the add form.
+  const [iotAddTick, setIotAddTick] = useState(0);
+
+  // M1: auto-sync the network section with the PHONE's network. When the
+  // phone actually joins the pending router, the "Join <ssid> on this phone"
+  // card is cleared by itself — no stale instruction once the phone is there.
+  useEffect(() => {
+    if (!pendingJoinSsid) return;
+    return NetInfo.addEventListener((state) => {
+      const ssid = phoneWifiSsid(state);
+      if (ssid && ssid.toUpperCase() === pendingJoinSsid.toUpperCase()) {
+        setPendingJoinSsid(null);
+      }
+    });
+  }, [pendingJoinSsid]);
 
   const tap = useCallback(() => {
     feedbackTap?.();
@@ -427,7 +485,10 @@ export function ConnectionSection({
 
   const scanNearby = useCallback(async () => {
     tap();
-    await runOutcome(() => requestScan());
+    const ok = await runOutcome(() => requestScan());
+    // M1: the car acknowledged the search — only then do the found networks
+    // earn rows (owner 2026-10-13: nearby beacons must not appear otherwise).
+    if (ok) setScanShown(true);
   }, [requestScan, runOutcome, tap]);
 
   // -----------------------------------------------------------------------
@@ -436,60 +497,54 @@ export function ConnectionSection({
   // U-86: the status names the network the CAR reports, never a generic
   // "home router" - that phrase is exactly what the owner objected to, because
   // it was shown even when the car was joined to something else.
+  // M1: under parallel BT+Wi-Fi, with BOTH links live, the status names both
+  // at once — the car shows the same on its OLED (ModeManager.currentLink()).
   const statusLabel = !anyLink
     ? "Not connected"
-    : liveTarget === "bt-spp"
-      ? `Bluetooth · ${sppStatusMsg || "the car"}`
-      : onOwnHotspot
-        ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
-        : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
-
-  // U-102 (owner 2026-10-12): the panel is an immediate, always-on SPLIT —
-  // left hands the communication-method choice + its single connect action;
-  // right renders ONLY that method's own network things. The old layout defaulted
-  // method to null, so the right pane did not exist and the whole section drew
-  // as one full-width column ("two separate formats"); with a default method the
-  // split shows on open and every method (even Internet) keeps its own pane.
-  const rightTitle =
-    method === "bluetooth"
-      ? "Paired cars"
-      : method === "wifi"
-        ? "Networks on the car"
-        : null;
+    : allowParallelLinks && btLive && wifiConnected
+      ? "Bluetooth + Wi-Fi"
+      : liveTarget === "bt-spp"
+        ? `Bluetooth · ${sppStatusMsg || "the car"}`
+        : onOwnHotspot
+          ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
+          : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
 
   // Only paired/known devices for Bluetooth — no scan results list.
   // Pairing is done in phone Settings; the app observes bonded devices.
   const knownDevices = sppDevices.filter((d) => d.bonded);
 
-  // Status line for the left pane (shown next to method pills when linked)
-  const statusText = !anyLink
-    ? "Not connected"
-    : liveTarget === "bt-spp"
-      ? `Bluetooth · ${sppStatusMsg || "the car"}`
-      : onOwnHotspot
-        ? `Car hotspot · ${carApName ?? "the car's Wi-Fi"}`
-        : `Wi-Fi · ${reportedSsid ?? "the car's network"}`;
-
   return (
     <View className="mt-2 flex-wrap flex-row items-start gap-2">
-      {/* ── LEFT pane: method select + status + setup ── */}
-      <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
-        {/* Method pills row with status + disconnect on the right */}
-        <View className="flex-row items-center justify-between gap-2">
-          <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-            Connection method
-          </Text>
-          {anyLink && (
-            <View className="flex-row items-center gap-1.5 flex-wrap">
-              <Text className="text-[10px] text-muted">{statusText}</Text>
+      {/* ── STATUS + DISCONNECT strip: the ONE truth and the ONE disconnect
+          place (M1). The "Connection method" box above/below is the method
+          only; per-link BT / WiFi buttons (bigger icons) live here. */}
+      <View className="min-w-full" testID="conn-status-strip">
+        <View className="flex-row items-center justify-between gap-2 rounded-lg border border-line bg-card px-2 py-1.5">
+          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+            <View
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                anyLink ? "bg-success" : "bg-border"
+              }`}
+            />
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="middle"
+              testID="conn-status"
+              className="min-w-0 flex-1 text-[11px] font-bold text-ink"
+            >
+              {statusLabel}
+            </Text>
+          </View>
+          {anyLink ? (
+            <View className="shrink-0 flex-row items-center gap-1.5">
               {allowParallelLinks ? (
                 <>
                   {btLive && (
                     <ActionButton
-                      compact
-                      label="BT"
+                      label="Bluetooth"
                       variant="quiet"
-                      icon="power"
+                      icon="bluetooth"
+                      iconSize={13}
                       onPress={() => void handleDisconnect()}
                       disabled={busy}
                       testID="conn-disconnect-bt"
@@ -497,10 +552,10 @@ export function ConnectionSection({
                   )}
                   {wifiConnected && (
                     <ActionButton
-                      compact
-                      label="WiFi"
+                      label="Wi-Fi"
                       variant="quiet"
-                      icon="power"
+                      icon="wifi"
+                      iconSize={13}
                       onPress={() => void handleWifiDisconnect()}
                       disabled={busy}
                       testID="conn-disconnect-wifi"
@@ -509,18 +564,27 @@ export function ConnectionSection({
                 </>
               ) : (
                 <ActionButton
-                  compact
                   label="Disconnect"
                   variant="quiet"
                   icon="power"
+                  iconSize={13}
                   onPress={() => void disconnect()}
                   disabled={busy}
                   testID="conn-disconnect"
                 />
               )}
             </View>
-          )}
+          ) : null}
         </View>
+      </View>
+
+      {/* ── LEFT pane: method select + setup + the this-car inventory ── */}
+      <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
+        {/* M1: the method row is the METHOD ONLY — no status text, no
+            disconnect, no Bluetooth details (all in the strip above). */}
+        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+          Connection method
+        </Text>
 
         {/* U-97: the three methods, equal cards. Choosing one swaps the setup
             card below (and the right pane follows). */}
@@ -536,6 +600,10 @@ export function ConnectionSection({
                   tap();
                   onMethodChange(m.id);
                   setMessage(null);
+                  // M1: a method swap is a fresh surface — drop the explicit
+                  // scan rows and any stale "join this network" instruction.
+                  setScanShown(false);
+                  setPendingJoinSsid(null);
                 }}
                 disabled={blocked}
                 accessibilityRole="button"
@@ -591,83 +659,283 @@ export function ConnectionSection({
         {message ? (
           <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
         ) : null}
+
+        {/* ── LEFT-bottom inventory: what THIS car knows, ALWAYS visible
+            (M1, owner 2026-10-13: the paired list must not vanish when a link
+            comes up — it lives in the left-bottom half, with the switch/add
+            tools in the right half feeding it). */}
+        {method === "bluetooth" ? (
+          <BtInventory
+            devices={knownDevices}
+            busy={busy}
+            onConnect={connectBluetooth}
+          />
+        ) : method === "wifi" ? (
+          <AddedNetworksInventory
+            routers={routers}
+            reachable={anyLink}
+            busy={busy}
+            onSwitch={(s) => void switchRouter(s)}
+          />
+        ) : null}
       </View>
 
-      {/* ── RIGHT pane: ONLY the selected method's own network things ──
-          Bluetooth: paired cars only (no scan results)
-          Wi-Fi: networks list
+      {/* ── RIGHT pane: the manager. M1 (owner 2026-10-13): BOTH Wi-Fi and
+          Bluetooth render the SAME "Switch networks" surface (over BT it
+          manages the same registry through the live link), with a fixed
+          heading — the network list never appears "with no heading" again —
+          plus add-connection for other ESP / IoT projects. Nearby scan rows
+          appear only after an explicit Search (WifiPanel `showScanned`).
           Internet: its honest reason, nothing else. */}
       <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
-        {rightTitle ? (
-          <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-            {rightTitle}
-          </Text>
-        ) : null}
-
-        {method === "bluetooth" && !anyLink && knownDevices.length > 0 ? (
-          <View className="gap-1" testID="conn-bt-paired">
-            {knownDevices.map((d) => (
-              <ConnectionCard
-                key={d.id}
-                title={d.name || d.id}
-                subtitle="Paired"
-                onPress={() => void connectBluetooth(d.id, d.name, d.bonded)}
-                testID={`conn-bt-device-${d.id}`}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        {(method === "wifi" || method === "bluetooth") && (
-          <WifiPanel
-            routers={routers}
-            scanned={carScan ?? []}
-            busy={busy}
-            reachable={anyLink}
-            pendingSsid={pendingJoinSsid}
-            manage={manage}
-            sendCmd={sendCommand}
-            onSwitch={(s) => void switchRouter(s)}
-            onForget={(s) => void deleteRouter(s)}
-            onEdit={(s, p) => void editRouter(s, p)}
-            onAdd={(ssid, pass) =>
-              void (async () => {
-                const plan = planSwitch({
-                  target: ssid,
-                  pass,
-                  entries: routers,
-                  ownApName: carApName,
-                });
-                if (!plan) {
-                  setMessage({
-                    tone: "error",
-                    text: "That network cannot be used.",
-                  });
-                  return;
-                }
-                const ok = await runOutcome(() => runSwitchPlan(plan));
-                if (ok) {
-                  setPendingJoinSsid(ssid);
-                  setMessage({
-                    tone: "ok",
-                    text: `The car is switching to “${ssid}”.`,
-                  });
-                }
-              })()
-            }
-            onScan={() => void scanNearby()}
-            onInputFocus={onInputFocus}
-          />
-        )}
-
         {method === "internet" ? (
           <View className="rounded-lg border border-line bg-card p-2">
             <InlineMessage tone="info">
               {methodDef?.unavailable ?? "Not available yet."}
             </InlineMessage>
           </View>
+        ) : method === "wifi" || method === "bluetooth" ? (
+          <>
+            <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+              Switch networks
+            </Text>
+
+            <WifiPanel
+              routers={routers}
+              scanned={carScan ?? []}
+              busy={busy}
+              reachable={anyLink}
+              pendingSsid={pendingJoinSsid}
+              manage={manage}
+              showScanned={scanShown}
+              addRequestKey={iotAddTick}
+              sendCmd={sendCommand}
+              onSwitch={(s) => void switchRouter(s)}
+              onForget={(s) => void deleteRouter(s)}
+              onEdit={(s, p) => void editRouter(s, p)}
+              onAdd={(ssid, pass) =>
+                void (async () => {
+                  const plan = planSwitch({
+                    target: ssid,
+                    pass,
+                    entries: routers,
+                    ownApName: carApName,
+                  });
+                  if (!plan) {
+                    setMessage({
+                      tone: "error",
+                      text: "That network cannot be used.",
+                    });
+                    return;
+                  }
+                  const ok = await runOutcome(() => runSwitchPlan(plan));
+                  if (ok) {
+                    setPendingJoinSsid(ssid);
+                    setMessage({
+                      tone: "ok",
+                      text: `The car is switching to “${ssid}”.`,
+                    });
+                  }
+                })()
+              }
+              onScan={() => void scanNearby()}
+              onInputFocus={onInputFocus}
+            />
+
+            {/* M1: the honest entry for other ESP / IoT projects — a network
+                saved here is kept ON THE CAR, and any ESP in the fleet can
+                switch to it. The button opens the same add form above. */}
+            <IotEntryCard onAdd={() => setIotAddTick((t) => t + 1)} />
+          </>
         ) : null}
       </View>
+    </View>
+  );
+}
+
+// =====================================================================
+// BtInventory — the paired/known cars, ALWAYS visible left-bottom.
+// Friendly names only (M1: no raw hex MAC here — that belongs on a profile
+// surface). U-70's bounded window is kept: a long paired list scrolls inside
+// its own box and never stretches the page ("the list of the bluetooth device
+// found while scanning are too long, please keep all those in a scrolling
+// window").
+// =====================================================================
+function BtInventory({
+  devices,
+  busy,
+  onConnect,
+}: {
+  devices: readonly KnownBtDevice[];
+  busy: boolean;
+  onConnect: (
+    address: string,
+    name?: string | null,
+    bonded?: boolean,
+  ) => Promise<void>;
+}) {
+  return (
+    <View className="gap-1" testID="conn-bt-paired">
+      <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+        Paired cars
+      </Text>
+      {devices.length === 0 ? (
+        <Text className="py-0.5 text-[11px] text-muted">
+          No paired cars here yet — scan to find the car.
+        </Text>
+      ) : (
+        <ScrollView
+          className="overflow-hidden rounded-lg border border-line bg-card"
+          style={{ maxHeight: DEVICE_LIST_MAX_HEIGHT }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+        >
+          {devices.map((d, i) => (
+            <Pressable
+              key={d.id}
+              onPress={() => void onConnect(d.id, d.name, d.bonded)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={`Connect to ${friendlyBtDeviceName(d.name)}`}
+              accessibilityState={{ disabled: busy }}
+              testID={`conn-bt-device-${d.id}`}
+              className={`flex-row items-center gap-1.5 px-2 py-2 ${
+                i === 0 ? "" : "border-t border-line"
+              }`}
+            >
+              <Feather name="bluetooth" size={12} color="#1e3a8a" />
+              <Text
+                numberOfLines={1}
+                className="min-w-0 flex-1 text-[12px] font-semibold text-ink"
+              >
+                {friendlyBtDeviceName(d.name)}
+              </Text>
+              <Text className="shrink-0 text-[10px] text-muted">Paired</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+// =====================================================================
+// AddedNetworksInventory — the networks THIS CAR has added (its own hotspot +
+// every saved router), always visible left-bottom for the Wi-Fi method, so
+// the car's own relationship never disappears once a link is up. M1: only
+// added/saved names — scan results live in the right pane's Switch networks,
+// behind an explicit Search.
+// =====================================================================
+function AddedNetworksInventory({
+  routers,
+  reachable,
+  busy,
+  onSwitch,
+}: {
+  routers: readonly RouterEntry[];
+  reachable: boolean;
+  busy: boolean;
+  onSwitch: (ssid: string) => void;
+}) {
+  return (
+    <View className="gap-1" testID="conn-added-networks">
+      <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+        Added networks
+      </Text>
+      {routers.length === 0 ? (
+        <Text className="py-0.5 text-[11px] text-muted">
+          No networks added yet — add one under Switch networks.
+        </Text>
+      ) : (
+        <ScrollView
+          className="overflow-hidden rounded-lg border border-line bg-card"
+          style={{ maxHeight: DEVICE_LIST_MAX_HEIGHT }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+        >
+          {routers.map((r, i) => {
+            const canTap = reachable && !busy && !r.isActive;
+            return (
+              <Pressable
+                key={r.ssid}
+                onPress={() => {
+                  if (canTap) onSwitch(r.ssid);
+                }}
+                disabled={!canTap}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  r.isActive ? `${r.ssid}, connected` : `Use ${r.ssid}`
+                }
+                accessibilityState={{ disabled: !canTap }}
+                testID={`conn-added-network-${r.ssid}`}
+                className={`flex-row items-center gap-1.5 px-2 py-2 ${
+                  i === 0 ? "" : "border-t border-line"
+                }`}
+              >
+                <Feather
+                  name={r.isActive ? "check-circle" : "wifi"}
+                  size={12}
+                  color={r.isActive ? "#059669" : "#1e3a8a"}
+                />
+                <Text
+                  numberOfLines={1}
+                  className={`min-w-0 flex-1 text-[12px] ${
+                    r.isActive ? "font-bold text-ink" : "font-semibold text-ink"
+                  }`}
+                >
+                  {r.ssid}
+                </Text>
+                <Text className="shrink-0 text-[10px] text-muted">
+                  {r.isActive
+                    ? "Connected"
+                    : r.isOwnAp
+                      ? "Car hotspot"
+                      : "Saved"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+// =====================================================================
+// IotEntryCard — the honest entry for other ESP / IoT projects (M1). A
+// network saved here is kept ON THE CAR, and any ESP in the fleet can switch
+// to it; the button opens the same add form in the right pane. This is the
+// "add connection for other projects" surface the owner asked for, without
+// inventing a second manager.
+// =====================================================================
+function IotEntryCard({ onAdd }: { onAdd: () => void }) {
+  return (
+    <View
+      className="rounded-lg border border-line bg-card p-2"
+      testID="conn-iot-entry"
+    >
+      <View className="flex-row items-center gap-1.5">
+        <Feather name="cpu" size={12} color="#475569" />
+        <Text className="min-w-0 flex-1 text-[11px] font-black text-ink">
+          Other ESP / IoT projects
+        </Text>
+      </View>
+      <Text className="mt-0.5 text-[10px] leading-3 text-muted">
+        A network saved here is kept on the car, and any ESP on the fleet can
+        switch to it — this is the connection point for multi-ESP projects.
+      </Text>
+      <Pressable
+        onPress={onAdd}
+        accessibilityRole="button"
+        accessibilityLabel="Add a network for this or another project"
+        className="mt-1 flex-row items-center gap-1"
+        testID="conn-iot-add"
+      >
+        <Feather name="plus" size={11} color="#1e3a8a" />
+        <Text className="text-[11px] font-bold text-navy">Add a network</Text>
+      </Pressable>
     </View>
   );
 }
