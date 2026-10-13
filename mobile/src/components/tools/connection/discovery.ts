@@ -137,10 +137,20 @@ export function subnetCandidates(
  * `ap` alone is the weaker signal (it is a name, so it could collide) but it is
  * what makes discovery work BEFORE the app has ever paired, which is the case
  * that matters here — the phone has no profile for a car it has never seen.
+ *
+ * The own-AP names differ PER CAR: the donor broadcasts `WirelessCar_Wifi`, the
+ * 4WD4M car broadcasts `4WDCar_Wifi` (carProtocol.OWN_AP_NAMES is the fleet
+ * registry). `apName` matches ONE exact name (callers that know which car);
+ * `apNames` matches ANY of them (callers that only know "one of our cars is on
+ * this network" — the sweep that must work before the app has ever paired).
  */
 export function looksLikeOurCar(
   payload: unknown,
-  expect: { boardId?: string | null; apName?: string | null } = {},
+  expect: {
+    boardId?: string | null;
+    apName?: string | null;
+    apNames?: readonly string[] | null;
+  } = {},
 ): boolean {
   if (!payload || typeof payload !== "object") return false;
   const p = payload as Record<string, unknown>;
@@ -152,6 +162,11 @@ export function looksLikeOurCar(
   const ap = typeof p.ap === "string" ? p.ap.trim().toUpperCase() : "";
   const wantAp = (expect.apName ?? "").trim().toUpperCase();
   if (wantAp && ap && ap === wantAp) return true;
+
+  const wantAps = (expect.apNames ?? [])
+    .map((n) => n.trim().toUpperCase())
+    .filter((n) => n.length > 0);
+  if (wantAps.length > 0 && ap && wantAps.includes(ap)) return true;
 
   return false;
 }
@@ -168,7 +183,11 @@ export function looksLikeOurCar(
  */
 export async function findCarOnNetwork(input: {
   candidates: readonly string[];
-  expect?: { boardId?: string | null; apName?: string | null };
+  expect?: {
+    boardId?: string | null;
+    apName?: string | null;
+    apNames?: readonly string[] | null;
+  };
   fetchJson: (url: string, timeoutMs: number) => Promise<unknown>;
   concurrency?: number;
   signal?: { aborted: boolean };
