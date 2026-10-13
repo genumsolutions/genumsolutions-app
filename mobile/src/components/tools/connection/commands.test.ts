@@ -19,7 +19,7 @@ import {
 } from "./commands";
 import { normalizeRouters } from "./routerList";
 
-const AP = "4wd4mCar_Wifi";
+const AP = "4WD4MCar_WiFi";
 
 describe("requests use the one grammar owner (no forked wire strings)", () => {
   it("builds each request's exact line", () => {

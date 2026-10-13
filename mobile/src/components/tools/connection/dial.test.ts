@@ -15,7 +15,7 @@ import {
   resolveDial,
 } from "./dial";
 
-const AP = "4wd4mCar_Wifi";
+const AP = "4WD4MCar_WiFi";
 
 describe("the own-AP gateways are recognised, not guessed around", () => {
   it("knows both fleet gateways and nothing else", () => {

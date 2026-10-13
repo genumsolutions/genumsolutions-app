@@ -20,7 +20,7 @@ import {
   validateRouterInput,
 } from "./routerList";
 
-const AP = "4wd4mCar_Wifi";
+const AP = "4WD4MCar_WiFi";
 
 describe("D1 - the own AP is never a switch target", () => {
   it("a list that leads with the own AP offers the REAL router, not the AP", () => {
@@ -86,7 +86,7 @@ describe("normalisation is total and de-duplicating", () => {
   it("F-64/U-105: the own AP is matched case-insensitively, and legacy names never match", () => {
     expect(isOwnApName("4wd 4mcar_wifi".replace(" ", ""))).toBe(true);
     expect(isOwnApName("4WD4MCAR_WIFI")).toBe(true);
-    expect(isOwnApName(" 4wd4mCar_Wifi ")).toBe(true);
+    expect(isOwnApName(" 4WD4MCar_WiFi ")).toBe(true);
     expect(isOwnApName("HomeNet")).toBe(false);
     expect(isOwnApName(null)).toBe(false);
     // U-105: the purged donor/old names are genuinely not ours anymore.

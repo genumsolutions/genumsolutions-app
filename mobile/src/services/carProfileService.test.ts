@@ -602,7 +602,7 @@ describe("R4-5: last-used router sync", () => {
 // unable to return it - otherwise smart-link fires ROUTERS;USE;<ownAp> and
 // the firmware erases the stored credentials and reverts the car to itself.
 describe("pickBestRouter never returns the car's own network", () => {
-  const AP = "4wd4mCar_Wifi";
+  const AP = "4WD4MCar_WiFi";
 
   it("skips the own AP even when it is the only saved name", () => {
     expect(pickBestRouter({ saved: [AP] })).toBeNull();

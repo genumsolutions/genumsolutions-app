@@ -1,10 +1,10 @@
 # TESTING — Physical Device Test Checklist
 
-## U-105 round — one own-hotspot `4wd4mCar_Wifi`; Parallel + power-save REMOVED; Wi-Fi / Bluetooth / boot-auto-join toggles; no teardown (2026-10-13 — DEVICE VERIFY PENDING, needs CAR FLASH)
+## U-105 round — one own-hotspot `4WD4MCar_WiFi`; Parallel + power-save REMOVED; Wi-Fi / Bluetooth / boot-auto-join toggles; no teardown (2026-10-13 — DEVICE VERIFY PENDING, needs CAR FLASH)
 
 > Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live
 > **simultaneously** by default — the app's parallel + own-hotspot power-save settings and the
-> one-active-link teardown are REMOVED, and the fleet own-hotspot name is ONE: `4wd4mCar_Wifi`
+> one-active-link teardown are REMOVED, and the fleet own-hotspot name is ONE: `4WD4MCar_WiFi`
 > (donor `WirelessCar_Wifi` + old `4WDCar_Wifi` purged). **This round REQUIRES the car re-flash** —
 > the SSID rename and the `WIFICFG;WIFI|BT|AUTOJOIN` toggles live in firmware **1.3.5** (the car's
 > current bench runs 1.0.5; `Update` over the app alone cannot change the SSID). App is a JS-only
@@ -12,10 +12,10 @@
 > `TRACKS/DEVICE-TESTS.md` **U-105-1..8** rows in the same session (they share the flash).
 
 - [ ] **U-105-0 — flash the car to 1.3.5 first (from the Genum_4WD4M_CAR repo).** The own-hotspot
-      SSID becomes `4wd4mCar_Wifi` on that flash. After it, the OTA app (force-close ×2) must agree
+      SSID becomes `4WD4MCar_WiFi` on that flash. After it, the OTA app (force-close ×2) must agree
       with the car everywhere: scans, the "Added networks" own-AP pin, `OWN_AP_NAME`/`OWN_AP_NAMES`.
 - [ ] **U-105-1 — only ONE own-hotspot name exists anywhere.** A Wi-Fi scan while the car is on its
-      own hotspot shows `4wd4mCar_Wifi` — and NEVER `WirelessCar_Wifi` or `4WDCar_Wifi` in the app's
+      own hotspot shows `4WD4MCar_WiFi` — and NEVER `WirelessCar_Wifi` or `4WDCar_Wifi` in the app's
       networks list, saved routers, or the car's NETW echo. Deleting on the old name is impossible
       because the app no longer recognises it as "our" network.
 - [ ] **U-105-2 — Wi-Fi / Bluetooth / Boot auto-join toggles in Remote Settings.** Linked car →
@@ -45,7 +45,7 @@
       comes back, the row clears.
 - [ ] **U-105-8 — regressions.** BT connect no longer drops an open Wi-Fi socket and vice versa;
       the "phone joined a new network → find the car" recovery still works; router add/switch/clear
-      unchanged; F-65 keep-looking still re-finds a rebooting car; only `4wd4mCar_Wifi` appears in
+      unchanged; F-65 keep-looking still re-finds a rebooting car; only `4WD4MCar_WiFi` appears in
       any scan (see U-105-1). No repeat of U-93's double-DEL, no `ROUTERS;STARTED` phantom rows.
 
 ## F-65 round — reconnect rebuild: fleet-AP discovery, honest reconnecting, bounded keep-looking (2026-10-13, OTA `bc9062c` — DEVICE VERIFY PENDING)

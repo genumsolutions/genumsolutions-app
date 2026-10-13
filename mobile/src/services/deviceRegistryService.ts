@@ -69,7 +69,7 @@ export const BUNDLED_DEVICE_MODELS: DeviceModel[] = [
     // `fw` (telemetry.fwVersion) and must never be overwritten by this value.
     fwVersion: "1.2.4",
     btName: "4WD CAR",
-    apSsid: "4wd4mCar_Wifi",
+    apSsid: "4WD4MCar_WiFi",
     apIp: "192.168.245.1",
     transports: ["classic-bt", "wifi-ap", "wifi-sta", "http", "websocket"],
   },
