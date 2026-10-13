@@ -306,6 +306,11 @@ export function RemoteControlScreen({ navigation }: Props) {
   } = hub;
 
   const linked = connected || wifiConnected;
+  // M2 (owner 2026-10-13): parallel BT+Wi-Fi must NAME BOTH links at once —
+  // the strip and sub-header show "BT · <car> + WiFi · <ip>" instead of only
+  // the Bluetooth name (the car's OLED says the same via currentLink()).
+  const parallelBoth =
+    hub.allowParallelLinks === true && connected && wifiConnected;
   const isRobocar = !isDrone && !isNonRobocar;
 
   // W5: determine if car is on its own hotspot and the correct IP to display
@@ -525,11 +530,23 @@ export function RemoteControlScreen({ navigation }: Props) {
   // connection-status line as `TelemetryLine`; formatting still comes from the
   // pure, tested `telemetryFormat.ts`. The gamepad's centre gap shows the
   // compact OLED mirror again (RESTORED) — the readings no longer sit there.
-  const linkLabel = connected
-    ? "Bluetooth"
-    : wifiConnected
-      ? "WiFi"
-      : "Offline";
+  const linkLabel = parallelBoth
+    ? "BT+WiFi"
+    : connected
+      ? "Bluetooth"
+      : wifiConnected
+        ? "WiFi"
+        : "Offline";
+  // M2: the ONE label for the chrome row AND the sub-header line 1 — both live
+  // links named together under parallel, never a raw hex MAC (friendly names
+  // only; the hex belongs on a profile surface, not the Remote).
+  const deckLinkLabel = parallelBoth
+    ? `BT · ${friendlyBtName(deviceName) || "Car"} + WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
+    : connected
+      ? friendlyBtName(deviceName) || "Connected"
+      : wifiConnected
+        ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
+        : "No link";
   const driveTelemetryArgs = {
     linked,
     linkLabel,
@@ -669,11 +686,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             numberOfLines={1}
             className="max-w-[120px] shrink-0 text-[11px] font-bold text-navy dark:text-sky-300"
           >
-            {connected
-              ? friendlyBtName(deviceName) || "Connected"
-              : wifiConnected
-                ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
-                : "No link"}
+            {deckLinkLabel}
           </Text>
 
           {isRobocar && (
@@ -748,11 +761,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   ellipsizeMode="middle"
                   className="min-w-0 shrink text-[10px] font-bold text-muted dark:text-slate-300"
                 >
-                  {connected
-                    ? friendlyBtName(deviceName) || "Connected"
-                    : wifiConnected
-                      ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
-                      : "No link"}
+                  {deckLinkLabel}
                 </Text>
               </View>
             </View>

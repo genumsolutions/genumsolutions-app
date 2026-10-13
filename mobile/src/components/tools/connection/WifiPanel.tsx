@@ -38,7 +38,7 @@
 // Everything shown here is something the car actually reported. Unknown values
 // are not invented (F-62).
 // =====================================================================
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
@@ -104,6 +104,15 @@ export type WifiPanelProps = {
       When `false`, the per-row Edit/Forget and the "Add network" form are not
       rendered; a short pointer names where they moved. */
   manage?: boolean;
+  /** M1 (owner 2026-10-13): *"networks on the car … keep only paired or saved
+      network list after the search."* Nearby networks the car's antenna hears
+      are only rendered after an EXPLICIT "Search for networks" tap (the host
+      flips this true on a confirmed scan and clears it when the section
+      resets). The default is true so a reduced caller keeps the old behaviour. */
+  showScanned?: boolean;
+  /** M1: a monotonically-changing key the host can bump (e.g. the "Other ESP
+      projects → Add a network" card) to open the same add form in place. */
+  addRequestKey?: number;
 };
 
 type Row = {
@@ -130,6 +139,8 @@ export function WifiPanel({
   onInputFocus,
   pendingSsid,
   manage = true,
+  showScanned = true,
+  addRequestKey,
 }: WifiPanelProps) {
   const [adding, setAdding] = useState(false);
   // U-93: editing an existing entry = setting a NEW password for it (the car
@@ -140,6 +151,19 @@ export function WifiPanel({
   const [error, setError] = useState<string | null>(null);
   // Keyboard-return flow: SSID "next" moves focus to the password field.
   const passRef = useRef<TextInput>(null);
+
+  // M1: the host's "Add a network" card (other ESP / IoT projects) opens the
+  // SAME add form in place by bumping this key — one manager, one entry point.
+  const lastAddKey = useRef(addRequestKey);
+  useEffect(() => {
+    if (addRequestKey === undefined || addRequestKey === lastAddKey.current) {
+      return;
+    }
+    lastAddKey.current = addRequestKey;
+    setAdding(true);
+    setEditingSsid(null);
+    setError(null);
+  }, [addRequestKey]);
 
   // Only the car's own reserved network is excluded from switching (F-63).
   const ownAp = routers.find((r) => r.isOwnAp);
@@ -206,21 +230,26 @@ export function WifiPanel({
       }
     }
     // Nearby networks the car can see. Anything already listed is skipped, so
-    // the same network never appears twice with two meanings.
-    for (const n of scanned) {
-      const k = keyOf(n.ssid);
-      if (!k || seen.has(k)) continue;
-      seen.add(k);
-      out.push({
-        ssid: n.ssid,
-        state: "nearby",
-        meta: n.open ? `${n.rssi} dBm` : `${n.rssi} dBm · locked`,
-        switchable: false,
-        editable: false,
-      });
+    // the same network never appears twice with two meanings. M1: only shown
+    // after an EXPLICIT user search (owner 2026-10-13: the list must not mix
+    // random nearby beacons with the car's saved networks — "keep only paired
+    // or saved network list after the search").
+    if (showScanned) {
+      for (const n of scanned) {
+        const k = keyOf(n.ssid);
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        out.push({
+          ssid: n.ssid,
+          state: "nearby",
+          meta: n.open ? `${n.rssi} dBm` : `${n.rssi} dBm · locked`,
+          switchable: false,
+          editable: false,
+        });
+      }
     }
     return out;
-  }, [routers, scanned]);
+  }, [routers, scanned, showScanned]);
 
   const validation = validateRouterInput(ssid, pass, {
     ownApName: ownAp?.ssid ?? null,
