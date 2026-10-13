@@ -13,6 +13,30 @@ Full plan: `TRACKS/PLAN-2026-10-13-cleanup-rebuild.md`; records reference (car r
 `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. JS-only OTA rules stay (**version 3.2.7/60
 unchanged**). **No code changed yet (Phase 0 = notes).**
 
+## This session (2026-10-13, U-108 Phase 4 — connection truth + restart prompt; JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
+
+Owner round 4, Phase 4.
+
+**`components/tools/useControlHub.ts`:**
+- New `phoneSsidOf(state)` + `phoneSsid` state, refreshed on every NetInfo event (the app always
+  knows which network the phone is on).
+- New `carRestartNotice` state + `lastBootSeenRef`. The ref is seeded from the persisted per-car
+  `savedPrefs.diagnostics.bootCount` (survives an app restart), then compared live: a boot count
+  HIGHER than the last seen means the car rebooted. The FIRST observation only seeds — never a
+  false prompt. On a real restart the notice carries `{prevBoot, boot, crashCount, resetReason}`.
+- `handleRestartReconnect` (re-arms the SPP link when down) + `handleRestartDismiss`; both exposed
+  in the return object alongside `phoneSsid` / `carRestartNotice`.
+
+**`screens/RemoteControlScreen.tsx`:**
+- The Remote disconnect row gains a right-aligned `phone-net` chip ("on <ssid>" / "phone Wi-Fi off").
+- New `renderRestartBanner()` (bottom-anchored, `restart-reconnect` / `restart-leave` /
+  `restart-cancel`) shows "Car restarted · Boot prev → boot · reset <reason> · N crashes". This is
+  the prompt the owner asked for — separate from the SPP backoff "Connection lost" banner, and not
+  gated on retry exhaustion.
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (F-32): version
+3.2.7 / versionCode 60 unchanged.
+
 ## This session (2026-10-13, U-108 Remote layout — JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
 
 Owner round 4, Phase 3. The Remote screen's top chrome is decluttered and the ONE disconnect place

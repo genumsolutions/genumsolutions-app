@@ -252,6 +252,20 @@ function phoneNetworkKey(state: NetInfoState): string {
   return ip ? `wifi:${ip}` : "wifi:unknown";
 }
 
+/**
+ * U-108 Phase 4 (owner 2026-10-13): the SSID the PHONE is on right now, so the
+ * app always knows which network it sits on (safe switching). `null` when the
+ * phone is not on Wi-Fi.
+ */
+function phoneSsidOf(state: NetInfoState): string | null {
+  if (state.type !== "wifi" || state.isConnected !== true) return null;
+  const details = state.details as unknown as
+    Record<string, unknown> | undefined;
+  const ssid =
+    typeof details?.["ssid"] === "string" ? details["ssid"].trim() : "";
+  return ssid || null;
+}
+
 export function useControlHub(routeCategory?: string) {
   // U-68 (2026-10-02): the transport registry used to be registered LAZILY,
   // as a side effect of `useTransportList` — a hook in linkManagerHooks.ts that
@@ -282,6 +296,9 @@ export function useControlHub(routeCategory?: string) {
     null,
   );
   const [wifiConnected, setWifiConnected] = useState(false);
+  // U-108 Phase 4: the SSID the PHONE is joined to (null = not on Wi-Fi), so the
+  // deck can always say which network it sits on before a switch.
+  const [phoneSsid, setPhoneSsid] = useState<string | null>(null);
   // U-105 (1.3.5, owner 2026-10-13): the car's THREE persisted transport
   // toggles. `WIFICFG;WIFI;ON|OFF` (NVS `botcfg/t_wifi`), `WIFICFG;BT;ON|OFF`
   // (NVS `botcfg/t_bt`) and `WIFICFG;AUTOJOIN;ON|OFF` (NVS
@@ -343,6 +360,16 @@ export function useControlHub(routeCategory?: string) {
     sppService.getConnectionInfo().status === "connected" ? "Connected" : null,
   );
   const [showSppsRetry, setShowSppsRetry] = useState(false);
+  // U-108 Phase 4 (owner 2026-10-13): a car RESTART detected from the boot
+  // counter. Carries the reason + crash count on the next connect so the app can
+  // prompt Reconnect / Leave / Cancel (previously only the SPP backoff banner
+  // existed, and only after the retries were exhausted).
+  const [carRestartNotice, setCarRestartNotice] = useState<{
+    prevBoot: number | null;
+    boot: number;
+    crashCount: number | null;
+    resetReason: string | null;
+  } | null>(null);
 
   // ---- Active mode + state (mirrors ESP remote) ----
   // speed starts at the ESP remote's default speedValue = 170.
@@ -1118,6 +1145,43 @@ export function useControlHub(routeCategory?: string) {
     telemetry.fwVersion,
   ]);
 
+  // U-108 Phase 4 (owner 2026-10-13): CAR RESTART detection from the boot
+  // counter. The car's boot counter only ever moves forward, so a count HIGHER
+  // than the one we last saw for this car means it rebooted. We seed the last
+  // seen value from the persisted per-car `diagnostics.bootCount` (survives an
+  // app restart), then compare live; the FIRST observation only seeds — it never
+  // raises a false prompt. Previously the only restart signal was the SPP
+  // backoff banner, and only after the retries were exhausted.
+  const lastBootSeenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      lastBootSeenRef.current == null &&
+      savedPrefs?.diagnostics?.bootCount != null
+    ) {
+      lastBootSeenRef.current = savedPrefs.diagnostics.bootCount;
+    }
+  }, [savedPrefs]);
+  useEffect(() => {
+    if (!(connected || wifiConnected)) return;
+    const boot = telemetry.bootCount;
+    if (typeof boot !== "number" || !Number.isFinite(boot)) return;
+    const prev = lastBootSeenRef.current;
+    lastBootSeenRef.current = boot;
+    if (prev == null || boot <= prev) return; // first observation / no restart
+    setCarRestartNotice({
+      prevBoot: prev,
+      boot,
+      crashCount: telemetry.crashCount ?? null,
+      resetReason: telemetry.resetReason ?? null,
+    });
+  }, [
+    connected,
+    wifiConnected,
+    telemetry.bootCount,
+    telemetry.crashCount,
+    telemetry.resetReason,
+  ]);
+
   // Provisioning-reply handler mirror (defined below with useState deps).
   const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(
     null,
@@ -1849,6 +1913,29 @@ export function useControlHub(routeCategory?: string) {
     }
   }, []);
 
+  // U-108 Phase 4: the detected car-restart prompt's actions. Reconnect re-arms
+  // the Bluetooth link when it is down (a restart usually drops it); Leave is the
+  // same clear plus a screen-level goBack; Cancel just clears.
+  const handleRestartDismiss = useCallback(() => {
+    setCarRestartNotice(null);
+  }, []);
+  const handleRestartReconnect = useCallback(async () => {
+    setCarRestartNotice(null);
+    setError(null);
+    manualCloseRef.current = false;
+    sppReconnectAttemptsRef.current = 0;
+    sppReconnectActiveRef.current = false;
+    try {
+      if (!sppService.isConnected) {
+        await sppService.retryConnect();
+      }
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : "Reconnect failed");
+      }
+    }
+  }, []);
+
   // UX-1 (2026-10-02 audit): a connect failure surfaces ONCE — through the
   // hub's `error` (the ConnectionBanner is the single problem surface on the
   // Control Panel). The extra toast here was the duplicate-message defect
@@ -2127,6 +2214,9 @@ export function useControlHub(routeCategory?: string) {
   useEffect(() => {
     phoneNetworkKeyRef.current = null;
     return NetInfo.addEventListener((state) => {
+      // U-108 Phase 4: keep the phone-network truth fresh on EVERY event (not
+      // just a move) so the deck can show which network the phone is on.
+      setPhoneSsid(phoneSsidOf(state));
       const next = phoneNetworkKey(state);
       const prev = phoneNetworkKeyRef.current;
       phoneNetworkKeyRef.current = next;
@@ -3257,6 +3347,13 @@ export function useControlHub(routeCategory?: string) {
     sppStatus,
     sppStatusMsg,
     showSppsRetry,
+    // U-108 Phase 4 (owner 2026-10-13): the network the PHONE is on (safe
+    // switching) and a detected CAR RESTART (boot-count change) with the
+    // Reconnect / Leave / Cancel actions.
+    phoneSsid,
+    carRestartNotice,
+    handleRestartReconnect,
+    handleRestartDismiss,
     sppSupported,
     canControl,
     setWifiUrl,
