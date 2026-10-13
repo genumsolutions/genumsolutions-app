@@ -1,5 +1,44 @@
 # TESTING — Physical Device Test Checklist
 
+## U-R4 round — connectivity restructure + parallel display (2026-10-13 — DEVICE VERIFY PENDING, F-61)
+
+> Owner: implement the second connectivity review — one status/disconnect strip and exactly one
+> disconnect place, always-visible paired/added inventories, networks list WITHOUT random nearby
+> beacons, an entry for other ESP/IoT projects, and parallel BT+Wi-Fi displaying BOTH links on the
+> app and the car. App JS-only OTA (version 3.2.7 unchanged) pushed as `08f0351`; **car firmware
+> 1.3.3 UNFLASHED** (`d1e33bc`) — bench car is still 1.0.5 (F-61). Flash BEFORE the panel/OLED
+> checks below that depend on firmware. Force-close and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **U-R4-0 — bring the car up to 1.3.3.** Bench is on 1.0.5; every firmware-dependent check
+      below (parallel truth, OLED row, crash phase) needs 1.3.3 flashed. Note on the flash screen
+      that 1.3.3 = 1.3.0 + 1.3.1 + 1.3.2 + this round's M3.
+- [ ] **U-R4-1 — OTA the app round.** Remote → verify the Connectivity panel shows the full-width
+      status strip on top, "Connection method" pills are the method ONLY, and there is exactly ONE
+      disconnect place (the strip). Force-close/reopen ×2 first.
+- [ ] **U-R4-2 — the ONE disconnect place.** Sub-header/chrome has no disconnect or Bluetooth
+      details (friendly name only). With parallel OFF: one `Disconnect`. With parallel ON: two
+      bigger `Bluetooth`/`Wi-Fi` buttons — each drops its own link and the OTHER stays up. Nothing
+      else anywhere else disconnects.
+- [ ] **U-R4-3 — always-visible inventories.** Bluetooth method: "Paired cars" left-bottom stays
+      visible before AND after a link comes up; only friendly names, never a raw hex MAC. Wi-Fi
+      method: "Added networks" (car hotspot + saved routers) stays visible, shows
+      Connected/Car hotspot/Saved tags.
+- [ ] **U-R4-4 — networks list is honest.** The right pane "Switch networks" shows only the car's
+      own hotspot + saved networks + (after tapping Search) the scan results. Random nearby beacons
+      must NOT appear before a Search. Switching a saved network still works and the phone-side
+      "Join <ssid> on this phone" notice clears ITSELF once the phone joins that network.
+- [ ] **U-R4-5 — other ESP/IoT entry.** The "Other ESP / IoT projects" card is under the manager;
+      "Add a network" opens the same add form and a saved network is switchable for the fleet.
+- [ ] **U-R4-6 — parallel shows BOTH links (needs 1.3.3).** Parallel ON, Bluetooth + Wi-Fi both
+      connected: Remote chrome row + sub-header line 1 show `BT · <name> + WiFi · <ip>`;
+      Connectivity strip status says "Bluetooth + Wi-Fi"; car OLED row shows `Parallel : BT+WiFi`;
+      TelemetryLine reports `BT+WiFi`.
+- [ ] **U-R4-7 — freeze/reset follow-up (needs 1.3.3).** The DB currently records a reset loop on
+      `1FB608` (929 boots / 746 crashes, PANIC + BROWNOUT, no crash phase captured). After flashing,
+      drive + switch networks + run parallel, then read Tools → Restarts row: `RST`, `BC`, `CC`,
+      `PH`, `LH` must report real values; note whether a PANIC row now carries a phase. A BROWNOUT
+      under load points at the motor supply (L298N inrush), not firmware.
+
 ## U-R3 round — fleet diagnostics: the restart record over Bluetooth + a shared app/device log medium (2026-10-12, OTA `503af36` — DEVICE VERIFY PENDING)
 
 > Owner: the car "restarts/freezes" and the app has no place to read its own errors → make the
