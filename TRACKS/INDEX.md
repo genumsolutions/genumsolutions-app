@@ -1,7 +1,7 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
 > ✅ **2026-10-13 (latest) — U-105 SHIPPED (JS-only → same-version OTA 3.2.7/60, UNPUSHED
-> pending commit): ONE fleet own-hotspot `4wd4mCar_Wifi` (donor `WirelessCar_Wifi` + old
+> pending commit): ONE fleet own-hotspot `4WD4MCar_WiFi` (donor `WirelessCar_Wifi` + old
 > `4WDCar_Wifi` purged); Parallel + Hotspot power-save (APSAVE) settings REMOVED, replaced by
 > the car's **Wi-Fi / Bluetooth / Boot auto-join** toggles (`WIFICFG;WIFI|BT|AUTOJOIN`, NVS
 > `t_wifi`/`t_bt`/`boot_autojoin`, cloud `wifi_enabled`/`bt_enabled`/`boot_autojoin`); the

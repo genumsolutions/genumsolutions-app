@@ -2837,7 +2837,7 @@ export function useControlHub(routeCategory?: string) {
   const routerClearAll = useCallback(() => {
     // A-41 (round-9): wipe EVERY saved router + the stored active pair on the
     // car and remote (ROUTERS;CLEAR over every link, T-62). Optimistic reset
-    // to an empty list — the car's own network (4wd4mCar_Wifi) is virtual;
+    // to an empty list — the car's own network (4WD4MCar_WiFi) is virtual;
     // the car's next `networks` echo re-appends it as the leading, protected
     // entry (T-66). Never touches the car's own AP.
     sendCommand(buildRouterCommand("CLEAR", ""));

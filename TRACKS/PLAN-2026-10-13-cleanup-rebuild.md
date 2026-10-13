@@ -1,6 +1,6 @@
 # PLAN 2026-10-13 — Field-fix + cleanup round (APP half, mirror)
 
-Status: **PHASES 0 + 3 + 4 DONE — phases 5..9 pending.** This is the app-side mirror of the
+Status: **PHASES 0 + 3 + 4 + 5 DONE — phases 6..9 pending.** This is the app-side mirror of the
 car master plan `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-13-cleanup-rebuild.md`. Shared records
 reference: `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. Cross-repo round log: root
 `RESUME-HERE.md`.
@@ -51,9 +51,16 @@ Files: `components\tools\useControlHub.ts` (SPP reconnect/backoff ~L3151-3220,
       transport-truth, `linkVerified` = the car actually answered). Verify on device.
 - Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
-### Phase 5 — SSID exact literal
+### Phase 5 — SSID exact literal — **DONE (U-108 Phase 5)**
 Files: `services\carProtocol.ts` (`OWN_AP_NAME`/`OWN_AP_NAMES`), `screens\DeviceConnectionScreen.tsx`
 (L172 legacy text), fixtures/tests. Matching is case-insensitive; only display literals change.
+- [x] Renamed the literal `4wd4mCar_Wifi` → **`4WD4MCar_WiFi`** across `mobile/src` (source, fixtures,
+      tests) + `mobile/TESTING.md` + `TRACKS/INDEX.md` (23 files; 85 insertions / 85 deletions — a
+      pure 1:1 rename). The four ALL-CAPS folding probes and the three lowercase probes are untouched,
+      so `isOwnApName` case-insensitivity stays proven.
+- [x] App half of the car `Config.h` `WIFI_AP_NAME` rename (car batch 1.3.6). Matching is
+      case-insensitive, so the app keeps working against a car still on the old casing.
+- Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (version 3.2.7/60 unchanged).
 
 ### Phase 6 — auto-join labels
 File: `screens\RemoteControlScreen.tsx` settings toggles (~L1176-1257). Keep both toggles,
@@ -76,6 +83,6 @@ Files: `services\deviceProfileRegistryService.ts` (`genum.device.index`, `genum.
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
 ## RESUME HERE
-> Phases 0 + 3 + 4 DONE. Next app work is **Phase 5** (SSID exact literal `4WD4MCar_WiFi` in
-> `carProtocol.ts` + `DeviceConnectionScreen.tsx` + fixtures/docs). Phases 6/7 follow (auto-join
-> labels, fresh start + timestamps).
+> Phases 0 + 3 + 4 + 5 DONE. Next app work is **Phase 6** (clearer labels on the two auto-join
+> toggles — boot auto-join vs auto-join saved router; keep both, no merge). Then Phase 7 (fresh start
+> + timestamps).

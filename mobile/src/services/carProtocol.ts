@@ -304,14 +304,14 @@ export const REQ_STATE_LINE = "REQ_STATE";
  * (never a bare constant).
  *
  * U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
- * `4wd4mCar_Wifi` — the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
+ * `4WD4MCar_WiFi` — the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
  * are purged from the registry (both firmware and app). `OWN_AP_NAMES` is kept
  * as a one-element array so every existing caller (`isOwnApName()`, discovery,
  * dial, DevicePrefs) keeps working untouched while a stray legacy name can
  * never match again.
  */
-export const OWN_AP_NAME = "4wd4mCar_Wifi";
-export const OWN_AP_NAMES: readonly string[] = ["4wd4mCar_Wifi"];
+export const OWN_AP_NAME = "4WD4MCar_WiFi";
+export const OWN_AP_NAMES: readonly string[] = ["4WD4MCar_WiFi"];
 
 /**
  * True when `name` is ANY car's own AP (protected, never deletable).

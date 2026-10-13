@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-105 rework — fleet own-hotspot is ONE name `4wd4mCar_Wifi`; Parallel + power-save (APSAVE) REMOVED, replaced by Wi-Fi/BT/boot-auto-join toggles; NO one-active-link teardown; delete-network-stays-deleted; JS-only OTA, version 3.2.7 unchanged)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-105 rework — fleet own-hotspot is ONE name `4WD4MCar_WiFi`; Parallel + power-save (APSAVE) REMOVED, replaced by Wi-Fi/BT/boot-auto-join toggles; NO one-active-link teardown; delete-network-stays-deleted; JS-only OTA, version 3.2.7 unchanged)
 
 ## PLAN 2026-10-13 (Phase 0) — field-fix + cleanup round, notes-first, phased
 
@@ -12,6 +12,24 @@ car-related AsyncStorage records with timestamps + a "Reset car data" action.
 Full plan: `TRACKS/PLAN-2026-10-13-cleanup-rebuild.md`; records reference (car repo)
 `Genum_4WD4M_CAR\TRACKS\RECORDS-INVENTORY.md`. JS-only OTA rules stay (**version 3.2.7/60
 unchanged**). **No code changed yet (Phase 0 = notes).**
+
+## This session (2026-10-13, U-108 Phase 5 — SSID exact literal `4WD4MCar_WiFi`; JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
+
+Owner round 4, Phase 5. The fleet own-hotspot literal is now exactly **`4WD4MCar_WiFi`**.
+
+- A case-**sensitive** rename of `4wd4mCar_Wifi` → `4WD4MCar_WiFi` across `mobile/src` (source,
+  fixtures, tests) + `mobile/TESTING.md` + `TRACKS/INDEX.md`: 23 files, 85 insertions / 85
+  deletions — a pure 1:1 rename.
+- The case-sensitivity probes were deliberately preserved: four ALL-CAPS (`4WD4MCAR_WIFI`) folding
+  probes and three lowercase (`4wd4mcar_wifi`) probes are untouched, so `isOwnApName` folding stays
+  proven. (A first pass used PowerShell `-replace`, which is case-INsensitive and clobbered them;
+  reverted and redone with `-creplace`.)
+- Pairs with the car `Config.h` `WIFI_AP_NAME` rename (car batch 1.3.6). Matching is
+  case-insensitive, so an app on the new casing still recognises a car on the old casing and vice
+  versa.
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (F-32): version
+3.2.7 / versionCode 60 unchanged.
 
 ## This session (2026-10-13, U-108 Phase 4 — connection truth + restart prompt; JS-only OTA, version 3.2.7/versionCode 60 UNCHANGED)
 
@@ -67,12 +85,12 @@ Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (
 Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live
 **simultaneously by default**, so the app's parallel + own-hotspot power-save settings and the whole
 one-active-link teardown are **removed**, not relabelled. The fleet own-hotspot name is **ONE** —
-`4wd4mCar_Wifi` — with the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi` purged from the
+`4WD4MCar_WiFi` — with the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi` purged from the
 app registry and every current-state surface. Full cross-repo round: `../RESUME-HERE.md` (root).
 
 **App changes (this file's repo):**
 1. **`services/carProtocol.ts` — the single own-AP name + the three toggles.** `OWN_AP_NAME` and
-   `OWN_AP_NAMES` are now `4wd4mCar_Wifi` ONLY; `isOwnApName` rejects legacy names
+   `OWN_AP_NAMES` are now `4WD4MCar_WiFi` ONLY; `isOwnApName` rejects legacy names
    (`WirelessCar_Wifi` / `4WDCar_Wifi`). Telemetry gains `wifiEnabled` / `btEnabled` / `bootAutojoin`
    from STATE `;WIFI=` / `;BT=` / `;AUTOJOIN=` keys AND the WS JSON `wifi_enabled` / `bt_enabled` /
    `boot_autojoin` (strict booleans — junk never flashes an instant OFF).
@@ -102,7 +120,7 @@ app registry and every current-state surface. Full cross-repo round: `../RESUME-
    purged from discovery/dial/commands/router*.ts/realCarBytes/wifiPanelShape suites.
 
 **Gates (all green):** app `tsc` 0 · vitest **688/688** (44 files) · prettier clean. Car repo
-**1.3.5** firmware (single AP `4wd4mCar_Wifi`, `WIFICFG;WIFI|BT|AUTOJOIN`, `ROUTERS;DEL`
+**1.3.5** firmware (single AP `4WD4MCar_WiFi`, `WIFICFG;WIFI|BT|AUTOJOIN`, `ROUTERS;DEL`
 case-insensitive, no Parallel/APSAVE) gates green — **UNFLASHED** (the SSID rename needs the flash).
 **Commits:** app `4cc5b7e` (U-105, JS-only OTA rules: no `app.json`/versionCode bump). **Next:**
 owner flash grid → car FW **1.3.5**, force-close ×2 for the app OTA, then the U-105 device rows

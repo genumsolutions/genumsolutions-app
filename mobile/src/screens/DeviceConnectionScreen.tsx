@@ -169,7 +169,7 @@ function SetupPanel({
             Wi-Fi AP (own AP) — built
           </Text>
           <Text className="mt-1 text-xs leading-4 text-muted">
-            Join the car's own AP (4wd4mCar_Wifi) on the phone, then connect.
+            Join the car's own AP (4WD4MCar_WiFi) on the phone, then connect.
             The WS drive and the website page use this one socket.
           </Text>
           <TextInput

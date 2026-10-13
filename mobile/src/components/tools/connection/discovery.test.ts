@@ -85,7 +85,7 @@ describe("only something recognisably OUR car is accepted", () => {
   const carJson = {
     status: "Stopped",
     id: "A1B2C3",
-    ap: "4wd4mCar_Wifi",
+    ap: "4WD4MCar_WiFi",
     ssid: "HomeNet",
     ip: "192.168.1.50",
   };
@@ -105,10 +105,10 @@ describe("only something recognisably OUR car is accepted", () => {
     // The hub's sweep passes the whole fleet registry. Pre-F-65 it looked only
     // for the DONOR name and never found a 4WD4M car on a router — the "car
     // not found" loop after every drop or reboot (historical). U-105 (1.3.5)
-    // trims that registry to the ONE own-hotspot name `4wd4mCar_Wifi`, so the
+    // trims that registry to the ONE own-hotspot name `4WD4MCar_WiFi`, so the
     // same sweep now matches that name case-insensitively and rejects anything
     // else — legacy names are NOT our own network any more.
-    const fleet = ["4wd4mCar_Wifi"];
+    const fleet = ["4WD4MCar_WiFi"];
     expect(looksLikeOurCar(carJson, { apNames: fleet })).toBe(true);
     expect(
       looksLikeOurCar({ ...carJson, ap: "4WD4MCAR_WIFI" }, { apNames: fleet }),
@@ -123,11 +123,11 @@ describe("only something recognisably OUR car is accepted", () => {
   it("REJECTS a device that merely answered on port 80", () => {
     // Routers, laptops, printers and NAS boxes all answer HTTP.
     expect(
-      looksLikeOurCar({ server: "nginx" }, { apName: "4wd4mCar_Wifi" }),
+      looksLikeOurCar({ server: "nginx" }, { apName: "4WD4MCar_WiFi" }),
     ).toBe(false);
-    expect(looksLikeOurCar({}, { apName: "4wd4mCar_Wifi" })).toBe(false);
-    expect(looksLikeOurCar(null, { apName: "4wd4mCar_Wifi" })).toBe(false);
-    expect(looksLikeOurCar("a string", { apName: "4wd4mCar_Wifi" })).toBe(
+    expect(looksLikeOurCar({}, { apName: "4WD4MCar_WiFi" })).toBe(false);
+    expect(looksLikeOurCar(null, { apName: "4WD4MCar_WiFi" })).toBe(false);
+    expect(looksLikeOurCar("a string", { apName: "4WD4MCar_WiFi" })).toBe(
       false,
     );
     expect(looksLikeOurCar(carJson, { apName: "SomeOtherAp" })).toBe(false);
@@ -147,13 +147,13 @@ describe("only something recognisably OUR car is accepted", () => {
 });
 
 describe("the sweep tolerates dead hosts and stops at the first hit", () => {
-  const carJson = { id: "A1B2C3", ap: "4wd4mCar_Wifi" };
+  const carJson = { id: "A1B2C3", ap: "4WD4MCar_WiFi" };
 
   it("finds the car and stops, ignoring every dead address", async () => {
     const probed: string[] = [];
     const hit = await findCarOnNetwork({
       candidates: Array.from({ length: 200 }, (_, i) => `192.168.1.${i + 1}`),
-      expect: { apName: "4wd4mCar_Wifi" },
+      expect: { apName: "4WD4MCar_WiFi" },
       concurrency: 8,
       fetchJson: async (url) => {
         probed.push(url);
@@ -170,7 +170,7 @@ describe("the sweep tolerates dead hosts and stops at the first hit", () => {
   it("finds the car by ANY fleet own-AP name (apNames, F-65)", async () => {
     const hit = await findCarOnNetwork({
       candidates: ["192.168.1.10", "192.168.1.42"],
-      expect: { apNames: ["4wd4mCar_Wifi"] },
+      expect: { apNames: ["4WD4MCar_WiFi"] },
       fetchJson: async (url) => {
         if (!url.includes("192.168.1.42")) throw new Error("ECONNREFUSED");
         return carJson;
@@ -182,7 +182,7 @@ describe("the sweep tolerates dead hosts and stops at the first hit", () => {
   it("returns null when nothing on the network is our car", async () => {
     const hit = await findCarOnNetwork({
       candidates: ["192.168.1.1", "192.168.1.2"],
-      expect: { apName: "4wd4mCar_Wifi" },
+      expect: { apName: "4WD4MCar_WiFi" },
       fetchJson: async () => ({ server: "nginx" }),
     });
     expect(hit).toBeNull();
@@ -191,7 +191,7 @@ describe("the sweep tolerates dead hosts and stops at the first hit", () => {
   it("returns null - not a throw - when every host is unreachable", async () => {
     const hit = await findCarOnNetwork({
       candidates: ["192.168.1.1", "192.168.1.2", "192.168.1.3"],
-      expect: { apName: "4wd4mCar_Wifi" },
+      expect: { apName: "4WD4MCar_WiFi" },
       fetchJson: async () => {
         throw new Error("ECONNREFUSED");
       },
@@ -204,7 +204,7 @@ describe("the sweep tolerates dead hosts and stops at the first hit", () => {
     const signal = { aborted: false };
     const hit = await findCarOnNetwork({
       candidates: Array.from({ length: 100 }, (_, i) => `192.168.1.${i + 1}`),
-      expect: { apName: "4wd4mCar_Wifi" },
+      expect: { apName: "4WD4MCar_WiFi" },
       concurrency: 4,
       signal,
       fetchJson: async () => {
@@ -221,7 +221,7 @@ describe("the sweep tolerates dead hosts and stops at the first hit", () => {
     let probes = 0;
     const hit = await findCarOnNetwork({
       candidates: [],
-      expect: { apName: "4wd4mCar_Wifi" },
+      expect: { apName: "4WD4MCar_WiFi" },
       fetchJson: async () => {
         probes++;
         return carJson;

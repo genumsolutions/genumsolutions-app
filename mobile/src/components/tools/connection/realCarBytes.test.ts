@@ -8,7 +8,7 @@
 // The real car (captured off ws://192.168.1.100:81/ on 2026-10-03) sends:
 //
 //   STATE;MODE=4WD4M;SPD=230;TRIM=0;STATUS=Stopped;SSID=nijandangal_2.4;
-//         AP=4wd4mCar_Wifi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;USED;...
+//         AP=4WD4MCar_WiFi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;USED;...
 //
 // Note there is no CONNECTED= and no CAP= in the real one. A parser that only
 // ever saw the synthetic shape can pass every test and still drop the answer
@@ -23,23 +23,23 @@ import { parseRouterAnswer, outcomeFor } from "./commands";
 /** Captured off the car, byte for byte. */
 const REAL_STATE_WITH_USED =
   "STATE;MODE=4WD4M;SPD=230;TRIM=0;STATUS=Stopped;SSID=nijandangal_2.4;" +
-  "AP=4wd4mCar_Wifi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;USED;nijandangal_2.4\n";
+  "AP=4WD4MCar_WiFi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;USED;nijandangal_2.4\n";
 
 const REAL_STATE_WITH_ADDED =
   "STATE;MODE=4WD4M;SPD=230;TRIM=0;STATUS=Stopped;SSID=nijandangal_2.4;" +
-  "AP=4wd4mCar_Wifi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;ADDED;HomeNet\n";
+  "AP=4WD4MCar_WiFi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;ADDED;HomeNet\n";
 
 const REAL_STATE_WITH_DELETED =
   "STATE;MODE=4WD4M;SPD=230;TRIM=0;STATUS=Stopped;SSID=nijandangal_2.4;" +
-  "AP=4wd4mCar_Wifi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;DELETED;HomeNet\n";
+  "AP=4WD4MCar_WiFi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;DELETED;HomeNet\n";
 
 /** Captured: the periodic registry broadcast. Note the own AP appears TWICE. */
-const REAL_NETW = "NETW;4wd4mCar_Wifi;nijandangal_2.4;4wd4mCar_Wifi\n";
+const REAL_NETW = "NETW;4WD4MCar_WiFi;nijandangal_2.4;4WD4MCar_WiFi\n";
 
 /** Captured: the scan acknowledgement. */
 const REAL_STATE_WITH_SCAN =
   "STATE;MODE=4WD4M;SPD=230;TRIM=0;STATUS=Stopped;SSID=nijandangal_2.4;" +
-  "AP=4wd4mCar_Wifi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;SCAN;STARTED\n";
+  "AP=4WD4MCar_WiFi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;SCAN;STARTED\n";
 
 describe("U-89 - real car bytes through the real parser", () => {
   it("a real STATE line carries its reply through", () => {
@@ -102,7 +102,7 @@ describe("U-89 - real car bytes through the real parser", () => {
   it("the real refusal strings parse as refusals, not as lists", () => {
     const t = parseTelemetryLine(
       "STATE;MODE=4WD4M;SPD=230;TRIM=0;STATUS=Stopped;SSID=nijandangal_2.4;" +
-        "AP=4wd4mCar_Wifi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;FULL\n",
+        "AP=4WD4MCar_WiFi;IP=192.168.1.100;ID=1FB608;REPLY=ROUTERS;FULL\n",
     );
     const answer = parseRouterAnswer(t.reply!);
     expect(answer).toEqual({ kind: "full" });

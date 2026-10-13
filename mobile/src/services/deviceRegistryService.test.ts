@@ -5,7 +5,7 @@
 // The failure this file exists to prevent (found 2026-10-01): a single
 // 4WD4M was known by FOUR unrelated strings - repo folder
 // (Genum_4WD4M_CAR), firmware FW_NAME ("4WD4M Car"), advertised
-// Bluetooth/AP name ("4WD CAR" / "4wd4mCar_Wifi") and app catalogue
+// Bluetooth/AP name ("4WD CAR" / "4WD4MCar_WiFi") and app catalogue
 // ("4WD4M" + car label "4-wheel-drive") - with nothing asserting they
 // described the same thing.
 // =====================================================================
@@ -61,7 +61,7 @@ describe("BUNDLED_DEVICE_MODELS", () => {
 
   it("keeps the 4WD4M AP identity it actually advertises", () => {
     const m = BUNDLED_DEVICE_MODELS.find((x) => x.id === "4wd4m");
-    expect(m?.apSsid).toBe("4wd4mCar_Wifi");
+    expect(m?.apSsid).toBe("4WD4MCar_WiFi");
     expect(m?.apIp).toBe("192.168.245.1");
   });
 
@@ -119,7 +119,7 @@ describe("pairingLabel", () => {
     fwName: "4WD4M Car",
     fwVersion: "1.0.0",
     btName: "4WD CAR",
-    apSsid: "4wd4mCar_Wifi",
+    apSsid: "4WD4MCar_WiFi",
     apIp: "192.168.245.1",
     transports: ["classic-bt"],
   };
@@ -153,8 +153,8 @@ describe("device unique ids reuse the existing profile key rule", () => {
   });
 
   it("falls back to a Wi-Fi identity last", () => {
-    expect(resolveProfileKey({ wifiIdentity: "4wd4mCar_Wifi" })).toBe(
-      "wifi:4wd4mCar_Wifi",
+    expect(resolveProfileKey({ wifiIdentity: "4WD4MCar_WiFi" })).toBe(
+      "wifi:4WD4MCar_WiFi",
     );
   });
 
