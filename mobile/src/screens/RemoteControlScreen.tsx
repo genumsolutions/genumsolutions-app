@@ -31,6 +31,7 @@ import React, {
 import {
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -628,113 +629,135 @@ export function RemoteControlScreen({ navigation }: Props) {
     </View>
   ) : null;
 
-  const renderReconnectBanner = () => {
-    if (!showSppsRetry) return null;
-    return (
+  // U-110 (owner 2026-10-14): the reconnect / restart prompts are now CENTERED
+  // MODAL overlays — a dimmed card in the middle of the screen over the drive
+  // deck, not a banner pinned to the bottom edge (the owner asked for a
+  // "separate screen" in the middle). Both prompts share one shell so they read
+  // identically.
+  const renderPromptShell = (
+    tone: "amber" | "sky",
+    title: string,
+    body: React.ReactNode,
+    actions: React.ReactNode,
+  ) => (
+    <Modal transparent visible animationType="fade">
       <View
-        className="mx-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5"
-        style={{ marginBottom: Math.max(insets.bottom, 8) }}
+        className="flex-1 items-center justify-center px-6"
+        style={{ backgroundColor: "rgba(15,23,42,0.5)" }}
       >
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1">
-            <Text className="text-xs font-bold text-amber-800">
-              Connection lost
-            </Text>
-            <Text className="text-[10px] text-amber-600">
-              Reconnect to your car?
-            </Text>
-          </View>
-        </View>
-        <View className="flex-row gap-2">
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              void handleSppsRetry();
-            }}
-            className="rounded-full bg-gold px-3 py-1"
-            hitSlop={6}
+        <View
+          className={`rounded-2xl border px-4 py-3 ${
+            tone === "amber"
+              ? "border-amber-200 bg-amber-50"
+              : "border-sky-200 bg-sky-50"
+          }`}
+          style={{ width: "100%", maxWidth: 360 }}
+        >
+          <Text
+            className={`text-sm font-bold ${
+              tone === "amber" ? "text-amber-800" : "text-sky-800"
+            }`}
           >
-            <Text className="text-[10px] font-bold text-white">Reconnect</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              handleReconnectPromptCancel();
-            }}
-            className="rounded-full border border-line bg-card px-3 py-1"
-            hitSlop={6}
-          >
-            <Text className="text-[10px] font-bold text-muted">Cancel</Text>
-          </Pressable>
+            {title}
+          </Text>
+          <View className="mt-0.5">{body}</View>
+          <View className="mt-3 flex-row justify-end gap-2">{actions}</View>
         </View>
       </View>
+    </Modal>
+  );
+
+  const renderReconnectBanner = () => {
+    // U-110: never show the "connection lost" prompt while a link is live — the
+    // prompt asserts the car is gone, and an answered Wi-Fi/WebSocket (or
+    // Bluetooth) link proves it is not. (Owner field report 2026-10-14: the
+    // prompt appeared while the car was connected and working over Wi-Fi.)
+    if (!showSppsRetry || linked) return null;
+    return renderPromptShell(
+      "amber",
+      "Connection lost",
+      <Text className="text-[11px] text-amber-600">
+        Reconnect to your car?
+      </Text>,
+      <>
+        <Pressable
+          onPress={() => {
+            feedbackTap();
+            void handleSppsRetry();
+          }}
+          className="rounded-full bg-gold px-3 py-1.5"
+          hitSlop={6}
+        >
+          <Text className="text-[11px] font-bold text-white">Reconnect</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            feedbackTap();
+            handleReconnectPromptCancel();
+          }}
+          className="rounded-full border border-line bg-card px-3 py-1.5"
+          hitSlop={6}
+        >
+          <Text className="text-[11px] font-bold text-muted">Cancel</Text>
+        </Pressable>
+      </>,
     );
   };
 
   const renderRestartBanner = () => {
     if (!carRestartNotice) return null;
     const reason = carRestartNotice.resetReason?.trim() || "unknown";
-    return (
-      <View
-        className="mx-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5"
-        style={{ marginBottom: Math.max(insets.bottom, 8) }}
-      >
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1">
-            <Text className="text-xs font-bold text-sky-800">
-              Car restarted
-            </Text>
-            <Text className="text-[10px] text-sky-700">
-              {carRestartNotice.prevBoot != null
-                ? `Boot ${carRestartNotice.prevBoot} → ${carRestartNotice.boot}`
-                : `Boot ${carRestartNotice.boot}`}
-              {" · reset "}
-              {reason}
-              {carRestartNotice.crashCount != null
-                ? ` · ${carRestartNotice.crashCount} crash${
-                    carRestartNotice.crashCount === 1 ? "" : "es"
-                  }`
-                : ""}
-            </Text>
-          </View>
-        </View>
-        <View className="flex-row gap-2">
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              void handleRestartReconnect();
-            }}
-            className="rounded-full bg-gold px-3 py-1"
-            hitSlop={6}
-            testID="restart-reconnect"
-          >
-            <Text className="text-[10px] font-bold text-white">Reconnect</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              handleRestartDismiss();
-              navigation.goBack();
-            }}
-            className="rounded-full border border-line bg-card px-3 py-1"
-            hitSlop={6}
-            testID="restart-leave"
-          >
-            <Text className="text-[10px] font-bold text-muted">Leave</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              handleRestartDismiss();
-            }}
-            className="rounded-full border border-line bg-card px-3 py-1"
-            hitSlop={6}
-            testID="restart-cancel"
-          >
-            <Text className="text-[10px] font-bold text-muted">Cancel</Text>
-          </Pressable>
-        </View>
-      </View>
+    return renderPromptShell(
+      "sky",
+      "Car restarted",
+      <Text className="text-[11px] text-sky-700">
+        {carRestartNotice.prevBoot != null
+          ? `Boot ${carRestartNotice.prevBoot} → ${carRestartNotice.boot}`
+          : `Boot ${carRestartNotice.boot}`}
+        {" · reset "}
+        {reason}
+        {carRestartNotice.crashCount != null
+          ? ` · ${carRestartNotice.crashCount} crash${
+              carRestartNotice.crashCount === 1 ? "" : "es"
+            }`
+          : ""}
+      </Text>,
+      <>
+        <Pressable
+          onPress={() => {
+            feedbackTap();
+            void handleRestartReconnect();
+          }}
+          className="rounded-full bg-gold px-3 py-1.5"
+          hitSlop={6}
+          testID="restart-reconnect"
+        >
+          <Text className="text-[11px] font-bold text-white">Reconnect</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            feedbackTap();
+            handleRestartDismiss();
+            navigation.goBack();
+          }}
+          className="rounded-full border border-line bg-card px-3 py-1.5"
+          hitSlop={6}
+          testID="restart-leave"
+        >
+          <Text className="text-[11px] font-bold text-muted">Leave</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            feedbackTap();
+            handleRestartDismiss();
+          }}
+          className="rounded-full border border-line bg-card px-3 py-1.5"
+          hitSlop={6}
+          testID="restart-cancel"
+        >
+          <Text className="text-[11px] font-bold text-muted">Cancel</Text>
+        </Pressable>
+      </>,
     );
   };
 
@@ -1515,13 +1538,13 @@ export function RemoteControlScreen({ navigation }: Props) {
         </>
       )}
 
-      {/* Reconnect banner — anchored to the bottom so it never collides with
-            the phone status bar/notch in landscape. Shows when connection
-            drops and auto-reconnect is exhausted. */}
+      {/* Reconnect prompt — a CENTERED modal (U-110), shown only when the
+            auto-reconnect backoff is exhausted AND no link is live. */}
       {renderReconnectBanner()}
 
-      {/* U-108 Phase 4: car-restart prompt (boot-count change), carrying the
-            reset reason + crash count on the next connect. */}
+      {/* U-108 Phase 4 / U-110: car-restart prompt (boot-count change) as a
+            CENTERED modal, carrying the reset reason + crash count on the next
+            connect. */}
       {renderRestartBanner()}
     </View>
   );

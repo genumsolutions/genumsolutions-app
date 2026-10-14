@@ -1067,6 +1067,12 @@ export function useControlHub(routeCategory?: string) {
     if (!(connected || wifiConnected)) return;
     void flushAppLogs().catch(() => {});
   }, [connected, wifiConnected]);
+  // U-110 (owner 2026-10-14): a live link retires any "connection lost?" prompt.
+  // It can only be stale once the car is answering again — whether on the same
+  // transport that was retrying or on another one.
+  useEffect(() => {
+    if (connected || wifiConnected) setShowSppsRetry(false);
+  }, [connected, wifiConnected]);
   useEffect(() => {
     const live = connected || wifiConnected;
     if (!live) {
@@ -3274,7 +3280,14 @@ export function useControlHub(routeCategory?: string) {
         // never appeared and only a manual reconnect could recover.)
         sppReconnectAttemptsRef.current = 0;
         sppReconnectActiveRef.current = false;
-        setShowSppsRetry(true);
+        // U-110 (owner 2026-10-14): raise the prompt ONLY when the car is
+        // genuinely unreachable. A live Wi-Fi/WebSocket (or BLE) link means the
+        // car is answering, so a Bluetooth-shaped "connection lost" is stale and
+        // false — the owner's field report: the prompt appeared while the car was
+        // connected and working over Wi-Fi.
+        if (!(wifiService.isConnected || bleService.isConnected)) {
+          setShowSppsRetry(true);
+        }
         return;
       }
       sppReconnectAttemptsRef.current += 1;

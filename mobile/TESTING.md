@@ -1,5 +1,23 @@
 # TESTING — Physical Device Test Checklist
 
+## U-110 round — stale reconnect prompt + centered prompts (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.7)
+
+> Owner's post-flash report: the app showed "Connection lost / Reconnect to your
+> car?" **while the car was connected and working** (over Wi-Fi), and the prompt
+> sat as a bottom banner rather than a dialog.
+
+- [ ] **U-110-1 — no stale prompt while connected.** With the car live on its
+      Wi-Fi (or Bluetooth) link and driving, the "Connection lost / Reconnect to
+      your car?" prompt does **not** appear. (It used to surface when the SPP
+      backoff gave up even though Wi-Fi was answering.)
+- [ ] **U-110-2 — the prompt is a centered modal when it IS real.** Kill the car
+      (or its AP) so no link is live: the prompt appears as a **dimmed card in
+      the middle of the screen**, not a bottom banner. Reconnect works.
+- [ ] **U-110-3 — the restart prompt is a centered modal.** After a real car
+      restart, "Car restarted" shows centered with Reconnect / Leave / Cancel.
+- [ ] **U-110-4 — link-up retires the prompt.** If the prompt is showing and the
+      car comes back (any transport), it disappears on its own.
+
 ## U-105 round — one own-hotspot `4WD4MCar_WiFi`; Parallel + power-save REMOVED; Wi-Fi / Bluetooth / boot-auto-join toggles; no teardown (2026-10-13 — DEVICE VERIFY PENDING, needs CAR FLASH)
 
 > Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live
