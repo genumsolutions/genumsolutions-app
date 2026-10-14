@@ -81,29 +81,29 @@ describe("resolveBtConnectDevice — the name the user JUST tapped wins", () => 
 
   it("uses the fresh request name over a stale screen row's name", () => {
     const device = resolveBtConnectDevice(
-      { address: STALE_ROW.address, name: "4WD CAR" },
+      { address: STALE_ROW.address, name: "4WD4M Car" },
       [STALE_ROW],
     );
-    expect(device.name).toBe("4WD CAR");
+    expect(device.name).toBe("4WD4M Car");
     expect(device.address).toBe(STALE_ROW.address);
   });
 
   it("still resolves from the screen row when the request carries no name (F-40 path)", () => {
     const device = resolveBtConnectDevice(
       { address: STALE_ROW.address, name: undefined },
-      [{ ...STALE_ROW, name: "4WD CAR" }],
+      [{ ...STALE_ROW, name: "4WD4M Car" }],
     );
-    expect(device.name).toBe("4WD CAR");
+    expect(device.name).toBe("4WD4M Car");
   });
 
   it("never fails the connect when the screen list lost the row (F-40 rule)", () => {
     const device = resolveBtConnectDevice(
-      { address: "AA:BB:CC:DD:EE:FF", name: "4WD CAR" },
+      { address: "AA:BB:CC:DD:EE:FF", name: "4WD4M Car" },
       [],
     );
     expect(device).toEqual({
       id: "AA:BB:CC:DD:EE:FF",
-      name: "4WD CAR",
+      name: "4WD4M Car",
       address: "AA:BB:CC:DD:EE:FF",
       bonded: true,
     });
@@ -119,7 +119,7 @@ describe("resolveBtConnectDevice — the name the user JUST tapped wins", () => 
 
   it("keeps the screen row's bonded flag and telemetry memory when listed", () => {
     const device = resolveBtConnectDevice(
-      { address: STALE_ROW.address, name: "4WD CAR" },
+      { address: STALE_ROW.address, name: "4WD4M Car" },
       [STALE_ROW],
     );
     expect(device.bonded).toBe(true);

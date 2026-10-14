@@ -10,7 +10,7 @@
 //
 // Why the FROZEN advertised name is shown (the whole point of the registry):
 // the catalogue calls a car "4WD 4-Motor Car" but the firmware announces
-// "4WD CAR", and the OS pairing list shows the announced one. A user who
+// "4WD4M Car", and the OS pairing list shows the announced one. A user who
 // cannot match those two concludes their car has vanished. So the pairing
 // name is rendered next to the name, never derived from it.
 //

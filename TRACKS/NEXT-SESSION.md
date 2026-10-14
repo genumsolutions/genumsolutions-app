@@ -1,4 +1,33 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-110 — stale reconnect prompt + centered prompts; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-111 — apply the car's settings on connect + BT name; JS-only OTA, version 3.2.7/60 UNCHANGED)
+
+## This session (2026-10-14, U-111 — apply the car's settings on connect + BT name; JS-only OTA 3.2.7/60 UNCHANGED)
+
+The owner: "after the car gets connected it should send its state and preferences to
+the app and the app should apply them, and the car should save them for the next
+power cycle." The car half is a firmware fix in `Genum_4WD4M_CAR` (see its
+`TRACKS/NEXT-SESSION.md`); this is the app half.
+
+- **`components/tools/useControlHub.ts`**
+  - `applyTelemetry` now **adopts the car's three transport settings** —
+    `wifiEnabled` / `btEnabled` / `bootAutojoin` — from every STATE line
+    (`;WIFI=` / `;BT=` / `;AUTOJOIN=`) and WS JSON frame
+    (`wifi_enabled` / `bt_enabled` / `boot_autojoin`). `carProtocol` parsed them
+    since U-105 but nothing applied them, so a fresh phone (or a cleared profile)
+    showed "don't know" until each toggle was queried by hand.
+  - Adoption is change-guarded (persisted only on a real change, never on the steady
+    1 Hz echo) and protected by a `toggleCommitRef` carrying the same short
+    optimistic-commit grace as the mode pick, so the car's echo of the pre-command
+    frame cannot undo a just-flipped toggle.
+  - `setCarTransportToggle` records that commit.
+- **Car Bluetooth name** `4WD CAR` → `4WD4M Car` across the registry + UI + help text
+  (`deviceRegistryService.ts`, `DeviceConnectionScreen.tsx`, `adapters.ts`,
+  `DeviceGarageCard.tsx`, tests, `mobile/TESTING.md`) so the app names the car the
+  same thing the firmware now advertises. Also corrected the own-AP SSID in the
+  workspace reference `guide/DEVICE-REGISTRY.json` (`4WDCar_Wifi` → `4WD4MCar_WiFi`).
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA (F-32):
+version 3.2.7 / versionCode 60 unchanged. Nothing device-verified until the owner
+flashes car 1.3.8 (F-61).
 
 ## This session (2026-10-14, U-110 — stale reconnect prompt + centered prompts; JS-only OTA 3.2.7/60 UNCHANGED)
 
@@ -2861,7 +2890,9 @@ PROTOCOL truth + offline fallback + **seed source**. They are intentionally diff
 ## Known drift — needs an owner answer, do not guess
 
 - **4 naming vocabularies per device:** repo folder / firmware `FW_NAME` / advertised BT+AP /
-  app catalogue. 4WD4M = `Genum_4WD4M_CAR` · "4WD4M Car" · "4WD CAR"+"4WDCar_Wifi" · "4WD4M".
+  app catalogue. 4WD4M = `Genum_4WD4M_CAR` · "4WD4M Car" · "4WD4M Car"+"4WD4MCar_WiFi" · "4WD4M".
+  (The BT name was `4WD CAR` and the AP `4WDCar_Wifi`; both were renamed — U-110 / 1.3.5 — and the
+  registry now records the current values.)
 - **`wireless-car` (fw 1.8.0, the 4WD4M's own ancestor) and `smart-dustbin` have firmware but NO app
   mode entry** — invisible to the app. Add catalogue entries, or retired?
 - **5 app modes have NO firmware repo:** `obstacle-us`, `obstacle-ir`, `website-client`,

@@ -1,5 +1,27 @@
 # TESTING — Physical Device Test Checklist
 
+## U-111 round — car settings applied on connect + BT name (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.8)
+
+> Owner: "after the car gets connected it should send its state and preferences to the
+> app and the app should apply them, and the car should save them for the next power
+> cycle." The car half is firmware 1.3.8 (`Genum_4WD4M_CAR`); the app is a JS-only OTA
+> (version 3.2.7 / versionCode 60 unchanged — force-close and reopen ×2, `A-2`).
+
+- [ ] **U-111-1 — the app shows the car's settings on connect (round-trip).** Connect
+      (Bluetooth or Wi-Fi) with a **fresh app profile** (or after the 1.3.8 flash wipes
+      the car's toggles): the Remote ⚙ Settings' Wi-Fi / Bluetooth / Boot-auto-join
+      switches show the car's **real** values immediately — both transports ON, auto-join
+      ON by default — instead of "don't know"/stale local state.
+- [ ] **U-111-2 — a change round-trips and survives a power cycle.** Toggle Boot
+      auto-join OFF in the app → the car confirms and the app shows OFF; **power-cycle the
+      car** → it returns with auto-join OFF (the car persisted it). Turn it back ON.
+- [ ] **U-111-3 — the app names the car's Bluetooth `4WD4M Car`.** The pairing row, the
+      device detail "Pairs as" value, the connect help text and the mobile TESTING rows
+      all read `4WD4M Car` (was `4WD CAR`), matching the firmware's advertisement.
+- [ ] **U-111-4 — no optimistic-flip flicker.** Flip a transport toggle and watch it: the
+      switch does NOT bounce back to the old value while the car's next telemetry frame
+      arrives.
+
 ## U-110 round — stale reconnect prompt + centered prompts (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.7)
 
 > Owner's post-flash report: the app showed "Connection lost / Reconnect to your
@@ -927,7 +949,7 @@ stop) LAST, on whichever link you end up using.
 
 ### U-60-1 — switch communication method while connected
 
-- [ ] Connect over BT (`4WD CAR`), drive, tap the method chip → the list OPENS while the link
+- [ ] Connect over BT (`4WD4M Car`), drive, tap the method chip → the list OPENS while the link
       is live (R4-2 used to lock it).
 - [ ] Pick a DIFFERENT method (e.g. Car access point) → an INLINE confirm strip names the
       target and says what will be disconnected — no overlay centered below the fold.

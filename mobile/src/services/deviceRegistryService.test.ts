@@ -5,7 +5,7 @@
 // The failure this file exists to prevent (found 2026-10-01): a single
 // 4WD4M was known by FOUR unrelated strings - repo folder
 // (Genum_4WD4M_CAR), firmware FW_NAME ("4WD4M Car"), advertised
-// Bluetooth/AP name ("4WD CAR" / "4WD4MCar_WiFi") and app catalogue
+// Bluetooth/AP name ("4WD4M Car" / "4WD4MCar_WiFi") and app catalogue
 // ("4WD4M" + car label "4-wheel-drive") - with nothing asserting they
 // described the same thing.
 // =====================================================================
@@ -49,9 +49,9 @@ describe("BUNDLED_DEVICE_MODELS", () => {
       BUNDLED_DEVICE_MODELS.map((m) => [m.id, m]),
     );
     // Verified against the firmware sources, not invented:
-    //   BluetoothComm.cpp:13  -> SerialBT.begin("4WD CAR")
+    //   BluetoothComm.cpp -> SerialBT.begin(BT_SPP_NAME) = "4WD4M Car"
     //   Genum_REMOTE_ESP32    -> SerialBT.begin("REMOTE_CTRL")
-    expect(byId["4wd4m"].btName).toBe("4WD CAR");
+    expect(byId["4wd4m"].btName).toBe("4WD4M Car");
     expect(byId["remote-esp32"].btName).toBe("REMOTE_CTRL");
     expect(byId["wireless-car"].btName).toBe("WIRELESS CAR");
     expect(byId["2wd1m"].btName).toBe("2 WHEEL DRIVE CAR");
@@ -96,7 +96,10 @@ describe("BUNDLED_DEVICE_MODELS", () => {
         byId[id].fwName.toUpperCase(),
       );
     }
-    // These two deviate on purpose and are frozen - documented, not fixed.
+    // 4wd4m deviates on purpose and is frozen: since U-110 the firmware sets
+    // BT_SPP_NAME to the mixed-case project identity "4WD4M Car" (identical to
+    // FW_NAME, NOT upper-cased). remote-esp32 hard-codes REMOTE_CTRL.
+    expect(byId["4wd4m"].btName).toBe(byId["4wd4m"].fwName);
     expect(byId["4wd4m"].btName).not.toBe(byId["4wd4m"].fwName.toUpperCase());
     expect(byId["remote-esp32"].btName).not.toBe(
       byId["remote-esp32"].fwName.toUpperCase(),
@@ -118,16 +121,16 @@ describe("pairingLabel", () => {
     repo: "Genum_4WD4M_CAR",
     fwName: "4WD4M Car",
     fwVersion: "1.0.0",
-    btName: "4WD CAR",
+    btName: "4WD4M Car",
     apSsid: "4WD4MCar_WiFi",
     apIp: "192.168.245.1",
     transports: ["classic-bt"],
   };
 
   it("shows the announced name when it differs from the app name", () => {
-    // This is the whole point: the OS pairing list says "4WD CAR", so if the
+    // This is the whole point: the OS pairing list says "4WD4M Car", so if the
     // app only said "4WD 4-Motor Car" the user cannot find their car.
-    expect(pairingLabel(model)).toBe('4WD 4-Motor Car (pairs as "4WD CAR")');
+    expect(pairingLabel(model)).toBe('4WD 4-Motor Car (pairs as "4WD4M Car")');
   });
 
   it("does not repeat the name when they are the same", () => {

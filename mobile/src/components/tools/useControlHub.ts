@@ -571,6 +571,26 @@ export function useControlHub(routeCategory?: string) {
     at: number;
   } | null>(null);
 
+  // U-111: the same optimistic-commit protection for the three car transport
+  // toggles (Wi-Fi / Bluetooth / boot auto-join). A user flip is remembered
+  // briefly so the car's echo of the PRE-command frame cannot undo it; a
+  // CHANGED echo is car truth and adopts.
+  const TOGGLE_CHANGE_GRACE_MS = 2500;
+  const toggleCommitRef = useRef<{
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin";
+    value: boolean;
+    at: number;
+  } | null>(null);
+  // U-111: live mirror of those three toggles. The telemetry-adopt effect has
+  // empty deps, so it reads the current values here to persist ONLY on a real
+  // change - never on the steady 1 Hz echo.
+  const transportToggleRef = useRef<{
+    wifiEnabled: boolean | null;
+    btEnabled: boolean | null;
+    bootAutojoin: boolean | null;
+  }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null });
+  transportToggleRef.current = { wifiEnabled, btEnabled, bootAutojoin };
+
   // A-14/A-16: always-fresh mirrors for the connection/status setters so the
   // writers can dedupe without stale closures and without re-running drives.
   const connectedRef = useRef(connected);
@@ -1417,6 +1437,65 @@ export function useControlHub(routeCategory?: string) {
       }
       if (t.ap !== undefined) setCarApName(t.ap || null);
       if (t.ssid !== undefined) setCarSsid(t.ssid || null);
+      // U-111 (owner 2026-10-14): "after the car gets connected it should send
+      // its state and preferences to the app, and the app should apply them."
+      // The car broadcasts its three persisted transport settings on every STATE
+      // line (`;WIFI=` / `;BT=` / `;AUTOJOIN=`) and in every WS JSON frame
+      // (`wifi_enabled` / `bt_enabled` / `boot_autojoin`). carProtocol has parsed
+      // them since U-105, but NOTHING applied them — so a fresh phone (or a
+      // cleared profile) showed "don't know" until the user queried each toggle
+      // by hand. Adopt car truth here, so the panel agrees with the car the
+      // moment a link comes up. A just-flipped toggle is protected for the same
+      // short grace as the mode commit, so the car's echo of the pre-command
+      // frame cannot undo the optimistic flip; persistence happens only on a
+      // real change, never on the steady 1 Hz echo.
+      {
+        const commit = toggleCommitRef.current;
+        if (commit && Date.now() - commit.at > TOGGLE_CHANGE_GRACE_MS)
+          toggleCommitRef.current = null;
+        const pending = toggleCommitRef.current;
+        const protect = (
+          which: "wifiEnabled" | "btEnabled" | "bootAutojoin",
+          incoming: boolean,
+        ) => !(pending?.which === which && pending.value !== incoming);
+        const cur = transportToggleRef.current;
+        if (
+          typeof t.wifiEnabled === "boolean" &&
+          protect("wifiEnabled", t.wifiEnabled) &&
+          cur.wifiEnabled !== t.wifiEnabled
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            wifiEnabled: t.wifiEnabled,
+          };
+          setWifiEnabled(t.wifiEnabled);
+          persistPrefsRef.current?.({ wifiEnabled: t.wifiEnabled });
+        }
+        if (
+          typeof t.btEnabled === "boolean" &&
+          protect("btEnabled", t.btEnabled) &&
+          cur.btEnabled !== t.btEnabled
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            btEnabled: t.btEnabled,
+          };
+          setBtEnabled(t.btEnabled);
+          persistPrefsRef.current?.({ btEnabled: t.btEnabled });
+        }
+        if (
+          typeof t.bootAutojoin === "boolean" &&
+          protect("bootAutojoin", t.bootAutojoin) &&
+          cur.bootAutojoin !== t.bootAutojoin
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            bootAutojoin: t.bootAutojoin,
+          };
+          setBootAutojoin(t.bootAutojoin);
+          persistPrefsRef.current?.({ bootAutojoin: t.bootAutojoin });
+        }
+      }
       // Connections-Hub (smart-link): the car-side scan answer to ROUTERS;SCAN
       // (firmware v2). Change-guarded so steady frames don't thrash.
       if (t.scan !== undefined) {
@@ -2592,6 +2671,7 @@ export function useControlHub(routeCategory?: string) {
       if (patch === "wifiEnabled") setWifiEnabled(on);
       else if (patch === "btEnabled") setBtEnabled(on);
       else setBootAutojoin(on);
+      toggleCommitRef.current = { which: patch, value: on, at: Date.now() };
       persistPrefsRef.current?.({ [patch]: on });
       sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`);
     },
