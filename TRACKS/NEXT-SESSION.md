@@ -1,4 +1,17 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-105 rework — fleet own-hotspot is ONE name `4WD4MCar_WiFi`; Parallel + power-save (APSAVE) REMOVED, replaced by Wi-Fi/BT/boot-auto-join toggles; NO one-active-link teardown; delete-network-stays-deleted; JS-only OTA, version 3.2.7 unchanged)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-108 Phase 7b — Reset car data + on-connect epoch sync; JS-only OTA, version 3.2.7/60 UNCHANGED; Phase 9 docs/TESTING close-out DONE)
+
+## This session (2026-10-13, U-108 Phase 9 — docs/TESTING/DEVICE-TESTS close-out)
+
+**Phase 9 DONE.** Added U-108 rows to `mobile/TESTING.md` (U-108-1..4: on-connect clock sync,
+Reset car data button, auto-join labels, config_epoch propagation). Updated `TRACKS/NEXT-SESSION.md`
+and `TRACKS/PLAN-2026-10-13-cleanup-rebuild.md` with close-out status. All Phase 9 work complete.
+
+**DB migration (Phase 7c)** remains PENDING: owner runs
+`genumsolutions-website/supabase/migrations/20261013120000_phase7c_fresh_start_cleanup.sql`
+in Supabase SQL Editor after replacing `owner_user_id`.
+
+All app Phases 0 + 3 + 4 + 5 + 6 + 7b DONE. DB Phase 7c PENDING. Phase 9 DONE.
+Nothing device-verified until owner flashes 1.3.6.
 
 ## This session (2026-10-13, U-108 Phase 7b — Reset car data + on-connect epoch sync; JS-only OTA, version 3.2.7/60 UNCHANGED)
 
