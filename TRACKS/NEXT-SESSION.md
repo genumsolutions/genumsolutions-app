@@ -1,4 +1,32 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-13: U-108 Phase 7b — Reset car data + on-connect epoch sync; JS-only OTA, version 3.2.7/60 UNCHANGED; Phase 9 docs/TESTING close-out DONE)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-109 — control-panel cleanup + the car's own-hotspot boot fix; JS-only OTA, version 3.2.7/60 UNCHANGED)
+
+## This session (2026-10-14, U-109 — control-panel cleanup, app half; JS-only OTA 3.2.7/60 UNCHANGED)
+
+Field-fix + cleanup round, app half. The car could not be reached on any method;
+the firmware root cause is the U-109 own-hotspot boot fix in `Genum_4WD4M_CAR`
+(see its `TRACKS/NEXT-SESSION.md`). This half removes dead/contradictory wiring
+from the control panels so the app talks to the 4WD4M car over exactly the live
+paths.
+
+- **`components/tools/useControlHub.ts`**
+  - Dropped the retired `ESP_SER` / `ESP_CLI` tokens from `EVERY_LINK_COMMANDS`
+    (the car retired them in U-79 and answers `CAPS …;GONE`; the catalog keeps
+    them for pre-U-79 backward-compat metadata only).
+  - Removed the inert `transports/` LinkManager wiring
+    (`ensureTransportsRegistered`, `linkManager.getActive()`); the hub's own
+    `sendCommand` fan-out is the one wire path. `chosenRadio: null` (nothing in
+    production sets a chosen transport; the `transports/` library + tests and
+    `commandRouting.ts` stay as the documented roadmap registry).
+  - Fixed contradictory comments (the "ESP_SER deck" note → the Wi-Fi panel; the
+    v1.4.0 provisioning note now says the car REJOINS the router and does NOT
+    switch to a webserver mode — the web layer is always-on in 4WD4M).
+- **`components/tools/ProjectInfo.tsx`** — donor name residue
+  `"4WD4M": "Wireless Car"` → `"4WD4M Car"` (`ESP_SER`/`ESP_CLI` stay mapped to
+  "Wireless Car" — they are donor-only modes).
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA
+(F-32): version 3.2.7 / versionCode 60 unchanged. Nothing device-verified until the
+owner flashes car 1.3.6 (F-61).
 
 ## This session (2026-10-13, U-108 Phase 9 — docs/TESTING/DEVICE-TESTS close-out)
 

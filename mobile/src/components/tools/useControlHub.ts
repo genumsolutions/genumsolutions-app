@@ -63,7 +63,6 @@ import {
   TELEMETRY_FLUSH_MS,
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
-import { ensureTransportsRegistered } from "../../transports/linkManagerHooks";
 // Imported from the PURE modules directly, not from the `./connection` barrel.
 // The barrel re-exports the UI (ConnectionSection → useControlHub, a
 // type-only back-reference), and a hook has no business pulling React
@@ -80,7 +79,6 @@ import {
 } from "./connection/commands";
 import { deriveRouters } from "./connection/routerMemory";
 import { isCarApGateway } from "./connection/dial";
-import { linkManager } from "../../transports/linkManager";
 import {
   isAllowedDriveStatus,
   statusToDirection,
@@ -128,13 +126,16 @@ const ROUTER_SWITCH_NOTICE_MS = 4 * 60 * 1000;
 const EVERY_LINK_COMMANDS = new Set([
   "4WD4M",
   "BT",
-  "ESP_SER",
+  // U-79 (car 1.3.x): ESP_SER / ESP_CLI are retired as drive modes and the
+  // 4WD4M registry no longer carries them (the car answers CAPS …;GONE and the
+  // app hides them). They were still broadcast here as live mode tokens; the
+  // two entries are dropped. The catalog keeps the tokens for pre-U-79
+  // backward-compat metadata (roboCarCatalog.ts).
   "PATH",
   "OBS_US",
   "OBS_IR",
   "MAN",
   "AUTO",
-  "ESP_CLI",
   "2WD1M",
   "ESTOP",
   "SPD0",
@@ -269,17 +270,12 @@ function phoneSsidOf(state: NetInfoState): string | null {
 }
 
 export function useControlHub(routeCategory?: string) {
-  // U-68 (2026-10-02): the transport registry used to be registered LAZILY,
-  // as a side effect of `useTransportList` — a hook in linkManagerHooks.ts that
-  // only `TransportPicker` called, and which has since been deleted as dead. The Control Panel no longer mounts the picker (the connection
-  // section was rebuilt), so nothing registered the transports and every
-  // `linkManager.adopt("bt-classic", …)` in this hook would have thrown
-  // "Unknown transport" the moment a connection was made.
-  //
-  // The registry is not a UI concern: any screen that owns a connection needs
-  // it, so the hook that owns connections registers it. Idempotent.
-  ensureTransportsRegistered();
-
+  // The `transports/` LinkManager registry is NOT wired here: the live
+  // connection UI is the `connection/methods.ts` picker, and the hub's own
+  // `sendCommand` fan-out (below) is the ONE wire path. Nothing in production
+  // calls linkManager.adopt()/activate()/loadSelection(); registering the
+  // transports only to read a never-set `getActive()` was dead wiring, so it
+  // is gone. The library and its tests stay as the documented roadmap registry.
   const route = useRoute<Route>();
   const resolvedCategory = routeCategory ?? route.params?.category;
 
@@ -329,7 +325,7 @@ export function useControlHub(routeCategory?: string) {
   // The car's NVS registry stays the source of truth; passwords never sync.
   const [carNetworks, setCarNetworks] = useState<string[]>([]);
   // Broadcast id of the car's AP fallback + its configured SSID (car truth,
-  // from the status JSON `ap` / `ssid` fields). Shown in the ESP_SER deck.
+  // from the status JSON `ap` / `ssid` fields). Shown in the Wi-Fi panel.
   const [carApName, setCarApName] = useState<string | null>(null);
   const [carSsid, setCarSsid] = useState<string | null>(null);
   // A-7 legacy car-truth map: token -> stub flag, fed by CAP=STUB on
@@ -2271,10 +2267,11 @@ export function useControlHub(routeCategory?: string) {
     }));
   }, []);
 
-  // ---- v1.4.0 WiFi provisioning (app â†’ BT â†’ car) ----
+  // ---- v1.4.0 WiFi provisioning (app → BT → car) ----
   // Sends WIFICFG;<ssid>;<password> over the Bluetooth link; the car stores
-  // the pair in Preferences and switches itself to ESP_SER (joins the router
-  // and hosts its web page). The car's STATE echo carries REPLY=WIFICFG;â€¦
+  // the pair in Preferences and REJOINS that router. v2: it does NOT switch to
+  // a webserver mode — the web layer is always-on in 4WD4M — so the car's STATE
+  // echo carries REPLY=WIFICFG;…
   const handleWifiProvision = useCallback(async () => {
     const ssid = wifiSsid.trim();
     if (!ssid) {
@@ -2521,20 +2518,17 @@ export function useControlHub(routeCategory?: string) {
 
   // Send a command over the right transport(s) for the ACTIVE mode; no-ops
   // when nothing is linked.
-  //   â€¢ Every-link commands (mode tokens + neutral/emergency lines) go over
+  //   • Every-link commands (mode tokens + neutral/emergency lines) go over
   //     all live links.
-  //   â€¢ Everything else follows the active mode's own transports: WiFi modes
-  //     (ESP_SER / ESP_CLI) drive over the WebSocket only, BT modes over
-  //     SPP/BLE only (R-4 parity â€” a Bluetooth car must never hear a
-  //     WiFi-mode drive letter).
-  //   â€¢ When only ONE link is live it is used regardless of mode, so a 4WD4M
-  //     car connected purely over the wireless car's WS still drives (that
-  //     path accepts drive in any mode).
-  //   * 4b (2026-10-02 evening): when TWO links are live the user's CHOSEN
-  //     method (the manager's active link) is the tie-breaker — it is ADDED
-  //     as a carrier, so a stale secondary link can never strand a drive
-  //     command while the phone sits on the router. The decision is pinned
-  //     pure in commandRouting.ts / commandRouting.test.ts.
+  //   • Everything else follows the active mode's own transports (R-4 parity:
+  //     a Bluetooth car must never hear a WiFi-only drive letter). The 4WD4M
+  //     mode lists BT + WiFi, so with both links live the command rides both.
+  //   • When only ONE link is live it is used regardless of mode, so a 4WD4M
+  //     car connected purely over the car's WS still drives.
+  //   • routeCommand() also takes an optional `chosenRadio` tie-breaker; it is
+  //     passed null because no production path sets a chosen transport (the
+  //     transports/ LinkManager is not activated — see the note at the top of
+  //     this hook). It stays a pure, tested seam (commandRouting.test.ts).
   const sendCommand = useCallback(
     (cmd: string) => {
       const btLive = sppService.isConnected || bleService.isConnected;
@@ -2546,16 +2540,13 @@ export function useControlHub(routeCategory?: string) {
       const broadcast = EVERY_LINK_COMMANDS.has(
         cmd.trim().toUpperCase().split(";")[0],
       );
-      // F-12: the chosen link is read LIVE at call time (manager truth) —
-      // never cached in state, so a method switch changes routing on the
-      // very next command.
       const route = routeCommand({
         broadcast,
         btLive,
         wsLive,
         modeUsesBt,
         modeUsesWifi,
-        chosenRadio: linkManager.getActive()?.radio ?? null,
+        chosenRadio: null,
       });
       if (route.bt && connected && sppService.isConnected) {
         void sppService.sendLine(cmd).catch(() => {});
