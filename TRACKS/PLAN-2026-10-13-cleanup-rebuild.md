@@ -115,6 +115,17 @@ give them clearer distinct labels (no merge).
   consistent with the car OLED rule.
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
+### U-109 (2026-10-14) — control-panel cleanup (app half) — **DONE**
+Field-fix + cleanup follow-on (the car half is the own-hotspot boot fix in
+`Genum_4WD4M_CAR`). `useControlHub.ts`: dropped retired `ESP_SER`/`ESP_CLI` from
+`EVERY_LINK_COMMANDS`; removed the inert `transports/` LinkManager wiring
+(`ensureTransportsRegistered` + `linkManager.getActive()`), `chosenRadio: null`;
+fixed contradictory comments. `ProjectInfo.tsx`: donor name residue
+`"4WD4M": "Wireless Car"` → `"4WD4M Car"`. `transports/` + tests and
+`commandRouting.ts` kept as the documented roadmap registry.
+Gates: `tsc` 0 · vitest **688/688** · prettier clean. JS-only OTA (3.2.7/60 unchanged).
+
 ## RESUME HERE
-> Phases 0 + 3 + 4 + 5 + 6 + 7b DONE. **DB Phase 7c PENDING** (owner runs migration in Supabase).
-> Phase 9 DONE (TESTING.md U-108 rows, docs close-out).
+> Phases 0 + 3 + 4 + 5 + 6 + 7b DONE. **U-109 DONE** (control-panel cleanup: retired-mode tokens,
+> inert LinkManager wiring removed, donor label fixed). **DB Phase 7c PENDING** (owner runs migration
+> in Supabase). Phase 9 DONE (TESTING.md U-108 rows, docs close-out).

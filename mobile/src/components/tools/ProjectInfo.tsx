@@ -20,7 +20,9 @@ import { company } from "../../config/company";
 // Folder-derived human project names for the shipped fleet cars (DEVICE-ROUND-3 §2.7).
 // Tokens map 1:N — multiple modes share the same physical car.
 const CAR_PROJECT_NAME: Record<string, string> = {
-  "4WD4M": "Wireless Car",
+  "4WD4M": "4WD4M Car",
+  // The webserver/webclient modes are donor (Genum_WIRELESS_CAR) only; the
+  // 4WD4M car retired them (U-79).
   ESP_SER: "Wireless Car",
   ESP_CLI: "Wireless Car",
   "2WD1M": "2WD1M Car",

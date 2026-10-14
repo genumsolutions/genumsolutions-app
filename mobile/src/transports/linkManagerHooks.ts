@@ -22,11 +22,14 @@
 // bearing for so long. Those comments were corrected in the same pass.
 //
 // They are recoverable from git if a screen ever genuinely needs them.
-// What remains is the one function that is actually called
-// (useControlHub + ToolsScreen). Note the FILENAME now over-promises: there
-// are no hooks here. It was left alone rather than renamed because the two
-// live importers reference it by path, and a rename is a bigger diff than the
-// dead code it would remove.
+// What remains is one registration shim. Since U-109 (2026-10-14) NOTHING in
+// `src` imports this file: the Control Panel's live connection UI is
+// `connection/methods.ts`, and `useControlHub` no longer wires the LinkManager
+// (see the note at the top of that hook). `ensureTransportsRegistered()` is
+// therefore reached by no production path; the adapters stay covered by
+// `adapters.test.ts`, which calls `registerAllTransports()` directly. Kept —
+// filename and all — as the documented roadmap registration point for the day a
+// transport picker returns, not as a load-bearing module.
 // =====================================================================
 import { registerAllTransports } from "./adapters";
 
