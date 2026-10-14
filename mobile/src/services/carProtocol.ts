@@ -305,11 +305,10 @@ export const FACTORY_RESET_LINE = "FACTORY;RESET";
  * and DEL/CLEAR/ADD refuse it (car T-66). The app pins it as a non-deletable
  * "Default" row and never sends it to ROUTERS;DEL.
  *
- * v2 (Genum_4WD4M_CAR, owner plan 2026-09-28): on-air names are UNIQUE per
- * car — the donor broadcasts `WirelessCar_Wifi`, the new 4WD4M car broadcasts
- * `4WDCar_Wifi`. The list below is the fleet registry of own-AP names; use
- * `isOwnApName()` everywhere the app must treat a car's own network specially
- * (never a bare constant).
+ * v2 (Genum_4WD4M_CAR, owner plan 2026-09-28): own-AP names are UNIQUE per
+ * car, so the app identifies a car's own network by NAME, never by a bare
+ * constant. Use `isOwnApName()` everywhere that distinction matters; the
+ * registry below is the fleet list it consults.
  *
  * U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
  * `4WD4MCar_WiFi` — the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
