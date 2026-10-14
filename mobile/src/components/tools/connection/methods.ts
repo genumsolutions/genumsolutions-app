@@ -1,5 +1,6 @@
 // =====================================================================
-// connection/methods — THE THREE METHODS (U-68 rebuild, 2026-10-02).
+// connection/methods — THE TWO METHODS (U-68 rebuild, 2026-10-02;
+// Internet removed 2026-10-14 by owner directive).
 //
 // Owner directive, verbatim: *"please keep only these method for now,
 // Bluwtooth, Wifi(LAN), Internet"* and *"offer bluetooh comminication with
@@ -8,34 +9,38 @@
 // projects own hotspot like the esp32 has and then allowing to switch the
 // router and keep all the router data nd things in proper state"*.
 //
+// NOTE: that quote PREDATES the removal below — it names Internet because at
+// the time it was still offered (honestly, as unavailable). On 2026-10-14 the
+// owner dropped the Internet/remote-link ("control from anywhere") method
+// entirely; it is gone from this model and will be rebuilt from scratch later.
+// The quote is kept as the historical record of the original brief, not as the
+// current requirement.
+//
 // This module is the single declaration of what can be connected to. It is
 // pure data + pure predicates: no I/O, no React, no services. A screen may
-// not invent a fourth method, and may not offer a target this file does not
+// not invent a third method, and may not offer a target this file does not
 // declare — that is the whole point (F-67: options the user chooses between
 // must come from one list, or they are not comparable).
 //
-// A "target" is a concrete thing to connect to. Three methods, three
-// targets, and they are NOT three transports:
+// A "target" is a concrete thing to connect to. Two methods, three targets,
+// and they are NOT three transports:
 //
 //   bluetooth → bt-spp        the car, by MAC from a scan. SPP only: BLE is
 //                              not offered at all (no BLE server exists in
 //                              the car firmware, and a row that cannot work
 //                              is worse than no row).
-//   wifi      → car-hotspot   the network the ESP32 itself broadcasts. This
-//                              is the PROVISIONING surface — it is where you
+//              → bt-routers    router management over the SAME live SPP link
+//                              (U-96): it re-provisions the car's network.
+//   wifi      → car-wifi      the car, on whatever network it is on, dialled
+//                              ONLY at the address the car reports. This is
+//                              also the PROVISIONING surface — it is where you
 //                              add and switch the car's router.
-//              → home-router   the car, once it has joined your router,
-//                              dialled ONLY at the address the car reports.
-//   internet  → (none)        offered honestly as unavailable. There is no
-//                              broker and no relay (see guide/PLAN-2026-10-02
-//                              -CONTROL-PANEL-CONNECTION-REBUILD.md). It
-//                              must never appear to work.
 //
 // Pinned by methods.test.ts.
 // =====================================================================
 
-/** The three methods, exactly. */
-export type ConnectionMethodId = "bluetooth" | "wifi" | "internet";
+/** The two methods, exactly. */
+export type ConnectionMethodId = "bluetooth" | "wifi";
 
 /**
  * U-86: "The car's hotspot" and "Your home router" are gone as separate
@@ -78,12 +83,6 @@ export type ConnectionMethod = {
   readonly label: string;
   readonly blurb: string;
   readonly targets: readonly ConnectionTarget[];
-  /**
-   * Set when the whole method cannot work on this build. The UI shows the
-   * reason instead of a connect button — honest, and it leaves the door open
-   * for the relay that does not exist yet.
-   */
-  readonly unavailable?: string;
 };
 
 const BT_SPP: ConnectionTarget = {
@@ -146,13 +145,6 @@ export const CONNECTION_METHODS: readonly ConnectionMethod[] = [
     blurb: "Reach the car over Wi-Fi, on whatever network it is on.",
     targets: [CAR_WIFI],
   },
-  {
-    id: "internet",
-    label: "Internet",
-    blurb: "Remote link from anywhere.",
-    unavailable: "Not available yet.",
-    targets: [],
-  },
 ];
 
 export const METHOD_IDS: readonly ConnectionMethodId[] = CONNECTION_METHODS.map(
@@ -192,11 +184,10 @@ export function targetsOfMethod(
 /**
  * Why a target cannot be used right now, or `null` when it can.
  *
- * A method-level `unavailable` beats everything (Internet). Then the target's
- * own precondition: `home-router` is unusable until the car reports an
- * address that is not its own hotspot. The UI must render THIS string rather
- * than offering a button that would dial a guess (F-65, and the D4 defect
- * this replaces).
+ * The target's own precondition decides: a target that needs the car reachable
+ * first is unusable until the car reports an address. The UI must render THIS
+ * string rather than offering a button that would dial a guess (F-65, and the
+ * D4 defect this replaces).
  */
 export function targetUnavailableReason(
   id: ConnectionTargetId | null | undefined,
@@ -204,7 +195,6 @@ export function targetUnavailableReason(
 ): string | null {
   const method = getMethod(methodOfTarget(id));
   if (!method) return "That connection method no longer exists.";
-  if (method.unavailable) return method.unavailable;
   const target = getTarget(id);
   if (!target) return "That connection method no longer exists.";
   if (target.needsCarOnRouter && !ctx.carOnOwnRouter) {

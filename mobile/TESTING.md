@@ -1,5 +1,25 @@
 # TESTING — Physical Device Test Checklist
 
+## U-112 round — the Internet method removed from the app (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.9)
+
+> Owner directive: the Internet / remote-link ("control from anywhere") method is
+> dropped ENTIRELY — removed, not parked — and will be rebuilt from scratch later.
+> Car half: `Genum_4WD4M_CAR` firmware **1.3.9** deletes `RelayComm` and every
+> relay seam. Nothing reachable is lost: the method was offered as
+> honestly-unavailable and the relay was build-blocked (F-84).
+
+- [ ] **U-112-1 — exactly TWO connection methods.** The Connections area offers
+      **Bluetooth** and **WiFi (LAN)** pills only. There is **no Internet pill,
+      no globe icon, no "not set up yet" card** anywhere — it was removed by
+      owner directive (2026-10-14), not parked. If it renders, the removal failed.
+- [ ] **U-112-2 — no relay/Internet transport is reachable.** The transport
+      registry carries **6** ids (`bt-classic`, `bt-ble`, `wifi-ap-ws`,
+      `wifi-sta-ws`, `http`, `mdns`): no `mqtt`, no `cloud-relay`, no `internet`
+      radio in any grouping, help window or teaching text.
+- [ ] **U-112-3 — nothing else moved.** Bluetooth and Wi-Fi connect + disconnect,
+      router add / switch / forget, the Remote chrome and the two prompts behave
+      exactly as they did before the removal (the two live methods are untouched).
+
 ## U-111 round — car settings applied on connect + BT name (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.8)
 
 > Owner: "after the car gets connected it should send its state and preferences to the
@@ -187,6 +207,11 @@
       record") shows a real reason (e.g. `TASK_WDT`) + phase after a reset — previously it stayed
       empty over Bluetooth (only the Wi-Fi `/status` JSON carried it). The fleet crash report also
       syncs over Bluetooth now (`device_crash_reports` gains a row on connect).
+
+> ⚠️ **U-R3-2 is OBSOLETE as of U-112 (2026-10-14):** the relay transport was deleted from the
+> car firmware (1.3.9) and the Internet method from the app — there is no relay path left to run.
+> Kept for history only.
+
 - [ ] **U-R3-2 — a long STATE is no longer dropped by the relay.** A STATE line carrying the record
       plus a full `REPLY=` exceeds 448 bytes; with the relay cap raised to 512 it reaches the phone
       instead of vanishing. Over the relay transport the Remote still updates (no "paired into
@@ -286,7 +311,8 @@
       both panes at once: LEFT = "Connection method" pills (Bluetooth preselected) + the one connect
       card; RIGHT = "Cars found · networks" with the paired/added device first, the rest inside the
       bounded scroll (the whole list hides once a link is up). No one-column blank-then-two-column
-      state. Every method — Bluetooth, Wi-Fi, Internet — renders this same split look.
+      state. Every method — Bluetooth, Wi-Fi — renders this same split look.
+      (U-112: the Internet method was removed; there are two, not three.)
 - [ ] **U-102-9 — the Settings gear has no Connectivity row.** The Remote's ⚙ dropdown lists Dark
       theme / the rest but NOT Connectivity (that is the corner pill). Tapping the gear never opens
       a duplicate/other connection panel.
@@ -602,14 +628,15 @@
 > on that evidence and the owner came back with "nothing is fixed". These rows are the only thing
 > that can close it.
 
-### U-68-1 — exactly three methods, one uniform surface
+### U-68-1 — exactly two methods, one uniform surface (Internet removed U-112, 2026-10-14)
 
-- [ ] The Connections area shows **Connection**, then **Bluetooth · WiFi (LAN) · Internet**, then
+- [ ] The Connections area shows **Connection**, then **Bluetooth · WiFi (LAN)**, then
       one setup card, then the routers — in that order, every option on the same card component.
 - [ ] **Bluetooth** offers one target only (SPP). There is **no BLE row anywhere**.
-- [ ] **WiFi (LAN)** offers two targets: _the car's hotspot_ and _your home router_.
-- [ ] **Internet** is present and says plainly that it is not set up yet. It must **not** offer a
-      connect button and must never appear to work.
+- [ ] **WiFi (LAN)** offers the car on the network it reports (one target).
+- [ ] **Internet is GONE, not parked.** No pill, no card, no disabled row, no reason text. It was
+      removed by owner directive on 2026-10-14 (U-112) and the tests pin its ABSENCE — if it
+      renders at all, the removal failed.
 
 ### U-68-2 — method switching actually switches ⭐ ("the method switching was not working")
 
@@ -1014,8 +1041,8 @@ stop) LAST, on whichever link you end up using.
 
 ### U-59-3 — nothing user-selectable changed
 
-- [ ] Transport picker rows unchanged (still 8 registered; the F-41 gate
-      on selectable methods is untouched by this round).
+- [ ] Transport picker rows unchanged (6 registered since U-112 — MQTT + Internet relay removed;
+      the F-41 gate on selectable methods is untouched by this round).
 - [ ] Connection-method list, teaching text and the primary-method gate
       all render as before.
 
@@ -1391,9 +1418,10 @@ stop) LAST, on whichever link you end up using.
 
 ### U-51-2 — method gate: SPP + Car access point live, everything else Coming Soon (F-41)
 
-- [ ] The dropdown lists all **8** methods (no Cable row, no duplicates).
+- [ ] The dropdown lists all **6** methods (no Cable row, no duplicates; 8 → 6 with U-112, which
+      dropped MQTT and Internet relay).
 - [ ] **Classic Bluetooth (SPP)** and **Car access point** are bright and selectable.
-- [ ] The other six (**BLE, Home router, HTTP / REST, mDNS, MQTT, Internet relay**) are dimmed with
+- [ ] The other four (**BLE, Home router, HTTP / REST, mDNS**) are dimmed with
       a **"Coming Soon"** tag; tapping the row does NOTHING — no connection steps open, no dial,
       no error, no selection change.
 - [ ] Tapping **ⓘ on a Coming Soon row** still opens its full help window (readable, closable by
@@ -2356,10 +2384,10 @@ new JS bundle). Do not expect a new APK or a version bump.
       (a row with a chevron), **not** a long repeated list of method cards. The repeated capability
       chips / blurb text under every method must be **gone** from the page.
 - [ ] Dropdown closed on a fresh open shows **"Choose a method"** (no method pre-selected).
-- [ ] Tap the dropdown: it lists every registered method, grouped **Bluetooth / WiFi / Internet &
-      cloud**. Count them — there must be **8**:
+- [ ] Tap the dropdown: it lists every registered method, grouped **Bluetooth / WiFi**. Count them — there must be **6** (U-112 dropped MQTT + Internet
+      relay):
       Classic Bluetooth (SPP) · Bluetooth Low Energy (GATT) · Car access point · Home router ·
-      HTTP / REST · mDNS · MQTT · Internet relay.- [ ] **No Cable group and no "USB serial" anywhere** in the dropdown or anywhere else in the app. If a Cable/USB row appears, the removal failed — report it. (The separate "Every way the car can be controlled" teaching list below About was REMOVED — 2026-09-29 owner round: the per-method ⓘ help windows carry that content now.)
+      HTTP / REST · mDNS.- [ ] **No Cable group and no "USB serial" anywhere** in the dropdown or anywhere else in the app. If a Cable/USB row appears, the removal failed — report it. (The separate "Every way the car can be controlled" teaching list below About was REMOVED — 2026-09-29 owner round: the per-method ⓘ help windows carry that content now.)
 - [ ] No method appears **twice** (scan the list carefully; each is a distinct label).
 - [ ] After picking a method the dropdown collapses and the trigger shows that method's name.
 
@@ -2369,7 +2397,8 @@ new JS bundle). Do not expect a new APK or a version bump.
       Bluetooth**: a small separate window opens over the page (not a full screen, not an inline
       expansion) with what the method is, what you need, when to use it, connect+verify steps, and
       the capability chips.
-- [ ] Tap **ⓘ on a roadmap method** (Bluetooth LE, mDNS, MQTT, Internet relay): its window shows an
+- [ ] Tap **ⓘ on a roadmap method** (Bluetooth LE, mDNS — MQTT and Internet relay were removed by
+      U-112): its window shows an
       amber roadmap note explaining what is missing. The window must be readable, not truncated.
 - [ ] Close the window by tapping **outside** it, by the **✕**, and by the Android **back** button —
       all three must dismiss it. The Control Panel must still be usable afterwards.

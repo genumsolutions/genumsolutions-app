@@ -1,7 +1,10 @@
-// Pins for the three-method model (U-68). The owner's directive was
-// "keep only these method for now, Bluwtooth, Wifi(LAN), Internet" and
-// "offer bluetooh comminication with SPP only for now" — so the shape of
-// this list IS the requirement, and it is pinned.
+// Pins for the two-method model (U-68; Internet removed 2026-10-14). The
+// owner's original directive was "keep only these method for now, Bluwtooth,
+// Wifi(LAN), Internet" and "offer bluetooh comminication with SPP only for
+// now" — so the shape of this list IS the requirement, and it is pinned. The
+// Internet/remote-link method was dropped on 2026-10-14 by owner directive and
+// will be rebuilt from scratch later; these tests pin its ABSENCE so it cannot
+// creep back without a decision.
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,9 +17,9 @@ import {
   targetsOfMethod,
 } from "./methods";
 
-describe("the method model — exactly the three the owner named", () => {
-  it("offers Bluetooth, WiFi (LAN) and Internet, in that order, and nothing else", () => {
-    expect(METHOD_IDS).toEqual(["bluetooth", "wifi", "internet"]);
+describe("the method model — exactly the two the owner kept", () => {
+  it("offers Bluetooth and WiFi (LAN), in that order, and nothing else", () => {
+    expect(METHOD_IDS).toEqual(["bluetooth", "wifi"]);
   });
 
   it("Bluetooth offers SPP connect and router management, never BLE", () => {
@@ -57,11 +60,9 @@ describe("the method model — exactly the three the owner named", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("Internet is offered but honestly unavailable, with a reason and no targets", () => {
-    const net = getMethod("internet");
-    expect(net).not.toBeNull();
-    expect(net!.unavailable).toBeTruthy();
-    expect(net!.targets).toHaveLength(0);
+  it("Internet is gone entirely — removed by owner directive, not parked", () => {
+    expect(METHOD_IDS).not.toContain("internet");
+    expect(getMethod("internet" as never)).toBeNull();
   });
 });
 
@@ -113,14 +114,6 @@ describe("unavailability is a string the UI can render, never a silent button", 
       targetUnavailableReason("bt-spp", { carOnOwnRouter: false }),
     ).toBeNull();
   });
-
-  it("a method's own unavailability beats the target precondition", () => {
-    const reason = targetUnavailableReason("car-wifi", {
-      carOnOwnRouter: false,
-    });
-    expect(reason).toBeNull();
-    expect(getMethod("internet")!.unavailable).toBeTruthy();
-  });
 });
 
 describe("lookups are total — an unknown id is a null, never a throw", () => {
@@ -139,14 +132,14 @@ describe("lookups are total — an unknown id is a null, never a throw", () => {
 // The old gate lived in `transportGate.ts` and was enforced ONLY inside
 // TransportPicker — i.e. only while that particular component was mounted. It
 // is deleted with the picker. Its INTENT must not go with it: the transport
-// REGISTRY still carries eight entries (three real, five parked), and the rule
-// is that a user may only ever be OFFERED the ones that work.
+// REGISTRY still carries six entries, and the rule is that a user may only ever
+// be OFFERED the ones that work.
 //
 // So the guarantee now moves to the model: the offered targets are declared in
 // `methods.ts` and these tests pin that every one of them is a real registered
 // transport, and that the parked ones cannot leak in.
 describe("F-41 intent, preserved: only working transports are offered", () => {
-  // Mirrors buildAllTransports()'s ids (adapters.test.ts pins the list at 8).
+  // Mirrors buildAllTransports()'s ids (adapters.test.ts pins the list at 6).
   const REGISTERED = [
     "bt-classic",
     "bt-ble",
@@ -154,8 +147,6 @@ describe("F-41 intent, preserved: only working transports are offered", () => {
     "wifi-sta-ws",
     "http",
     "mdns",
-    "mqtt",
-    "cloud-relay",
   ] as const;
 
   /** target id -> the transport id(s) that can actually carry it. */
@@ -180,20 +171,15 @@ describe("F-41 intent, preserved: only working transports are offered", () => {
   });
 
   it("no offered target is carried by a parked transport", () => {
-    const parked = ["bt-ble", "http", "mdns", "mqtt", "cloud-relay"];
+    const parked = ["bt-ble", "http", "mdns"];
     for (const t of CONNECTION_METHODS.flatMap((m) => m.targets)) {
       for (const c of [CARRIER[t.id]].flat()) expect(parked).not.toContain(c);
     }
   });
 
   it("no parked transport is reachable through the method list at all", () => {
-    const parked = ["bt-ble", "http", "mdns", "mqtt", "cloud-relay"];
+    const parked = ["bt-ble", "http", "mdns"];
     const ids = JSON.stringify(CONNECTION_METHODS);
     for (const p of parked) expect(ids).not.toContain(p);
-  });
-
-  it("Internet offers NO target - it has no carrier and must not pretend to", () => {
-    // An unbacked target would be a button that dials nothing.
-    expect(getMethod("internet")!.targets).toEqual([]);
   });
 });

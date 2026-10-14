@@ -404,7 +404,7 @@ export function createHttpTransport(): Transport {
   return {
     id: "http",
     label: "HTTP / REST (web server)",
-    radio: "internet",
+    radio: "wifi",
     blurb: "Drive the car's built-in web page with plain HTTP requests",
     capabilities: ["drive", "telemetry", "mode"],
     teaching: HTTP_TEACHING,
@@ -580,56 +580,6 @@ function createMdnssTransport(): Transport {
   );
 }
 
-function createMqttTransport(): Transport {
-  return createPlaceholderTransport(
-    "mqtt",
-    "MQTT (broker)",
-    "internet",
-    "Car talks to a message broker on the LAN or the internet",
-    ["telemetry", "mode"],
-    {
-      intro:
-        "MQTT is a publish/subscribe protocol: both the phone and the car talk to a broker, so control and telemetry flow through one hub — even across the internet.",
-      needs:
-        "A broker (e.g. Mosquitto) reachable by both sides; firmware MQTT client.",
-      when: "The future path to control the car from anywhere (cloud relay). Needs a broker decision first.",
-      serverClient:
-        "Neither side connects to the other. BOTH the phone and the car are CLIENTS of a broker, and each one dials OUT to it — the broker is the only server, and it holds both connections and passes messages between them. That is the whole reason MQTT is the answer for 'drive from anywhere': neither device needs to be reachable or even on the same network, because each makes its own outbound connection. It also means credentials become a real concern — a broker with a public address needs a per-device login, which is why this row stays parked until that decision is made.",
-      steps: [
-        "Choose/deploy a broker and decide credentials.",
-        "Firmware round: add the MQTT client + the same text protocol over topic messages.",
-        "App registers the broker, connects, drives over the internet.",
-      ],
-    },
-    "Roadmap: needs a broker (LAN or cloud) plus firmware MQTT support. No broker is hosted yet — recorded as an open decision.",
-  );
-}
-
-function createCloudRelayTransport(): Transport {
-  return createPlaceholderTransport(
-    "cloud-relay",
-    "Internet relay",
-    "internet",
-    "Control the car from anywhere via a cloud relay",
-    ["telemetry", "mode"],
-    {
-      intro:
-        "STA/Home-router control is limited to the LAN. An internet relay (broker or tunnel) would let the phone reach the car from anywhere, exactly like the app's other cloud services.",
-      needs:
-        "A hosted relay/tunnel service; the car must be on a network that can reach it.",
-      when: "The future 'drive from anywhere' mode. LAN STA works today; internet needs the relay decision.",
-      serverClient:
-        "The car dials OUT to a relay on the public internet, so the relay can reach the car even though the car sits behind a home router that would otherwise hide it. The phone then connects to that same relay. Both sides are clients of the relay — the car is not reachable directly at all. This is the same 'dial outward' shape as MQTT, differing in that the relay is a purpose-built tunnel for this one app rather than a general message bus.",
-      steps: [
-        "Decide the relay (MQTT broker or WebRTC-style tunnel).",
-        "Firmware + app both connect to the relay.",
-        "Drive from any network.",
-      ],
-    },
-    "Roadmap: no relay/tunnel service is hosted yet — LAN control works today; this is the recorded path to internet control.",
-  );
-}
-
 // --- registry --------------------------------------------------------
 
 /**
@@ -648,8 +598,6 @@ export function buildAllTransports(): Transport[] {
     createWifiStaTransport(),
     createHttpTransport(),
     createMdnssTransport(),
-    createMqttTransport(),
-    createCloudRelayTransport(),
   ];
 }
 

@@ -17,10 +17,11 @@
 //             disconnect buttons moved to the row right below Back (testIDs
 //             `remote-disconnect-bt` / `remote-disconnect-wifi`). The
 //             "Connection method" box is the method only.
-//   METHOD  → three compact pills. U-97: *"show connection methods as three
+//   METHOD  → two compact pills. U-97: *"show connection methods as three
 //             equal cards"* — visible and comparable at a glance, and only the
-//             selected method's setup card renders below them. Internet stays
-//             rendered but visibly disabled with its reason.
+//             selected method's setup card renders below them. (There were
+//             three; the Internet card was removed 2026-10-14 by owner
+//             directive, so the row now shows Bluetooth and Wi-Fi.)
 //   setup   → the selected method's job, and nothing else
 //   left-bottom → the THIS-CAR inventory, always visible (M1): paired cars
 //             (Bluetooth, friendly names only) or added networks (Wi-Fi).
@@ -148,14 +149,13 @@ type KnownBtDevice = {
 // discovery shares it, and the pure module is its home.
 // =====================================================================
 
-/** U-97: the icon for each of the three methods (there are exactly three). */
+/** U-97: the icon for each method (there are exactly two). */
 const METHOD_ICON: Record<
   ConnectionMethodId,
   React.ComponentProps<typeof Feather>["name"]
 > = {
   bluetooth: "bluetooth",
   wifi: "wifi",
-  internet: "globe",
 };
 
 export type ConnectionSectionProps = {
@@ -267,9 +267,9 @@ export function ConnectionSection({
   );
 
   /** Only the SELECTED method's own connect target is rendered (U-69). Each
-      method now has exactly one (or, for Internet, none), so there is no
-      per-method choice left: the live link's target when it belongs to this
-      method, otherwise the method's first target. */
+      method now has exactly one, so there is no per-method choice left: the
+      live link's target when it belongs to this method, otherwise the method's
+      first target. */
   const setupTarget: ConnectionTarget | null = useMemo(() => {
     if (!methodDef) return null;
     if (liveTarget && methodOfTarget(liveTarget) === methodDef.id) {
@@ -506,12 +506,11 @@ export function ConnectionSection({
           Connection method
         </Text>
 
-        {/* U-97: the three methods, equal cards. Choosing one swaps the setup
+        {/* U-97: the two methods, equal cards. Choosing one swaps the setup
             card below (and the right pane follows). */}
         <View className="flex-row gap-1.5" testID="conn-methods">
           {CONNECTION_METHODS.map((m) => {
             const selected = m.id === method;
-            const blocked = Boolean(m.unavailable);
             return (
               <Pressable
                 key={m.id}
@@ -525,16 +524,15 @@ export function ConnectionSection({
                   setScanShown(false);
                   setPendingJoinSsid(null);
                 }}
-                disabled={blocked}
                 accessibilityRole="button"
                 accessibilityLabel={m.label}
-                accessibilityState={{ selected, disabled: blocked }}
+                accessibilityState={{ selected }}
                 testID={`conn-method-${m.id}`}
                 className={`min-w-0 flex-1 items-center gap-1 rounded-lg border px-1.5 py-1.5 ${
                   selected
                     ? "border-select-ink bg-select-bg"
                     : "border-line bg-card"
-                } ${blocked ? "opacity-60" : "active:opacity-70"}`}
+                } active:opacity-70`}
               >
                 <Feather
                   name={METHOD_ICON[m.id]}
@@ -551,7 +549,7 @@ export function ConnectionSection({
                 </Text>
                 <View
                   className={`h-1 w-1 rounded-full ${
-                    selected && !blocked ? "bg-success" : "bg-border"
+                    selected ? "bg-success" : "bg-border"
                   }`}
                 />
               </Pressable>
@@ -605,16 +603,9 @@ export function ConnectionSection({
           manages the same registry through the live link), with a fixed
           heading — the network list never appears "with no heading" again —
           plus add-connection for other ESP / IoT projects. Nearby scan rows
-          appear only after an explicit Search (WifiPanel `showScanned`).
-          Internet: its honest reason, nothing else. */}
+          appear only after an explicit Search (WifiPanel `showScanned`). */}
       <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
-        {method === "internet" ? (
-          <View className="rounded-lg border border-line bg-card p-2">
-            <InlineMessage tone="info">
-              {methodDef?.unavailable ?? "Not available yet."}
-            </InlineMessage>
-          </View>
-        ) : method === "wifi" || method === "bluetooth" ? (
+        {method === "wifi" || method === "bluetooth" ? (
           <>
             <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
               Switch networks
@@ -902,24 +893,20 @@ function MethodSetup({
     <ConnectionCard
       title={method.label}
       icon={method.id === "bluetooth" ? "bluetooth" : "wifi"}
-      tone={method.unavailable ? "idle" : "busy"}
+      tone="busy"
       testID={`conn-setup-${method.id}`}
     >
-      {method.unavailable ? (
-        <InlineMessage tone="info">{method.unavailable}</InlineMessage>
-      ) : (
-        <TargetBody
-          target={target}
-          busy={busy}
-          carOnRouter={carOnRouter}
-          sppSupported={sppSupported}
-          sppStatus={sppStatus}
-          linkLive={linkLive}
-          onScanBluetooth={onScanBluetooth}
-          onConnectBluetooth={onConnectBluetooth}
-          onConnectWifi={onConnectWifi}
-        />
-      )}
+      <TargetBody
+        target={target}
+        busy={busy}
+        carOnRouter={carOnRouter}
+        sppSupported={sppSupported}
+        sppStatus={sppStatus}
+        linkLive={linkLive}
+        onScanBluetooth={onScanBluetooth}
+        onConnectBluetooth={onConnectBluetooth}
+        onConnectWifi={onConnectWifi}
+      />
 
       {/* 2026-10-10 (owner: "it show multiple things like connect and find
           the car on the network ..."). The two buttons that used to sit here -

@@ -232,12 +232,8 @@ describe("the U-69 token pair exists everywhere it must", () => {
 });
 
 describe("the offered methods still fit the owner's brief (regression net)", () => {
-  it("exactly three methods, Wi-Fi a single target", () => {
-    expect(CONNECTION_METHODS.map((m) => m.id)).toEqual([
-      "bluetooth",
-      "wifi",
-      "internet",
-    ]);
+  it("exactly two methods, Wi-Fi a single target", () => {
+    expect(CONNECTION_METHODS.map((m) => m.id)).toEqual(["bluetooth", "wifi"]);
     const wifi = CONNECTION_METHODS.find((m) => m.id === "wifi")!;
     expect(wifi.targets).toHaveLength(1);
     expect(wifi.targets[0]!.id).toBe("car-wifi");

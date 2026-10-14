@@ -22,8 +22,13 @@
 // Pinned by commandRouting.test.ts.
 // =====================================================================
 
-/** The LinkManager's active-transport radio, or null when unknown. */
-export type ChosenRadio = "bluetooth" | "wifi" | "internet" | null;
+/**
+ * The LinkManager's active-transport radio, or null when unknown.
+ *
+ * `internet` was removed on 2026-10-14 with the Internet method; only the two
+ * physical radios remain.
+ */
+export type ChosenRadio = "bluetooth" | "wifi" | null;
 
 export type CommandRouteInput = {
   /** Every-link command (mode tokens + neutral/emergency lines)? */
