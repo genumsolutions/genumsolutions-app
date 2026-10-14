@@ -28,6 +28,12 @@ Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA
 (F-32): version 3.2.7 / versionCode 60 unchanged. Nothing device-verified until the
 owner flashes car 1.3.6 (F-61).
 
+**U-109b (2026-10-14, comment hygiene — no behaviour change):** the
+`OWN_AP_NAME` doc comment still presented the pre-U-105 two-name fleet (donor
+`WirelessCar_Wifi` + the old `4WDCar_Wifi`) as the current design; reworded to
+the single-name contract so it never asserts a false present state. Commit
+`ea2fe33`; `tsc` 0 · vitest 688/688 · prettier clean.
+
 ## This session (2026-10-13, U-108 Phase 9 — docs/TESTING/DEVICE-TESTS close-out)
 
 **Phase 9 DONE.** Added U-108 rows to `mobile/TESTING.md` (U-108-1..4: on-connect clock sync,
