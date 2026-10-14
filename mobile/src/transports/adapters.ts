@@ -84,9 +84,9 @@ export function createClassicBtTransport(): Transport {
         "An Android phone with Bluetooth. The car must be powered on and paired in the phone's Bluetooth settings.",
       when: "The default choice — the proven, reliable path here. Use it when the car is on the bench or wherever RF distance is enough.",
       serverClient:
-        "The car is the SERVER and the phone is the CLIENT, and the pairing is symmetric-free: the car advertises the name '4WD CAR' from boot and simply waits, so the phone is always the side that initiates. The phone therefore picks the car from a scan — there is no address to type. Because the link is direct, it survives with no router and no internet, and the car keeps driving even if the phone's WiFi is on someone else's network.",
+        "The car is the SERVER and the phone is the CLIENT, and the pairing is symmetric-free: the car advertises the name '4WD4M Car' from boot and simply waits, so the phone is always the side that initiates. The phone therefore picks the car from a scan — there is no address to type. Because the link is direct, it survives with no router and no internet, and the car keeps driving even if the phone's WiFi is on someone else's network.",
       steps: [
-        "Pair the car ('4WD CAR') once in Android Settings → Connections → Bluetooth.",
+        "Pair the car ('4WD4M Car') once in Android Settings → Connections → Bluetooth. If Android asks for a PIN it is 1234; on most phones the bond completes with no PIN at all.",
         "In Connections → Bluetooth Classic (SPP), tap Scan for cars and pick it.",
         "The row shows Connected; open the Drive Deck and drive.",
       ],

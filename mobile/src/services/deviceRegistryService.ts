@@ -68,7 +68,7 @@ export const BUNDLED_DEVICE_MODELS: DeviceModel[] = [
     // NOT a claim about any live car — U-96i: the live version rides /status
     // `fw` (telemetry.fwVersion) and must never be overwritten by this value.
     fwVersion: "1.2.4",
-    btName: "4WD CAR",
+    btName: "4WD4M Car",
     apSsid: "4WD4MCar_WiFi",
     apIp: "192.168.245.1",
     transports: ["classic-bt", "wifi-ap", "wifi-sta", "http", "websocket"],
@@ -413,7 +413,7 @@ export async function removeUserDevice(
 /**
  * What the user will actually SEE when pairing, which is NOT the same as the
  * in-app name. A car called "4WD 4-Motor Car" in the app is announced as
- * "4WD CAR" over Bluetooth, and the OS pairing list shows the announced
+ * "4WD4M Car" over Bluetooth, and the OS pairing list shows the announced
  * name. Surfacing both is what stops "my car is missing" confusion.
  */
 export function pairingLabel(model: DeviceModel | null): string {

@@ -66,7 +66,7 @@ function SetupPanel({
           </Text>
           <Text className="mt-1 text-xs leading-4 text-muted">
             The hand-held remote&apos;s path. Pair the car&apos;s broadcast name
-            (4WD CAR) — PIN 1234.
+            (4WD4M Car) — if Android asks for a PIN, it is 1234.
           </Text>
           <Pressable
             onPress={onScan}

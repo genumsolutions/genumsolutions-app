@@ -87,7 +87,7 @@ describe("relativeTime", () => {
 const MODEL = {
   displayName: "4WD 4-Motor Car",
   repo: "Genum_4WD4M_CAR",
-  btName: "4WD CAR",
+  btName: "4WD4M Car",
   transports: ["classic-bt", "wifi-ap", "wifi-sta", "http", "websocket"],
 };
 
@@ -101,10 +101,10 @@ describe("deviceDetailRows", () => {
 
   it("shows the advertised pairing name when it differs from the model name", () => {
     // The same reason the registry exists: the OS pairing list says
-    // "4WD CAR", so the detail view must carry that string too.
+    // "4WD4M Car", so the detail view must carry that string too.
     const rows = deviceDetailRows(base, NOW);
     const pairing = rows.find((r) => r.label === "Pairs as");
-    expect(pairing?.value).toBe("4WD CAR");
+    expect(pairing?.value).toBe("4WD4M Car");
   });
 
   it("omits the pairing row when it would repeat the model name", () => {
