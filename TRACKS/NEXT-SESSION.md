@@ -1,4 +1,30 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-109 — control-panel cleanup + the car's own-hotspot boot fix; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-110 — stale reconnect prompt + centered prompts; JS-only OTA, version 3.2.7/60 UNCHANGED)
+
+## This session (2026-10-14, U-110 — stale reconnect prompt + centered prompts; JS-only OTA 3.2.7/60 UNCHANGED)
+
+From the owner's post-flash report: the app showed the "Connection lost /
+Reconnect to your car?" prompt **while the car was connected and working** (over
+Wi-Fi), and the prompt sat as a bottom banner rather than a dialog.
+
+- **`components/tools/useControlHub.ts`**
+  - The SPP-backoff exhaustion path raises `showSppsRetry` **only when neither
+    `wifiService.isConnected` nor `bleService.isConnected`** — a live Wi-Fi
+    (or BLE) link means the car is answering, so a Bluetooth-shaped "connection
+    lost" is stale and false.
+  - A new effect clears `showSppsRetry` whenever `connected || wifiConnected`
+    becomes true, so the prompt retires as soon as the car is reachable again.
+- **`screens/RemoteControlScreen.tsx`**
+  - Both prompts (reconnect + car-restart) now render as **centered transparent
+    `Modal`s** — a dimmed card in the middle of the screen — not bottom banners.
+    They share one `renderPromptShell()`; the restart prompt's
+    `restart-reconnect` / `restart-leave` / `restart-cancel` testIDs are
+    unchanged.
+  - The reconnect prompt is additionally gated on `linked` (`connected ||
+    wifiConnected`), belt-and-suspenders with the hub guard.
+
+Gates: `tsc` 0 · vitest **688/688** (44 files) · prettier clean. JS-only OTA
+(F-32): version 3.2.7 / versionCode 60 unchanged. Nothing device-verified until
+the owner flashes car 1.3.7 (F-61).
 
 ## This session (2026-10-14, U-109 — control-panel cleanup, app half; JS-only OTA 3.2.7/60 UNCHANGED)
 
