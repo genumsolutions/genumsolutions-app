@@ -48,6 +48,29 @@
       unchanged; F-65 keep-looking still re-finds a rebooting car; only `4WD4MCar_WiFi` appears in
       any scan (see U-105-1). No repeat of U-93's double-DEL, no `ROUTERS;STARTED` phantom rows.
 
+## U-108 round — fresh start + timestamps + auto-join labels + Reset car data (2026-10-13, app 3.2.7/60 — DEVICE VERIFY PENDING)
+
+> JS-only OTA (version 3.2.7/60 unchanged, force-close ×2). Requires car firmware 1.3.6
+> (`Genum_4WD4M_CAR` 1.3.6 with `FACTORY;RESET`, `TIME;<epoch>`, `config_epoch`).
+
+- [ ] **U-108-1 — on-connect clock sync.** Link a car on 1.3.6 (SPP or WiFi). The app sends
+      `TIME;<unixEpoch>` alongside `REQ_STATE` on connect (serial capture shows `TIME;1760...`
+      before `REQ_STATE`). The car's `TIME?` reply reflects the adopted epoch.
+- [ ] **U-108-2 — Reset car data button.** Remote screen ⚙ Settings → scroll to "Reset car
+      data" (red, `testID: reset-car-data`). Tap → destructive confirm dialog. Confirm: serial
+      shows `[FACTORY] botcfg namespace cleared`; app clears all car AsyncStorage keys; toast
+      "Car data reset — power cycle the car for a fresh start"; Remote panel resets to defaults
+      (both toggles ON, no router list, auto-join ON).
+- [ ] **U-108-3 — auto-join labels.** Remote Settings: the CAR toggle reads "Boot auto-join
+      (car)" (`power` icon, caption "On power-up the CAR rejoins its last router..."). The APP
+      toggle reads "Auto-join saved router (app)" (`refresh-cw` icon, caption "When you open
+      the car, the APP switches it..."). Distinct accessibility labels. CarProfileCard shows
+      "Auto-join saved router (app)" and cross-references the car setting.
+- [ ] **U-108-4 — config_epoch propagation.** After a router switch (`ROUTERS;USE`), a toggle
+      flip, or a `WIFICFG` store, the car's `TIME?` shows an advanced `configEpoch`. The app
+      does not read it directly (car firmware exposes it via `TIME?`); this row is a car-side
+      check in `Genum_4WD4M_CAR\TRACKS\DEVICE-TESTS.md` U-108-3.
+
 ## F-65 round — reconnect rebuild: fleet-AP discovery, honest reconnecting, bounded keep-looking (2026-10-13, OTA `bc9062c` — DEVICE VERIFY PENDING)
 
 > Owner's post-1.3.3 field failures: car won't (re)connect, car restarts after connecting, flaky

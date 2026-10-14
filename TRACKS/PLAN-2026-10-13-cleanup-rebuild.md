@@ -116,6 +116,5 @@ give them clearer distinct labels (no merge).
 - Phase 9: `mobile\TESTING.md` device rows + `TRACKS\NEXT-SESSION.md` ledger.
 
 ## RESUME HERE
-> Phases 0 + 3 + 4 + 5 + 6 + 7b DONE. Next app work is **Phase 7c** (DB additive migration:
-> delete this car `1FB608` + owner's car-related rows + retention). Then Phase 9
-> (docs/TESTING/DEVICE-TESTS rows).
+> Phases 0 + 3 + 4 + 5 + 6 + 7b DONE. **DB Phase 7c PENDING** (owner runs migration in Supabase).
+> Phase 9 DONE (TESTING.md U-108 rows, docs close-out).
