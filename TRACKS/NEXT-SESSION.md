@@ -1,5 +1,11 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-112 — the Internet method removed from the app; JS-only OTA, version 3.2.7/60 UNCHANGED)
 
+> **⏭️ NEXT ROUND IS PLANNED:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
+> owner's 13-issue list (dual BT+Wi-Fi link, Remote-screen merge, conditional disconnects,
+> settings widening/audit, mode rotate, sync sweep). **Phase 0 = evidence captures while the
+> owner tests 1.3.10**, then P1..P8 one at a time. Car master:
+> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`.
+
 ## This session (2026-10-14, U-112 — the Internet method removed from the app; JS-only OTA 3.2.7/60 UNCHANGED)
 
 Owner directive (mirrors the car repo — `Genum_4WD4M_CAR` firmware **1.3.9**
