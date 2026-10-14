@@ -38,7 +38,7 @@ export type CrashReportInput = {
   modelId?: string | null;
   /** Firmware version the car reports, when it reports one. */
   fwVersion?: string | null;
-  /** The method that reached the car: bluetooth | wifi | internet. */
+  /** The method that reached the car: bluetooth | wifi. */
   connectionMethod: string;
   ssid?: string | null;
   ip?: string | null;

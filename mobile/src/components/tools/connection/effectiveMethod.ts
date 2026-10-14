@@ -18,7 +18,7 @@
 // Pure, so it can be pinned without rendering anything.
 // =====================================================================
 
-export type ConnectionMethodId = "bluetooth" | "wifi" | "internet";
+export type ConnectionMethodId = "bluetooth" | "wifi";
 
 export function effectiveMethod(input: {
   /** What the user explicitly picked, if anything. Always wins. */

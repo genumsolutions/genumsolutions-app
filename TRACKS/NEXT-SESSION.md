@@ -1,4 +1,34 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-111 — apply the car's settings on connect + BT name; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-112 — the Internet method removed from the app; JS-only OTA, version 3.2.7/60 UNCHANGED)
+
+## This session (2026-10-14, U-112 — the Internet method removed from the app; JS-only OTA 3.2.7/60 UNCHANGED)
+
+Owner directive (mirrors the car repo — `Genum_4WD4M_CAR` firmware **1.3.9**
+deletes `RelayComm`): the Internet / remote-link ("control from anywhere")
+method is dropped ENTIRELY — removed, not parked — and will be rebuilt from
+scratch later. Nothing reachable is lost: the method was offered as honestly
+-unavailable and the relay was build-blocked (F-84).
+
+- **`connection/methods.ts` + `connection/effectiveMethod.ts`** —
+  `ConnectionMethodId` is now `"bluetooth" | "wifi"`. The Internet method (its
+  pill, its unavailability card, the `unavailable` field) is gone, and
+  `ConnectionSection` renders two pills with no blocked/disabled state.
+- **`transports/types.ts` + `transports/adapters.ts`** — `TransportRadio` loses
+  `internet`; the `mqtt` and `cloud-relay` placeholder transports are deleted
+  (registry 8 → 6). `commandRouting.ts` `ChosenRadio` loses `internet` too, and
+  `crashReportService.ts`'s `connectionMethod` doc matches the two methods.
+- **Tests pin the ABSENCE** (the round's regression net): `methods.test.ts` —
+  "Internet is gone entirely — removed by owner directive, not parked";
+  `contrast.guard.test.ts` — exactly two methods; `adapters.test.ts` — 6 ids,
+  no mqtt/cloud-relay; `commandRouting.test.ts` — the `internet` tie-breaker
+  case is gone.
+- **`mobile/TESTING.md`** — new **U-112** section (3 rows); the stale
+  three-method / 8-transport rows updated (U-102-8, U-68-1, U-51-2, U-50-1/2,
+  U-59-3) and U-R3-2 marked OBSOLETE (no relay path exists any more).
+
+**Gates:** `tsc` 0 · vitest **685/685** (44 files — 688 minus the three
+Internet-only cases) · prettier clean. JS-only OTA (F-32): version 3.2.7 /
+versionCode 60 unchanged. **Not device-verified (F-61)** — owner flashes car
+**1.3.9** and runs the U-112 rows.
 
 ## This session (2026-10-14, U-111 — apply the car's settings on connect + BT name; JS-only OTA 3.2.7/60 UNCHANGED)
 

@@ -125,15 +125,4 @@ describe("routeCommand — both links live: mode parity + chosen tie-breaker", (
     });
     expect(r).toEqual({ bt: false, ws: true });
   });
-
-  it("an 'internet'-radio choice leaves the two live links to mode parity", () => {
-    const r = routeCommand({
-      ...base,
-      btLive: true,
-      wsLive: true,
-      modeUsesBt: true,
-      chosenRadio: "internet",
-    });
-    expect(r).toEqual({ bt: true, ws: false });
-  });
 });

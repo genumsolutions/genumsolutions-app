@@ -34,27 +34,24 @@
  * Stable ids for every link the app can drive the car over.
  *
  * Implemented today: bt-classic, wifi-ap-ws, wifi-sta-ws, http (REST).
- * Registered placeholders (the full "what if every possible comm method"
- * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md, NOT in the repo):
- * bt-ble (needs firmware GATT-UART), mdns, mqtt, cloud-relay.
+ * Registered placeholders (the remaining "what if every possible comm method"
+ * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md, NOT in the
+ * repo): bt-ble (needs firmware GATT-UART), mdns.
+ *
+ * The Internet/remote-link transports (mqtt, cloud-relay) were removed on
+ * 2026-10-14 by owner directive; they will be rebuilt from scratch later.
  */
 export type TransportId =
-  | "bt-classic"
-  | "bt-ble"
-  | "wifi-ap-ws"
-  | "wifi-sta-ws"
-  | "http"
-  | "mdns"
-  | "mqtt"
-  | "cloud-relay";
+  "bt-classic" | "bt-ble" | "wifi-ap-ws" | "wifi-sta-ws" | "http" | "mdns";
 
 /**
  * The radio a transport rides on — what the picker groups by.
  *
  * `wired` (the cable/USB-serial method) was removed at the owner's request
  * ("remove the cable ones method too totally"), so it is no longer a radio.
+ * `internet` was removed on 2026-10-14 with the Internet method itself.
  */
-export type TransportRadio = "bluetooth" | "wifi" | "internet";
+export type TransportRadio = "bluetooth" | "wifi";
 
 /**
  * What a link can do. The UI hides or disables anything absent here,

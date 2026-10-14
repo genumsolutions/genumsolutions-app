@@ -12,7 +12,7 @@
 //      here because the app once shipped the short forms (/f /b /l /r),
 //      which the car answers with 404 (F-50).
 //   3. The placeholders: isSupported()===false, connect() throws the roadmap
-//      note, and the registry contains every possible comm method.
+//      note, and the registry contains every remaining comm method.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mutable singletons so tests can flip the shared socket's state.
@@ -173,7 +173,7 @@ describe("HTTP / REST adapter", () => {
     const frames: Array<Record<string, unknown>> = [];
     http.onTelemetry((t) => frames.push(t as Record<string, unknown>));
 
-    expect(http.radio).toBe("internet");
+    expect(http.radio).toBe("wifi");
     await http.connect();
     expect(http.getStatus()).toBe("connected");
     expect(http.isConnected()).toBe(true);
@@ -282,7 +282,7 @@ describe("Registered placeholders and the full registry", () => {
     expect(ble.roadmapNote).toMatch(/firmware/i);
   });
 
-  it("registers every possible comm method, placeholders stay inert", async () => {
+  it("registers every remaining comm method, placeholders stay inert", async () => {
     registerAllTransports();
     const ids = linkManager.list().map((t) => t.id);
     for (const want of [
@@ -292,29 +292,24 @@ describe("Registered placeholders and the full registry", () => {
       "wifi-sta-ws",
       "http",
       "mdns",
-      "mqtt",
-      "cloud-relay",
     ]) {
       expect(ids).toContain(want);
     }
     // The cable/USB-serial method was removed at the owner's request.
     expect(ids).not.toContain("usb-serial");
-    expect(linkManager.list().length).toBe(8);
+    // The Internet/remote transports (mqtt, cloud-relay) were removed on
+    // 2026-10-14 by owner directive — they must not reappear in the registry.
+    expect(ids).not.toContain("mqtt");
+    expect(ids).not.toContain("cloud-relay");
+    expect(linkManager.list().length).toBe(6);
 
     const mdns = linkManager.get("mdns");
-    const mqtt = linkManager.get("mqtt");
-    const cloud = linkManager.get("cloud-relay");
 
     expect(mdns?.isSupported()).toBe(false);
     expect(mdns?.radio).toBe("wifi");
-    expect(mqtt?.isSupported()).toBe(false);
-    expect(mqtt?.radio).toBe("internet");
-    expect(cloud?.isSupported()).toBe(false);
-    expect(cloud?.radio).toBe("internet");
 
     // connect() throws the roadmap note instead of lifting a dead link.
     await expect(mdns?.connect?.()).rejects.toThrow(/mDNS/i);
-    await expect(mqtt?.connect?.()).rejects.toThrow(/broker/i);
     expect(mdns?.getStatus()).toBe("idle");
     expect(mdns?.getTargetLabel()).toBeNull();
   });
