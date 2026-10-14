@@ -44,10 +44,6 @@ function readings(p: DriveTelemetryProps): Reading[] {
   const off = !p.linked;
   const sig = formatSignal({ rssi: p.rssi, signal: p.signal });
   return [
-    {
-      label: "Link",
-      value: off ? "Offline" : p.linkLabel.trim() || "Connected",
-    },
     { label: "Uptime", value: off ? DASH : formatUptime(p.uptimeMs) },
     { label: "Heap", value: off ? DASH : formatHeap(p.freeHeap) },
     { label: "Signal", value: off ? DASH : sig.value },
