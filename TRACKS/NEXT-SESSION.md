@@ -8,11 +8,25 @@
 > (commit `d510a03` + cleanup — dropdown widened + the CAR's boot-auto-join toggle removed;
 > the control AUDIT is the owner's bench pass), both with device rows **U-113-2..7 + U-113-16**
 > owed. **Car-side P4** (BT heap diet, THE main issue) has landed its first two bullets
-> (heap breadcrumb + classic-BT-only bring-up); the E1 capture + floor re-tune are owed, then P5;
-> P6 (dual link) needs P4's headroom. Master car plan:
+> (heap breadcrumb + classic-BT-only bring-up) and **car-side P5 (issues 7 + 9, the Wi-Fi
+> transport switch) is landed + gated — CAR-ONLY, no app change**; the E1 capture + floor
+> re-tune and the E3/E4 captures are owed. P6 (dual link) needs P4's headroom. Master car plan:
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
 > captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.11
 > (the car's current flash target; the diet + P5 ride 1.3.11).
+
+## This session (2026-10-15, U-113 P5 — CAR-side only; no app change, 3.2.7/60 UNCHANGED)
+
+P5 (issues 7 + 9) turned out to be **entirely a car-firmware fix**, so nothing in this
+repo changed and the app version stays **3.2.7 / versionCode 60**. Per the U-111 round
+the app's transport-toggle round-trip already works; what was broken is that the **car**
+did not honour its own switch — `stop()` dropped the beacon only `if (apRunning_)`, and
+`handle()`'s AP retry re-created the hotspot ~2 s after `WIFICFG;WIFI;OFF` (it tested
+only `!apRunning_`, which `stop()` had just cleared). Fixed and gated on the car
+(`wifi-off-hides-ap` + `page-always-on`, mutants M91-M95).
+
+App work remaining in this round is unchanged: **P7** (issue 8, persistence + sync
+sweep) and **P6** (issue 1, the dual link) — P6 still gated on P4's heap headroom.
 
 ## This session (2026-10-15, U-113 P1 — the dead mode-rotate button fixed; JS-only OTA, 3.2.7/60 UNCHANGED)
 
