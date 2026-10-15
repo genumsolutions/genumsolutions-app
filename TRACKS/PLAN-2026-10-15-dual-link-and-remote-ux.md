@@ -1,9 +1,12 @@
 # PLAN 2026-10-15 — dual link + remote-screen UX + BT heap (APP half, mirror)
 
-Status: **P1 DONE (2026-10-15) — P2 NEXT.** Phase 0 captures (E2/E5 + the P3 audit log) are
-still owed from the owner's 1.3.10 bench pass; P1 did not need them (source-level root cause,
-see below). This file mirrors the master in `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`
-(keep both in sync); cross-repo round log stays in the root `RESUME-HERE.md`.
+Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
+P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
+U-113-5..7 are the owner's bench pass) — next is car-side P4 (BT heap diet → 1.3.11).**
+Phase 0 captures (E2/E5 + the P3 audit log) are still owed from the owner's 1.3.10 bench pass;
+P1 did not need them (source-level root cause, see below). This file mirrors the master in
+`Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md` (keep both in sync);
+cross-repo round log stays in the root `RESUME-HERE.md`.
 
 Owner request (2026-10-15, pasted text, verbatim intent — 14 issues; #14 was missed in this
 plan's first pass and added on the 2026-10-15 re-read of the same pasted text):
@@ -99,6 +102,10 @@ P3 settings audit pass/fail log.
 
 ### P2 — Issues 2, 3, 4, 10: Remote screen chrome rebuilt (APP, JS-only OTA)
 
+**✅ DONE 2026-10-15** (commit `c035e8c`; `remoteChrome.test.ts` pins every rule both
+ways; tsc 0 · vitest 705/705 · prettier clean). Device rows **U-113-2..4 + U-113-16**
+are owed from the owner's bench pass (F-61).
+
 All in `src/screens/RemoteControlScreen.tsx`:
 
 - **Merge** the disconnect row (L868-921, `h-7`) and the tabs row (L924-999, `h-7`) into ONE
@@ -127,6 +134,13 @@ All in `src/screens/RemoteControlScreen.tsx`:
   U-113-16 with before/after screenshots.
 
 ### P3 — Issues 5, 12: Settings panel widened + fully audited (APP, JS-only OTA)
+
+**◑ CODE LANDED 2026-10-15** (commit `d510a03`): the dropdown widened `w-64` → `w-80`
+and the CAR's "Boot auto-join (car)" toggle removed (Q1's UI half). **The control AUDIT
+(issue 12) is the owner's bench pass** — rows **U-113-5..7**; "make the other auto-join
+fully working" may still need a code fix once that pass names a failure. A follow-up
+2026-10-15 cleanup also repaired the removal, which had left a dead JSX fragment parked
+inside a JSX comment (it compiled only because the comment swallowed it).
 
 - Widen the dropdown (`absolute right-3 w-64`, L1307) to fit content (e.g. `w-80` / %-based with
   a max), re-lay the rows so labels + switches + helper text all fit without truncation, keep

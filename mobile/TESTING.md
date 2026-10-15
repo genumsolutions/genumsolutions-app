@@ -19,6 +19,52 @@
       Needs ANY 1.3.10+ flash (the CAPS GONE keys come from U-79). Force-close and reopen
       ×2 after the OTA (`A-2`).
 
+### P2 — issues 2, 3, 4, 10, 14: Remote chrome rebuilt (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
+
+> Plan: P2. All rows need the owner's bench pass; capture before/after screenshots
+> for the merged row and the prompts.
+
+- [ ] **U-113-2 — issue 2: ONE row below Back.** The disconnect chips and the
+      D-pad/Joystick/Telemetry/Connectivity pills now share a SINGLE constant-height
+      row; the content area gains their ~28 px. There is no second row, and the pills
+      still switch tabs.
+- [ ] **U-113-3 — issue 3: the disconnect chips are per-live-method.** The BT chip
+      appears only while a Bluetooth link is live and disconnects ONLY Bluetooth
+      (Wi-Fi stays up); the Wi-Fi chip appears only while a Wi-Fi link is live and
+      disconnects ONLY Wi-Fi. Before P2 the BT chip rode the shared `connected` flag
+      (which a Wi-Fi connect also sets) and its tap killed BOTH links.
+- [ ] **U-113-4 — issues 4 + 10: the chrome line is honest.** The "on &lt;phone-ssid&gt;"
+      chip is gone (no phone-network name anywhere on the Remote). The broadcast IP
+      right of Back IS the tappable link to the car's page, the long
+      "BT · name + WiFi · ip (AP)" label is gone, and there is no second page chip in
+      the tabs row.
+- [ ] **U-113-16 — issue 14: the prompts are readable.** Both the network-reconnect
+      and the car-restart dialogs are OPAQUE high-contrast cards (solid background +
+      border) — the screen text no longer shows through — and each names the real
+      connection state (which link dropped / which is still up), not a generic
+      "Connection lost".
+
+### P3 — issues 5, 12: Settings panel widened + audited (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
+
+> Plan: P3. The widen + the toggle removal are IN; the control AUDIT is the bench
+> pass these rows exist to produce (log pass/fail per control, not just "works").
+
+- [ ] **U-113-5 — issue 5: the settings dropdown fits.** Open the Settings menu on a
+      narrow phone: labels, switches and helper text all fit without truncation (the
+      panel was widened `w-64` → `w-80`); the list still scrolls when it overflows.
+- [ ] **U-113-6 — issue 12a: the CAR's boot auto-join toggle is gone; the app's is the
+      only one.** The Settings menu no longer offers "Boot auto-join (car)". The
+      remaining "Auto-join saved router (app)" toggle still works: on car selection
+      the app switches the car to the strongest saved router it hears (walk the
+      smart-link path end-to-end and report any failure — this half may need a code
+      fix).
+- [ ] **U-113-7 — issue 12b: the whole panel audited.** Toggle and verify EACH
+      control, logging pass/fail: Wi-Fi toggle, Bluetooth toggle (the two can't both
+      go off), Reset car data, Steering-limit + Trim steppers (2WD1M gate), mode
+      chooser + rotate (see U-113-1), the speed strip, the four tab pills, settings
+      open/close, Back (navigates without disconnecting), the reconnect/restart
+      prompts, and the floating-button drag. Report every failure with a repro.
+
 ## U-112 round — the Internet method removed from the app (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.9)
 
 > Owner directive: the Internet / remote-link ("control from anywhere") method is

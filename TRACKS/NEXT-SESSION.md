@@ -1,12 +1,14 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-15: U-113 P1 — the dead mode-rotate button fixed; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-15: U-113 P2 Remote chrome rebuild + P3 settings widen/auto-join cleanup; JS-only OTA, version 3.2.7/60 UNCHANGED)
 
 > **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
-> owner's 14-issue list. **P1 DONE 2026-10-15** (issue 11 — the dead mode-rotate: root-caused
+> owner's 14-issue list. **P1 DONE** (issue 11 — the dead mode-rotate: root-caused
 > to the cycle sending the car's GONE tokens ESP_SER/ESP_CLI → NACK → rollback; fixed with
-> the GONE-aware `nextCyclableToken` + device row U-113-1). **Next up: P2** (Remote chrome:
-> merge rows, conditional BT/Wi-Fi chips, drop the phone-net chip, IP-chip-as-link, opaque
-> reconnect dialog), then P3 (settings widen + audit), car P4 (BT heap diet → 1.3.11), P5,
-> P6 (dual link — needs P4 first), P7, P8. Master car plan:
+> the GONE-aware `nextCyclableToken` + device row U-113-1). **P2 DONE** (commit `c035e8c`,
+> issues 2/3/4/10/14 — Remote chrome rebuilt; `remoteChrome.test.ts`) and **P3 code landed**
+> (commit `d510a03` + cleanup — dropdown widened + the CAR's boot-auto-join toggle removed;
+> the control AUDIT is the owner's bench pass), both with device rows **U-113-2..7 + U-113-16**
+> owed. **Next: car-side P4** (BT heap diet → 1.3.11, THE main issue), then P5; P6 (dual link)
+> needs P4's headroom. Master car plan:
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
 > captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.10.
 
@@ -51,6 +53,66 @@ Version stays **3.2.7/60** (JS-only OTA, F-32).
 
 **Next phase: P2** — Remote screen chrome rebuild (issues 2/3/4/10/14), all in
 `RemoteControlScreen.tsx` + the `connected` flag split in `useControlHub.ts`; see the plan.
+
+## This session (2026-10-15, U-113 P2 — Remote chrome rebuild; JS-only OTA, 3.2.7/60 UNCHANGED)
+
+Commit **`c035e8c`**. All in `src/screens/RemoteControlScreen.tsx` + a small
+`useControlHub.ts` addition, plus a new `src/screens/remoteChrome.test.ts`.
+
+- **Issue 2 — one row below Back.** The disconnect row and the tab-pills row
+  (`h-7` each) merged into ONE constant-height row; the content area gains
+  ~28 px. Pinned: exactly one `flex h-7 flex-shrink-0 flex-row`.
+- **Issue 3 — per-method disconnect chips.** The chips used the SHARED
+  `connected` flag — which a Wi-Fi connect also sets and `handleWifiDisconnect`
+  never cleared — so the BT chip showed on a Wi-Fi-only link and its tap ran
+  the FULL teardown and killed Wi-Fi too. New `btLinked`
+  (`sppService.isConnected || bleService.isConnected`, reconciled on every BT
+  edge incl. mount) drives the BT chip; `handleBtDisconnect` closes BT only and
+  LEAVES Wi-Fi up. Pinned both ways.
+- **Issue 4 — the phone-net chip is gone** (`testID="phone-net"`, its selector
+  and the 1 s NAME⇄IP alternation removed from the screen; NetInfo discovery
+  stays — smart-link uses it).
+- **Issue 10 — the IP is THE page link.** The broadcast IP right of Back is the
+  tappable link; the long `deckLinkLabel` collapses to the short transport
+  label; the duplicate page chip in the tabs row is removed. One link only.
+- **Issue 14 — the prompts are readable.** Both prompts are opaque, high-contrast
+  cards (`bg-white dark:bg-slate-900`, `border-2`, `shadow-2xl` — the old
+  `bg-*-50` tints are gone) and their copy names the real connection state
+  ("Bluetooth disconnected", "Link now: {linkLabel}") instead of the generic
+  "Connection lost" / "Reconnect to your car?".
+
+**Gates:** tsc 0 · vitest **705/705** (46 files, incl. the new 7-case
+`remoteChrome.test.ts`, every rule proven both ways) · prettier clean.
+Device rows **U-113-2..4 + U-113-16** added to `mobile/TESTING.md` — owner bench
+pass owed (F-61). Version stays **3.2.7/60**.
+
+## This session (2026-10-15, U-113 P3 — Settings widen + auto-join cleanup; JS-only OTA, 3.2.7/60 UNCHANGED)
+
+Commit **`d510a03`**, plus a 2026-10-15 cleanup commit.
+
+- **Issue 5 — the settings dropdown was widened** `w-64` → `w-80` (narrow-phone
+  fit; scrolling `maxHeight` kept).
+- **Issue 12 (UI half) — the CAR's "Boot auto-join (car)" toggle removed** from
+  the Remote settings (Q1's default; the firmware half — stop the boot hop —
+  rides car-side P5). The app's own "Auto-join saved router (app)" toggle stays
+  and is now the only auto-join control here.
+- **Cleanup (found while reviewing):** the removal left a dead JSX fragment
+  (`onValueChange={(on) => …}` / `<Switch …/>` / `</View>`) parked inside the
+  `{/* U-108 Phase 6 … */}` comment, which only closed 18 lines later at an
+  unrelated comment terminator — it compiled because the comment swallowed it.
+  The block is deleted and the two comments are independent again;
+  `CarProfileCard.tsx`'s now-stale "separate Boot auto-join (car) setting" line
+  is dropped too.
+
+**NOT done (owner bench):** the issue-12 control AUDIT — every control on the
+panel toggled and logged pass/fail — and "make the app auto-join fully working"
+(walk the smart-link path end-to-end). Rows **U-113-5..7** are in
+`mobile/TESTING.md`; a failure found there becomes a code fix.
+
+**Gates:** tsc 0 · vitest **705/705** · prettier clean. Version stays **3.2.7/60**.
+
+**Next phase: car-side P4** — the BT heap diet (issue 6, THE main issue) → car
+1.3.11, then P5 rides the same flash; P6 (dual link) needs P4's headroom first.
 
 ## This session (2026-10-14, U-112 — the Internet method removed from the app; JS-only OTA 3.2.7/60 UNCHANGED)
 
