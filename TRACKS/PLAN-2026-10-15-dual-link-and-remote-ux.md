@@ -2,11 +2,12 @@
 
 Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
 P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
-U-113-5..7 are the owner's bench pass) — next is car-side P4 (BT heap diet → 1.3.12).**
+U-113-5..7 are the owner's bench pass) — car-side P4 (BT heap diet) has landed its first two
+bullets (breadcrumb + classic-BT-only bring-up); the E1 capture + floor re-tune are owed.**
 Phase 0 captures (E2/E5 + the P3 audit log) are still owed from the owner's 1.3.11 bench pass;
-P1 did not need them (source-level root cause, see below). **Car versions: the current car body
-(U-112 + U-114 + T66 + P4/E1) is 1.3.11 — the owner's bench + E1 flash; P4's diet + P5 ship as
-1.3.12.** This file mirrors the master in
+P1 did not need them (source-level root cause, see below). **Car version: the current car body
+(U-112 + U-114 + T66 + P4/E1 + the P4 diet) is 1.3.11 — the owner's bench + E1 flash; P5 rides
+it.** This file mirrors the master in
 `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md` (keep both in sync);
 cross-repo round log stays in the root `RESUME-HERE.md`.
 
@@ -159,15 +160,17 @@ inside a JSX comment (it compiled only because the comment swallowed it).
   reconnect/restart prompts, floating button drag. Fix the failures.
 - Acceptance: `mobile/TESTING.md` checklist + device rows U-113-5..7; vitest green.
 
-### P4 — Issue 6: BT heap diet (CAR firmware → 1.3.12) — THE main thing
+### P4 — Issue 6: BT heap diet (CAR firmware → 1.3.11) — THE main thing
 
-- Measure first (heap waterfall per stage), fix per measurement (prime suspects: unused BLE
-  controller memory, default ACL buffers, BT-restart-watchdog fragmentation), new contract rule
-  `bt-heap` + mutants. **Re-tune the U-112 floors afterwards** — at 10-14 KB the 49152 B status
-  floor defers telemetry to 1 attempt/4 s AND the 65536 B scan floor refuses every scan, i.e.
-  today BT ON ≈ router list permanently busy. Details + acceptance in the master plan.
+- Heap waterfall per stage (landed) → fix per measurement. **First step landed:** the car brings
+  Bluetooth up **classic-BT-only** (`SerialBT.begin(name, false, true)`), releasing the BLE
+  controller/host memory it never used; new contract rules `heap-waterfall` + `bt-heap` + mutants.
+  Remaining suspects if the post-diet numbers are still low: default ACL buffers, BT-restart
+  fragmentation. **Re-tune the U-112 floors afterwards** — at 10-14 KB the 49152 B status floor
+  defers telemetry to 1 attempt/4 s AND the 65536 B scan floor refuses every scan, i.e. today
+  BT ON ≈ router list permanently busy. Details + acceptance in the master plan.
 
-### P5 — Issues 7, 9: transport policy made honest (CAR firmware → rides the 1.3.12 flash)
+### P5 — Issues 7, 9: transport policy made honest (CAR firmware → rides the 1.3.11 flash)
 
 - Wi-Fi OFF must drop the beacon AND the page (find why `stop()`/`softAPdisconnect` misses:
   `apRunning_` desync vs never reached vs cached phone scan); page must come up with NO client
@@ -201,7 +204,7 @@ inside a JSX comment (it compiled only because the comment swallowed it).
   **mutate-gates clean-tree run**).
 - Ledgers: app `mobile/TESTING.md`, both `TRACKS/NEXT-SESSION.md`, car `TRACKS/CHANGELOG.md` +
   `TRACKS/DEVICE-TESTS.md` (U-113-1..16), root `RESUME-HERE.md`, `TRACKS/RUNSHEET.md`.
-- Ship: owner flashes 1.3.12 (huge_app, 115200), app publishes the JS-only OTA (3.2.7/60
+- Ship: owner flashes 1.3.11 (huge_app, 115200), app publishes the JS-only OTA (3.2.7/60
   unchanged unless a native change sneaks in — none planned), both CIs green, `backup` branches
   re-snapshotted.
 
@@ -219,6 +222,6 @@ inside a JSX comment (it compiled only because the comment swallowed it).
 ## Definition of done (issue 13)
 
 All 14 issues closed with device evidence attached to their U-113 rows; every phase's gates green
-including mutation proof; both repos pushed with clean trees; CI green on both; 1.3.12 flashed and
+including mutation proof; both repos pushed with clean trees; CI green on both; 1.3.11 flashed and
 the app OTA published; `backup` updated. Device-verified means the owner's own captures, not our
 gates (F-61 honesty rule).
