@@ -1,10 +1,56 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-14: U-112 — the Internet method removed from the app; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-15: U-113 P1 — the dead mode-rotate button fixed; JS-only OTA, version 3.2.7/60 UNCHANGED)
 
-> **⏭️ NEXT ROUND IS PLANNED:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
-> owner's 13-issue list (dual BT+Wi-Fi link, Remote-screen merge, conditional disconnects,
-> settings widening/audit, mode rotate, sync sweep). **Phase 0 = evidence captures while the
-> owner tests 1.3.10**, then P1..P8 one at a time. Car master:
-> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`.
+> **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
+> owner's 14-issue list. **P1 DONE 2026-10-15** (issue 11 — the dead mode-rotate: root-caused
+> to the cycle sending the car's GONE tokens ESP_SER/ESP_CLI → NACK → rollback; fixed with
+> the GONE-aware `nextCyclableToken` + device row U-113-1). **Next up: P2** (Remote chrome:
+> merge rows, conditional BT/Wi-Fi chips, drop the phone-net chip, IP-chip-as-link, opaque
+> reconnect dialog), then P3 (settings widen + audit), car P4 (BT heap diet → 1.3.11), P5,
+> P6 (dual link — needs P4 first), P7, P8. Master car plan:
+> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
+> captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.10.
+
+## This session (2026-10-15, U-113 P1 — the dead mode-rotate button fixed; JS-only OTA, 3.2.7/60 UNCHANGED)
+
+Owner reported (issue 11 of the 14-issue list): *"the icon on the top of the remote to
+switch modes doesn't cycle like before, seems like resetting to the same 4wd4m car."*
+
+**Root cause (H2, not H1):** `cycleMode` walked the full `REMOTE_MODE_ORDER` and sent the
+next token per owner ruling R-10 ("planned/CS stay cyclable — the car will NACK if it
+doesn't support it"). But U-79 REMOVED `ESP_SER`/`ESP_CLI` from the 4WD4M's registry
+outright (absent from CAPS = `GONE`, U-81), so every tap went 4WD4M → ESP_SER → car answers
+`NACK;E=UNKNOWN_MODE` → `handleNack` rolls the optimistic pick back to car truth = 4WD4M
+again. Forever. (H1 — the stale-`activeMode` closure in `sendCommand` routing — was ruled
+out for THIS symptom: mode tokens are not in `EVERY_LINK_COMMANDS`, but the OLD mode's
+transports for 4WD4M list both radios, so the token did leave the app; the NACK rollback
+is what the owner saw.)
+
+**Fix (app only):**
+- `config/roboCarCatalog.ts` — new pure helper **`nextCyclableToken(token, isUnavailable)`**:
+  same fleet-order walk as `nextRemoteModeToken`, but skips tokens the caller marks
+  unavailable. Current token stays the LAST candidate (a car whose only cyclable mode is
+  the one selected lands honestly on itself); empty predicate ⇒ byte-identical to
+  `nextRemoteModeToken` for every input; all-filtered ⇒ plain successor (button never
+  dead-ends).
+- `components/tools/useControlHub.ts` — `cycleMode` routes through the helper with the
+  predicate `modeAvailStatus(tok, carStubMap, carAvailMap) === "GONE"` — ONLY GONE tokens
+  are skipped; WIP/CS stay cyclable (R-10 intact). Deps now include the CAPS maps. Without
+  a CAPS table (older cars) nothing resolves to GONE and the cycle is unchanged.
+
+**Tests:** `roboCarCatalog.test.ts` +6 cases (identical-to-plain when empty predicate,
+4WD4M GONE-pair skip 4WD4M→PATH, AUTO→2WD1M, 2WD1M wrap→4WD4M, WIP/CS stay, self-landing,
+all-filtered fallback, canonical-uppercase predicate args) · new
+`components/tools/cycleModeGone.test.ts` (F-83 source-wiring pin on the RAW
+`useControlHub.ts` — helper called, no plain cycle left, `=== "GONE"` predicate,
+`isTokenComingSoon` absent, CAPS deps present, `selectMode` + commit-grace intact), all
+rules proven both ways (mutate → red on the exact assertion, restore → green).
+
+**Gates:** tsc 0 · vitest **701/701** (45 files) · prettier clean on the 4 touched files.
+Device row **U-113-1** added to `mobile/TESTING.md` — owner bench pass still owed (F-61).
+Version stays **3.2.7/60** (JS-only OTA, F-32).
+
+**Next phase: P2** — Remote screen chrome rebuild (issues 2/3/4/10/14), all in
+`RemoteControlScreen.tsx` + the `connected` flag split in `useControlHub.ts`; see the plan.
 
 ## This session (2026-10-14, U-112 — the Internet method removed from the app; JS-only OTA 3.2.7/60 UNCHANGED)
 

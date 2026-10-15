@@ -201,3 +201,15 @@ minimal cards, cart rebuild, admin sweeps, biometric fix) — all pushed, CI + O
 vitest 205/205. Resume point: `TRACKS/NEXT-SESSION.md` (top block) +
 `guide/SESSION-2026-09-27-U47-OWNER-ROUND.md`. FIN-36 re-stage + tags wait on the owner
 device pass.
+
+**2026-10-15 · U-113 P1 — the dead mode-rotate button fixed (3.2.7/60, JS-only OTA,
+version UNCHANGED).** Owner issue 11 of the 14-issue list (plan:
+`TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md`). Root cause: `cycleMode` walked the full
+`REMOTE_MODE_ORDER` per R-10 and sent the next token — but the 4WD4M removed
+`ESP_SER`/`ESP_CLI` in U-79 (absent from CAPS = GONE, U-81), so the car answered
+`NACK;E=UNKNOWN_MODE` and `handleNack` rolled the pick back to 4WD4M on every tap. Fix: new
+pure `nextCyclableToken(token, isUnavailable)` in `roboCarCatalog.ts`; `cycleMode` skips only
+`modeAvailStatus(...) === "GONE"` (WIP/CS stay cyclable — R-10 intact). Tests: +6 catalog
+rules + new F-83 source-wiring pin `components/tools/cycleModeGone.test.ts` (mutate-proven
+both ways). Gates: tsc 0 · vitest **701/701** (45 files) · prettier clean. Device row
+U-113-1 pending owner bench pass. Next: P2 (Remote chrome rebuild).

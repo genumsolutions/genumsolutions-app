@@ -366,6 +366,47 @@ export function nextRemoteModeToken(token: string): string {
 }
 
 /**
+ * The next mode token in the fleet order, SKIPPING every token the caller
+ * marks unavailable for the paired car — the U-113 P1 companion to
+ * `nextRemoteModeToken`.
+ *
+ * The plain cycle walks all 9 tokens regardless of the car, per owner ruling
+ * R-10: planned (WIP) and not-yet-built (CS) modes must stay cyclable; the
+ * car renders its own "planned mode" frame. That ruling does NOT extend to a
+ * token the car declared `GONE` in its CAPS table: GONE means the mode is
+ * absent from the car's own registry (U-79 removed `ESP_SER`/`ESP_CLI` from
+ * the 4WD4M outright), so sending it can only ever come back as
+ * `NACK;E=UNKNOWN_MODE` — and the app's NACK handler rolls the optimistic
+ * pick straight back to car truth. That combination made the remote's rotate
+ * button look dead on the 4WD4M: 4WD4M → ESP_SER → NACK → 4WD4M, forever.
+ *
+ * Semantics:
+ *  - `isUnavailable` is called with the canonical (uppercase) token.
+ *  - The current token stays in the pool as the LAST candidate, so a car
+ *    whose only cyclable mode is the one already selected lands honestly on
+ *    itself instead of dead-ending.
+ *  - Unknown / legacy tokens (BT) start from the head of the order (4WD4M)
+ *    — same as `nextRemoteModeToken` — so with an empty predicate the two
+ *    helpers are identical for every input.
+ *  - If literally every token is filtered out (pathological CAPS data), the
+ *    plain unfiltered successor is returned so the button still moves and
+ *    the car's answer decides.
+ */
+export function nextCyclableToken(
+  token: string,
+  isUnavailable: (token: string) => boolean,
+): string {
+  const t = token.trim().toUpperCase();
+  const n = REMOTE_MODE_ORDER.length;
+  const base = remoteOrderIndex(t) === -1 ? 0 : remoteOrderIndex(t);
+  for (let step = 1; step <= n; step++) {
+    const candidate = REMOTE_MODE_ORDER[(base + step) % n];
+    if (!isUnavailable(candidate)) return candidate;
+  }
+  return nextRemoteModeToken(t);
+}
+
+/**
  * Stable-sort a mode list (DB rows or bundled) into the fleet cycle order.
  * Unknown/unmapped tokens drop to the tail. Used by the chooser, the
  * remote nav preview and cycleMode so the on-screen order ALWAYS matches

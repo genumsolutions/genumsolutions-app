@@ -1,5 +1,24 @@
 # TESTING — Physical Device Test Checklist
 
+## U-113 round — the 2026-10-15 rectification round (14-issue list; app 3.2.7/60 JS-only OTA unless a row says otherwise; car flash target 1.3.11)
+
+> Master plan: `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` (mirror of
+> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`). Phases P1..P8,
+> one at a time; device rows accumulate here as each phase lands. **Rows below marked
+> (code landed) still need the owner's bench pass — F-61: our gates are NOT device evidence.**
+
+### P1 — issue 11: mode-rotate cycles again (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
+
+- [ ] **U-113-1 — the mode-rotate button cycles AND skips the car's GONE modes.** On the
+      Remote screen the rotate icon next to the mode chooser advances through the fleet
+      cycle; on the 4WD4M it must go 4WD4M → **PATH** (ESP_SER/ESP_CLI were removed from
+      the car's registry in U-79 and are absent from its CAPS table = GONE — the old code
+      sent ESP_SER, the car NACKed and the display rolled back to 4WD4M, i.e. "resets to
+      the same 4wd4m"). A full spin must visit every mode the car's CAPS table lists
+      exactly once before wrapping to 4WD4M, and planned/CS modes stay cyclable (R-10).
+      Needs ANY 1.3.10+ flash (the CAPS GONE keys come from U-79). Force-close and reopen
+      ×2 after the OTA (`A-2`).
+
 ## U-112 round — the Internet method removed from the app (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.9)
 
 > Owner directive: the Internet / remote-link ("control from anywhere") method is
