@@ -286,6 +286,15 @@ export function useControlHub(routeCategory?: string) {
   // device", and keeps working when nothing is linked (simulation). ----
   const [sppDevices, setSppDevices] = useState<SppDevice[]>([]);
   const [connected, setConnected] = useState(sppService.isConnected);
+  // U-113 P2 (issue 3): `connected` is the SHARED "some link is up" flag — a
+  // Wi-Fi connect sets it too. The Remote screen's Bluetooth chip must show
+  // only while a BT transport is REALLY linked, so BT truth gets its own
+  // state, written by the SPP/BLE handlers (each one consults the other BT
+  // transport before clearing — SPP dropping must not hide a live BLE link
+  // and vice versa). Wi-Fi truth already has its own flag (`wifiConnected`).
+  const [btLinked, setBtLinked] = useState(
+    sppService.isConnected || bleService.isConnected,
+  );
   const [deviceName, setDeviceName] = useState(sppService.deviceName ?? "");
   const [scanning, setScanning] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -1268,9 +1277,11 @@ export function useControlHub(routeCategory?: string) {
     }
     if (sppService.isConnected) {
       setConnected(true);
+      setBtLinked(true);
       setDeviceName(sppService.deviceName ?? "");
     } else if (bleService.isConnected) {
       setConnected(true);
+      setBtLinked(true);
       setDeviceName(bleService.deviceName ?? "");
     }
     if (wifiService.linkVerified) setLinkVerified(true);
@@ -1631,6 +1642,8 @@ export function useControlHub(routeCategory?: string) {
           // a silent auto-reconnect or retry that reached 'connected' left the
           // UI believing the link was down (dead Connect button on return).
           setConnected(true);
+          // U-113 P2: an SPP link IS Bluetooth truth for the Remote chip.
+          setBtLinked(true);
           // U-98: a live SPP link IS a verified car link. Before this only the
           // Wi-Fi paths set `linkVerified`, so a Bluetooth connect left the
           // Control Panel's Connection card stuck on "Connecting…" forever
@@ -1662,6 +1675,9 @@ export function useControlHub(routeCategory?: string) {
             setConnected(false);
             setLinkVerified(false);
           }
+          // U-113 P2: SPP is down — hide the BT chip unless BLE still holds
+          // a link (the two BT transports are independent transports).
+          if (!bleService.isConnected) setBtLinked(false);
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
           // Auto-reconnect on unexpected disconnect (ESP remote parity):
@@ -1685,6 +1701,9 @@ export function useControlHub(routeCategory?: string) {
             setConnected(false);
             setLinkVerified(false);
           }
+          // U-113 P2: SPP is down — hide the BT chip unless BLE still holds
+          // a link (the two BT transports are independent transports).
+          if (!bleService.isConnected) setBtLinked(false);
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
           if (
@@ -1707,6 +1726,7 @@ export function useControlHub(routeCategory?: string) {
       if (!mountedRef.current) return;
       if (kind === "connected") {
         setConnected(true);
+        setBtLinked(true);
         setDeviceName(bleService.deviceName ?? "Car");
         setTimeout(() => {
           bleService
@@ -1718,12 +1738,14 @@ export function useControlHub(routeCategory?: string) {
         // Only clear connected if SPP is also not linked.
         if (!sppService.isConnected) {
           setConnected(false);
+          setBtLinked(false);
           setDeviceName("");
         }
       } else if (kind === "error") {
         // BLE monitoring error â€” treat like disconnect if SPP is also down
         if (!sppService.isConnected) {
           setConnected(false);
+          setBtLinked(false);
           setDeviceName("");
         }
       }
@@ -1947,6 +1969,7 @@ export function useControlHub(routeCategory?: string) {
         sppReconnectAttemptsRef.current = 0;
         sppReconnectActiveRef.current = false; // fresh manual link: re-arm the scheduler
         setConnected(true);
+        setBtLinked(true);
         setDeviceName(device.name);
         setConnecting(false);
         setConnectingAddress(null);
@@ -2350,6 +2373,57 @@ export function useControlHub(routeCategory?: string) {
       ssid: undefined,
       connected: undefined,
     }));
+  }, []);
+
+  // U-113 P2 (owner issue 3): a BLUETOOTH-ONLY disconnect. The Remote
+  // screen's BT chip used to call the full `handleDisconnect`, which tore
+  // the Wi-Fi link down too — the owner's "each must really disconnect its
+  // own method". This safe-stops over Bluetooth, closes SPP + BLE, and
+  // LEAVES the Wi-Fi link up: `connected` / `linkVerified` are only cleared
+  // by the guarded paths when no answered Wi-Fi link remains (the same rule
+  // the BT status handlers already follow). `manualCloseRef` stops the SPP
+  // auto-reconnect from reopening a link the user deliberately dropped.
+  const handleBtDisconnect = useCallback(async () => {
+    manualCloseRef.current = true;
+    // Safe-stop: neutral commands over each LIVE BT transport before closing.
+    if (sppService.isConnected) {
+      try {
+        await sppService.sendLine("S");
+      } catch {
+        /* ignore — link may already be dead */
+      }
+      try {
+        await sppService.sendLine("SPD0");
+      } catch {
+        /* ignore */
+      }
+    }
+    if (bleService.isConnected) {
+      try {
+        await bleService.sendLine("S");
+      } catch {
+        /* ignore */
+      }
+      try {
+        await bleService.sendLine("SPD0");
+      } catch {
+        /* ignore */
+      }
+      await bleService.disconnect();
+    }
+    await sppService.disconnect();
+    setBtLinked(false);
+    // A live Wi-Fi link keeps the shared truth (`connected` / `linkVerified` /
+    // deviceName belong to whatever link remains); with no Wi-Fi socket up
+    // this is a full link loss and must un-verify it.
+    if (!wifiService.isConnected) {
+      setConnected(false);
+      setLinkVerified(false);
+      setDeviceName("");
+    }
+    // The car heard S / SPD0 over BT — "Stop" is honest on every surface.
+    setDriveStatusOnce("Stop");
+    setDriveDirOnce("S");
   }, []);
 
   // ---- v1.4.0 WiFi provisioning (app → BT → car) ----
@@ -3519,6 +3593,9 @@ export function useControlHub(routeCategory?: string) {
     // connection
     sppDevices,
     connected,
+    // U-113 P2: per-method link truth — BT chip shows only while a BT
+    // transport is really up (Wi-Fi truth is `wifiConnected` below).
+    btLinked,
     deviceName,
     scanning,
     connecting,
@@ -3550,6 +3627,9 @@ export function useControlHub(routeCategory?: string) {
     handleSppsRetry,
     handleWifiConnect,
     handleWifiDisconnect,
+    // U-113 P2: per-method disconnects — BT-only and Wi-Fi-only. The full
+    // `handleDisconnect` (both links down) stays for surfaces that mean it.
+    handleBtDisconnect,
     handleDisconnect,
     showConnectionMessage,
     // v1.4.0 WiFi provisioning (app â†’ BT â†’ car) + car WiFi truth
