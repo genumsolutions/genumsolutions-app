@@ -7,11 +7,12 @@
 > issues 2/3/4/10/14 — Remote chrome rebuilt; `remoteChrome.test.ts`) and **P3 code landed**
 > (commit `d510a03` + cleanup — dropdown widened + the CAR's boot-auto-join toggle removed;
 > the control AUDIT is the owner's bench pass), both with device rows **U-113-2..7 + U-113-16**
-> owed. **Next: car-side P4** (BT heap diet → 1.3.12, THE main issue), then P5; P6 (dual link)
-> needs P4's headroom. Master car plan:
+> owed. **Car-side P4** (BT heap diet, THE main issue) has landed its first two bullets
+> (heap breadcrumb + classic-BT-only bring-up); the E1 capture + floor re-tune are owed, then P5;
+> P6 (dual link) needs P4's headroom. Master car plan:
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
 > captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.11
-> (the car's current flash target; the diet + P5 ship as 1.3.12).
+> (the car's current flash target; the diet + P5 ride 1.3.11).
 
 ## This session (2026-10-15, U-113 P1 — the dead mode-rotate button fixed; JS-only OTA, 3.2.7/60 UNCHANGED)
 
@@ -112,8 +113,9 @@ panel toggled and logged pass/fail — and "make the app auto-join fully working
 
 **Gates:** tsc 0 · vitest **705/705** · prettier clean. Version stays **3.2.7/60**.
 
-**Next phase: car-side P4** — the BT heap diet (issue 6, THE main issue) → car
-1.3.12, then P5 rides the same flash; P6 (dual link) needs P4's headroom first.
+**Next phase: car-side P4** — the BT heap diet (issue 6, THE main issue): first two
+bullets landed (heap breadcrumb + classic-BT-only bring-up); the E1 capture + floor re-tune
+are owed, then P5 rides the same 1.3.11 flash; P6 (dual link) needs P4's headroom first.
 
 ## This session (2026-10-14, U-112 — the Internet method removed from the app; JS-only OTA 3.2.7/60 UNCHANGED)
 
