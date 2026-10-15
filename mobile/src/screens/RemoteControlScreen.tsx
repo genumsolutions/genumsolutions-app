@@ -97,6 +97,14 @@ type Route = RouteProp<RootStackParamList, "RemoteControl">;
 
 const NAV_DEBOUNCE_MS = 120;
 
+// U-113 P2 (owner issue 2, Open Question Q2 default = yes): the merged
+// single row below Back carries [BT chip?] [Wi-Fi chip?] · telemetry … ·
+// [D-pad][Joystick][Telemetry][Connectivity]. When the row gets tight the
+// compact telemetry line (Up/Heap/Sig) drops FIRST — disconnect chips and
+// tab pills are the controls, the readings are also on the Telemetry tab.
+// Landscape phones start around 640 px; below this cut the line hides.
+const MERGED_ROW_TELEMETRY_MIN_PX = 700;
+
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxSpeed: 255,
   maxSignedDrive: 255,
@@ -115,25 +123,13 @@ function clampStep(
   return Math.max(min, Math.min(max, v));
 }
 
-/**
- * A-25 (device-round-5): the BT device name shown in the header must be
- * FRIENDLY — never a raw hex address. SPP scans can resolve to the MAC
- * fallback (sppService `device.name ?? device.address`); here a MAC-shaped
- * string becomes a neutral label and underscores are prettified into spaces
- * (`WIRELESS_CAR` → `WIRELESS CAR`).
- *
- * A-38 (device-round-8, owner): never invent a car name. When the scan only
- * gave us a MAC (or a 1–2 char fragment) there is no real name to show, so
- * return '' — callers already fall back to the neutral "Connected" label.
- * The old 'ESP32 Car' placeholder is removed.
- */
-function friendlyBtName(name: string): string {
-  const n = (name || "").trim();
-  if (!n) return "";
-  const hexMac = /^([0-9A-Fa-f]{2}([:-])){5}[0-9A-Fa-f]{2}$/.test(n);
-  if (hexMac || n.length <= 2) return "";
-  return n.replace(/_/g, " ");
-}
+// A-25/A-38 (device rounds 5/8): "the chrome label must be FRIENDLY — never
+// a raw hex MAC, never an invented name" — kept by CONSTRUCTION since
+// U-113 P2 (owner issue 10): the link chip renders the short link label +
+// IP and NO device name at all, so there is no name to sanitize and the
+// `friendlyBtName` helper that used to live here is deleted with its caller
+// (`deckLinkLabel`, the "BT · name + WiFi · ip (AP)" line the owner called
+// gibberish). The BT name still shows where a name belongs: the OLED mirror.
 
 /** Small −/+ stepper pill for the settings dropdown. */
 function StepperPill({
@@ -304,14 +300,18 @@ export function RemoteControlScreen({ navigation }: Props) {
     showSppsRetry,
     handleSppsRetry,
     handleReconnectPromptCancel,
-    // U-108 Phase 4: phone-network truth + the detected car-restart prompt.
-    phoneSsid,
+    // U-108 Phase 4: the detected car-restart prompt. (phoneSsid is gone
+    // from the Remote — U-113 P2 removed the "on <ssid>" chip, issue 4.)
+    btLinked,
     carRestartNotice,
     handleRestartReconnect,
     handleRestartDismiss,
     autoJoinRouter,
     setAutoJoinRouter,
-    handleDisconnect,
+    // U-113 P2 (issue 3): per-method disconnects — each chip tears down ONLY
+    // its own transport. (The full `handleDisconnect` is no longer used here:
+    // the BT chip used to call it and killed the Wi-Fi link too.)
+    handleBtDisconnect,
     handleWifiDisconnect,
   } = hub;
 
@@ -330,33 +330,19 @@ export function RemoteControlScreen({ navigation }: Props) {
   });
   // Car is on router if WiFi connected and NOT on own hotspot
   const carOnRouter = wifiConnected && !onOwnHotspot;
-  // Display IP: use telemetry.ip if available and valid; otherwise show AP IP only
-  // when we know car is on its own hotspot; otherwise show placeholder
-  const displayIp = telemetry.ip
-    ? telemetry.ip
-    : onOwnHotspot
-      ? DEFAULT_AP_IP
-      : carOnRouter
-        ? "—"
-        : DEFAULT_AP_IP;
-  const showIp = telemetry.ip !== undefined || onOwnHotspot;
 
-  // U-108 (owner 2026-10-13): the IP chip alternates the NETWORK NAME ⇄ the IP
-  // (~1 s), mirroring the car OLED's Wi-Fi frame, so the deck always names the
-  // network it is on and its address without a second tap.
+  // U-113 P2 (owner issue 10): the chrome row shows the car's broadcast IP
+  // as THE link to the car's page, so this is the ONE IP expression left.
+  // Honesty kept from U-108/W5: a known STA IP first, the AP address (named
+  // as such) only while the car is on its own hotspot, and a dash — never a
+  // guess — otherwise. The old 1 s NAME⇄IP alternation and its second copy of
+  // this expression died with the tabs-row chip (issue 4/10); the SSID still
+  // shows on the OLED mirror and in the Connectivity panel.
   const ipChipText = telemetry.ip
     ? telemetry.ip
     : onOwnHotspot
       ? `${DEFAULT_AP_IP} (AP)`
       : "—";
-  const netNameText = onOwnHotspot
-    ? (carApName ?? "Car hotspot")
-    : (telemetry.ssid ?? carSsid ?? "—");
-  const [ipChipPhase, setIpChipPhase] = useState(false);
-  useEffect(() => {
-    const id = setInterval(() => setIpChipPhase((p) => !p), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   // Restore joystick layout choice per device.
   useEffect(() => {
@@ -564,16 +550,10 @@ export function RemoteControlScreen({ navigation }: Props) {
       : wifiConnected
         ? "WiFi"
         : "Offline";
-  // M2: the ONE label for the chrome row AND the sub-header line 1 — both live
-  // links named together under parallel, never a raw hex MAC (friendly names
-  // only; the hex belongs on a profile surface, not the Remote).
-  const deckLinkLabel = parallelBoth
-    ? `BT · ${friendlyBtName(deviceName) || "Car"} + WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
-    : connected
-      ? friendlyBtName(deviceName) || "Connected"
-      : wifiConnected
-        ? `WiFi · ${displayIp}${onOwnHotspot ? " (AP)" : ""}`
-        : "No link";
+  // U-113 P2 (owner issue 10): the long `deckLinkLabel` ("BT · name + WiFi ·
+  // ip (AP)") is GONE — the chrome chip renders the short `linkLabel` +
+  // `ipChipText` and IS the page link. `linkLabel` stays the ONE transport
+  // name (M2): both links together under parallel, never a raw hex MAC.
   const driveTelemetryArgs = {
     linked,
     linkLabel,
@@ -643,25 +623,32 @@ export function RemoteControlScreen({ navigation }: Props) {
     <Modal transparent visible animationType="fade">
       <View
         className="flex-1 items-center justify-center px-6"
-        style={{ backgroundColor: "rgba(15,23,42,0.5)" }}
+        style={{ backgroundColor: "rgba(15,23,42,0.7)" }}
       >
+        {/* U-113 P2 (owner issue 14 — "merges with background text"): the card
+            is OPAQUE in BOTH themes — a solid surface, a strong 2 px border and
+            a shadow, never a translucent tint the screen text can read through.
+            Copy is a readable 13 px on high contrast, not the old 11 px
+            grey-on-tint. */}
         <View
-          className={`rounded-2xl border px-4 py-3 ${
+          className={`rounded-2xl border-2 px-5 py-4 shadow-2xl ${
             tone === "amber"
-              ? "border-amber-200 bg-amber-50"
-              : "border-sky-200 bg-sky-50"
+              ? "border-amber-400 bg-white dark:border-amber-300 dark:bg-slate-900"
+              : "border-sky-400 bg-white dark:border-sky-300 dark:bg-slate-900"
           }`}
-          style={{ width: "100%", maxWidth: 360 }}
+          style={{ width: "100%", maxWidth: 380 }}
         >
           <Text
-            className={`text-sm font-bold ${
-              tone === "amber" ? "text-amber-800" : "text-sky-800"
+            className={`text-base font-black ${
+              tone === "amber"
+                ? "text-amber-900 dark:text-amber-100"
+                : "text-sky-900 dark:text-sky-100"
             }`}
           >
             {title}
           </Text>
-          <View className="mt-0.5">{body}</View>
-          <View className="mt-3 flex-row justify-end gap-2">{actions}</View>
+          <View className="mt-1">{body}</View>
+          <View className="mt-4 flex-row justify-end gap-2">{actions}</View>
         </View>
       </View>
     </Modal>
@@ -673,11 +660,16 @@ export function RemoteControlScreen({ navigation }: Props) {
     // Bluetooth) link proves it is not. (Owner field report 2026-10-14: the
     // prompt appeared while the car was connected and working over Wi-Fi.)
     if (!showSppsRetry || linked) return null;
+    // U-113 P2 (issue 14): the copy NAMES the real connection state instead of
+    // a generic "Connection lost / Reconnect to your car?" — this prompt only
+    // exists when the BT auto-reconnect backoff is exhausted AND no link of
+    // ANY kind is up, so say exactly that.
     return renderPromptShell(
       "amber",
-      "Connection lost",
-      <Text className="text-[11px] text-amber-600">
-        Reconnect to your car?
+      "Bluetooth disconnected",
+      <Text className="text-[13px] leading-5 text-amber-800 dark:text-amber-200">
+        The Bluetooth link to your car dropped, and no Wi-Fi link is up either.
+        The car is stopping itself on link loss. Reconnect?
       </Text>,
       <>
         <Pressable
@@ -710,18 +702,26 @@ export function RemoteControlScreen({ navigation }: Props) {
     return renderPromptShell(
       "sky",
       "Car restarted",
-      <Text className="text-[11px] text-sky-700">
-        {carRestartNotice.prevBoot != null
-          ? `Boot ${carRestartNotice.prevBoot} → ${carRestartNotice.boot}`
-          : `Boot ${carRestartNotice.boot}`}
-        {" · reset "}
-        {reason}
-        {carRestartNotice.crashCount != null
-          ? ` · ${carRestartNotice.crashCount} crash${
-              carRestartNotice.crashCount === 1 ? "" : "es"
-            }`
-          : ""}
-      </Text>,
+      <View>
+        <Text className="text-[13px] leading-5 text-sky-800 dark:text-sky-200">
+          {carRestartNotice.prevBoot != null
+            ? `Boot ${carRestartNotice.prevBoot} → ${carRestartNotice.boot}`
+            : `Boot ${carRestartNotice.boot}`}
+          {" · reset "}
+          {reason}
+          {carRestartNotice.crashCount != null
+            ? ` · ${carRestartNotice.crashCount} crash${
+                carRestartNotice.crashCount === 1 ? "" : "es"
+              }`
+            : ""}
+        </Text>
+        {/* U-113 P2 (issue 14): name which link is up NOW, so the owner sees
+            what the restart did to each transport instead of guessing. */}
+        <Text className="mt-0.5 text-[13px] font-bold leading-5 text-sky-900 dark:text-sky-100">
+          Link now: {linkLabel}
+          {linked ? ` · ${ipChipText}` : ""}
+        </Text>
+      </View>,
       <>
         <Pressable
           onPress={() => {
@@ -787,23 +787,40 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </Pressable>
 
-          {/* U-108 (owner 2026-10-13): the ONE link status lives RIGHT OF BACK —
-              never duplicated in a sub-header line or the Connectivity panel.
-              A-25: friendly names only; a stale BT name must never label a WiFi
-              link, and a raw hex MAC never appears here. */}
-          <View className="min-w-0 shrink flex-row items-center gap-1.5">
+          {/* U-113 P2 (owner issue 10): the ONE link status lives RIGHT OF BACK
+              — and the broadcast IP there IS the link to the car's page (the
+              duplicate page chip in the row below is gone). Short label only
+              (BT+WiFi / Bluetooth / WiFi + IP): no device name renders here at
+              all, so a stale BT name can never label a Wi-Fi link and a raw
+              hex MAC cannot appear either (A-25/A-38 by construction). One dot,
+              one status (U-108 ruling kept). Tap opens the car's web page
+              (A-36: with a reachable STA IP the page directly; offline/AP the
+              car's own AP page — "nothing happens" is gone). */}
+          <Pressable
+            onPress={handleOpenWebPage}
+            accessibilityRole="link"
+            accessibilityLabel={
+              telemetry.ip
+                ? `Open car web page at ${telemetry.ip}`
+                : onOwnHotspot
+                  ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
+                  : "Car IP not available yet"
+            }
+            testID="deck-link-status"
+            hitSlop={8}
+            className="min-w-0 shrink flex-row items-center gap-1.5 active:opacity-70"
+          >
             <View
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
             />
             <Text
               numberOfLines={1}
-              ellipsizeMode="middle"
-              testID="deck-link-status"
               className="min-w-0 shrink text-[11px] font-bold text-navy dark:text-sky-300"
             >
-              {deckLinkLabel}
+              {linkLabel}
+              {linked ? ` · ${ipChipText}` : ""}
             </Text>
-          </View>
+          </Pressable>
 
           <Text className="shrink-0 text-sm font-black uppercase tracking-[0.2em] text-muted">
             Remote
@@ -865,18 +882,21 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ── U-108 disconnect row (owner 2026-10-13): the ONLY disconnect place
-            on this screen — separate Bluetooth and Wi-Fi buttons on the line
-            right below Back, for every car category. The old duplicate
-            link-status line and the Connectivity panel's status+disconnect strip
-            are gone; the ONE status lives in the chrome row. Constant height so
-            the drive deck never shifts. */}
+        {/* ── U-113 P2 (owner issues 2/3/4): the ONE merged row below Back —
+            the old U-108 disconnect row and the tab-pills row are combined,
+            giving the drive deck the ~28 px both used to take. Order = the Q2
+            overflow priority: disconnect chips (only for LIVE methods, each
+            tearing down ONLY its own transport — issue 3) > tab pills > the
+            compact telemetry line (hidden first on narrow screens). Constant
+            height so the deck never shifts. The "on <phone-ssid>" chip is
+            gone (issue 4 — useless here); its NetInfo discovery stays for
+            smart-link switching. */}
         <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center gap-1.5 px-1">
-          {connected ? (
+          {btLinked ? (
             <Pressable
               onPress={() => {
                 feedbackTap();
-                void handleDisconnect();
+                void handleBtDisconnect();
               }}
               accessibilityRole="button"
               accessibilityLabel="Disconnect Bluetooth"
@@ -904,58 +924,17 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Text className="text-[9px] font-bold text-muted">Wi-Fi</Text>
             </Pressable>
           ) : null}
-          {/* U-108 Phase 4: the app always knows which network the PHONE is on
-              (safe switching) — shown right of the disconnect buttons. */}
+          {/* Q2 default (owner): the compact telemetry line is the FIRST
+              thing dropped when the row gets tight — the disconnect chips and
+              the tab pills are controls and always fit. The same readings are
+              on the Telemetry tab and the readout column. */}
+          {isRobocar && width >= MERGED_ROW_TELEMETRY_MIN_PX ? (
+            <TelemetryLine {...driveTelemetryArgs} />
+          ) : null}
           <View className="min-w-0 flex-1" />
-          <View
-            className="shrink-0 flex-row items-center gap-1"
-            testID="phone-net"
-          >
-            <Feather name="smartphone" size={9} color="#94a3b8" />
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="middle"
-              className="max-w-[110px] text-[9px] font-bold text-muted"
-            >
-              {phoneSsid ? `on ${phoneSsid}` : "phone Wi-Fi off"}
-            </Text>
-          </View>
-        </View>
-
-        {isRobocar && (
-          <View className="flex-shrink-0">
-            {/* Telemetry + control pills (D-pad / Joystick / Telemetry / Connectivity) */}
-            <View className="flex h-7 flex-shrink-0 flex-row items-center gap-1 px-1">
-              <TelemetryLine {...driveTelemetryArgs} />
-              <View className="min-w-0 flex-1" />
-              {activeMode.id === "website-server" || wifiConnected ? (
-                <Pressable
-                  onPress={handleOpenWebPage}
-                  accessibilityRole="link"
-                  accessibilityLabel={
-                    telemetry.ip
-                      ? `Open car web page at ${telemetry.ip}`
-                      : onOwnHotspot
-                        ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
-                        : "Car IP not available yet"
-                  }
-                  hitSlop={6}
-                  className="shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5"
-                >
-                  <Feather
-                    name={wifiConnected ? "external-link" : "wifi"}
-                    size={10}
-                    color={wifiConnected ? "#0284c7" : "#64748b"}
-                  />
-                  <Text
-                    className={`font-mono text-[9px] ${wifiConnected ? "text-sky-700 dark:text-sky-300" : "text-muted"}`}
-                    numberOfLines={1}
-                  >
-                    {ipChipPhase ? ipChipText : netNameText}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {/* Control pills */}
+          {/* Control pills (robocar only — decks drive themselves) */}
+          {isRobocar ? (
+            <>
               <Pressable
                 onPress={() => {
                   feedbackTap();
@@ -1015,9 +994,13 @@ export function RemoteControlScreen({ navigation }: Props) {
                   Connectivity
                 </Text>
               </Pressable>
-            </View>
-          </View>
-        )}
+            </>
+          ) : null}
+        </View>
+
+        {/* U-113 P2 (issue 2): the tab pills MOVED into the single merged row
+            above — the second h-7 row below Back is gone and the drive deck
+            gains its ~28 px. */}
 
         {/* ── Content area ── */}
         {isDrone || isNonRobocar ? (
