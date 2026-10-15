@@ -16,7 +16,7 @@
       sent ESP_SER, the car NACKed and the display rolled back to 4WD4M, i.e. "resets to
       the same 4wd4m"). A full spin must visit every mode the car's CAPS table lists
       exactly once before wrapping to 4WD4M, and planned/CS modes stay cyclable (R-10).
-      Needs ANY 1.3.10+ flash (the CAPS GONE keys come from U-79). Force-close and reopen
+      Needs ANY 1.3.11+ flash (the CAPS GONE keys come from U-79). Force-close and reopen
       ×2 after the OTA (`A-2`).
 
 ### P2 — issues 2, 3, 4, 10, 14: Remote chrome rebuilt (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
