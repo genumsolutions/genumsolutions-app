@@ -8,7 +8,12 @@ transport switch) is landed + gated; the E1 capture + floor re-tune and the E3/E
 are owed.**
 Phase 0 captures (E2/E5 + the P3 audit log) are still owed from the owner's 1.3.11 bench pass;
 P1 did not need them (source-level root cause, see below). **Car version: the current car body
-(U-112 + U-114 + T66 + P4/E1 + the P4 diet + P5) is 1.3.11 — the owner's bench + E1 flash.** This file mirrors the master in
+(U-112 + U-114 + T66 + P4/E1 + the P4 diet + P5) is 1.3.11 — the owner's bench + E1 flash.**
+**Bench log (2026-10-15): 1.3.11 is FLASHED to the car (COM8, source-agent pass) and boots
+verified — the router wipe happened, `AP=4WD4MCar_WiFi` is non-empty, no new crash. E1 came back
+PARTIAL (4 of the 6 `[HEAPW]` stages; `spp-connected` + `page-served` need the phone), so the
+floor re-tune is still open and the app side is unchanged: 3.2.7 / versionCode 60.**
+This file mirrors the master in
 `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md` (keep both in sync);
 cross-repo round log stays in the root `RESUME-HERE.md`.
 
