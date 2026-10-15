@@ -1302,14 +1302,14 @@ export function RemoteControlScreen({ navigation }: Props) {
               {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
             </Text>
 
-            {/* U-105 (owner 2026-10-13): the car's THREE transport toggles replace the
+            {/* U-105 (owner 2026-10-13): the car's transport toggles replace the
                 removed parallel + power-save settings (`WIFICFG;PARALLEL` /
                 `WIFICFG;APSAVE` and their NVS keys are gone). Wi-Fi (`t_wifi`)
                 and Bluetooth (`t_bt`) can never BOTH be off — the car clamps a
                 both-off request, and here the toggle that would leave the pair
-                at two-OFFs is disabled. Auto-join gates the boot hop to the
-                last-switched router (`boot_autojoin`). Each mirrors the car's
-                NVS and rides to DevicePrefs + cloud. */}
+                at two-OFFs is disabled. Each mirrors the car's NVS and rides to
+                DevicePrefs + cloud. (P3 2026-10-15: the third toggle here, the
+                CAR's boot auto-join, was removed — see below.) */}
             <View className="mt-1 flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Feather name="wifi" size={14} color="#64748b" />
@@ -1350,24 +1350,17 @@ export function RemoteControlScreen({ navigation }: Props) {
               />
             </View>
 
-            {/* U-108 Phase 6 (owner 2026-10-13): TWO auto-join settings, clearly
-                labelled and never merged. (1) this one is the CAR's own boot
-                auto-join (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) — a firmware
-                onValueChange={(on) => {
-                  feedbackTap();
-                  hub.setCarTransportToggle("AUTOJOIN", on);
-                }}
-                disabled={!linked}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="Car boot auto-join: on power-up the car rejoins its last router, else stays on its own hotspot"
-              />
-            </View>
+            {/* P3 · Q1 (owner, 2026-10-15): the CAR's boot auto-join toggle
+                (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) was REMOVED from this
+                panel — it only ever rejoined the last router, which the owner
+                called useless (issue 12). The firmware half of Q1's default
+                (stop the boot hop) rides P5; the app's smart-link auto-join
+                below is now the ONLY auto-join control here. */}
 
             {/* U-R3 (owner 2026-10-12): smart-link auto-join — the APP's setting.
                 On car selection the app joins the strongest saved router the car
                 hears, else stays on its own access point. Mirrors DevicePrefs and
-                the cloud profile. Distinct from the CAR boot auto-join above. */}
+                the cloud profile. */}
             <View className="mt-1.5 flex-row items-center justify-between gap-2">
               <View className="min-w-0 flex-1 flex-row items-center gap-2">
                 <Feather name="refresh-cw" size={14} color="#64748b" />
