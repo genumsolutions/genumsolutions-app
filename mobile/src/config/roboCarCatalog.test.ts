@@ -9,6 +9,7 @@ import {
   resolveModeByIndex,
   nextMode,
   nextRemoteModeToken,
+  nextCyclableToken,
   isModeToken,
   sortRemoteModes,
   resolveModeForProduct,
@@ -176,6 +177,73 @@ describe("nextRemoteModeToken", () => {
   it("unknown tokens start from the head of the order", () => {
     expect(nextRemoteModeToken("bogus")).toBe("ESP_SER");
     expect(nextRemoteModeToken("")).toBe("ESP_SER");
+  });
+});
+
+describe("nextCyclableToken (U-113 P1 — the GONE-aware rotate cycle)", () => {
+  /** Every token this car refused in its CAPS table — exactly what the
+      pre-U-79→U-79 4WD4M broadcasts: no ESP_SER, no ESP_CLI keys at all. */
+  const GONE_ON_4WD4M = new Set(["ESP_SER", "ESP_CLI"]);
+
+  it("is identical to nextRemoteModeToken when nothing is unavailable", () => {
+    for (const t of REMOTE_MODE_ORDER) {
+      expect(nextCyclableToken(t, () => false)).toBe(nextRemoteModeToken(t));
+    }
+    // Legacy / unknown inputs keep the old "start from the head" behavior.
+    expect(nextCyclableToken("BT", () => false)).toBe("ESP_SER");
+    expect(nextCyclableToken("bogus", () => false)).toBe("ESP_SER");
+    expect(nextCyclableToken("", () => false)).toBe("ESP_SER");
+  });
+
+  it("skips GONE tokens — the 4WD4M rotate finally advances", () => {
+    // THE defect: old cycle said 4WD4M → ESP_SER, the car NACKed
+    // (UNKNOWN_MODE) and handleNack rolled back to 4WD4M — forever.
+    expect(nextCyclableToken("4WD4M", (t) => GONE_ON_4WD4M.has(t))).toBe(
+      "PATH",
+    );
+    // Wrap-around skips too: AUTO → (ESP_CLI gone) → 2WD1M.
+    expect(nextCyclableToken("AUTO", (t) => GONE_ON_4WD4M.has(t))).toBe(
+      "2WD1M",
+    );
+    // 2WD1M wraps past BOTH gone tokens back to 4WD4M.
+    expect(nextCyclableToken("2WD1M", (t) => GONE_ON_4WD4M.has(t))).toBe(
+      "4WD4M",
+    );
+  });
+
+  it("only skips what the caller marks — WIP/CS stay cyclable (R-10)", () => {
+    // modeAvailStatus answers GONE ONLY for tokens absent from the CAPS
+    // table; a CS/WIP mode is present, so the predicate is false and the
+    // token is still cyclable. Simulate exactly that: only ESP_SER/ESP_CLI
+    // are filtered, the CS-heavy remainder still walks the full order.
+    expect(nextCyclableToken("ESP_SER", (t) => GONE_ON_4WD4M.has(t))).toBe(
+      "PATH",
+    );
+    expect(nextCyclableToken("PATH", (t) => GONE_ON_4WD4M.has(t))).toBe(
+      "OBS_US",
+    );
+  });
+
+  it("lands on the current token when it is the only cyclable mode", () => {
+    // A car that announced only 4WD4M (every other token gone) must not
+    // dead-end on a sent token — the button honestly stays on 4WD4M.
+    expect(nextCyclableToken("4WD4M", (t) => t !== "4WD4M")).toBe("4WD4M");
+  });
+
+  it("falls back to the plain successor when EVERY token is filtered", () => {
+    expect(nextCyclableToken("4WD4M", () => true)).toBe("ESP_SER");
+  });
+
+  it("calls the predicate with canonical uppercase order tokens only", () => {
+    const seen: string[] = [];
+    nextCyclableToken("4wd4m", (t) => {
+      seen.push(t);
+      return false;
+    });
+    expect(seen).toEqual(["ESP_SER"]);
+    for (const t of seen) {
+      expect(REMOTE_MODE_ORDER).toContain(t);
+    }
   });
 });
 

@@ -51,9 +51,8 @@ import {
   LOCAL_CAR_MODES,
   type CarMode,
   isModeToken,
-  nextRemoteModeToken,
+  nextCyclableToken,
   sortRemoteModes,
-  REMOTE_MODE_ORDER,
 } from "../../config/roboCarCatalog";
 import { getCarModes } from "../../services/carModeService";
 import { PROJECT_CATEGORIES } from "../../config/project-catalog";
@@ -88,6 +87,7 @@ import {
   buildRouterCommand,
   normalizeModeToken,
   canonicalCarToken,
+  modeAvailStatus,
   SPEED_MIN,
   SPEED_MAX,
   SPEED_STEP,
@@ -3271,19 +3271,28 @@ export function useControlHub(routeCategory?: string) {
   );
 
   const cycleMode = useCallback(() => {
-    // Remote fleet cycle order â€” always advances and wraps through
-    // ALL 9 firmware modes per REMOTE_MODE_ORDER. We do NOT filter by
-    // carModes (what the car currently broadcasts), because planned/CS
-    // modes must still be cyclable per owner ruling (R-10). The car
-    // will NACK if it truly rejects the token; the app must not pre-
-    // filter. The pool is the full REMOTE_MODE_ORDER mapped to CarMode.
-    const pool = REMOTE_MODE_ORDER.map((token) =>
-      LOCAL_CAR_MODES.find((m) => canonicalCarToken(m.token) === token),
-    ).filter((m): m is CarMode => m !== undefined);
-    const nextToken = nextRemoteModeToken(activeMode.token);
-    const next = pool.find((m) => canonicalCarToken(m.token) === nextToken);
+    // Remote fleet cycle order — always advances and wraps through
+    // ALL 9 firmware modes per REMOTE_MODE_ORDER. Planned/CS modes stay
+    // cyclable per owner ruling R-10 (the car renders its own planned-mode
+    // frame) — so we do NOT pre-filter the pool by availability. The ONE
+    // exception is U-113 P1: a token the paired car declared GONE in its
+    // CAPS table (absent from the car's own registry — ESP_SER/ESP_CLI on
+    // the 4WD4M since U-79) is SKIPPED. Sending one is guaranteed to come
+    // back as NACK;E=UNKNOWN_MODE, and handleNack rolls the optimistic pick
+    // straight back to car truth — which is exactly why the rotate button
+    // looked dead on the owner's car: 4WD4M → ESP_SER → NACK → 4WD4M,
+    // forever. With no CAPS table yet (older cars) every token resolves to
+    // the fleet fallback and the predicate is uniformly false, so the
+    // cycle is byte-for-byte what it was before.
+    const nextToken = nextCyclableToken(activeMode.token, (tok) => {
+      const avail = modeAvailStatus(tok, carStubMap, carAvailMap);
+      return avail === "GONE";
+    });
+    const next = LOCAL_CAR_MODES.find(
+      (m) => canonicalCarToken(m.token) === nextToken,
+    );
     if (next) selectMode(next);
-  }, [activeMode, selectMode]);
+  }, [activeMode, selectMode, carStubMap, carAvailMap]);
 
   const toggleRelay = useCallback(
     (i: number) => {
