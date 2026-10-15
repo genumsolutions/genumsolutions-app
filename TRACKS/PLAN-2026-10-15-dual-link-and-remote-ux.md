@@ -3,11 +3,12 @@
 Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
 P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
 U-113-5..7 are the owner's bench pass) — car-side P4 (BT heap diet) has landed its first two
-bullets (breadcrumb + classic-BT-only bring-up); the E1 capture + floor re-tune are owed.**
+bullets (breadcrumb + classic-BT-only bring-up) and car-side P5 (issues 7 + 9, the Wi-Fi
+transport switch) is landed + gated; the E1 capture + floor re-tune and the E3/E4 captures
+are owed.**
 Phase 0 captures (E2/E5 + the P3 audit log) are still owed from the owner's 1.3.11 bench pass;
 P1 did not need them (source-level root cause, see below). **Car version: the current car body
-(U-112 + U-114 + T66 + P4/E1 + the P4 diet) is 1.3.11 — the owner's bench + E1 flash; P5 rides
-it.** This file mirrors the master in
+(U-112 + U-114 + T66 + P4/E1 + the P4 diet + P5) is 1.3.11 — the owner's bench + E1 flash.** This file mirrors the master in
 `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md` (keep both in sync);
 cross-repo round log stays in the root `RESUME-HERE.md`.
 
@@ -172,10 +173,17 @@ inside a JSX comment (it compiled only because the comment swallowed it).
 
 ### P5 — Issues 7, 9: transport policy made honest (CAR firmware → rides the 1.3.11 flash)
 
-- Wi-Fi OFF must drop the beacon AND the page (find why `stop()`/`softAPdisconnect` misses:
-  `apRunning_` desync vs never reached vs cached phone scan); page must come up with NO client
-  attached; both ON ⇒ hotspot + page + BT simultaneously. New gates `wifi-off-hides-ap` and
-  `page-always-on` + mutants. Details in the master plan.
+- **✅ LANDED + gated (2026-10-15) — the cause was in the car, not the app; NO app change.**
+  The cause was source-visible: `stop()` dropped the beacon only `if (apRunning_)`, and
+  `handle()`'s AP retry then **re-created the hotspot ~2 s after `WIFICFG;WIFI;OFF`** — it
+  tested only `!apRunning_`, which `stop()` had just cleared, and `stop()` only runs while
+  `webUp` is true, which the U-79 loop clears as it calls it. Three guards now:
+  `WiFi.softAPdisconnect()` unconditional · `startOwnAP()` refuses while `!wifiEnabled_` ·
+  the `handle()` retry gated on `wifiEnabled_`. Issue 9 needed no new fix (U-105 already
+  removed the beacon park) and is now pinned by a gate. New `wifi-off-hides-ap` +
+  `page-always-on` rules + mutants **M91-M95**; the car's `mutate-gates.mjs` is **89/89**.
+  **Owed from the bench:** E3/E4 captures + rows **U-113-9..11** (car RUNSHEET step 6c).
+  Details in the master plan.
 
 ### P6 — Issue 1: dual BT+Wi-Fi link, end to end (APP + car)
 
