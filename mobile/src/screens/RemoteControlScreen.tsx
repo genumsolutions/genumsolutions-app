@@ -1286,7 +1286,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             accessibilityLabel="Close settings"
           />
           <ScrollView
-            className="absolute right-3 z-40 w-64 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
+            className="absolute right-3 z-40 w-80 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
             style={{
               top: Math.max(insets.top, 8) + 48,
               maxHeight: height - 96,
@@ -1353,23 +1353,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             {/* U-108 Phase 6 (owner 2026-10-13): TWO auto-join settings, clearly
                 labelled and never merged. (1) this one is the CAR's own boot
                 auto-join (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) — a firmware
-                setting that decides whether the CAR rejoins its last router on
-                power-up. (2) the smart-link toggle below is the APP's setting. */}
-            <View className="mt-1.5 flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1 flex-row items-center gap-2">
-                <Feather name="power" size={14} color="#64748b" />
-                <View className="min-w-0 flex-1">
-                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    Boot auto-join (car)
-                  </Text>
-                  <Text className="text-[9px] leading-tight text-muted">
-                    On power-up the CAR rejoins its last router — off keeps it
-                    on its own hotspot.
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={hub.bootAutojoin === true}
                 onValueChange={(on) => {
                   feedbackTap();
                   hub.setCarTransportToggle("AUTOJOIN", on);
