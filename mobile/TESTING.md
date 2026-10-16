@@ -6,6 +6,13 @@
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`). Phases P1..P8,
 > one at a time; device rows accumulate here as each phase lands. **Rows below marked
 > (code landed) still need the owner's bench pass — F-61: our gates are NOT device evidence.**
+>
+> **P8 close-out (2026-10-16): the round is SOURCE-COMPLETE.** All 14 issues are
+> code-complete and gated (car + app gates green; the app ships JS-only
+> **3.2.7 / versionCode 60**, OTA published). **No row below is ticked — every U-113
+> row is still the owner's bench pass (F-61).** The car-side rows (U-113-8..15) and
+> U-115-1..3 live in `Genum_4WD4M_CAR\TRACKS\DEVICE-TESTS.md`; the order + capture
+> commands are in that repo's `TRACKS/RUNSHEET.md`.
 
 ### P1 — issue 11: mode-rotate cycles again (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
 

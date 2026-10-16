@@ -17,6 +17,12 @@
 > remaining: **P8** (close-out). Device rows **U-113-12..14** and **U-113-15** stay
 > owed from the owner's bench. The status block below is the original 2026-10-15
 > text.
+>
+> **P8/issue 13 (close-out) landed 2026-10-16** — app gates green, the P6+P7 JS-only
+> OTA published (`3.2.7/60`, notes `e02db5c2b4c…`), CI green, `backup` re-snapshotted,
+> and the records updated (`mobile/TESTING.md` close-out note, both `NEXT-SESSION.md`,
+> root `RESUME-HERE.md`). **The round is source-complete; every device row + Q1–Q3 stay
+> the owner's bench (F-61).**
 
 Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
 P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
@@ -256,6 +262,12 @@ inside a JSX comment (it compiled only because the comment swallowed it).
 - Ship: owner flashes 1.3.11 (huge_app, 115200), app publishes the JS-only OTA (3.2.7/60
   unchanged unless a native change sneaks in — none planned), both CIs green, `backup` branches
   re-snapshotted.
+- **✅ CODE-DONE 2026-10-16 (docs-only — no app code; 3.2.7 / versionCode 60 UNCHANGED).**
+  Gates: vitest **48 files / 720 tests** · `tsc --noEmit` clean · prettier clean (car side:
+  contract **0** · webpage-js **PASS** · syntax **9/9** · mutate-gates **103/103**). **Ship:**
+  the P6+P7 JS-only OTA is **published** (`3.2.7/60`, notes `e02db5c2b4c…`); CI green;
+  `backup` re-snapshotted to `main`. **Not device-verified (F-61):** U-113-1..7 + U-113-16
+  (here), U-113-8..15 + U-115-1..3 (car), E3/E4/E5/E11, Q1–Q3.
 
 ## Open questions for the owner (defaults chosen — say the word to change them)
 
