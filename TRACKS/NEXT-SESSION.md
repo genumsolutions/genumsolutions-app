@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-16: car-side U-115 boot-scan-first landed → 1.3.12 + P4 closed (E1 6/6, status floor 20000); U-113 P2/P3 app work unchanged; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); JS-only OTA, version 3.2.7/60 UNCHANGED)
 
 > **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
 > owner's 14-issue list. **P1 DONE** (issue 11 — the dead mode-rotate: root-caused
@@ -14,6 +14,42 @@
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
 > captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.11
 > (the car's current flash target; the diet + P5 ride 1.3.11).
+
+## This session (2026-10-16, P6/issue 1 — APP change, JS-only OTA 3.2.7/60 UNCHANGED)
+
+**Issue 1:** *"app+car connected over Bluetooth AND Wi-Fi at the same time.
+Connecting both fails today."*
+
+**The keep-both plumbing was never the problem.** `linkManager.ts` never tears a
+previous link down, the services never import each other, `handleConnect` touches no
+Wi-Fi socket and `handleWifiConnect` touches no SPP socket — all already pinned by
+`oneActiveLink.test.ts` / `linkManager.test.ts`. What stopped it was **one line** in
+`components/tools/connection/ConnectionSection.tsx`:
+
+```
+{target.id === "bt-spp" && !linkLive ? ( … Find my car … )}
+```
+
+`linkLive` was the **shared** `btLive || wifiConnected`, so the moment Wi-Fi
+connected the Bluetooth scan button vanished — and because `sppDevices` is filled
+**only** by a scan, the paired list below stayed empty too. The dual link was
+**one-sided**: Wi-Fi-second worked, Bluetooth-second could not.
+
+**Fix:** the gate keys on `btLive` (Bluetooth's own `sppStatus`), and the dead
+`linkLive` prop is removed from `MethodSetup`/`TargetBody` so the old shared flag
+cannot be wired straight back in.
+
+**New test** `components/tools/connection/dualLinkConnect.test.ts` (no component
+harness in this repo — same note as `oneActiveLink.test.ts`, so it reads the source):
+the scan keys on `btLive`, the paired inventory is not hidden by a live Wi-Fi link,
+and the Wi-Fi Connect button is never gated on Bluetooth. **Proven both directions:**
+all 4 mutations go red.
+
+**Gates:** vitest **711/711** · `tsc --noEmit` clean · prettier clean. **Version stays
+3.2.7 / versionCode 60** — JS-only, ships on the **OTA** channel.
+
+**Still owed (F-61):** device rows **U-113-12..14** (both links up in both orders,
+independent disconnects, commands over each + a 1 min soak) from the owner's bench.
 
 ## This session (2026-10-16, U-115 — CAR-side only; no app change, 3.2.7/60 UNCHANGED)
 
