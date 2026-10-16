@@ -476,7 +476,9 @@ export function useControlHub(routeCategory?: string) {
   });
 
   // ---- Control mode toggle ----
-  const [useJoystick, setUseJoystick] = useState(false);
+  // P7 / issue 8: renamed from setUseJoystick — the PUBLIC setter returned
+  // below is the persisting wrapper defined next to persistPrefs.
+  const [useJoystick, setUseJoystickState] = useState(false);
 
   // ---- ESP32-remote safety limits ----
   const safetyLimits = DEFAULT_SAFETY_LIMITS;
@@ -492,7 +494,9 @@ export function useControlHub(routeCategory?: string) {
   // in the memory key, so a car keeps one profile across renames and links.
   const carFwIdRef = useRef<string | null>(null);
   // Connections-Hub: per-car auto-join toggle (smart-link). Default on.
-  const [autoJoinRouter, setAutoJoinRouter] = useState<boolean>(true);
+  // P7 / issue 8: renamed like useJoystick — the public setter returned
+  // below persists through the guarded writer.
+  const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(true);
   // One write per join guard for the wifi-history recorder.
   const wifiJoinKeyRef = useRef<string>("");
   // Connections-Hub (smart-link): the car-side scan result (ROUTERS;SCAN),
@@ -599,6 +603,28 @@ export function useControlHub(routeCategory?: string) {
     bootAutojoin: boolean | null;
   }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null });
   transportToggleRef.current = { wifiEnabled, btEnabled, bootAutojoin };
+  // P7 / issue 8: the optimistic-commit grace as a NAMED predicate. It used
+  // to live as an inline closure inside the telemetry-adopt block, which is
+  // why the WIFICFG REPLY handler (`WIFICFG;WIFI|BT|AUTOJOIN;ON|OFF` answering
+  // a query or a set) adopted its value WITHOUT the grace — a reply that was
+  // in flight when the user flipped a toggle carried the PRE-flip state,
+  // rolled the panel back, and (worse) PERSISTED the pre-flip value into the
+  // per-car profile, so the wrong truth outlived the app restart. Every
+  // adoption path — STATE broadcast and reply alike — runs this one rule.
+  // A plain function on purpose: it only reads refs, so any render's
+  // instance is current and no effect has to depend on its identity.
+  const toggleChangeProtected = (
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin",
+    incoming: boolean,
+  ) => {
+    const commit = toggleCommitRef.current;
+    if (commit && Date.now() - commit.at > TOGGLE_CHANGE_GRACE_MS)
+      toggleCommitRef.current = null;
+    const pending = toggleCommitRef.current;
+    return !(pending?.which === which && pending.value !== incoming);
+  };
+  const toggleChangeProtectedRef = useRef(toggleChangeProtected);
+  toggleChangeProtectedRef.current = toggleChangeProtected;
 
   // A-14/A-16: always-fresh mirrors for the connection/status setters so the
   // writers can dedupe without stale closures and without re-running drives.
@@ -775,9 +801,9 @@ export function useControlHub(routeCategory?: string) {
           if (resolved.steerLimit != null) setSteerLimit(resolved.steerLimit);
           if (resolved.trim != null) setTrim(resolved.trim);
           if (resolved.useJoystick != null)
-            setUseJoystick(resolved.useJoystick);
+            setUseJoystickState(resolved.useJoystick);
           if (resolved.autoJoinRouter != null)
-            setAutoJoinRouter(resolved.autoJoinRouter);
+            setAutoJoinRouterState(resolved.autoJoinRouter);
           // U-105 (1.3.5): restore the per-car transport toggles (Wi-Fi /
           // Bluetooth / boot auto-join) when their profile is resolved, so the
           // panel shows car truth before any link is brought up. `undefined`
@@ -914,11 +940,11 @@ export function useControlHub(routeCategory?: string) {
         setSteerLimit(merged.prefs.steerLimit);
       if (merged.prefs.trim != null) setTrim(merged.prefs.trim);
       if (merged.prefs.useJoystick != null)
-        setUseJoystick(merged.prefs.useJoystick);
+        setUseJoystickState(merged.prefs.useJoystick);
       if (merged.prefs.joystickLayout)
         setJoystickLayoutId(merged.prefs.joystickLayout);
       if (merged.prefs.autoJoinRouter != null)
-        setAutoJoinRouter(merged.prefs.autoJoinRouter);
+        setAutoJoinRouterState(merged.prefs.autoJoinRouter);
       // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
       // toggle mirror too; restore it so the panel agrees with car truth.
       if (typeof merged.prefs.wifiEnabled === "boolean")
@@ -1059,6 +1085,25 @@ export function useControlHub(routeCategory?: string) {
   // (and without stale captures) when called from deep in the input chain.
   const persistPrefsRef = useRef(persistPrefs);
   persistPrefsRef.current = persistPrefs;
+
+  // P7 / issue 8: the two per-car controls that were RAW useState setters —
+  // the D-pad/Joystick pill on the Remote screen and the "auto-join saved
+  // router" switch (screen + CarProfileCard) — updated live state only and
+  // never touched the profile, so both preferences died with the app session
+  // (the owner's "store in the app pronto"). They keep their public names so
+  // every call site persists without knowing it; the two RESTORE paths above
+  // use the raw setters on purpose — loading a profile is not a user edit and
+  // must not write back. Same guarded coalescing writer as everything else,
+  // so the two writers that share this prefs key can never clobber each
+  // other's fields.
+  const setUseJoystick = (value: boolean) => {
+    setUseJoystickState(value);
+    persistPrefsRef.current?.({ useJoystick: value });
+  };
+  const setAutoJoinRouter = (value: boolean) => {
+    setAutoJoinRouterState(value);
+    persistPrefsRef.current?.({ autoJoinRouter: value });
+  };
 
   // Connections-Hub (profiles): record a Wi-Fi join into the per-car history
   // (names only) once per join, and remember the last verified router URL.
@@ -1359,6 +1404,13 @@ export function useControlHub(routeCategory?: string) {
           canonical === pending.stale &&
           canonical !== pending.token;
         if (!staleRace) {
+          // P7 / issue 8: the car's OWN mode button (or a mode change made
+          // from another phone) must reach the per-car profile, not just the
+          // live state — selectMode persists its pick, so adoption must too,
+          // or the app resurrected the PREVIOUS mode after a restart. Stored
+          // as the local CarMode id (selectMode's shape), never the raw car
+          // token; change-guarded so the steady 1 Hz echo schedules nothing.
+          const modeChanged = carModeIdRef.current !== canonical;
           if (pending != null) modeCommitRef.current = null;
           setCarModeId(canonical);
           carModeIdRef.current = canonical;
@@ -1366,6 +1418,10 @@ export function useControlHub(routeCategory?: string) {
             (m) => m.id === canonical.toLowerCase() || m.token === canonical,
           );
           if (matched) setActiveMode(matched);
+          if (modeChanged)
+            persistPrefsRef.current?.({
+              modeId: matched ? matched.id : canonical.toLowerCase(),
+            });
         }
       }
       // Speed mirror — car-truth, change-guarded, range-clamped (owner
@@ -1389,7 +1445,15 @@ export function useControlHub(routeCategory?: string) {
             const next = quantizeSpeedToStep(
               Math.max(SPEED_MIN, Math.min(SPEED_MAX, mag)),
             );
-            if (next !== speedRef.current) setSpeed(next);
+            if (next !== speedRef.current) {
+              setSpeed(next);
+              // P7 / issue 8: a speed the CAR confirmed (its own button, a mode
+              // change, another phone) now reaches the profile as well —
+              // adoption used to update live state only, so the app resurrected
+              // the pre-change speed after a restart. Same guarded writer as
+              // selectMode's path.
+              persistPrefsRef.current?.({ speed: next });
+            }
           }
         }
       }
@@ -1461,14 +1525,7 @@ export function useControlHub(routeCategory?: string) {
       // frame cannot undo the optimistic flip; persistence happens only on a
       // real change, never on the steady 1 Hz echo.
       {
-        const commit = toggleCommitRef.current;
-        if (commit && Date.now() - commit.at > TOGGLE_CHANGE_GRACE_MS)
-          toggleCommitRef.current = null;
-        const pending = toggleCommitRef.current;
-        const protect = (
-          which: "wifiEnabled" | "btEnabled" | "bootAutojoin",
-          incoming: boolean,
-        ) => !(pending?.which === which && pending.value !== incoming);
+        const protect = toggleChangeProtectedRef.current;
         const cur = transportToggleRef.current;
         if (
           typeof t.wifiEnabled === "boolean" &&
@@ -1534,6 +1591,18 @@ export function useControlHub(routeCategory?: string) {
             : null;
       if (incomingRouters) {
         const incoming: string[] = incomingRouters;
+        // P7 / issue 8: a registry changed on ANOTHER surface (a second
+        // phone, the car's own answer to ROUTERS;ADD/DEL) adopted into live
+        // state here but never reached the per-car profile — the next
+        // restart resurrected the stale list from disk. Change-guarded on the
+        // same mirror the state setter uses, so the steady 1 s broadcast
+        // schedules no write.
+        const prevRouters = savedNetworksRef.current;
+        const unchanged =
+          prevRouters.length === incoming.length &&
+          prevRouters.every((n, i) => n === incoming[i]);
+        if (!unchanged)
+          persistPrefsRef.current?.({ savedRouters: incoming.slice() });
         setCarNetworks((prev) =>
           prev.length === incoming.length &&
           prev.every((n, i) => n === incoming[i])
@@ -1910,6 +1979,21 @@ export function useControlHub(routeCategory?: string) {
       }
     }, 2000);
     return () => clearInterval(id);
+  }, [isFocused]);
+
+  // P7 / issue 8: a focus gain is a re-sync moment. The car's own buttons  // (mode on the car, toggles changed from a second phone) move state while
+  // this app is parked on another screen; previously nothing was re-read
+  // until the LINK bounced — the three toggles were queried only on the
+  // link-up transition, and the poll above only restarts its 2 s tick on
+  // return. One REQ_STATE refreshes mode/speed/trim AND the toggles (they
+  // ride every STATE line — WebServerComm's /status JSON and ModeManager's
+  // `;WIFI=`/`;BT=`/`;AUTOJOIN=` keys), so a single line per focus-gain is
+  // the whole fix. Fire-and-forget, same as the poll.
+  useEffect(() => {
+    if (!isFocused || !connectedRef.current) return;
+    if (sppService.isConnected) sppService.requestState().catch(() => {});
+    if (bleService.isConnected) bleService.requestState().catch(() => {});
+    if (wifiService.isConnected) wifiService.requestState().catch(() => {});
   }, [isFocused]);
 
   // Scan for SPP devices (Classic Bluetooth)
@@ -2500,24 +2584,55 @@ export function useControlHub(routeCategory?: string) {
       } else if (reply.startsWith("WIFICFG;SSID;")) {
         setCarSsid(reply.slice("WIFICFG;SSID;".length).trim() || null);
       } else if (reply.startsWith("WIFICFG;WIFI;")) {
-        // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered to
-        // both a bare `WIFICFG;WIFI;?` query and an ON/OFF set. Car truth wins:
-        // adopt it into the per-car pref too. (The removed APSAVE/PARALLEL
-        // branches died with the settings the owner ruled out.)
+        // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered
+        // to both a bare `WIFICFG;WIFI;?` query and an ON/OFF set.
+        // P7 / issue 8: the reply runs the SAME optimistic-commit grace as the
+        // STATE adoption path. A query answer (or set echo) in flight when the
+        // user flipped the toggle carries the PRE-flip value; adopting it
+        // here rolled the panel back — and PERSISTED that pre-flip value into
+        // the per-car profile, so the wrong truth survived the restart. Car
+        // truth still wins outside the grace window.
         const on =
           reply.slice("WIFICFG;WIFI;".length).trim().toUpperCase() === "ON";
-        setWifiEnabled(on);
-        persistPrefs({ wifiEnabled: on });
+        if (
+          toggleChangeProtectedRef.current("wifiEnabled", on) &&
+          transportToggleRef.current.wifiEnabled !== on
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            wifiEnabled: on,
+          };
+          setWifiEnabled(on);
+          persistPrefs({ wifiEnabled: on });
+        }
       } else if (reply.startsWith("WIFICFG;BT;")) {
         const on =
           reply.slice("WIFICFG;BT;".length).trim().toUpperCase() === "ON";
-        setBtEnabled(on);
-        persistPrefs({ btEnabled: on });
+        if (
+          toggleChangeProtectedRef.current("btEnabled", on) &&
+          transportToggleRef.current.btEnabled !== on
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            btEnabled: on,
+          };
+          setBtEnabled(on);
+          persistPrefs({ btEnabled: on });
+        }
       } else if (reply.startsWith("WIFICFG;AUTOJOIN;")) {
         const on =
           reply.slice("WIFICFG;AUTOJOIN;".length).trim().toUpperCase() === "ON";
-        setBootAutojoin(on);
-        persistPrefs({ bootAutojoin: on });
+        if (
+          toggleChangeProtectedRef.current("bootAutojoin", on) &&
+          transportToggleRef.current.bootAutojoin !== on
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            bootAutojoin: on,
+          };
+          setBootAutojoin(on);
+          persistPrefs({ bootAutojoin: on });
+        }
       }
       lastProvisionReplyRef.current = reply;
     },
@@ -3404,7 +3519,9 @@ export function useControlHub(routeCategory?: string) {
   const selectJoystickLayout = useCallback(
     (id: string) => {
       setJoystickLayoutId(id);
-      setUseJoystick(id === "dual");
+      // raw setter on purpose: the full patch below persists both fields
+      // itself (P7 / issue 8 - the public wrapper would write twice)
+      setUseJoystickState(id === "dual");
       persistPrefs({ joystickLayout: id, useJoystick: id === "dual" });
     },
     [persistPrefs],
