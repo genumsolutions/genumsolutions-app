@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-15: U-113 P2 Remote chrome rebuild + P3 settings widen/auto-join cleanup; JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-16: car-side U-115 boot-scan-first landed → 1.3.12 + P4 closed (E1 6/6, status floor 20000); U-113 P2/P3 app work unchanged; JS-only OTA, version 3.2.7/60 UNCHANGED)
 
 > **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
 > owner's 14-issue list. **P1 DONE** (issue 11 — the dead mode-rotate: root-caused
@@ -14,6 +14,29 @@
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
 > captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.11
 > (the car's current flash target; the diet + P5 ride 1.3.11).
+
+## This session (2026-10-16, U-115 — CAR-side only; no app change, 3.2.7/60 UNCHANGED)
+
+The owner's 2026-10-16 field report ("the car's own hotspot is detected but will
+not connect", "it only connects once bluetooth is off") is a **car-only** fix, so
+nothing in this repo changed and the app version stays **3.2.7 / versionCode 60**.
+
+- **Car U-115 (`5d26e9c`, firmware 1.3.11 → 1.3.12):** the boot auto-join was
+  holding the own hotspot on a **moving channel** while it retried an absent
+  router. `armBootAutoJoin()` now runs ONE non-blocking reachability scan first —
+  **present** → rejoin, **absent** → stay AP-only (own hotspot stable from the
+  first second), **inconclusive** → fall back to the plain rejoin. New contract
+  rule `boot-scan-first` + mutants M96-M100.
+- **Car P4 CLOSED:** the full E1 `[HEAPW]` waterfall came back **6/6** and
+  `STATUS_HEAP_FLOOR_BYTES` was re-tuned **49152 → 20000** (`cce743e`), so **P6
+  (dual link) is now unblocked** on the heap headroom.
+- Car gates green: syntax 9/9 · webpage-js PASS · firmware-contract 0 failures ·
+  mutate-gates 94/94 (source only — F-61).
+
+App work remaining in this round is unchanged: **P6** (issue 1, dual link — now
+unblocked) and **P7** (issue 8, persistence + sync sweep). Device rows
+**U-113-2..7 + U-113-16** and the E3/E4/E11 captures stay owed from the owner's
+bench.
 
 ## This session (2026-10-15, U-113 P5 — CAR-side only; no app change, 3.2.7/60 UNCHANGED)
 

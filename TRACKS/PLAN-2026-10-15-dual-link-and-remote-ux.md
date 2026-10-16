@@ -1,5 +1,13 @@
 # PLAN 2026-10-15 — dual link + remote-screen UX + BT heap (APP half, mirror)
 
+> **2026-10-16 addendum.** Car-side **U-115** landed (`5d26e9c`, firmware **1.3.12**)
+> — the boot auto-join now probes the air first, so an absent router no longer holds
+> the own hotspot on a moving channel. **P4 is CLOSED** (E1 captured **6/6**;
+> `STATUS_HEAP_FLOOR_BYTES` re-tuned 49152 → **20000**, `cce743e`), so **P6 (dual
+> link) is now unblocked**. No app code changed — version stays **3.2.7/60**. App
+> work remaining: **P6** (issue 1) and **P7** (issue 8). The status block below is
+> the original 2026-10-15 text.
+
 Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
 P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
 U-113-5..7 are the owner's bench pass) — car-side P4 (BT heap diet) has landed its first two
