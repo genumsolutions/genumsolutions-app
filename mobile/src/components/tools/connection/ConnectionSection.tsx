@@ -565,7 +565,6 @@ export function ConnectionSection({
             carOnRouter={carOnRouter}
             sppSupported={sppSupported}
             sppStatus={sppStatus}
-            linkLive={anyLink}
             onScanBluetooth={() => void scanBluetooth()}
             onConnectBluetooth={connectBluetooth}
             onConnectWifi={connectWifi}
@@ -862,7 +861,6 @@ function MethodSetup({
   carOnRouter,
   sppSupported,
   sppStatus,
-  linkLive,
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
@@ -873,8 +871,6 @@ function MethodSetup({
   carOnRouter: boolean;
   sppSupported: boolean;
   sppStatus: string;
-  /** U-70: a link is already up, so the scan affordances must be hidden. */
-  linkLive: boolean;
   onScanBluetooth: () => void;
   onConnectBluetooth: (
     address: string,
@@ -902,7 +898,6 @@ function MethodSetup({
         carOnRouter={carOnRouter}
         sppSupported={sppSupported}
         sppStatus={sppStatus}
-        linkLive={linkLive}
         onScanBluetooth={onScanBluetooth}
         onConnectBluetooth={onConnectBluetooth}
         onConnectWifi={onConnectWifi}
@@ -929,7 +924,6 @@ function TargetBody({
   carOnRouter,
   sppSupported,
   sppStatus,
-  linkLive,
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
@@ -939,8 +933,6 @@ function TargetBody({
   carOnRouter: boolean;
   sppSupported: boolean;
   sppStatus: string;
-  /** U-70: a link is already up, so the scan affordances must be hidden. */
-  linkLive: boolean;
   onScanBluetooth: () => void;
   onConnectBluetooth: (
     address: string,
@@ -953,13 +945,22 @@ function TargetBody({
     carOnOwnRouter: carOnRouter,
   });
 
+  // P6 / issue 1 (2026-10-16): the Bluetooth scan is hidden only when
+  // BLUETOOTH is the live link — NOT when any link is. The old shared gate
+  // (`!linkLive` = "no link up at all") hid the scan the moment Wi-Fi
+  // connected, so a phone sitting on the car's own hotspot could never raise
+  // the Bluetooth transport as the SECOND link — which is exactly the dual
+  // link issue 1 asks for. Wi-Fi is the mirror case: its Connect button is
+  // never gated on Bluetooth.
+  const btLive = sppStatus === "connected";
+
   return (
     <View>
       {/* U-84: the per-target "requirement" paragraph is gone. It was guidance
           text describing the control directly beneath it — the owner named
           subtitles like this as part of the mess. If a target genuinely cannot
           be used, TargetBody says why in place, where it applies. */}
-      {target.id === "bt-spp" && !linkLive ? (
+      {target.id === "bt-spp" && !btLive ? (
         <View className="mt-2 gap-1.5">
           {/* U-69: if classic Bluetooth is not in this build, say so HERE with
               the reason, instead of offering a button that can only fail. */}
@@ -981,9 +982,10 @@ function TargetBody({
           {/* U-70: the FOUND-device LIST moved to the section's RIGHT pane
               (2026-10-12): left = the method + this one action, right = the
               method's own results. Paired/added devices render above the scroll,
-              the rest behind one bounded window; and the whole list hides once a
-              link is up (connecting a second car to a live session is not a
-              wanted state). */}
+              the rest behind one bounded window. P6 (issue 1): the list hides
+              once BLUETOOTH is up — the second link being live over Wi-Fi no
+              longer hides it, because raising Bluetooth beside a live Wi-Fi link
+              is precisely the state issue 1 asks for. */}
         </View>
       ) : null}{" "}
       {/* U-86: one Connect action, whatever network the car is on. */}
