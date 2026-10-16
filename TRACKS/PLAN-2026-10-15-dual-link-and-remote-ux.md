@@ -4,9 +4,13 @@
 > — the boot auto-join now probes the air first, so an absent router no longer holds
 > the own hotspot on a moving channel. **P4 is CLOSED** (E1 captured **6/6**;
 > `STATUS_HEAP_FLOOR_BYTES` re-tuned 49152 → **20000**, `cce743e`), so **P6 (dual
-> link) is now unblocked**. No app code changed — version stays **3.2.7/60**. App
-> work remaining: **P6** (issue 1) and **P7** (issue 8). The status block below is
-> the original 2026-10-15 text.
+> link) is now unblocked**. **P6/issue 1 is CODE-DONE** (`02569c1`): the Bluetooth
+> scan no longer hides behind a live Wi-Fi link (the shared `linkLive` gate is gone,
+> keyed on Bluetooth's own `sppStatus`), and `dualLinkConnect.test.ts` pins both
+> directions (**4 mutations → red**). JS-only, version stays **3.2.7/60** (OTA
+> channel). App work remaining: **P7** (issue 8) and **P8** (close-out). Device rows
+> **U-113-12..14** stay owed from the owner's bench. The status block below is the
+> original 2026-10-15 text.
 
 Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
 P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
