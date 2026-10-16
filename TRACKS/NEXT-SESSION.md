@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P7/issue 8 settings round-trip landed** — adopted mode/speed/routers now reach the per-car profile, the WIFICFG reply honours the toggle grace, the Joystick pill + auto-join-router switch persist, and a focus gain re-reads the car; **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); JS-only OTA, version 3.2.7/60 UNCHANGED)
 
 > **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
 > owner's 14-issue list. **P1 DONE** (issue 11 — the dead mode-rotate: root-caused
@@ -14,6 +14,63 @@
 > `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`. Phase 0 evidence
 > captures (E2/E5 + P3 audit log) are still owed from the owner's bench while testing 1.3.11
 > (the car's current flash target; the diet + P5 ride 1.3.11).
+>
+> **P7/issue 8 landed** (app `e02db5c`, car `26a781c`): every setting now stores on BOTH
+> sides promptly — the app's adopt paths write the per-car profile (mode/speed/routers), the
+> `WIFICFG` reply runs the same grace as the broadcast, the Joystick pill + auto-join-router
+> switch persist, and a focus gain re-reads the car. Car half gated by `settings-round-trip`
+> (no firmware byte changed). Device row **U-113-15** owed from the bench.
+
+## This session (2026-10-16, P7/issue 8 — APP change, JS-only OTA 3.2.7/60 UNCHANGED)
+
+**Issue 8:** *"every one of these settings must store in the car AND in the app
+promptly and stay in sync."*
+
+**The car already keeps its half** (now pinned by the car repo's
+`settings-round-trip` rule + M104-M109, no firmware byte changed): each
+`WIFICFG;WIFI|BT|AUTOJOIN` persists to NVS before it is acked, replies with the
+state it actually holds (a flip that would leave both transports off is refused
+and re-answered), and rides both the STATE line and the `/status` JSON.
+
+**Every gap was app-side, and they all had one shape: the app ADOPTED car truth
+into live state but never wrote it into the per-car profile**, so a restart
+resurrected whatever disk last held. Fixed in `components/tools/useControlHub.ts`:
+
+- an adopted **mode** (the car's own button, or a change from another phone) now
+  persists `modeId` — as the local CarMode id, `selectMode`'s shape — behind the
+  existing change guard, so the 1 Hz echo schedules nothing;
+- an adopted **speed** now persists;
+- an adopted **saved-router registry** now persists, change-guarded on the same
+  mirror the state setter uses;
+- the **`WIFICFG` reply** path now runs the SAME optimistic-commit grace as the
+  STATE adopt path — a reply in flight during a user flip can no longer roll the
+  panel back OR persist the pre-flip value. The grace is now ONE named predicate
+  read through a ref, not an inline closure in one path (which is why the reply
+  path bypassed it);
+- the **D-pad/Joystick pill** (`RemoteControlScreen`) and the **auto-join-router
+  switch** (`RemoteControlScreen` + `CarProfileCard`) are no longer raw `useState`
+  setters — both persist through the same guarded writer; the restore paths stay
+  on the raw setters on purpose, so loading a profile never writes back;
+- a **focus gain** now fires one `REQ_STATE` immediately (mode/speed/trim AND the
+  three toggles ride every STATE line), so a car-side change made while the app
+  was parked is re-read on return.
+
+Two findings recorded as *not* gaps: **trim/steerLimit** are emitted only by the
+stub `TwoWD1M` mode (a live 4WD4M car never sends them), and `persistPrefs`
+early-returns until a stable profile key exists (by design — never write under a
+transient identity).
+
+**New test** `components/tools/persistenceSync.test.ts` (9 assertions; reads the
+source — no component harness in this repo, same note as `oneActiveLink.test.ts`).
+**Proven both directions: 8 mutations → red**, byte-exact restore.
+
+**Gates:** vitest **48 files / 720 tests** (was 47/711) · `tsc --noEmit` clean ·
+prettier clean. **Version stays 3.2.7 / versionCode 60** — JS-only, ships on the
+**OTA** channel.
+
+**Still owed (F-61):** device row **U-113-15** (a setting changed on one surface
+survives kill-app / car-reboot / a change from another surface) from the owner's
+bench.
 
 ## This session (2026-10-16, P6/issue 1 — APP change, JS-only OTA 3.2.7/60 UNCHANGED)
 

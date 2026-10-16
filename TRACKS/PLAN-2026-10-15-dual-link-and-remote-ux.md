@@ -7,10 +7,16 @@
 > link) is now unblocked**. **P6/issue 1 is CODE-DONE** (`02569c1`): the Bluetooth
 > scan no longer hides behind a live Wi-Fi link (the shared `linkLive` gate is gone,
 > keyed on Bluetooth's own `sppStatus`), and `dualLinkConnect.test.ts` pins both
-> directions (**4 mutations → red**). JS-only, version stays **3.2.7/60** (OTA
-> channel). App work remaining: **P7** (issue 8) and **P8** (close-out). Device rows
-> **U-113-12..14** stay owed from the owner's bench. The status block below is the
-> original 2026-10-15 text.
+> directions (**4 mutations → red**). **P7/issue 8 is CODE-DONE** (`e02db5c`; car
+> half `26a781c`): every adopt path now writes the per-car profile (mode / speed /
+> saved routers), the `WIFICFG` reply runs the same optimistic-commit grace as the
+> broadcast (now one named predicate), the Joystick pill + auto-join-router switch
+> persist, and a focus gain fires one `REQ_STATE` — new `persistenceSync.test.ts`
+> (**8 mutations → red**), car premise pinned by `settings-round-trip` with no
+> firmware byte changed. JS-only, version stays **3.2.7/60** (OTA channel). App work
+> remaining: **P8** (close-out). Device rows **U-113-12..14** and **U-113-15** stay
+> owed from the owner's bench. The status block below is the original 2026-10-15
+> text.
 
 Status: **P1 DONE (2026-10-15) · P2 DONE (code + tests; device rows U-113-2..4/16 owed) ·
 P3 code landed (widen + the CAR boot-auto-join toggle removed; the control AUDIT + rows
@@ -222,6 +228,24 @@ inside a JSX comment (it compiled only because the comment swallowed it).
 - Fix the gaps found (e.g. `toggleCommitRef` grace, `queryCarTransportToggle` refresh on focus,
   cloud write batching); extend `carProfileService.test.ts` / `deviceProfileRegistryService`
   tests. Device row U-113-15: toggle → kill app → reopen → car reboot → still in sync.
+- **✅ CODE-DONE 2026-10-16 (app `e02db5c`, car `26a781c`) — every gap was app-side.**
+  The car already keeps its whole half (NVS before ack; replies with the held state;
+  last-transport-off clamp; both the STATE line and the `/status` JSON), now pinned by
+  the car's **`settings-round-trip`** rule + **M104-M109** with **no firmware byte
+  changed**. All seven app gaps had one shape — the app ADOPTED car truth into live
+  state but never wrote the per-car profile: adopted **mode** (the car's own button),
+  **speed**, and the **saved-router registry**; the **D-pad/Joystick pill** and the
+  **auto-join-router switch** were raw `useState` setters (never persisted);
+  the **`WIFICFG` reply** bypassed the `toggleCommitRef` grace (a stale reply could
+  roll the panel back AND persist the pre-flip value); and nothing re-read the car on
+  **focus return**. Fixed in `useControlHub.ts` (+ the two call sites in
+  `RemoteControlScreen`), with the grace extracted to one named predicate every adopt
+  path runs. New `persistenceSync.test.ts` (**8 mutations → red**, byte-exact restore).
+  Recorded as *not* gaps: **trim/steerLimit** ride only the stub `TwoWD1M` (a live
+  car never emits them) and `persistPrefs` early-returns until a stable profile key
+  exists (by design). Service round-trips were already covered
+  (`carProfileService.test.ts`).
+- **Still owed (F-61):** device row **U-113-15** — the owner's bench.
 
 ### P8 — Issue 13: close-out
 
