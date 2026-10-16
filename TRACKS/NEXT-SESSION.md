@@ -1,4 +1,4 @@
-# NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P7/issue 8 settings round-trip landed** — adopted mode/speed/routers now reach the per-car profile, the WIFICFG reply honours the toggle grace, the Joystick pill + auto-join-router switch persist, and a focus gain re-reads the car; **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); JS-only OTA, version 3.2.7/60 UNCHANGED)
+# NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P8/issue 13 close-out landed — the round is SOURCE-COMPLETE, the P6+P7 JS-only OTA is published (3.2.7/60), nothing device-verified (F-61)**; **P7/issue 8 settings round-trip landed** — adopted mode/speed/routers now reach the per-car profile, the WIFICFG reply honours the toggle grace, the Joystick pill + auto-join-router switch persist, and a focus gain re-reads the car; **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); version 3.2.7/60 UNCHANGED)
 
 > **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
 > owner's 14-issue list. **P1 DONE** (issue 11 — the dead mode-rotate: root-caused
@@ -20,6 +20,33 @@
 > `WIFICFG` reply runs the same grace as the broadcast, the Joystick pill + auto-join-router
 > switch persist, and a focus gain re-reads the car. Car half gated by `settings-round-trip`
 > (no firmware byte changed). Device row **U-113-15** owed from the bench.
+>
+> **P8/issue 13 (close-out) landed 2026-10-16:** app gates green (vitest **48 files /
+> 720 tests**, `tsc --noEmit` clean, prettier clean); the P6+P7 **JS-only OTA is
+> published** (manifest `3.2.7 / 60`, notes `e02db5c2b4c…`); CI green; `backup`
+> re-snapshotted. **The round is source-complete; every device row is the owner's bench
+> (F-61).** See the P8 section below.
+
+## This session (2026-10-16, P8/issue 13 — close-out; NO code change, 3.2.7/60 UNCHANGED)
+
+**Issue 13 is the round's own close-out** — no app source changed. It is the "is the
+record honest and is the round done" pass.
+
+**Gates (fresh, clean tree):** vitest **48 files / 720 tests** · `tsc --noEmit` clean ·
+`prettier --check` clean. (Car side green too: firmware-contract **0** · webpage-js
+**PASS** · syntax **9/9** · mutate-gates **103/103**.)
+
+**Ship:** the P6+P7 **JS-only OTA is published** — live manifest `version 3.2.7`,
+`version_code 60`, notes `OTA · Short update (e02db5c2b4c…)`, updated 2026-10-16
+19:06 UTC. **No APK, no version bump** (nothing native changed). CI green on `main`.
+
+**Records:** `mobile/TESTING.md` gained the P8 close-out note; both `NEXT-SESSION.md`
+and the plan carry the P8 entries; root `RESUME-HERE.md` has the round verdict;
+`backup` re-snapshotted to `main`.
+
+**Honest status (F-61):** all 14 issues are **code-complete and gated**; **no row is
+device-verified** — U-113-1..7 + U-113-16 here, U-113-8..15 + U-115-1..3 in the car
+repo, plus E3/E4/E5/E11 and Q1–Q3, are the owner's bench.
 
 ## This session (2026-10-16, P7/issue 8 — APP change, JS-only OTA 3.2.7/60 UNCHANGED)
 
