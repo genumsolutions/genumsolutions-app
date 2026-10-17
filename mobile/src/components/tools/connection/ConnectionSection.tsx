@@ -91,6 +91,7 @@ import {
 } from "./index";
 import { ActionButton, ConnectionCard, InlineMessage } from "./ConnectionCard";
 import { WifiPanel } from "./WifiPanel";
+import { describeSecondLink } from "./linkOrder";
 import type { useControlHub } from "../useControlHub";
 
 // 2026-10-10: NetInfo / CAR_WS_URL / CAR_STATUS_URL / PROBE_TIMEOUT_MS /
@@ -195,6 +196,11 @@ export function ConnectionSection({
     sppDevices,
     sppSupported,
     wifiConnected,
+    // P3: the second-link raise is derived from the hub's live link facts —
+    // which transport is in flight and what the car said about it.
+    btLinked,
+    connecting,
+    connectingAddress,
     // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
@@ -255,6 +261,18 @@ export function ConnectionSection({
   // live, and the FIRST connect when nothing is up, are never gated — the car
   // never refuses those.
   const secondLinkRefused = linkCap === false && btLive !== wifiConnected;
+  // P3 (owner item A, 2026-10-17): the in-flight SECOND raise, described —
+  // "Wi-Fi coming up…" while it negotiates, and the CAR's own refusal as
+  // soon as its LINKCAP latch reports it (a raise pending beside a refusal
+  // verdict will not open; saying so beats waiting for the native failure).
+  // Zero or two links live ⇒ there is no second raise ⇒ the line is null.
+  const secondLink = describeSecondLink({
+    btLinked,
+    wifiConnected,
+    connecting,
+    connectingAddress,
+    linkCap,
+  });
   const reportedIp = telemetry.ip ?? null;
   const reportedSsid = telemetry.ssid ?? carSsid ?? null;
   const onOwnHotspot = carIsOnOwnHotspot({
@@ -584,6 +602,16 @@ export function ConnectionSection({
             onConnectBluetooth={connectBluetooth}
             onConnectWifi={connectWifi}
           />
+        ) : null}
+
+        {/* P3: the in-flight second-link raise, named while it runs. Tone
+            follows the car's verdict: a REPORTED refusal (F-88: only an
+            explicit `false` can say this) is an error, a plain pending raise
+            is information. */}
+        {secondLink.line ? (
+          <InlineMessage tone={secondLink.refusedByCar ? "error" : "info"}>
+            {secondLink.line}
+          </InlineMessage>
         ) : null}
 
         {/* ONE message surface for the whole section — above the right pane so a
