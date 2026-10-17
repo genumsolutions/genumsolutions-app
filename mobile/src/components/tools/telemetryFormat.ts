@@ -165,13 +165,20 @@ export function buildCarTelemetry(args: BuildTelemetryArgs): TelemetryField[] {
 }
 
 /**
- * The U-95/F-79 restart record as one field, or `null` when there is nothing
- * honest to say.
+ * The last-reset record as one field, or `null` when there is nothing honest to
+ * say. (Was `buildRestartField`; P2/2026-10-17 turned the emphasis around — see
+ * below.)
  *
  * WHY THIS IS SEPARATE from `buildCarTelemetry`: that one is a fixed six-reading
  * instrument strip whose ordering several tests pin. Appending a seventh "when
  * present, sometimes" row would make the strip's shape depend on the car's
  * firmware version, which is exactly the kind of drift the strip is not for.
+ *
+ * WHAT LEADS (P2, owner item C — "bare minimum: last reset only, but better"):
+ * the HEADLINE is the LAST RESET — *how* the car died (`TASK_WDT`) and *what it
+ * was doing* (`http-root`), joined as `TASK_WDT · http-root`. The restart COUNT
+ * that used to be the headline is now the calm second line (`3 restarts · boot
+ * 5`). One reset the owner can act on beats a tally they cannot.
  *
  * WHY IT CAN RETURN `null`: three states look identical on a dash but mean very
  * different things, and this is the one place in the panel where that matters —
@@ -183,8 +190,10 @@ export function buildCarTelemetry(args: BuildTelemetryArgs): TelemetryField[] {
  *     bill of health the car never actually gave.
  *   * the car is offline                -> we cannot know; the last record we
  *     held is stale, and showing it as current would be the worst of the three.
+ *     (F-79: the offline and too-old rows each carry a SHORT hint, so the three
+ *     dashes stay distinguishable instead of collapsing into one.)
  */
-export function buildRestartField(args: {
+export function buildResetField(args: {
   connected: boolean;
   resetReason?: string | null;
   bootCount?: number | null;
@@ -202,46 +211,59 @@ export function buildRestartField(args: {
   if (!reported && !boots) return null;
   // Offline: the record we hold describes the last car we saw, not this one.
   if (!args.connected) {
-    return { label: "Restarts", value: DASH, tone: "muted" };
+    return {
+      label: "Last reset",
+      value: DASH,
+      tone: "muted",
+      hint: "Car offline",
+    };
   }
 
   if (!reported) {
     return {
-      label: "Restarts",
+      label: "Last reset",
       value: DASH,
       tone: "muted",
-      hint: "Firmware too old to report restarts",
+      hint: "Firmware too old to report resets",
     };
   }
 
   if (args.crashCount! <= 0) {
     return {
-      label: "Restarts",
+      label: "Last reset",
       value: "None",
       tone: "good",
       ...(boots ? { hint: `${args.bootCount} clean boots` } : {}),
     };
   }
 
-  // A real crash. The hint is the whole point: the reason names HOW the car died
-  // and the phase names WHICH operation it was doing. "It resets again and
-  // again" becomes "TASK_WDT during http-root" — which is a bug report.
-  const parts: string[] = [];
+  // A real crash. The HEADLINE is the last reset: the reason names HOW the car
+  // died and the phase names WHICH operation it was doing. "It resets again and
+  // again" becomes "TASK_WDT · http-root" — which is a bug report, and the line
+  // the owner asked to lead.
   const reason = args.resetReason?.trim();
   const phase = args.lastCrashPhase?.trim();
-  if (reason) parts.push(reason);
-  if (phase) parts.push(`during ${phase}`);
+  const headline =
+    reason && phase
+      ? `${reason} · ${phase}`
+      : reason || phase || "Unknown fault";
+
+  // The count is now SECONDARY. The heap is still mentioned only when small
+  // enough to be the likely cause — a healthy heap number on every reset is
+  // noise.
+  const parts: string[] = [
+    `${args.crashCount} restart${args.crashCount === 1 ? "" : "s"}`,
+  ];
+  if (boots) parts.push(`boot ${args.bootCount}`);
   const heap = args.lastCrashHeap;
   if (typeof heap === "number" && Number.isFinite(heap) && heap > 0) {
-    // Only surface the heap when it is small enough to be the likely cause;
-    // printing a healthy heap number on every crash is noise.
     if (heap < 64 * 1024) parts.push(`low heap ${formatHeap(heap)}`);
   }
 
   return {
-    label: "Restarts",
-    value: String(args.crashCount),
+    label: "Last reset",
+    value: headline,
     tone: "bad",
-    ...(parts.length > 0 ? { hint: parts.join(" ") } : {}),
+    hint: parts.join(" · "),
   };
 }

@@ -20,8 +20,8 @@ begins. If a session is interrupted, **resume from the first phase below that is
 | Phase | Scope | State | Commit |
 |---|---|---|---|
 | P0 | evidence captures (owner bench, no code) | ⏳ owed — no device here | — |
-| P1 | [B] reconnect/restart prompt → one pure decision | ✅ | `P1_APP_COMMIT` |
-| P2 | [C] reset strip leads with the last reset | ⏳ todo | — |
+| P1 | [B] reconnect/restart prompt → one pure decision | ✅ | app `8b2405f` (`P1/issue B`) |
+| P2 | [C] reset strip leads with the last reset | ✅ | app `P2/issue C` |
 | P3 | [A] dual-link connect ordering (needs P5) | ⏳ todo | — |
 | P4 | [F car] link admission + `LINKCAP` | ⏳ todo | — |
 | P5 | [F app] surface `LINKCAP` (absent ⇒ capable) | ⏳ todo | — |
@@ -31,9 +31,10 @@ begins. If a session is interrupted, **resume from the first phase below that is
 | P9 | [E car] findability (conditional on P8) | ⏳ todo | — |
 | P10 | close-out (ledgers, ship, backup) | ⏳ todo | — |
 
-Legend: ✅ done + committed · 🔧 in progress · ⏳ todo · ⛔ blocked.
-Car-half phases (P4/P6/P9) are committed in the **car** repo; the ✅ row is copied here so the
-mirror still says where to resume.
+Legend: ✅ done + committed · 🔧 in progress · ⏳ todo · ⛔ blocked. The Commit column
+carries each phase's **commit-subject token** (a hash for the phases already landed) — find it
+with `git log --oneline --grep "<token>"`. Car-half phases (P4/P6/P9) are committed in the
+**car** repo; the ✅ row is copied here so the mirror still says where to resume.
 
 ## Owner request (2026-10-17, verbatim intent — six items)
 

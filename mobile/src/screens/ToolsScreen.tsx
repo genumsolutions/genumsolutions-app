@@ -36,7 +36,7 @@ import { useControlHub } from "../components/tools/useControlHub";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
 import { TelemetryStrip } from "../components/tools/TelemetryStrip";
-import { buildRestartField } from "../components/tools/telemetryFormat";
+import { buildResetField } from "../components/tools/telemetryFormat";
 import { feedbackTap } from "../services/hapticsService";
 import {
   KIND_GROUPS,
@@ -250,9 +250,10 @@ export function ToolsScreen() {
       : null;
   const apName = staSsid ? null : carApName?.trim() || "4WD4MCar_WiFi";
 
-  // U-95/F-79: the car's restart record, resolved once. Shown in the
+  // P2/owner item C: the last reset, resolved once. The HEADLINE is the last
+  // reset itself (reason · phase); the count is secondary. Shown in the
   // Diagnostics disclosure only when the car actually reported real values.
-  const restartField = buildRestartField({
+  const resetField = buildResetField({
     connected,
     resetReason: telemetry.resetReason,
     bootCount: telemetry.bootCount,
@@ -434,16 +435,14 @@ export function ToolsScreen() {
           </Pressable>
         </View>
 
-        {/* Diagnostics — the car's restart record (U-97). A quiet fact, not a
+        {/* Diagnostics — the LAST reset (P2/owner item C). A quiet fact, not a
             headline reading: the row only appears when the car actually
-            reported real values — no row rather than a false "None". */}
-        {restartField ? (
+            reported real values — no row rather than a false "None". The
+            field's own label ("Last reset") heads it, so no separate title. */}
+        {resetField ? (
           <SectionDisclosure title="Diagnostics">
             <View className="rounded-2xl border border-line bg-card p-4">
-              <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
-                Last restart record
-              </Text>
-              <TelemetryStrip fields={[restartField]} />
+              <TelemetryStrip fields={[resetField]} />
             </View>
           </SectionDisclosure>
         ) : null}
