@@ -188,15 +188,33 @@ export function targetsOfMethod(
  * first is unusable until the car reports an address. The UI must render THIS
  * string rather than offering a button that would dial a guess (F-65, and the
  * D4 defect this replaces).
+ *
+ * P5 (2026-10-17, owner item F / firmware 1.3.13): `ctx.linkCapRefused` is the
+ * car's REPORTED verdict that it cannot host a second link (`;LINKCAP=0` /
+ * `"link_cap":0`). When a raise would be the SECOND link, the dial targets
+ * return the honest reason instead of offering an action that can only be
+ * refused live. The caller only sets this when the raise IS a second raise —
+ * the car never refuses its first link, so a first connect must never be gated
+ * on it. And the caller only sets it when the car's field is **strictly
+ * false**: an ABSENT field means capable (F-88), never denied.
  */
 export function targetUnavailableReason(
   id: ConnectionTargetId | null | undefined,
-  ctx: { carOnOwnRouter: boolean },
+  ctx: { carOnOwnRouter: boolean; linkCapRefused?: boolean },
 ): string | null {
   const method = getMethod(methodOfTarget(id));
   if (!method) return "That connection method no longer exists.";
   const target = getTarget(id);
   if (!target) return "That connection method no longer exists.";
+  if (
+    ctx.linkCapRefused &&
+    (target.id === "bt-spp" || target.id === "car-wifi")
+  ) {
+    return (
+      "The car is low on memory right now — it will hold one link only. " +
+      "Disconnect the current link first if you need this one."
+    );
+  }
   if (target.needsCarOnRouter && !ctx.carOnOwnRouter) {
     return (
       "The car has not joined your router yet. Switch it from the car's own " +

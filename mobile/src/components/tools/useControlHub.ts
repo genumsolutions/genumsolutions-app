@@ -319,6 +319,13 @@ export function useControlHub(routeCategory?: string) {
   const [wifiEnabled, setWifiEnabled] = useState<boolean | null>(null);
   const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
   const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
+  // P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict, as the
+  // car last said it. `null` = the car has not said (pre-1.3.13 firmware).
+  // This is a LIVE fact, not a stored preference — it mirrors the car's latched
+  // admission verdict (`;LINKCAP=` / `"link_cap"`), so it is adopted from the
+  // telemetry stream and never persisted: the car re-broadcasts it on every
+  // STATE line, and the F-88 rule lives at the point of use, not here.
+  const [linkCap, setLinkCap] = useState<boolean | null>(null);
   // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
   // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
   // user-editable and the remembered per-device URL wins when present.
@@ -1564,6 +1571,11 @@ export function useControlHub(routeCategory?: string) {
           persistPrefsRef.current?.({ bootAutojoin: t.bootAutojoin });
         }
       }
+      // P5 (firmware 1.3.13): adopt the car's LINKCAP verdict straight from
+      // the telemetry stream — it rides every STATE line and every WS JSON
+      // frame. No commit-grace: this is a car fact, not a user edit, so no
+      // optimistic value exists to protect.
+      if (typeof t.linkCap === "boolean") setLinkCap(t.linkCap);
       // Connections-Hub (smart-link): the car-side scan answer to ROUTERS;SCAN
       // (firmware v2). Change-guarded so steady frames don't thrash.
       if (t.scan !== undefined) {
@@ -3728,6 +3740,11 @@ export function useControlHub(routeCategory?: string) {
     connectionMsgType,
     sppStatus,
     sppStatusMsg,
+    // P5 (owner item F, 2026-10-17 / firmware 1.3.13): the car's LINK-CAPACITY
+    // verdict — `null` = the car has not said (pre-1.3.13 firmware; F-88:
+    // absence means CAPABLE, never denied). The connection panel gates the
+    // SECOND-link raises on `linkCap === false`.
+    linkCap,
     showSppsRetry,
     // U-108 Phase 4 (owner 2026-10-13): the network the PHONE is on (safe
     // switching) and a detected CAR RESTART (boot-count change) with the
