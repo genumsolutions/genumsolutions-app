@@ -92,6 +92,7 @@ import {
 import { ActionButton, ConnectionCard, InlineMessage } from "./ConnectionCard";
 import { WifiPanel } from "./WifiPanel";
 import { describeSecondLink } from "./linkOrder";
+import { CAR_MDNS_HOST } from "./discoveryPlan";
 import type { useControlHub } from "../useControlHub";
 
 // 2026-10-10: NetInfo / CAR_WS_URL / CAR_STATUS_URL / PROBE_TIMEOUT_MS /
@@ -201,6 +202,10 @@ export function ConnectionSection({
     btLinked,
     connecting,
     connectingAddress,
+    // P8 (owner item E / F-91): the user's own "Car network" answer for THIS
+    // car, and the only writer that persists it into the profile.
+    carNetworkHint,
+    setCarNetworkHint,
     // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
@@ -230,6 +235,9 @@ export function ConnectionSection({
   const [scanShown, setScanShown] = useState(false);
   // M1: bumped by the "Other ESP / IoT projects" card to open the add form.
   const [iotAddTick, setIotAddTick] = useState(0);
+  // P8 (owner item E / F-91): the "Car network" input — edited locally,
+  // saved by the guarded hub writer (which persists it per car).
+  const [hintDraft, setHintDraft] = useState<string | null>(null);
 
   // M1: auto-sync the network section with the PHONE's network. When the
   // phone actually joins the pending router, the "Join <ssid> on this phone"
@@ -699,6 +707,63 @@ export function ConnectionSection({
                 saved here is kept ON THE CAR, and any ESP in the fleet can
                 switch to it. The button opens the same add form above. */}
             <IotEntryCard onAdd={() => setIotAddTick((t) => t + 1)} />
+
+            {/* P8 (owner item E / F-91): "Car network" — the user's own
+                answer for where THIS car is, probed FIRST by discovery. An IP
+                or hostname is dialled; an SSID is kept as a note and falls
+                through to the automatic plan (never dialled as a host). */}
+            <View
+              className="rounded-lg border border-line bg-card p-2"
+              testID="car-network-card"
+            >
+              <View className="flex-row items-center gap-1">
+                <Feather name="map-pin" size={12} color="#475569" />
+                <Text className="text-[10px] font-black text-ink">
+                  Car network
+                </Text>
+                {carNetworkHint ? (
+                  <Text className="ml-auto text-[9px] font-bold text-success">
+                    saved
+                  </Text>
+                ) : null}
+              </View>
+              <Text className="mt-0.5 text-[10px] leading-3 text-muted">
+                Where is the car? Its IP or name (e.g. 192.168.1.42 or{" "}
+                {CAR_MDNS_HOST}). Discovery looks here first; empty = let the
+                app find it automatically.
+              </Text>
+              <View className="mt-1 flex-row items-center gap-1.5">
+                <TextInput
+                  value={hintDraft ?? carNetworkHint ?? ""}
+                  onChangeText={setHintDraft}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="IP or hostname"
+                  placeholderTextColor="#94a3b8"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1.5 text-[11px] text-ink"
+                  testID="car-network-input"
+                />
+                <Feather
+                  name="check"
+                  size={16}
+                  color="#1e3a8a"
+                  onPress={() => {
+                    tap();
+                    setCarNetworkHint(hintDraft ?? "");
+                    setHintDraft(null);
+                    setMessage({
+                      tone: "ok",
+                      text: (hintDraft ?? "").trim()
+                        ? "Car network saved — discovery will look there first."
+                        : "Car network cleared — discovery is automatic again.",
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save the car network"
+                  testID="car-network-save"
+                />
+              </View>
+            </View>
           </>
         ) : null}
       </View>

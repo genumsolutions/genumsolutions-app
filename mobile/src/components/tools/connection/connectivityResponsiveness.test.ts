@@ -1,0 +1,227 @@
+// =====================================================================
+// P8 / owner item E (2026-10-17) — connectivity responsiveness + "where is
+// the car?".
+//
+// The owner's ask: react faster to network changes, and let the user TELL
+// the app where the car's network is — or make it automatic. This module
+// pins both halves:
+//
+//   * the ORDER (buildDiscoveryPlan): the user's hint first (F-91: a
+//     manual override must exist, persist and WIN), then the car's mDNS
+//     name, then the last router lease, then the bounded /24 sweep;
+//   * the EXECUTION (raw-source rules): the plan runs in findCarForUser
+//     BEFORE the sweep, the phone-network watcher records a down-sentinel
+//     so a rejoin re-finds the car, and the hint persists through the
+//     guarded writer into the per-car profile.
+//
+// Failsafes this file refuses to let regress:
+//   F-91 — the manual override wins: a hint is probed first, always.
+//   F-88's shape — an absent hint is NOT a denial: empty/whitespace hints
+//     are dropped and the automatic plan still runs.
+//   R-16a — this is discovery only; nothing here auto-joins a router.
+//
+// No component harness exists (see dualLinkConnect.test.ts), so the wiring
+// rules read the raw sources with comments stripped, literals KEPT. Every
+// rule was proven both ways (mutate → red, restore → green) when written.
+// =====================================================================
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath, URL as NodeURL } from "node:url";
+import { describe, expect, it } from "vitest";
+import { CAR_MDNS_HOST, buildDiscoveryPlan } from "./discoveryPlan";
+
+// --- the ORDER: the user's answer wins, the sweep never leads ------------
+
+describe("P8 — buildDiscoveryPlan orders the methods honestly", () => {
+  it("a user hint is probed FIRST — F-91's core assertion", () => {
+    const plan = buildDiscoveryPlan({ hint: "192.168.1.42" });
+    expect(plan.probes[0]).toEqual({ host: "192.168.1.42", via: "hint" });
+    expect(plan.probes[1]).toEqual({ host: CAR_MDNS_HOST, via: "mdns" });
+  });
+
+  it("mDNS leads when the user has not said — automatic still works", () => {
+    const plan = buildDiscoveryPlan({ hint: null });
+    expect(plan.probes[0]).toEqual({ host: CAR_MDNS_HOST, via: "mdns" });
+  });
+
+  it("an absent or blank hint is dropped, never dialled (F-88's shape)", () => {
+    for (const hint of ["", "   ", null, undefined]) {
+      const plan = buildDiscoveryPlan({ hint });
+      expect(plan.probes.every((p) => p.via !== "hint")).toBe(true);
+    }
+  });
+
+  it("an SSID-looking hint is NOT dialled as a host", () => {
+    // A name with a space is a note, not a hostname: dialling it can only
+    // fail slowly, so the plan skips it and falls through to the automatic
+    // methods — the user's answer still steers the sweep order via the
+    // stored hint, it is simply never mis-dialled.
+    const plan = buildDiscoveryPlan({ hint: "My Home WiFi" });
+    expect(plan.probes.every((p) => p.via !== "hint")).toBe(true);
+  });
+
+  it("the remembered lease follows the probes, and never duplicates one", () => {
+    const plan = buildDiscoveryPlan({ hint: null, leaseHost: "192.168.1.9" });
+    expect(plan.probes).toEqual([
+      { host: CAR_MDNS_HOST, via: "mdns" },
+      { host: "192.168.1.9", via: "lease" },
+    ]);
+    // A lease equal to the hint is probed ONCE, at the hint's position.
+    const dup = buildDiscoveryPlan({
+      hint: "192.168.1.9",
+      leaseHost: "192.168.1.9",
+    });
+    expect(dup.probes.filter((p) => p.host === "192.168.1.9")).toHaveLength(1);
+    expect(dup.probes[0]?.via).toBe("hint");
+  });
+
+  it("the user's hint equal to mDNS is not probed twice", () => {
+    const plan = buildDiscoveryPlan({ hint: CAR_MDNS_HOST });
+    expect(plan.probes.filter((p) => p.host === CAR_MDNS_HOST)).toHaveLength(1);
+  });
+
+  it("the bounded sweep always runs AFTER every probe, never before", () => {
+    for (const hint of [null, "", "192.168.1.42", "genum-car.local"]) {
+      const plan = buildDiscoveryPlan({ hint });
+      expect(plan.sweep).toBe(true);
+    }
+    // The plan itself contains no sweep hosts — the sweep is the caller's
+    // bounded /24, and this module decides ORDER, not the /24's members.
+    expect(plan2SweepIsLast(buildDiscoveryPlan({ hint: "192.168.1.42" }))).toBe(
+      true,
+    );
+  });
+});
+
+/** Structural check: probes is the plan's only host list; sweep is a flag. */
+function plan2SweepIsLast(
+  plan: ReturnType<typeof buildDiscoveryPlan>,
+): boolean {
+  return (
+    typeof plan.sweep === "boolean" &&
+    plan.probes.every((p) => typeof p.host === "string" && p.host.length > 0)
+  );
+}
+
+// --- the wiring, read from source ----------------------------------------
+
+const RAW_HUB = readFileSync(
+  fileURLToPath(new NodeURL("../useControlHub.ts", import.meta.url)),
+  "utf8",
+);
+
+const hubCode = RAW_HUB.replace(/\/\*[\s\S]*?\*\//g, "")
+  .split("\n")
+  .map((l) => l.replace(/\/\/.*$/, ""))
+  .join("\n");
+
+describe("P8 — the hub executes the plan before the sweep", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(RAW_HUB.length).toBeGreaterThan(1000);
+    expect(hubCode).toContain("buildDiscoveryPlan({");
+  });
+
+  it("the plan is built from THIS car's hint and the car's own lease", () => {
+    const at = hubCode.indexOf("buildDiscoveryPlan({");
+    expect(at).toBeGreaterThan(0);
+    const call = hubCode.slice(at, at + 220);
+    expect(call).toContain("carNetworkHintRef.current");
+    expect(call).toContain("lastRouterIpRef.current");
+  });
+
+  it("every plan probe is tried, and a probe HIT ends the search", () => {
+    const at = hubCode.indexOf("buildDiscoveryPlan({");
+    const after = hubCode.slice(at, at + 900);
+    expect(after).toContain("for (const p of plan.probes)");
+    expect(after).toContain("return { ok: true, host: p.host };");
+    // The bounded sweep still exists after the probes (fall-through).
+    const sweepAt = after.indexOf("findCarOnNetwork({");
+    expect(sweepAt).toBeGreaterThan(
+      after.indexOf("for (const p of plan.probes)"),
+    );
+  });
+
+  it("probes are validated as OUR car — a random host cannot masquerade", () => {
+    expect(hubCode).toContain(
+      "looksLikeOurCar(payload, { apNames: OWN_AP_NAMES })",
+    );
+  });
+});
+
+describe("P8 — the watcher reacts to link down/up, not only SSID moves", () => {
+  it("records a down-sentinel so a REJOIN re-finds the car", () => {
+    // Before this round a drop updated the key normally, so rejoining the
+    // SAME network was `prev === next` and no re-find ran — the app sat on a
+    // dead link until the user tapped Connect. The sentinel makes the rejoin
+    // a genuine change.
+    expect(hubCode).toContain('`down:${state.type ?? "none"}`');
+  });
+
+  it("a rejoin resets the keep-looking budget and fires the find", () => {
+    const watcherAt = hubCode.indexOf("phoneNetworkKey(state)");
+    expect(watcherAt).toBeGreaterThan(0);
+    const tail = hubCode.slice(watcherAt, watcherAt + 900);
+    expect(tail).toContain("resetPhoneNetDiscoverBudget();");
+    expect(tail).toContain("void autoDiscoverAndConnect();");
+  });
+});
+
+describe("P8 — the hint persists through the guarded writer (F-91)", () => {
+  it("the ONLY writer is guarded and persists to the profile", () => {
+    expect(hubCode).toContain(
+      "const setCarNetworkHint = (value: string | null) => {",
+    );
+    const writerAt = hubCode.indexOf(
+      "const setCarNetworkHint = (value: string | null) => {",
+    );
+    const body = hubCode.slice(writerAt, writerAt + 420);
+    expect(body).toContain(
+      "persistPrefsRef.current?.({ carNetworkHint: next });",
+    );
+  });
+
+  it("the hint restores with the profile", () => {
+    expect(hubCode).toContain("merged.prefs.carNetworkHint");
+  });
+
+  it("the hint is exposed to the panel under its own name", () => {
+    expect(hubCode).toContain("carNetworkHint,");
+    expect(hubCode).toContain("setCarNetworkHint,");
+  });
+});
+
+// --- the panel: the control exists and says what it does -----------------
+
+const RAW_SECTION = readFileSync(
+  fileURLToPath(new NodeURL("./ConnectionSection.tsx", import.meta.url)),
+  "utf8",
+);
+
+const section = RAW_SECTION.replace(/\/\*[\s\S]*?\*\//g, "")
+  .split("\n")
+  .map((l) => l.replace(/\/\/.*$/, ""))
+  .join("\n");
+
+describe('P8 — ConnectionSection offers the "Car network" control', () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(RAW_SECTION.length).toBeGreaterThan(1000);
+    expect(section).toContain('testID="car-network-card"');
+  });
+
+  it("the input and its save exist, and save goes through the guarded writer", () => {
+    expect(section).toContain('testID="car-network-input"');
+    expect(section).toContain('testID="car-network-save"');
+    expect(section).toContain('setCarNetworkHint(hintDraft ?? "");');
+  });
+
+  it("the hint value shown comes from the hub, not a raw local copy", () => {
+    // value is the draft (while typing) or the SAVED hub value — never a
+    // detached local state that would forget the profile's answer.
+    expect(section).toContain('hintDraft ?? carNetworkHint ?? ""');
+  });
+
+  it("the copy names the mDNS fallback so the user knows what auto means", () => {
+    expect(section).toContain("CAR_MDNS_HOST");
+    expect(section).toContain("Discovery looks here first");
+  });
+});

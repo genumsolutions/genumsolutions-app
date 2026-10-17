@@ -119,6 +119,16 @@ export type DevicePrefs = {
   wifiHistory?: Array<{ ssid: string; lastSeen: number }> | null;
   /** Connections-Hub round: last verified WS url used for THIS car. */
   lastWifiUrl?: string | null;
+  /**
+   * P8 (owner item E, 2026-10-17 / F-91): the user's own "Car network"
+   * answer for THIS car — an IP or hostname ("192.168.1.42",
+   * "genum-car.local") where the car is known to be reachable. Per car,
+   * stored in the profile like every other pref, and it is probed FIRST by
+   * discovery (an SSID string is kept for display but is not dialled).
+   * Empty/null = the user has not said, and discovery runs its automatic
+   * plan only (F-88's shape: absent ≠ denied, absent ≠ overridden).
+   */
+  carNetworkHint?: string | null;
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
