@@ -15,6 +15,15 @@ import { Switch, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { DevicePrefs } from "./types";
 import type { ProfileSyncState } from "../../services/carProfileService";
+import type { CarLogRow } from "./carLogModel";
+
+/** P7: the viewer's per-car log facts, already merged/scoped by the hub. */
+export type CarLogView = {
+  rows: CarLogRow[];
+  total: number;
+  /** When the viewer learned it (fetch or restore); null = nothing yet. */
+  fetchedAt: number | null;
+};
 
 export type CarProfileCardProps = {
   /** Stable profile key — `fw:<id>` / BT MAC / `wifi:<identity>`. */
@@ -34,6 +43,12 @@ export type CarProfileCardProps = {
   profileSync?: ProfileSyncState | null;
   /** Resolved display name of the saved mode (catalogue-resolved). */
   modeName?: string | null;
+  /** P7: this car's bug/reset/freeze log (merged + scoped by the caller). */
+  carLog?: CarLogView | null;
+  onRefreshCarLog?: () => void;
+  /** P7: clear-on-car action; rendered only with a confirmed dialog behind it. */
+  onClearCarLog?: () => void;
+  confirmClearCarLog?: boolean;
 };
 
 function SyncBadge({ sync }: { sync: ProfileSyncState | null | undefined }) {
@@ -61,6 +76,109 @@ function SyncBadge({ sync }: { sync: ProfileSyncState | null | undefined }) {
       <Text className="text-[10px] font-bold text-amber-700">
         saved on this phone
       </Text>
+    </View>
+  );
+}
+
+/**
+ * P7 (owner item D): the per-car BUG/RESET/FREEZE log viewer — a disclosure
+ * inside THIS car's profile, never a merged fleet feed (F-90). Rows arrive
+ * already merged (car ring + this phone's ring + cloud) and labelled with
+ * their source; the viewer adds none of its own opinions:
+ *
+ *   * the never-fetched state is honest ("no log read yet — Refresh"),
+ *     not an empty-list lie;
+ *   * a cached/offline view is LABELLED with when it was read, so a stale
+ *     fact is never presented as the present (F-87 shape borrowed from P4);
+ *   * Clear on car requires CONFIRM — the parent passes `confirmClearCarLog`
+ *     only when a confirm dialog backs it; the viewer refuses otherwise.
+ */
+function CarLogDisclosure({
+  log,
+  onRefresh,
+  clearCarLog,
+  confirmClearCarLog,
+}: {
+  log: CarLogView | null;
+  onRefresh?: () => void;
+  clearCarLog?: () => void;
+  confirmClearCarLog?: boolean;
+}) {
+  if (!onRefresh && !log) return null;
+  return (
+    <View
+      className="mt-3 rounded-lg border border-line bg-surface p-2"
+      testID="car-log-viewer"
+    >
+      <View className="flex-row items-center gap-1">
+        <Feather name="alert-triangle" size={12} color="#b45309" />
+        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+          Car log · bugs / resets / freezes
+        </Text>
+        {onRefresh ? (
+          <Feather
+            name="refresh-cw"
+            size={12}
+            color="#1e3a8a"
+            onPress={onRefresh}
+            accessibilityLabel="Refresh the car's event log"
+            testID="car-log-refresh"
+          />
+        ) : null}
+      </View>
+      {log?.fetchedAt ? (
+        <Text className="mt-0.5 text-[10px] text-muted" testID="car-log-stamp">
+          {log.total === 0
+            ? "The car reports no events — nothing has gone wrong that it recorded."
+            : `${log.total} event${log.total === 1 ? "" : "s"} · read ${new Date(log.fetchedAt).toLocaleTimeString()}`}
+        </Text>
+      ) : (
+        <Text className="mt-0.5 text-[10px] text-muted">
+          No log read yet — Refresh reads the car's own event ring.
+        </Text>
+      )}
+      {(log?.rows ?? []).slice(0, 12).map((r, i) => (
+        <View
+          key={`${r.source}-${r.at}-${i}`}
+          className="mt-1 flex-row items-start gap-1"
+        >
+          <View
+            className={`rounded-full px-1.5 py-0.5 ${
+              r.chip === "reset"
+                ? "bg-red-100"
+                : r.chip === "freeze"
+                  ? "bg-amber-100"
+                  : r.chip === "bug"
+                    ? "bg-orange-100"
+                    : "bg-slate-100"
+            }`}
+          >
+            <Text className="text-[9px] font-black text-ink">
+              {r.chip.toUpperCase()} · {r.source.toUpperCase()}
+            </Text>
+          </View>
+          <Text
+            numberOfLines={2}
+            className="min-w-0 flex-1 text-[10px] text-ink"
+          >
+            {r.line}
+          </Text>
+        </View>
+      ))}
+      {clearCarLog ? (
+        <Text
+          onPress={() => {
+            if (!confirmClearCarLog) return;
+            clearCarLog();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Clear the car's event log"
+          testID="car-log-clear"
+          className="mt-1.5 text-[10px] font-bold text-red-700"
+        >
+          Clear on car
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -96,6 +214,10 @@ export function CarProfileCard({
   apName,
   profileSync,
   modeName,
+  carLog,
+  onRefreshCarLog,
+  onClearCarLog,
+  confirmClearCarLog,
 }: CarProfileCardProps) {
   const showAutoJoin =
     autoJoinRouter !== undefined && setAutoJoinRouter !== undefined;
@@ -301,6 +423,15 @@ export function CarProfileCard({
           />
         </View>
       )}
+
+      {/* P7/owner item D: THIS car's bug/reset/freeze log — a per-car fact
+          under the per-car profile. Rendered only when the caller wires it. */}
+      <CarLogDisclosure
+        log={carLog ?? null}
+        onRefresh={onRefreshCarLog}
+        clearCarLog={onClearCarLog}
+        confirmClearCarLog={confirmClearCarLog === true}
+      />
     </View>
   );
 }

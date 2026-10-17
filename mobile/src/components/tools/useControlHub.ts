@@ -21,6 +21,13 @@ import type { RootStackParamList } from "../../navigation/types";
 import { APP_VERSION } from "../../config/site";
 import { sppService, type SppDevice } from "../../services/sppService";
 import { CAR_WS_URL, probeCarStatus } from "./connection/discovery";
+import {
+  CAR_LOG_COMMANDS,
+  CAR_LOG_WINDOW,
+  type CarLogEntry,
+  carLogCacheKey,
+  parseLogGetReply,
+} from "./carLogModel";
 import { bleService } from "../../services/bleService";
 import { wifiService } from "../../services/wifiService";
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
@@ -1504,6 +1511,10 @@ export function useControlHub(routeCategory?: string) {
         // is why a failed add was indistinguishable from a successful one.
         handleWifiProvisionReplyRef.current?.(t.reply);
         consumeRouterAnswerRef.current?.(t.reply);
+        // P7 (owner item D): the car's EVENT-LOG answers ride the SAME slot
+        // (LOG;GET windows). This consumer ignores every reply that is not a
+        // LOG;GET — the other consumers ignore what is not theirs.
+        carLogReplyRef.current?.(t.reply);
       }
       // U-74: remember a router lease as soon as the car reports one. The car
       // broadcasts it on the hotspot link just before the AP moves channel, so
@@ -3718,6 +3729,123 @@ export function useControlHub(routeCategory?: string) {
   const isNonRobocar = activeCategory !== "robocar";
   const is2wd1mActive = activeMode.controls.includes("drive-2wd1m");
 
+  // ---------------------------------------------------------------------
+  // P7 (owner item D, 2026-10-17): the per-car LOG VIEWER feed — the app
+  // half of the car's bounded event ring (P6: LOG? / LOG;GET;<n> /
+  // LOG;CLEAR). The ring's answers ride REPLY= on STATE; this block is the
+  // only consumer of LOG-shaped replies, so one car's log stays one car's
+  // feed (F-90: logs are per-device or they are rumours).
+  //
+  // Window chain: LOG;GET;0 returns ≤3 newest events plus the ring total;
+  // fetchLog keeps issuing windows until it has read `total` or a window
+  // comes back short, then writes ONE cache snapshot per car (keyed by the
+  // same `profileKey` the profile card uses) so an offline viewer shows a
+  // LINKED, timestamped view rather than a stale live one (F-86 shape: label
+  // what the viewer knows and when it knew it).
+  // ---------------------------------------------------------------------
+  const [carLogEvents, setCarLogEvents] = useState<CarLogEntry[]>([]);
+  const [carLogTotal, setCarLogTotal] = useState(0);
+  const [carLogFetchedAt, setCarLogFetchedAt] = useState<number | null>(null);
+  const carLogFetchRef = useRef<{
+    entries: CarLogEntry[];
+    next: number;
+  } | null>(null);
+  const carLogCacheKeyRef = useRef<string | null>(null);
+  carLogCacheKeyRef.current = carLogCacheKey(profileKeyRef.current);
+
+  // The ONE LOG-reply consumer. Registered below by ref so the telemetry
+  // effect can fan it out without re-creating on every state change.
+  const carLogReplyRef = useRef<(reply: string) => void>(() => {});
+  carLogReplyRef.current = (reply) => {
+    const parsed = parseLogGetReply(reply);
+    if (!parsed) return; // not ours: WIFICFG/ROUTERS/TIME have their own consumers
+    const acc = carLogFetchRef.current;
+    if (!acc) {
+      // A window the viewer did not ask for (a P6-era terminal session, or
+      // another REPLY= racing): still honest data — adopt it as the newest
+      // window without chaining.
+      setCarLogEvents(parsed.events);
+      setCarLogTotal(parsed.total);
+      setCarLogFetchedAt(Date.now());
+      return;
+    }
+    if (parsed.start !== acc.next) return; // stale/interleaved window: ignore
+    const entries = [...acc.entries, ...parsed.events];
+    const expectNext = parsed.start + parsed.events.length;
+    const done =
+      entries.length >= parsed.total || parsed.events.length < CAR_LOG_WINDOW;
+    if (done) {
+      carLogFetchRef.current = null;
+      setCarLogEvents(entries);
+      setCarLogTotal(parsed.total);
+      const at = Date.now();
+      setCarLogFetchedAt(at);
+      if (carLogCacheKeyRef.current) {
+        void AsyncStorage.setItem(
+          carLogCacheKeyRef.current,
+          JSON.stringify({
+            entries: [...entries].reverse(),
+            total: parsed.total,
+            at,
+          }),
+        ).catch(() => {});
+      }
+    } else {
+      carLogFetchRef.current = { entries, next: expectNext };
+      void sendCommand(CAR_LOG_COMMANDS.get(expectNext));
+    }
+  };
+
+  /** Ask the car for its event log (the newest window first; the reply
+      consumer chains the rest). Works over ANY live transport. */
+  const requestCarLog = useCallback(() => {
+    carLogFetchRef.current = { entries: [], next: 0 };
+    void sendCommand(CAR_LOG_COMMANDS.get(0));
+  }, [sendCommand]);
+
+  /** Confirmed-elsewhere clear: the car drops the ring (LOG;CLEAR →
+      LOG;CLEARED); this cache dies with it, then one fresh fetch shows the
+      honest empty state. Never called without the viewer's confirm dialog. */
+  const clearCarLog = useCallback(() => {
+    carLogFetchRef.current = null;
+    if (carLogCacheKeyRef.current) {
+      void AsyncStorage.removeItem(carLogCacheKeyRef.current).catch(() => {});
+    }
+    setCarLogEvents([]);
+    setCarLogTotal(0);
+    void sendCommand(CAR_LOG_COMMANDS.clear());
+    // Read back the now-empty ring so the viewer shows a real zero, not an
+    // assumption (F-61: the car's answer, not our wish). Commands ride the
+    // same queue, so the fresh GET is answered by the post-clear ring.
+    void sendCommand(CAR_LOG_COMMANDS.get(0));
+  }, [sendCommand]);
+
+  // Restore the per-car cached view when the profile changes (F-90: never
+  // another car's history). Marked restored — the fetch stamps it fresh.
+  useEffect(() => {
+    const key = carLogCacheKey(profileKeyRef.current);
+    if (!key) return;
+    let alive = true;
+    void AsyncStorage.getItem(key)
+      .then((raw) => {
+        if (!raw || !alive) return;
+        const cached = JSON.parse(raw) as {
+          entries: CarLogEntry[];
+          total: number;
+          at: number;
+        };
+        setCarLogEvents(cached.entries ?? []);
+        setCarLogTotal(cached.total ?? 0);
+        setCarLogFetchedAt(cached.at ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // profileKeyRef mirrors addressForMemory; the identity is what scopes the
+    // cache (F-90), so the profile change is the dependency.
+  }, [profileKeyRef.current]);
+
   return {
     // connection
     sppDevices,
@@ -3801,6 +3929,15 @@ export function useControlHub(routeCategory?: string) {
     consumeRouterAnswer,
     // Reset car data (Phase 7b)
     resetCarData,
+    // P7 (owner item D): the per-car log viewer's feed — the car's bounded
+    // event ring parsed and cached, plus the live commands. `carLogFetchedAt`
+    // says WHEN the viewer knows what it knows (a cached/offline view is
+    // labelled, never silently mixed with a live one — F-85/F-86 shape).
+    carLogEvents,
+    carLogTotal,
+    carLogFetchedAt,
+    requestCarLog,
+    clearCarLog,
     // U-74: the last router lease the car reported, so the Control Panel can offer
     // a one-tap reconnect after the hotspot link drops.
     lastRouterIp,

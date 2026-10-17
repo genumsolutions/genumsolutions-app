@@ -17,6 +17,7 @@
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -37,6 +38,7 @@ import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
 import { TelemetryStrip } from "../components/tools/TelemetryStrip";
 import { buildResetField } from "../components/tools/telemetryFormat";
+import { carEventRow, type CarLogRow } from "../components/tools/carLogModel";
 import { feedbackTap } from "../services/hapticsService";
 import {
   KIND_GROUPS,
@@ -253,6 +255,29 @@ export function ToolsScreen() {
   // P2/owner item C: the last reset, resolved once. The HEADLINE is the last
   // reset itself (reason · phase); the count is secondary. Shown in the
   // Diagnostics disclosure only when the car actually reported real values.
+  // P7/owner item D: “Clear on car” is a real, destructive, LIVE command
+  // (LOG;CLEAR wipes the car's bounded event ring), so it asks FIRST — the
+  // confirmed dialog here is the `confirmClearCarLog` contract the profile
+  // card honours. Cancel does nothing; Clear sends the command and the car's
+  // own fresh LOG;GET read-back answers with a real zero (F-61).
+  const handleClearCarLogConfirmed = useCallback(() => {
+    Alert.alert(
+      "Clear the car's event log?",
+      "This wipes the bug/reset/freeze history the car keeps on itself. It cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            feedbackTap();
+            hub.clearCarLog();
+          },
+        },
+      ],
+    );
+  }, [hub]);
+
   const resetField = buildResetField({
     connected,
     resetReason: telemetry.resetReason,
@@ -469,6 +494,20 @@ export function ToolsScreen() {
             carId={carIdentityId}
             staSsid={staSsid}
             apName={apName}
+            carLog={
+              {
+                rows: hub.carLogEvents.map((e) => carEventRow(e)),
+                total: hub.carLogTotal,
+                fetchedAt: hub.carLogFetchedAt,
+              } as {
+                rows: CarLogRow[];
+                total: number;
+                fetchedAt: number | null;
+              }
+            }
+            onRefreshCarLog={hub.requestCarLog}
+            onClearCarLog={handleClearCarLogConfirmed}
+            confirmClearCarLog={true}
           />
         </SectionDisclosure>
 
