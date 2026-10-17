@@ -51,6 +51,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../navigation/types";
 import { useApp } from "../context/AppContext";
 import { useControlHub } from "../components/tools/useControlHub";
+import { resolveLinkPrompt } from "../components/tools/linkPrompt";
 import { DriveControls } from "../components/tools/DriveControls";
 import { BalanceControls, PID_DEFS } from "../components/tools/BalanceControls";
 import type { PidKey } from "../components/tools/BalanceControls";
@@ -654,22 +655,73 @@ export function RemoteControlScreen({ navigation }: Props) {
     </Modal>
   );
 
-  const renderReconnectBanner = () => {
-    // U-110: never show the "connection lost" prompt while a link is live — the
-    // prompt asserts the car is gone, and an answered Wi-Fi/WebSocket (or
-    // Bluetooth) link proves it is not. (Owner field report 2026-10-14: the
-    // prompt appeared while the car was connected and working over Wi-Fi.)
-    if (!showSppsRetry || linked) return null;
-    // U-113 P2 (issue 14): the copy NAMES the real connection state instead of
-    // a generic "Connection lost / Reconnect to your car?" — this prompt only
-    // exists when the BT auto-reconnect backoff is exhausted AND no link of
-    // ANY kind is up, so say exactly that.
+  // P1 (owner 2026-10-17): ONE prompt-state decision drives the deck. The pure
+  // `resolveLinkPrompt` owns "which prompt belongs on screen right now?" from
+  // the live facts; this renderer only paints what it returns. That kills the
+  // two independent gates (a stale prompt can no longer outlive its cause) and
+  // removes the restart card's third action.
+  const linkPrompt = resolveLinkPrompt({
+    linked,
+    btLinked,
+    wifiConnected,
+    sppRetryDue: showSppsRetry,
+    restart: carRestartNotice,
+    linkLabel,
+    ipText: linked ? ipChipText : null,
+  });
+
+  const renderLinkPrompt = () => {
+    if (!linkPrompt) return null;
+
+    if (linkPrompt.kind === "restart") {
+      return renderPromptShell(
+        "sky",
+        linkPrompt.title,
+        <View>
+          <Text className="text-[13px] leading-5 text-sky-800 dark:text-sky-200">
+            {linkPrompt.bootLine}
+          </Text>
+          {/* U-113 P2 (issue 14): name which link is up NOW, so the owner sees
+              what the restart did to each transport instead of guessing. */}
+          <Text className="mt-0.5 text-[13px] font-bold leading-5 text-sky-900 dark:text-sky-100">
+            {linkPrompt.linkLine}
+          </Text>
+        </View>,
+        // P1: exactly TWO actions — Reconnect + Cancel. The old "Leave" action
+        // (which also popped the screen) is gone.
+        <>
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              void handleRestartReconnect();
+            }}
+            className="rounded-full bg-gold px-3 py-1.5"
+            hitSlop={6}
+            testID="restart-reconnect"
+          >
+            <Text className="text-[11px] font-bold text-white">Reconnect</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              handleRestartDismiss();
+            }}
+            className="rounded-full border border-line bg-card px-3 py-1.5"
+            hitSlop={6}
+            testID="restart-cancel"
+          >
+            <Text className="text-[11px] font-bold text-muted">Cancel</Text>
+          </Pressable>
+        </>,
+      );
+    }
+
+    // kind === "reconnect"
     return renderPromptShell(
       "amber",
-      "Bluetooth disconnected",
+      linkPrompt.title,
       <Text className="text-[13px] leading-5 text-amber-800 dark:text-amber-200">
-        The Bluetooth link to your car dropped, and no Wi-Fi link is up either.
-        The car is stopping itself on link loss. Reconnect?
+        {linkPrompt.body}
       </Text>,
       <>
         <Pressable
@@ -679,6 +731,7 @@ export function RemoteControlScreen({ navigation }: Props) {
           }}
           className="rounded-full bg-gold px-3 py-1.5"
           hitSlop={6}
+          testID="reconnect-retry"
         >
           <Text className="text-[11px] font-bold text-white">Reconnect</Text>
         </Pressable>
@@ -689,71 +742,7 @@ export function RemoteControlScreen({ navigation }: Props) {
           }}
           className="rounded-full border border-line bg-card px-3 py-1.5"
           hitSlop={6}
-        >
-          <Text className="text-[11px] font-bold text-muted">Cancel</Text>
-        </Pressable>
-      </>,
-    );
-  };
-
-  const renderRestartBanner = () => {
-    if (!carRestartNotice) return null;
-    const reason = carRestartNotice.resetReason?.trim() || "unknown";
-    return renderPromptShell(
-      "sky",
-      "Car restarted",
-      <View>
-        <Text className="text-[13px] leading-5 text-sky-800 dark:text-sky-200">
-          {carRestartNotice.prevBoot != null
-            ? `Boot ${carRestartNotice.prevBoot} → ${carRestartNotice.boot}`
-            : `Boot ${carRestartNotice.boot}`}
-          {" · reset "}
-          {reason}
-          {carRestartNotice.crashCount != null
-            ? ` · ${carRestartNotice.crashCount} crash${
-                carRestartNotice.crashCount === 1 ? "" : "es"
-              }`
-            : ""}
-        </Text>
-        {/* U-113 P2 (issue 14): name which link is up NOW, so the owner sees
-            what the restart did to each transport instead of guessing. */}
-        <Text className="mt-0.5 text-[13px] font-bold leading-5 text-sky-900 dark:text-sky-100">
-          Link now: {linkLabel}
-          {linked ? ` · ${ipChipText}` : ""}
-        </Text>
-      </View>,
-      <>
-        <Pressable
-          onPress={() => {
-            feedbackTap();
-            void handleRestartReconnect();
-          }}
-          className="rounded-full bg-gold px-3 py-1.5"
-          hitSlop={6}
-          testID="restart-reconnect"
-        >
-          <Text className="text-[11px] font-bold text-white">Reconnect</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            feedbackTap();
-            handleRestartDismiss();
-            navigation.goBack();
-          }}
-          className="rounded-full border border-line bg-card px-3 py-1.5"
-          hitSlop={6}
-          testID="restart-leave"
-        >
-          <Text className="text-[11px] font-bold text-muted">Leave</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            feedbackTap();
-            handleRestartDismiss();
-          }}
-          className="rounded-full border border-line bg-card px-3 py-1.5"
-          hitSlop={6}
-          testID="restart-cancel"
+          testID="reconnect-cancel"
         >
           <Text className="text-[11px] font-bold text-muted">Cancel</Text>
         </Pressable>
@@ -1497,14 +1486,12 @@ export function RemoteControlScreen({ navigation }: Props) {
         </>
       )}
 
-      {/* Reconnect prompt — a CENTERED modal (U-110), shown only when the
-            auto-reconnect backoff is exhausted AND no link is live. */}
-      {renderReconnectBanner()}
-
-      {/* U-108 Phase 4 / U-110: car-restart prompt (boot-count change) as a
-            CENTERED modal, carrying the reset reason + crash count on the next
-            connect. */}
-      {renderRestartBanner()}
+      {/* P1 (owner 2026-10-17): the reconnect / car-restart prompt. A single
+            decision (`resolveLinkPrompt`) picks at most ONE centered modal —
+            the reconnect card only while no link is up, the restart card while
+            a boot-count change is pending. Each carries exactly Reconnect +
+            Cancel. */}
+      {renderLinkPrompt()}
     </View>
   );
 }
