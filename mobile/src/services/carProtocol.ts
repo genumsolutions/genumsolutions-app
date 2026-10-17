@@ -112,6 +112,16 @@ export type CarTelemetry = {
   btEnabled?: boolean;
   bootAutojoin?: boolean;
   /**
+   * P4/P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict —
+   * `;LINKCAP=0|1` on every STATE line (so a Bluetooth-only app reads it
+   * without a WS round-trip) and `"link_cap":0|1` in the WS JSON. `true` = a
+   * second link is (or could be) admitted; `false` = the car REFUSED the
+   * second link to keep the run-time alive (latched car-side; the incumbent
+   * link stays up). Absent on pre-1.3.13 firmware — consumers must treat
+   * "missing" as "don't know" = CAPABLE (F-88), never as a denial.
+   */
+  linkCap?: boolean;
+  /**
    * R-4 fleet parity: the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>` (or
    * `:` separators) when it does not recognize a sent mode token. The app
    * surfaces the rejection like the remote (comms.cpp:482-513) and parks the
@@ -640,6 +650,15 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       } else if (key === "AUTOJOIN") {
         // U-105: boot auto-join toggle `;AUTOJOIN=ON|OFF`.
         telemetry.bootAutojoin = val.toUpperCase() === "ON";
+      } else if (key === "LINKCAP") {
+        // P4 (firmware 1.3.13): the link-admission verdict rides every STATE
+        // line, so a Bluetooth-only app learns whether the car can host a
+        // second link. `;LINKCAP=1` = a second link is admitted; `;LINKCAP=0`
+        // = the car refused the second link (latched; the incumbent stays
+        // up). Empty/garbage stays ABSENT — absence means capable (F-88),
+        // never denied.
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.linkCap = n !== 0;
       } else if (key === "UP" || key === "UPTIME") {
         // U-102: the STATE line now carries the same uptime/heap/signal the WS
         // JSON does, so a Bluetooth link renders the top-line telemetry too.
@@ -800,6 +819,11 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.bt_enabled === "boolean") telemetry.btEnabled = j.bt_enabled;
       if (typeof j.boot_autojoin === "boolean")
         telemetry.bootAutojoin = j.boot_autojoin;
+      // P4 (firmware 1.3.13): the link-admission verdict in the WS JSON — the
+      // same fact the STATE line carries as `;LINKCAP=`. `link_cap:0` = the
+      // car refused the second link; an ABSENT field stays absent = capable
+      // (F-88), never denied.
+      if (typeof j.link_cap === "number") telemetry.linkCap = j.link_cap !== 0;
       // Connections-Hub round: board-unique id (ESP.getEfuseMac(), last 6).
       if (typeof j.id === "string") telemetry.id = j.id;
       // Connections-Hub round: car-side WiFi scan (reply to ROUTERS;SCAN).

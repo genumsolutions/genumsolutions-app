@@ -195,6 +195,10 @@ export function ConnectionSection({
     sppDevices,
     sppSupported,
     wifiConnected,
+    // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
+    // itself refused a second link; `null`/`true` = nothing denied (F-88:
+    // an absent field means CAPABLE — this gate never reads a mere null).
+    linkCap,
     linkVerified,
     error: hubError,
     handleScan,
@@ -241,6 +245,16 @@ export function ConnectionSection({
   // ---- the ONE truth about the link -------------------------------------
   const btLive = sppStatus === "connected";
   const anyLink = btLive || wifiConnected;
+  // P5 (owner item F, 2026-10-17 / firmware 1.3.13): the car's own admission
+  // verdict. When the car REPORTED that it cannot host a second link
+  // (`linkCap === false`, strict — F-88: absent means capable) and exactly one
+  // link is live (`btLive !== wifiConnected`), the next connect action would
+  // raise the SECOND transport the car just refused. Disabling that action
+  // with the car's own reason (the model's `targetUnavailableReason`) is
+  // cheaper than starting an MQTT-refused dial; re-connecting the link that is
+  // live, and the FIRST connect when nothing is up, are never gated — the car
+  // never refuses those.
+  const secondLinkRefused = linkCap === false && btLive !== wifiConnected;
   const reportedIp = telemetry.ip ?? null;
   const reportedSsid = telemetry.ssid ?? carSsid ?? null;
   const onOwnHotspot = carIsOnOwnHotspot({
@@ -565,6 +579,7 @@ export function ConnectionSection({
             carOnRouter={carOnRouter}
             sppSupported={sppSupported}
             sppStatus={sppStatus}
+            secondLinkRefused={secondLinkRefused}
             onScanBluetooth={() => void scanBluetooth()}
             onConnectBluetooth={connectBluetooth}
             onConnectWifi={connectWifi}
@@ -861,6 +876,7 @@ function MethodSetup({
   carOnRouter,
   sppSupported,
   sppStatus,
+  secondLinkRefused,
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
@@ -871,6 +887,8 @@ function MethodSetup({
   carOnRouter: boolean;
   sppSupported: boolean;
   sppStatus: string;
+  /** P5: the raise this card offers would be the car-refused SECOND link. */
+  secondLinkRefused: boolean;
   onScanBluetooth: () => void;
   onConnectBluetooth: (
     address: string,
@@ -898,6 +916,7 @@ function MethodSetup({
         carOnRouter={carOnRouter}
         sppSupported={sppSupported}
         sppStatus={sppStatus}
+        secondLinkRefused={secondLinkRefused}
         onScanBluetooth={onScanBluetooth}
         onConnectBluetooth={onConnectBluetooth}
         onConnectWifi={onConnectWifi}
@@ -924,6 +943,7 @@ function TargetBody({
   carOnRouter,
   sppSupported,
   sppStatus,
+  secondLinkRefused,
   onScanBluetooth,
   onConnectBluetooth,
   onConnectWifi,
@@ -933,6 +953,8 @@ function TargetBody({
   carOnRouter: boolean;
   sppSupported: boolean;
   sppStatus: string;
+  /** P5: the raise this card offers would be the car-refused SECOND link. */
+  secondLinkRefused: boolean;
   onScanBluetooth: () => void;
   onConnectBluetooth: (
     address: string,
@@ -943,6 +965,10 @@ function TargetBody({
 }) {
   const unavailable = targetUnavailableReason(target.id, {
     carOnOwnRouter: carOnRouter,
+    // P5: a second-link raise the CAR refused is offered with the reason,
+    // not as a button that can only fail (same F-65 discipline as the
+    // needs-car-on-router reason below).
+    linkCapRefused: secondLinkRefused,
   });
 
   // P6 / issue 1 (2026-10-16): the Bluetooth scan is hidden only when
@@ -975,10 +1001,17 @@ function TargetBody({
               label={sppStatus === "scanning" ? "Searching…" : "Find my car"}
               icon="bluetooth"
               onPress={onScanBluetooth}
-              disabled={busy || sppStatus === "scanning"}
+              disabled={
+                busy || sppStatus === "scanning" || Boolean(unavailable)
+              }
               testID="conn-bt-scan"
             />
           )}
+          {/* P5: the car refused the second link — say WHY before the button
+              (an F-65 message, not a silent disabled control). */}
+          {unavailable ? (
+            <InlineMessage tone="info">{unavailable}</InlineMessage>
+          ) : null}
           {/* U-70: the FOUND-device LIST moved to the section's RIGHT pane
               (2026-10-12): left = the method + this one action, right = the
               method's own results. Paired/added devices render above the scroll,
