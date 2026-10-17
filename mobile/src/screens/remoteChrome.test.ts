@@ -44,6 +44,7 @@ function strip(s: string): string {
 
 const screen = strip(raw("./RemoteControlScreen.tsx"));
 const hub = strip(raw("../components/tools/useControlHub.ts"));
+const prompt = strip(raw("../components/tools/linkPrompt.ts"));
 
 /** The body of `const <name> = useCallback(` … up to the next top-level
     `const <other> = useCallback(`. Anchor-based: empty slice ⇒ loud failure. */
@@ -63,6 +64,7 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
   it("has sources to check (the rules must not pass vacuously)", () => {
     expect(screen.length).toBeGreaterThan(5000);
     expect(hub.length).toBeGreaterThan(5000);
+    expect(prompt.length).toBeGreaterThan(500);
     expect(screen).toContain('testID="remote-disconnect-bt"');
     expect(screen).toContain('testID="remote-disconnect-wifi"');
     expect(screen).toContain("renderPromptShell(");
@@ -127,12 +129,15 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(screen).not.toContain("bg-amber-50");
     expect(screen).not.toContain("bg-sky-50");
     // The reconnect copy names the real state (BT gone AND no Wi-Fi link);
-    // the generic strings are gone.
-    expect(screen).toContain("Bluetooth disconnected");
+    // the generic strings are gone. P1 (2026-10-17) moved the copy into the
+    // pure `linkPrompt.ts` decision module, so the SCREEN now carries the call
+    // and the module carries the words.
+    expect(screen).toContain("resolveLinkPrompt(");
+    expect(prompt).toContain("Bluetooth disconnected");
     expect(screen).not.toContain('"Connection lost"');
     expect(screen).not.toContain("Reconnect to your car?");
     // The restart prompt names which link is up NOW.
-    expect(screen).toContain("Link now: {linkLabel}");
+    expect(prompt).toContain("Link now:");
   });
 });
 

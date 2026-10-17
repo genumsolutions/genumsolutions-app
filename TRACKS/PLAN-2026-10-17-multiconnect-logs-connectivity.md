@@ -10,6 +10,31 @@
 > remote-ux.md`, P1–P8, source-complete). This round covers what the owner reported **after**
 > testing that body.
 
+## PROGRESS — implementation log (live; update after EACH phase)
+
+**Status: IMPLEMENTING** (owner said go, 2026-10-17). One phase at a time; each phase ends
+with **typecheck + tests + format green → commit → push `main` AND `backup`** before the next
+begins. If a session is interrupted, **resume from the first phase below that is not ✅** — each
+✅ names the commit that carries it.
+
+| Phase | Scope | State | Commit |
+|---|---|---|---|
+| P0 | evidence captures (owner bench, no code) | ⏳ owed — no device here | — |
+| P1 | [B] reconnect/restart prompt → one pure decision | ✅ | `P1_APP_COMMIT` |
+| P2 | [C] reset strip leads with the last reset | ⏳ todo | — |
+| P3 | [A] dual-link connect ordering (needs P5) | ⏳ todo | — |
+| P4 | [F car] link admission + `LINKCAP` | ⏳ todo | — |
+| P5 | [F app] surface `LINKCAP` (absent ⇒ capable) | ⏳ todo | — |
+| P6 | [D car] bounded event log + `LOG` verbs | ⏳ todo | — |
+| P7 | [D app] per-car log viewer off the car profile | ⏳ todo | — |
+| P8 | [E] connectivity responsiveness + "Car network" | ⏳ todo | — |
+| P9 | [E car] findability (conditional on P8) | ⏳ todo | — |
+| P10 | close-out (ledgers, ship, backup) | ⏳ todo | — |
+
+Legend: ✅ done + committed · 🔧 in progress · ⏳ todo · ⛔ blocked.
+Car-half phases (P4/P6/P9) are committed in the **car** repo; the ✅ row is copied here so the
+mirror still says where to resume.
+
 ## Owner request (2026-10-17, verbatim intent — six items)
 
 1. **Dual-link BT + Wi-Fi connect problem** — connecting both still misbehaves; the concern is
