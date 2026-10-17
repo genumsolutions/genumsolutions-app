@@ -22,9 +22,9 @@ begins. If a session is interrupted, **resume from the first phase below that is
 | P0 | evidence captures (owner bench, no code) | ⏳ owed — no device here | — |
 | P1 | [B] reconnect/restart prompt → one pure decision | ✅ | app `8b2405f` (`P1/issue B`) |
 | P2 | [C] reset strip leads with the last reset | ✅ | app `P2/issue C` |
-| P3 | [A] dual-link connect ordering (needs P5) | ⏳ todo | — |
+| P3 | [A] dual-link connect ordering (needs P5) | ✅ | app `b887475` |
 | P4 | [F car] link admission + `LINKCAP` | ✅ | car `50e5522` (`P4/issue 6`) |
-| P5 | [F app] surface `LINKCAP` (absent ⇒ capable) | ⏳ todo | — |
+| P5 | [F app] surface `LINKCAP` (absent ⇒ capable) | ✅ | app `f5dc333` |
 | P6 | [D car] bounded event log + `LOG` verbs | ⏳ todo | — |
 | P7 | [D app] per-car log viewer off the car profile | ⏳ todo | — |
 | P8 | [E] connectivity responsiveness + "Car network" | ⏳ todo | — |
