@@ -20,7 +20,14 @@ import { useRoute, type RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../../navigation/types";
 import { APP_VERSION } from "../../config/site";
 import { sppService, type SppDevice } from "../../services/sppService";
-import { CAR_WS_URL, probeCarStatus } from "./connection/discovery";
+import {
+  CAR_STATUS_URL,
+  CAR_WS_URL,
+  PROBE_TIMEOUT_MS,
+  looksLikeOurCar,
+  probeCarStatus,
+} from "./connection/discovery";
+import { buildDiscoveryPlan } from "./connection/discoveryPlan";
 import {
   CAR_LOG_COMMANDS,
   CAR_LOG_WINDOW,
@@ -518,6 +525,22 @@ export function useControlHub(routeCategory?: string) {
   const [carScan, setCarScan] = useState<ScanNetwork[] | null>(null);
   // U-74: the last router lease the car reported (see DevicePrefs.lastRouterIp).
   const [lastRouterIp, setLastRouterIp] = useState<string | null>(null);
+  // P8 (owner item E / F-91): the user's own "Car network" answer for THIS
+  // car — persisted per profile like every other pref, probed FIRST by the
+  // discovery plan. The state is local; the guarded writer below persists it.
+  const [carNetworkHint, setCarNetworkHintState] = useState<string | null>(
+    null,
+  );
+  const carNetworkHintRef = useRef<string | null>(null);
+  carNetworkHintRef.current = carNetworkHint;
+  /** P8: the ONLY writer — a change-guarded, profile-persisting save (a user
+      edit reaches the profile at once, P7/issue 8's rule), not a raw setter. */
+  const setCarNetworkHint = (value: string | null) => {
+    const next = value === null ? null : value.trim() || null;
+    if (next === carNetworkHintRef.current) return;
+    setCarNetworkHintState(next);
+    persistPrefsRef.current?.({ carNetworkHint: next });
+  };
   // Live mirror for the phone-network watcher (avoids a stale closure).
   const lastRouterIpRef = useRef<string | null>(null);
   lastRouterIpRef.current = lastRouterIp;
@@ -959,6 +982,13 @@ export function useControlHub(routeCategory?: string) {
         setJoystickLayoutId(merged.prefs.joystickLayout);
       if (merged.prefs.autoJoinRouter != null)
         setAutoJoinRouterState(merged.prefs.autoJoinRouter);
+      // P8: the user's "Car network" answer restores with the profile too —
+      // a profile that forgot it would demote the manual override to a
+      // once-per-session entry (F-91 says the override must PERSIST and win).
+      if (typeof merged.prefs.carNetworkHint === "string")
+        setCarNetworkHintState(merged.prefs.carNetworkHint || null);
+      else if (merged.prefs.carNetworkHint === null)
+        setCarNetworkHintState(null);
       // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
       // toggle mirror too; restore it so the panel agrees with car truth.
       if (typeof merged.prefs.wifiEnabled === "boolean")
@@ -2175,6 +2205,29 @@ export function useControlHub(routeCategory?: string) {
     host: string | null;
   }> => {
     try {
+      // P8 (owner item E / F-91): the ordered plan runs BEFORE the sweep —
+      // the user's own "Car network" hint first (a live hit at the user's
+      // address is authoritative and ends the search), then the car's mDNS
+      // name, then the last router lease the car reported, and only then
+      // the bounded /24. Each probe is one short request; a miss falls
+      // through to the next method without throwing.
+      const plan = buildDiscoveryPlan({
+        hint: carNetworkHintRef.current,
+        leaseHost: lastRouterIpRef.current,
+      });
+      for (const p of plan.probes) {
+        try {
+          const payload = await probeCarStatus(
+            CAR_STATUS_URL(p.host),
+            PROBE_TIMEOUT_MS,
+          );
+          if (looksLikeOurCar(payload, { apNames: OWN_AP_NAMES })) {
+            return { ok: true, host: p.host };
+          }
+        } catch {
+          /* a miss on this method just falls through */
+        }
+      }
       const state = await NetInfo.fetch();
       const details = state.details as Record<string, unknown> | undefined;
       const rawIp = details?.["ipAddress"];
@@ -2444,8 +2497,18 @@ export function useControlHub(routeCategory?: string) {
       const prev = phoneNetworkKeyRef.current;
       phoneNetworkKeyRef.current = next;
       if (prev === null || prev === next) return;
-      if (state.type !== "wifi" || state.isConnected !== true) return;
-      // A real move to another network: fresh "keep looking" budget.
+      // P8 (owner item E / F-91): a DOWN event (the phone lost Wi-Fi, or
+      // isConnected flipped false) is recorded as a sentinel, so the moment
+      // the phone comes back on ANY network — even the same SSID — the next
+      // event is a genuine change and the car is re-found. Previously the
+      // down event just updated the key, so a rejoin to the SAME network
+      // was indistinguishable from "nothing happened" and the app sat on a
+      // dead link until the user tapped Connect.
+      if (state.type !== "wifi" || state.isConnected !== true) {
+        phoneNetworkKeyRef.current = `down:${state.type ?? "none"}`;
+        return;
+      }
+      // A real move (or a rejoin after a drop): fresh "keep looking" budget.
       resetPhoneNetDiscoverBudget();
       void autoDiscoverAndConnect();
     });
@@ -4026,6 +4089,10 @@ export function useControlHub(routeCategory?: string) {
     carUniqueId: carFwIdRef.current,
     autoJoinRouter,
     setAutoJoinRouter,
+    // P8 (owner item E / F-91): the user's own "Car network" answer —
+    // persisted per car, probed FIRST by discovery.
+    carNetworkHint,
+    setCarNetworkHint,
     // Profiles-sync (cloud mirror state for the current car profile)
     profileSync,
     // derived
