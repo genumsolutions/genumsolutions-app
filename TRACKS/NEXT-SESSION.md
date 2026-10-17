@@ -1,6 +1,18 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P8/issue 13 close-out landed — the round is SOURCE-COMPLETE, the P6+P7 JS-only OTA is published (3.2.7/60), nothing device-verified (F-61)**; **P7/issue 8 settings round-trip landed** — adopted mode/speed/routers now reach the per-car profile, the WIFICFG reply honours the toggle grace, the Joystick pill + auto-join-router switch persist, and a focus gain re-reads the car; **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); version 3.2.7/60 UNCHANGED)
 
-> **⏭️ ROUND IN PROGRESS:** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
+> **🆕 NEXT ROUND (2026-10-17) — PLANNING ONLY, no app byte changed (3.2.7/60).** The owner
+> filed a new six-item list: (1) dual-link BT+Wi-Fi *connect timing*, (2) the reconnect
+> dialog (right time, no stale messages, **Reconnect + Cancel only**), (3) control-panel
+> reset status as **last reset only** but cleaner, (4) a **bug/reset/freeze log tied to the
+> car's unique profile**, (5) connectivity **responsiveness** + a way to tell the app where
+> the car's network is (or automatic), (6) the **multi-connect heap freeze** — manage
+> resources or have the app know multi-connect is refused. Plan (mirror):
+> `TRACKS/PLAN-2026-10-17-multiconnect-logs-connectivity.md` (master in the car repo).
+> App phases P1–P3, P5, P7, P8 (+ P0/P10); car phases P4, P6, P9; new failsafe entries
+> F-85…F-91 proposed; firmware target **1.3.13**. Implementation starts phase-by-phase on
+> the owner's go.
+>
+> **⏭️ PREVIOUS ROUND (source-complete):** `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` — the
 > owner's 14-issue list. **P1 DONE** (issue 11 — the dead mode-rotate: root-caused
 > to the cycle sending the car's GONE tokens ESP_SER/ESP_CLI → NACK → rollback; fixed with
 > the GONE-aware `nextCyclableToken` + device row U-113-1). **P2 DONE** (commit `c035e8c`,
