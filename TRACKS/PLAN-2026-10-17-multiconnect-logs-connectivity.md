@@ -162,7 +162,35 @@ Car-side shapes (F-87, F-89) live in the master. Carried review gates: **F-61** 
 truth ≠ green gates) on every phase; **F-79** (three distinguishable dash states) in P2;
 invariants **1** (non-blocking boot) and **2** (silence → stop) in P4/P6.
 
-## 5 · Open questions for the owner (defaults chosen — say the word to change)
+
+
+## P11 — webpage view power toggle (app only, 2026-10-19, JS-only OTA 3.2.7/60 unchanged)
+
+Owner: add an independent "Webpage view" on/off switch that mutes the car's built-in
+web page server (:80) without touching the Wi-Fi / Bluetooth transport layer or Bluetooth —
+i.e. "wifi on/off AND webpage on/off" both present, both work.
+
+### Implementation
+
+- `mobile/src/components/tools/useControlHub.ts`:
+  - new `pageOff` state + `setPageOff` callback;
+  - `transportToggleRef`, `toggleCommitRef` and `toggleChangeProtected` extended with
+    `pageOff`;
+  - `setPageOff` sends `WIFICFG;WIFI;PAGE;ON|OFF` and persists the app device-prefs copy.
+- `mobile/src/components/tools/types.ts`:
+  - `pageOff?: boolean` added to `DevicePrefs`.
+- `mobile/src/screens/RemoteControlScreen.tsx`:
+  - "Webpage view" Switch in the Remote settings panel (`hub.pageOff` / `hub.setPageOff`).
+
+### Gates
+
+- `tsc --noEmit` 0
+- `npm test` 813/821 (8 pre-existing failures in `connectivityResponsiveness.test.ts` +
+  2 other files, unrelated to this change)
+
+### Commit
+
+`6ec2887`. Pushed to `main` + `backup` on all three repos (app, website, car).## 5 · Open questions for the owner (defaults chosen — say the word to change)
 
 - **Q4 (items 1/6):** when the car cannot host a second link, should the app **(a) disable the
   second connect with a reason** (default) or (b) allow it and let the car refuse live?
