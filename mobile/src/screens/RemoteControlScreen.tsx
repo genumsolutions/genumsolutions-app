@@ -1339,6 +1339,25 @@ export function RemoteControlScreen({ navigation }: Props) {
               />
             </View>
 
+            <View className="mt-1 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Feather name="eye" size={14} color="#64748b" />
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                  Webpage view
+                </Text>
+              </View>
+              <Switch
+                value={hub.pageOff === true}
+                onValueChange={(on) => {
+                  feedbackTap();
+                  hub.setPageOff(on);
+                }}
+                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                thumbColor="#ffffff"
+                accessibilityLabel="Turn the car's web page on or off"
+              />
+            </View>
+
             {/* P3 · Q1 (owner, 2026-10-15): the CAR's boot auto-join toggle
                 (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) was REMOVED from this
                 panel — it only ever rejoined the last router, which the owner

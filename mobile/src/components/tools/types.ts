@@ -132,6 +132,12 @@ export type DevicePrefs = {
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
+
+  /**
+   * U-116 (page-server power): whether the car's built-in web page server is
+   * muted. Persisted per device; the car applies `page_off` in its NVS.
+   */
+  pageOff?: boolean;
   /**
    * U-105 (1.3.5): the car's THREE persisted transport toggles, mirrored per
    * device. Wi-Fi (`wifi_enabled`), Bluetooth (`bt_enabled`) and boot
