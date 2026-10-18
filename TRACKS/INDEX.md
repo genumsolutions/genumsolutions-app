@@ -213,3 +213,24 @@ pure `nextCyclableToken(token, isUnavailable)` in `roboCarCatalog.ts`; `cycleMod
 rules + new F-83 source-wiring pin `components/tools/cycleModeGone.test.ts` (mutate-proven
 both ways). Gates: tsc 0 · vitest **701/701** (45 files) · prettier clean. Device row
 U-113-1 pending owner bench pass. Next: P2 (Remote chrome rebuild).
+
+**2026-10-19 · P11 — webpage view power toggle (U-116); app only, JS-only OTA 3.2.7/60 unchanged.**
+
+Owner: add an independent "Webpage view" on/off switch that mutes the car's built-in
+web page server (:80) without touching the Wi-Fi / Bluetooth transport layer or Bluetooth —
+i.e. "wifi on/off AND webpage on/off" both present, both work.
+
+Implementation (app `mobile/`):
+- `mobile/src/components/tools/useControlHub.ts` — new `pageOff` state + `setPageOff`
+  callback; `transportToggleRef`, `toggleCommitRef` and `toggleChangeProtected` extended
+  with `pageOff`; `setPageOff` sends `WIFICFG;WIFI;PAGE;ON|OFF` and persists the app
+  device-prefs copy.
+- `mobile/src/components/tools/types.ts` — `pageOff?: boolean` added to `DevicePrefs`.
+- `mobile/src/screens/RemoteControlScreen.tsx` — "Webpage view" Switch in the Remote
+  settings panel (`hub.pageOff` / `hub.setPageOff`).
+- Tests: `npm run typecheck` clean; `npm test` 813/821 (8 pre-existing failures in
+  `connectivityResponsiveness.test.ts` + 2 other files, unrelated to this change).
+
+Gates: `tsc --noEmit` 0 · `npm test` (see failures above). Version stays **3.2.7 / versionCode 60** — JS-only, ships on the OTA channel.
+
+Commit:** `6ec2887`. Pushed to `main` + `backup` on all three repos (app, website, car).
