@@ -1,5 +1,64 @@
 # TESTING — Physical Device Test Checklist
 
+## U-116 round — the 2026-10-17 six-item round (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; needs CAR FLASH **1.3.13**)
+
+> Master plan: `TRACKS/PLAN-2026-10-17-multiconnect-logs-connectivity.md` (mirror of
+> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-17-multiconnect-logs-connectivity.md`).
+> Phases P1, P2, P5, P3, P7, P8 landed in that order (each JS-only); **P4/P6 are
+> the car half (1.3.13); P9 is deferred to this sheet's U-116-19/20 result.**
+> **Every row is unticked — F-61: green gates are not device evidence.**
+
+- [ ] **U-116-1 — ⭐ a Bluetooth drop raises the reconnect prompt at the RIGHT
+      moment.** With the car powered off mid-drive: the prompt appears once the SPP
+      backoff is exhausted AND no link is up; its copy names the cause; **Reconnect
+  - Cancel only** (two actions, no Leave).
+- [ ] **U-116-2 — a Wi-Fi drop gets its own honest copy.** Drop the WS link
+      only (e.g. leave the car's network): the prompt names Wi-Fi, not Bluetooth.
+- [ ] **U-116-3 — a detected car restart leads with the restart.** Power-cycle
+      the car while linked: the restart card names the reset reason + boot change
+      and offers **Reconnect + Cancel**.
+- [ ] **U-116-4 — a cleared cause dismisses the prompt.** Reconnect (or power
+      the car back): the prompt goes within one tick; it never outlives its cause.
+- [ ] **U-116-5 — ⭐ the Diagnostics strip leads with the LAST RESET.** On a
+      crashed car the headline reads `TASK_WDT · http-root` (reason · phase), the
+      counts sit secondary, `low heap` only under 64 kB.
+- [ ] **U-116-6 — a clean car shows `None` + a clean-boot hint** (no false
+      crash claim from a zero count).
+- [ ] **U-116-7 — an OFFLINE car shows a dash, never a stale record as current**;
+      firmware without the fields reads `Firmware too old to report resets`.
+- [ ] **U-116-8 — ⭐ the second link's raise is DESCRIBED.** With Wi-Fi live,
+      start Bluetooth: the panel shows "Bluetooth coming up…" while it negotiates;
+      the Remote label never says `BT+WiFi` before both are genuinely up (mirror
+      order too — U-116-9).
+- [ ] **U-116-9 — a car-refused second raise shows REFUSED, not pending.** On a
+      `LINKCAP=0` car (see car row U-116-11): starting the second link shows the
+      car's reason immediately; the button that would START a refused raise is
+      muted with the same reason (never a silent disable).
+- [ ] **U-116-13 — ⭐ the LINKCAP verdict surfaces honestly.** A `LINKCAP=0`
+      car: the second connect action is disabled WITH the reason ("the car is low
+      on memory right now — it will hold one link only"); the FIRST connect (no
+      link up) is never gated; an older car (no field) is never refused — F-88.
+- [ ] **U-116-16 — ⭐ the per-car log viewer shows REAL car events.** Tools →
+      Saved settings → Car profile → "Car log": after a reset, Refresh lists the
+      car's BOOT/FAULT rows newest-first with chip + source (CAR), the stamp line
+      shows when it was read.
+- [ ] **U-116-17 — clear-on-car is confirmed and real.** "Clear on car" asks
+      first; on Clear the car's `LOG;CLEAR` wipes the ring and the viewer reads
+      back a real zero from the car.
+- [ ] **U-116-18 — an OFFLINE viewer shows the cached view, labelled.** With
+      the car off: the last fetch shows with its timestamp; nothing pretends to be
+      live.
+- [ ] **U-116-19 — ⭐ the "Car network" hint is found FIRST.** Set Car network
+      to the car's IP: discovery probes it before mDNS/sweep and connects; the
+      hint survives an app restart (per-car profile).
+- [ ] **U-116-20 — a phone network change re-finds the car, including a
+      REJOIN to the same network.** Toggle phone Wi-Fi off/on on the same SSID: the
+      app re-finds and re-offers the car without a manual Connect tap.
+
+> **P9 note (findability):** implement the car-side phase only if U-116-19/20
+> show the app still cannot find the car reliably — the phase is conditional by
+> design (plan §P9).
+
 ## U-113 round — the 2026-10-15 rectification round (14-issue list; app 3.2.7/60 JS-only OTA unless a row says otherwise; car flash target 1.3.11)
 
 > Master plan: `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` (mirror of
