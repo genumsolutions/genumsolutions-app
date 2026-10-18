@@ -331,6 +331,7 @@ export function useControlHub(routeCategory?: string) {
   // transports stay up SIMULTANEOUSLY when enabled (no one-active-link
   // teardown anywhere).
   const [wifiEnabled, setWifiEnabled] = useState<boolean | null>(null);
+  const [pageOff, setPageOffState] = useState<boolean | null>(null);
   const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
   const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
   // P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict, as the
@@ -627,7 +628,7 @@ export function useControlHub(routeCategory?: string) {
   // CHANGED echo is car truth and adopts.
   const TOGGLE_CHANGE_GRACE_MS = 2500;
   const toggleCommitRef = useRef<{
-    which: "wifiEnabled" | "btEnabled" | "bootAutojoin";
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOff";
     value: boolean;
     at: number;
   } | null>(null);
@@ -638,8 +639,14 @@ export function useControlHub(routeCategory?: string) {
     wifiEnabled: boolean | null;
     btEnabled: boolean | null;
     bootAutojoin: boolean | null;
-  }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null });
-  transportToggleRef.current = { wifiEnabled, btEnabled, bootAutojoin };
+    pageOff: boolean | null;
+  }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null, pageOff: null });
+  transportToggleRef.current = {
+    wifiEnabled,
+    btEnabled,
+    bootAutojoin,
+    pageOff: null,
+  };
   // P7 / issue 8: the optimistic-commit grace as a NAMED predicate. It used
   // to live as an inline closure inside the telemetry-adopt block, which is
   // why the WIFICFG REPLY handler (`WIFICFG;WIFI|BT|AUTOJOIN;ON|OFF` answering
@@ -651,7 +658,7 @@ export function useControlHub(routeCategory?: string) {
   // A plain function on purpose: it only reads refs, so any render's
   // instance is current and no effect has to depend on its identity.
   const toggleChangeProtected = (
-    which: "wifiEnabled" | "btEnabled" | "bootAutojoin",
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOff",
     incoming: boolean,
   ) => {
     const commit = toggleCommitRef.current;
@@ -2669,6 +2676,21 @@ export function useControlHub(routeCategory?: string) {
         setError(`Car rejected WiFi settings: ${reply}`);
       } else if (reply.startsWith("WIFICFG;SSID;")) {
         setCarSsid(reply.slice("WIFICFG;SSID;".length).trim() || null);
+      } else if (reply.startsWith("WIFICFG;WIFI;PAGE;")) {
+        const pageOn =
+          reply.slice("WIFICFG;WIFI;PAGE;".length).trim().toUpperCase() ===
+          "ON";
+        if (
+          toggleChangeProtectedRef.current("pageOff", pageOn) &&
+          transportToggleRef.current.pageOff !== pageOn
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            pageOff: pageOn,
+          };
+          setPageOffState(pageOn);
+          persistPrefs({ pageOff: pageOn });
+        }
       } else if (reply.startsWith("WIFICFG;WIFI;")) {
         // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered
         // to both a bare `WIFICFG;WIFI;?` query and an ON/OFF set.
@@ -2955,6 +2977,16 @@ export function useControlHub(routeCategory?: string) {
   const queryCarTransportToggle = useCallback(
     (which: "WIFI" | "BT" | "AUTOJOIN") => {
       sendSystemLine(`WIFICFG;${which};?`);
+    },
+    [sendSystemLine],
+  );
+
+  // ---- page-server power (U-116) ----
+  const setPageOff = useCallback(
+    (on: boolean) => {
+      setPageOffState(on);
+      persistPrefsRef.current?.({ pageOff: on });
+      sendSystemLine(`WIFICFG;WIFI;PAGE;${on ? "ON" : "OFF"}`);
     },
     [sendSystemLine],
   );
@@ -4078,6 +4110,13 @@ export function useControlHub(routeCategory?: string) {
     // toggles
     useJoystick,
     setUseJoystick,
+    // U-116: webpage view power. Distinct from the Wi-Fi/BT transport
+    // toggles — mutes the car's web page server (:80) while keeping the
+    // transport layer and BT up. Persisted to car NVS `page_off` so a
+    // power restart keeps the choice; the app's device prefs also keep
+    // this screen's copy in sync.
+    pageOff,
+    setPageOff,
     joystickLayoutId,
     selectJoystickLayout,
     // persistence
