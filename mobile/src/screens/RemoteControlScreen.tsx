@@ -1343,7 +1343,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               <View className="flex-row items-center gap-2">
                 <Feather name="eye" size={14} color="#64748b" />
                 <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Webpage view
+                  Webpage
                 </Text>
               </View>
               <Switch
@@ -1395,18 +1395,11 @@ export function RemoteControlScreen({ navigation }: Props) {
               />
             </View>
 
-            {/* U-108 Phase 7b (owner 2026-10-13): Reset car data — sends
-                FACTORY;RESET to the car (wipes its NVS, restores defaults) and
-                clears all car-related local storage on the phone. Destructive.
-
-                UX fix (owner 2026-10-19: "the reset thing seems weird in the
-                setting"): the action used to sit INLINE among the everyday
-                toggles — a tiny bordered "Reset" next to protocol jargon
-                ("Sends FACTORY;RESET…"), which read like a debug switch. It is
-                now its own DANGER-ZONE card below a divider: warning header,
-                red-tinted container, plain-language copy (no protocol token),
-                and ONE full-width action. Behaviour is unchanged — same
-                two-step confirm, same hub.resetCarData(), same testID. */}
+            {/* Webpage — turn the car-hosted webpage (:80/:81) on or off.
+                Webpage ONLY: this does not touch the Wi-Fi transport toggle
+                (WIFICFG;WIFI;ON|OFF / t_wifi) or the Bluetooth transport toggle
+                (WIFICFG;BT;ON|OFF / t_bt). The app sends WIFICFG;WIFI;PAGE;ON
+                / OFF; the car only flips pageOff_ (pageServerIsOn = !pageOff_). */}
             <View className="mt-2.5 border-t border-line pt-2">
               <View className="mb-1 flex-row items-center gap-1.5">
                 <Feather name="alert-triangle" size={12} color="#dc2626" />
