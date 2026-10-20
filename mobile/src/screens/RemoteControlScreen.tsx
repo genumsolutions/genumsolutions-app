@@ -71,6 +71,7 @@ import { HandheldDeck } from "../components/tools/decks/HandheldDeck";
 import { DroneControls } from "../components/tools/DroneControls";
 import {
   ConnectionSection,
+  InlineMessage,
   type ConnectionMethodId,
 } from "../components/tools/connection";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
@@ -956,6 +957,29 @@ export function RemoteControlScreen({ navigation }: Props) {
         {/* U-113 P2 (issue 2): the tab pills MOVED into the single merged row
             above — the second h-7 row below Back is gone and the drive deck
             gains its ~28 px. */}
+
+        {/* U-119c (owner 2026-10-21): THE FEEDBACK SURFACE. The hub has
+            14 showConnectionMessage() call sites that set `connectionMessage`
+            and NOTHING rendered it — so the user was told nothing after an
+            action. That includes two the code itself calls safety-critical:
+              • F-59 narration: "Smart-link joined <ssid> AUTOMATICALLY …" —
+                the comment on that call says a toast that never said
+                "automatic" read to the owner as "the app is broken".
+              • the post-reset confirmation "Car data reset — power cycle the
+                car", fired from this screen's reset button, so a successful
+                factory reset produced NO acknowledgement at all.
+            The duplicate "Connected to" toasts were deliberately removed in
+            9029a79 (only the status header remained); this restores ONE strip,
+            not three, and it auto-clears on the hub's own 4 s timer. Reuses the
+            existing InlineMessage primitive (ConnectionSection / WifiPanel) so
+            no new design language lands here. */}
+        {hub.connectionMessage ? (
+          <InlineMessage
+            tone={hub.connectionMsgType === "error" ? "error" : "ok"}
+          >
+            {hub.connectionMessage}
+          </InlineMessage>
+        ) : null}
 
         {/* ── Content area ── */}
         {isDrone || isNonRobocar ? (
