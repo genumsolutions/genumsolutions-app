@@ -1,25 +1,15 @@
 // =====================================================================
-// projectService - reads project packages from the shared `products`
+// projectService - project-package predicate over the shared `products`
 // Supabase table. The website's /projects page shows Project packages and
 // Robot Cars from the SAME products table (see website's ProjectsCatalog),
 // so the app shows the same data.
+//
+// U-119b (2026-10-21): getProjects() and the Project interface it was the
+// only user of are GONE — zero importers anywhere in mobile/src (only
+// isProjectPackage is imported, by AdminScreen). Their removal also orphaned
+// the getProductsFromSupabase and Product imports, so those went too. What
+// stays is what is read.
 // =====================================================================
-import { getProductsFromSupabase } from "./productService";
-import type { Product } from "../types";
-
-export interface Project {
-  id: string;
-  name: string;
-  description: string;
-  mode_name: string;
-  category: string;
-  inventoryType?: "Inhouse" | "Catalog" | "Supplier";
-  technologies: string[];
-  difficulty: string;
-  image?: string;
-  priceLabel: string;
-  specs: string[];
-}
 
 export function isProjectPackage(p: {
   productType?: string | null;
@@ -30,21 +20,4 @@ export function isProjectPackage(p: {
     p.category === "Robot Cars" ||
     p.category === "Pre-packaged Kits"
   );
-}
-
-export async function getProjects(): Promise<Project[]> {
-  const products = await getProductsFromSupabase();
-  return products.filter(isProjectPackage).map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    mode_name: p.category,
-    category: p.category,
-    inventoryType: p.inventoryType,
-    technologies: p.specs,
-    difficulty: p.difficulty,
-    image: p.image,
-    priceLabel: p.priceLabel,
-    specs: p.specs,
-  }));
 }

@@ -9,9 +9,10 @@
 // MainTabParamList two lines below it.
 // =====================================================================
 import type { NavigatorScreenParams } from "@react-navigation/native";
-import type { CompositeNavigationProp } from "@react-navigation/native";
-import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+// U-119b (2026-10-21): TabNav and the three navigation-prop type imports that
+// existed ONLY to build it (CompositeNavigationProp, BottomTabNavigationProp,
+// NativeStackNavigationProp) were deleted together — zero importers of TabNav
+// anywhere in mobile/src, and no other line in this file used those three.
 
 export type MainTabParamList = {
   Home: undefined;
@@ -55,9 +56,3 @@ export type RootStackParamList = {
   DeviceConnection: { kind: string; deviceName: string };
   Update: undefined;
 };
-
-/** Navigation prop for tab screens that can push onto the root stack. */
-export type TabNav<T extends keyof MainTabParamList> = CompositeNavigationProp<
-  BottomTabNavigationProp<MainTabParamList, T>,
-  NativeStackNavigationProp<RootStackParamList>
->;

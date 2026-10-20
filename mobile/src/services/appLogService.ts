@@ -211,9 +211,3 @@ export async function flushAppLogs(): Promise<void> {
   }
   await writeQueue(remaining);
 }
-
-/** The local ring, newest first — for any future on-device log viewer. */
-export async function listLocalLogs(): Promise<AppLogEntry[]> {
-  const ring = await readRing();
-  return ring.reverse();
-}

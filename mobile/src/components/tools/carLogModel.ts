@@ -196,11 +196,6 @@ export const CAR_LOG_COMMANDS = {
 /** ~48 chars/event worst case, 3 per window keeps REPLY under its 191 cap. */
 export const CAR_LOG_WINDOW = 3;
 
-export type CarLogFetchPlan = {
-  commands: string[];
-  expectedWindows: number;
-};
-
 /**
  * The windows to answer to read the whole ring, bounded by what the owner
  * actually needs: the newest CAR_LOG_MAX_FETCH events, never the history of
