@@ -105,11 +105,6 @@ export interface Project {
   spec?: string;
 }
 
-export interface SiteContent {
-  homeTitle: string;
-  homeBody: string;
-}
-
 export interface CartLine {
   productId: string;
   quantity: number;

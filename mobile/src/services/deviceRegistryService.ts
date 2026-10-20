@@ -147,62 +147,8 @@ export type UserDevice = {
 const asString = (v: unknown): string | null =>
   typeof v === "string" && v.length > 0 ? v : null;
 
-function parseModel(row: Record<string, unknown>): DeviceModel | null {
-  const id = asString(row.id);
-  const displayName = asString(row.display_name);
-  if (!id || !displayName) return null;
-  const transports = Array.isArray(row.transports)
-    ? (row.transports.filter((t) => typeof t === "string") as DeviceTransport[])
-    : [];
-  return {
-    id,
-    displayName,
-    repo: asString(row.repo) ?? "",
-    fwName: asString(row.fw_name) ?? "",
-    fwVersion: asString(row.fw_version) ?? "",
-    btName: asString(row.bt_name),
-    apSsid: asString(row.ap_ssid),
-    apIp: asString(row.ap_ip),
-    transports,
-  };
-}
-
 function getBundled(id: string): DeviceModel | null {
   return BUNDLED_DEVICE_MODELS.find((m) => m.id === id) ?? null;
-}
-
-/** All models, DB-first. Never throws: an unreachable DB is not an error. */
-export async function fetchDeviceModels(): Promise<DeviceModel[]> {
-  if (!supabaseConfigured) return BUNDLED_DEVICE_MODELS;
-  try {
-    const { data, error } = await supabase
-      .from("device_models")
-      .select("*")
-      .order("sort_order");
-    if (error || !data || data.length === 0) return BUNDLED_DEVICE_MODELS;
-    const parsed = (data as Record<string, unknown>[]).map(parseModel);
-    return parsed.filter((m): m is DeviceModel => m !== null);
-  } catch {
-    return BUNDLED_DEVICE_MODELS;
-  }
-}
-
-/** One model by id, DB-first with the bundled fallback. */
-export async function fetchDeviceModel(
-  id: string,
-): Promise<DeviceModel | null> {
-  if (!supabaseConfigured) return getBundled(id);
-  try {
-    const { data, error } = await supabase
-      .from("device_models")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (error || !data) return getBundled(id);
-    return parseModel(data as Record<string, unknown>) ?? getBundled(id);
-  } catch {
-    return getBundled(id);
-  }
 }
 
 /**
