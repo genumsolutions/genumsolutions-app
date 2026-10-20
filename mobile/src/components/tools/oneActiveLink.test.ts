@@ -160,7 +160,12 @@ describe("U-105 — the three transport toggles ride", () => {
   });
 
   it("the query uses the same `;?` shape the car answers", () => {
-    expect(code).toContain("sendSystemLine(`WIFICFG;${which};?`)");
+    // U-117: the three transport toggles keep their exact wire form; PAGE
+    // queries the car's NESTED verb (`WIFICFG;WIFI;PAGE;?`) — the panel now
+    // asks for the web-page state on link-up too.
+    expect(code).toContain("`WIFICFG;${which};?`");
+    expect(code).toContain('"WIFICFG;WIFI;PAGE;?"');
+    expect(code).toContain('which === "PAGE"');
   });
 
   it("the reply parser adopts car truth into the per-car pref", () => {

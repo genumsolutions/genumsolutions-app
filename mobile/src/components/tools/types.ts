@@ -137,7 +137,12 @@ export type DevicePrefs = {
    * U-116 (page-server power): whether the car's built-in web page server is
    * muted. Persisted per device; the car applies `page_off` in its NVS.
    */
-  pageOff?: boolean;
+  /**
+   * U-117: the car's web page server state — TRUE = serving. Renamed from
+   * `pageOff` (which held the ON value): an inverted name is a bug factory.
+   * The old key is written by no restore path, so nothing migrates.
+   */
+  pageOn?: boolean;
   /**
    * U-105 (1.3.5): the car's THREE persisted transport toggles, mirrored per
    * device. Wi-Fi (`wifi_enabled`), Bluetooth (`bt_enabled`) and boot
