@@ -8,3 +8,5 @@ node_modules/
 # Local agent / editor metadata
 .opencode/
 .claude/
+# Local image-tooling venv (Pillow) used for asset resizing — never commit.
+.venv-imgtools/
