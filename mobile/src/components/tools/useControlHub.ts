@@ -331,7 +331,14 @@ export function useControlHub(routeCategory?: string) {
   // transports stay up SIMULTANEOUSLY when enabled (no one-active-link
   // teardown anywhere).
   const [wifiEnabled, setWifiEnabled] = useState<boolean | null>(null);
-  const [pageOff, setPageOffState] = useState<boolean | null>(null);
+  // U-117 (2026-10-20): HONEST NAMING. This state used to be called `pageOff`
+  // while holding the page-ON value (every writer stored `pageOn`, every reader
+  // compared it as ON) — an inverted name that invited exactly the bug class it
+  // was misnamed to prevent. It is now `pageOn` end to end: true = the car is
+  // serving its page. The persisted key follows it (`pageOn` in DevicePrefs);
+  // the old `pageOff` key was written but NEVER read by any restore path, so no
+  // migration is needed — a stale row is simply ignored.
+  const [pageOn, setPageOnState] = useState<boolean | null>(null);
   const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
   const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
   // P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict, as the
@@ -628,7 +635,7 @@ export function useControlHub(routeCategory?: string) {
   // CHANGED echo is car truth and adopts.
   const TOGGLE_CHANGE_GRACE_MS = 2500;
   const toggleCommitRef = useRef<{
-    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOff";
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOn";
     value: boolean;
     at: number;
   } | null>(null);
@@ -639,13 +646,17 @@ export function useControlHub(routeCategory?: string) {
     wifiEnabled: boolean | null;
     btEnabled: boolean | null;
     bootAutojoin: boolean | null;
-    pageOff: boolean | null;
-  }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null, pageOff: null });
+    pageOn: boolean | null;
+  }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null, pageOn: null });
   transportToggleRef.current = {
     wifiEnabled,
     btEnabled,
     bootAutojoin,
-    pageOff: null,
+    // U-117 fix: this mirror used to be reset to `pageOff: null` on EVERY
+    // render, so the PAGE adopt's change-guard compared against null forever
+    // and every PAGE reply re-persisted. It now mirrors the live state like
+    // its three siblings.
+    pageOn,
   };
   // P7 / issue 8: the optimistic-commit grace as a NAMED predicate. It used
   // to live as an inline closure inside the telemetry-adopt block, which is
@@ -658,7 +669,7 @@ export function useControlHub(routeCategory?: string) {
   // A plain function on purpose: it only reads refs, so any render's
   // instance is current and no effect has to depend on its identity.
   const toggleChangeProtected = (
-    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOff",
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOn",
     incoming: boolean,
   ) => {
     const commit = toggleCommitRef.current;
@@ -1623,6 +1634,20 @@ export function useControlHub(routeCategory?: string) {
           };
           setBootAutojoin(t.bootAutojoin);
           persistPrefsRef.current?.({ bootAutojoin: t.bootAutojoin });
+        }
+        // U-117: the car's WEB PAGE state (`;PAGE=` / `page_on`) is adopted
+        // with the same change-guard as its siblings — the steady 1 Hz echo
+        // persists nothing, a genuine flip writes the per-car profile. No
+        // commit-grace: the page state is a car fact with no optimistic user
+        // edit on this path (the panel's own tap answers via the WIFICFG reply
+        // handler below), so a pre-command frame cannot roll anything back.
+        if (typeof t.pageOn === "boolean" && cur.pageOn !== t.pageOn) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            pageOn: t.pageOn,
+          };
+          setPageOnState(t.pageOn);
+          persistPrefsRef.current?.({ pageOn: t.pageOn });
         }
       }
 
@@ -2692,18 +2717,20 @@ export function useControlHub(routeCategory?: string) {
         // grace on the reply path: the request is one-shot (the panel sends
         // ON or OFF and the car echoes the result), so a late echo of the
         // pre-flip value can never be a stale race line — adopting it would be
-        // a lie, not a protection. Adopt every PAGE reply unconditionally.
+        // a lie, not a protection. Adopt every PAGE reply, but only PERSIST on
+        // a real change (U-117: the persist used to sit outside the guard, so
+        // every echo re-wrote the profile).
         const pageOn =
           reply.slice("WIFICFG;WIFI;PAGE;".length).trim().toUpperCase() ===
           "ON";
-        if (transportToggleRef.current.pageOff !== pageOn) {
+        if (transportToggleRef.current.pageOn !== pageOn) {
           transportToggleRef.current = {
             ...transportToggleRef.current,
-            pageOff: pageOn,
+            pageOn,
           };
-          setPageOffState(pageOn);
+          setPageOnState(pageOn);
+          persistPrefs({ pageOn });
         }
-        persistPrefs({ pageOff: pageOn });
       } else if (reply.startsWith("WIFICFG;WIFI;")) {
         // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered
         // to both a bare `WIFICFG;WIFI;?` query and an ON/OFF set.
@@ -2996,17 +3023,23 @@ export function useControlHub(routeCategory?: string) {
     [sendSystemLine, showConnectionMessage],
   );
   const queryCarTransportToggle = useCallback(
-    (which: "WIFI" | "BT" | "AUTOJOIN") => {
-      sendSystemLine(`WIFICFG;${which};?`);
+    (which: "WIFI" | "BT" | "AUTOJOIN" | "PAGE") => {
+      // U-117: PAGE queries the web-page server state (`WIFICFG;WIFI;PAGE;?`)
+      // — the panel asks for it the moment a link comes up, so the switch
+      // shows CAR truth instead of an assumption, even on firmware that has
+      // not yet put `;PAGE=` on the STATE line.
+      sendSystemLine(
+        which === "PAGE" ? "WIFICFG;WIFI;PAGE;?" : `WIFICFG;${which};?`,
+      );
     },
     [sendSystemLine],
   );
 
   // ---- page-server power (U-116) ----
-  const setPageOff = useCallback(
+  const setPageOn = useCallback(
     (on: boolean) => {
-      setPageOffState(on);
-      persistPrefsRef.current?.({ pageOff: on });
+      setPageOnState(on);
+      persistPrefsRef.current?.({ pageOn: on });
       if (!sendSystemLine(`WIFICFG;WIFI;PAGE;${on ? "ON" : "OFF"}`)) {
         showConnectionMessage(
           `The car's web page ${on ? "on" : "off"} — connect to the car first.`,
@@ -4141,8 +4174,8 @@ export function useControlHub(routeCategory?: string) {
     // transport layer and BT up. Persisted to car NVS `page_off` so a
     // power restart keeps the choice; the app's device prefs also keep
     // this screen's copy in sync.
-    pageOff,
-    setPageOff,
+    pageOn,
+    setPageOn,
     joystickLayoutId,
     selectJoystickLayout,
     // persistence

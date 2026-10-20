@@ -112,6 +112,15 @@ export type CarTelemetry = {
   btEnabled?: boolean;
   bootAutojoin?: boolean;
   /**
+   * U-117 (2026-10-20): is the car's own web page (:80/:81) serving RIGHT
+   * NOW — `"page_on":0|1` in the WS JSON (`/status`, since car U-116) and
+   * `;PAGE=ON|OFF` on the STATE line (so a Bluetooth-only app reads it
+   * without a WS round-trip). `true` = serving, `false` = the owner turned it
+   * off. Absent on firmware that predates the field — consumers must treat
+   * "missing" as "don't know", never as OFF (the switch then stays neutral).
+   */
+  pageOn?: boolean;
+  /**
    * P4/P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict —
    * `;LINKCAP=0|1` on every STATE line (so a Bluetooth-only app reads it
    * without a WS round-trip) and `"link_cap":0|1` in the WS JSON. `true` = a
@@ -650,6 +659,12 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       } else if (key === "AUTOJOIN") {
         // U-105: boot auto-join toggle `;AUTOJOIN=ON|OFF`.
         telemetry.bootAutojoin = val.toUpperCase() === "ON";
+      } else if (key === "PAGE") {
+        // U-117: the web page server state rides STATE as `;PAGE=ON|OFF`, the
+        // same fact `/status` carries as `page_on`. Empty/garbage stays
+        // ABSENT — "don't know", never OFF.
+        const v = val.toUpperCase();
+        if (v === "ON" || v === "OFF") telemetry.pageOn = v === "ON";
       } else if (key === "LINKCAP") {
         // P4 (firmware 1.3.13): the link-admission verdict rides every STATE
         // line, so a Bluetooth-only app learns whether the car can host a
@@ -824,6 +839,10 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       // car refused the second link; an ABSENT field stays absent = capable
       // (F-88), never denied.
       if (typeof j.link_cap === "number") telemetry.linkCap = j.link_cap !== 0;
+      // U-117: the car's web-page server state in the WS JSON — the same fact
+      // the STATE line carries as `;PAGE=`. Wrong type / absent stays ABSENT
+      // ("don't know"), so the panel never manufactures an OFF.
+      if (typeof j.page_on === "number") telemetry.pageOn = j.page_on !== 0;
       // Connections-Hub round: board-unique id (ESP.getEfuseMac(), last 6).
       if (typeof j.id === "string") telemetry.id = j.id;
       // Connections-Hub round: car-side WiFi scan (reply to ROUTERS;SCAN).

@@ -518,11 +518,15 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // U-105 (1.3.5): read the car's three transport toggles once a link is up, so
   // the Settings rows reflect CAR truth (null until the car answers).
+  // U-117: the web-page state joins them — without this query the Webpage
+  // switch showed an ASSUMED off after every (re)connect while the car kept
+  // serving, which is exactly the "toggle is broken" report.
   useEffect(() => {
     if (linked) {
       hub.queryCarTransportToggle("WIFI");
       hub.queryCarTransportToggle("BT");
       hub.queryCarTransportToggle("AUTOJOIN");
+      hub.queryCarTransportToggle("PAGE");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
@@ -1347,11 +1351,12 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </View>
               <Switch
-                value={hub.pageOff === true}
+                value={hub.pageOn === true}
                 onValueChange={(on) => {
                   feedbackTap();
-                  hub.setPageOff(on);
+                  hub.setPageOn(on);
                 }}
+                disabled={!linked}
                 trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                 thumbColor="#ffffff"
                 accessibilityLabel="Turn the car's web page on or off"
