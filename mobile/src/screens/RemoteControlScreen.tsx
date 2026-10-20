@@ -305,8 +305,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     // from the Remote — U-113 P2 removed the "on <ssid>" chip, issue 4.)
     btLinked,
     carRestartNotice,
-    handleRestartReconnect,
-    handleRestartDismiss,
     autoJoinRouter,
     setAutoJoinRouter,
     // U-113 P2 (issue 3): per-method disconnects — each chip tears down ONLY
@@ -677,49 +675,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   const renderLinkPrompt = () => {
     if (!linkPrompt) return null;
 
-    if (linkPrompt.kind === "restart") {
-      return renderPromptShell(
-        "sky",
-        linkPrompt.title,
-        <View>
-          <Text className="text-[13px] leading-5 text-sky-800 dark:text-sky-200">
-            {linkPrompt.bootLine}
-          </Text>
-          {/* U-113 P2 (issue 14): name which link is up NOW, so the owner sees
-              what the restart did to each transport instead of guessing. */}
-          <Text className="mt-0.5 text-[13px] font-bold leading-5 text-sky-900 dark:text-sky-100">
-            {linkPrompt.linkLine}
-          </Text>
-        </View>,
-        // P1: exactly TWO actions — Reconnect + Cancel. The old "Leave" action
-        // (which also popped the screen) is gone.
-        <>
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              void handleRestartReconnect();
-            }}
-            className="rounded-full bg-gold px-3 py-1.5"
-            hitSlop={6}
-            testID="restart-reconnect"
-          >
-            <Text className="text-[11px] font-bold text-white">Reconnect</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              feedbackTap();
-              handleRestartDismiss();
-            }}
-            className="rounded-full border border-line bg-card px-3 py-1.5"
-            hitSlop={6}
-            testID="restart-cancel"
-          >
-            <Text className="text-[11px] font-bold text-muted">Cancel</Text>
-          </Pressable>
-        </>,
-      );
-    }
-
+    // U-118 (owner 2026-10-20): "the reconnect shows the last reset thing —
+    // remove that." The old `restart` card (Boot N → N+1 · reset REASON ·
+    // crashes + its own two actions) is GONE from the deck. There is exactly
+    // ONE prompt now, and the restart only reaches it as a plain cause
+    // sentence inside `linkPrompt.body`. The reset record itself still leads
+    // the Control Panel's "Last restart record" (P2, ToolsScreen) — it was
+    // never removed from where an owner acts on it.
     // kind === "reconnect"
     return renderPromptShell(
       "amber",

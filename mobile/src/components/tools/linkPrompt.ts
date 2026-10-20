@@ -1,5 +1,7 @@
 // =====================================================================
 // P1 (owner 2026-10-17) — ONE prompt-state decision for the Remote screen.
+// U-118 (owner 2026-10-20) — "the reconnect shows the last reset thing,
+// remove that."
 //
 // Before this module the deck carried TWO independent prompts whose visibility
 // was decided in two different places by two different flags:
@@ -7,27 +9,21 @@
 //   * renderReconnectBanner()  — gated on `showSppsRetry && !linked`
 //   * renderRestartBanner()    — gated on `carRestartNotice != null`
 //
-// Nothing owned the question "which prompt, if any, belongs on screen right
-// now?", so the two could stack, the restart card could keep offering a third
-// action ("Leave"), and the "is the car really gone?" claim lived in the same
-// expression that flipped between a live and dead link.
+// P1 made this module the single owner of that question, and U-118 narrows it
+// to ONE card: RECONNECT. The old `restart` card was the only place the
+// last-reset record (boot count · reset reason · crash count) was painted on
+// the deck, and the owner asked for it to be removed from the reconnect
+// surface. The record itself is untouched — it still leads the Control Panel's
+// "Last restart record" (P2, ToolsScreen), which is where an owner acts on it.
 //
-// This module is that single owner. It is PURE — it takes the live link facts
-// and returns the ONE prompt the screen should show, or null. The screen no
-// longer decides; it only renders what this returns. That makes the decision
-// testable without a renderer and makes stale prompts impossible to keep by
-// accident: when the fact that raised a prompt clears, the next call returns
-// null (F-85: a prompt is a claim about the PRESENT).
+// A detected restart still MATTERS here, but only as the CAUSE of the dropped
+// link: it may raise the reconnect card earlier (the car rebooted and no link
+// is up — the prompt is a true claim about NOW) and it swaps in one plain
+// sentence. No numbers, no reset reason, no crash count ever reach this card.
 //
-// Precedence, deliberately:
-//   1. A detected car RESTART wins — it NAMES the cause of a dropped link and
-//      is the only place the reset reason / crash count are surfaced. It is
-//      informational and can be shown while a link is live (the boot count
-//      only rises on a real restart, observed over a working link).
-//   2. The RECONNECT prompt is a claim that the car is NOT answering, so it may
-//      only be raised when the auto-reconnect backoff is exhausted AND no link
-//      of any kind is up. A live link retires it (the screen also arms a
-//      state-clearing effect for the underlying flag).
+// It remains PURE — it takes the live link facts and returns the ONE prompt
+// the screen should show, or null. When the fact that raised a prompt clears,
+// the next call returns null (F-85: a prompt is a claim about the PRESENT).
 // =====================================================================
 
 /** The car-restart facts the hub raises on a boot-count increase. */
@@ -38,22 +34,12 @@ export type LinkPromptRestart = {
   resetReason: string | null;
 };
 
-export type LinkPrompt =
-  | {
-      readonly kind: "restart";
-      readonly tone: "sky";
-      readonly title: string;
-      /** "Boot 4 → 5 · reset TASK_WDT · 3 crashes" */
-      readonly bootLine: string;
-      /** "Link now: BT+WiFi · 192.168.245.10" */
-      readonly linkLine: string;
-    }
-  | {
-      readonly kind: "reconnect";
-      readonly tone: "amber";
-      readonly title: string;
-      readonly body: string;
-    };
+export type LinkPrompt = {
+  readonly kind: "reconnect";
+  readonly tone: "amber";
+  readonly title: string;
+  readonly body: string;
+};
 
 export type LinkPromptArgs = {
   /** Any real link is up (the screen's `connected || wifiConnected`). */
@@ -64,7 +50,7 @@ export type LinkPromptArgs = {
   readonly wifiConnected: boolean;
   /** The SPP auto-reconnect backoff has exhausted. */
   readonly sppRetryDue: boolean;
-  /** The detected restart, or null. */
+  /** The detected restart, or null. Cause only — its RECORD is never shown. */
   readonly restart: LinkPromptRestart | null;
   /** Human transport label ("BT+WiFi" / "Bluetooth" / "WiFi" / "Offline"). */
   readonly linkLabel: string;
@@ -72,50 +58,32 @@ export type LinkPromptArgs = {
   readonly ipText: string | null;
 };
 
-/** Build the restart card's one-line boot summary. Exported for tests. */
-export function formatBootLine(restart: LinkPromptRestart): string {
-  const reason = restart.resetReason?.trim() || "unknown";
-  const crashes =
-    restart.crashCount != null
-      ? `${restart.crashCount} crash${restart.crashCount === 1 ? "" : "es"}`
-      : null;
-  const boot =
-    restart.prevBoot != null
-      ? `Boot ${restart.prevBoot} → ${restart.boot}`
-      : `Boot ${restart.boot}`;
-  return [boot, `reset ${reason}`, crashes].filter(Boolean).join(" · ");
-}
+/** Base copy: the honest state of a link that is down with no fallback. */
+const RECONNECT_BODY =
+  "The Bluetooth link to your car dropped, and no Wi-Fi link is up either. " +
+  "The car is stopping itself on link loss. Reconnect?";
+
+/** Cause copy when the car rebooted — a sentence, never the reset RECORD. */
+const RESTART_CAUSE_BODY =
+  "Your car restarted and the Bluetooth link dropped, with no Wi-Fi link " +
+  "up either. The car is stopping itself on link loss. Reconnect?";
 
 /**
  * The ONE decision: which prompt belongs on screen right now, given the live
  * link facts. Returns null when nothing should be shown.
+ *
+ * Gate: a link is DOWN (never while one is up) AND the user has a true reason
+ * — the auto-reconnect backoff is exhausted, OR the car rebooted (which is
+ * itself why the link died).
  */
 export function resolveLinkPrompt(args: LinkPromptArgs): LinkPrompt | null {
-  // 1. A restart names the cause — it outranks the generic reconnect copy.
-  if (args.restart) {
-    return {
-      kind: "restart",
-      tone: "sky",
-      title: "Car restarted",
-      bootLine: formatBootLine(args.restart),
-      linkLine:
-        `Link now: ${args.linked ? args.linkLabel : "none"}` +
-        (args.linked && args.ipText ? ` · ${args.ipText}` : ""),
-    };
-  }
-
-  // 2. The reconnect prompt asserts the car is gone — only honest when the
-  //    backoff is exhausted AND no transport is up. Never while linked.
-  if (args.sppRetryDue && !args.linked) {
+  if (!args.linked && (args.sppRetryDue || args.restart != null)) {
     return {
       kind: "reconnect",
       tone: "amber",
       title: "Bluetooth disconnected",
-      body:
-        "The Bluetooth link to your car dropped, and no Wi-Fi link is up either. " +
-        "The car is stopping itself on link loss. Reconnect?",
+      body: args.restart != null ? RESTART_CAUSE_BODY : RECONNECT_BODY,
     };
   }
-
   return null;
 }
