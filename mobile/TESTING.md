@@ -1,5 +1,56 @@
 # TESTING — Physical Device Test Checklist
 
+## U-117/U-118/U-119 round — 2026-10-20: settings truth + reconnect honesty + cleansing (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; webpage rows need CAR FLASH **1.3.14**)
+
+> Owner report: *"webpage toggle off button is not working … other settings in
+> the remote screen … reconnect shows the last reset thing, remove that … the
+> app is not aware about its own connected network … cleansing."
+> **U-117** = webpage-toggle truth (parse/adopt/query/rename `pageOn`, offline
+> toast; car half = `;PAGE=` on STATE, firmware **1.3.14**) · **U-118** = the
+> restart RECORD card removed from the deck + the "This phone" network row ·
+> **U-119** = dead-export cleansing (behaviour-neutral).
+> **Every row is unticked — F-61: green gates are not device evidence.**
+> Gates this round: tsc 0 · vitest **843/843** (55 files) · prettier clean;
+> car: contract 0 failures (new rule `page-state`) · webpage-js PASS ·
+> syntax 9/9 · mutate-gates **120/120**.
+
+- [ ] **U-117-1 — ⭐ the Webpage switch shows CAR truth on connect.** Car
+      serving its page, app fresh-started, open the Remote settings: the
+      switch is ON before you touch it (it queries `WIFICFG;WIFI;PAGE;?` on
+      link-up). It must NOT show OFF-then-flip — an assumed state is the bug.
+- [ ] **U-117-2 — ⭐ Webpage OFF actually stops the page (needs 1.3.14).**
+      Toggle OFF from the app with BT linked: phone browser to the car's IP
+      gets the GHOST page, not the control page; Wi-Fi/BT toggles do NOT move.
+      Serial `[WIFICFG] web page OFF`. Toggling ON serves again.
+- [ ] **U-117-3 — the choice survives BOTH restarts.** Webpage OFF → restart
+      the CAR (page still off, `/status` `page_on:0`) → restart the APP
+      (switch still OFF). No 1 Hz write churn: profile save count must not
+      tick every second while idle.
+- [ ] **U-117-4 — offline toggle is honest.** Not linked: every switch in the
+      panel is DISABLED, and a `WIFICFG` send path shows _"… connect to the
+      car first"_ instead of silently doing nothing. State via BT-only also
+      shows `;PAGE=` after the flash (U-117-2's car half).
+- [ ] **U-118-1 — ⭐ the reconnect prompt carries NO reset record.** Force a
+      car restart with no link: the ONE card says "Bluetooth disconnected"
+      with a plain cause sentence — no `Boot N → N+1`, no reset reason, no
+      crash count. **Cancel** clears it (restart-raised cards must be
+      dismissible); Reconnect runs the normal SPP retry.
+- [ ] **U-118-2 — the reset record still lives where it belongs.** Control
+      Panel → Tools → Diagnostics → "Last restart record" still LEADS with
+      the last reset (P2) — U-118 removed it from the deck, not from here.
+- [ ] **U-118-3 — ⭐ "This phone" row tells the truth.** Connectivity panel:
+      `Wi-Fi · <your SSID>` on Wi-Fi; `Wi-Fi · network name hidden` when the
+      OS withholds it; `Cellular`; `No network` in airplane mode — and it
+      updates live when you switch networks.
+- [ ] **U-118-4 — deck chrome unchanged (regression guard).** The old
+      "on <ssid>" chip stays GONE from the Remote deck (U-113 P2 issue 4) —
+      the phone's network lives ONLY in the Connectivity panel row.
+- [ ] **U-119-1 — cleansing is behaviour-neutral.** With 3.2.7/60 OTA after
+      `c26b9cf`: drive both links, connect/disconnect each method, open the
+      Update screen (version label reads correctly), car-profile sync — all
+      as before. Six dead exports were removed; anything that changes here is
+      a regression, not a "cleanup side-effect".
+
 ## U-116 round — the 2026-10-17 six-item round (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; needs CAR FLASH **1.3.13**)
 
 > Master plan: `TRACKS/PLAN-2026-10-17-multiconnect-logs-connectivity.md` (mirror of

@@ -1,5 +1,26 @@
 # NEXT SESSION — genumsolutions-app (updated 2026-10-16: **P8/issue 13 close-out landed — the round is SOURCE-COMPLETE, the P6+P7 JS-only OTA is published (3.2.7/60), nothing device-verified (F-61)**; **P7/issue 8 settings round-trip landed** — adopted mode/speed/routers now reach the per-car profile, the WIFICFG reply honours the toggle grace, the Joystick pill + auto-join-router switch persist, and a focus gain re-reads the car; **P6/issue 1 dual BT+Wi-Fi link landed** — the Bluetooth scan no longer hides behind a live Wi-Fi link; car-side U-115 boot-scan-first → 1.3.12 + P4 closed (E1 6/6, status floor 20000); version 3.2.7/60 UNCHANGED)
 
+> 🆕 **2026-10-20 (LATEST) — U-117/U-118/U-119 SHIPPED (JS-only → same-version OTA
+> 3.2.7/60; commits `14bf5c0` · `72ecae4` · `c26b9cf`).** (1) **Webpage toggle truth** —
+> `page_on`/`;PAGE=` parsed (absent ⇒ don't know, never OFF), adopted change-guarded,
+> `WIFICFG;WIFI;PAGE;?` queried on link-up, persist moved INSIDE the reply guard, the
+> per-render mirror no longer nulls the page slot, switch disabled while offline, and the
+> inverted **`pageOff` → `pageOn`** rename end to end (old DevicePrefs key never read ⇒ no
+> migration). (2) **Reconnect honesty** — the deck's restart RECORD card is GONE (owner:
+> *"remove that"*): ONE card (Reconnect + Cancel); a restart survives only as a plain cause
+> sentence, only while no link is up; Cancel clears it; dead `handleRestartReconnect`/
+> `handleRestartDismiss` deleted; Tools → Diagnostics still leads with the last reset.
+> (3) **"This phone" network row** in the Connectivity panel (pure `formatPhoneNetwork`;
+> deck's "on <ssid>" chip stays gone — issue 4). (4) **Cleansing**: six dead exports
+> removed (tombstoned). Car twin (same round): `;PAGE=` on STATE, contract rule
+> `page-state`, mutants M123-M126, **FW 1.3.14 (UNFLASHED)**. Gates: tsc 0 · vitest
+> **843/843** (55 files) · prettier clean; car contract 0 · webpage-js PASS · syntax 9/9 ·
+> mutate **120/120**. Device rows: `mobile/TESTING.md` **U-117-1..4 · U-118-1..4 ·
+> U-119-1** (all unticked, F-61). Mid-session insurance note:
+> `TRACKS/SESSION-2026-10-20-U117-U118.md`.
+>
+> **⏭️ 2026-10-17 round (below) — header kept:**
+
 > **🆕 NEXT ROUND (2026-10-17) — PLANNING ONLY, no app byte changed (3.2.7/60).** The owner
 > filed a new six-item list: (1) dual-link BT+Wi-Fi *connect timing*, (2) the reconnect
 > dialog (right time, no stale messages, **Reconnect + Cancel only**), (3) control-panel
