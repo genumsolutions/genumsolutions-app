@@ -18,8 +18,10 @@ export const DRIVE_CMD_MIN_INTERVAL_MS = 30;
  */
 export const TELEMETRY_FLUSH_MS = 66;
 
-export const WIFI_RECONNECT_DELAY_MS = 3000;
-export const WIFI_MAX_RECONNECT_ATTEMPTS = 5;
+// U-119 cleansing (2026-10-20): WIFI_RECONNECT_DELAY_MS /
+// WIFI_MAX_RECONNECT_ATTEMPTS DELETED — the fixed-interval Wi-Fi reconnect
+// loop they fed is gone (replaced by the NetInfo-driven auto-discover in
+// useControlHub), and both had zero callers.
 
 // SPP auto-reconnect — industry-standard silent exponential backoff.
 // Delays: 1s → 2s → 4s → 8s → give up (no prompt, fully silent).

@@ -31,7 +31,7 @@ import {
   parseTelemetryLine,
   SPEED_MIN,
 } from "../services/carProtocol";
-import { linkManager, type CommandSender } from "./linkManager";
+import { linkManager } from "./linkManager";
 import type {
   DiscoveredDevice,
   Transport,
@@ -606,9 +606,10 @@ export function registerAllTransports(): void {
   for (const t of buildAllTransports()) linkManager.register(t);
 }
 
-/** The command path the rest of the app uses. Routes to the chosen link. */
-export const sendViaActiveLink: CommandSender = (line) =>
-  linkManager.sendLine(line);
+// U-119 cleansing (2026-10-20): `sendViaActiveLink` DELETED — zero callers.
+// The app's command path is sendCommand (mode-based routing + the
+// EVERY_LINK_COMMANDS fan-out in useControlHub), not this thin alias, so the
+// name never misled anyone into using it.
 
 /** Exposed for the Control Panel's "open the car's page" action. */
 export { DEFAULT_AP_IP };

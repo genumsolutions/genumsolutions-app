@@ -171,9 +171,6 @@ export type Transport = {
   onStatus(cb: (e: TransportStatusEvent) => void): () => void;
 };
 
-export function hasCapability(
-  t: Pick<Transport, "capabilities">,
-  c: TransportCapability,
-): boolean {
-  return t.capabilities.includes(c);
-}
+// U-119 cleansing (2026-10-20): `hasCapability()` DELETED — zero callers
+// anywhere in src (the capability reads go through `t.capabilities`
+// directly). TransportCapability stays: the interface still uses it.

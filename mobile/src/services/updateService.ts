@@ -84,9 +84,9 @@ export function installedAppVersion(): string {
   return APP_VERSION;
 }
 
-export function installedVersionCode(): number {
-  return Constants.expoConfig?.android?.versionCode ?? 0;
-}
+// U-119 cleansing (2026-10-20): `installedVersionCode()` DELETED — zero
+// callers (the version CODE lives in app.json / parity.test.ts; this screen
+// only ever shows the label, via installedAppVersion() above).
 
 // ── OTA Update Check ──────────────────────────────────────────────
 // Checks for expo-updates OTA bundle. Returns true if an OTA update
