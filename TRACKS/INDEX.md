@@ -1,5 +1,20 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-10-20 (latest) — U-117/U-118/U-119 SHIPPED (JS-only → same-version OTA 3.2.7/60):
+> the WEBPAGE TOGGLE NOW TELLS THE TRUTH** (`page_on`/`;PAGE=` parsed, adopted
+> change-guarded, queried on link-up, `WIFICFG` reply persists inside its guard, the
+> per-render mirror no longer nulls the page slot, switch disabled while offline, and the
+> inverted **`pageOff` → `pageOn`** rename end to end) · **the deck's reconnect card drops
+> the last-reset RECORD** (owner: *"remove that"* — one card left, Reconnect + Cancel; a
+> restart survives only as a plain cause sentence; Cancel clears it; the record still leads
+> Tools → Diagnostics) · **"This phone" network row** in the Connectivity panel (pure
+> `formatPhoneNetwork`: Wi-Fi · SSID / hidden / Cellular / No network; deck chip stays gone)
+> · **cleansing**: six dead exports removed. Car twin: `;PAGE=` on STATE + contract rule
+> `page-state` + M123-M126, **FW 1.3.14 (UNFLASHED)**. Gates: tsc 0 · vitest **843/843** ·
+> prettier clean; car contract 0 · webpage-js PASS · syntax 9/9 · **mutate 120/120**.
+> Device rows: `mobile/TESTING.md` **U-117-1..4 · U-118-1..4 · U-119-1** (all unticked,
+> F-61). Session note (mid-session insurance): `TRACKS/SESSION-2026-10-20-U117-U118.md`.
+
 > ✅ **2026-10-13 (latest) — U-105 SHIPPED (JS-only → same-version OTA 3.2.7/60, UNPUSHED
 > pending commit): ONE fleet own-hotspot `4WD4MCar_WiFi` (donor `WirelessCar_Wifi` + old
 > `4WDCar_Wifi` purged); Parallel + Hotspot power-save (APSAVE) settings REMOVED, replaced by
