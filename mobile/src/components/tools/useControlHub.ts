@@ -2677,20 +2677,26 @@ export function useControlHub(routeCategory?: string) {
       } else if (reply.startsWith("WIFICFG;SSID;")) {
         setCarSsid(reply.slice("WIFICFG;SSID;".length).trim() || null);
       } else if (reply.startsWith("WIFICFG;WIFI;PAGE;")) {
+        // U-116: the car's WEBPAGE server toggle. Distinct from the Wi-Fi /
+        // Bluetooth transport toggles (t_wifi / t_bt). The car answers
+        // WIFICFG;WIFI;PAGE;ON | OFF so the app mirrors car truth (the user
+        // may have flipped it from the car's own page, BT, or another phone).
+        // Unlike the transport toggles, the PAGE flip has NO optimistic-commit
+        // grace on the reply path: the request is one-shot (the panel sends
+        // ON or OFF and the car echoes the result), so a late echo of the
+        // pre-flip value can never be a stale race line — adopting it would be
+        // a lie, not a protection. Adopt every PAGE reply unconditionally.
         const pageOn =
           reply.slice("WIFICFG;WIFI;PAGE;".length).trim().toUpperCase() ===
           "ON";
-        if (
-          toggleChangeProtectedRef.current("pageOff", pageOn) &&
-          transportToggleRef.current.pageOff !== pageOn
-        ) {
+        if (transportToggleRef.current.pageOff !== pageOn) {
           transportToggleRef.current = {
             ...transportToggleRef.current,
             pageOff: pageOn,
           };
           setPageOffState(pageOn);
-          persistPrefs({ pageOff: pageOn });
         }
+        persistPrefs({ pageOff: pageOn });
       } else if (reply.startsWith("WIFICFG;WIFI;")) {
         // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered
         // to both a bare `WIFICFG;WIFI;?` query and an ON/OFF set.
