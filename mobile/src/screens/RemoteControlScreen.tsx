@@ -1397,53 +1397,68 @@ export function RemoteControlScreen({ navigation }: Props) {
 
             {/* U-108 Phase 7b (owner 2026-10-13): Reset car data — sends
                 FACTORY;RESET to the car (wipes its NVS, restores defaults) and
-                clears all car-related local storage on the phone. Destructive. */}
-            <View className="mt-2.5 flex-row items-center justify-between">
-              <View className="min-w-0 flex-1 flex-row items-center gap-2">
-                <Feather name="trash-2" size={14} color="#ef4444" />
-                <View className="min-w-0 flex-1">
-                  <Text className="text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+                clears all car-related local storage on the phone. Destructive.
+
+                UX fix (owner 2026-10-19: "the reset thing seems weird in the
+                setting"): the action used to sit INLINE among the everyday
+                toggles — a tiny bordered "Reset" next to protocol jargon
+                ("Sends FACTORY;RESET…"), which read like a debug switch. It is
+                now its own DANGER-ZONE card below a divider: warning header,
+                red-tinted container, plain-language copy (no protocol token),
+                and ONE full-width action. Behaviour is unchanged — same
+                two-step confirm, same hub.resetCarData(), same testID. */}
+            <View className="mt-2.5 border-t border-line pt-2">
+              <View className="mb-1 flex-row items-center gap-1.5">
+                <Feather name="alert-triangle" size={12} color="#dc2626" />
+                <Text className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400">
+                  Danger zone
+                </Text>
+              </View>
+              <View className="rounded-lg border border-red-500/40 bg-red-500/5 p-2">
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+                  Factory reset the car
+                </Text>
+                <Text className="mt-0.5 text-[9px] leading-tight text-muted">
+                  Erases everything the car remembers — saved Wi-Fi routers, its
+                  name and settings — and removes it from this phone. Restart
+                  the car afterwards. This cannot be undone.
+                </Text>
+                <TouchableOpacity
+                  testID="reset-car-data"
+                  onPress={async () => {
+                    Alert.alert(
+                      "Factory reset the car?",
+                      "The car erases its saved Wi-Fi routers, name and settings, and this phone forgets the car. Restart the car afterwards to finish. This cannot be undone.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Reset car",
+                          style: "destructive",
+                          onPress: async () => {
+                            const result = await hub.resetCarData();
+                            if (!result.ok) {
+                              Alert.alert(
+                                "Reset failed",
+                                result.error ?? "unknown",
+                              );
+                            } else {
+                              hub.showConnectionMessage(
+                                "Car data reset — power cycle the car for a fresh start",
+                                "success",
+                              );
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                  className="mt-1.5 items-center rounded-md border border-red-500 bg-red-500/10 py-1.5"
+                >
+                  <Text className="text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
                     Reset car data
                   </Text>
-                  <Text className="text-[9px] leading-tight text-muted">
-                    Sends FACTORY;RESET to the car + clears all local car data.
-                    Irreversible.
-                  </Text>
-                </View>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                testID="reset-car-data"
-                onPress={async () => {
-                  Alert.alert(
-                    "Reset car data?",
-                    "This sends FACTORY;RESET to the car (wipes its config) and clears all car data from this phone. This cannot be undone.",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Reset",
-                        style: "destructive",
-                        onPress: async () => {
-                          const result = await hub.resetCarData();
-                          if (!result.ok) {
-                            Alert.alert(
-                              "Reset failed",
-                              result.error ?? "unknown",
-                            );
-                          } else {
-                            hub.showConnectionMessage(
-                              "Car data reset — power cycle the car for a fresh start",
-                              "success",
-                            );
-                          }
-                        },
-                      },
-                    ],
-                  );
-                }}
-                className="px-2 py-1 border border-red-500 rounded text-[10px] font-bold text-red-500"
-              >
-                Reset
-              </TouchableOpacity>
             </View>
 
             {/* Steering limit + Trim (2WD1M only) */}
