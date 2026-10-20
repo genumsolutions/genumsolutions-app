@@ -1576,9 +1576,15 @@ export function useControlHub(routeCategory?: string) {
       // cleared profile) showed "don't know" until the user queried each toggle
       // by hand. Adopt car truth here, so the panel agrees with the car the
       // moment a link comes up. A just-flipped toggle is protected for the same
-      // short grace as the mode commit, so the car's echo of the pre-command
-      // frame cannot undo the optimistic flip; persistence happens only on a
-      // real change, never on the steady 1 Hz echo.
+      // short grace as the mode commit: the 1 Hz broadcast is NOT a neutral
+      // authority — a pre-command frame is in flight for up to a second after
+      // the tap, and adopting it would roll the panel back AND persist the
+      // pre-flip value into the per-car profile (the P7/issue-8 defect, which
+      // is why this same rule also gates the WIFICFG reply path). Persistence
+      // happens only on a real change, never on the steady 1 Hz echo. The
+      // no-transport case (nothing to adopt from) is handled honestly by the
+      // sendSystemLine guard's "connect to the car first" message instead of
+      // an optimistic toggle that silently does nothing.
       {
         const protect = toggleChangeProtectedRef.current;
         const cur = transportToggleRef.current;
@@ -1619,6 +1625,7 @@ export function useControlHub(routeCategory?: string) {
           persistPrefsRef.current?.({ bootAutojoin: t.bootAutojoin });
         }
       }
+
       // P5 (firmware 1.3.13): adopt the car's LINKCAP verdict straight from
       // the telemetry stream — it rides every STATE line and every WS JSON
       // frame. No commit-grace: this is a car fact, not a user edit, so no
@@ -2956,10 +2963,13 @@ export function useControlHub(routeCategory?: string) {
   // the mode's radio is not the one that is up; so this fan-out targets every
   // live transport directly (spp → ble → wifi), no duplicate sends.
   const sendSystemLine = useCallback((line: string) => {
-    if (sppService.isConnected) void sppService.sendLine(line).catch(() => {});
-    if (bleService.isConnected) void bleService.sendLine(line).catch(() => {});
-    if (wifiService.isConnected)
-      void wifiService.sendLine(line).catch(() => {});
+    const spp = sppService.isConnected;
+    const ble = bleService.isConnected;
+    const ws = wifiService.isConnected;
+    if (spp) void sppService.sendLine(line).catch(() => {});
+    if (ble) void bleService.sendLine(line).catch(() => {});
+    if (ws) void wifiService.sendLine(line).catch(() => {});
+    return spp || ble || ws;
   }, []);
   // One generic setter/query pair for the three keys — ON/OFF toggles that
   // persist on the car. Optimistic: the car's reply re-confirms (or corrects)
@@ -2976,9 +2986,14 @@ export function useControlHub(routeCategory?: string) {
       else setBootAutojoin(on);
       toggleCommitRef.current = { which: patch, value: on, at: Date.now() };
       persistPrefsRef.current?.({ [patch]: on });
-      sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`);
+      if (!sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`)) {
+        showConnectionMessage(
+          `Turn the ${patch.replace(/([A-Z])/g, " $1").trim()} transport ${on ? "on" : "off"} — connect to the car first.`,
+          "error",
+        );
+      }
     },
-    [sendSystemLine],
+    [sendSystemLine, showConnectionMessage],
   );
   const queryCarTransportToggle = useCallback(
     (which: "WIFI" | "BT" | "AUTOJOIN") => {
@@ -2992,9 +3007,14 @@ export function useControlHub(routeCategory?: string) {
     (on: boolean) => {
       setPageOffState(on);
       persistPrefsRef.current?.({ pageOff: on });
-      sendSystemLine(`WIFICFG;WIFI;PAGE;${on ? "ON" : "OFF"}`);
+      if (!sendSystemLine(`WIFICFG;WIFI;PAGE;${on ? "ON" : "OFF"}`)) {
+        showConnectionMessage(
+          `The car's web page ${on ? "on" : "off"} — connect to the car first.`,
+          "error",
+        );
+      }
     },
-    [sendSystemLine],
+    [sendSystemLine, showConnectionMessage],
   );
 
   // ---- Connection-Manager Phase B: the ONE opt-in envelope intake ----
