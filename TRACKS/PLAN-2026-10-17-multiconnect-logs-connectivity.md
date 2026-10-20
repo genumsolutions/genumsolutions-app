@@ -166,7 +166,7 @@ invariants **1** (non-blocking boot) and **2** (silence → stop) in P4/P6.
 
 ## P11 — webpage view power toggle (app only, 2026-10-19, JS-only OTA 3.2.7/60 unchanged)
 
-Owner: add an independent "Webpage view" on/off switch that mutes the car's built-in
+Owner: add an independent "Webpage" on/off switch that mutes the car's built-in
 web page server (:80) without touching the Wi-Fi / Bluetooth transport layer or Bluetooth —
 i.e. "wifi on/off AND webpage on/off" both present, both work.
 
@@ -180,7 +180,7 @@ i.e. "wifi on/off AND webpage on/off" both present, both work.
 - `mobile/src/components/tools/types.ts`:
   - `pageOff?: boolean` added to `DevicePrefs`.
 - `mobile/src/screens/RemoteControlScreen.tsx`:
-  - "Webpage view" Switch in the Remote settings panel (`hub.pageOff` / `hub.setPageOff`).
+  - "Webpage" Switch in the Remote settings panel (`hub.pageOff` / `hub.setPageOff`).
 
 ### Gates
 

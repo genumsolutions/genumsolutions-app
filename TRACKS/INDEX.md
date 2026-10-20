@@ -214,7 +214,7 @@ rules + new F-83 source-wiring pin `components/tools/cycleModeGone.test.ts` (mut
 both ways). Gates: tsc 0 · vitest **701/701** (45 files) · prettier clean. Device row
 U-113-1 pending owner bench pass. Next: P2 (Remote chrome rebuild).
 
-**2026-10-19 · P11 — webpage view power toggle (U-116); app only, JS-only OTA 3.2.7/60 unchanged.**
+**2026-10-19 · P11 — Webpage toggle (U-116); app only, JS-only OTA 3.2.7/60 unchanged.**
 
 Owner: add an independent "Webpage view" on/off switch that mutes the car's built-in
 web page server (:80) without touching the Wi-Fi / Bluetooth transport layer or Bluetooth —
