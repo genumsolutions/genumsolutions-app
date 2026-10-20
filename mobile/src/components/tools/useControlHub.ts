@@ -167,6 +167,7 @@ import type { CarTelemetry } from "../../services/carProtocol";
 import { DEFAULT_WS_URL, OWN_AP_NAMES } from "../../services/carProtocol";
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { findCarOnNetwork, subnetCandidates } from "./connection/discovery";
+import { formatPhoneNetwork } from "./connection/phoneNetwork";
 import type { SensorData } from "./types";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
@@ -320,6 +321,13 @@ export function useControlHub(routeCategory?: string) {
   // U-108 Phase 4: the SSID the PHONE is joined to (null = not on Wi-Fi), so the
   // deck can always say which network it sits on before a switch.
   const [phoneSsid, setPhoneSsid] = useState<string | null>(null);
+  // U-118: the human label for the phone's OWN network (pure formatter in
+  // ./connection/phoneNetwork), refreshed on every NetInfo event below and
+  // rendered by the Connectivity panel — the fact the owner asked for
+  // ("the app is not aware about its own connected network").
+  const [phoneNetworkLabel, setPhoneNetworkLabel] = useState<string | null>(
+    null,
+  );
   // U-105 (1.3.5, owner 2026-10-13): the car's THREE persisted transport
   // toggles. `WIFICFG;WIFI;ON|OFF` (NVS `botcfg/t_wifi`), `WIFICFG;BT;ON|OFF`
   // (NVS `botcfg/t_bt`) and `WIFICFG;AUTOJOIN;ON|OFF` (NVS
@@ -2205,28 +2213,11 @@ export function useControlHub(routeCategory?: string) {
     }
   }, []);
 
-  // U-108 Phase 4: the detected car-restart prompt's actions. Reconnect re-arms
-  // the Bluetooth link when it is down (a restart usually drops it); Leave is the
-  // same clear plus a screen-level goBack; Cancel just clears.
-  const handleRestartDismiss = useCallback(() => {
-    setCarRestartNotice(null);
-  }, []);
-  const handleRestartReconnect = useCallback(async () => {
-    setCarRestartNotice(null);
-    setError(null);
-    manualCloseRef.current = false;
-    sppReconnectAttemptsRef.current = 0;
-    sppReconnectActiveRef.current = false;
-    try {
-      if (!sppService.isConnected) {
-        await sppService.retryConnect();
-      }
-    } catch (e) {
-      if (mountedRef.current) {
-        setError(e instanceof Error ? e.message : "Reconnect failed");
-      }
-    }
-  }, []);
+  // U-118 (owner 2026-10-20): the restart prompt's dedicated actions
+  // (handleRestartReconnect / handleRestartDismiss) are GONE with the restart
+  // card. The deck has ONE prompt now: Reconnect runs the same SPP retry the
+  // reconnect card always had, and Cancel is handleReconnectPromptCancel,
+  // which clears BOTH the backoff flag and the restart notice.
 
   // UX-1 (2026-10-02 audit): a connect failure surfaces ONCE — through the
   // hub's `error` (the ConnectionBanner is the single problem surface on the
@@ -2532,6 +2523,15 @@ export function useControlHub(routeCategory?: string) {
       // U-108 Phase 4: keep the phone-network truth fresh on EVERY event (not
       // just a move) so the deck can show which network the phone is on.
       setPhoneSsid(phoneSsidOf(state));
+      // U-118: and keep the rendered label in step with it (same event, so the
+      // SSID and the label can never disagree).
+      setPhoneNetworkLabel(
+        formatPhoneNetwork({
+          type: state.type ?? "",
+          connected: state.isConnected === true,
+          ssid: phoneSsidOf(state),
+        }),
+      );
       const next = phoneNetworkKey(state);
       const prev = phoneNetworkKeyRef.current;
       phoneNetworkKeyRef.current = next;
@@ -3775,6 +3775,11 @@ export function useControlHub(routeCategory?: string) {
     // list (or Retry) must stay possible (old behavior killed the address,
     // which contributed to the dead Connect button).
     setShowSppsRetry(false);
+    // U-118: the restart CAUSE may be what raised the card now (there is no
+    // restart card anymore), so cancelling must clear it too — otherwise a
+    // restart-raised prompt could never be dismissed (F-85: when the cause
+    // clears, so does the prompt).
+    setCarRestartNotice(null);
     manualCloseRef.current = true;
     if (sppReconnectTimerRef.current) {
       clearTimeout(sppReconnectTimerRef.current);
@@ -4032,9 +4037,8 @@ export function useControlHub(routeCategory?: string) {
     // switching) and a detected CAR RESTART (boot-count change) with the
     // Reconnect / Leave / Cancel actions.
     phoneSsid,
+    phoneNetworkLabel,
     carRestartNotice,
-    handleRestartReconnect,
-    handleRestartDismiss,
     sppSupported,
     canControl,
     setWifiUrl,

@@ -136,8 +136,11 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(prompt).toContain("Bluetooth disconnected");
     expect(screen).not.toContain('"Connection lost"');
     expect(screen).not.toContain("Reconnect to your car?");
-    // The restart prompt names which link is up NOW.
-    expect(prompt).toContain("Link now:");
+    // U-118 (owner 2026-10-20): the restart RECORD card is gone from the
+    // deck — the prompt module carries the reconnect copy only, with no
+    // "Link now:" line, no boot line and no reset detail.
+    expect(prompt).not.toContain("Link now:");
+    expect(prompt).not.toContain("bootLine");
   });
 });
 
