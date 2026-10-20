@@ -78,28 +78,8 @@ export function TelemetryStrip({
   );
 }
 
-/**
- * The status dot + line under the title. The dot is the fastest read on the
- * whole page: green when a car is reporting, grey when nothing is.
- */
-export function CarStatusLine({
-  connected,
-  summary,
-}: {
-  connected: boolean;
-  summary: string;
-}) {
-  return (
-    <View className="mt-2 flex-row items-center">
-      <View
-        className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-success" : "bg-border"}`}
-      />
-      <Text
-        numberOfLines={1}
-        className={`ml-2 flex-1 font-mono text-xs ${connected ? "text-ink" : "text-muted"}`}
-      >
-        {summary}
-      </Text>
-    </View>
-  );
-}
+// U-119 cleansing (2026-10-20): `CarStatusLine` is DELETED — the duplicated
+// top Car status card it fed was removed in an earlier round (its
+// buildCarTelemetry/describeCar siblings went with it; see
+// TRACKS/NEXT-SESSION.md), and the export lingered with zero callers.
+// The status dot + line now live in the deck's own status row.
