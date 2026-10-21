@@ -139,7 +139,7 @@ export function getProjectCategory(slug: string): ProjectCategory | undefined {
 }
 
 /**
- * PLAN-2026-09-29 §2: visual KIND groups for the Control Panel's pill row.
+ * Control-panel kinds plan §2: visual KIND groups for the Control Panel's pill row.
  * Two slim section headers above the SAME 7 pills in the SAME order as
  * before — kinds are labels only: nothing merges, nothing moves between
  * categories (owner decision ①). Static strings — no DB, no admin.

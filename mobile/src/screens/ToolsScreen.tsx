@@ -330,7 +330,7 @@ export function ToolsScreen() {
           Projects
         </Text>
 
-        {/* Category selector — grouped by KIND (PLAN-2026-09-29 §2): two slim
+        {/* Category selector — grouped by KIND (control-panel kinds plan §2): two slim
             section headers above the same 7 pills in the SAME order as before.
             Kinds are visual labels only — nothing merges, nothing moves. */}
         {KIND_GROUPS.map((group) => {
