@@ -1,5 +1,5 @@
 // =====================================================================
-// ProjectsScreen — U-47 (2026-09-27, owner): ONE unified projects grid.
+// ProjectsScreen — U-47: ONE unified projects grid.
 // The Packages/Robot-Cars tabs are gone; every project package displays
 // as a minimal card and the category selector filters by the SIX
 // owner-named categories (Robo Car, Smart Home, Smart Farm, Smart City,
@@ -93,7 +93,7 @@ export function ProjectsScreen() {
 
   // The six canonical categories from the DB (matched by NAME — the
   // products.project_category column stores names). Categories with no
-  // products yet are flagged coming-soon (owner decision, mirrors web).
+  // products yet are flagged coming-soon.
   const categoryOptions = useMemo(() => {
     const present = new Set(
       allProjects.map((p) => p.projectCategory).filter(Boolean),

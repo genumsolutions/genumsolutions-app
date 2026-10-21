@@ -1,5 +1,5 @@
 // =====================================================================
-// HandheldDeck — per-category deck step ② (PLAN-2026-09-29).
+// HandheldDeck — per-category deck step ②.
 // =====================================================================
 import React from "react";
 import { View } from "react-native";

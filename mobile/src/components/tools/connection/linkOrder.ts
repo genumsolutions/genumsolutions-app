@@ -1,5 +1,5 @@
 // =====================================================================
-// P3 / owner item A (2026-10-17) — the SECOND-link raise, described.
+// P3 / owner item A — the SECOND-link raise, described.
 //
 // Issue A is connect ORDERING + honesty: when one link is already live and
 // the app starts the other transport, the user must never read that raise as

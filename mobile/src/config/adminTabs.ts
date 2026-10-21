@@ -13,7 +13,7 @@
 // the customer storefront — Electronic Products (/products), 3D Products
 // (/3d-printing), Projects (/projects, + Pre-packaged Kits). Must match the
 // website's tests/admin-parity.test.ts ADMIN_TABS exactly.
-// U-R3 (2026-10-12): "System Logs" added — fleet crash reports + app logs.
+// U-R3: "System Logs" added — fleet crash reports + app logs.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",

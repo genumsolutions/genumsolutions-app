@@ -1,5 +1,5 @@
 // =====================================================================
-// crashReportService - fleet firmware diagnostics (owner 2026-10-08).
+// crashReportService - fleet firmware diagnostics.
 //
 // THE FEATURE: the moment the app connects to a car it shares the car's last
 // stored restart record (reset_reason, boot_count, crash_count,

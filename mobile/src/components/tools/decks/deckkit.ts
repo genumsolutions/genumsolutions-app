@@ -1,5 +1,5 @@
 // =====================================================================
-// deckkit.ts — per-category DECK manifests (PLAN-2026-09-29, step ①).
+// deckkit.ts — per-category DECK manifests.
 //
 // Owner decisions (guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md — NOT in the
 // repo; this file and deckkit.test.ts are the surviving record):

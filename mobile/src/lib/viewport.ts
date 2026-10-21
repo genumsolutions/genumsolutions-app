@@ -1,4 +1,4 @@
-// U-90 (2026-10-04): the app's ONE responsive idiom.
+// U-90: the app's ONE responsive idiom.
 //
 // Before this module every screen derived its own layout facts:
 // the wide-layout screens used a private `width >= 640`, RemoteControlScreen

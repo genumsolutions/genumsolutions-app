@@ -1,5 +1,5 @@
 // =====================================================================
-// P3 / owner item A (2026-10-17) — dual-link connect ORDERING + honesty.
+// P3 / owner item A — dual-link connect ORDERING + honesty.
 //
 // The in-between state of a second-link raise was invisible: one shared
 // `connecting` flag, no owner of "WHICH link is coming up", and a car that

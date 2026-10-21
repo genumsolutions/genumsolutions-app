@@ -1,5 +1,5 @@
 // =====================================================================
-// collectionService — U-47 (2026-09-27): per-user saved cards.
+// collectionService — U-47: per-user saved cards.
 //
 // The `user_collection` table (RLS: own rows only) backs the heart on
 // every card and the "My collection" section on the profile. item_kind

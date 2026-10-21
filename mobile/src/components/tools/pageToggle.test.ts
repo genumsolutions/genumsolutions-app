@@ -1,5 +1,5 @@
 // =====================================================================
-// U-117 (2026-10-20) — the Webpage switch tells the TRUTH.
+// U-117 — the Webpage switch tells the TRUTH.
 //
 // The owner's report: "the webpage toggle off button is not working". The
 // car's half was already fixed car-side (serve path reads `pageOff_`, NVS

@@ -5,7 +5,7 @@
 // with a tagline, description, capability checklist and the deck CTA) plus two
 // quiet car-fact disclosures ("Diagnostics" restart record, "Saved settings")
 // and "About this project". Connection UI lives ONLY in the Remote screen's
-// Connectivity panel (Phase 2, 2026-10-12) — this page starts links nowhere.
+// Connectivity panel — this page starts links nowhere.
 //
 // History: U-81 (2026-10-03) led with the car's instrument panel + connections
 // (owner: car facts first). 2026-10-12 stripped the panel to the catalogue +

@@ -1,5 +1,5 @@
 // =====================================================================
-// carProfileService — per-device car profiles, LOCAL + CLOUD (owner ④⑩).
+// carProfileService — per-device car profiles, LOCAL + CLOUD.
 //
 // Local truth is the app's existing per-device pref record (DevicePrefs via
 // DeviceMemory, keyed by profileKey). This service is the layer that turns

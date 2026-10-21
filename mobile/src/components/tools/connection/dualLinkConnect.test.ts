@@ -1,5 +1,5 @@
 // =====================================================================
-// P6 / issue 1 (2026-10-16) — the SECOND link must be reachable from the UI.
+// P6 / issue 1 — the SECOND link must be reachable from the UI.
 //
 // Issue 1 asks for the app and the car connected over Bluetooth AND Wi-Fi at
 // the same time. The keep-both plumbing below the panel was already additive

@@ -13,7 +13,7 @@
 //     that stays put navigates instead.
 //   - Rotation-safe: the slot is re-clamped into the visible window on
 //     every window-size change, so a portrait-dragged position cannot
-//     park the FAB off-screen in landscape (owner round 2026-09-29).
+//     park the FAB off-screen in landscape.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -120,7 +120,7 @@ export function FloatingRemoteButton() {
   const dim = useWindowDimensions();
 
   // Link state: live refresh from every transport's status stream. A FRESH
-  // connect while dismissed re-arms the FAB (owner-approved re-arm rule).
+  // connect while dismissed re-arms the FAB.
   useEffect(() => {
     const update = () => {
       const nowLinked = anyLinked();
