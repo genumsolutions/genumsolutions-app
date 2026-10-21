@@ -80,6 +80,6 @@ export function TelemetryStrip({
 
 // U-119 cleansing (2026-10-20): `CarStatusLine` is DELETED — the duplicated
 // top Car status card it fed was removed in an earlier round (its
-// buildCarTelemetry/describeCar siblings went with it; see
-// TRACKS/NEXT-SESSION.md), and the export lingered with zero callers.
+// buildCarTelemetry/describeCar siblings went with it), and the export
+// lingered with zero callers.
 // The status dot + line now live in the deck's own status row.

@@ -23,7 +23,7 @@
 //     and transports keep speaking wire lines; a future gated round (F-41
 //     discipline: prove on the 4WD4M testbed first) may wire this as an
 //     ALTERNATE front door. A module with zero call-sites is recorded as
-//     intentionally-dormant here and in CONTINUITY.md — the U-25/F-45
+//     intentionally-dormant here — the U-25/F-45
 //     dead-code liability rule is satisfied by this comment + the roadmap.
 //
 // Honest limits (the brief's ideas we deliberately do NOT implement):
