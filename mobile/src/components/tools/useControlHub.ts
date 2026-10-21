@@ -1211,7 +1211,7 @@ export function useControlHub(routeCategory?: string) {
     if (!(connected || wifiConnected)) return;
     void flushAppLogs().catch(() => {});
   }, [connected, wifiConnected]);
-  // U-110 (owner 2026-10-14): a live link retires any "connection lost?" prompt.
+  // U-110: a live link retires any "connection lost?" prompt.
   // It can only be stale once the car is answering again — whether on the same
   // transport that was retrying or on another one.
   useEffect(() => {
@@ -2176,7 +2176,7 @@ export function useControlHub(routeCategory?: string) {
           // UX-1: no toast here - the hub's `error` is the single failure
           // state; the Control Panel's connection section renders it.
         }
-        // U-69 (2026-10-02): the outcome is now RETURNED as well as stored.
+        // U-69: the outcome is now RETURNED as well as stored.
         //
         // This handler has always swallowed its failure into `error` state,
         // which used to be rendered by ConnectionBanner. When U-68 replaced the
@@ -2796,7 +2796,7 @@ export function useControlHub(routeCategory?: string) {
   //
   // It does NOT refuse the token, and an earlier version of this comment
   // claimed it did. Parking is presentation-only: selectMode() sends every
-  // token (R-10, 2026-09-15) and the car is the authority on what it accepts.
+  // token and the car is the authority on what it accepts.
   // The stale "refuse it from here on" wording survived a deliberate removal
   // of that gate, which is the worst kind of comment — one that describes a
   // safety control that isn't there.
@@ -3301,7 +3301,7 @@ export function useControlHub(routeCategory?: string) {
     setDriveStatusOnce("All routers cleared");
   }, [sendCommand]);
 
-  // ---- Smart-link (owner ③): auto-join a saved router ON CAR SELECTION. ----
+  // ---- Smart-link: auto-join a saved router ON CAR SELECTION. ----
   // When the link verifies, if the car is sitting on its OWN access point and
   // THIS car has saved routers, offer the best one: a saved router the car's
   // OWN antenna hears with strength (ROUTERS;SCAN → scan.rssi, strongest

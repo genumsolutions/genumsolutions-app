@@ -1,5 +1,5 @@
 // =====================================================================
-// ProductCard — U-47 (2026-09-27) owner redesign: the card IS the link.
+// ProductCard — U-47 owner redesign: the card IS the link.
 // Bare minimum: square photo, name, price. No badge, no chips, no spec
 // text, no dead padding — details live on the product page. The heart
 // reads/writes the APP-WIDE CollectionContext (hydrated once per

@@ -11,7 +11,7 @@
 // changes underneath it (which is exactly how the previous unified
 // connection card produced stale status).
 //
-// WHAT WAS REMOVED HERE, AND WHY (2026-10-06 cleanup).
+// WHAT WAS REMOVED HERE, AND WHY.
 // This file used to export six hooks: useActiveTransport, useTransportList,
 // useSelectedTransport, useActiveTelemetry, useActivateTransport and
 // __resetRegistrationForTests. All six had ZERO imports anywhere in src —

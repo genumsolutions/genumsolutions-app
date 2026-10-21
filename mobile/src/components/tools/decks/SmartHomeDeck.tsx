@@ -1,5 +1,5 @@
 // =====================================================================
-// SmartHomeDeck — the per-category deck PILOT (PLAN-2026-09-29 step ①).
+// SmartHomeDeck — the per-category deck PILOT.
 //
 // Replaces the shared SensorGrid fallback for the Smart Home category
 // ONLY (owner decision ③: every category gets its OWN deck showing ONLY

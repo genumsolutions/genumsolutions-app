@@ -1,5 +1,5 @@
 // =====================================================================
-// P7 / owner item D (2026-10-17) — the per-car LOG VIEWER.
+// P7 / owner item D — the per-car LOG VIEWER.
 //
 // The car's half (P6) ships a bounded event ring and LOG?/LOG;GET;<n>/LOG
 // ;CLEAR. The app's half is: parse the reply, merge the sources the owner

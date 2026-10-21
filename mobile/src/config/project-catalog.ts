@@ -56,7 +56,7 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
   },
   {
     slug: "home-automation",
-    // U-47 (owner): renamed from "Home Automation" — slug kept for routing.
+    // U-47: renamed from "Home Automation" — slug kept for routing.
     name: "Smart Home",
     tagline: "Flip relays, switches, and read sensors around the home.",
     description:
@@ -98,7 +98,7 @@ export const PROJECT_CATEGORIES: ProjectCategory[] = [
   },
   {
     slug: "drones",
-    // U-47 (owner): renamed to match the projects-page category.
+    // U-47: renamed to match the projects-page category.
     name: "Aerial Drones",
     tagline: "Flight-controller and telemetry builds.",
     description:

@@ -28,7 +28,7 @@ import type { ModeChooserProps } from "./types";
 // REMOTE_MODE_ORDER, mirrors state.cpp MODE_CMDS[]). Availability is CAR
 // truth (carAvailMap / carStubMap + fleet fallback via modeAvailStatus),
 // NOT a static table: every row stays SELECTABLE, the state only changes
-// the badge (R-10 / owner decision 2026-09-15).
+// the badge.
 
 export function ModeChooser({
   activeMode,
@@ -190,7 +190,7 @@ export function ModeChooser({
                 const isActive = shown.id === m.id;
                 // R-10: availability is CAR truth (CAPS table → stub map →
                 // fleet fallback). The state styles the row + badge — the row
-                // is ALWAYS selectable (owner decision 2026-09-15).
+                // is ALWAYS selectable.
                 //
                 // U-81, one exception: `GONE` means the token is absent from
                 // this car's own registry, so the car CANNOT accept it. The

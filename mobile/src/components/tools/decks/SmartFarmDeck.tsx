@@ -1,5 +1,5 @@
 // =====================================================================
-// SmartFarmDeck — per-category deck step ② (PLAN-2026-09-29).
+// SmartFarmDeck — per-category deck step ②.
 //
 // Landed after owner approval of the Smart Home pilot (plan ①).
 // See SmartHomeDeck.tsx for the live-vs-planned honesty rules; this deck

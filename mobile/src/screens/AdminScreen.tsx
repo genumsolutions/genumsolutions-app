@@ -1,7 +1,7 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
 // Tabs (9): Dashboard · Orders · Electronic Products · 3D Products · Projects · Content · Users · System Logs · Settings.
-// U-R3 (2026-10-12): "System Logs" added (fleet crash reports + app logs).
+// U-R3: "System Logs" added (fleet crash reports + app logs).
 // This line used to say "Catalog" and "6 tabs" — Catalog was split into three.
 // =====================================================================
 import React, {
@@ -2754,7 +2754,7 @@ function ProductEditor({
         />
         <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
         {product.image ? (
-          // U-39b (2026-09-26): remove-cross on the cover thumbnail.
+          // U-39b: remove-cross on the cover thumbnail.
           <View className="mb-2 h-16 w-16">
             <Image
               source={{ uri: product.image }}

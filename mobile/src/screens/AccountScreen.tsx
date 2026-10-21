@@ -128,7 +128,7 @@ export function AccountScreen() {
     isError: boolean;
   } | null>(null);
 
-  // C8 (2026-09-23): shared loader so pull-to-refresh can re-run both fetches.
+  // C8: shared loader so pull-to-refresh can re-run both fetches.
   const reload = useCallback(() => {
     if (!isSignedIn) return Promise.resolve();
     setOrdersLoading(true);

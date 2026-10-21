@@ -46,7 +46,7 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
     const webTabs = (match![1] ?? "")
       .split(",")
       // Quote-agnostic strip: prettier (singleQuote:false) may render the
-      // website's literals double-quoted (2026-09-23 sweep).
+      // website's literals double-quoted.
       .map((s) => s.trim().replace(/^["']|["']$/g, ""))
       .filter(Boolean);
     expect(webTabs).toEqual([...ADMIN_TABS]);

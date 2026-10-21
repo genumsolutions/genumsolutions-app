@@ -142,7 +142,7 @@ export async function getCarModes(): Promise<CarMode[]> {
     // Ensure the firmware-available modes are always present even if the DB
     // row has null id/name/token and was dropped. X-8: `4WD4M` is the
     // canonical token (legacy `BT` no longer a shipped mode); all 9 firmware
-    // tokens are selectable in the controllers (owner decision 2026-09-15).
+    // tokens are selectable in the controllers.
     const FIRMWARE_TOKENS = ["4WD4M", "AUTO", "2WD1M"] as const;
     for (const token of FIRMWARE_TOKENS) {
       const hasToken = modes.some((m) => m.token.toUpperCase() === token);

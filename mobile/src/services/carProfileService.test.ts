@@ -513,7 +513,7 @@ describe("profiles sync engine (last-saved-wins)", () => {
 });
 
 // =====================================================================
-// R4-5 (2026-09-30): the last-used router joins the synced profile.
+// R4-5: the last-used router joins the synced profile.
 // Owner: "if the user changes things for the car, that car should also
 // save all those things — profile, settings, data, presets."
 // =====================================================================

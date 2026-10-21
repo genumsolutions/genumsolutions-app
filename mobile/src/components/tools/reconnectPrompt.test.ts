@@ -1,5 +1,5 @@
 // =====================================================================
-// P1 (owner 2026-10-17) — ONE prompt-state decision, pinned both ways.
+// P1 — ONE prompt-state decision, pinned both ways.
 // U-118 (owner 2026-10-20) — "the reconnect shows the last reset thing,
 // remove that."
 //

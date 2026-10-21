@@ -3,7 +3,7 @@
 // last-saved drive settings the profile will restore (mode / speed / steer /
 // trim / joystick — exactly what syncs to the user's account and comes back
 // on any phone), saved-router mirror, Wi-Fi history (names only) and the
-// smart-link auto-join toggle (owner ③).
+// smart-link auto-join toggle.
 //
 // The profile lives in DevicePrefs via useControlHub (persistPrefs), which
 // now also mirrors every save to the user's cloud `car_profiles` row — the

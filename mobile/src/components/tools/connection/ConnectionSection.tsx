@@ -521,7 +521,7 @@ export function ConnectionSection({
   }, [requestScan, runOutcome, tap]);
 
   // -----------------------------------------------------------------------
-  // STATUS — U-108 (owner 2026-10-13): this panel no longer draws a status bar.
+  // STATUS — U-108: this panel no longer draws a status bar.
   // The ONE link status lives in the Remote chrome (right of Back); the panel is
   // method / setup / inventory only. `anyLink` and `btLive` stay for the
   // reachability gates below.

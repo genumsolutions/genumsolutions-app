@@ -57,7 +57,7 @@ export function ProductDetailScreen() {
   // C3 (2026-09-23): related (same category → same type) rows resolved
   // against the full catalog once it loads. (Recently-viewed removed U-47.)
   const [related, setRelated] = useState<Product[]>([]);
-  // U-23 (2026-09-24): gallery pagination (primary + thumbnails).
+  // U-23: gallery pagination (primary + thumbnails).
   const [activeImage, setActiveImage] = useState(0);
   // U-45 Phase 2 (2026-09-27): project↔component links for THIS product —
   // for a project the catalog components it needs (with qty), for a

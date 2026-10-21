@@ -179,7 +179,7 @@ describe("buildCarTelemetry", () => {
   });
 });
 
-// ---- P2 (2026-10-17): the LAST RESET leads; the count is secondary ----
+// ---- P2: the LAST RESET leads; the count is secondary ----
 
 describe("buildResetField", () => {
   it("shows NO ROW when the car reports nothing — a dash would imply all-clear", () => {

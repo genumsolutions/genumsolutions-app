@@ -1,6 +1,6 @@
 // =====================================================================
 // DriveTelemetry — the compact link / uptime / heap / signal readout that
-// replaced the app's OLED mirror (Phase 3, owner 2026-10-12).
+// replaced the app's OLED mirror.
 //
 // It renders the SAME four readings the OLED mirror's data came from, now
 // placed around the drive controls: in the gamepad's center gap (compact)
