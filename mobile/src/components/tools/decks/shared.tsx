@@ -1,5 +1,5 @@
 // =====================================================================
-// shared.tsx — the DECK KIT chrome (PLAN-2026-09-29 §5): every deck is
+// shared.tsx — the DECK KIT chrome (control-panel kinds plan §5): every deck is
 // built from these four primitives so all categories feel like one
 // family (plan design rule 1: same card borders/spacing/typography as
 // the robocar deck — rounded-2xl border border-line bg-card).

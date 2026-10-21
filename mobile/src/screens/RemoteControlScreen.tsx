@@ -1011,7 +1011,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   />
                 </View>
               ) : hasDeck(activeCategory) ? (
-                /* PLAN-2026-09-29 step ②: dedicated per-category deck —
+                /* Control-panel kinds plan step ②: dedicated per-category deck —
                    ONLY this category's tiles, never the shared SensorGrid
                    fallback (owner decision ③). Every non-robocar, non-drone
                    category has a built deck; the screen maps slug →

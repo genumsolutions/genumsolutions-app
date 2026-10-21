@@ -1,6 +1,6 @@
 // =====================================================================
 // deckkit.test.ts — pins the per-category DECK parity contract
-// (guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md, owner decisions ①–④).
+// (the control-panel kinds plan, owner decisions ①–④).
 //
 // Pure TS (no react-native import): the deck manifests are data, so the
 // tests pin the data — component rendering is out of scope for vitest

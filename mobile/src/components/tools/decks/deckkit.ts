@@ -1,8 +1,8 @@
 // =====================================================================
 // deckkit.ts — per-category DECK manifests.
 //
-// Owner decisions (guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md — NOT in the
-// repo; this file and deckkit.test.ts are the surviving record):
+// Owner decisions (the control-panel kinds plan — NOT in the repo; this
+// file and deckkit.test.ts are the surviving record):
 //   ① The 7 categories stay SEPARATE — a deck shows ONLY its category's
 //      tiles; kinds are visual labels, nothing merges.
 //   ② Robocar + drones are UNTOUCHED (gold standard) — they must NEVER

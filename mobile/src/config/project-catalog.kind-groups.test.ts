@@ -1,5 +1,5 @@
 // =====================================================================
-// project-catalog.kind-groups.test.ts — pins the PLAN-2026-09-29 §2 kind
+// project-catalog.kind-groups.test.ts — pins the control-panel kinds plan §2 kind
 // grouping for the Control Panel pill row (step ③).
 //
 // Owner decisions pinned here:
@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 import { KIND_GROUPS, PROJECT_CATEGORIES } from "./project-catalog";
 
-describe("kind groups (PLAN-2026-09-29 §2)", () => {
+describe("kind groups (control-panel kinds plan §2)", () => {
   it("splits the 7 categories into exactly two groups", () => {
     expect(KIND_GROUPS).toHaveLength(2);
     const grouped = KIND_GROUPS.flatMap((g) => g.slugs).sort();
