@@ -103,6 +103,19 @@ describe("U-117 — the hub adopts and persists the page state honestly", () => 
     ).toBeGreaterThan(block.indexOf("cur.pageOn !== t.pageOn"));
   });
 
+  it("the PAGE reply branch PRECEDES the generic WIFICFG;WIFI; branch", () => {
+    // U-120 B (owner 2026-10-22, mirror-trap guard): the car answers
+    // `WIFICFG;WIFI;PAGE;ON|OFF`, which ALSO starts with `WIFICFG;WIFI;`.
+    // If the generic Wi-Fi-transport branch ever ran first it would parse
+    // `PAGE;ON` as a non-ON and adopt wifiEnabled=false while the page state
+    // stayed stale — the exact shape of the car-side bug fixed this round
+    // (the ;WIFI branch swallowing the nested ;WIFI;PAGE form).
+    const pageAt = hub.indexOf('reply.startsWith("WIFICFG;WIFI;PAGE;")');
+    const wifiAt = hub.indexOf('reply.startsWith("WIFICFG;WIFI;")');
+    expect(pageAt).toBeGreaterThan(0);
+    expect(wifiAt).toBeGreaterThan(pageAt);
+  });
+
   it("the WIFICFG PAGE reply persists only on a real change", () => {
     const at = hub.indexOf('reply.startsWith("WIFICFG;WIFI;PAGE;")');
     expect(at).toBeGreaterThan(0);
