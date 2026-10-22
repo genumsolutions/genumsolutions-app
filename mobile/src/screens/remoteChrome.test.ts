@@ -181,3 +181,39 @@ describe("U-113 P2 — the hub's per-method link truth (btLinked + handleBtDisco
     expect(body).not.toContain("wifiService.disconnect()");
   });
 });
+
+describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () => {
+  it("has a source to check (the rule must not pass vacuously)", () => {
+    expect(screen.length).toBeGreaterThan(5000);
+  });
+
+  it("the compact telemetry line is the ONLY width-gated thing in the row", () => {
+    // The Q2 default: on a narrow phone the telemetry fields shrink/drop
+    // first; the disconnect chips and the tab pills are controls and always
+    // fit. Exactly ONE width gate exists in the whole screen and it wraps
+    // TelemetryLine — a second gate would mean a control started hiding too,
+    // and no gate would mean the telemetry line overflows the row again.
+    expect(screen).toContain("const MERGED_ROW_TELEMETRY_MIN_PX = 700;");
+    expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
+    expect(
+      /width >= MERGED_ROW_TELEMETRY_MIN_PX \? \(\s*<TelemetryLine \{\.\.\.driveTelemetryArgs\} \/>\s*\) : null/.test(
+        screen,
+      ),
+    ).toBe(true);
+  });
+
+  it("the chips and pills render ungated inside the one merged row", () => {
+    // One merged row (issue 2's pin) carrying both controls unconditionally.
+    expect(count(screen, "flex h-7 flex-shrink-0 flex-row")).toBe(1);
+    expect(screen).toContain('testID="remote-disconnect-bt"');
+    expect(screen).toContain('testID="remote-disconnect-wifi"');
+    // The pill labels are multiline JSX (`>` … D-pad … `<`), so match
+    // across whitespace rather than the adjacent-characters form.
+    expect(
+      (screen.match(/>[\s\n]*D-pad[\s\n]*</g) ?? []).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      (screen.match(/>[\s\n]*Connectivity[\s\n]*</g) ?? []).length,
+    ).toBeGreaterThanOrEqual(1);
+  });
+});
