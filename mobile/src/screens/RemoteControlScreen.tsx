@@ -315,6 +315,10 @@ export function RemoteControlScreen({ navigation }: Props) {
     handleBtDisconnect,
     handleWifiDisconnect,
     carNetworks,
+    // U-121 (owner 2026-10-23): the phone's OWN network lives on the first
+    // bar (the merged row below Back) — the Connectivity panel's "This phone"
+    // row is gone, so the space below it is the panels'.
+    phoneNetworkLabel,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -345,6 +349,17 @@ export function RemoteControlScreen({ navigation }: Props) {
     : onOwnHotspot
       ? `${DEFAULT_AP_IP} (AP)`
       : "—";
+
+  // U-121 (owner 2026-10-23, items 1+2): the chrome chip is THE BROADCAST IP
+  // ALONE — no "BT+WiFi" transport label, no car network name — and it renders
+  // ONLY while the car is actually serving its own web page (`pageOn`, car
+  // truth adopted change-guarded from `;PAGE=`/`page_on` and queried on every
+  // link-up) behind a live link. It resolves over ANY link: the car reports
+  // `;IP=` on every STATE line over Bluetooth too (ModeManager), so a BT-only
+  // link shows the same honest address the Wi-Fi link does — no more
+  // "Bluetooth · —" until Wi-Fi comes up. Page off / no link ⇒ no chip at all,
+  // because there is no page to open.
+  const pageLinkReady = linked && hub.pageOn === true;
 
   // Restore joystick layout choice per device.
   useEffect(() => {
@@ -749,42 +764,37 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </Pressable>
 
-          {/* U-113 P2 (owner issue 10): the ONE link status lives RIGHT OF BACK
-              — and the broadcast IP there IS the link to the car's page (the
-              duplicate page chip in the row below is gone). Short label only
-              (BT+WiFi / Bluetooth / WiFi + IP): no device name renders here at
-              all, so a stale BT name can never label a Wi-Fi link and a raw
-              hex MAC cannot appear either (A-25/A-38 by construction). One dot,
-              one status (U-108 ruling kept). Tap opens the car's web page
-              (A-36: with a reachable STA IP the page directly; offline/AP the
-              car's own AP page — "nothing happens" is gone). */}
-          <Pressable
-            onPress={handleOpenWebPage}
-            accessibilityRole="link"
-            accessibilityLabel={
-              telemetry.ip
-                ? `Open car web page at ${telemetry.ip}`
-                : onOwnHotspot
-                  ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
-                  : "Car IP not available yet"
-            }
-            testID="deck-link-status"
-            hitSlop={8}
-            className="min-w-0 shrink flex-row items-center gap-1.5 active:opacity-70"
-          >
-            <View
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${linked ? "bg-green-400" : "bg-slate-600"}`}
-            />
-            <Text
-              numberOfLines={1}
-              className="min-w-0 shrink text-[11px] font-bold text-navy dark:text-sky-300"
+          {/* U-121 (owner 2026-10-23, items 1+2): the ONE chip right of Back
+              is the BROADCAST IP ALONE — no transport label, no car network
+              name — and only while the car is serving its own web page behind
+              a live link (`pageLinkReady`). Over a BT-only link the car's
+              `;IP=` on STATE resolves it exactly like Wi-Fi does. Tap opens
+              the car's page (A-36 kept): the reachable STA IP directly, the
+              car's own AP page as the honest fallback. */}
+          {pageLinkReady ? (
+            <Pressable
+              onPress={handleOpenWebPage}
+              accessibilityRole="link"
+              accessibilityLabel={
+                telemetry.ip
+                  ? `Open car web page at ${telemetry.ip}`
+                  : onOwnHotspot
+                    ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
+                    : "Car IP not available yet"
+              }
+              testID="deck-link-status"
+              hitSlop={8}
+              className="min-w-0 shrink flex-row items-center gap-1.5 active:opacity-70"
             >
-              {linkLabel}
-              {linked
-                ? ` · ${ipChipText}${carNetworks.length > 0 ? ` • ${carNetworks[0] || ""}` : ""}`
-                : ""}
-            </Text>
-          </Pressable>
+              <View className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
+              <Text
+                numberOfLines={1}
+                className="min-w-0 shrink text-[11px] font-bold text-navy dark:text-sky-300"
+              >
+                {ipChipText}
+              </Text>
+            </Pressable>
+          ) : null}
 
           <Text className="shrink-0 text-sm font-black uppercase tracking-[0.2em] text-muted">
             Remote
@@ -846,16 +856,37 @@ export function RemoteControlScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ── U-113 P2 (owner issues 2/3/4): the ONE merged row below Back —
-            the old U-108 disconnect row and the tab-pills row are combined,
-            giving the drive deck the ~28 px both used to take. Order = the Q2
-            overflow priority: disconnect chips (only for LIVE methods, each
-            tearing down ONLY its own transport — issue 3) > tab pills > the
-            compact telemetry line (hidden first on narrow screens). Constant
-            height so the deck never shifts. The "on <phone-ssid>" chip is
-            gone (issue 4 — useless here); its NetInfo discovery stays for
-            smart-link switching. */}
-        <View className="mt-1 flex h-7 flex-shrink-0 flex-row items-center gap-1.5 px-1">
+        {/* ── U-113 P2 (owner issues 2/3/4), rebuilt by U-121 (2026-10-23):
+            the ONE merged row below Back. Order = the Q2 overflow priority:
+            the phone's own network chip (truncates, never hides) > disconnect
+            chips (only for LIVE methods, each tearing down ONLY its own
+            transport — issue 3) > tab pills > the compact telemetry line
+            (hidden first on narrow screens). Constant height so the deck
+            never shifts. U-121 (items 5+6): the row grew h-7 → h-9 and the
+            pills/chips carry real tap sizes with a REAL disconnect mark
+            (transport icon + name + ✕), per the owner's "too small to click"
+            and "not proper disconnect icon". */}
+        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5 px-1">
+          {/* U-121 (item 4): the phone's OWN network — its name — on the
+              FIRST bar of the Remote, replacing the Connectivity panel's
+              "This phone" row (which is gone). Truncating chip: it gives way
+              before the controls ever do, so Q2's telemetry-only drop rule
+              stays true. */}
+          {phoneNetworkLabel ? (
+            <View
+              testID="remote-phone-network"
+              accessibilityLabel={`This phone is on ${phoneNetworkLabel}`}
+              className="max-w-[180px] shrink flex-row items-center gap-1 rounded-full border border-line bg-card px-2.5 py-1"
+            >
+              <Feather name="smartphone" size={11} color="#64748b" />
+              <Text
+                numberOfLines={1}
+                className="text-[10px] font-bold text-muted"
+              >
+                {phoneNetworkLabel}
+              </Text>
+            </View>
+          ) : null}
           {btLinked ? (
             <Pressable
               onPress={() => {
@@ -866,10 +897,13 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Disconnect Bluetooth"
               testID="remote-disconnect-bt"
               hitSlop={6}
-              className="shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5 active:opacity-70"
+              className="shrink-0 flex-row items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 active:opacity-70"
             >
-              <Feather name="bluetooth" size={10} color="#64748b" />
-              <Text className="text-[9px] font-bold text-muted">Bluetooth</Text>
+              <Feather name="bluetooth" size={12} color="#64748b" />
+              <Text className="text-[10px] font-bold text-muted">
+                Bluetooth
+              </Text>
+              <Feather name="x-circle" size={13} color="#64748b" />
             </Pressable>
           ) : null}
           {wifiConnected ? (
@@ -882,10 +916,11 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Disconnect Wi-Fi"
               testID="remote-disconnect-wifi"
               hitSlop={6}
-              className="shrink-0 flex-row items-center gap-1 rounded-full border border-line bg-card px-2 py-0.5 active:opacity-70"
+              className="shrink-0 flex-row items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 active:opacity-70"
             >
-              <Feather name="wifi" size={10} color="#64748b" />
-              <Text className="text-[9px] font-bold text-muted">Wi-Fi</Text>
+              <Feather name="wifi" size={12} color="#64748b" />
+              <Text className="text-[10px] font-bold text-muted">Wi-Fi</Text>
+              <Feather name="x-circle" size={13} color="#64748b" />
             </Pressable>
           ) : null}
           {/* Q2 default (owner): the compact telemetry line is the FIRST
@@ -899,16 +934,22 @@ export function RemoteControlScreen({ navigation }: Props) {
           {/* Control pills (robocar only — decks drive themselves) */}
           {isRobocar ? (
             <>
+              {/* U-121 (owner item 5, 2026-10-23): the pills are TABBED
+                  controls — real size now (px-3.5 py-2, 11 px bold), not the
+                  9 px slivers the owner could not hit. */}
               <Pressable
                 onPress={() => {
                   feedbackTap();
                   setShowJoystick(true);
                   setUseJoystick(false);
                 }}
-                className={`rounded-full px-2.5 py-0.5 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"}`}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel="D-pad"
+                className={`rounded-full px-3.5 py-2 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[9px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
                 >
                   D-pad
                 </Text>
@@ -919,10 +960,13 @@ export function RemoteControlScreen({ navigation }: Props) {
                   setShowJoystick(true);
                   setUseJoystick(true);
                 }}
-                className={`rounded-full px-2.5 py-0.5 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"}`}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel="Joystick"
+                className={`rounded-full px-3.5 py-2 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[9px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
                 >
                   Joystick
                 </Text>
@@ -933,10 +977,13 @@ export function RemoteControlScreen({ navigation }: Props) {
                   setShowJoystick(false);
                   setShowRouter(false);
                 }}
-                className={`rounded-full px-2.5 py-0.5 ${!showJoystick && !showRouter ? "bg-navy" : "border border-line bg-card"}`}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel="Telemetry"
+                className={`rounded-full px-3.5 py-2 ${!showJoystick && !showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[9px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
                 >
                   Telemetry
                 </Text>
@@ -947,13 +994,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                   setShowJoystick(false);
                   setShowRouter(true);
                 }}
+                hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel="Connectivity"
                 accessibilityState={{ selected: showRouter }}
-                className={`rounded-full px-2.5 py-0.5 ${showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
+                className={`rounded-full px-3.5 py-2 ${showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[9px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
                 >
                   Connectivity
                 </Text>
