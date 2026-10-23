@@ -7,10 +7,13 @@
 //
 //   7. "the car's IP selection should have the network selector too along
 //      with the broadcast IP … use the network name to select the car
-//      network and to let the app know where the car is." — a by-name
-//      selector sits NEXT TO the wifi-sta broadcast-IP field: picking the
-//      car's network prefills its reported lease when the car is on it,
-//      and issues ROUTERS;USE over a live link otherwise.
+//      network and to let the app know where the car is." — U-121 Phase B
+//      (owner 2026-10-23): the selector is now a PROPER one — always
+//      rendered (honest empty state), radio rows at real tap size, the car's
+//      own hotspot + every saved router by NAME, the car's row marked; the
+//      wifi-sta broadcast-IP field stays beside it. Picking prefills the
+//      car's own reported lease (or its fixed AP address) and issues
+//      ROUTERS;USE over a live link otherwise.
 //   9. "the app still doesn't know its own network before connecting." —
 //      the phone's own network label renders on THIS screen, above the
 //      setup card, before any link exists.
@@ -64,9 +67,13 @@ describe("U-120 Phase D — item 7: the network selector by the IP field", () =>
     const sta = staCard();
     // The broadcast-IP field itself…
     expect(sta).toContain('placeholder="ws://192.168.1.42:81"');
-    // …and the by-name selector right there with it.
+    // …and the proper by-name selector right there with it.
     expect(sta).toContain('testID="car-network-selector"');
-    expect(sta).toContain("onPickNetwork(ssid)");
+    expect(sta).toContain("onPickNetwork(row.ssid)");
+    // U-121 Phase B: ALWAYS rendered — no `length > 0` gate hides it, the
+    // empty state is honest copy instead of a disappearing card.
+    expect(sta).not.toContain("carNetworks.length > 0 && (");
+    expect(sta).toContain("No saved networks known yet");
     // The own-AP card (its own address field) stays plain — no selector.
     const apStart = screen.indexOf('case "wifi-ap-own"');
     const staStart = screen.indexOf('case "wifi-sta"');
@@ -76,20 +83,36 @@ describe("U-120 Phase D — item 7: the network selector by the IP field", () =>
     );
   });
 
-  it("the selector is driven by the car's own network facts (by NAME)", () => {
+  it("the selector is a proper radio list of the car's networks (by NAME)", () => {
     const sta = staCard();
-    expect(sta).toContain("carNetworks.map(");
-    expect(sta).toContain("const onCar = carSsid === ssid;");
-    expect(sta).toContain("accessibilityLabel={`Select car network ${ssid}");
+    // Rows are BUILT from car truth at the component level: the car's own
+    // hotspot first, then every saved router by name (never a duplicate).
+    expect(screen).toContain("const selectorRows:");
+    expect(screen).toContain("...(carApName");
+    expect(screen).toContain(".filter((s) => s !== carApName)");
+    expect(screen).toContain("onCar: carSsid === ssid");
+    // Radio rows: selected state, a real role, a real tap size (py-2.5).
+    expect(sta).toContain('accessibilityRole="radio"');
+    expect(sta).toContain("accessibilityState={{ selected: picked }}");
+    expect(sta).toContain("px-3 py-2.5");
+    expect(sta).toContain(
+      "accessibilityLabel={`Select car network ${row.ssid}",
+    );
+    // The row the car is actually on says so.
+    expect(sta).toContain("car is here");
     // The picked-name hint says where the car IS (or how it gets there).
     expect(sta).toContain("pickedNetwork === carSsid");
     expect(sta).toContain("The car is on ${pickedNetwork}");
+    expect(sta).toContain("pickedNetwork === carApName");
   });
 
-  it("picking resolves where the car is: its lease, or a move by name", () => {
+  it("picking resolves where the car is: its lease, its AP, or a move by name", () => {
     const body = pickBody();
     expect(body.length).toBeGreaterThan(300);
     expect(body).toContain("setPickedNetwork(ssid);");
+    // Car's own hotspot → its FIXED AP address fills the dial field.
+    expect(body).toContain("if (ssid === carApName) {");
+    expect(body).toContain("setWifiUrl(`ws://${DEFAULT_AP_IP}:81`);");
     // Car ON that network → prefill the dial target from its reported IP.
     expect(body).toContain("if (carSsid === ssid) {");
     expect(body).toContain("setWifiUrl(`ws://${bare}:81`);");
@@ -101,6 +124,7 @@ describe("U-120 Phase D — item 7: the network selector by the IP field", () =>
 
   it("the hub facts the selector needs are destructured from the hub", () => {
     expect(screen).toContain("carNetworks,");
+    expect(screen).toContain("carApName,");
     expect(screen).toContain("carSsid,");
     expect(screen).toContain("routerUse,");
     expect(screen).toContain("carIp={telemetry.ip ?? null}");
