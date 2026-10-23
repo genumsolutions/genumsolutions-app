@@ -1,5 +1,66 @@
 # TESTING — Physical Device Test Checklist
 
+## U-120 round — 2026-10-22/23: Q1–Q3 close-out + owner list B (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FLASH **1.3.15**)
+
+> Owner (2026-10-22): implement the Q1–Q3 defaults (both halves) and owner list
+> B, no confirmation needed, push mid-phase. **A** = Q1 firmware boot-hop OFF
+> (car 1.3.15) + Q2/Q3 pins · **B** = the webpage toggle's command reaches its
+> handler (car fix + app reply-branch pin) · **C** = reconnecting is NEVER
+> automatic — one method-naming yes/no dialog · **D** = no dummy paired row +
+> the by-name car-network selector by the broadcast-IP field + the phone's own
+> network before connecting · **E** = auto-join says AND does "last used
+> router" (sense ×3 surfaces + recency pick + strength machinery removed) +
+> settings/connectivity audit + cleansing.
+> Car-side bench rows for the firmware half live in
+> `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (**Q1-1 · Q1-2 · U-120-B**, unticked).
+> **Every row here is unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **882/882** (59 files) · prettier clean;
+> car: syntax 9/9 · contract 0 · webpage-js PASS · mutate-gates **123/123**.
+
+- [ ] **U-120-C1 — ⭐ NO automatic reconnect anywhere.** Mid-drive, cut the car
+      off (or kill its link): the app must NOT re-dial on its own — no Wi-Fi
+      quiet re-dial (the old 3 s one), no SPP silent backoff burst (the old
+      1s→2s→4s→8s). ONE dialog raises instead, immediately.
+- [ ] **U-120-C2 — ⭐ the dialog names the METHOD and only reconnects on yes.**
+      Bluetooth drop → title "Bluetooth disconnected", body "Reconnect to your
+      car over Bluetooth?"; Wi-Fi drop → "Wi-Fi disconnected" / "…over Wi-Fi?".
+      **Reconnect** runs exactly that transport (SPP retry / Wi-Fi re-dial);
+      **Cancel** dismisses and NOTHING reopens the link in the background (a
+      fresh manual Connect must still work).
+- [ ] **U-120-C3 — no narration noise on the dialog.** No "stopping itself on
+      link loss", no "no Wi-Fi link is up", no reset record — one title, one
+      sentence, two buttons.
+- [ ] **U-120-C4 — a live other link suppresses the prompt (U-110).** Kill BT
+      while Wi-Fi still answers (and vice versa): no dialog — the car is still
+      reachable, so the claim would be false.
+- [ ] **U-120-D1 — ⭐ no dummy "Paired car" row.** Connectivity → Bluetooth:
+      the paired list shows only devices with a real name; the invented
+      "Paired car" placeholder entry is GONE — and a real named car must still
+      appear (a fully EMPTY paired list is a FAIL: the old guard removed every
+      entry).
+- [ ] **U-120-D2 — ⭐ the car-network selector by the broadcast-IP field.**
+      Connect screen → Wi-Fi STA card: chips of the car's networks sit beside
+      the `ws://…` field; the car's current network is marked "· car"; tapping
+      the CURRENT one prefills the field with the car's reported IP; tapping
+      another while linked tells the car to join it and the field follows the
+      new `STATE;IP`.
+- [ ] **U-120-D3 — the phone's own network is known BEFORE connecting.** The
+      Connect screen shows "This phone · Wi-Fi · <SSID>" (etc.) above the
+      setup card with no link up at all.
+- [ ] **U-120-E1 — ⭐ auto-join says LAST USED router (sense).** Remote
+      Settings and Tools → car profile both read "Auto-join last used router
+      (app)" with last-used help text; the smart-link toast names the same
+      setting; NOTHING on any surface says "strongest saved router".
+- [ ] **U-120-E2 — ⭐ auto-join DOES last used router (operations).** With ≥2
+      saved routers and the car on its own AP: link up → the car joins the
+      MOST RECENTLY USED one (not whichever it hears loudest), promptly — no
+      6 s strength-scan wait, no automatic `ROUTERS;SCAN` for the pick (the
+      explicit "Search for networks" button still scans).
+- [ ] **U-120-E3 — audit + cleansing regression pass.** Remote → Connectivity
+      and the Settings menu read correctly (labels, toggles, lists); drive on
+      both links, connect/disconnect each method, factory-reset dialog — all
+      unchanged. Anything behavioral that moved here is a regression.
+
 ## U-117/U-118/U-119 round — 2026-10-20: settings truth + reconnect honesty + cleansing (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; webpage rows need CAR FLASH **1.3.14**)
 
 > Owner report: *"webpage toggle off button is not working … other settings in
