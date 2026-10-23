@@ -540,6 +540,9 @@ export function WifiPanel({
                   <Text className="mt-5 text-[13px] font-black uppercase tracking-widest text-muted">
                     Network name
                   </Text>
+                  <Text className="mt-4 text-[13px] font-black uppercase tracking-widest text-muted">
+                    Network name
+                  </Text>
                   <TextInput
                     value={ssid}
                     onChangeText={(v) => {
@@ -578,17 +581,17 @@ export function WifiPanel({
                     autoCorrect={false}
                     secureTextEntry
                     accessibilityLabel="Network password"
-                    maxLength={72}
+                    maxLength={128}
                     returnKeyType="done"
                     onSubmitEditing={submit}
-                    className="mt-2 h-14 rounded-lg border-2 border-line bg-surface px-4 text-[16px] text-ink"
+                    className="mt-2 h-16 rounded-lg border-2 border-line bg-surface px-4 text-[16px] text-ink"
                     testID="wifi-pass"
                   />
                   {error ? (
                     <InlineMessage tone="error">{error}</InlineMessage>
                   ) : null}
 
-                  <View className="mt-5 flex-row gap-2">
+                  <View className="mt-6 flex-row gap-2">
                     <Pressable
                       onPress={submit}
                       disabled={
@@ -598,10 +601,10 @@ export function WifiPanel({
                       }
                       accessibilityRole="button"
                       accessibilityLabel="Save network"
-                      className="flex-1 items-center rounded-full bg-navy py-3.5 disabled:opacity-50"
+                      className="flex-1 items-center rounded-full bg-navy py-4 disabled:opacity-50"
                       testID="wifi-add-submit"
                     >
-                      <Text className="text-[13px] font-black text-white">
+                      <Text className="text-[14px] font-black text-white">
                         {editingSsid ? "Save password" : "Save"}
                       </Text>
                     </Pressable>
@@ -609,9 +612,9 @@ export function WifiPanel({
                       onPress={cancel}
                       accessibilityRole="button"
                       accessibilityLabel="Cancel"
-                      className="items-center rounded-full border border-line bg-card px-5 py-3"
+                      className="items-center rounded-full border-2 border-line bg-card px-6 py-4"
                     >
-                      <Text className="text-[13px] font-bold text-navy">
+                      <Text className="text-[14px] font-bold text-navy">
                         Cancel
                       </Text>
                     </Pressable>
