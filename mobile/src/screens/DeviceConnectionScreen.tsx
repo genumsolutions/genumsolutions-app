@@ -45,6 +45,12 @@ function SetupPanel({
   scanning,
   onScan,
   onConnect,
+  carNetworks,
+  carSsid,
+  carIp,
+  linked,
+  pickedNetwork,
+  onPickNetwork,
 }: {
   kind: string;
   deviceName: string;
@@ -54,6 +60,18 @@ function SetupPanel({
   scanning: boolean;
   onScan: () => void;
   onConnect: (device: SppDevice) => void;
+  /** The car's known networks (savedRouters mirror; car truth once linked). */
+  carNetworks: string[];
+  /** The network the car is actually on right now, or null (no link yet). */
+  carSsid: string | null;
+  /** The car's reported IP — where it lives on that network — or null. */
+  carIp: string | null;
+  /** Any link is up — the only state in which the car can be told to move. */
+  linked: boolean;
+  /** The network picked in the selector (U-120 Phase D item 7). */
+  pickedNetwork: string | null;
+  /** Pick the car's network by NAME, next to the broadcast-IP field. */
+  onPickNetwork: (ssid: string) => void;
 }) {
   const [label, setLabel] = useState(deviceName);
 
@@ -205,6 +223,60 @@ function SetupPanel({
           <Text className="mt-2 text-[10px] leading-3 text-muted">
             Send WIFICFG over Bluetooth to put the car on your router.
           </Text>
+
+          {/* U-120 Phase D (owner item 7, 2026-10-22): "the car's IP selection
+              should have the network selector too along with the broadcast
+              IP … use the network name to select the car network and to let
+              the app know where the car is." The selector sits RIGHT BESIDE
+              the broadcast-IP field and works by NAME: pick the car's network
+              and the app resolves where the car is — its own reported lease
+              when the car is on that network, or ROUTERS;USE over a live link
+              so the car joins the picked network and reports its new IP. */}
+          {carNetworks.length > 0 && (
+            <View className="mt-3" testID="car-network-selector">
+              <Text className="text-[10px] font-black uppercase tracking-wide text-muted">
+                Car network — pick by name
+              </Text>
+              <View className="mt-1 flex-row flex-wrap gap-1.5">
+                {carNetworks.map((ssid) => {
+                  const onCar = carSsid === ssid;
+                  const picked = pickedNetwork === ssid;
+                  return (
+                    <Pressable
+                      key={ssid}
+                      onPress={() => onPickNetwork(ssid)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select car network ${ssid}${onCar ? " — the car is on it" : ""}`}
+                      className={`rounded-full border px-2.5 py-1 ${
+                        picked
+                          ? "border-select-ink bg-select-bg"
+                          : "border-line bg-surface"
+                      }`}
+                    >
+                      <Text
+                        className={`text-[10px] font-bold ${
+                          picked ? "text-select-ink" : "text-ink"
+                        }`}
+                      >
+                        {onCar ? `${ssid} · car` : ssid}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {pickedNetwork ? (
+                <Text className="mt-1 text-[10px] leading-3 text-muted">
+                  {pickedNetwork === carSsid
+                    ? carIp
+                      ? `The car is on ${pickedNetwork} at ${carIp} — that is the address in the field.`
+                      : `The car is on ${pickedNetwork}.`
+                    : linked
+                      ? `Telling the car to join ${pickedNetwork} — its new IP arrives automatically.`
+                      : `Connect first — the car joins ${pickedNetwork} and reports where it is.`}
+                </Text>
+              ) : null}
+            </View>
+          )}
         </>
       );
     }
@@ -239,6 +311,13 @@ export function DeviceConnectionScreen({}: Props) {
     error,
     wifiUrl,
     sppDevices,
+    // U-120 Phase D: item 9 (the phone's own network before connecting) +
+    // item 7 (the car-network selector beside the broadcast-IP field).
+    phoneNetworkLabel,
+    carNetworks,
+    carSsid,
+    routerUse,
+    telemetry,
     setWifiUrl,
     handleScan,
     handleConnect,
@@ -285,6 +364,32 @@ export function DeviceConnectionScreen({}: Props) {
     navigation.replace("RemoteControl", { category: "robocar" });
   }, [navigation]);
 
+  // U-120 Phase D (owner item 7, 2026-10-22): pick the car's network by NAME
+  // next to the broadcast-IP field, and let the app know where the car is:
+  //   * the car is ON the picked network → its reported lease is where it
+  //     lives: prefill the dial target from the car's own IP (no guessing);
+  //   * the car is elsewhere → select by name means TELL it to join
+  //     (ROUTERS;USE over the live link); its new IP arrives on STATE;IP and
+  //     the hub's smart-link auto-dial prefills the target itself.
+  const [pickedNetwork, setPickedNetwork] = useState<string | null>(null);
+  const pickCarNetwork = useCallback(
+    (ssid: string) => {
+      feedbackTap();
+      setPickedNetwork(ssid);
+      if (carSsid === ssid) {
+        const bare = (telemetry.ip ?? "")
+          .replace(/^wss?:\/\//, "")
+          .replace(/:\d+$/, "")
+          .replace(/\/.*$/, "")
+          .trim();
+        if (bare) setWifiUrl(`ws://${bare}:81`);
+        return;
+      }
+      if (connected || wifiConnected) routerUse(ssid);
+    },
+    [carSsid, telemetry.ip, connected, wifiConnected, routerUse, setWifiUrl],
+  );
+
   return (
     <ScrollView
       className="flex-1 bg-mist"
@@ -300,6 +405,29 @@ export function DeviceConnectionScreen({}: Props) {
             {deviceName}
           </Text>
         </View>
+      </View>
+
+      {/* U-120 Phase D (owner item 9, 2026-10-22): "the app still doesn't
+          know its own network before connecting." The phone's OWN network is
+          shown HERE — the screen an owner is on BEFORE any link exists — from
+          the hub's NetInfo watcher (pure formatPhoneNetwork label), so
+          reachability can be judged before anything is dialed. */}
+      <View
+        testID="device-phone-network"
+        className="flex-row items-center justify-between rounded-xl border border-line bg-card px-3 py-2"
+      >
+        <View className="flex-row items-center gap-1.5">
+          <Feather name="smartphone" size={12} color="#64748b" />
+          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+            This phone
+          </Text>
+        </View>
+        <Text
+          numberOfLines={1}
+          className="max-w-[60%] text-[10px] font-bold text-ink"
+        >
+          {phoneNetworkLabel ?? "…"}
+        </Text>
       </View>
 
       {/* Setup */}
@@ -319,6 +447,12 @@ export function DeviceConnectionScreen({}: Props) {
             feedbackTap();
             void handleConnect(device);
           }}
+          carNetworks={carNetworks}
+          carSsid={carSsid}
+          carIp={telemetry.ip ?? null}
+          linked={connected || wifiConnected}
+          pickedNetwork={pickedNetwork}
+          onPickNetwork={pickCarNetwork}
         />
       </View>
 

@@ -529,7 +529,16 @@ export function ConnectionSection({
 
   // Only paired/known devices for Bluetooth — no scan results list.
   // Pairing is done in phone Settings; the app observes bonded devices.
-  const knownDevices = sppDevices.filter((d) => d.bonded);
+  // U-120 Phase D (owner item 6, 2026-10-22): "the list of the paired device
+  // contains dummy name paired car which is not needed." friendlyBtDeviceName
+  // INVENTS "Paired car" for a device with no usable name (empty, a raw MAC —
+  // sppService falls back to the MAC when the OS reports no name — or ≤2
+  // chars). Those invented placeholders ARE the dummy rows: exclude exactly
+  // them, so every remaining row shows a real name. (The previous guard tested
+  // `d.address`, which is ALWAYS a MAC — it emptied the whole list.)
+  const knownDevices = sppDevices.filter(
+    (d) => d.bonded && friendlyBtDeviceName(d.name) !== "Paired car",
+  );
 
   return (
     <View className="mt-2 flex-wrap flex-row items-start gap-2">
