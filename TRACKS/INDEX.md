@@ -1,5 +1,28 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-10-22/23 (latest) — U-120 SHIPPED (JS-only → same-version OTA 3.2.7/60; car FW
+> **1.3.15**): Q1–Q3 close-out + owner list B in five phases, each pushed mid-phase.** **Q1**
+> firmware boot-hop stopped (`boot_autojoin` default OFF in 1.3.15; the app's smart-link is the
+> only router-joiner) · **Q2/Q3** pins (telemetry-first drop on narrow phones · both-links
+> fan-out, `chosenRadio: null`) · **B** the webpage toggle's `WIFICFG;WIFI;PAGE;…` finally
+> REACHES its handler (car `;WIFI`-prefix swallow fixed on the car side; app PAGE-reply branch
+> precedes the generic WIFI branch) · **C** reconnecting is NEVER automatic — SPP silent
+> backoff + Wi-Fi quiet re-dial DELETED; ONE dialog names the METHOD (Bluetooth/Wi-Fi) and
+> Reconnect routes through it, yes-only, Cancel marks the link user-closed · **D** no dummy
+> "Paired car" row in the paired list (the old guard tested `d.address` — always a MAC — and
+> emptied the list; now filtered by NAME) · by-name **car-network selector beside the connect
+> screen's broadcast-IP field** (car's current network marked "· car"; its reported lease
+> prefills the field; `ROUTERS;USE` over a live link otherwise) · **"This phone" network row
+> on the Connect screen before any link** · **E** auto-join says AND does **"last used router"**
+> (Remote settings + car profile card + smart-link toast; `pickBestRouter` recency-only; the
+> strength-scan ask, the 6 s wait and the scan-early fire are GONE) + settings/connectivity
+> audit + cleansing. Gates: app tsc 0 · vitest **882/882** (59 files) · prettier clean; car
+> syntax 9/9 · contract 0 (`boot-hop-off`, `page-state`) · webpage-js PASS · mutate
+> **123/123**. Device rows: `mobile/TESTING.md` **U-120-C1..E3** + car
+> `TRACKS/DEVICE-TESTS.md` **Q1-1 · Q1-2 · U-120-B** (all unticked, F-61). Session note:
+> `TRACKS/SESSION-2026-10-22-U120.md`. Commits: app `8a66ddc` → `8a034e5` → `1a2a17b` →
+> `af0c56b` → `f9e61f1` (+ records); car `965b909`/`62c0b31` → `ff96ca5`/`7a4486d`.
+
 > ✅ **2026-10-20 (latest) — U-117/U-118/U-119 SHIPPED (JS-only → same-version OTA 3.2.7/60):
 > the WEBPAGE TOGGLE NOW TELLS THE TRUTH** (`page_on`/`;PAGE=` parsed, adopted
 > change-guarded, queried on link-up, `WIFICFG` reply persists inside its guard, the
