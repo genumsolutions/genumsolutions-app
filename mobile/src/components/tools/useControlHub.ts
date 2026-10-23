@@ -601,14 +601,10 @@ export function useControlHub(routeCategory?: string) {
     );
   }, []);
   // Smart-link session state: which profile has been offered a router join in
-  // the CURRENT link session (reset when the link drops), plus the pending
-  // scan timer so the app waits ≤ SMART_LINK_SCAN_MS for strength data before
-  // falling back to a recency pick.
+  // the CURRENT link session (reset when the link drops). U-120 item 12: the
+  // pick is recency-only now, so there is no strength scan to wait for — the
+  // join fires as soon as the link verifies (no timer, no ROUTERS;SCAN).
   const smartLinkFiredRef = useRef<string | null>(null);
-  // `smartLinkScanTimerRef` used to sit here and was removed as dead: declared,
-  // never read, never written, never cleared. The sibling smartLinkFiredRef
-  // above is the one that actually carries the state.
-  const SMART_LINK_SCAN_MS = 6000;
   /**
    * D2 (U-68): how long a router request waits for the car's answer before it
    * is reported as unanswered. The car answers inside one STATE broadcast
@@ -785,12 +781,11 @@ export function useControlHub(routeCategory?: string) {
   // The previous key is kept as `legacyMemoryKey` so a first link under the
   // new key migrates the stored prefs instead of starting from factory.
   const addressForMemory = carFwId ? `fw:${carFwId}` : legacyMemoryKey;
-  // Refs mirroring the live profile key + scan so timer callbacks (smart-link
-  // fallback) read through without re-creating.
+  // Ref mirroring the live profile key so callbacks (smart-link) read through
+  // without re-creating.
   const profileKeyRef = useRef<string | null>(null);
   profileKeyRef.current = addressForMemory;
   const profileKey = addressForMemory;
-  const carScanRef = useRef<ScanNetwork[] | null>(null);
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
   // Live mirror for the phone-network watcher (avoids a stale closure).
   const savedPrefsRef = useRef(savedPrefs);
@@ -1662,8 +1657,10 @@ export function useControlHub(routeCategory?: string) {
       // frame. No commit-grace: this is a car fact, not a user edit, so no
       // optimistic value exists to protect.
       if (typeof t.linkCap === "boolean") setLinkCap(t.linkCap);
-      // Connections-Hub (smart-link): the car-side scan answer to ROUTERS;SCAN
-      // (firmware v2). Change-guarded so steady frames don't thrash.
+      // The car-side scan answer (ROUTERS;SCAN, firmware v2) — feeds the
+      // Connectivity panel's nearby list (shown after an explicit Search).
+      // Change-guarded so steady frames don't thrash. U-120 item 12: smart-link
+      // no longer reads it — the pick is recency-only.
       if (t.scan !== undefined) {
         setCarScan((prev) =>
           prev && prev.length === t.scan!.length
@@ -1671,7 +1668,6 @@ export function useControlHub(routeCategory?: string) {
             : (t.scan ?? []).slice(),
         );
       }
-      if (t.scan !== undefined) carScanRef.current = (t.scan ?? []).slice();
       // A-27: sync the saved-router mirror from the car's `networks` JSON
       // (broadcast on every WS status frame + REQ_STATE). Change-guarded to
       // skip identical arrays (steady 1 s broadcasts don't thrash the panel).
@@ -3306,15 +3302,13 @@ export function useControlHub(routeCategory?: string) {
     setDriveStatusOnce("All routers cleared");
   }, [sendCommand]);
 
-  // ---- Smart-link: auto-join a saved router ON CAR SELECTION. ----
+  // ---- Smart-link: auto-join the LAST USED saved router ON CAR SELECTION. ----
   // When the link verifies, if the car is sitting on its OWN access point and
-  // THIS car has saved routers, offer the best one: a saved router the car's
-  // OWN antenna hears with strength (ROUTERS;SCAN → scan.rssi, strongest
-  // wins), else the most recently used saved router. Asked for the scan first
-  // and wait ≤ SMART_LINK_SCAN_MS for strength before the recency fallback —
-  // that IS the owner's "use if available with strength, else own AP" rule.
-  // User-controlled via autoJoinRouter (per-car profile toggle). Fires once
-  // per link session; a fresh link re-arms it.
+  // THIS car has saved routers, join the most recently used one (recency —
+  // owner item 12: "auto-join last used router", NOT the strongest signal the
+  // antenna hears; the strength scan went with the rule). User-controlled via
+  // autoJoinRouter (per-car profile toggle). Fires once per link session; a
+  // fresh link re-arms it.
   const fireRouterUse = useCallback(
     (ssid: string) => {
       if (smartLinkFiredRef.current) return;
@@ -3328,23 +3322,16 @@ export function useControlHub(routeCategory?: string) {
       // same narration-hides-an-action failure F-59's confirm rule fixed,
       // in its automation form.
       showConnectionMessage(
-        `Smart-link joined "${ssid}" automatically — connect your phone to it to drive. Turn this off under Saved settings → Auto-join saved router (app).`,
+        `Smart-link joined "${ssid}" automatically — connect your phone to it to drive. Turn this off under Saved settings → Auto-join last used router (app).`,
         "success",
       );
     },
     [routerUse, showConnectionMessage],
   );
-  const smartLinkFallbackTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
   useEffect(() => {
     // Re-arm on every fresh link session.
     if (!linkVerified || !profileKey || !autoJoinRouter) {
       smartLinkFiredRef.current = null;
-      if (smartLinkFallbackTimerRef.current) {
-        clearTimeout(smartLinkFallbackTimerRef.current);
-        smartLinkFallbackTimerRef.current = null;
-      }
       return;
     }
     if (smartLinkFiredRef.current === profileKey) return;
@@ -3360,20 +3347,15 @@ export function useControlHub(routeCategory?: string) {
     }
     // Never kick a car off a router we don't know about.
     if (carSsid) return;
-    // Ask the car for a strength scan; fall back to recency if it never answers.
-    if (!smartLinkFallbackTimerRef.current) {
-      sendCommand(buildRouterCommand("SCAN", ""));
-      smartLinkFallbackTimerRef.current = setTimeout(() => {
-        smartLinkFallbackTimerRef.current = null;
-        const fallback = pickBestRouter({
-          saved,
-          scan: carScanRef.current,
-          history: savedPrefs?.wifiHistory,
-          lastSsid: savedPrefs?.lastWifiSsid,
-        });
-        if (fallback) fireRouterUse(fallback);
-      }, SMART_LINK_SCAN_MS);
-    }
+    // U-120 item 12: the pick is recency-only — no strength scan to ask for
+    // and no timer to wait out. Join the last used saved router NOW (the
+    // once-per-session guard above decides whether this runs at all).
+    const best = pickBestRouter({
+      saved,
+      history: savedPrefs?.wifiHistory,
+      lastSsid: savedPrefs?.lastWifiSsid,
+    });
+    if (best) fireRouterUse(best);
   }, [
     linkVerified,
     profileKey,
@@ -3381,37 +3363,6 @@ export function useControlHub(routeCategory?: string) {
     carApName,
     carSsid,
     carNetworks,
-    savedPrefs,
-    carScan,
-    sendCommand,
-    fireRouterUse,
-  ]);
-
-  // A scan answer with a live router HEARD with strength beats the timer:
-  // fire the join the moment strength data arrives (before the fallback).
-  useEffect(() => {
-    if (!linkVerified || !profileKey || !autoJoinRouter) return;
-    if (smartLinkFiredRef.current === profileKey) return;
-    if (!smartLinkFallbackTimerRef.current) return; // no pending offer
-    const saved = savedPrefs?.savedRouters ?? [];
-    if (saved.length === 0) return;
-    const best = pickBestRouter({
-      saved,
-      scan: carScan,
-      history: savedPrefs?.wifiHistory,
-      lastSsid: savedPrefs?.lastWifiSsid,
-    });
-    if (!best) return;
-    if (smartLinkFallbackTimerRef.current) {
-      clearTimeout(smartLinkFallbackTimerRef.current);
-      smartLinkFallbackTimerRef.current = null;
-    }
-    fireRouterUse(best);
-  }, [
-    linkVerified,
-    profileKey,
-    autoJoinRouter,
-    carScan,
     savedPrefs,
     fireRouterUse,
   ]);

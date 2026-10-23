@@ -221,3 +221,58 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
     ).toBeGreaterThanOrEqual(1);
   });
 });
+
+// =====================================================================
+// U-120 Phase E (owner item 12, 2026-10-22) — "in the setting it is auto
+// join LAST USED router, not other ways — in sense and operations."
+//
+// SENSE: every surface that names the switch (Remote settings, the car
+// profile card, the smart-link toast) says "last used router" and NOTHING
+// says "strongest saved router" anymore. OPERATIONS: pickBestRouter is
+// recency-only (pinned in carProfileService.test.ts) and the strength
+// machinery that fed the old rule — the ROUTERS;SCAN ask, the 6 s wait,
+// the scan-arrival early fire — is deleted from the hub, not bypassed.
+// =====================================================================
+describe("U-120 Phase E — the auto-join says AND does 'last used router'", () => {
+  const profile = strip(raw("../components/tools/CarProfileCard.tsx"));
+
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(profile.length).toBeGreaterThan(2000);
+    expect(profile).toContain("Auto-join");
+    expect(screen).toContain("Auto-join");
+  });
+
+  it("sense: the Remote settings switch names the LAST USED router", () => {
+    expect(screen).toContain("Auto-join last used router (app)");
+    expect(screen).toMatch(/the last used\s+saved router/);
+    expect(screen).toContain(
+      'accessibilityLabel="App auto-join: on connect, switch the car to the last used saved router"',
+    );
+    expect(screen).not.toContain("strongest saved router");
+    expect(screen).not.toContain("Auto-join saved router (app)");
+  });
+
+  it("sense: the car profile card carries the same words", () => {
+    expect(profile).toContain("Auto-join last used router (app)");
+    expect(profile).toMatch(/join the last used saved router/);
+    expect(profile).not.toContain("strongest saved router");
+    expect(profile).not.toContain("Auto-join saved router (app)");
+  });
+
+  it("sense: the smart-link toast points at the same setting name", () => {
+    expect(hub).toContain("Auto-join last used router (app)");
+    expect(hub).not.toContain("Auto-join saved router (app)");
+  });
+
+  it("operations: the strength-scan machinery is GONE from the hub", () => {
+    // The old rule waited ≤ SMART_LINK_SCAN_MS for ROUTERS;SCAN strength and
+    // fired the strongest heard router (a scan answer early-fired it).
+    expect(hub).not.toContain("SMART_LINK_SCAN_MS");
+    expect(hub).not.toContain("smartLinkFallbackTimerRef");
+    expect(hub).not.toContain("carScanRef");
+    expect(hub).not.toContain('buildRouterCommand("SCAN"');
+    // The ONE remaining pick is the recency pick, fired on link verify.
+    expect(hub).toContain("const best = pickBestRouter({");
+    expect(hub).toContain("history: savedPrefs?.wifiHistory,");
+  });
+});

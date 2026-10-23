@@ -2,13 +2,16 @@
 // DeviceConnectionScreen — shows ONE connection kind with its own
 // placeholder settings and a "Continue", then opens the Remote window.
 //
-// Every possible method currently has a row + placeholder setup:
+// Per-method setup rows:
 //   • bluetooth-spp   — built: Classic Bluetooth SPP (the hand-held remote).
 //   • bluetooth-ble   — placeholder: BLE layer for the ESP remote, not wired.
 //   • wifi-ap         — placeholder: the ESP remote control path via the phone.
-//   • wifi-ap-own     — placeholder: WS drive over the car's own AP.
-//   • wifi-sta        — placeholder: WS drive over a provisioned router.
-// Real widgets appear here when each link is implemented.
+//   • wifi-ap-own     — built: WS drive over the car's own AP.
+//   • wifi-sta        — built: WS drive over a provisioned router, with the
+//                        U-120 item 7 by-name car-network selector beside the
+//                        broadcast-IP field.
+// The screen also carries the U-120 item 9 phone-network row (this phone's
+// own network, known BEFORE any link is dialed). Placeholders say so in place.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {

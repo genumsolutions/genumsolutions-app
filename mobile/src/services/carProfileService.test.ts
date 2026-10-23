@@ -220,14 +220,10 @@ describe("toCloudRecord", () => {
 });
 
 describe("pickBestRouter (smart-link)", () => {
-  it("picks the STRONGEST saved router the car currently hears (scan)", () => {
+  it("picks the most recently used saved router when multiple are available", () => {
+    // No scan or history: picks the most recent from the saved list order.
     const best = pickBestRouter({
       saved: ["Home", "Office", "Cafe"],
-      scan: [
-        { ssid: "Office", rssi: -62 },
-        { ssid: "Home", rssi: -45 },
-        { ssid: "Cafe", rssi: -80 },
-      ],
     });
     expect(best).toBe("Home");
   });
