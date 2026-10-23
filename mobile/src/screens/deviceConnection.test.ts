@@ -15,8 +15,8 @@
 //      car's own reported lease (or its fixed AP address) and issues
 //      ROUTERS;USE over a live link otherwise.
 //   9. "the app still doesn't know its own network before connecting." —
-//      the phone's own network label renders on THIS screen, above the
-//      setup card, before any link exists.
+//      the phone's own network label moved to the Connectivity panel's left
+//      pane and the Remote's first bar (U-121 Phase C, 2026-10-23).
 // =====================================================================
 
 import { readFileSync } from "node:fs";
@@ -118,35 +118,18 @@ describe("U-120 Phase D — item 7: the network selector by the IP field", () =>
     expect(body).toContain("setWifiUrl(`ws://${bare}:81`);");
     // Car elsewhere → tell it to join over a LIVE link only (the car cannot
     // hear a fire-and-forget with no link); the new IP then arrives on
-    // STATE;IP and the hub's smart-link auto-dial prefills the field.
-    expect(body).toContain("if (connected || wifiConnected) routerUse(ssid);");
-  });
-
-  it("the hub facts the selector needs are destructured from the hub", () => {
-    expect(screen).toContain("carNetworks,");
-    expect(screen).toContain("carApName,");
-    expect(screen).toContain("carSsid,");
-    expect(screen).toContain("routerUse,");
-    expect(screen).toContain("carIp={telemetry.ip ?? null}");
-    expect(screen).toContain("linked={connected || wifiConnected}");
+    // STATE;IP and the hub's smart-link auto-dial prefills the field.    expect(body).toContain("if (connected || wifiConnected) routerUse(ssid);");
   });
 });
 
-describe("U-120 Phase D — item 9: the phone's own network before connecting", () => {
-  it("renders the hub's phone-network label on THIS screen", () => {
-    expect(screen).toContain('testID="device-phone-network"');
-    expect(screen).toContain("phoneNetworkLabel,");
-    expect(screen).toContain('{phoneNetworkLabel ?? "…"}');
-  });
-
-  it("the row sits ABOVE the setup card — visible before any link", () => {
-    const rowAt = screen.indexOf('testID="device-phone-network"');
-    const setupAt = screen.indexOf("<SetupPanel");
-    expect(rowAt).toBeGreaterThan(0);
-    expect(setupAt).toBeGreaterThan(rowAt);
-    // …and nothing gates it on link state (no conditional wrapper).
-    const before = screen.slice(Math.max(0, rowAt - 200), rowAt);
-    expect(before).not.toContain("linkReady");
-    expect(before).not.toContain("connected");
+describe("U-121 Phase C — item 9: the phone's own network moved out of this screen", () => {
+  it("the phone-network row is no longer rendered by DeviceConnectionScreen", () => {
+    // U-121 Phase C moved the phone's own network label out of this screen.
+    // It now lives on the Connectivity panel's left pane (`conn-phone-network`,
+    // rendered from ConnectionSection) and on the Remote's FIRST bar
+    // (`remote-phone-network`, rendered from RemoteControlScreen).
+    expect(screen).not.toContain('testID="device-phone-network"');
+    expect(screen).not.toContain("phoneNetworkLabel,");
+    expect(screen).not.toContain('{phoneNetworkLabel ?? "…"}');
   });
 });

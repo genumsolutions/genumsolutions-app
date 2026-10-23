@@ -796,10 +796,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             </Pressable>
           ) : null}
 
-          <Text className="shrink-0 text-sm font-black uppercase tracking-[0.2em] text-muted">
-            Remote
-          </Text>
-
           <View className="min-w-0 flex-1" />
 
           {isRobocar && (
@@ -839,11 +835,11 @@ export function RemoteControlScreen({ navigation }: Props) {
                 onPress={() => setShowSettings((v) => !v)}
                 accessibilityRole="button"
                 accessibilityLabel="Settings"
-                hitSlop={10}
+                hitSlop={12}
                 android_ripple={{
                   color: "rgba(255,255,255,0.2)",
                   borderless: true,
-                  radius: 28,
+                  radius: 32,
                 }}
               >
                 <View

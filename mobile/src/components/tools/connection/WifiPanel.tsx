@@ -479,6 +479,7 @@ export function WifiPanel({
               keyboard. Same state machine, same testIDs, same submit rules. */}
           <Modal
             transparent
+
             visible={adding}
             animationType="fade"
             onRequestClose={cancel}
@@ -488,11 +489,13 @@ export function WifiPanel({
               behavior={Platform.OS === "ios" ? "padding" : undefined}
               style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.55)" }}
             >
+              {" "}
               <ScrollView
                 contentContainerStyle={{
                   flexGrow: 1,
                   justifyContent: "center",
                   padding: 20,
+                  paddingBottom: 30,
                 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
@@ -534,7 +537,7 @@ export function WifiPanel({
                     </Text>
                   ) : null}
 
-                  <Text className="mt-4 text-[11px] font-black uppercase tracking-widest text-muted">
+                  <Text className="mt-5 text-[13px] font-black uppercase tracking-widest text-muted">
                     Network name
                   </Text>
                   <TextInput
@@ -554,10 +557,10 @@ export function WifiPanel({
                     returnKeyType="next"
                     blurOnSubmit={false}
                     onSubmitEditing={() => passRef.current?.focus()}
-                    className="mt-1.5 h-12 rounded-lg border border-line bg-surface px-3 text-[15px] text-ink"
+                    className="mt-2 h-14 rounded-lg border-2 border-line bg-surface px-4 text-[16px] text-ink"
                     testID="wifi-ssid"
                   />
-                  <Text className="mt-3 text-[11px] font-black uppercase tracking-widest text-muted">
+                  <Text className="mt-4 text-[13px] font-black uppercase tracking-widest text-muted">
                     Password
                   </Text>
                   <TextInput
@@ -578,14 +581,14 @@ export function WifiPanel({
                     maxLength={72}
                     returnKeyType="done"
                     onSubmitEditing={submit}
-                    className="mt-1.5 h-12 rounded-lg border border-line bg-surface px-3 text-[15px] text-ink"
+                    className="mt-2 h-14 rounded-lg border-2 border-line bg-surface px-4 text-[16px] text-ink"
                     testID="wifi-pass"
                   />
                   {error ? (
                     <InlineMessage tone="error">{error}</InlineMessage>
                   ) : null}
 
-                  <View className="mt-4 flex-row gap-2">
+                  <View className="mt-5 flex-row gap-2">
                     <Pressable
                       onPress={submit}
                       disabled={
@@ -595,7 +598,7 @@ export function WifiPanel({
                       }
                       accessibilityRole="button"
                       accessibilityLabel="Save network"
-                      className="flex-1 items-center rounded-full bg-navy py-3 disabled:opacity-50"
+                      className="flex-1 items-center rounded-full bg-navy py-3.5 disabled:opacity-50"
                       testID="wifi-add-submit"
                     >
                       <Text className="text-[13px] font-black text-white">
