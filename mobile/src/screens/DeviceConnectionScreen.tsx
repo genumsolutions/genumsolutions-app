@@ -8,8 +8,11 @@
 //   • wifi-ap         — placeholder: the ESP remote control path via the phone.
 //   • wifi-ap-own     — built: WS drive over the car's own AP.
 //   • wifi-sta        — built: WS drive over a provisioned router, with the
-//                        U-120 item 7 by-name car-network selector beside the
-//                        broadcast-IP field.
+//                        U-120 item 7 / U-121 Phase B car-network selector:
+//                        a proper always-rendered radio-row list (the car's
+//                        own hotspot + every saved router, by NAME) beside
+//                        the broadcast-IP field, so the user can tell the
+//                        app where the car is.
 // The screen also carries the U-120 item 9 phone-network row (this phone's
 // own network, known BEFORE any link is dialed). Placeholders say so in place.
 // =====================================================================
@@ -49,6 +52,7 @@ function SetupPanel({
   onScan,
   onConnect,
   carNetworks,
+  carApName,
   carSsid,
   carIp,
   linked,
@@ -65,6 +69,8 @@ function SetupPanel({
   onConnect: (device: SppDevice) => void;
   /** The car's known networks (savedRouters mirror; car truth once linked). */
   carNetworks: string[];
+  /** The car's own AP broadcast id — its fallback network, fixed address. */
+  carApName: string | null;
   /** The network the car is actually on right now, or null (no link yet). */
   carSsid: string | null;
   /** The car's reported IP — where it lives on that network — or null. */
@@ -77,6 +83,26 @@ function SetupPanel({
   onPickNetwork: (ssid: string) => void;
 }) {
   const [label, setLabel] = useState(deviceName);
+
+  // U-121 Phase B (owner 2026-10-23, item 7): the car-network selector is a
+  // PROPER list — always rendered, one radio row per network, the car's own
+  // hotspot first (its fixed fallback network) then every saved router by
+  // name. The row that says where the car IS is marked; the pick itself is
+  // the user's answer to "which network is the car at?".
+  const selectorRows: { ssid: string; onCar: boolean }[] = [
+    ...(carApName
+      ? [
+          {
+            ssid: carApName,
+            // Linked with no joined SSID = the car sits on its own AP.
+            onCar: linked && (carSsid == null || carSsid === ""),
+          },
+        ]
+      : []),
+    ...carNetworks
+      .filter((s) => s !== carApName)
+      .map((ssid) => ({ ssid, onCar: carSsid === ssid })),
+  ];
 
   switch (kind) {
     case "bluetooth-spp": {
@@ -227,59 +253,92 @@ function SetupPanel({
             Send WIFICFG over Bluetooth to put the car on your router.
           </Text>
 
-          {/* U-120 Phase D (owner item 7, 2026-10-22): "the car's IP selection
-              should have the network selector too along with the broadcast
-              IP … use the network name to select the car network and to let
-              the app know where the car is." The selector sits RIGHT BESIDE
-              the broadcast-IP field and works by NAME: pick the car's network
-              and the app resolves where the car is — its own reported lease
-              when the car is on that network, or ROUTERS;USE over a live link
-              so the car joins the picked network and reports its new IP. */}
-          {carNetworks.length > 0 && (
-            <View className="mt-3" testID="car-network-selector">
+          {/* U-120 Phase D (owner item 7, 2026-10-22) → U-121 Phase B
+              (owner 2026-10-23: "that doesn't have the proper saved network
+              selector so that user can let the app know which network the car
+              is currently at"). The selector is now a PROPER one: always
+              rendered (an honest empty state instead of disappearing), radio
+              rows at real tap size, the car's own hotspot plus every saved
+              router by NAME, and the row the car is actually on is marked.
+              Picking resolves where the car is — its own reported lease when
+              it is on that network, or ROUTERS;USE over a live link so the
+              car joins the picked network and reports its new IP. */}
+          <View
+            className="mt-3 rounded-xl border border-line bg-mist p-3"
+            testID="car-network-selector"
+          >
+            <View className="flex-row items-center gap-1.5">
+              <Feather name="map-pin" size={12} color="#475569" />
               <Text className="text-[10px] font-black uppercase tracking-wide text-muted">
-                Car network — pick by name
+                Car network — where is the car?
               </Text>
-              <View className="mt-1 flex-row flex-wrap gap-1.5">
-                {carNetworks.map((ssid) => {
-                  const onCar = carSsid === ssid;
-                  const picked = pickedNetwork === ssid;
+            </View>
+            <Text className="mt-1 text-[10px] leading-3 text-muted">
+              Pick the network the car is on — its IP fills in from the car
+              itself. Picking another saved network tells the car to join it.
+            </Text>
+            {selectorRows.length === 0 ? (
+              <Text className="mt-2 text-[11px] leading-4 text-muted">
+                No saved networks known yet — the list fills in once the car
+                answers over a link.
+              </Text>
+            ) : (
+              <View className="mt-2 gap-1.5">
+                {selectorRows.map((row) => {
+                  const picked = pickedNetwork === row.ssid;
                   return (
                     <Pressable
-                      key={ssid}
-                      onPress={() => onPickNetwork(ssid)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Select car network ${ssid}${onCar ? " — the car is on it" : ""}`}
-                      className={`rounded-full border px-2.5 py-1 ${
+                      key={row.ssid}
+                      onPress={() => onPickNetwork(row.ssid)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: picked }}
+                      accessibilityLabel={`Select car network ${row.ssid}${row.onCar ? " — the car is on it" : ""}`}
+                      className={`flex-row items-center gap-2 rounded-lg border px-3 py-2.5 ${
                         picked
                           ? "border-select-ink bg-select-bg"
-                          : "border-line bg-surface"
+                          : "border-line bg-card"
                       }`}
+                      testID={`car-network-pick-${row.ssid}`}
                     >
+                      <Feather
+                        name={picked ? "check-circle" : "circle"}
+                        size={14}
+                        color={picked ? "#1e3a8a" : "#94a3b8"}
+                      />
                       <Text
-                        className={`text-[10px] font-bold ${
-                          picked ? "text-select-ink" : "text-ink"
+                        numberOfLines={1}
+                        className={`min-w-0 flex-1 text-[13px] ${
+                          picked
+                            ? "font-bold text-select-ink"
+                            : "font-semibold text-ink"
                         }`}
                       >
-                        {onCar ? `${ssid} · car` : ssid}
+                        {row.ssid}
                       </Text>
+                      {row.onCar ? (
+                        <Text className="shrink-0 text-[10px] font-bold text-success">
+                          car is here
+                        </Text>
+                      ) : null}
                     </Pressable>
                   );
                 })}
               </View>
-              {pickedNetwork ? (
-                <Text className="mt-1 text-[10px] leading-3 text-muted">
-                  {pickedNetwork === carSsid
+            )}
+            {pickedNetwork ? (
+              <Text className="mt-1.5 text-[10px] leading-3 text-muted">
+                {pickedNetwork === carApName
+                  ? `The car's own hotspot (${DEFAULT_AP_IP}) is in the field — join ${carApName} on this phone to reach it.`
+                  : pickedNetwork === carSsid
                     ? carIp
                       ? `The car is on ${pickedNetwork} at ${carIp} — that is the address in the field.`
                       : `The car is on ${pickedNetwork}.`
                     : linked
                       ? `Telling the car to join ${pickedNetwork} — its new IP arrives automatically.`
                       : `Connect first — the car joins ${pickedNetwork} and reports where it is.`}
-                </Text>
-              ) : null}
-            </View>
-          )}
+              </Text>
+            ) : null}
+          </View>
         </>
       );
     }
@@ -318,6 +377,7 @@ export function DeviceConnectionScreen({}: Props) {
     // item 7 (the car-network selector beside the broadcast-IP field).
     phoneNetworkLabel,
     carNetworks,
+    carApName,
     carSsid,
     routerUse,
     telemetry,
@@ -367,8 +427,11 @@ export function DeviceConnectionScreen({}: Props) {
     navigation.replace("RemoteControl", { category: "robocar" });
   }, [navigation]);
 
-  // U-120 Phase D (owner item 7, 2026-10-22): pick the car's network by NAME
-  // next to the broadcast-IP field, and let the app know where the car is:
+  // U-120 Phase D (owner item 7, 2026-10-22) → U-121 Phase B: pick the
+  // car's network by NAME in the proper selector, and let the app know where
+  // the car is:
+  //   * the car's OWN HOTSPOT picked → its address is fixed (DEFAULT_AP_IP):
+  //     prefill it directly, no guessing;
   //   * the car is ON the picked network → its reported lease is where it
   //     lives: prefill the dial target from the car's own IP (no guessing);
   //   * the car is elsewhere → select by name means TELL it to join
@@ -379,6 +442,10 @@ export function DeviceConnectionScreen({}: Props) {
     (ssid: string) => {
       feedbackTap();
       setPickedNetwork(ssid);
+      if (ssid === carApName) {
+        setWifiUrl(`ws://${DEFAULT_AP_IP}:81`);
+        return;
+      }
       if (carSsid === ssid) {
         const bare = (telemetry.ip ?? "")
           .replace(/^wss?:\/\//, "")
@@ -390,7 +457,15 @@ export function DeviceConnectionScreen({}: Props) {
       }
       if (connected || wifiConnected) routerUse(ssid);
     },
-    [carSsid, telemetry.ip, connected, wifiConnected, routerUse, setWifiUrl],
+    [
+      carApName,
+      carSsid,
+      telemetry.ip,
+      connected,
+      wifiConnected,
+      routerUse,
+      setWifiUrl,
+    ],
   );
 
   return (
@@ -451,6 +526,7 @@ export function DeviceConnectionScreen({}: Props) {
             void handleConnect(device);
           }}
           carNetworks={carNetworks}
+          carApName={carApName}
           carSsid={carSsid}
           carIp={telemetry.ip ?? null}
           linked={connected || wifiConnected}
