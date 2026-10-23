@@ -70,11 +70,13 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(screen).toContain("renderPromptShell(");
   });
 
-  it("issue 2: ONE merged row below Back (the second h-7 row is gone)", () => {
+  it("issue 2: ONE merged row below Back (the second row is gone)", () => {
     // Exactly one constant-height row remains between the chrome row and the
     // content area; it carries the chips AND the pills. A second occurrence
-    // means the old tabs row came back and the deck lost its 28 px again.
-    expect(count(screen, "flex h-7 flex-shrink-0 flex-row")).toBe(1);
+    // means the old tabs row came back and the deck lost its space again.
+    // U-121 (owner items 5/6): the one row grew h-7 → h-9 for real tap sizes.
+    expect(count(screen, "flex h-7 flex-shrink-0 flex-row")).toBe(0);
+    expect(count(screen, "flex h-9 flex-shrink-0 flex-row")).toBe(1);
   });
 
   it("issue 4: the phone-net chip and its alternation are gone entirely", () => {
@@ -94,9 +96,13 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(count(screen, "handleOpenWebPage")).toBe(2);
     expect(screen).toContain("onPress={handleOpenWebPage}");
     expect(count(screen, 'accessibilityRole="link"')).toBe(1);
-    // The long label is gone; the chip renders the short transport label.
+    // The long label is gone; U-121 (items 1+2) the chip renders THE
+    // BROADCAST IP ALONE, gated on the car serving its page — no transport
+    // label, no car network name, nothing at all while the page is off.
     expect(screen).not.toContain("deckLinkLabel");
-    expect(screen).toContain("{linkLabel}");
+    expect(screen).toContain("{ipChipText}");
+    expect(count(screen, "{linkLabel}")).toBe(0);
+    expect(screen).not.toContain("carNetworks[0]");
     // No device name renders in the chrome label at all (A-25/A-38 kept by
     // construction — the helper that sanitized it is deleted, not dormant).
     expect(screen).not.toContain("friendlyBtName");
@@ -199,6 +205,8 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
     // and no gate would mean the telemetry line overflows the row again.
     expect(screen).toContain("const MERGED_ROW_TELEMETRY_MIN_PX = 700;");
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
+    // (U-121: the phone-network chip added to this row TRUNCATES instead of
+    // hiding, so the single width gate stays telemetry-only.)
     expect(
       /width >= MERGED_ROW_TELEMETRY_MIN_PX \? \(\s*<TelemetryLine \{\.\.\.driveTelemetryArgs\} \/>\s*\) : null/.test(
         screen,
@@ -208,7 +216,7 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
 
   it("the chips and pills render ungated inside the one merged row", () => {
     // One merged row (issue 2's pin) carrying both controls unconditionally.
-    expect(count(screen, "flex h-7 flex-shrink-0 flex-row")).toBe(1);
+    expect(count(screen, "flex h-9 flex-shrink-0 flex-row")).toBe(1);
     expect(screen).toContain('testID="remote-disconnect-bt"');
     expect(screen).toContain('testID="remote-disconnect-wifi"');
     // The pill labels are multiline JSX (`>` … D-pad … `<`), so match
@@ -274,5 +282,55 @@ describe("U-120 Phase E — the auto-join says AND does 'last used router'", () 
     // The ONE remaining pick is the recency pick, fired on link verify.
     expect(hub).toContain("const best = pickBestRouter({");
     expect(hub).toContain("history: savedPrefs?.wifiHistory,");
+  });
+});
+
+// =====================================================================
+// U-121 (owner 2026-10-23) — the chrome tells the truth about the PAGE,
+// and the first bar carries the phone's own network.
+//
+//   1. the chrome chip is THE BROADCAST IP ALONE — no "BT+WiFi" transport
+//      label, no car network name;
+//   2. it renders ONLY while the Webpage toggle is ON in the car (car truth
+//      `pageOn`) behind a live link — and it resolves over a BT-only link
+//      too (the car reports `;IP=` on STATE over Bluetooth as well);
+//   4. the phone's OWN network (name) moved here, onto the merged row —
+//      the Connectivity panel's "This phone" row is gone;
+//   5. the tab pills carry real tap sizes (px-3.5 py-2, 11 px bold);
+//   6. the disconnect chips are real: bigger, transport icon + name + ✕.
+// =====================================================================
+describe("U-121 — the chrome chip is the broadcast IP, only while the page is on", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(screen.length).toBeGreaterThan(5000);
+    expect(screen).toContain('testID="deck-link-status"');
+  });
+
+  it("the chip renders ONLY behind a live link while the car serves its page", () => {
+    // The ONE gate: linked AND the car's own page state (`;PAGE=`/`page_on`,
+    // adopted change-guarded and queried on link-up since U-117).
+    expect(screen).toContain(
+      "const pageLinkReady = linked && hub.pageOn === true;",
+    );
+    expect(screen).toContain("{pageLinkReady ? (");
+    // The chip body is the IP alone: no transport label, no car network.
+    expect(screen).toContain("{ipChipText}");
+    expect(count(screen, "{linkLabel}")).toBe(0);
+    expect(screen).not.toContain("carNetworks[0]");
+  });
+
+  it("the phone's own network chip lives on the FIRST bar (merged row)", () => {
+    expect(screen).toContain('testID="remote-phone-network"');
+    expect(screen).toContain("{phoneNetworkLabel}");
+    // It TRUNCATES instead of hiding, so Q2's drop rule stays telemetry-only.
+    expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
+  });
+
+  it("items 5+6: real tap sizes and a real disconnect mark", () => {
+    // Four tab pills at the new size…
+    expect(count(screen, "rounded-full px-3.5 py-2")).toBe(4);
+    // …both disconnect chips carry the transport icon + name + ✕…
+    expect(count(screen, 'name="x-circle"')).toBe(2);
+    // …and the old 9 px sliver sizing is gone from the row.
+    expect(count(screen, "px-2.5 py-0.5")).toBe(0);
   });
 });

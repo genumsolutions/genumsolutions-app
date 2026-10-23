@@ -9,9 +9,11 @@
 //
 // Layer 2 — the wiring reads the raw sources with comments stripped (same
 // convention as linkCapacity.test.ts; there is no component harness in this
-// repo): the hub refreshes the label on every NetInfo event, exposes it, and
-// the Connectivity panel renders it — while the deck chrome stays free of the
-// old phone-ssid chip (U-113 P2 issue 4, pinned in remoteChrome.test.ts).
+// repo): the hub refreshes the label on every NetInfo event and exposes it.
+// U-121 (owner 2026-10-23, item 4): the label is rendered by the REMOTE's
+// first bar (the merged row below Back) — the Connectivity panel's "This
+// phone" row is gone, freeing its left pane; the deck chrome still stays
+// free of the old raw phone-ssid chip (U-113 P2 issue 4).
 // =====================================================================
 
 import { readFileSync } from "node:fs";
@@ -99,18 +101,31 @@ describe("U-118 — the hub keeps the label fresh and exposes it", () => {
   });
 });
 
-describe("U-118 — the Connectivity panel renders it (and only there)", () => {
-  it("the panel destructures and paints the label with a stable testID", () => {
-    expect(section).toContain("phoneNetworkLabel,");
-    expect(section).toContain('testID="conn-phone-network"');
-    expect(section).toContain('{phoneNetworkLabel ?? "…"}');
-    expect(section).toContain("This phone");
+describe("U-121 — the label moved from the Connectivity panel to the Remote's first bar", () => {
+  it("the Connectivity panel no longer renders it (owner item 4: space below)", () => {
+    // The "This phone" row is gone from the panel's left pane entirely —
+    // not relocated inside it. Its testID, its label source and the "This
+    // phone" words all left with it.
+    expect(section).not.toContain('testID="conn-phone-network"');
+    expect(section).not.toContain("phoneNetworkLabel");
+    expect(section).not.toContain("This phone");
+    // The panel still never leaks the RAW ssid either (issue 4 kept).
+    expect(section).not.toContain("phoneSsid");
   });
 
-  it("the deck chrome stays free of the phone-ssid chip (issue 4)", () => {
-    // remoteChrome.test.ts pins the SCREEN; this pins the hub does not leak
-    // the raw ssid into the panel either — the rendered fact is the LABEL.
-    expect(section).not.toContain("phoneSsid");
-    expect(section).toContain("phoneNetworkLabel");
+  it("the Remote's FIRST bar carries it with a stable testID", () => {
+    const chrome = strip(raw("../../../screens/RemoteControlScreen.tsx"));
+    expect(chrome).toContain('testID="remote-phone-network"');
+    expect(chrome).toContain("{phoneNetworkLabel}");
+    expect(chrome).toContain("phoneNetworkLabel,");
+    // The raw ssid stays out of the chrome (issue 4) — the LABEL renders.
+    expect(chrome).not.toContain("phoneSsid");
+  });
+
+  it("the label stays the hub's public surface (the connect screen also uses it)", () => {
+    expect(hub).toContain("phoneNetworkLabel,");
+    expect(hub).toContain(
+      "const [phoneNetworkLabel, setPhoneNetworkLabel] = useState",
+    );
   });
 });

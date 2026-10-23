@@ -190,7 +190,6 @@ export function ConnectionSection({
   const {
     telemetry,
     carApName,
-    phoneNetworkLabel,
     carSsid,
     carNetworks,
     carScan,
@@ -550,30 +549,12 @@ export function ConnectionSection({
 
       {/* ── LEFT pane: method select + setup + the this-car inventory ── */}
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
-        {/* U-118 (owner 2026-10-20): "the app is not aware about its own
-            connected network." The phone's network is the half of the
-            reachability equation the car's side already shows three times —
-            it now has a row, on the ONE surface an owner opens when a link
-            misbehaves. Deliberately NOT deck chrome (U-113 P2 issue 4 removed
-            that chip and this keeps it removed). Label comes from the hub's
-            NetInfo watcher via the pure formatPhoneNetwork(). */}
-        <View
-          testID="conn-phone-network"
-          className="flex-row items-center justify-between gap-2 rounded-lg border border-line bg-card px-2 py-1.5"
-        >
-          <View className="flex-row items-center gap-1.5">
-            <Feather name="smartphone" size={12} color="#64748b" />
-            <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-              This phone
-            </Text>
-          </View>
-          <Text
-            numberOfLines={1}
-            className="max-w-[60%] text-[10px] font-bold text-ink"
-          >
-            {phoneNetworkLabel ?? "…"}
-          </Text>
-        </View>
+        {/* U-121 (owner 2026-10-23, item 4): the "This phone" row that used
+            to lead this pane is GONE — the phone's own network now lives on
+            the Remote's FIRST bar (the merged row below Back, testID
+            `remote-phone-network`), and this pane keeps only what belongs to
+            the car. The label fact itself is unchanged (hub's NetInfo watcher
+            via the pure formatPhoneNetwork). */}
 
         {/* M1: the method row is the METHOD ONLY — no status text, no
             disconnect, no Bluetooth details (all in the strip above). */}

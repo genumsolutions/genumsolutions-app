@@ -168,9 +168,11 @@ describe("U-117 — the hub adopts and persists the page state honestly", () => 
 
 describe("U-117 — the Webpage switch behaves like its siblings", () => {
   it("is disabled while no link is up (Wi-Fi/BT switches set the rule)", () => {
-    const at = screen.indexOf("hub.pageOn === true");
+    // U-121: `hub.pageOn === true` now also gates the chrome IP chip, so the
+    // switch is anchored on ITS OWN writer — the rule is about the Switch.
+    const at = screen.indexOf("hub.setPageOn(on)");
     expect(at).toBeGreaterThan(0);
-    const block = slice(screen, at - 200, 500);
+    const block = slice(screen, at - 500, 700);
     expect(block).toContain("disabled={!linked}");
     expect(block).toContain("hub.setPageOn(on)");
   });
