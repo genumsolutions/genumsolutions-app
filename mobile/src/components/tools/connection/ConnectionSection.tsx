@@ -197,6 +197,7 @@ export function ConnectionSection({
     sppDevices,
     sppSupported,
     wifiConnected,
+    phoneNetworkLabel,
     // P3: the second-link raise is derived from the hub's live link facts —
     // which transport is in flight and what the car said about it.
     btLinked,
@@ -556,11 +557,35 @@ export function ConnectionSection({
             the car. The label fact itself is unchanged (hub's NetInfo watcher
             via the pure formatPhoneNetwork). */}
 
+        {/* U-121 Phase C (owner 2026-10-23): show the phone's own network name
+            on the LEFT pane top, so the owner sees what network THEY are on
+            (not just the car's). Car info stays below.
+            testID `conn-phone-network` is stable — pinned by the source test.
+            Note: unlike the old lead row this is OPTIONAL — it renders only
+            once the hub has a real NetInfo label (which arrives shortly after
+            the app starts). */}
+        {phoneNetworkLabel && (
+          <View
+            testID="conn-phone-network"
+            className="flex-row items-center justify-between rounded-xl border border-line bg-card px-3 py-2"
+          >
+            <View className="flex-row items-center gap-1.5">
+              <Feather name="smartphone" size={12} color="#64748b" />
+              <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                This phone
+              </Text>
+            </View>
+            <Text
+              numberOfLines={1}
+              className="max-w-[60%] text-[10px] font-bold text-ink"
+            >
+              {phoneNetworkLabel}
+            </Text>
+          </View>
+        )}
+
         {/* M1: the method row is the METHOD ONLY — no status text, no
             disconnect, no Bluetooth details (all in the strip above). */}
-        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-          Connection method
-        </Text>
 
         {/* U-97: the two methods, equal cards. Choosing one swaps the setup
             card below (and the right pane follows). */}

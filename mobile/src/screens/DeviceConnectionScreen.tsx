@@ -373,9 +373,6 @@ export function DeviceConnectionScreen({}: Props) {
     error,
     wifiUrl,
     sppDevices,
-    // U-120 Phase D: item 9 (the phone's own network before connecting) +
-    // item 7 (the car-network selector beside the broadcast-IP field).
-    phoneNetworkLabel,
     carNetworks,
     carApName,
     carSsid,
@@ -483,29 +480,6 @@ export function DeviceConnectionScreen({}: Props) {
             {deviceName}
           </Text>
         </View>
-      </View>
-
-      {/* U-120 Phase D (owner item 9, 2026-10-22): "the app still doesn't
-          know its own network before connecting." The phone's OWN network is
-          shown HERE — the screen an owner is on BEFORE any link exists — from
-          the hub's NetInfo watcher (pure formatPhoneNetwork label), so
-          reachability can be judged before anything is dialed. */}
-      <View
-        testID="device-phone-network"
-        className="flex-row items-center justify-between rounded-xl border border-line bg-card px-3 py-2"
-      >
-        <View className="flex-row items-center gap-1.5">
-          <Feather name="smartphone" size={12} color="#64748b" />
-          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-            This phone
-          </Text>
-        </View>
-        <Text
-          numberOfLines={1}
-          className="max-w-[60%] text-[10px] font-bold text-ink"
-        >
-          {phoneNetworkLabel ?? "…"}
-        </Text>
       </View>
 
       {/* Setup */}
