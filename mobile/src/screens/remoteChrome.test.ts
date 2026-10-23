@@ -133,7 +133,11 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // pure `linkPrompt.ts` decision module, so the SCREEN now carries the call
     // and the module carries the words.
     expect(screen).toContain("resolveLinkPrompt(");
-    expect(prompt).toContain("Bluetooth disconnected");
+    // U-120 Phase C (item 8): the copy asks ONE yes/no question naming the
+    // METHOD; the old narration sentences are gone with it.
+    expect(prompt).toContain("Reconnect to your car over ${method}?");
+    expect(prompt).not.toContain("stopping itself on link loss");
+    expect(prompt).not.toContain("no Wi-Fi link is up");
     expect(screen).not.toContain('"Connection lost"');
     expect(screen).not.toContain("Reconnect to your car?");
     // U-118 (owner 2026-10-20): the restart RECORD card is gone from the

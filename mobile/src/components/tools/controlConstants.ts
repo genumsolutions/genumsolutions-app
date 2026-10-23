@@ -23,6 +23,7 @@ export const TELEMETRY_FLUSH_MS = 66;
 // loop they fed is gone (replaced by the NetInfo-driven auto-discover in
 // useControlHub), and both had zero callers.
 
-// SPP auto-reconnect — industry-standard silent exponential backoff.
-// Delays: 1s → 2s → 4s → 8s → give up (no prompt, fully silent).
-export const SPP_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
+// U-120 Phase C cleansing (2026-10-22): SPP_RECONNECT_DELAYS_MS DELETED —
+// the SPP silent backoff scheduler it fed is gone (owner item 8: reconnecting
+// is never automatic; the reconnect dialog owns every retry) and it had zero
+// callers left.

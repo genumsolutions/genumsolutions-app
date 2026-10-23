@@ -72,10 +72,13 @@ import { getCarModes } from "../../services/carModeService";
 import { PROJECT_CATEGORIES } from "../../config/project-catalog";
 import {
   DRIVE_CMD_MIN_INTERVAL_MS,
-  SPP_RECONNECT_DELAYS_MS,
   TELEMETRY_FLUSH_MS,
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
+// U-120 Phase C: the reconnect dialog names the METHOD that dropped and
+// routes its Reconnect action through it — the hub stores that method
+// alongside the dialog flag.
+import type { LinkPromptMethod } from "./linkPrompt";
 // Imported from the PURE modules directly, not from the `./connection` barrel.
 // The barrel re-exports the UI (ConnectionSection → useControlHub, a
 // type-only back-reference), and a hook has no business pulling React
@@ -403,7 +406,15 @@ export function useControlHub(routeCategory?: string) {
   const [sppStatusMsg, setSppStatusMsg] = useState<string | null>(
     sppService.getConnectionInfo().status === "connected" ? "Connected" : null,
   );
-  const [showSppsRetry, setShowSppsRetry] = useState(false);
+  // U-120 Phase C (owner item 8): "reconnecting should not be automatic —
+  // it should prompt the reconnect dialog box with proper method and only
+  // reconnect if sayed yes." No transport reconnects on its own anymore
+  // (the Wi-Fi quiet re-dial and the SPP silent backoff are both gone).
+  // An unexpected drop raises ONE dialog: `reconnectDue` gates it,
+  // `reconnectMethod` names what dropped (title/body + the Reconnect route).
+  const [reconnectDue, setReconnectDue] = useState(false);
+  const [reconnectMethod, setReconnectMethod] =
+    useState<LinkPromptMethod>("Bluetooth");
   // U-108 Phase 4 (owner 2026-10-13): a car RESTART detected from the boot
   // counter. Carries the reason + crash count on the next connect so the app can
   // prompt Reconnect / Leave / Cancel (previously only the SPP backoff banner
@@ -710,23 +721,10 @@ export function useControlHub(routeCategory?: string) {
     null,
   );
 
-  // ---- SPP auto-reconnect (ESP remote parity: 4 silent tries â†’ prompt) ----
-  const sppReconnectAttemptsRef = useRef(0);
-  // R1 flicker fix (owner round 1, 2026-09-28): re-arm guard. The status
-  // handler called startSppReconnect() on EVERY emitted error while this
-  // scheduler's own .catch ALSO chained the next attempt - duelling timers:
-  // each failed retry emitted more statuses, which scheduled more retries,
-  // and the Control Panel flickered continuously until the user pressed
-  // Disconnect. startSppReconnect() is now the ONLY scheduler (idempotent:
-  // a running burst returns early) and every exit path de-arms the flag.
-  // One scheduler only; a running burst returns early, so repeated errors
-  // cannot start a second scheduler and flicker the panel.
-  const sppReconnectActiveRef = useRef(false);
+  // U-120 Phase C: the SPP auto-reconnect machinery (attempts / re-arm
+  // guard / backoff timer) is GONE with the silent retries themselves.
   // FIN-44: last status message seen by the dedupe gate (see onStatus below).
   const sppStatusMsgRef = useRef<string | null>(null);
-  const sppReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const sppLastAddressRef = useRef<string | null>(null);
 
   // W5: refs to track previous telemetry IP/SSID for network switch detection
@@ -1215,7 +1213,7 @@ export function useControlHub(routeCategory?: string) {
   // It can only be stale once the car is answering again — whether on the same
   // transport that was retrying or on another one.
   useEffect(() => {
-    if (connected || wifiConnected) setShowSppsRetry(false);
+    if (connected || wifiConnected) setReconnectDue(false);
   }, [connected, wifiConnected]);
   useEffect(() => {
     const live = connected || wifiConnected;
@@ -1762,21 +1760,12 @@ export function useControlHub(routeCategory?: string) {
       // same-message guard never matched and the reconnect burst kept
       // re-rendering. Keep it truthful (ref write = no re-render).
       sppStatusMsgRef.current = message ?? null;
-      // FIN-50 flicker fix (owner gate 2026-09-20): during the SILENT
-      // auto-reconnect burst the UI flapped connecting↔error on every attempt
-      // (each transition re-rendered the control panel + remote screen). While
-      // the backoff is running, collapse both transient kinds into ONE stable
-      // presentation ('connecting' + 'Reconnecting…') so repeated attempts no
-      // longer change any rendered value. Real transitions ('connected',
-      // 'disconnected') and the exhausted-attempts banner are unaffected.
-      const reconnecting =
-        !manualCloseRef.current &&
-        !sppService.manualClose &&
-        !!sppLastAddressRef.current &&
-        sppReconnectAttemptsRef.current > 0;
-      const burst = reconnecting && (kind === "connecting" || kind === "error");
-      const presentationKind = burst ? "connecting" : kind;
-      const presentationMsg = burst ? "Reconnecting…" : (message ?? null);
+      // U-120 Phase C: the SILENT auto-reconnect burst is GONE (nothing
+      // retries on its own anymore), so the FIN-50 burst collapse has
+      // nothing left to collapse — every status reaches the UI exactly as
+      // emitted, and the reconnect dialog owns recovery.
+      const presentationKind = kind;
+      const presentationMsg = message ?? null;
       // FIN-44 flicker fix: dedupe repeats of the same status kind (the SPP
       // service emits per event; repeated 'connecting'/'error' bursts from the
       // auto-reconnect backoff re-rendered the BT connection-details row on
@@ -1794,14 +1783,13 @@ export function useControlHub(routeCategory?: string) {
       });
       switch (kind) {
         case "connecting":
-          if (!burst) setSppStatusMsg(""); // burst: keep the stable message
-          setShowSppsRetry(false);
+          setSppStatusMsg("");
+          setReconnectDue(false);
           break;
         case "connected":
           setSppStatus("connected");
           setSppStatusMsg(message ?? "Connected");
-          setShowSppsRetry(false);
-          sppReconnectAttemptsRef.current = 0;
+          setReconnectDue(false);
           // A-7: fresh link â€” drop any stub truth from the previous session
           // so the next car (or a re-flashed car) starts from the fallback
           // table until it reports per-token truth again (remote R-10 parity).
@@ -1849,20 +1837,27 @@ export function useControlHub(routeCategory?: string) {
           if (!bleService.isConnected) setBtLinked(false);
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
-          // Auto-reconnect on unexpected disconnect (ESP remote parity):
-          // silent exponential backoff; the banner appears when exhausted.
+          // U-120 Phase C: NO silent auto-reconnect. An unexpected
+          // Bluetooth drop raises the reconnect dialog at once — the
+          // dialog names the method and only reconnects on an explicit yes.
+          // The U-110 rule survives at presentation level: while ANY link
+          // answers, `!linked` keeps the dialog hidden; the guard below also
+          // skips raising it while the car is reachable on Wi-Fi/BLE.
+          // A manual disconnect clears the prompt instead (nothing to ask).
           if (
             !manualCloseRef.current &&
             !sppService.manualClose &&
-            sppLastAddressRef.current
+            sppLastAddressRef.current &&
+            !(wifiService.isConnected || bleService.isConnected)
           ) {
-            startSppReconnect();
+            setReconnectDue(true);
+            setReconnectMethod("Bluetooth");
           } else {
-            setShowSppsRetry(false);
+            setReconnectDue(false);
           }
           break;
         case "error":
-          if (!burst) setSppStatusMsg(presentationMsg ?? "Connection error"); // burst: no flap
+          setSppStatusMsg(presentationMsg ?? "Connection error");
           setDeviceName("");
           // U-98: same rule as "disconnected" — a failed Bluetooth attempt
           // must not un-verify the Wi-Fi link that is still up.
@@ -1875,14 +1870,18 @@ export function useControlHub(routeCategory?: string) {
           if (!bleService.isConnected) setBtLinked(false);
           setDriveStatusOnce("Stop");
           setDriveDirOnce("S");
+          // U-120 Phase C: same rule as "disconnected" — no automatic
+          // retry; the user is asked, with the method named, and decides.
           if (
             !manualCloseRef.current &&
             !sppService.manualClose &&
-            sppLastAddressRef.current
+            sppLastAddressRef.current &&
+            !(wifiService.isConnected || bleService.isConnected)
           ) {
-            startSppReconnect();
+            setReconnectDue(true);
+            setReconnectMethod("Bluetooth");
           } else {
-            setShowSppsRetry(false);
+            setReconnectDue(false);
           }
           break;
         default:
@@ -1936,7 +1935,7 @@ export function useControlHub(routeCategory?: string) {
           setWifiConnected(true);
           setConnecting(false);
           setError(null);
-          setShowSppsRetry(false);
+          setReconnectDue(false);
           // A-7/R-10: fresh link â€” drop stale stub/avail truth from the old
           // session (same reset the SPP handler does on its own reconnect).
           setCarStubMap({});
@@ -1957,21 +1956,23 @@ export function useControlHub(routeCategory?: string) {
           // which is exactly the stale-visual report ("the app is still in the
           // old state").
           setLinkVerified(false);
+          // U-120 Phase C: "disconnected" is the MANUAL path (disconnect()).
+          // The user chose to drop the link — no dialog asks them to reconnect.
+          setReconnectDue(false);
           // Only clear the global "connected" if SPP/BLE are also down.
           if (!sppService.isConnected && !bleService.isConnected) {
             setConnected(false);
             setDeviceName("");
           }
           break;
-        // F-65 (2026-10-13): an UNEXPECTED socket loss previously scheduled the
-        // service's quiet re-dial with NO status event, so the hub kept
-        // `wifiConnected` true and the app looked green while every command
-        // vanished (the owner's "the app freezes / the car is still connected
-        // but nothing works"). `wifiService` now announces the drop BEFORE it
-        // re-dials, and this handler tells the UI the truth immediately: the
-        // Wi-Fi link is gone, it may or may not come back. Same teardown as
-        // "disconnected" (no error banner — the re-dial is still in progress,
-        // and "connected" / "error" follow inside seconds).
+        // F-65 (2026-10-13) → U-120 Phase C: an UNEXPECTED socket loss used to
+        // be swallowed silently, so the hub kept `wifiConnected` true and the
+        // app looked green while every command vanished (the owner's "the app
+        // freezes / the car is still connected but nothing works"). The
+        // service announces the drop; this handler tells the UI the truth
+        // immediately AND raises the reconnect dialog — no automatic re-dial
+        // runs anymore (owner item 8), so recovery is the user's call: one
+        // dialog naming the method (Wi-Fi), Reconnect or Cancel.
         case "reconnecting":
           setWifiConnected(false);
           setConnecting(false);
@@ -1979,6 +1980,12 @@ export function useControlHub(routeCategory?: string) {
           if (!sppService.isConnected && !bleService.isConnected) {
             setConnected(false);
             setDeviceName("");
+          }
+          // U-110's rule at presentation level too: while the car answers on
+          // Bluetooth, a Wi-Fi-shaped loss is stale — don't ask.
+          if (!(sppService.isConnected || bleService.isConnected)) {
+            setReconnectDue(true);
+            setReconnectMethod("Wi-Fi");
           }
           break;
         case "error":
@@ -1990,13 +1997,13 @@ export function useControlHub(routeCategory?: string) {
             setConnected(false);
             setDeviceName("");
           }
-          // wifiService auto-reconnect re-dials the SAME url up to
-          // MAX_RECONNECTS and then gives up. When the car moved routers that
-          // address is dead, so retrying it can never succeed — and the owner's
-          // report was precisely "the app wait for the same network to connect",
-          // then a manual disconnect + rejoin. Look for the car instead: the
-          // sweep already has inflight/cooldown/manual-close guards, so this
-          // cannot hammer the network or reopen a link the user closed.
+          // U-120 Phase C: a failed dial's rescue is still automatic
+          // FINDING, not reconnecting — the user asked to connect (or said
+          // yes to the dialog), and when the car moved routers the old
+          // address is dead by definition, so the sweep runs instead of
+          // re-dialing a corpse. The sweep already has inflight/cooldown/
+          // manual-close guards, so this cannot hammer the network or
+          // reopen a link the user closed.
           autoDiscoverRef.current?.();
           break;
         default:
@@ -2150,8 +2157,6 @@ export function useControlHub(routeCategory?: string) {
       try {
         await sppService.connect(device.address);
         sppLastAddressRef.current = device.address;
-        sppReconnectAttemptsRef.current = 0;
-        sppReconnectActiveRef.current = false; // fresh manual link: re-arm the scheduler
         setConnected(true);
         setBtLinked(true);
         setDeviceName(device.name);
@@ -2197,13 +2202,13 @@ export function useControlHub(routeCategory?: string) {
     [showConnectionMessage],
   );
 
-  // Immediate SPP retry (uses last known address from service)
+  // The user SAID YES to the reconnect dialog's Bluetooth method: retry the
+  // remembered device once. No silent backoff follows (U-120 Phase C) — a
+  // failure surfaces through the hub's error, and a fresh drop re-asks.
   const handleSppsRetry = useCallback(async () => {
-    setShowSppsRetry(false);
+    setReconnectDue(false);
     setError(null);
     manualCloseRef.current = false;
-    sppReconnectAttemptsRef.current = 0;
-    sppReconnectActiveRef.current = false; // explicit user retry: re-arm first (idempotent)
     try {
       await sppService.retryConnect();
     } catch (e) {
@@ -3704,95 +3709,33 @@ export function useControlHub(routeCategory?: string) {
     [persistPrefs],
   );
 
-  // ---- SPP auto-reconnect â€” silent exponential backoff ----
-  // Delays: 1s â†’ 2s â†’ 4s â†’ 8s â†’ give up â†’ show the reconnect banner.
-  const startSppReconnect = useCallback(() => {
-    // R1 flicker fix: idempotent re-arm guard (see sppReconnectActiveRef).
-    // The status handler fires on every error; without this guard each error
-    // started a SECOND scheduler alongside the .catch chain below, and the
-    // multiplying retry loops flickered the Control Panel until Disconnect.
-    if (sppReconnectActiveRef.current) return;
-    sppReconnectActiveRef.current = true;
-    if (sppReconnectTimerRef.current) {
-      clearTimeout(sppReconnectTimerRef.current);
-      sppReconnectTimerRef.current = null;
-    }
-    const attempt = () => {
-      if (
-        !mountedRef.current ||
-        manualCloseRef.current ||
-        sppService.manualClose ||
-        !sppLastAddressRef.current
-      ) {
-        // R1 flicker fix: on failure, de-arm so the next retry does not
-        // have a contradictory state from a duelling scheduler.        // R1 flicker fix: on failure, de-arm so the next retry does not
-        // have a contradictory state from a duelling scheduler.
-        sppReconnectActiveRef.current = false;
-        return;
-      }
-      const n = sppReconnectAttemptsRef.current;
-      if (n >= SPP_RECONNECT_DELAYS_MS.length) {
-        // All attempts exhausted â€” surface the banner so the user can decide.
-        // (Previously this path gave up silently: the â€œconnection lostâ€ UI
-        // never appeared and only a manual reconnect could recover.)
-        sppReconnectAttemptsRef.current = 0;
-        sppReconnectActiveRef.current = false;
-        // U-110 (owner 2026-10-14): raise the prompt ONLY when the car is
-        // genuinely unreachable. A live Wi-Fi/WebSocket (or BLE) link means the
-        // car is answering, so a Bluetooth-shaped "connection lost" is stale and
-        // false — the owner's field report: the prompt appeared while the car was
-        // connected and working over Wi-Fi.
-        if (!(wifiService.isConnected || bleService.isConnected)) {
-          setShowSppsRetry(true);
-        }
-        return;
-      }
-      sppReconnectAttemptsRef.current += 1;
-      sppService.retryConnect().catch(() => {
-        if (
-          !mountedRef.current ||
-          manualCloseRef.current ||
-          sppService.manualClose
-        ) {
-          sppReconnectActiveRef.current = false;
-          return;
-        }
-        const delay =
-          SPP_RECONNECT_DELAYS_MS[sppReconnectAttemptsRef.current] ??
-          SPP_RECONNECT_DELAYS_MS[SPP_RECONNECT_DELAYS_MS.length - 1];
-        sppReconnectTimerRef.current = setTimeout(attempt, delay);
-      });
-    };
-    sppReconnectTimerRef.current = setTimeout(
-      attempt,
-      SPP_RECONNECT_DELAYS_MS[0],
-    );
-  }, []);
+  // U-120 Phase C (owner item 8): the dialog's Reconnect — the ONLY
+  // reconnect path now — routes through the METHOD that dropped: the
+  // Bluetooth method retries the remembered device once (handleSppsRetry),
+  // the Wi-Fi method re-dials the last address through handleWifiConnect,
+  // whose own rescue re-FINDS the car when the address died with the
+  // network. Nothing retries unless this runs — the user said yes.
+  const handleReconnectConfirm = useCallback((): Promise<unknown> => {
+    setReconnectDue(false);
+    setCarRestartNotice(null);
+    return reconnectMethod === "Wi-Fi"
+      ? handleWifiConnect()
+      : handleSppsRetry();
+  }, [reconnectMethod, handleWifiConnect, handleSppsRetry]);
 
+  // The user SAID NO. Dismiss the dialog WITHOUT tearing the remembered
+  // device down — the user may just want to keep browsing; a fresh connect
+  // from the device list must stay possible. `manualCloseRef` marks the link
+  // as user-closed so no background sweep reopens it (U-120: nothing
+  // reconnects without an explicit yes).
   const handleReconnectPromptCancel = useCallback(() => {
-    // Dismiss the banner WITHOUT tearing the remembered device down â€” the
-    // user may just want to keep browsing; a fresh connect from the device
-    // list (or Retry) must stay possible (old behavior killed the address,
-    // which contributed to the dead Connect button).
-    setShowSppsRetry(false);
+    setReconnectDue(false);
     // U-118: the restart CAUSE may be what raised the card now (there is no
     // restart card anymore), so cancelling must clear it too — otherwise a
     // restart-raised prompt could never be dismissed (F-85: when the cause
     // clears, so does the prompt).
     setCarRestartNotice(null);
     manualCloseRef.current = true;
-    if (sppReconnectTimerRef.current) {
-      clearTimeout(sppReconnectTimerRef.current);
-      sppReconnectTimerRef.current = null;
-    }
-  }, []);
-
-  // Cleanup reconnect timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (sppReconnectTimerRef.current)
-        clearTimeout(sppReconnectTimerRef.current);
-    };
   }, []);
 
   /**
@@ -4032,7 +3975,8 @@ export function useControlHub(routeCategory?: string) {
     // absence means CAPABLE, never denied). The connection panel gates the
     // SECOND-link raises on `linkCap === false`.
     linkCap,
-    showSppsRetry,
+    reconnectDue,
+    reconnectMethod,
     // U-108 Phase 4 (owner 2026-10-13): the network the PHONE is on (safe
     // switching) and a detected CAR RESTART (boot-count change) with the
     // Reconnect / Leave / Cancel actions.
@@ -4106,7 +4050,10 @@ export function useControlHub(routeCategory?: string) {
     // D3 (U-68): the car's own antenna scan result, so the Control Panel can
     // offer a real nearby-network list. `null` until the car answers.
     carScan,
-    // SPP auto-reconnect
+    // U-120 Phase C: the ONE reconnect dialog's actions — confirm routes
+    // the retry through the method that dropped, cancel dismisses and marks
+    // the link user-closed.
+    handleReconnectConfirm,
     handleReconnectPromptCancel,
     // mode + category (carStubMap is returned with the WiFi-truth group above)
     activeCategory,

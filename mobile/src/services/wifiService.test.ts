@@ -224,7 +224,8 @@ describe("WifiService link verification (R1)", () => {
   it("announces 'reconnecting' + clears verification on an UNEXPECTED close (F-65)", async () => {
     // The car half disappears mid-session: the socket dies without a manual
     // close. The service must SAY the link dropped (not sit on a fake green
-    // while commands vanish) before it quietly re-dials.
+    // while commands vanish) — recovery is the hub's reconnect dialog, never
+    // a service re-dial (U-120 item 8).
     vi.useFakeTimers();
     const service = new WifiService();
     const statuses: string[] = [];
@@ -241,6 +242,29 @@ describe("WifiService link verification (R1)", () => {
     expect(service.isConnected).toBe(false);
     expect(service.linkVerified).toBe(false);
     expect(statuses).toContain("reconnecting");
+  });
+
+  it("never re-dials on its own after an unexpected close (U-120 item 8)", async () => {
+    // Owner item 8: "reconnecting should not be automatic." The old path
+    // scheduled a quiet scheduleReconnect(url) here — a re-dial that could
+    // loop on a dead address. Now the drop is only ANNOUNCED; opening a
+    // socket again requires the user saying yes (connect()).
+    vi.useFakeTimers();
+    const service = new WifiService();
+    const statuses: string[] = [];
+    service.onStatus((kind) => statuses.push(kind));
+    const pending = service.connect("ws://192.168.245.1:81");
+    open(latest());
+    await pending;
+    latest().close();
+    latest().onclose?.();
+    expect(statuses).toContain("reconnecting");
+    // Far past the old 3 s re-dial and the 8 s connect timeout: still ONE
+    // socket, no second dial, no new status — nothing runs without a yes.
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(sockets.length).toBe(1);
+    expect(statuses.filter((s) => s === "connecting")).toHaveLength(1);
+    expect(service.isConnected).toBe(false);
   });
 
   it("does NOT announce 'reconnecting' on a manual disconnect", async () => {
