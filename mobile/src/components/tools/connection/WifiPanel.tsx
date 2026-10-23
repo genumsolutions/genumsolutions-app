@@ -39,7 +39,16 @@
 // are not invented (F-62).
 // =====================================================================
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 
 import { InlineMessage } from "./ConnectionCard";
@@ -68,14 +77,18 @@ export type ScannedNetwork = {
 const ROUTER_LIST_MAX_HEIGHT = 240;
 
 /**
- * 2026-10-12 (owner): *"add the router has too less space ... give the
- * scrolling thing."* The add/edit form used to render inline below the list
- * with no height of its own, so in landscape it was squeezed against the panel
- * edge (and the keyboard). It now lives in its OWN bounded scroller with a
- * minimum height, so the fields stay reachable and scroll independently.
+ * U-121 Phase C (owner 2026-10-23): *"the field space to enter the router name
+ * and password is too small and hard to read … the keyboard used to enter the
+ * data there is weird shape and size in the landscape view."* The inline form
+ * (and its bounded-scroller workaround from 2026-10-12, `ADD_FORM_MAX_HEIGHT`
+ * / `ADD_FORM_MIN_HEIGHT`, both GONE) is replaced by a CENTERED MODAL CARD:
+ * one fixed readable width with labelled h-12 / 15 px fields and real
+ * Save/Cancel buttons, so the landscape split keyboard can never squeeze it
+ * against the panel edge again. Android resizes the app under the keyboard
+ * (`softwareKeyboardLayoutMode: resize` in app.json) and the card stays
+ * centered; iOS is padded by KeyboardAvoidingView.
  */
-const ADD_FORM_MAX_HEIGHT = 190;
-const ADD_FORM_MIN_HEIGHT = 132;
+const ADD_FORM_MAX_WIDTH = 420;
 
 export type WifiPanelProps = {
   /** Exactly what the car reported in NETW;… — the only source of truth. */
@@ -445,102 +458,7 @@ export function WifiPanel({
 
       {manage ? (
         <>
-          {adding ? (
-            <ScrollView
-              className="mt-1.5 overflow-hidden rounded-lg border border-line bg-card"
-              style={{
-                maxHeight: ADD_FORM_MAX_HEIGHT,
-                minHeight: ADD_FORM_MIN_HEIGHT,
-              }}
-              contentContainerStyle={{ padding: 8, gap: 6 }}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator
-            >
-              <View className="gap-1.5" testID="wifi-add-form">
-                {editingSsid ? (
-                  <Text
-                    className="text-[11px] font-bold text-ink"
-                    testID="wifi-edit-title"
-                  >
-                    Set a new password for “{editingSsid}”
-                  </Text>
-                ) : null}
-                <TextInput
-                  value={ssid}
-                  onChangeText={(v) => {
-                    setSsid(v);
-                    setError(null);
-                  }}
-                  onFocus={() => onInputFocus?.()}
-                  placeholder="Network name"
-                  placeholderTextColor="#94a3b8"
-                  selectionColor="#1e3a8a"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  accessibilityLabel="Network name"
-                  maxLength={40}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => passRef.current?.focus()}
-                  className="h-9 rounded-md border border-line bg-card px-2.5 text-[13px] text-ink"
-                  testID="wifi-ssid"
-                />
-                <TextInput
-                  ref={passRef}
-                  value={pass}
-                  onChangeText={(v) => {
-                    setPass(v);
-                    setError(null);
-                  }}
-                  onFocus={() => onInputFocus?.()}
-                  placeholder="Password"
-                  placeholderTextColor="#94a3b8"
-                  selectionColor="#1e3a8a"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                  accessibilityLabel="Network password"
-                  maxLength={72}
-                  returnKeyType="done"
-                  onSubmitEditing={submit}
-                  className="h-9 rounded-md border border-line bg-card px-2.5 text-[13px] text-ink"
-                  testID="wifi-pass"
-                />
-                {error ? (
-                  <InlineMessage tone="error">{error}</InlineMessage>
-                ) : null}
-                <View className="flex-row gap-1.5">
-                  <Pressable
-                    onPress={submit}
-                    disabled={
-                      busy ||
-                      !ssid.trim() ||
-                      (editingSsid != null && !pass.trim())
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel="Save network"
-                    className="flex-1 items-center rounded-full bg-navy py-1.5"
-                    testID="wifi-add-submit"
-                  >
-                    <Text className="text-[11px] font-black text-white">
-                      {editingSsid ? "Save password" : "Save"}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={cancel}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel"
-                    className="items-center rounded-full border border-line bg-card px-4 py-1.5"
-                  >
-                    <Text className="text-[11px] font-bold text-navy">
-                      Cancel
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </ScrollView>
-          ) : (
+          {adding ? null : (
             <Pressable
               onPress={() => setAdding(true)}
               disabled={!canAdd}
@@ -555,6 +473,150 @@ export function WifiPanel({
               </Text>
             </Pressable>
           )}
+
+          {/* U-121 Phase C: the add/edit form is a CENTERED MODAL CARD —
+              labelled, readable fields at real size, clear of the landscape
+              keyboard. Same state machine, same testIDs, same submit rules. */}
+          <Modal
+            transparent
+            visible={adding}
+            animationType="fade"
+            onRequestClose={cancel}
+            statusBarTranslucent
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.55)" }}
+            >
+              <ScrollView
+                contentContainerStyle={{
+                  flexGrow: 1,
+                  justifyContent: "center",
+                  padding: 20,
+                }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View
+                  className="w-full self-center rounded-2xl border border-line bg-card p-4 shadow-2xl"
+                  style={{ maxWidth: ADD_FORM_MAX_WIDTH }}
+                  testID="wifi-add-form"
+                >
+                  <View className="flex-row items-center gap-2">
+                    <Feather
+                      name={editingSsid ? "edit-2" : "wifi"}
+                      size={16}
+                      color="#1e3a8a"
+                    />
+                    <Text
+                      numberOfLines={1}
+                      className="min-w-0 flex-1 text-[15px] font-black text-ink"
+                    >
+                      {editingSsid ? "Edit network" : "Add network"}
+                    </Text>
+                    <Pressable
+                      onPress={cancel}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close"
+                      testID="wifi-add-close"
+                    >
+                      <Feather name="x" size={20} color="#64748b" />
+                    </Pressable>
+                  </View>
+                  {editingSsid ? (
+                    <Text
+                      className="mt-1 text-[12px] leading-4 text-muted"
+                      testID="wifi-edit-title"
+                    >
+                      “{editingSsid}” keeps its name — the car gets the new
+                      password.
+                    </Text>
+                  ) : null}
+
+                  <Text className="mt-4 text-[11px] font-black uppercase tracking-widest text-muted">
+                    Network name
+                  </Text>
+                  <TextInput
+                    value={ssid}
+                    onChangeText={(v) => {
+                      setSsid(v);
+                      setError(null);
+                    }}
+                    onFocus={() => onInputFocus?.()}
+                    placeholder="e.g. HomeNet"
+                    placeholderTextColor="#94a3b8"
+                    selectionColor="#1e3a8a"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Network name"
+                    maxLength={40}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => passRef.current?.focus()}
+                    className="mt-1.5 h-12 rounded-lg border border-line bg-surface px-3 text-[15px] text-ink"
+                    testID="wifi-ssid"
+                  />
+                  <Text className="mt-3 text-[11px] font-black uppercase tracking-widest text-muted">
+                    Password
+                  </Text>
+                  <TextInput
+                    ref={passRef}
+                    value={pass}
+                    onChangeText={(v) => {
+                      setPass(v);
+                      setError(null);
+                    }}
+                    onFocus={() => onInputFocus?.()}
+                    placeholder="Wi-Fi password"
+                    placeholderTextColor="#94a3b8"
+                    selectionColor="#1e3a8a"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry
+                    accessibilityLabel="Network password"
+                    maxLength={72}
+                    returnKeyType="done"
+                    onSubmitEditing={submit}
+                    className="mt-1.5 h-12 rounded-lg border border-line bg-surface px-3 text-[15px] text-ink"
+                    testID="wifi-pass"
+                  />
+                  {error ? (
+                    <InlineMessage tone="error">{error}</InlineMessage>
+                  ) : null}
+
+                  <View className="mt-4 flex-row gap-2">
+                    <Pressable
+                      onPress={submit}
+                      disabled={
+                        busy ||
+                        !ssid.trim() ||
+                        (editingSsid != null && !pass.trim())
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel="Save network"
+                      className="flex-1 items-center rounded-full bg-navy py-3 disabled:opacity-50"
+                      testID="wifi-add-submit"
+                    >
+                      <Text className="text-[13px] font-black text-white">
+                        {editingSsid ? "Save password" : "Save"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={cancel}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel"
+                      className="items-center rounded-full border border-line bg-card px-5 py-3"
+                    >
+                      <Text className="text-[13px] font-bold text-navy">
+                        Cancel
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </Modal>
         </>
       ) : (
         /* Reduced mode (owner 2026-10-11): the list stays here for connecting
