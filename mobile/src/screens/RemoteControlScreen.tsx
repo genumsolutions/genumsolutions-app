@@ -1037,6 +1037,19 @@ export function RemoteControlScreen({ navigation }: Props) {
           </InlineMessage>
         ) : null}
 
+        {/* U-121 Phase D (owner 2026-10-23): "the car freezes and the app
+            doesn't know about that." A link being up says nothing about a
+            live car — the owner's freeze (BT on, Wi-Fi drop, heap collapse)
+            keeps the transport nominally up while the car answers NOTHING.
+            The hub's pure `isCarSilent` detector names that state honestly,
+            and this strip says what to do about it. */}
+        {hub.carSilent ? (
+          <InlineMessage tone="error">
+            The car has not answered for a while — it may have frozen. Check its
+            power (a heap collapse can lock it up), then Reconnect.
+          </InlineMessage>
+        ) : null}
+
         {/* ── Content area ── */}
         {isDrone || isNonRobocar ? (
           /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
