@@ -299,8 +299,9 @@ export function RemoteControlScreen({ navigation }: Props) {
     isDrone,
     isNonRobocar,
     is2wd1mActive,
-    showSppsRetry,
-    handleSppsRetry,
+    reconnectDue,
+    reconnectMethod,
+    handleReconnectConfirm,
     handleReconnectPromptCancel,
     // U-108 Phase 4: the detected car-restart prompt. (phoneSsid is gone
     // from the Remote — U-113 P2 removed the "on <ssid>" chip, issue 4.)
@@ -313,6 +314,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     // the BT chip used to call it and killed the Wi-Fi link too.)
     handleBtDisconnect,
     handleWifiDisconnect,
+    carNetworks,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -667,7 +669,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     linked,
     btLinked,
     wifiConnected,
-    sppRetryDue: showSppsRetry,
+    reconnectDue,
+    method: reconnectMethod,
     restart: carRestartNotice,
     linkLabel,
     ipText: linked ? ipChipText : null,
@@ -694,7 +697,10 @@ export function RemoteControlScreen({ navigation }: Props) {
         <Pressable
           onPress={() => {
             feedbackTap();
-            void handleSppsRetry();
+            // U-120 Phase C: the ONLY reconnect path — routes through the
+            // method that dropped (Bluetooth retry / Wi-Fi re-dial) and runs
+            // only because the user tapped Reconnect.
+            void handleReconnectConfirm();
           }}
           className="rounded-full bg-gold px-3 py-1.5"
           hitSlop={6}
@@ -774,7 +780,9 @@ export function RemoteControlScreen({ navigation }: Props) {
               className="min-w-0 shrink text-[11px] font-bold text-navy dark:text-sky-300"
             >
               {linkLabel}
-              {linked ? ` · ${ipChipText}` : ""}
+              {linked
+                ? ` · ${ipChipText}${carNetworks.length > 0 ? ` • ${carNetworks[0] || ""}` : ""}`
+                : ""}
             </Text>
           </Pressable>
 

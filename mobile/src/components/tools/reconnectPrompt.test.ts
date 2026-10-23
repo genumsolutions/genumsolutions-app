@@ -5,6 +5,13 @@
 //
 // Owner item B ("the reconnect dialog"): it must appear at the proper time,
 // carry no stale/unnecessary message, and offer ONLY Reconnect + Cancel.
+// U-120 Phase C (owner 2026-10-22, item 8): reconnecting is NEVER
+// automatic — no transport re-dials or silent-backoffs anymore. The card
+// names the METHOD that dropped, asks one yes/no question, and only
+// reconnects if the user says yes (screen routes through
+// handleReconnectConfirm). This file pins both halves of that: the pure
+// decision/copy, and the source shape proving no auto-retry machinery is
+// left anywhere.
 // U-118 narrows it further: the deck's SECOND card — the restart RECORD
 // (Boot N → N+1 · reset REASON · crash count, with its own Reconnect/Cancel
 // pair) — is gone from the deck entirely. The reset record still leads the
@@ -60,7 +67,8 @@ function facts(over: Partial<LinkPromptArgs> = {}): LinkPromptArgs {
     linked: false,
     btLinked: false,
     wifiConnected: false,
-    sppRetryDue: false,
+    reconnectDue: false,
+    method: "Bluetooth",
     restart: null,
     linkLabel: "Offline",
     ipText: null,
@@ -77,50 +85,71 @@ const restart = {
 };
 
 describe("U-118 — resolveLinkPrompt: the reconnect card is a claim about NOW", () => {
-  it("shows nothing when the backoff is exhausted but a link is live", () => {
+  it("shows nothing when a drop awaits the answer but a link is live", () => {
     // The whole field bug this guards: a live Wi-Fi link must retire the
     // "Bluetooth disconnected" claim (F-85).
     expect(
       resolveLinkPrompt(
-        facts({ sppRetryDue: true, linked: true, wifiConnected: true }),
+        facts({ reconnectDue: true, linked: true, wifiConnected: true }),
       ),
     ).toBeNull();
     expect(
       resolveLinkPrompt(
-        facts({ sppRetryDue: true, linked: true, btLinked: true }),
+        facts({ reconnectDue: true, linked: true, btLinked: true }),
       ),
     ).toBeNull();
   });
 
-  it("shows nothing before the backoff is exhausted (and no restart)", () => {
+  it("shows nothing when no drop awaits and no restart", () => {
     expect(
-      resolveLinkPrompt(facts({ sppRetryDue: false, linked: false })),
+      resolveLinkPrompt(facts({ reconnectDue: false, linked: false })),
     ).toBeNull();
   });
 
   it("shows the reconnect card only when nothing is up", () => {
-    const p = resolveLinkPrompt(facts({ sppRetryDue: true, linked: false }));
+    const p = resolveLinkPrompt(facts({ reconnectDue: true, linked: false }));
     expect(p?.kind).toBe("reconnect");
-    expect(p && p.kind === "reconnect" ? p.body : "").toContain(
-      "no Wi-Fi link is up",
+    // U-120 item 8: ONE yes/no question naming the METHOD — no link-state
+    // narration, no "stopping itself on link loss" sentence.
+    expect(p && p.kind === "reconnect" ? p.body : "").toBe(
+      "Reconnect to your car over Bluetooth?",
     );
     expect(p && p.kind === "reconnect" ? p.title : "").toBe(
       "Bluetooth disconnected",
     );
+    expect(p && p.kind === "reconnect" ? p.method : "").toBe("Bluetooth");
+  });
+
+  it("the Wi-Fi method is named and routed as Wi-Fi (proper method)", () => {
+    // Owner item 8: the dialog prompts "with proper method" — a Wi-Fi drop
+    // must SAY Wi-Fi in both title and body and expose the method so the
+    // screen can route Reconnect to the Wi-Fi re-dial.
+    const p = resolveLinkPrompt(
+      facts({ reconnectDue: true, linked: false, method: "Wi-Fi" }),
+    );
+    expect(p?.kind).toBe("reconnect");
+    expect(p && p.kind === "reconnect" ? p.title : "").toBe(
+      "Wi-Fi disconnected",
+    );
+    expect(p && p.kind === "reconnect" ? p.body : "").toBe(
+      "Reconnect to your car over Wi-Fi?",
+    );
+    expect(p && p.kind === "reconnect" ? p.method : "").toBe("Wi-Fi");
   });
 
   it("a cleared cause dismisses it (same facts, one field flipped)", () => {
     // Raised…
     expect(
-      resolveLinkPrompt(facts({ sppRetryDue: true, linked: false }))?.kind,
+      resolveLinkPrompt(facts({ reconnectDue: true, linked: false }))?.kind,
     ).toBe("reconnect");
-    // …then retired the moment EITHER the backoff clears OR a link comes up.
+    // …then retired the moment EITHER the drop is answered/cleared OR a link
+    // comes up.
     expect(
-      resolveLinkPrompt(facts({ sppRetryDue: false, linked: false })),
+      resolveLinkPrompt(facts({ reconnectDue: false, linked: false })),
     ).toBeNull();
     expect(
       resolveLinkPrompt(
-        facts({ sppRetryDue: true, linked: true, btLinked: true }),
+        facts({ reconnectDue: true, linked: true, btLinked: true }),
       ),
     ).toBeNull();
   });
@@ -128,8 +157,8 @@ describe("U-118 — resolveLinkPrompt: the reconnect card is a claim about NOW",
 
 describe("U-118 — a restart is a CAUSE, never a record", () => {
   it("a restart with no link raises the ONE reconnect card", () => {
-    // The restart is why the link died, so it may prompt before the backoff
-    // exhausts — but it prompts with the RECONNECT card, nothing else.
+    // The restart is why the link died, so it may prompt on its own — but it
+    // prompts with the RECONNECT card, nothing else.
     const p = resolveLinkPrompt(facts({ restart, linked: false }));
     expect(p?.kind).toBe("reconnect");
   });
@@ -165,9 +194,9 @@ describe("U-118 — a restart is a CAUSE, never a record", () => {
     ).toBeNull();
   });
 
-  it("restart + exhausted backoff still yields exactly one card", () => {
+  it("restart + a pending drop still yields exactly one card", () => {
     const p = resolveLinkPrompt(
-      facts({ restart, sppRetryDue: true, linked: false }),
+      facts({ restart, reconnectDue: true, linked: false }),
     );
     expect(p?.kind).toBe("reconnect");
   });
@@ -188,8 +217,10 @@ describe("U-118 — the screen wires exactly ONE prompt decision", () => {
 
   it("calls resolveLinkPrompt with the live link facts", () => {
     expect(screen).toContain("resolveLinkPrompt({");
-    // The facts it must feed: link truth, the backoff flag, the restart CAUSE.
-    expect(screen).toContain("sppRetryDue: showSppsRetry");
+    // The facts it must feed: link truth, the pending-drop flag + METHOD,
+    // the restart CAUSE.
+    expect(screen).toContain("reconnectDue,");
+    expect(screen).toContain("method: reconnectMethod");
     expect(screen).toContain("restart: carRestartNotice");
   });
 
@@ -227,5 +258,61 @@ describe("U-118 — the screen wires exactly ONE prompt decision", () => {
     // The restart card's dedicated handlers are dead and must be gone.
     expect(hub).not.toContain("const handleRestartReconnect");
     expect(hub).not.toContain("const handleRestartDismiss");
+  });
+});
+
+// =====================================================================
+// U-120 Phase C (owner item 8) — "reconnecting should not be automatic."
+//
+// Both former auto-retry paths are DELETED, not bypassed, and the dialog is
+// the ONLY recovery path: a source-shape pass over the hub + the Wi-Fi
+// transport + the screen proves (mutate → red, restore → green):
+//   1. no SPP silent backoff scheduler exists,
+//   2. the Wi-Fi service has no quiet re-dial (no scheduleReconnect),
+//   3. the screen's Reconnect routes through handleReconnectConfirm, which
+//      picks the method — there is no straight-to-retry button anymore.
+// =====================================================================
+describe("U-120 Phase C — reconnecting is never automatic", () => {
+  const hub = strip(raw("./useControlHub.ts"));
+  const wifi = strip(raw("../../services/wifiService.ts"));
+
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(hub.length).toBeGreaterThan(5000);
+    expect(wifi.length).toBeGreaterThan(2000);
+    expect(hub).toContain("const handleReconnectConfirm = useCallback");
+    expect(wifi).toContain('emitStatus("reconnecting"');
+  });
+
+  it("the SPP silent backoff scheduler is GONE from the hub", () => {
+    expect(hub).not.toContain("startSppReconnect");
+    expect(hub).not.toContain("sppReconnectTimerRef");
+    expect(hub).not.toContain("sppReconnectAttemptsRef");
+    expect(hub).not.toContain("sppReconnectActiveRef");
+    expect(hub).not.toContain("SPP_RECONNECT_DELAYS_MS");
+  });
+
+  it("the Wi-Fi service has no re-dial of its own", () => {
+    // The old path: an unexpected close scheduled scheduleReconnect(url) —
+    // a quiet re-dial that could loop on a dead address. Gone: an unexpected
+    // close only ANNOUNCES the drop; the dialog owns every retry.
+    expect(wifi).not.toContain("scheduleReconnect");
+    expect(wifi).not.toContain("RECONNECT_DELAY_MS");
+    expect(wifi).not.toContain("MAX_RECONNECTS");
+  });
+
+  it("an unexpected drop raises the dialog with its method (both transports)", () => {
+    // SPP drop → Bluetooth; Wi-Fi drop (the old re-dial case) → Wi-Fi.
+    expect(hub).toContain('setReconnectMethod("Bluetooth")');
+    expect(hub).toContain('setReconnectMethod("Wi-Fi")');
+    // A MANUAL drop never asks (disconnect is an answer already).
+    expect(hub).toContain("setReconnectDue(false)");
+  });
+
+  it("the screen reconnects ONLY through the method-routing confirm", () => {
+    // The button must not dial a transport directly anymore: Reconnect →
+    // handleReconnectConfirm (Bluetooth retry vs Wi-Fi re-dial by method).
+    expect(screen).toContain("void handleReconnectConfirm();");
+    expect(screen).not.toContain("void handleSppsRetry();");
+    expect(hub).toContain('reconnectMethod === "Wi-Fi"');
   });
 });

@@ -10,13 +10,15 @@
 // socket. Exactly ONE WebSocket must exist per car, shared by every hub
 // instance — same pattern as sppService / bleService.
 //
-// The service owns the socket lifecycle + auto-reconnect. After an UNEXPECTED
-// close it announces "reconnecting" (so every hub drops the false green
-// immediately) and quietly re-dials the same URL once at RECONNECT_DELAY_MS.
-// A re-dial that fails surfaces an "error" status — the old address is dead,
-// so the app must SWEEP for the car, not keep dialing a corpse. `disconnect()`
-// is the only manual close; unmounting a screen must NEVER kill a shared link
-// (navigation-survivable, like SPP/BLE).
+// The service owns the socket lifecycle — NOT the recovery. After an
+// UNEXPECTED close it announces "reconnecting" (so every hub drops the
+// false green immediately) and DOES NOT re-dial on its own: U-120 item 8
+// (owner 2026-10-22) — "reconnecting should not be automatic, it should
+// prompt the reconnect dialog box ... and only reconnect if sayed yes."
+// Recovery belongs to the hub's reconnect dialog; a `connect()` only ever
+// runs because the user said yes (or started a fresh connect).
+// `disconnect()` is the only manual close; unmounting a screen must NEVER
+// kill a shared link (navigation-survivable, like SPP/BLE).
 //
 // Every inbound frame runs the shared carProtocol parser (STATE / SPD /
 // TEL / CAPS / NACK / JSON), so all consumers see identical telemetry.
@@ -34,8 +36,6 @@ type StatusCallback = (
   message?: string,
 ) => void;
 
-const RECONNECT_DELAY_MS = 3000;
-const MAX_RECONNECTS = 5;
 // R1 fix (owner round 1, 2026-09-28): a WebSocket to an unreachable car can
 // hang in CONNECTING forever (RN does not always fire onclose promptly), so
 // "Connecting..." never resolved. Hard cap: if the socket is not OPEN
@@ -55,8 +55,6 @@ export class WifiService {
   private connectingMarker = false;
   private manualClose = true;
   private verified = false;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectAttempts = 0;
   private telemetryCallbacks: Set<TelemetryCallback> = new Set();
   private statusCallbacks: Set<StatusCallback> = new Set();
 
@@ -118,13 +116,6 @@ export class WifiService {
     });
   }
 
-  private clearReconnectTimer() {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
-
   /**
    * Open (or reuse) the WebSocket for a car at `url`. Safe to call from any
    * hub instance at any time: reuses an already-open socket to the same URL
@@ -132,7 +123,6 @@ export class WifiService {
    */
   async connect(url: string): Promise<void> {
     this.manualClose = false;
-    this.clearReconnectTimer();
 
     if (
       this.socket &&
@@ -140,7 +130,6 @@ export class WifiService {
       this.socketUrl === url
     ) {
       // Already live on this car — no second socket.
-      this.reconnectAttempts = 0;
       return;
     }
     if (this.socket) {
@@ -153,7 +142,6 @@ export class WifiService {
     }
 
     this.socketUrl = url;
-    this.reconnectAttempts = 0;
     this.connectingMarker = true;
     // A fresh dial must re-prove the car: drop the previous verification.
     this.verified = false;
@@ -199,7 +187,6 @@ export class WifiService {
     socket.onopen = () => {
       clearTimeout(connectTimer);
       this.connectingMarker = false;
-      this.reconnectAttempts = 0;
       if (this.socket !== socket) return;
       this.emitStatus("connected", url);
     };
@@ -236,53 +223,24 @@ export class WifiService {
         this.emitStatus("disconnected");
         return;
       }
-      // F-65 (2026-10-13): an UNEXPECTED close used to schedule the quiet
-      // re-dial with NO status event, so every hub kept `wifiConnected` true
-      // and the app looked green while commands vanished (the owner's
-      // freeze/no-reply report). The verification died with the socket — say
-      // so and announce "reconnecting" BEFORE the re-dial: the hub flips the
-      // link to false immediately and "connected"/"error" follow within
-      // seconds. Honest transient state beats a fake green.
+      // U-120 Phase C (owner item 8): an unexpected close announces the drop
+      // (F-65: every hub clears the false green on this event) and hands
+      // recovery to the hub's reconnect dialog — the service does NOT
+      // re-dial. `manualClose` paths never reach here: disconnect() nulls
+      // the socket first, so their close is stale; the guard above is
+      // defensive parity with the pre-U-120 behaviour.
       this.verified = false;
       this.emitStatus("reconnecting", url);
-      this.scheduleReconnect(url);
     };
 
     socket.onerror = () => {
-      /* onclose owns state + reconnect */
+      /* onclose owns state; the reconnect dialog owns recovery */
     };
-  }
-
-  /**
-   * Quiet re-dial after an unexpected close — ONE retry at RECONNECT_DELAY_MS.
-   *
-   * A retry that fails surfaces the reachability "error" (the dial's own
-   * CONNECT_TIMEOUT_MS teardown), because after the old address is dead the
-   * app must SWEEP for the car on the phone's current network instead of
-   * dialing a corpse again. There is deliberately no 5-in-a-row loop here:
-   * every `connect()` dial zeroes `reconnectAttempts`, so each unexpected
-   * close gets exactly one retry by construction and `MAX_RECONNECTS` sits
-   * above `scheduleReconnect` only as a defensive cap.
-   */
-  private scheduleReconnect(url: string) {
-    if (this.reconnectAttempts >= MAX_RECONNECTS) {
-      this.emitStatus("error", "WiFi connection lost — reconnection failed.");
-      return;
-    }
-    this.reconnectAttempts += 1;
-    this.clearReconnectTimer();
-    this.reconnectTimer = setTimeout(() => {
-      this.connect(url).catch(() => {
-        /* onclose status already reported */
-      });
-    }, RECONNECT_DELAY_MS);
   }
 
   /** The ONLY manual teardown. Emits 'disconnected' so every hub updates. */
   async disconnect(): Promise<void> {
     this.manualClose = true;
-    this.clearReconnectTimer();
-    this.reconnectAttempts = 0;
     const s = this.socket;
     this.socket = null;
     this.socketUrl = null;
