@@ -123,9 +123,6 @@ export type WifiPanelProps = {
       flips this true on a confirmed scan and clears it when the section
       resets). The default is true so a reduced caller keeps the old behaviour. */
   showScanned?: boolean;
-  /** M1: a monotonically-changing key the host can bump (e.g. the "Other ESP
-      projects → Add a network" card) to open the same add form in place. */
-  addRequestKey?: number;
 };
 
 type Row = {
@@ -153,7 +150,6 @@ export function WifiPanel({
   pendingSsid,
   manage = true,
   showScanned = true,
-  addRequestKey,
 }: WifiPanelProps) {
   const [adding, setAdding] = useState(false);
   // U-93: editing an existing entry = setting a NEW password for it (the car
@@ -164,19 +160,6 @@ export function WifiPanel({
   const [error, setError] = useState<string | null>(null);
   // Keyboard-return flow: SSID "next" moves focus to the password field.
   const passRef = useRef<TextInput>(null);
-
-  // M1: the host's "Add a network" card (other ESP / IoT projects) opens the
-  // SAME add form in place by bumping this key — one manager, one entry point.
-  const lastAddKey = useRef(addRequestKey);
-  useEffect(() => {
-    if (addRequestKey === undefined || addRequestKey === lastAddKey.current) {
-      return;
-    }
-    lastAddKey.current = addRequestKey;
-    setAdding(true);
-    setEditingSsid(null);
-    setError(null);
-  }, [addRequestKey]);
 
   // Only the car's own reserved network is excluded from switching (F-63).
   const ownAp = routers.find((r) => r.isOwnAp);
