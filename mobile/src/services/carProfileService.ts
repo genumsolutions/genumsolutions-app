@@ -73,7 +73,11 @@ export function addBtId(
 export type PickRouterInput = {
   /** Routers the CAR has stored (the `networks` echo / savedRouters mirror). */
   saved: string[];
-  /** Car-side scan result (ROUTERS;SCAN) with signal strengths. */
+  /**
+   * Car-side scan result (ROUTERS;SCAN) with signal strengths. ACCEPTED but
+   * no longer decides the pick — U-120 item 12 made the rule recency-only,
+   * so signal never displaces the last used router.
+   */
   scan?: Array<{ ssid: string; rssi?: number | null }> | null;
   /** Wi-Fi history, newest first. */
   history?: WifiHistoryEntry[] | null;
@@ -82,12 +86,15 @@ export type PickRouterInput = {
 };
 
 /**
- * Pick the router the car should auto-join (smart-link). Rule (owner ③):
- * "use it if available WITH STRENGTH, else fall back to the car's own AP."
- * Strategy: prefer a saved router the car's own antenna currently hears
- * (scan rssi, strongest wins, recency breaks ties); when no scan overlap,
- * fall back to the most recently used saved router. Returns null when there
- * is nothing to join (stay on the car's own AP). Pure.
+ * Pick the router the car should auto-join (smart-link). Rule (owner item 12,
+ * 2026-10-22): "auto-join LAST USED router" — both sense (label/help/
+ * accessibility) and operations (this pick rule) say and do exactly that;
+ * the old strength-first rule (the strongest saved router the car's antenna
+ * hears, RSSI sort) is gone, so a strong old router can never displace the
+ * car's current working network. Strategy: the most recently used saved
+ * router (history order, lastSsid first). When no saved routers are
+ * available, return null (stay on the car's own AP — never pick it, F-63).
+ * Pure.
  */
 export function pickBestRouter(input: PickRouterInput): string | null {
   // D1 (U-68, 2026-10-02): the own AP is REMOVED here, not by the caller.
@@ -113,28 +120,9 @@ export function pickBestRouter(input: PickRouterInput): string | null {
     return Math.min(inHistory, isLast);
   };
 
-  const hearable = (input.scan ?? [])
-    .map((n) => ({
-      ssid: typeof n?.ssid === "string" ? n.ssid.trim() : "",
-      rssi:
-        typeof n?.rssi === "number" && Number.isFinite(n.rssi) ? n.rssi : null,
-    }))
-    .filter((n) => n.ssid.length > 0);
-
-  const heard = hearable.filter((n) => saved.includes(n.ssid));
-  if (heard.length > 0) {
-    const byRssi = heard.some((n) => n.rssi != null)
-      ? heard
-          .filter((n) => n.rssi != null)
-          .sort(
-            (a, b) =>
-              (b.rssi ?? -Infinity) - (a.rssi ?? -Infinity) ||
-              recency(a.ssid) - recency(b.ssid),
-          )
-      : heard.slice().sort((a, b) => recency(a.ssid) - recency(b.ssid));
-    return byRssi[0].ssid;
-  }
-
+  // U-120 item 12 (operations): the pick is RECENCY, never signal — sorted
+  // by last use (history order, lastSsid first), so the car rejoins the
+  // router it was actually on last instead of whichever it hears loudest.
   const byRecency = saved.slice().sort((a, b) => recency(a) - recency(b));
   return byRecency[0] || null;
 }
