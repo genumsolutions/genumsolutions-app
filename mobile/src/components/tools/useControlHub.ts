@@ -75,6 +75,7 @@ import {
   TELEMETRY_FLUSH_MS,
 } from "./controlConstants";
 import { routeCommand } from "./commandRouting";
+import { isCarSilent } from "./carSilence";
 // U-120 Phase C: the reconnect dialog names the METHOD that dropped and
 // routes its Reconnect action through it — the hub stores that method
 // alongside the dialog flag.
@@ -415,6 +416,16 @@ export function useControlHub(routeCategory?: string) {
   const [reconnectDue, setReconnectDue] = useState(false);
   const [reconnectMethod, setReconnectMethod] =
     useState<LinkPromptMethod>("Bluetooth");
+  // U-121 Phase D (owner 2026-10-23): the app KNOWS when the car stops
+  // answering. A live transport says nothing about a live car — the owner's
+  // freeze report (BT on, Wi-Fi drops, heap collapses to ~15 KB, the car
+  // locks up while the app still shows a link). `carSilent` is the pure
+  // `isCarSilent` rule fed by two facts: the last car frame (stamped at the
+  // top of applyTelemetry, over EITHER link) and the link-up instant,
+  // evaluated on a bounded tick while a link is up.
+  const lastCarFrameRef = useRef<number | null>(null);
+  const linkUpAtRef = useRef<number | null>(null);
+  const [carSilent, setCarSilent] = useState(false);
   // U-108 Phase 4 (owner 2026-10-13): a car RESTART detected from the boot
   // counter. Carries the reason + crash count on the next connect so the app can
   // prompt Reconnect / Leave / Cancel (previously only the SPP backoff banner
@@ -1430,6 +1441,11 @@ export function useControlHub(routeCategory?: string) {
   useEffect(() => {
     const applyTelemetry = (t: CarTelemetry) => {
       if (!mountedRef.current) return;
+      // U-121 Phase D (owner 2026-10-23): every frame the car sends — over
+      // EITHER link — refreshes the silence clock. A frozen car stops
+      // producing frames while its transport stays nominally up, so this
+      // stamp is the half `carSilent` reads (the timer half evaluates it).
+      lastCarFrameRef.current = Date.now();
       // U-97 (bluetooth lag): buffer + flush on a bounded tick instead of a
       // setState per frame. Merged against the previous buffer so nothing in a
       // burst is lost; the state update itself stays functional.
@@ -2020,6 +2036,37 @@ export function useControlHub(routeCategory?: string) {
     // re-created the subscription on every mode change, which caused the
     // app to miss STATE;MODE=... frames from the car during the gap.
   }, []);
+
+  // U-121 Phase D (owner 2026-10-23): "the car freezes and the app doesn't
+  // know about that." A live transport says nothing about a live car — the
+  // owner's freeze keeps the link nominally up while the car stops answering
+  // entirely. This is the detector: while a link is up, a bounded 2 s tick
+  // evaluates the PURE `isCarSilent` rule against two refs — the last car
+  // frame (stamped at the top of applyTelemetry, over EITHER link) and the
+  // link-up instant (so a car that freezes during connect is caught too).
+  // No interval runs while nothing is linked; the state resets on every link
+  // change, so a fresh link never inherits a stale "silent" verdict.
+  useEffect(() => {
+    if (!connected && !wifiConnected) {
+      lastCarFrameRef.current = null;
+      linkUpAtRef.current = null;
+      setCarSilent(false);
+      return;
+    }
+    if (linkUpAtRef.current == null) linkUpAtRef.current = Date.now();
+    const evaluate = () => {
+      const next = isCarSilent({
+        linked: true,
+        nowMs: Date.now(),
+        lastFrameAtMs: lastCarFrameRef.current,
+        sinceLinkUpMs: linkUpAtRef.current,
+      });
+      setCarSilent((cur) => (next === cur ? cur : next));
+    };
+    evaluate();
+    const id = setInterval(evaluate, 2000);
+    return () => clearInterval(id);
+  }, [connected, wifiConnected]);
 
   // W5: Detect car-side network switch from telemetry changes.
   // When the car reports a new IP or SSID (meaning it moved to a different
@@ -3933,6 +3980,8 @@ export function useControlHub(routeCategory?: string) {
     // Reconnect / Leave / Cancel actions.
     phoneSsid,
     phoneNetworkLabel,
+    // U-121 Phase D: the linked car has stopped answering (may be frozen).
+    carSilent,
     carRestartNotice,
     sppSupported,
     canControl,
