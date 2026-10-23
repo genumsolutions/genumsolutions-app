@@ -38,7 +38,7 @@ export function formatPhoneNetwork(input: PhoneNetworkInput): string {
     const ssid = input.ssid?.trim() || "";
     // iOS withholds the SSID unless location permission is granted — say the
     // name is hidden rather than printing an empty or guessed network.
-    return ssid ? `Wi-Fi · ${ssid}` : "Wi-Fi · network name hidden";
+    return ssid ? `Wi-Fi · ${ssid}` : "Wi-Fi · name hidden";
   }
   if (input.type === "cellular") return "Cellular";
   return input.type ? `Other · ${input.type}` : "Unknown network";

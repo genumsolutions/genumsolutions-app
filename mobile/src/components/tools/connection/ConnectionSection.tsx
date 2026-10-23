@@ -234,8 +234,6 @@ export function ConnectionSection({
   // an EXPLICIT "Search for networks" tap — never because the car broadcast
   // its own antennas' results at link-up (smart-link). Reset on method change.
   const [scanShown, setScanShown] = useState(false);
-  // M1: bumped by the "Other ESP / IoT projects" card to open the add form.
-  const [iotAddTick, setIotAddTick] = useState(0);
   // P8 (owner item E / F-91): the "Car network" input — edited locally,
   // saved by the guarded hub writer (which persists it per car).
   const [hintDraft, setHintDraft] = useState<string | null>(null);
@@ -550,32 +548,6 @@ export function ConnectionSection({
 
       {/* ── LEFT pane: method select + setup + the this-car inventory ── */}
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
-        {/* U-121 (owner 2026-10-23, item 4): the old "This phone" lead row
-            that claimed the left-pane top is gone — the phone's own network is
-            now shown on the Remote's FIRST bar (the merged row below Back,
-            testID `remote-phone-network`), so the Connectivity left pane keeps
-            only what belongs to the car and the space below stays for the panels.
-            The phone's network fact itself is unchanged (hub NetInfo watcher via
-            the pure formatPhoneNetwork), but this panel no longer leads with it. */}
-          <View
-            testID="conn-phone-network"
-            className="flex-row items-center justify-between rounded-xl border border-line bg-card px-3 py-2"
-          >
-            <View className="flex-row items-center gap-1.5">
-              <Feather name="smartphone" size={12} color="#64748b" />
-              <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                This phone
-              </Text>
-            </View>
-            <Text
-              numberOfLines={1}
-              className="max-w-[80%] text-[11px] font-bold text-ink"
-            >
-              {phoneNetworkLabel}
-            </Text>
-          </View>
-        )
-
         {/* M1: the method row is the METHOD ONLY — no status text, no
             disconnect, no Bluetooth details (all in the strip above). */}
 
@@ -702,7 +674,6 @@ export function ConnectionSection({
               pendingSsid={pendingJoinSsid}
               manage={manage}
               showScanned={scanShown}
-              addRequestKey={iotAddTick}
               sendCmd={sendCommand}
               onSwitch={(s) => void switchRouter(s)}
               onForget={(s) => void deleteRouter(s)}
@@ -736,15 +707,14 @@ export function ConnectionSection({
               onInputFocus={onInputFocus}
             />
 
-            {/* M1: the honest entry for other ESP / IoT projects — a network
-                saved here is kept ON THE CAR, and any ESP in the fleet can
-                switch to it. The button opens the same add form above. */}
-            <IotEntryCard onAdd={() => setIotAddTick((t) => t + 1)} />
-
-            {/* P8 (owner item E / F-91): "Car network" — the user's own
-                answer for where THIS car is, probed FIRST by discovery. An IP
-                or hostname is dialled; an SSID is kept as a note and falls
-                through to the automatic plan (never dialled as a host). */}
+            {/* P8 (owner item E / F-91) + owner 2026-10-23: the car-network
+                section now shows BOTH where the car is AND the broadcast IP for
+                the control page, in the same card. The wifi network the car is
+                at is picked by NAME from the car's own list (its own hotspot
+                first, then every saved router); the broadcast IP is read from
+                the car and autofilled most of the time (the car's own AP
+                address when it is on the hotspot, its reported STA IP when it
+                is on a router, the fleet default only as a last resort). */}
             <View
               className="rounded-lg border border-line bg-card p-2"
               testID="car-network-card"

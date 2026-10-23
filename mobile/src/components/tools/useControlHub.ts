@@ -20,6 +20,7 @@ import { useRoute, type RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../../navigation/types";
 import { APP_VERSION } from "../../config/site";
 import { sppService, type SppDevice } from "../../services/sppService";
+import type { CarPageServingState } from "./CarPageServingState";
 import {
   CAR_STATUS_URL,
   CAR_WS_URL,
@@ -166,7 +167,8 @@ const EVERY_LINK_COMMANDS = new Set([
   // live (WS for wireless cars, BT for the hand-held remote path) rides the
   // car's single system-command hook (W-14/F-21).
   "ROUTERS",
-]);import { deviceMemory } from "./types";
+]);
+import { deviceMemory } from "./types";
 
 import type { CarTelemetry } from "../../services/carProtocol";
 import { DEFAULT_WS_URL, OWN_AP_NAMES } from "../../services/carProtocol";
@@ -175,8 +177,6 @@ import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { findCarOnNetwork, subnetCandidates } from "./connection/discovery";
 import { formatPhoneNetwork } from "./connection/phoneNetwork";
 import type { SensorData } from "./types";
-
-
 
 type Route = RouteProp<RootStackParamList, "Tools">;
 
@@ -347,13 +347,13 @@ export function useControlHub(routeCategory?: string) {
   // transports stay up SIMULTANEOUSLY when enabled (no one-active-link
   // teardown anywhere).
   const [wifiEnabled, setWifiEnabled] = useState<boolean | null>(null);
-// U-117 (2026-10-20): HONEST NAMING. This state used to be called `pageOff`
-// while holding the page-ON value (every writer stored `pageOn`, every reader
-// compared it as ON) — an inverted name that invited exactly the bug class it
-// was misnamed to prevent. It is now `pageOn` end to end: true = the car is
-// serving its page. The persisted key follows it (`pageOn` in DevicePrefs);
-// the old `pageOff` key was written but NEVER read by any restore path, so no
-// migration is needed — a stale row is simply ignored.
+  // U-117 (2026-10-20): HONEST NAMING. This state used to be called `pageOff`
+  // while holding the page-ON value (every writer stored `pageOn`, every reader
+  // compared it as ON) — an inverted name that invited exactly the bug class it
+  // was misnamed to prevent. It is now `pageOn` end to end: true = the car is
+  // serving its page. The persisted key follows it (`pageOn` in DevicePrefs);
+  // the old `pageOff` key was written but NEVER read by any restore path, so no
+  // migration is needed — a stale row is simply ignored.
   const [pageOn, setPageOnState] = useState<boolean | null>(null);
   const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
   const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
@@ -2106,18 +2106,18 @@ export function useControlHub(routeCategory?: string) {
   }, [telemetry.ip, telemetry.ssid]);
 
   // check if SPP is supported on this device
-  const sppSupported = sppService.supported;// U-120: the page-state triple ref. This is the HUB's source of the local
-// page-serving truth only; the Remote chrome chip and the page toggle read the
-// PUBLIC `carPageServing` opinion below, never these internals directly.
-const pageStateTriple = useRef<CarPageServingState>({
-  current: false,
-  old: false,
-  changeFlag: false,
-});
-const pageStateOld = useRef<boolean>(false);
-// U-120: the HUB keeps `pageOn` as its source of the car's page status, and
-// the ONLY public opinion it exposes is `carPageServing` (returned below).
-// Screens should never reach for `pageOn` to decide if the page is served.
+  const sppSupported = sppService.supported; // U-120: the page-state triple ref. This is the HUB's source of the local
+  // page-serving truth only; the Remote chrome chip and the page toggle read the
+  // PUBLIC `carPageServing` opinion below, never these internals directly.
+  const pageStateTriple = useRef<CarPageServingState>({
+    current: false,
+    old: false,
+    changeFlag: false,
+  });
+  const pageStateOld = useRef<boolean>(false);
+  // U-120: the HUB keeps `pageOn` as its source of the car's page status, and
+  // the ONLY public opinion it exposes is `carPageServing` (returned below).
+  // Screens should never reach for `pageOn` to decide if the page is served.
 
   // Periodic REQ_STATE â€” keeps the app synced with the car's current mode,
   // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
@@ -4135,7 +4135,7 @@ const pageStateOld = useRef<boolean>(false);
     // U-120: the HUB's local page-serving truth, returned for the Remote
     // chrome chip and any future dependents. A remote reachability path (HEAD/GET,
     // on-the-wire page detection) is a separate concern and does not feed this.
-    carPageServing,
+    carPageServing: pageStateTriple,
     // toggles
     useJoystick,
     setUseJoystick,

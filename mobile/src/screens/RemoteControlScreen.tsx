@@ -318,7 +318,12 @@ export function RemoteControlScreen({ navigation }: Props) {
     // U-121 (owner 2026-10-23): the phone's OWN network lives on the first
     // bar (the merged row below Back) — the Connectivity panel's "This phone"
     // row is gone, so the space below it is the panels'.
-    phoneNetworkLabel,
+    // 🛑 FAIL-SAFE: phoneNetworkLabel removed from Remote chrome per U-121 (2026-10-23) owner
+    // directive — the phone's own network chip is removed from the Remote chrome.
+    // The phone network is still tracked by the hub and shown in the Connectivity
+    // panel when an owner needs it, but it is no longer rendered in the Remote
+    // chrome bar. If the chip disappears from the Remote, do not re-add it: the
+    // hub state (phoneNetworkLabel) is still available for future surfaces.
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -868,7 +873,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           )}
         </View>
-
         {/* ── U-113 P2 (owner issues 2/3/4), rebuilt by U-121 (2026-10-23):
             the ONE merged row below Back. Order = the Q2 overflow priority:
             the phone's own network chip (truncates, never hides) > disconnect
@@ -878,7 +882,8 @@ export function RemoteControlScreen({ navigation }: Props) {
             never shifts. U-121 (items 5+6): the row grew h-7 → h-9 and the
             pills/chips carry real tap sizes with a REAL disconnect mark
             (transport icon + name + ✕), per the owner's "too small to click"
-            and "not proper disconnect icon". */}        {/* U-113 P2 (owner issues 2/3/4), rebuilt by U-121 (2026-10-23):
+            and "not proper disconnect icon". */}{" "}
+        {/* U-113 P2 (owner issues 2/3/4), rebuilt by U-121 (2026-10-23):
             the ONE merged row below Back. Order = the Q2 overflow priority:
             the phone's own network chip (truncates, never hides) > disconnect
             chips (only for LIVE methods, each tearing down ONLY its own
@@ -888,29 +893,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             pills/chips carry real tap sizes with a REAL disconnect mark
             (transport icon + name + ✕), per the owner's "too small to click"
             and "not proper disconnect icon". */}
-        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5 px-1">            {/* U-121 (item 4) + owner clarification (2026-10-23): the
-              phone's OWN network — its name — on the FIRST bar of the Remote,
-              replacing the Connectivity panel's "This phone" row (which is gone).
-              This is where the phone's network is shown on the Remote, so the
-              Connectivity left pane keeps only what belongs to the car and the
-              space below stays for the panels. Truncating chip: it gives way
-              before the controls ever do, so Q2's telemetry-only drop rule
-              stays true. */}
-          {phoneNetworkLabel ? (
-            <View
-              testID="remote-phone-network"
-              accessibilityLabel={`This phone is on ${phoneNetworkLabel}`}
-              className="max-w-[200px] shrink flex-row items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5"
-            >
-              <Feather name="smartphone" size={12} color="#64748b" />
-              <Text
-                numberOfLines={1}
-                className="text-[11px] font-bold text-muted"
-              >
-                {phoneNetworkLabel}
-              </Text>
-            </View>
-          ) : null}
+        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5 px-1">
           {btLinked ? (
             <Pressable
               onPress={() => {
@@ -924,11 +907,32 @@ export function RemoteControlScreen({ navigation }: Props) {
               className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-4 py-2 active:opacity-70"
             >
               <Feather name="bluetooth" size={13} color="#64748b" />
-              <Text className="text-[11px] font-bold text-muted">Bluetooth</Text>
+              <Text className="text-[11px] font-bold text-muted">
+                Bluetooth
+              </Text>
               <Feather name="x-circle" size={14} color="#ef4444" />
             </Pressable>
           ) : null}
-          {wifiConnected ? (
+          {onOwnHotspot ? (
+            <Pressable
+              onPress={() => {
+                feedbackTap();
+                void handleWifiDisconnect();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Disconnect Wi-Fi (hotspot)"
+              testID="remote-disconnect-wifi"
+              hitSlop={8}
+              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-4 py-2 active:opacity-70"
+            >
+              <Feather name="wifi" size={13} color="#64748b" />
+              <Text className="text-[11px] font-bold text-muted">
+                Wi-Fi (hotspot)
+              </Text>
+              <Feather name="x-circle" size={14} color="#ef4444" />
+            </Pressable>
+          ) : null}
+          {wifiConnected && !onOwnHotspot ? (
             <Pressable
               onPress={() => {
                 feedbackTap();
@@ -1032,11 +1036,9 @@ export function RemoteControlScreen({ navigation }: Props) {
             </>
           ) : null}
         </View>
-
         {/* U-113 P2 (issue 2): the tab pills MOVED into the single merged row
             above — the second h-7 row below Back is gone and the drive deck
             gains its ~28 px. */}
-
         {/* U-119c (owner 2026-10-21): THE FEEDBACK SURFACE. The hub has
             14 showConnectionMessage() call sites that set `connectionMessage`
             and NOTHING rendered it — so the user was told nothing after an
@@ -1059,7 +1061,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             {hub.connectionMessage}
           </InlineMessage>
         ) : null}
-
         {/* U-121 Phase D (owner 2026-10-23): "the car freezes and the app
             doesn't know about that." A link being up says nothing about a
             live car — the owner's freeze (BT on, Wi-Fi drop, heap collapse)
@@ -1072,7 +1073,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             power (a heap collapse can lock it up), then Reconnect.
           </InlineMessage>
         ) : null}
-
         {/* ── Content area ── */}
         {isDrone || isNonRobocar ? (
           /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
