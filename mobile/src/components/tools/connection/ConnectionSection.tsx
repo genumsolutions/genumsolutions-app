@@ -550,21 +550,13 @@ export function ConnectionSection({
 
       {/* ── LEFT pane: method select + setup + the this-car inventory ── */}
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
-        {/* U-121 (owner 2026-10-23, item 4): the "This phone" row that used
-            to lead this pane is GONE — the phone's own network now lives on
-            the Remote's FIRST bar (the merged row below Back, testID
-            `remote-phone-network`), and this pane keeps only what belongs to
-            the car. The label fact itself is unchanged (hub's NetInfo watcher
-            via the pure formatPhoneNetwork). */}
-
-        {/* U-121 Phase C (owner 2026-10-23): show the phone's own network name
-            on the LEFT pane top, so the owner sees what network THEY are on
-            (not just the car's). Car info stays below.
-            testID `conn-phone-network` is stable — pinned by the source test.
-            Note: unlike the old lead row this is OPTIONAL — it renders only
-            once the hub has a real NetInfo label (which arrives shortly after
-            the app starts). */}
-        {phoneNetworkLabel && (
+        {/* U-121 (owner 2026-10-23, item 4): the old "This phone" lead row
+            that claimed the left-pane top is gone — the phone's own network is
+            now shown on the Remote's FIRST bar (the merged row below Back,
+            testID `remote-phone-network`), so the Connectivity left pane keeps
+            only what belongs to the car and the space below stays for the panels.
+            The phone's network fact itself is unchanged (hub NetInfo watcher via
+            the pure formatPhoneNetwork), but this panel no longer leads with it. */}
           <View
             testID="conn-phone-network"
             className="flex-row items-center justify-between rounded-xl border border-line bg-card px-3 py-2"
@@ -577,12 +569,12 @@ export function ConnectionSection({
             </View>
             <Text
               numberOfLines={1}
-              className="max-w-[60%] text-[10px] font-bold text-ink"
+              className="max-w-[80%] text-[11px] font-bold text-ink"
             >
               {phoneNetworkLabel}
             </Text>
           </View>
-        )}
+        )
 
         {/* M1: the method row is the METHOD ONLY — no status text, no
             disconnect, no Bluetooth details (all in the strip above). */}

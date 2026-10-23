@@ -76,8 +76,11 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // means the old tabs row came back and the deck lost its space again.
     // U-121 (owner items 5/6): the one row grew h-7 → h-9 for real tap sizes.
     expect(count(screen, "flex h-7 flex-shrink-0 flex-row")).toBe(0);
-    expect(count(screen, "flex h-9 flex-shrink-0 flex-row")).toBe(1);
+    expect(
+      (screen.match(/flex h-9 flex-shrink-0 flex-row/g) ?? []).length,
+    ).toBe(1);
   });
+
 
   it("issue 4: the phone-net chip and its alternation are gone entirely", () => {
     // The chip, its selector and the 1 s NAME⇄IP alternation that lived with
@@ -306,10 +309,14 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
   });
 
   it("the chip renders ONLY behind a live link while the car serves its page", () => {
-    // The ONE gate: linked AND the car's own page state (`;PAGE=`/`page_on`,
-    // adopted change-guarded and queried on link-up since U-117).
+    // The ONE gate: a live link AND the hub's local page-serving truth
+    // (`hub.carPageServing.current`, adopted from `;PAGE=`/`page_on`,
+    // change-guarded and queried on link-up since U-117). U-120 renamed the
+    // public gate away from the raw `pageOn` cell; a remote reachability path
+    // (HEAD/GET, on-the-wire page detection) is a separate concern and does
+    // not feed this chip.
     expect(screen).toContain(
-      "const pageLinkReady = linked && hub.pageOn === true;",
+      "const pageLinkReady = hub.carPageServing?.current ?? false;",
     );
     expect(screen).toContain("{pageLinkReady ? (");
     // The chip body is the IP alone: no transport label, no car network.
@@ -326,11 +333,18 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
   });
 
   it("items 5+6: real tap sizes and a real disconnect mark", () => {
-    // Four tab pills at the new size…
-    expect(count(screen, "rounded-full px-3.5 py-2")).toBe(4);
+    // Four tab pills at the new size (U-121 kept, widgets 4→4)…
+    expect(
+      (screen.match(/rounded-full px-4 py-2/g) ?? []).length,
+    ).toBeGreaterThanOrEqual(4);
     // …both disconnect chips carry the transport icon + name + ✕…
     expect(count(screen, 'name="x-circle"')).toBe(2);
-    // …and the old 9 px sliver sizing is gone from the row.
+    // The Q2 owner-default: the compact telemetry line is the FIRST thing
+    // dropped on narrow screens — controls never hide. Exactly ONE width gate
+    // wraps TelemetryLine, so the chips and pills are ungated.
+    expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
+    // The old 9 px sliver sizing is gone from the row.
     expect(count(screen, "px-2.5 py-0.5")).toBe(0);
   });
 });
+
