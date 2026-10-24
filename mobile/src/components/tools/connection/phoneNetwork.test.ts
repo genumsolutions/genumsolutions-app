@@ -7,9 +7,11 @@
 // comments stripped.
 //
 //   1. the hub owns the label source
-//   2. the Connectivity panel's left pane renders it (testID
-//      `conn-phone-network`) — the SAME surface the Connect screen lost it
-//      from
+//   2. the Connectivity panel does NOT carry it — owner 2026-10-23:
+//      "remove this box as the whole". Exactly ONE surface renders the label
+//      (the Remote's first bar), so the pair of copies the owner saw as
+//      "duplicate messages like the words, wifi network name hidden" cannot
+//      come back
 //   3. the Remote's FIRST bar carries it (testID `remote-phone-network`) —
 //      the phone's network is ON the Remote, where the owner asked for it
 //   4. the Raw ssid never leaks — only the formatted label, ever (issue 4)
@@ -60,7 +62,7 @@ function chromeRaw(): string {
 const RAW_CHROME = chromeRaw();
 const chrome = strip(RAW_CHROME);
 
-describe("U-121 — the phone-network label moved to the Connectivity panel AND the Remote's first bar", () => {
+describe("U-121 — the phone-network label lives on the Remote's first bar, NOWHERE else", () => {
   it("the hub owns the phone-network label source", () => {
     expect(hub).toContain("phoneNetworkLabel,");
     expect(hub).toContain(
@@ -76,14 +78,14 @@ describe("U-121 — the phone-network label moved to the Connectivity panel AND 
     expect(section).not.toContain("phoneSsid");
   });
 
-  it("the Connectivity panel does render the phone-network row in the body (Phase C)", () => {
-    // The row is OPTIONAL (renders only when the hub has a real NetInfo
-    // label). The strip below contains the testID in the source; at runtime
-    // the row appears once the phone's network is known. The source-level
-    // pin is: the row exists, has the right testID, and the label renders.
-    expect(section).toContain('testID="conn-phone-network"');
-    expect(section).toContain("phoneNetworkLabel");
-    expect(section).toContain("This phone");
+  it("the Connectivity panel does NOT carry the 'This phone' box (owner 2026-10-23: remove it as the whole)", () => {
+    // The row the owner ordered removed is gone from this file entirely —
+    // no testID, no "This phone" heading, no label. The label's ONE render
+    // site is the Remote's first bar (next test), so it can never appear
+    // twice on the Remote screen (this section renders INSIDE it).
+    expect(section).not.toContain('testID="conn-phone-network"');
+    expect(section).not.toContain("This phone");
+    expect(section).not.toContain("phoneNetworkLabel");
   });
   it("the Remote's FIRST bar carries it with a stable testID", () => {
     expect(chrome).toContain('testID="remote-phone-network"');

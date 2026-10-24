@@ -95,6 +95,13 @@ import { describeSecondLink } from "./linkOrder";
 import { CAR_MDNS_HOST } from "./discoveryPlan";
 import type { useControlHub } from "../useControlHub";
 
+// 2026-10-23 (U-121 A2, owner: "remove this box as the whole"): the
+// "This phone" row and its `formatPhoneNetwork` re-export are GONE from this
+// file. The phone's own network is rendered ONCE, on the Remote's first bar
+// (`remote-phone-network`); keeping a second copy here is what the owner saw as
+// "duplicate messages like the words, wifi network name hidden". If the label
+// looks missing, check the Remote chrome — not here.
+
 // 2026-10-10: NetInfo / CAR_WS_URL / CAR_STATUS_URL / PROBE_TIMEOUT_MS /
 // findCarOnNetwork / probeCarStatus / subnetCandidates are gone from this file.
 // They existed only for `findCarOnThisNetwork`, which was a second copy of the
@@ -197,7 +204,6 @@ export function ConnectionSection({
     sppDevices,
     sppSupported,
     wifiConnected,
-    phoneNetworkLabel,
     // P3: the second-link raise is derived from the hub's live link facts —
     // which transport is in flight and what the car said about it.
     btLinked,
@@ -663,7 +669,7 @@ export function ConnectionSection({
         {method === "wifi" || method === "bluetooth" ? (
           <>
             <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-              Switch networks
+              {manage ? "Switch networks" : "Networks"}
             </Text>
 
             <WifiPanel
@@ -920,43 +926,6 @@ function AddedNetworksInventory({
           })}
         </ScrollView>
       )}
-    </View>
-  );
-}
-
-// =====================================================================
-// IotEntryCard — the honest entry for other ESP / IoT projects (M1). A
-// network saved here is kept ON THE CAR, and any ESP in the fleet can switch
-// to it; the button opens the same add form in the right pane. This is the
-// "add connection for other projects" surface the owner asked for, without
-// inventing a second manager.
-// =====================================================================
-function IotEntryCard({ onAdd }: { onAdd: () => void }) {
-  return (
-    <View
-      className="rounded-lg border border-line bg-card p-2"
-      testID="conn-iot-entry"
-    >
-      <View className="flex-row items-center gap-1.5">
-        <Feather name="cpu" size={12} color="#475569" />
-        <Text className="min-w-0 flex-1 text-[11px] font-black text-ink">
-          Other ESP / IoT projects
-        </Text>
-      </View>
-      <Text className="mt-0.5 text-[10px] leading-3 text-muted">
-        A network saved here is kept on the car, and any ESP on the fleet can
-        switch to it — this is the connection point for multi-ESP projects.
-      </Text>
-      <Pressable
-        onPress={onAdd}
-        accessibilityRole="button"
-        accessibilityLabel="Add a network for this or another project"
-        className="mt-1 flex-row items-center gap-1"
-        testID="conn-iot-add"
-      >
-        <Feather name="plus" size={11} color="#1e3a8a" />
-        <Text className="text-[11px] font-bold text-navy">Add a network</Text>
-      </Pressable>
     </View>
   );
 }

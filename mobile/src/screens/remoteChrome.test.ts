@@ -81,7 +81,6 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     ).toBe(1);
   });
 
-
   it("issue 4: the phone-net chip and its alternation are gone entirely", () => {
     // The chip, its selector and the 1 s NAME⇄IP alternation that lived with
     // it were removed from the SCREEN (phoneSsid is still exposed by the hub
@@ -115,7 +114,13 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // The BT chip is gated on the per-method truth (btLinked), not the
     // shared `connected` flag that a Wi-Fi connect also sets.
     expect(screen).toContain("{btLinked ? (");
-    expect(screen).toContain("{wifiConnected ? (");
+    // A1 (owner 2026-10-23, FAILSAFE item 4): the Wi-Fi chip is ONE chip in
+    // TWO variants — "Wi-Fi (hotspot)" while the car is on its own AP, "Wi-Fi"
+    // while it is on a router — and the router variant is gated on the Wi-Fi
+    // truth AND NOT on the hotspot, so the two can never render together. The
+    // old single `{wifiConnected ? (` gate is the pre-A1 shape.
+    expect(screen).toContain("{onOwnHotspot ? (");
+    expect(screen).toContain("{wifiConnected && !onOwnHotspot ? (");
     // Each chip calls its per-method disconnect. The full teardown
     // (`handleDisconnect`) must not be reachable from this screen anymore —
     // "handleBtDisconnect()" does NOT contain the "handleDisconnect()"
@@ -337,8 +342,12 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     expect(
       (screen.match(/rounded-full px-4 py-2/g) ?? []).length,
     ).toBeGreaterThanOrEqual(4);
-    // …both disconnect chips carry the transport icon + name + ✕…
-    expect(count(screen, 'name="x-circle"')).toBe(2);
+    // …every disconnect chip carries the transport icon + name + ✕…
+    // THREE render sites for TWO chips: Bluetooth, Wi-Fi (hotspot), Wi-Fi —
+    // A1 (owner 2026-10-23) split the Wi-Fi chip into its hotspot/router
+    // variants and each variant must keep its own ✕ (the owner's "not proper
+    // disconnect icon"). The pin was 2 before that split.
+    expect(count(screen, 'name="x-circle"')).toBe(3);
     // The Q2 owner-default: the compact telemetry line is the FIRST thing
     // dropped on narrow screens — controls never hide. Exactly ONE width gate
     // wraps TelemetryLine, so the chips and pills are ungated.
@@ -347,4 +356,3 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     expect(count(screen, "px-2.5 py-0.5")).toBe(0);
   });
 });
-
