@@ -405,10 +405,13 @@ export function ConnectionSection({
           name: name ?? address,
           bonded: bonded === true,
         });
+        // U-69 fixed: the hub now returns a ConnectOutcome, so a FAILED link
+        // is impossible to mistake for success. The message card always shows
+        // the REAL result of the action, never the old "Connected to <car>".
         setMessage(
           outcome.ok
             ? { tone: "ok", text: outcome.message }
-            : { tone: "error", text: outcome.reason },
+            : { tone: "error", text: outcome.reason ?? "Connection failed." },
         );
       } finally {
         setBusy(false);
@@ -459,7 +462,7 @@ export function ConnectionSection({
         setMessage(
           outcome.ok
             ? { tone: "ok", text: outcome.message }
-            : { tone: "error", text: outcome.reason },
+            : { tone: "error", text: outcome.reason ?? "Connection failed." },
         );
       } finally {
         setBusy(false);

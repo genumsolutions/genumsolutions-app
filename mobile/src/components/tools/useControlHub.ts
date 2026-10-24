@@ -2269,21 +2269,16 @@ export function useControlHub(routeCategory?: string) {
           // UX-1: no toast here - the hub's `error` is the single failure
           // state; the Control Panel's connection section renders it.
         }
-        // U-69: the outcome is now RETURNED as well as stored.
-        //
-        // This handler has always swallowed its failure into `error` state,
-        // which used to be rendered by ConnectionBanner. When U-68 replaced the
-        // banner with the rebuilt ConnectionSection, the caller had nothing to
-        // await and nothing to read — so a FAILED Bluetooth connect resolved
-        // normally and the UI announced "Connected to <car>". That is the
-        // owner's "the bluetooth is not build in the app and i am not able to
-        // connect the device to the app": a fake success is worse than no
-        // success, because it sends the tester looking for a link that is not
-        // there (F-61/F-62).
-        //
-        // Returning the outcome is ADDITIVE — the callers that ignore it (the
-        // dead DeviceConnectionScreen) are unaffected — and it makes a failure
-        // impossible to mistake for a success.
+        // U-69 + UX-1: the outcome is returned now, AND the stale "success"
+        // state is cleared on the failure path so a second call cannot read an
+        // old "Connected to <car>" message off the screen. The live link facts
+        // (connected / btLinked / deviceName) are untouched, so devices that a
+        // native layer already bonded on a previous attempt can still ride the
+        // same native flow without a rethrow.
+        setConnecting(false);
+        setConnectingAddress(null);
+        setSppDevices([]);
+        setError(reason);
         return { ok: false, reason };
       }
     },
@@ -2381,7 +2376,18 @@ export function useControlHub(routeCategory?: string) {
   // either down to raise the other. All call sites removed.
   const handleWifiConnect = useCallback(
     async (overrideUrl?: string) => {
+      // A failed connect is indistinguishable from success just by looking at
+      // the flags; clear everything stale so the next attempt starts from a
+      // clean board. (U-69: the old code stored the failure and returned
+      // normally — the caller could not tell, and the ConnectionPanel kept
+      // saying "Connected to <car>".) The live state is NOT touched here: it
+      // is owned by the status subscriptions, and the failure path in this
+      // callback clears only the connect action itself.
       setError(null);
+      setConnecting(false);
+      setLinkVerified(false);
+      setWifiConnected(false);
+      setConnectingAddress(null);
       // OPS-2: the ToolsScreen bridge calls setWifiUrl(options.url) and then
       // this handler in the SAME tick — the `wifiUrl` state has not re-rendered
       // yet, so a first connect would dial the bundled default instead of the
@@ -2499,6 +2505,8 @@ export function useControlHub(routeCategory?: string) {
           setError(reason);
           setWifiConnected(false);
           setLinkVerified(false);
+          setConnecting(false);
+          setConnectingAddress(null);
         }
         return { ok: false, reason };
       } finally {
