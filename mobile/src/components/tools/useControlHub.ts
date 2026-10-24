@@ -319,6 +319,23 @@ export function useControlHub(routeCategory?: string) {
     sppService.isConnected || bleService.isConnected,
   );
   const [deviceName, setDeviceName] = useState(sppService.deviceName ?? "");
+  // The connection method this device chose, board-unique and surviving the
+  // disconnect — the method a connect (BT or Wi-Fi) is raised through, which
+  // is also the radio a command is dialled over when the active mode lists
+  // BOTH transports. Owned by the device: a disconnected connect never
+  // changes it.
+  const [connMethod, setConnMethod] = useState<"bluetooth" | "wifi">(
+    "bluetooth",
+  );
+  // The connection method the Wi-Fi flow was first raised in — captured when
+  // `handleWifiConnect` is called, before `connected` flips or `sppConnected`
+  // changes. The method the second link was raised in is the one the car
+  // remembers, so the UI keeps asking for the STALE radio while the first one
+  // is up. Set once per call, before anything else moves, so it is never
+  // stale when `handleWifiConnect` runs.
+  const [wirelessMethod, setWirelessMethod] = useState<"bluetooth" | "wifi">(
+    "wifi",
+  );
   const [scanning, setScanning] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [linkVerified, setLinkVerified] = useState(false);
@@ -411,6 +428,11 @@ export function useControlHub(routeCategory?: string) {
   const [sppStatusMsg, setSppStatusMsg] = useState<string | null>(
     sppService.getConnectionInfo().status === "connected" ? "Connected" : null,
   );
+  // U-124 (owner item ⑧): the connection method this device chose, by the
+  // DEVICE, not the MODE. `connMethod` survives the disconnect so the next
+  // connect to the same device re-dials over the same radio; `wirelessMethod`
+  // is the stale copy the old sendCommand read and therefore the one the car
+  // was left on when Bluetooth went up. Both are replaced below.
   // U-120 Phase C (owner item 8): "reconnecting should not be automatic —
   // it should prompt the reconnect dialog box with proper method and only
   // reconnect if sayed yes." No transport reconnects on its own anymore
@@ -1050,6 +1072,18 @@ export function useControlHub(routeCategory?: string) {
         setBtEnabled(merged.prefs.btEnabled);
       if (typeof merged.prefs.bootAutojoin === "boolean")
         setBootAutojoin(merged.prefs.bootAutojoin);
+      // U-124 (owner item ⑧): restore the connection method the user chose on
+      // this device — the radio a connect (BT or Wi-Fi) is raised through. The
+      // default (bluetooth) is the right pick for a first connect on this
+      // device; a remembered pick survives a power cycle.
+      if (typeof merged.prefs.connMethod === "string")
+        setConnMethod(
+          merged.prefs.connMethod === "bluetooth" ? "bluetooth" : "wifi",
+        );
+      if (typeof merged.prefs.wirelessMethod === "string")
+        setWirelessMethod(
+          merged.prefs.wirelessMethod === "bluetooth" ? "bluetooth" : "wifi",
+        );
       if (merged.prefs.savedRouters && merged.prefs.savedRouters.length > 0) {
         setCarNetworks((cur) =>
           cur.length > 0 ? cur : (merged.prefs.savedRouters ?? []),
@@ -1117,6 +1151,19 @@ export function useControlHub(routeCategory?: string) {
             "",
         ),
         autoJoinRouter,
+        // U-124 (owner item ⑧): the connection method the user chose on this
+        // device — survives a disconnect and a power cycle, and is the radio a
+        // connect (BT or Wi-Fi) is raised through. A disconnected connect never
+        // changes it; a factory reset of the car never clears it (the pick is
+        // a device choice, not a car fact).
+        connMethod,
+        // The method the latest Wi-Fi flow was first raised in, captured
+        // inside handleWifiConnect before `connected` flips. The method the
+        // second link was raised in is the one the car remembers, so the UI
+        // keeps asking for the STALE radio while the first one is up. Set once
+        // per call, before anything else moves, so it is never stale when
+        // handleWifiConnect runs.
+        wirelessMethod,
         // U-105 (1.3.5): carry the live transport toggles so a narrow patch
         // (speed/mode/router) never wipes them.
         wifiEnabled: wifiEnabled ?? undefined,
@@ -1186,6 +1233,8 @@ export function useControlHub(routeCategory?: string) {
       bootAutojoin,
       carNetworkHint,
       carSsidAnswer,
+      connMethod,
+      wirelessMethod,
     ],
   );
 
@@ -2239,6 +2288,12 @@ export function useControlHub(routeCategory?: string) {
       // first" — so a brand-new car, or one that had been factory-reset, could
       // never be connected from the app at all. `bonded` is now presentation
       // only (it labels a row "Paired"); it never gates the connect.
+      // The method is captured here and persisted with the device profile, so
+      // the NEXT connect to this same device re-raises over the same radio
+      // (the owner's bench item ⑧: "i can connect to the wifi signal too when
+      // the bluetooth is already connected").
+      setConnMethod("bluetooth");
+      persistPrefsRef.current?.({ connMethod });
       setConnectingAddress(device.address);
       setError(null);
       manualCloseRef.current = false;
@@ -2255,6 +2310,12 @@ export function useControlHub(routeCategory?: string) {
         // the car now keeps Bluetooth AND Wi-Fi up simultaneously by design, so
         // raising Bluetooth here NEVER drops Wi-Fi (and vice versa).
         showConnectionMessage(`Connected to ${device.name}`, "success");
+        // Persist the chosen method with the device profile so the next
+        // connect to this same device raises over the same radio.
+        persistPrefsRef.current?.({ connMethod });
+        // Seed wirelessMethod so the SAME radio is used when the car is
+        // reached a second time from a Wi-Fi connect.
+        setWirelessMethod("bluetooth");
         void sppService.requestState().catch(() => {});
         return {
           ok: true,
@@ -2403,6 +2464,13 @@ export function useControlHub(routeCategory?: string) {
           ? effectiveUrl
           : `ws://${effectiveUrl}`;
       manualCloseRef.current = false;
+      // Capture the method the SECOND link is raised in BEFORE anything else
+      // moves — `connected` and `sppConnected` will flip the moment the car
+      // answers, and with both live `routeCommand` would prefer the stale
+      // `wirelessMethod`, so the radio the user actually tapped for the new
+      // link is the one the car keeps. `connMethod` owns the device and is
+      // never touched here (a disconnected connect never changes it).
+      setWirelessMethod("wifi");
       setConnecting(true);
       setLinkVerified(false);
       // Deliver over the ONE shared socket every hub reads — the SAME
@@ -2513,7 +2581,7 @@ export function useControlHub(routeCategory?: string) {
         if (mountedRef.current) setConnecting(false);
       }
     },
-    [wifiUrl, showConnectionMessage],
+    [wifiUrl, showConnectionMessage, wirelessMethod],
   ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
 
   // U-80b: AUTO-discover when the PHONE lands on a new network.
@@ -3049,9 +3117,13 @@ export function useControlHub(routeCategory?: string) {
   //   • When only ONE link is live it is used regardless of mode, so a 4WD4M
   //     car connected purely over the car's WS still drives.
   //   • routeCommand() also takes an optional `chosenRadio` tie-breaker; it is
-  //     passed null because no production path sets a chosen transport (the
-  //     transports/ LinkManager is not activated — see the note at the top of
-  //     this hook). It stays a pure, tested seam (commandRouting.test.ts).
+  //     set to `wirelessMethod` so a second connection is raised by the same
+  //     method the first one was — a BT-connected car still answers a Wi-Fi
+  //     dial (and vice versa), exactly what this bench round asks for.
+  //     `connMethod` is the user's durable choice on the device and is never
+  //     overwritten by a disconnected connect; `wirelessMethod` is the fresh
+  //     capture taken inside handleWifiConnect before anything else moves, so
+  //     it is never stale when the second link is raised.
   const sendCommand = useCallback(
     (cmd: string) => {
       const btLive = sppService.isConnected || bleService.isConnected;
@@ -3069,7 +3141,7 @@ export function useControlHub(routeCategory?: string) {
         wsLive,
         modeUsesBt,
         modeUsesWifi,
-        chosenRadio: null,
+        chosenRadio: wirelessMethod,
       });
       if (route.bt && connected && sppService.isConnected) {
         void sppService.sendLine(cmd).catch(() => {});
@@ -3081,7 +3153,7 @@ export function useControlHub(routeCategory?: string) {
         void wifiService.sendLine(cmd).catch(() => {});
       }
     },
-    [connected, wifiConnected, activeMode],
+    [connected, wifiConnected, activeMode, wirelessMethod],
   );
 
   // U-105 (1.3.5): the car's three transport toggles. Like the ROUTERS;… system
@@ -3862,7 +3934,11 @@ export function useControlHub(routeCategory?: string) {
       setWifiEnabled(true);
       setBtEnabled(true);
       setBootAutojoin(true);
-      // The savedPrefs persist will be overwritten on next save.
+      // The method is a device choice, not a car fact: a factory reset of the
+      // car leaves the next connect on whatever the user picked (default
+      // bluetooth), so nothing to clear here. A pick that resets a saved
+      // profile brings it back. The savedPrefs persist will be overwritten on
+      // next save.
       return { ok: true };
     } catch (e) {
       return {
@@ -4211,5 +4287,12 @@ export function useControlHub(routeCategory?: string) {
     is2wd1mActive,
     usesBtComm,
     usesWifi,
+    // U-124 (owner item ⑧): the connection method this device chose, and the
+    // method the latest Wi-Fi flow was first raised in. Both survive a
+    // disconnect and a power cycle, and drive which radio a connect is raised
+    // through when the active mode lists both transports.
+    connMethod,
+    setConnMethod,
+    wirelessMethod,
   };
 }

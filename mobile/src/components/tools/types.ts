@@ -147,6 +147,23 @@ export type DevicePrefs = {
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
+  /**
+   * U-124 (owner item ⑧, 2026-10-24): *"when the bluetooth is connected the
+   * car doesn't let the wifi method to connect too … fix this so that i can
+   * connect to the wifi signal too when the bluetooth is already connected"*.
+   *
+   * `connMethod` is the radio the user raised the LAST connect on — it
+   * survives a disconnect and a power cycle, so the next connect to this same
+   * device re-dials over the same radio (a disconnected connect never changes
+   * it, and a factory reset of the CAR never clears it: the pick belongs to
+   * the device, not the car). `wirelessMethod` is the radio the latest Wi-Fi
+   * flow was FIRST raised in, captured inside `handleWifiConnect` before
+   * `connected` flips — with both links live it is the tie-breaker
+   * `routeCommand(chosenRadio)` reads, so commands ride the radio the user
+   * actually picked instead of a stale one. Absent = the bluetooth default.
+   */
+  connMethod?: "bluetooth" | "wifi";
+  wirelessMethod?: "bluetooth" | "wifi";
 
   /**
    * U-116 (page-server power): whether the car's built-in web page server is
