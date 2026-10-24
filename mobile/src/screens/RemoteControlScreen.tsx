@@ -315,15 +315,7 @@ export function RemoteControlScreen({ navigation }: Props) {
     handleBtDisconnect,
     handleWifiDisconnect,
     carNetworks,
-    // U-121 (owner 2026-10-23): the phone's OWN network lives on the first
-    // bar (the merged row below Back) — the Connectivity panel's "This phone"
-    // row is gone, so the space below it is the panels'.
-    // 🛑 FAIL-SAFE: phoneNetworkLabel removed from Remote chrome per U-121 (2026-10-23) owner
-    // directive — the phone's own network chip is removed from the Remote chrome.
-    // The phone network is still tracked by the hub and shown in the Connectivity
-    // panel when an owner needs it, but it is no longer rendered in the Remote
-    // chrome bar. If the chip disappears from the Remote, do not re-add it: the
-    // hub state (phoneNetworkLabel) is still available for future surfaces.
+    phoneNetworkLabel,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -882,18 +874,23 @@ export function RemoteControlScreen({ navigation }: Props) {
             never shifts. U-121 (items 5+6): the row grew h-7 → h-9 and the
             pills/chips carry real tap sizes with a REAL disconnect mark
             (transport icon + name + ✕), per the owner's "too small to click"
-            and "not proper disconnect icon". */}{" "}
-        {/* U-113 P2 (owner issues 2/3/4), rebuilt by U-121 (2026-10-23):
-            the ONE merged row below Back. Order = the Q2 overflow priority:
-            the phone's own network chip (truncates, never hides) > disconnect
-            chips (only for LIVE methods, each tearing down ONLY its own
-            transport — issue 3) > tab pills > the compact telemetry line
-            (hidden first on narrow screens). Constant height so the deck
-            never shifts. U-121 (items 5+6): the row grew h-7 → h-9 and the
-            pills/chips carry real tap sizes with a REAL disconnect mark
-            (transport icon + name + ✕), per the owner's "too small to click"
             and "not proper disconnect icon". */}
         <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5 px-1">
+          {phoneNetworkLabel ? (
+            <Pressable
+              onPress={() => {}}
+              accessibilityRole="button"
+              accessibilityLabel={`Phone on ${phoneNetworkLabel}`}
+              testID="remote-phone-network"
+              hitSlop={8}
+              className="shrink-0 flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[200px] rounded-full border border-line bg-card px-3.5 py-2 active:opacity-70"
+            >
+              <Feather name="wifi" size={13} color="#64748b" />
+              <Text className="text-[11px] font-bold text-muted truncate">
+                {phoneNetworkLabel}
+              </Text>
+            </Pressable>
+          ) : null}
           {btLinked ? (
             <Pressable
               onPress={() => {

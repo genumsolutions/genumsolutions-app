@@ -19,5 +19,5 @@ See [`build_notes.md`](build_notes.md). It records:
 | `ModeChooser.tsx`                                         | Mode picker row that reflects `GROUP` capability.                                                                               |
 | `DriveTelemetry.tsx`                                      | Telemetry display.                                                                                                              |
 | `oneActiveLink.test.ts`                                   | Unit tests for `oneActiveLink` (each link may be active, carrier state immutable).                                              |
-| `useControlHub.ts`                                        | Link state/command hook (imports the public page-serving type from `CarPageServingState.ts`).                                     |
+| `useControlHub.ts`                                        | Link state/command hook (imports the public page-serving type from `CarPageServingState.ts`).                                   |
 | `PidInputModal.tsx.less` / `build_notes.md` / `README.md` | build/readme extras.                                                                                                            |
