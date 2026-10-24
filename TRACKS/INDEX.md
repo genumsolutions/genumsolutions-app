@@ -1,5 +1,32 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-10-24 (latest) — U-121 ROUND 2 SHIPPED (JS-only → same-version OTA 3.2.7/60; car FW
+> **1.3.17**): the owner's snag list, one phase per item.** **A2** the phone's network is on the
+> Remote's first bar **ONLY** — the `conn-phone-network` "This phone" box is deleted from the
+> Connectivity panel (it was the duplicate `…name hidden` the owner saw), the dangling
+> `<IotEntryCard>` usage is gone (it was the `TS2304` that left `tsc` RED on resume), and the
+> duplicated merged-row comment + `{" "}` residue went with it · **B2** the **Car network** card
+> finally carries both facts its P8 comment had promised — `The car is on` (editable,
+> auto-filled `telemetry.ssid` → configured → the owner's answer) and **Control address**
+> (read-only `(onOwnHotspot ? null : reportedIp) ?? DEFAULT_AP_IP`), via a new per-car pref
+> **`carSsidAnswer`** that rides the `persistPrefs` base because `deviceMemory.write` REPLACES
+> the record (with `carNetworkHint` for the same reason) · **C2** the connectivity residue sweep
+> (left "Added networks" is display-only — it was a second set of tap-to-switch buttons for the
+> right pane's own list; stale IoT/list-hiding comments and a stray `{" "}` removed) + the new
+> **`storyboard.md`** — the Remote screen's region-by-region source of truth, single-copy map and
+> do-not-re-add list (fleet convention: shape recorded first, code renders it, tests pin it).
+> **Car E2 (same report's firmware half):** _"the car resets again and again whenever i try to
+> connect the wifi from the app"_ — the switch/give-up step machines were the last UNGATED radio
+> path, now gated by `switchRadioMayRun()` (defer below 32000 B, **abandon** after 4 s with no
+> radio call) → **FW 1.3.17**, contract rule `switch-heap` + M137–M143; also fixed two
+> PRE-EXISTING reds (webpage-js transport-default checks; the undetected **M136**). Gates: app
+> tsc 0 · vitest **896/896** (60 files) · prettier clean; car syntax 9/9 · contract 0 ·
+> webpage-js 0 · mutate **137/137**. Device rows: `mobile/TESTING.md` **U-121-A1..C2** + car
+> `TRACKS/DEVICE-TESTS.md` **U-121-E · U-121-E2** (all unticked, F-61). Session note:
+> `TRACKS/SESSION-2026-10-23-U121.md` (2026-10-24 section). Commits: app `2c884ff` → `e4d3d4a`
+> → `34e9f9e` (+ records); car `088c46a` → `72abcbd`. **⚠ The car is still on 1.3.11 — 1.3.17
+> must be FLASHED before any of its rows can be ticked.**
+
 > ✅ **2026-10-22/23 (latest) — U-120 SHIPPED (JS-only → same-version OTA 3.2.7/60; car FW
 > **1.3.15**): Q1–Q3 close-out + owner list B in five phases, each pushed mid-phase.** **Q1**
 > firmware boot-hop stopped (`boot_autojoin` default OFF in 1.3.15; the app's smart-link is the
@@ -28,7 +55,7 @@
 > change-guarded, queried on link-up, `WIFICFG` reply persists inside its guard, the
 > per-render mirror no longer nulls the page slot, switch disabled while offline, and the
 > inverted **`pageOff` → `pageOn`** rename end to end) · **the deck's reconnect card drops
-> the last-reset RECORD** (owner: *"remove that"* — one card left, Reconnect + Cancel; a
+> the last-reset RECORD** (owner: _"remove that"_ — one card left, Reconnect + Cancel; a
 > restart survives only as a plain cause sentence; Cancel clears it; the record still leads
 > Tools → Diagnostics) · **"This phone" network row** in the Connectivity panel (pure
 > `formatPhoneNetwork`: Wi-Fi · SSID / hidden / Cellular / No network; deck chip stays gone)
@@ -259,6 +286,7 @@ web page server (:80) without touching the Wi-Fi / Bluetooth transport layer or 
 i.e. "wifi on/off AND webpage on/off" both present, both work.
 
 Implementation (app `mobile/`):
+
 - `mobile/src/components/tools/useControlHub.ts` — new `pageOff` state + `setPageOff`
   callback; `transportToggleRef`, `toggleCommitRef` and `toggleChangeProtected` extended
   with `pageOff`; `setPageOff` sends `WIFICFG;WIFI;PAGE;ON|OFF` and persists the app

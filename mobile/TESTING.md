@@ -1,5 +1,77 @@
 # TESTING — Physical Device Test Checklist
 
+## U-121 round 2 — 2026-10-24: the owner's snag list (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FLASH **1.3.17**)
+
+> Owner (2026-10-24): _"the car resets again and again whenever i try to
+> connect the wifi from the app"_ · _"the remote screen show the duplicate
+> messages like the words, wifi network name hidden"_ · remove the **This
+> phone** box as a whole · remove the **Other ESP / IoT projects** section
+> totally · in the Car network section add **entering the wifi network the car
+> is at** + **the broadcast IP for the control**, auto-filled most of the time ·
+> think the Bluetooth and Wi-Fi methods through and drop the duplicates ·
+> **note the Remote screen's storyboard**, use the line below Back and the
+> space right of Back, and be precise about everything after it.
+> Car-side bench rows for the firmware half live in
+> `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (**U-121-E · U-121-E2**, unticked).
+> **Every row here is unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **896/896** (60 files) · prettier clean;
+> car: syntax 9/9 · contract 0 (`switch-heap` new) · webpage-js 0 · mutate
+> **137/137** (M137–M143 new).
+
+- [ ] **U-121-A1 — ⭐ the car does NOT reset when the app connects its Wi-Fi.**
+      Flash **1.3.17**, Bluetooth ON (heap at the 13–20 kB floor), then switch
+      the car to a router from the app: either the switch completes, or serial
+      shows `[RADIO] step deferred: low heap …` → `[RADIO] switch abandoned:
+  low heap …` after 4 s. **No reset in either case**, `crash_count` flat,
+      and the same switch runs clean with Bluetooth OFF.
+- [ ] **U-121-A2 — the phone's network appears exactly ONCE.** On the Remote:
+      one chip on the line below Back (`remote-phone-network`), and **no**
+      "This phone / … name hidden" box anywhere in the Connectivity panel — the
+      words `name hidden` must never appear twice on one screen. The
+      "Other ESP / IoT projects" card is gone from the network list too.
+- [ ] **U-121-B1 — ⭐ the Car network card answers both questions, auto-filled.**
+      "The car is on" shows the car's reported network with no typing;
+      "Control address" shows the broadcast IP (the car's AP address on its own
+      hotspot, the router IP when it is on one) and follows the car when it
+      moves networks.
+- [ ] **U-121-B2 — a typed network survives a restart.** Type the network the
+      car is on (when it cannot report it) and ✓ → force-quit and reopen the
+      app → reconnect to that car: the field still shows what you typed (per-car
+      pref `carSsidAnswer`), and clearing it returns the field to car truth.
+- [ ] **U-121-C1 — one place to act on a network.** Connectivity → Wi-Fi: the
+      left "Added networks" list only DISPLAYS (Connected / Car hotspot /
+      Saved); switching, adding, editing and forgetting happen exclusively in
+      the right pane, and the right pane still does all four.
+- [ ] **U-121-C2 — the storyboard matches the screen.** `storyboard.md`'s
+      regions are what you see: chrome row (Back · IP chip · mode · speed ·
+      gear), the `h-9` line below Back (phone chip → disconnect chips →
+      telemetry → pills), one message strip, one deck panel, settings dropdown,
+      reconnect prompt on top. Anything that disagrees is a doc bug or a code
+      bug — say which.
+
+### Carried from U-121 round 1 (2026-10-23) — landed then, still UNVERIFIED
+
+> Those phases were committed and pushed with green gates but never got device
+> rows of their own (F-61). They are recorded here rather than left implicit.
+
+- [ ] **U-121-R1-A — ⭐ the chip right of Back is the BROADCAST IP alone, and
+      only while the car serves its page.** Webpage ON + any live link (Bluetooth
+      too) → the bare IP renders and tapping it opens the car's page; Webpage
+      OFF → the chip is gone. No transport label, no car-network name, no device
+      name in it, ever.
+- [ ] **U-121-R1-B — the connect screen picks the car's network BY NAME.** In
+      the Wi-Fi setup card the saved-network rows sit beside the broadcast-IP
+      field, the car's own network is marked, and choosing one prefills the
+      field (or issues `ROUTERS;USE` over a live link).
+- [ ] **U-121-R1-C — the add-network form is a centered modal card.** Fields are
+      labelled and readable in landscape, clear of the split keyboard; Save and
+      Cancel both work and the added network lands in the car's list.
+- [ ] **U-121-R1-D — ⭐ the app KNOWS when the car stopped answering.** With a
+      link up, stop the car's answers (freeze/power-cut it): within
+      `CAR_SILENT_MS` the deck shows _"The car has not answered for a while — it
+      may have frozen. Check its power … then Reconnect."_ and it clears when
+      frames resume. The link being up must NOT hide it.
+
 ## U-120 round — 2026-10-22/23: Q1–Q3 close-out + owner list B (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FLASH **1.3.15**)
 
 > Owner (2026-10-22): implement the Q1–Q3 defaults (both halves) and owner list
