@@ -25,11 +25,16 @@
 //   setup   → the selected method's job, and nothing else
 //   left-bottom → the THIS-CAR inventory, always visible (M1): paired cars
 //             (Bluetooth, friendly names only) or added networks (Wi-Fi).
+//             READ-ONLY — it answers "what does this car know", never "do it"
+//             (U-121 C2: its rows used to repeat the right pane's switch action
+//             on the very same list).
 //   right   → the ONE manager for BOTH methods: "Switch networks" + add
-//             (over a live BT link it manages the same registry), plus the
-//             entry card for other ESP / IoT projects. M1 gives it a fixed
-//             heading so the list never appears heading-less, and the "nearby"
-//             scan rows only appear after an explicit Search.
+//             (over a live BT link it manages the same registry). M1 gives it
+//             a fixed heading so the list never appears heading-less, and the
+//             "nearby" scan rows only appear after an explicit Search. The
+//             entry card for other ESP / IoT projects is GONE (owner
+//             2026-10-23/24: "remove the other esp /iot projects section
+//             totally") — the add form in this pane is the one way in.
 //
 // U-101 (owner 2026-10-12): *"the fonts are too big and the sections are hogging
 // up all the space ... use the split screen in landscape view, don't elongate
@@ -655,8 +660,9 @@ export function ConnectionSection({
           </InlineMessage>
         ) : null}
 
-        {/* ONE message surface for the whole section — above the right pane so a
-            confirmation or a failure is never below the fold. */}
+        {/* ONE message surface for the whole section — it sits at the top of
+            the LEFT pane so a confirmation or a failure is never below the
+            fold of either pane. */}
         {message ? (
           <InlineMessage tone={message.tone}>{message.text}</InlineMessage>
         ) : null}
@@ -672,12 +678,7 @@ export function ConnectionSection({
             onConnect={connectBluetooth}
           />
         ) : method === "wifi" ? (
-          <AddedNetworksInventory
-            routers={routers}
-            reachable={anyLink}
-            busy={busy}
-            onSwitch={(s) => void switchRouter(s)}
-          />
+          <AddedNetworksInventory routers={routers} />
         ) : null}
       </View>
 
@@ -685,8 +686,11 @@ export function ConnectionSection({
           Bluetooth render the SAME "Switch networks" surface (over BT it
           manages the same registry through the live link), with a fixed
           heading — the network list never appears "with no heading" again —
-          plus add-connection for other ESP / IoT projects. Nearby scan rows
-          appear only after an explicit Search (WifiPanel `showScanned`). */}
+          and it is the ONLY place a network can be switched, added, edited or
+          forgotten (the left-bottom inventory only displays them). Nearby scan
+          rows appear only after an explicit Search (WifiPanel `showScanned`).
+          The "Other ESP / IoT projects" entry card is deleted per the owner
+          (2026-10-23/24); the in-place add form below is the way in. */}
       <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
         {method === "wifi" || method === "bluetooth" ? (
           <>
@@ -950,17 +954,18 @@ function BtInventory({
 // the car's own relationship never disappears once a link is up. M1: only
 // added/saved names — scan results live in the right pane's Switch networks,
 // behind an explicit Search.
+//
+// U-121 C2 (owner 2026-10-24: "remove … duplicates and unnecessary thing"): it
+// is READ-ONLY now. Its rows used to be a second set of tap-to-switch buttons
+// for the SAME `routers` the right pane already manages — two lists, one list
+// of actions, on the same screen. The inventory answers "what does this car
+// know"; the right pane is the only place that DOES anything to it. Nothing is
+// lost: every row's switch is one pane over, always rendered.
 // =====================================================================
 function AddedNetworksInventory({
   routers,
-  reachable,
-  busy,
-  onSwitch,
 }: {
   routers: readonly RouterEntry[];
-  reachable: boolean;
-  busy: boolean;
-  onSwitch: (ssid: string) => void;
 }) {
   return (
     <View className="gap-1" testID="conn-added-networks">
@@ -969,7 +974,7 @@ function AddedNetworksInventory({
       </Text>
       {routers.length === 0 ? (
         <Text className="py-0.5 text-[11px] text-muted">
-          No networks added yet — add one under Switch networks.
+          No networks added yet — add one from the list on the right.
         </Text>
       ) : (
         <ScrollView
@@ -980,19 +985,13 @@ function AddedNetworksInventory({
           keyboardShouldPersistTaps="handled"
         >
           {routers.map((r, i) => {
-            const canTap = reachable && !busy && !r.isActive;
             return (
-              <Pressable
+              <View
                 key={r.ssid}
-                onPress={() => {
-                  if (canTap) onSwitch(r.ssid);
-                }}
-                disabled={!canTap}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  r.isActive ? `${r.ssid}, connected` : `Use ${r.ssid}`
-                }
-                accessibilityState={{ disabled: !canTap }}
+                accessibilityRole="text"
+                accessibilityLabel={`${r.ssid}, ${
+                  r.isActive ? "connected" : r.isOwnAp ? "car hotspot" : "saved"
+                }`}
                 testID={`conn-added-network-${r.ssid}`}
                 className={`flex-row items-center gap-1.5 px-2 py-2 ${
                   i === 0 ? "" : "border-t border-line"
@@ -1018,7 +1017,7 @@ function AddedNetworksInventory({
                       ? "Car hotspot"
                       : "Saved"}
                 </Text>
-              </Pressable>
+              </View>
             );
           })}
         </ScrollView>
@@ -1174,15 +1173,14 @@ function TargetBody({
           {unavailable ? (
             <InlineMessage tone="info">{unavailable}</InlineMessage>
           ) : null}
-          {/* U-70: the FOUND-device LIST moved to the section's RIGHT pane
-              (2026-10-12): left = the method + this one action, right = the
-              method's own results. Paired/added devices render above the scroll,
-              the rest behind one bounded window. P6 (issue 1): the list hides
-              once BLUETOOTH is up — the second link being live over Wi-Fi no
-              longer hides it, because raising Bluetooth beside a live Wi-Fi link
-              is precisely the state issue 1 asks for. */}
+          {/* The found-device LIST is not rendered here (U-70 put it in the
+              RIGHT pane, M1 then moved it to the left-bottom BtInventory where
+              "the paired list must not vanish when a link comes up"). This
+              card is the ONE action; keeping a list comment here as a warning,
+              because every earlier layout left a copy of the list behind when
+              it moved. */}
         </View>
-      ) : null}{" "}
+      ) : null}
       {/* U-86: one Connect action, whatever network the car is on. */}
       {target.id === "car-wifi" ? (
         <View className="mt-2">
