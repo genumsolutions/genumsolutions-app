@@ -423,3 +423,37 @@ describe("U-123 — the type scale, the settings rhythm, the honest chip", () =>
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
   });
 });
+
+describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar shown", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(screen).toContain("const cameraBand = insets.top;");
+    expect(screen).toContain("const shellTop = cameraBand + 8;");
+    expect(screen).toContain('testID="remote-camera-band"');
+  });
+
+  it("the top inset is claimed as a SOLID BLACK band, not the theme surface", () => {
+    // The defect: the strip above the shell was painted by the root's
+    // `bg-surface`, so on an edge-to-edge build the camera cutout sat on a
+    // light band and white status icons vanished over it ("the phone's status
+    // bar is missing"). The band must be black regardless of theme.
+    expect(screen).toContain('backgroundColor: "#000000"');
+    expect(screen).not.toContain("paddingTop: Math.max(insets.top, 8)");
+    // The band renders only when there IS an inset to claim — a non
+    // edge-to-edge build keeps its 8 px floor and no empty black row.
+    expect(screen).toContain("{cameraBand > 0 ? (");
+  });
+
+  it("the content uses only the REMAINING space, below the band", () => {
+    expect(screen).toContain("paddingTop: shellTop,");
+    // The settings dropdown anchors to the same origin — one top edge for
+    // every layer of the screen.
+    expect(screen).toContain("top: shellTop + 48,");
+    expect(screen).not.toContain("Math.max(insets.top, 8) + 48");
+  });
+
+  it("the system status bar is asked for, light on black, never hidden", () => {
+    expect(screen).toContain("hidden={false}");
+    expect(screen).toContain('barStyle="light-content"');
+    expect(screen).toContain('backgroundColor="#000000"');
+  });
+});
