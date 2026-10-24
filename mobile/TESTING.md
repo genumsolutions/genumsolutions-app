@@ -62,6 +62,19 @@
 - [ ] **U-124-4 — the WiFi connect awaits the outcome.** `DeviceConnectionScreen`'
       s `connect()` awaits `handleWifiConnect()` instead of letting a
       non-awaited failure resolve to success.
+- [ ] **U-124-5 — with the Webpage toggle OFF the broadcast IP is hidden on
+      EVERY surface.** Remote: no chip right of Back (`deck-link-status`
+      absent — gate is now `linked && carPageServing.current`, the hub
+      opinion a real boolean); Connectivity: the card's **Control address**
+      row absent (`car-network-ip` not rendered). Toggle ON over a live link
+      → both return. Pinned `pageServingTruth.test.ts` (4 rules); car twin:
+      FW 1.3.18 contract `page-state` + M144.
+- [ ] **U-124-6 — the car's page in a browser while the toggle is OFF shows
+      the “turned off” message, NOT a white screen.** Join the car's network,
+      open its IP in a phone browser with the page off: the ghost page's text
+      renders (firmware half — `serveGhostPage` now declares its real
+      Content-Length). F-61: source-level until flashed — FW 1.3.18 is
+      UNFLASHED.
 
 ## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
 

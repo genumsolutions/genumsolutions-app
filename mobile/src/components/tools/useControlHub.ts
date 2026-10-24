@@ -2199,18 +2199,30 @@ export function useControlHub(routeCategory?: string) {
   }, [telemetry.ip, telemetry.ssid]);
 
   // check if SPP is supported on this device
-  const sppSupported = sppService.supported; // U-120: the page-state triple ref. This is the HUB's source of the local
-  // page-serving truth only; the Remote chrome chip and the page toggle read the
-  // PUBLIC `carPageServing` opinion below, never these internals directly.
-  const pageStateTriple = useRef<CarPageServingState>({
-    current: false,
-    old: false,
-    changeFlag: false,
-  });
+  const sppSupported = sppService.supported;
+  // U-120: the page-state triple — the HUB's public `carPageServing` opinion
+  // (returned below). Screens read that opinion, never `pageOn` directly.
+  //
+  // U-124 ⑫ (owner 2026-10-24: "the ip is not hidden anywhere … fix these
+  // when webpage is off"): this used to be a REF whose triple NOTHING ever
+  // wrote — and the Remote chip read `hub.carPageServing?.current`, which on
+  // a ref-of-triple was the OBJECT `{current, old, changeFlag}` (always
+  // truthy), so the broadcast-IP chip never hid no matter what the car
+  // reported. The opinion is now the OBJECT ITSELF, derived at render time
+  // from `pageOn` (the hub's car truth: `;PAGE=` / `page_on` / the WIFICFG
+  // reply), so `hub.carPageServing?.current` is finally a boolean that flips
+  // with the car's report. `old`/`changeFlag` keep their documented shape via
+  // the steady-frame ref below, caught up one commit later by the effect.
   const pageStateOld = useRef<boolean>(false);
-  // U-120: the HUB keeps `pageOn` as its source of the car's page status, and
-  // the ONLY public opinion it exposes is `carPageServing` (returned below).
-  // Screens should never reach for `pageOn` to decide if the page is served.
+  const pageServingNow = pageOn === true;
+  const carPageServing: CarPageServingState = {
+    current: pageServingNow,
+    old: pageStateOld.current,
+    changeFlag: pageStateOld.current !== pageServingNow,
+  };
+  useEffect(() => {
+    pageStateOld.current = pageServingNow;
+  }, [pageServingNow]);
 
   // Periodic REQ_STATE â€” keeps the app synced with the car's current mode,
   // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
@@ -4333,10 +4345,12 @@ export function useControlHub(routeCategory?: string) {
     sensorData,
     relays,
     toggleRelay,
-    // U-120: the HUB's local page-serving truth, returned for the Remote
+    // U-120 + U-124 ⑫: the HUB's local page-serving truth, returned for the Remote
     // chrome chip and any future dependents. A remote reachability path (HEAD/GET,
     // on-the-wire page detection) is a separate concern and does not feed this.
-    carPageServing: pageStateTriple,
+    // It is the derived OBJECT (not a ref), so `carPageServing.current` is a
+    // real boolean that tracks the car's `;PAGE=`/`page_on` truth.
+    carPageServing,
     // toggles
     useJoystick,
     setUseJoystick,

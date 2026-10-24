@@ -383,7 +383,14 @@ export function RemoteControlScreen({ navigation }: Props) {
   // Any other consumer of that truth (the page toggle, future reachability checks)
   // must use the same public opinion, not a separate pageOn/wifiUrl path, so the
   // Remote chip and that path cannot agree on different page states for the same link.
-  const pageLinkReady = hub.carPageServing?.current ?? false;
+  // U-124 ⑫ (owner 2026-10-24, "the ip is not hidden anywhere"): TWO defects
+  // met behind that report — the hub's opinion was a never-written ref object
+  // (always truthy), and this gate had no live-link half despite the comment
+  // and the storyboard promising "a live link AND the car serves its page".
+  // The hub's opinion is now a real boolean (useControlHub, U-124 ⑫), and the
+  // gate is the conjunction its own docs always described: no link or page
+  // off ⇒ no chip, because there is no page to open.
+  const pageLinkReady = linked && (hub.carPageServing?.current ?? false);
   // U-105 (1.3.5, owner 2026-10-13): Bluetooth and Wi-Fi stay live TOGETHER by
   // default — the parallel + power-save settings are gone. Whenever both links
   // are open the strip and sub-header name BOTH at once (the car's OLED says
