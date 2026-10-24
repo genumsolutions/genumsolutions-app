@@ -129,6 +129,21 @@ export type DevicePrefs = {
    * plan only (F-88's shape: absent ≠ denied, absent ≠ overridden).
    */
   carNetworkHint?: string | null;
+  /**
+   * U-121 B2 (owner 2026-10-24): *"in the car network section, add the
+   * feature of the entering the wifi network the car is at for the user …
+   * most of the time set automatically and auto filled too."*
+   *
+   * The SSID half of the "Car network" card — `carNetworkHint` above is the
+   * address half. The card is auto-filled from the car's own report
+   * (`telemetry.ssid`, then the configured `carSsid`) so it is correct without
+   * typing; what the owner TYPES here is the override the app falls back to
+   * when the car cannot say (no link, stale telemetry), so every "where is the
+   * car on Wi-Fi" decision still has a name. Per car, stored in the profile
+   * like `carNetworkHint`. NOTE: the key is `carSsidAnswer`, not `carSsid` —
+   * `carSsid` is the hub's live CAR-truth state, not a preference.
+   */
+  carSsidAnswer?: string | null;
   /** Connections-Hub round: auto-join saved router on connect (smart-link),
       else go straight to the car's own AP. Default true. */
   autoJoinRouter?: boolean;
