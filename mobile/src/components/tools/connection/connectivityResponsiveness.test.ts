@@ -271,3 +271,37 @@ describe('P8 — ConnectionSection offers the "Car network" control', () => {
     );
   });
 });
+
+// U-121 C2 (owner 2026-10-24: "make the bluetooth method and the wifi method in
+// the connectivity section properly thought and the remove unproper things like
+// the dublicates and unnecessary thing from there too").
+describe("U-121 C2 — the left-bottom inventory is DISPLAY-ONLY; the right pane is the manager", () => {
+  it("has sources to check (the rule must not pass vacuously)", () => {
+    expect(section).toContain('testID="conn-added-networks"');
+    expect(section).toContain("<AddedNetworksInventory routers={routers} />");
+  });
+
+  it("the added-networks list carries NO switch action of its own", () => {
+    // Everything from the inventory's own testID to the end of the file: rows
+    // are Views (information), not Pressables, and no onSwitch reaches them —
+    // the right pane's WifiPanel is the single place that switches, adds,
+    // edits or forgets. Two lists of the same routers with two identical sets
+    // of tap-to-switch buttons was the duplicate the owner named.
+    const fromInventory = section.slice(
+      section.indexOf("function AddedNetworksInventory("),
+    );
+    expect(fromInventory).toContain('testID="conn-added-networks"');
+    expect(fromInventory).not.toContain("onSwitch");
+    expect(fromInventory).not.toContain("<Pressable");
+    expect(fromInventory).not.toContain("reachable");
+    expect(fromInventory).toContain("testID={`conn-added-network-${r.ssid}`}");
+  });
+
+  it("the IoT entry card is gone from the pane that used to carry it", () => {
+    // Owner 2026-10-23/24: "remove the other esp /iot projects section totally".
+    // A1 deleted the component; A2 deleted the usage a later edit re-added
+    // (it was the TS2304 that left `tsc` red on resume).
+    expect(section).not.toContain("IotEntryCard");
+    expect(section).not.toContain('testID="conn-iot-entry"');
+  });
+});
