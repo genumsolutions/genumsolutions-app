@@ -1,6 +1,6 @@
 # TESTING — Physical Device Test Checklist
 
-## U-123 round — 2026-10-24: the storyboard/wireframe re-review's six findings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = RUNSHEET records patch only)
+## U-123 round — 2026-10-24: the storyboard/wireframe re-review's six findings (app 3.2.7/60 JS-only OTA — DEVICEVERIFY PENDING; car half = RUNSHEET records patch only)
 
 > Re-review of `storyboard.md` + `TRACKS/remote-wireframe-2026-10-24.png`
 > against the render. Six findings, all fixed: the storyboard §1 table row
@@ -37,6 +37,74 @@
       line is correctly absent below 700 px. If ANY element clips or wraps,
       photograph it and report which one (this row exists because static math
       says it might not fit).
+
+## U-124 round — 2026-10-24: the connect-outcome fix (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = records patch only)
+
+> Owner: the connect layer fixed the fake-success defect — `handleConnect` and
+> `handleWifiConnect` now return `ConnectOutcome` instead of swallowing a
+> failure into `error` and resolving normally, the ConnectionPanel renders the
+> returned outcome, and `DeviceConnectionScreen` awaits the WiFi handler.
+> Every row unticked — F-61: green gates are not device evidence.
+
+- [ ] **U-124-1 — the handler returns a ConnectOutcome on both branches.**
+      Source-pinned in `mobile/src/components/tools/useControlHubConnectOutcome.test.ts`
+      (the real pin lives in the app, not this file): `handleConnect` returns
+      `{ ok: true, message }` on the success branch and `{ ok: false, reason }`
+      on the catch branch — no failure is ever swallowed into `error` alone.
+- [ ] **U-124-2 — the failure path clears the outbound state before the
+      outcome returns.** `setConnecting(false)`, `setConnectingAddress(null)`
+      and `setSppDevices([])` all run before the `return { ok: false, reason }`
+      in the catch, so a second connect starts from a clean board and a second
+      drop cannot read a stale "Connected to <car>" shape.
+- [ ] **U-124-3 — the panel renders the real outcome.** `connectBluetooth` and
+      `connectWifi` consume the handler's `ConnectOutcome` and render the
+      success/error tone, so a failed connect cannot read as "Connected".
+- [ ] **U-124-4 — the WiFi connect awaits the outcome.** `DeviceConnectionScreen`'
+      s `connect()` awaits `handleWifiConnect()` instead of letting a
+      non-awaited failure resolve to success.
+
+## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
+
+> Owner (2026-10-24): _"check the both project for the residues, dublicates, or
+> bugs or any discrepancies or the abnormalities. Also make the remote screen
+> hieracrhial in the size of the contents. also organize the remtoe screen and
+> the the tabs under this screen like conectivity and the others too. also make
+> the setting too organized and proper size and also mind the spaces of the
+> status bar of the phones and the position of the camera … some of the
+> sections got increased in the space twice or more i think during
+> rectififcation."
+>
+> Audit scope: BOTH repos (residues / duplicates / dead code / stale comments /
+> discrepancies). Findings + fixes below; the car repo had **NO actionable
+> findings** — every "removed-feature" string there lives in intentional NVS
+> migration code (`w.remove("ap_psave")` etc.) or historical records. Layout
+> truth: `storyboard.md` §0–5 + the measured wireframe
+> `TRACKS/remote-wireframe-2026-10-24.png` (not a device screenshot).
+> **Every row unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **896/896** (60 files) · prettier clean;
+> car: **unchanged** at 1.3.17 gates (syntax 9/9 · contract 0 · webpage-js 0 ·
+> mutate 137/137) — no car file touched.
+
+- [ ] **U-122-1 — ⭐ the shell respects the camera and the gesture bar.** On a
+      landscape phone with a punch-hole / side camera: nothing in the chrome
+      row or the merged row sits under the camera (the inset, floor 12 px,
+      applies on ALL FOUR sides), and the deck clears the gesture bar. Back and
+      the leftmost chip on the line below it start on the SAME left edge.
+- [ ] **U-122-2 — the tabs read as tabs.** D-pad · Joystick · Telemetry ·
+      Connectivity render as ONE segmented strip (single bordered pill
+      container, active view filled navy, `tablist` a11y role); tapping each
+      switches the deck and exactly one tab is filled.
+- [ ] **U-122-3 — the settings panel is grouped, closable and inset-safe.** The
+      gear opens a panel titled "Settings · <mode>" with an ✕ close (the scrim
+      closes it too); sections read **Car connection → Driving → Danger zone
+      LAST** — factory reset sits at the bottom, never between routine
+      settings. The panel anchors inside the insets (side camera / gesture bar
+      clear) and scrolls inside its own height.
+- [ ] **U-122-4 — the doubled spacing is gone.** The Connectivity panel's method
+      row sits one padding-step below the panel edge (the old 18 px top gap is
+      now 10 px), and the message strips ("the car may have frozen", connect
+      outcomes) read at a real 16 px line height instead of 10 px type in a
+      12 px box.
 
 ## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
 
