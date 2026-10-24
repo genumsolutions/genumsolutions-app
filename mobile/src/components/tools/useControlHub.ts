@@ -14,6 +14,7 @@
 // remote can be tested/debugged in a browser without hardware.
 // =====================================================================
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { PermissionsAndroid } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useRoute, type RouteProp } from "@react-navigation/native";
@@ -290,6 +291,19 @@ function phoneSsidOf(state: NetInfoState): string | null {
   const ssid =
     typeof details?.["ssid"] === "string" ? details["ssid"].trim() : "";
   return ssid || null;
+}
+
+/** U-124 ② (owner 2026-10-24): the SUBNET of the network this phone sits on
+    (NetInfo `details.subnet`, e.g. "192.168.245.0/24"). Always reported where
+    the SSID is gated, and it is the half that decides reachability: the car's
+    own hotspot is a /24 no home router uses. */
+function phoneSubnetOf(state: NetInfoState): string | null {
+  if (state.type !== "wifi" || state.isConnected !== true) return null;
+  const details = state.details as unknown as
+    Record<string, unknown> | undefined;
+  const subnet =
+    typeof details?.["subnet"] === "string" ? details["subnet"].trim() : "";
+  return subnet || null;
 }
 
 export function useControlHub(routeCategory?: string) {
@@ -2685,22 +2699,34 @@ export function useControlHub(routeCategory?: string) {
   // The phone-network watcher itself. The FIRST observation only records where
   // we are (a mount must never trigger a sweep); a genuine move onto another
   // Wi-Fi network re-finds the car.
+  //
+  // U-124 ②: publishing the label is pulled out into its own callback so the
+  // permission path below can re-read NetInfo the moment the OS starts
+  // handing the SSID over — one writer for the pair (ssid + label), so they
+  // can never disagree.
+  const publishPhoneNetState = useCallback((state: NetInfoState) => {
+    // U-108 Phase 4: keep the phone-network truth fresh on EVERY event (not
+    // just a move) so the deck can show which network the phone is on.
+    const ssid = phoneSsidOf(state);
+    setPhoneSsid(ssid);
+    // U-118: and keep the rendered label in step with it (same event, so the
+    // SSID and the label can never disagree). U-124 ②: the subnet rides along
+    // so a still-unnamed network is still NAMED (never "name hidden").
+    setPhoneNetworkLabel(
+      formatPhoneNetwork({
+        type: state.type ?? "",
+        connected: state.isConnected === true,
+        ssid,
+        subnet: phoneSubnetOf(state),
+      }),
+    );
+  }, []);
+
   const phoneNetworkKeyRef = useRef<string | null>(null);
   useEffect(() => {
     phoneNetworkKeyRef.current = null;
     return NetInfo.addEventListener((state) => {
-      // U-108 Phase 4: keep the phone-network truth fresh on EVERY event (not
-      // just a move) so the deck can show which network the phone is on.
-      setPhoneSsid(phoneSsidOf(state));
-      // U-118: and keep the rendered label in step with it (same event, so the
-      // SSID and the label can never disagree).
-      setPhoneNetworkLabel(
-        formatPhoneNetwork({
-          type: state.type ?? "",
-          connected: state.isConnected === true,
-          ssid: phoneSsidOf(state),
-        }),
-      );
+      publishPhoneNetState(state);
       const next = phoneNetworkKey(state);
       const prev = phoneNetworkKeyRef.current;
       phoneNetworkKeyRef.current = next;
@@ -2720,7 +2746,42 @@ export function useControlHub(routeCategory?: string) {
       resetPhoneNetDiscoverBudget();
       void autoDiscoverAndConnect();
     });
-  }, [autoDiscoverAndConnect]);
+  }, [autoDiscoverAndConnect, publishPhoneNetState]);
+
+  // U-124 ② (owner 2026-10-24): *"shows the wifi. name hidden, which is
+  // meaningless and should show the wifi network the app is connected to, at
+  // all time and in sync with the phone's network."*
+  //
+  // The watcher above is already in step with the phone (it fires on every
+  // network change, including a switch). What it could not do is get the NAME:
+  // Android withholds the SSID until the app holds ACCESS_FINE_LOCATION, and
+  // this app only ever asked for that permission as a side effect of a
+  // Bluetooth scan — so a session that never scanned read "name hidden".
+  //
+  // So the ask is tied to the fact it exists for: while a Wi-Fi network is
+  // live and UNNAMED, request the permission ONCE and re-read NetInfo when it
+  // is granted (the label then carries the real network name). A phone that
+  // already answers is never prompted, a refusal is accepted silently (the
+  // subnet fallback keeps the row honest), and nothing here can block the
+  // screen.
+  const ssidPermissionAskedRef = useRef(false);
+  useEffect(() => {
+    if (ssidPermissionAskedRef.current) return;
+    if (phoneSsid) return;
+    if (!phoneNetworkLabel?.startsWith("Wi-Fi")) return;
+    ssidPermissionAskedRef.current = true;
+    void (async () => {
+      try {
+        const permission = PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION;
+        if (await PermissionsAndroid.check(permission)) return;
+        const answer = await PermissionsAndroid.request(permission);
+        if (answer !== PermissionsAndroid.RESULTS.GRANTED) return;
+        publishPhoneNetState(await NetInfo.fetch());
+      } catch {
+        /* a permission that cannot be asked for leaves the honest fallback */
+      }
+    })();
+  }, [phoneSsid, phoneNetworkLabel, publishPhoneNetState]);
 
   const handleWifiDisconnect = useCallback(async () => {
     manualCloseRef.current = true;

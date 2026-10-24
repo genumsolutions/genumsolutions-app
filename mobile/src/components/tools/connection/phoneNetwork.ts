@@ -29,6 +29,14 @@ export type PhoneNetworkInput = {
   readonly connected: boolean;
   /** The Wi-Fi SSID, when the OS reports one. */
   readonly ssid: string | null;
+  /**
+   * U-124 ② (owner 2026-10-24): NetInfo's subnet ("192.168.245.0/24"). The
+   * OS withholds the SSID until the app holds the location permission; the
+   * subnet is the fact that is ALWAYS there and the one that actually decides
+   * whether this phone can reach the car (its own hotspot is a /24 no router
+   * uses), so it is the honest stand-in while the name is being asked for.
+   */
+  readonly subnet?: string | null;
 };
 
 /** The label the panel shows. Never empty — every state has honest copy. */
@@ -36,9 +44,15 @@ export function formatPhoneNetwork(input: PhoneNetworkInput): string {
   if (!input.connected || input.type === "none") return "No network";
   if (input.type === "wifi") {
     const ssid = input.ssid?.trim() || "";
-    // iOS withholds the SSID unless location permission is granted — say the
-    // name is hidden rather than printing an empty or guessed network.
-    return ssid ? `Wi-Fi · ${ssid}` : "Wi-Fi · name hidden";
+    if (ssid) return `Wi-Fi · ${ssid}`;
+    // The OS is withholding the name (permission not yet granted, or location
+    // services off). "name hidden" was the old answer — the owner: *"shows the
+    // wifi. name hidden, which is meaningless and should show the wifi network
+    // the app is connected to"*. The hub now ASKS for the permission so the
+    // real name lands; until the OS answers, the subnet names the network the
+    // phone actually sits on instead of printing a non-answer.
+    const subnet = input.subnet?.trim() || "";
+    return subnet ? `Wi-Fi · ${subnet}` : "Wi-Fi · name not shared";
   }
   if (input.type === "cellular") return "Cellular";
   return input.type ? `Other · ${input.type}` : "Unknown network";
