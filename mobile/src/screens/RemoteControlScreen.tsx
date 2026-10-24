@@ -105,7 +105,17 @@ const NAV_DEBOUNCE_MS = 120;
 // compact telemetry line (Up/Heap/Sig) drops FIRST — disconnect chips and
 // tab pills are the controls, the readings are also on the Telemetry tab.
 // Landscape phones start around 640 px; below this cut the line hides.
-const MERGED_ROW_TELEMETRY_MIN_PX = 700;
+// U-124 ③ (owner 2026-10-24, MEASURED): the row's natural width at fontScale
+// 1 was measured in headless Chrome — with the telemetry line ON it is ~864 px
+// (needs 888 px of screen), and ~700 px (needs 724) without it. So at the
+// 640-844 px landscape widths this screen actually runs at, the controls to the
+// LEFT of the tabs pushed the tab strip past the right edge and its labels
+// clipped — the owner's "tabs names … not fitting the text on its available
+// space". After this round's size pass the ON width is ~791 px (815 of screen);
+// 860 keeps telemetry showing only where the CONTROLS are provably safe, with
+// headroom for a system font scale above 1. Q2's rule is unchanged — telemetry
+// is still the first and only thing that drops.
+const MERGED_ROW_TELEMETRY_MIN_PX = 860;
 
 const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
   maxSpeed: 255,
@@ -959,7 +969,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         {/* 2026-10-24: no per-row px — both this row and the chrome row above
             start at the SAME shell inset, so the two bars line up on the left
             edge (the old px-1 pushed this row 4 px right of Back). */}
-        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5">
+        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1">
           {phoneNetworkLabel ? (
             // U-123 (re-review finding 5): this chip is INFORMATION. It used
             // to be a Pressable with an empty onPress — press feedback and an
@@ -969,7 +979,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             <View
               accessibilityLabel={`Phone on ${phoneNetworkLabel}`}
               testID="remote-phone-network"
-              className="flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[200px] rounded-full border border-line bg-card px-3.5 py-2"
+              className="flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[168px] rounded-full border border-line bg-card px-3 py-2"
             >
               {/* U-124 ⑥ (owner 2026-10-24): this row already carries a Wi-Fi
                   DISCONNECT chip, so a second Wi-Fi glyph here read as a
@@ -993,7 +1003,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Disconnect Bluetooth"
               testID="remote-disconnect-bt"
               hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-4 py-2 active:opacity-70"
+              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
             >
               <Feather name="bluetooth" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted">
@@ -1021,7 +1031,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Disconnect Wi-Fi (hotspot)"
               testID="remote-disconnect-wifi"
               hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-4 py-2 active:opacity-70"
+              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
             >
               <Feather name="wifi" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted">
@@ -1040,7 +1050,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Disconnect Wi-Fi"
               testID="remote-disconnect-wifi"
               hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-4 py-2 active:opacity-70"
+              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
             >
               <Feather name="wifi" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted">Wi-Fi</Text>
@@ -1062,7 +1072,7 @@ export function RemoteControlScreen({ navigation }: Props) {
             // SEGMENTED tab strip — a single bordered pill container, active
             // view filled navy — instead of four loose bordered pills that
             // read as more status chips. Tap sizes stay what U-121 left them
-            // (px-4 py-2, 12 px bold) and every tab now carries a selected
+            // (px-3 py-1.5, 11 px bold — U-124 ③) and every tab now carries a selected
             // accessibility state.
             <View
               accessibilityRole="tablist"
@@ -1079,10 +1089,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="D-pad"
                 accessibilityState={{ selected: showJoystick && !useJoystick }}
-                className={`rounded-full px-4 py-2 ${showJoystick && !useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
+                className={`rounded-full px-3 py-1.5 ${showJoystick && !useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[12px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
                 >
                   D-pad
                 </Text>
@@ -1097,10 +1107,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Joystick"
                 accessibilityState={{ selected: showJoystick && useJoystick }}
-                className={`rounded-full px-4 py-2 ${showJoystick && useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
+                className={`rounded-full px-3 py-1.5 ${showJoystick && useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[12px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
                 >
                   Joystick
                 </Text>
@@ -1115,10 +1125,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Telemetry"
                 accessibilityState={{ selected: !showJoystick && !showRouter }}
-                className={`rounded-full px-4 py-2 ${!showJoystick && !showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
+                className={`rounded-full px-3 py-1.5 ${!showJoystick && !showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[12px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
                 >
                   Telemetry
                 </Text>
@@ -1133,10 +1143,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Connectivity"
                 accessibilityState={{ selected: showRouter }}
-                className={`rounded-full px-4 py-2 ${showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
+                className={`rounded-full px-3 py-1.5 ${showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
-                  className={`text-[12px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
+                  className={`text-[11px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
                 >
                   Connectivity
                 </Text>

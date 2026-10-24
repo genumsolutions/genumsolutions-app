@@ -223,7 +223,7 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
     // fit. Exactly ONE width gate exists in the whole screen and it wraps
     // TelemetryLine — a second gate would mean a control started hiding too,
     // and no gate would mean the telemetry line overflows the row again.
-    expect(screen).toContain("const MERGED_ROW_TELEMETRY_MIN_PX = 700;");
+    expect(screen).toContain("const MERGED_ROW_TELEMETRY_MIN_PX = 860;");
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
     // (U-121: the phone-network chip added to this row TRUNCATES instead of
     // hiding, so the single width gate stays telemetry-only.)
@@ -316,7 +316,8 @@ describe("U-120 Phase E — the auto-join says AND does 'last used router'", () 
 //      too (the car reports `;IP=` on STATE over Bluetooth as well);
 //   4. the phone's OWN network (name) moved here, onto the merged row —
 //      the Connectivity panel's "This phone" row is gone;
-//   5. the tab pills carry real tap sizes (px-4 py-2, 12 px bold);
+//   5. the tab pills carry real tap sizes (px-4 py-2, 12 px bold — U-124 ③
+//      re-measured them to px-3 py-1.5, 11 px, so the text fits the row);
 //   6. the disconnect chips are real: bigger, transport icon + name + ✕.
 // =====================================================================
 describe("U-121 — the chrome chip is the broadcast IP, only while the page is on", () => {
@@ -350,10 +351,13 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
   });
 
   it("items 5+6: real tap sizes and a real disconnect mark", () => {
-    // Four tab pills at the new size (U-121 kept, widgets 4→4)…
+    // Four tab pills at the new size (U-121 kept, widgets 4→4; U-124 ③
+    // re-measured them down to px-3 py-1.5 / 11 px so the LABELS fit the row
+    // at 640 px instead of being pushed off its right edge).
     expect(
-      (screen.match(/rounded-full px-4 py-2/g) ?? []).length,
+      (screen.match(/rounded-full px-3 py-1.5/g) ?? []).length,
     ).toBeGreaterThanOrEqual(4);
+    expect((screen.match(/rounded-full px-4 py-2/g) ?? []).length).toBe(0);
     // …every disconnect chip carries the transport icon + name + ✕…
     // THREE render sites for TWO chips: Bluetooth, Wi-Fi (hotspot), Wi-Fi —
     // A1 (owner 2026-10-23) split the Wi-Fi chip into its hotspot/router
@@ -431,7 +435,7 @@ describe("U-123 — the type scale, the settings rhythm, the honest chip", () =>
     );
     // It still TRUNCATES (max-w cap) and is never gated — Q2's single
     // width gate stays telemetry-only.
-    expect(screen).toContain("max-w-[200px] rounded-full border border-line");
+    expect(screen).toContain("max-w-[168px] rounded-full border border-line");
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
   });
 });
