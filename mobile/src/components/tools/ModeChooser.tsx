@@ -109,7 +109,7 @@ export function ModeChooser({
       >
         <Text
           numberOfLines={1}
-          className={`min-w-0 flex-1 text-[13px] font-bold ${highlighted ? "text-slate-900" : "text-ink"}`}
+          className={`min-w-0 flex-1 text-[12px] font-bold ${highlighted ? "text-slate-900" : "text-ink"}`}
         >
           {shortName}
         </Text>

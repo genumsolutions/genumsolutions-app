@@ -1,5 +1,31 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-10-24 (latest) — U-123 SHIPPED (JS-only → same-version OTA 3.2.7/60;
+> car half = RUNSHEET records patch only): the storyboard/wireframe re-review's
+> six findings, one fix each.** **1** the storyboard §1 table's swallowed
+> `right (robocar)` row split back into its own row · **2** type scale made
+> honest — mode 13→**12** px, speed value 11→**12** px, telemetry labels 8→**10**
+> px (nothing below the scale's 9 px floor; the scale line now lists the
+> telemetry tier) · **3** the settings header's `border-b` removed → **one
+> divider above every group** (the doubled rule above CAR CONNECTION is gone) ·
+> **4** the settings panel's scroll indicator **ON** — the below-fold Danger
+> zone is discoverable on short landscape screens (Connectivity pane keeps its
+> hidden one) · **5** the phone chip is information again — dead
+> `onPress={() => {}}`/press-fade/a11y-button and the `shrink-0`+`flex-1`
+> contradiction replaced by a plain truncating `View` (label/testID/200 px cap
+> kept) · **6** stale size docs corrected (`remoteChrome.test.ts` U-121 header
+> `px-4 py-2, 12 px`; storyboard §2 gains the `isRobocar` tab gate).
+> **Owner extras:** RUNSHEET staleness patched (§1 heading →1.3.17, `fw`
+> expectation →1.3.17, manifest → the LIVE `9bb4850…` hash verified 2026-10-24
+> 05:45 UTC, boot-log name →1.3.17, header tick order → **newest round first**,
+> previously omitting U-121/Q1/U-120 rows) + new bench row **U-123-4** (640 px,
+> BOTH disconnect chips — the ⭐ watch row: static math says the tabs may clip).
+> New pins: `remoteChrome.test.ts` describe **U-123** (5 rules). Gates: app tsc
+> 0 · vitest **901/901** (60 files) · prettier clean; car (records-only, re-run
+> anyway) syntax 9/9 · contract 0 · webpage-js PASS · mutate **137/137**. Device
+> rows: `mobile/TESTING.md` **U-123-1..4** (unticked, F-61). Session note:
+> `TRACKS/SESSION-2026-10-24-U123.md`.
+
 > ✅ **2026-10-24 (latest) — U-122 SHIPPED (JS-only → same-version OTA 3.2.7/60; NO car
 > change): full audit of BOTH repos + the Remote screen's layout, hierarchy & settings.**
 > Audit: car repo **clean** (every removed-feature hit is intentional NVS cleanup or a

@@ -240,7 +240,7 @@ function ValueStrip({
         style={{ flex: 1, height: 28 }}
       />
       <Text
-        className={`w-7 shrink-0 text-right font-mono text-[11px] font-bold ${highlight ? "text-navy-dark" : "text-ink dark:text-white"}`}
+        className={`w-7 shrink-0 text-right font-mono text-[12px] font-bold ${highlight ? "text-navy-dark" : "text-ink dark:text-white"}`}
       >
         {Math.round(value)}
       </Text>
@@ -925,19 +925,21 @@ export function RemoteControlScreen({ navigation }: Props) {
             edge (the old px-1 pushed this row 4 px right of Back). */}
         <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5">
           {phoneNetworkLabel ? (
-            <Pressable
-              onPress={() => {}}
-              accessibilityRole="button"
+            // U-123 (re-review finding 5): this chip is INFORMATION. It used
+            // to be a Pressable with an empty onPress — press feedback and an
+            // a11y "button" that did nothing — plus a shrink-0 that fought
+            // its own flex-1. A plain truncating View: capped at 200 px,
+            // never hidden (Q2's single width gate stays telemetry-only).
+            <View
               accessibilityLabel={`Phone on ${phoneNetworkLabel}`}
               testID="remote-phone-network"
-              hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[200px] rounded-full border border-line bg-card px-3.5 py-2 active:opacity-70"
+              className="flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[200px] rounded-full border border-line bg-card px-3.5 py-2"
             >
               <Feather name="wifi" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted truncate">
                 {phoneNetworkLabel}
               </Text>
-            </Pressable>
+            </View>
           ) : null}
           {btLinked ? (
             <Pressable
@@ -1417,7 +1419,9 @@ export function RemoteControlScreen({ navigation }: Props) {
               its floor follow the safe-area insets (a landscape punch-hole
               camera sits on the side edge), and its content is GROUPED
               (connection / driving / danger) behind one header row with a real
-              close mark, instead of one undifferentiated strip of switches. */}
+              close mark, instead of one undifferentiated strip of switches. U-123: the scroll
+              indicator is ON — on a short landscape screen the Danger zone
+              sits below the fold and must stay discoverable. */}
           <ScrollView
             className="absolute z-40 w-72 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
             style={{
@@ -1429,9 +1433,9 @@ export function RemoteControlScreen({ navigation }: Props) {
                 Math.max(insets.bottom, 8) -
                 12,
             }}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
           >
-            <View className="flex-row items-center justify-between gap-2 border-b border-line pb-1.5">
+            <View className="flex-row items-center justify-between gap-2 pb-1.5">
               <Text
                 numberOfLines={1}
                 ellipsizeMode="middle"
