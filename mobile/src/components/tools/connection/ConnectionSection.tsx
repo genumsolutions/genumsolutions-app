@@ -572,7 +572,13 @@ export function ConnectionSection({
   );
 
   return (
-    <View className="mt-2 flex-wrap flex-row items-start gap-2">
+    // 2026-10-24 (owner: "some of the sections got increased in the space twice
+    // or more … during rectification"): the section's own top margin is GONE.
+    // Its only host (the Remote's Connectivity panel) already gives the pane
+    // padding:10, so this mt-2 stacked on top of it — 18 px above the method
+    // row where every other gap on the panel is 6-8 px. The panes' gap does the
+    // spacing; the host owns the outer edge.
+    <View className="flex-wrap flex-row items-start gap-2">
       {/* U-108 (owner 2026-10-13): the status + disconnect strip that used to
           sit here is gone — the link status is in the Remote chrome (right of
           Back) and the Bluetooth / Wi-Fi disconnect buttons are on the row

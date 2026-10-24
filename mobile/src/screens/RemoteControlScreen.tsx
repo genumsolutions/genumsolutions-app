@@ -161,6 +161,30 @@ function StepperPill({
   );
 }
 
+/**
+ * One group shape for the settings dropdown (owner 2026-10-24: "make the
+ * setting too organized and proper size"). A divider, a small-caps header and
+ * a fixed rhythm — the panel reads as SECTIONS instead of one undifferentiated
+ * strip of switches. The Danger zone keeps its own red header (same shape,
+ * destructive tone) and always renders LAST.
+ */
+function SettingsGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View className="mt-2 border-t border-line pt-1.5">
+      <Text className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-muted">
+        {title}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
 /** Inline value strip for the chrome row — Speed or Steer LIMIT. */
 function ValueStrip({
   label,
@@ -192,7 +216,7 @@ function ValueStrip({
       }`}
     >
       <Text
-        className={`text-[9px] font-black uppercase tracking-widest ${highlight ? "text-navy-dark" : "text-muted"}`}
+        className={`text-[10px] font-black uppercase tracking-widest ${highlight ? "text-navy-dark" : "text-muted"}`}
       >
         {label}
       </Text>
@@ -238,7 +262,10 @@ export function RemoteControlScreen({ navigation }: Props) {
   const hub = useControlHub(routeCategory);
   const { width, height, isLandscape } = useViewport();
   const insets = useSafeAreaInsets();
-  const { themeMode, setThemeMode } = useApp();
+  // 2026-10-24: `setThemeMode` was destructured here and never used — the
+  // theme switch lives on the Menu screen (MenuScreen.tsx). Only the current
+  // mode is read (the chrome slider's dark-aware colours).
+  const { themeMode } = useApp();
 
   const {
     connected,
@@ -751,9 +778,22 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   return (
     <View className="flex-1 bg-surface">
+      {/* 2026-10-24 (owner: "mind the spaces of the status bar of the phones
+          and the position of the camera"): the shell is inset-driven on ALL
+          FOUR sides. Landscape phones put the status bar / punch-hole camera
+          on the LEFT or RIGHT edge (insets.left/right) and gesture nav sits at
+          the bottom (insets.bottom); the old layout padded only the top and a
+          fixed px-3, so a side camera could sit under the chrome row and the
+          bottom row could touch the gesture bar. 12 px is the floor per side,
+          the insets win whenever they are larger. */}
       <View
-        className="flex-1 overflow-hidden px-3 pb-2"
-        style={{ paddingTop: Math.max(insets.top, 8) }}
+        className="flex-1 overflow-hidden"
+        style={{
+          paddingTop: Math.max(insets.top, 8),
+          paddingLeft: Math.max(insets.left, 12),
+          paddingRight: Math.max(insets.right, 12),
+          paddingBottom: Math.max(insets.bottom, 8),
+        }}
       >
         {/* ── Chrome row ── */}
         <View className="flex-shrink-0 flex-row items-center gap-2">
@@ -856,10 +896,15 @@ export function RemoteControlScreen({ navigation }: Props) {
                   radius: 32,
                 }}
               >
+                {/* 2026-10-24 (hierarchy): 56 px made the settings gear the
+                    biggest thing in the chrome row — bigger than Back, bigger
+                    than the drive controls it configures. 44 px is still a
+                    full touch target; the row's tallest element is now the
+                    mode/speed group the screen is actually about. */}
                 <View
-                  className={`h-14 w-14 items-center justify-center rounded-full bg-navy ${showSettings ? "bg-navy-dark" : ""}`}
+                  className={`h-11 w-11 items-center justify-center rounded-full bg-navy ${showSettings ? "bg-navy-dark" : ""}`}
                 >
-                  <Feather name="settings" size={22} color="#fff" />
+                  <Feather name="settings" size={18} color="#fff" />
                 </View>
               </Pressable>
             </View>
@@ -875,7 +920,10 @@ export function RemoteControlScreen({ navigation }: Props) {
             pills/chips carry real tap sizes with a REAL disconnect mark
             (transport icon + name + ✕), per the owner's "too small to click"
             and "not proper disconnect icon". */}
-        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5 px-1">
+        {/* 2026-10-24: no per-row px — both this row and the chrome row above
+            start at the SAME shell inset, so the two bars line up on the left
+            edge (the old px-1 pushed this row 4 px right of Back). */}
+        <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1.5">
           {phoneNetworkLabel ? (
             <Pressable
               onPress={() => {}}
@@ -956,11 +1004,18 @@ export function RemoteControlScreen({ navigation }: Props) {
           <View className="min-w-0 flex-1" />
           {/* Control pills (robocar only — decks drive themselves) */}
           {isRobocar ? (
-            <>
-              {/* U-121 (owner item 5, 2026-10-23) + owner clarification
-                  (2026-10-23): the tabs are TABBED controls — easy to hit now
-                  (bigger touch target, bigger label), not the 9 px slivers the
-                  owner could not click. */}
+            // 2026-10-24 (owner: "organize … the tabs under this screen like
+            // connectivity and the others too"): the four views are ONE
+            // SEGMENTED tab strip — a single bordered pill container, active
+            // view filled navy — instead of four loose bordered pills that
+            // read as more status chips. Tap sizes stay what U-121 left them
+            // (px-4 py-2, 12 px bold) and every tab now carries a selected
+            // accessibility state.
+            <View
+              accessibilityRole="tablist"
+              accessibilityLabel="Control views"
+              className="flex-shrink-0 flex-row items-center gap-0.5 rounded-full border border-line bg-card p-0.5"
+            >
               <Pressable
                 onPress={() => {
                   feedbackTap();
@@ -970,7 +1025,8 @@ export function RemoteControlScreen({ navigation }: Props) {
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="D-pad"
-                className={`rounded-full px-4 py-2 ${showJoystick && !useJoystick ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
+                accessibilityState={{ selected: showJoystick && !useJoystick }}
+                className={`rounded-full px-4 py-2 ${showJoystick && !useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
                   className={`text-[12px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
@@ -987,7 +1043,8 @@ export function RemoteControlScreen({ navigation }: Props) {
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Joystick"
-                className={`rounded-full px-4 py-2 ${showJoystick && useJoystick ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
+                accessibilityState={{ selected: showJoystick && useJoystick }}
+                className={`rounded-full px-4 py-2 ${showJoystick && useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
                   className={`text-[12px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
@@ -1004,7 +1061,8 @@ export function RemoteControlScreen({ navigation }: Props) {
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Telemetry"
-                className={`rounded-full px-4 py-2 ${!showJoystick && !showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
+                accessibilityState={{ selected: !showJoystick && !showRouter }}
+                className={`rounded-full px-4 py-2 ${!showJoystick && !showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
                   className={`text-[12px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
@@ -1022,7 +1080,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Connectivity"
                 accessibilityState={{ selected: showRouter }}
-                className={`rounded-full px-4 py-2 ${showRouter ? "bg-navy" : "border border-line bg-card"} active:opacity-70`}
+                className={`rounded-full px-4 py-2 ${showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
               >
                 <Text
                   className={`text-[12px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
@@ -1030,7 +1088,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   Connectivity
                 </Text>
               </Pressable>
-            </>
+            </View>
           ) : null}
         </View>
         {/* U-113 P2 (issue 2): the tab pills MOVED into the single merged row
@@ -1353,24 +1411,50 @@ export function RemoteControlScreen({ navigation }: Props) {
             onPress={() => setShowSettings(false)}
             accessibilityLabel="Close settings"
           />
+          {/* 2026-10-24 (owner: "make the setting too organized and proper
+              size" + "mind the spaces of the status bar … and the position of
+              the camera"): the dropdown is INSET-ANCHORED — its right edge and
+              its floor follow the safe-area insets (a landscape punch-hole
+              camera sits on the side edge), and its content is GROUPED
+              (connection / driving / danger) behind one header row with a real
+              close mark, instead of one undifferentiated strip of switches. */}
           <ScrollView
-            className="absolute right-3 z-40 w-80 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
+            className="absolute z-40 w-72 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
             style={{
               top: Math.max(insets.top, 8) + 48,
-              maxHeight: height - 96,
+              right: Math.max(insets.right, 12),
+              maxHeight:
+                height -
+                (Math.max(insets.top, 8) + 48) -
+                Math.max(insets.bottom, 8) -
+                12,
             }}
             showsVerticalScrollIndicator={false}
           >
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="middle"
-              className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-muted"
-            >
-              Settings ·{" "}
-              {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
-            </Text>
+            <View className="flex-row items-center justify-between gap-2 border-b border-line pb-1.5">
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="middle"
+                className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-wide text-muted"
+              >
+                Settings ·{" "}
+                {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
+              </Text>
+              <Pressable
+                onPress={() => setShowSettings(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close settings"
+                testID="remote-settings-close"
+              >
+                <Feather name="x" size={16} color="#64748b" />
+              </Pressable>
+            </View>
 
-            {/* U-105 (owner 2026-10-13): the car's transport toggles replace the
+            {/* Group 1 — Car connection: the car's three transport toggles
+                plus the app's auto-join rule, together. */}
+            <SettingsGroup title="Car connection">
+              {/* U-105 (owner 2026-10-13): the car's transport toggles replace the
                 removed parallel + power-save settings (`WIFICFG;PARALLEL` /
                 `WIFICFG;APSAVE` and their NVS keys are gone). Wi-Fi (`t_wifi`)
                 and Bluetooth (`t_bt`) can never BOTH be off — the car clamps a
@@ -1378,110 +1462,180 @@ export function RemoteControlScreen({ navigation }: Props) {
                 at two-OFFs is disabled. Each mirrors the car's NVS and rides to
                 DevicePrefs + cloud. (P3 2026-10-15: the third toggle here, the
                 CAR's boot auto-join, was removed — see below.) */}
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather name="wifi" size={14} color="#64748b" />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Wi-Fi
-                </Text>
+              <View className="mt-1 flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <Feather name="wifi" size={14} color="#64748b" />
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                    Wi-Fi
+                  </Text>
+                </View>
+                <Switch
+                  value={hub.wifiEnabled === true}
+                  onValueChange={(on) => {
+                    feedbackTap();
+                    hub.setCarTransportToggle("WIFI", on);
+                  }}
+                  disabled={!linked || hub.btEnabled === false}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Turn the car's Wi-Fi transport on or off"
+                />
               </View>
-              <Switch
-                value={hub.wifiEnabled === true}
-                onValueChange={(on) => {
-                  feedbackTap();
-                  hub.setCarTransportToggle("WIFI", on);
-                }}
-                disabled={!linked || hub.btEnabled === false}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="Turn the car's Wi-Fi transport on or off"
-              />
-            </View>
 
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather name="bluetooth" size={14} color="#64748b" />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Bluetooth
-                </Text>
+              <View className="mt-1 flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <Feather name="bluetooth" size={14} color="#64748b" />
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                    Bluetooth
+                  </Text>
+                </View>
+                <Switch
+                  value={hub.btEnabled === true}
+                  onValueChange={(on) => {
+                    feedbackTap();
+                    hub.setCarTransportToggle("BT", on);
+                  }}
+                  disabled={!linked || hub.wifiEnabled === false}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Turn the car's Bluetooth transport on or off"
+                />
               </View>
-              <Switch
-                value={hub.btEnabled === true}
-                onValueChange={(on) => {
-                  feedbackTap();
-                  hub.setCarTransportToggle("BT", on);
-                }}
-                disabled={!linked || hub.wifiEnabled === false}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="Turn the car's Bluetooth transport on or off"
-              />
-            </View>
 
-            <View className="mt-1 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <Feather name="eye" size={14} color="#64748b" />
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Webpage
-                </Text>
+              {/* Webpage — turn the car-hosted webpage (:80/:81) on or off.
+                Webpage ONLY: this does not touch the Wi-Fi transport toggle
+                (WIFICFG;WIFI;ON|OFF / t_wifi) or the Bluetooth transport toggle
+                (WIFICFG;BT;ON|OFF / t_bt). The app sends WIFICFG;WIFI;PAGE;ON
+                / OFF; the car only flips pageOff_ (pageServerIsOn = !pageOff_).
+                2026-10-24: this comment used to sit ABOVE THE FACTORY-RESET
+                block (a cut/paste residue of an earlier rectification) — it
+                belongs here, on the toggle it explains. */}
+              <View className="mt-1 flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <Feather name="eye" size={14} color="#64748b" />
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                    Webpage
+                  </Text>
+                </View>
+                <Switch
+                  value={hub.pageOn === true}
+                  onValueChange={(on) => {
+                    feedbackTap();
+                    hub.setPageOn(on);
+                  }}
+                  disabled={!linked}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Turn the car's web page on or off"
+                />
               </View>
-              <Switch
-                value={hub.pageOn === true}
-                onValueChange={(on) => {
-                  feedbackTap();
-                  hub.setPageOn(on);
-                }}
-                disabled={!linked}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="Turn the car's web page on or off"
-              />
-            </View>
 
-            {/* P3 · Q1 (owner, 2026-10-15): the CAR's boot auto-join toggle
+              {/* P3 · Q1 (owner, 2026-10-15): the CAR's boot auto-join toggle
                 (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) was REMOVED from this
                 panel — it only ever rejoined the last router, which the owner
                 called useless (issue 12). The firmware half of Q1's default
                 (stop the boot hop) rides P5; the app's smart-link auto-join
                 below is now the ONLY auto-join control here. */}
 
-            {/* U-R3 (owner 2026-10-12) → U-120 item 12 (owner 2026-10-22):
+              {/* U-R3 (owner 2026-10-12) → U-120 item 12 (owner 2026-10-22):
                 smart-link auto-join — the APP's setting, and it says AND does
                 "auto-join LAST USED router": on car selection the app joins the
                 most recently used saved router (recency — pickBestRouter), else
                 the car stays on its own access point. Mirrors DevicePrefs and
                 the cloud profile. */}
-            <View className="mt-1.5 flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1 flex-row items-center gap-2">
-                <Feather name="refresh-cw" size={14} color="#64748b" />
-                <View className="min-w-0 flex-1">
-                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    Auto-join last used router (app)
+              <View className="mt-1.5 flex-row items-center justify-between gap-2">
+                <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                  <Feather name="refresh-cw" size={14} color="#64748b" />
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                      Auto-join last used router (app)
+                    </Text>
+                    <Text className="text-[10px] leading-tight text-muted">
+                      When you open the car, the APP switches it to the last
+                      used saved router.
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={autoJoinRouter}
+                  onValueChange={(on) => {
+                    feedbackTap();
+                    setAutoJoinRouter(on);
+                  }}
+                  disabled={!linked}
+                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="App auto-join: on connect, switch the car to the last used saved router"
+                />
+              </View>
+            </SettingsGroup>
+
+            {/* Group 2 — Driving: steering limit + trim (2WD1M only). It
+                renders BEFORE the danger zone — a destructive action never
+                sits above the settings it belongs with. */}
+            <SettingsGroup title="Driving">
+              {/* Steering limit + Trim (2WD1M only) */}
+              <View
+                className={`${is2wd1mActive ? "" : "opacity-40"}`}
+                pointerEvents={is2wd1mActive ? "auto" : "none"}
+              >
+                <View className="mt-1.5 flex-row items-center justify-between">
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                    Steering
                   </Text>
-                  <Text className="text-[9px] leading-tight text-muted">
-                    When you open the car, the APP switches it to the last used
-                    saved router.
+                  <View className="flex-row items-center gap-2">
+                    <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
+                      {steerLimit}°
+                    </Text>
+                    <View className="flex-row gap-1">
+                      <StepperPill
+                        onPress={() => adjustSteerLimit(-5)}
+                        disabled={!canControl}
+                        icon="minus"
+                      />
+                      <StepperPill
+                        onPress={() => adjustSteerLimit(5)}
+                        disabled={!canControl}
+                        icon="plus"
+                      />
+                    </View>
+                  </View>
+                </View>
+                <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
+                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                    Trim
                   </Text>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
+                      {trim > 0 ? `+${trim}` : trim}°
+                    </Text>
+                    <View className="flex-row gap-1">
+                      <StepperPill
+                        onPress={() => adjustTrim(-1)}
+                        disabled={!canControl}
+                        icon="minus"
+                      />
+                      <StepperPill
+                        onPress={() => adjustTrim(1)}
+                        disabled={!canControl}
+                        icon="plus"
+                      />
+                    </View>
+                  </View>
                 </View>
               </View>
-              <Switch
-                value={autoJoinRouter}
-                onValueChange={(on) => {
-                  feedbackTap();
-                  setAutoJoinRouter(on);
-                }}
-                disabled={!linked}
-                trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                thumbColor="#ffffff"
-                accessibilityLabel="App auto-join: on connect, switch the car to the last used saved router"
-              />
-            </View>
+              {!is2wd1mActive && (
+                <Text className="mt-1 text-[10px] leading-3 text-muted">
+                  Steering &amp; trim: 2WD1M only.
+                </Text>
+              )}
+            </SettingsGroup>
 
-            {/* Webpage — turn the car-hosted webpage (:80/:81) on or off.
-                Webpage ONLY: this does not touch the Wi-Fi transport toggle
-                (WIFICFG;WIFI;ON|OFF / t_wifi) or the Bluetooth transport toggle
-                (WIFICFG;BT;ON|OFF / t_bt). The app sends WIFICFG;WIFI;PAGE;ON
-                / OFF; the car only flips pageOff_ (pageServerIsOn = !pageOff_). */}
+            {/* Group 3 — Danger zone, LAST. 2026-10-24: it used to sit between
+                the connection toggles and the steering rows, so a stray tap in
+                routine settings could reach a factory reset. Same red header
+                shape, now at the bottom of the panel where a destructive
+                action belongs. */}
             <View className="mt-2.5 border-t border-line pt-2">
               <View className="mb-1 flex-row items-center gap-1.5">
                 <Feather name="alert-triangle" size={12} color="#dc2626" />
@@ -1490,10 +1644,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </View>
               <View className="rounded-lg border border-red-500/40 bg-red-500/5 p-2">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+                <Text className="text-[11px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
                   Factory reset the car
                 </Text>
-                <Text className="mt-0.5 text-[9px] leading-tight text-muted">
+                <Text className="mt-0.5 text-[10px] leading-tight text-muted">
                   Erases everything the car remembers — saved Wi-Fi routers, its
                   name and settings — and removes it from this phone. Restart
                   the car afterwards. This cannot be undone.
@@ -1527,70 +1681,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                       ],
                     );
                   }}
-                  className="mt-1.5 items-center rounded-md border border-red-500 bg-red-500/10 py-1.5"
+                  className="mt-1.5 items-center rounded-md border border-red-500 bg-red-500/10 py-2"
                 >
-                  <Text className="text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
+                  <Text className="text-[11px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
                     Reset car data
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Steering limit + Trim (2WD1M only) */}
-            <View
-              className={`${is2wd1mActive ? "" : "opacity-40"}`}
-              pointerEvents={is2wd1mActive ? "auto" : "none"}
-            >
-              <View className="mt-1.5 flex-row items-center justify-between">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Steering
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
-                    {steerLimit}°
-                  </Text>
-                  <View className="flex-row gap-1">
-                    <StepperPill
-                      onPress={() => adjustSteerLimit(-5)}
-                      disabled={!canControl}
-                      icon="minus"
-                    />
-                    <StepperPill
-                      onPress={() => adjustSteerLimit(5)}
-                      disabled={!canControl}
-                      icon="plus"
-                    />
-                  </View>
-                </View>
-              </View>
-              <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Trim
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <Text className="font-mono text-[10px] font-bold text-ink dark:text-white">
-                    {trim > 0 ? `+${trim}` : trim}°
-                  </Text>
-                  <View className="flex-row gap-1">
-                    <StepperPill
-                      onPress={() => adjustTrim(-1)}
-                      disabled={!canControl}
-                      icon="minus"
-                    />
-                    <StepperPill
-                      onPress={() => adjustTrim(1)}
-                      disabled={!canControl}
-                      icon="plus"
-                    />
-                  </View>
-                </View>
-              </View>
-            </View>
-            {!is2wd1mActive && (
-              <Text className="mt-1 text-[9px] leading-3 text-muted">
-                Steering &amp; trim: 2WD1M only.
-              </Text>
-            )}
           </ScrollView>
         </>
       )}

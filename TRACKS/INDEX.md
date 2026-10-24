@@ -1,5 +1,22 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
+> ✅ **2026-10-24 (latest) — U-122 SHIPPED (JS-only → same-version OTA 3.2.7/60; NO car
+> change): full audit of BOTH repos + the Remote screen's layout, hierarchy & settings.**
+> Audit: car repo **clean** (every removed-feature hit is intentional NVS cleanup or a
+> historical record); app findings were all Remote-layout debt and all fixed — the Webpage
+> toggle's comment sitting above the FACTORY-RESET block, the unused `setThemeMode` destructure,
+> the Connectivity section's doubled top margin (`mt-2` inside the host's `padding:10` — the
+> "sections got increased space twice" report), the cramped `InlineMessage` box (10 px type in a
+> 12 px line). Layout: the shell is now inset-driven on ALL four sides (landscape cameras sit on
+> the SIDE edge; 12 px floor) and both bars share one left edge · the gear 56→44 px (hierarchy) ·
+> the four tabs are ONE segmented `tablist` strip (active filled) · the settings dropdown is
+> inset-anchored with an ✕ close and three `SettingsGroup` sections — **Car connection → Driving →
+> Danger zone LAST** (factory reset no longer sits between routine settings), labels 11 px/subs
+> 10 px. Arrangement verified against a measured wireframe rendered in headless Chrome
+> (`TRACKS/remote-wireframe-2026-10-24.png`). All U-113/U-121 pins held. Gates: app tsc 0 ·
+> vitest **896/896** (60 files) · prettier clean. Device rows: `mobile/TESTING.md` **U-122-1..4**
+> (unticked, F-61). Session note: `TRACKS/SESSION-2026-10-24-U122.md`.
+
 > ✅ **2026-10-24 (latest) — U-121 ROUND 2 SHIPPED (JS-only → same-version OTA 3.2.7/60; car FW
 > **1.3.17**): the owner's snag list, one phase per item.** **A2** the phone's network is on the
 > Remote's first bar **ONLY** — the `conn-phone-network` "This phone" box is deleted from the
