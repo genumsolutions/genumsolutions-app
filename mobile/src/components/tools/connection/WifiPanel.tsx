@@ -496,7 +496,7 @@ export function WifiPanel({
                     />
                     <Text
                       numberOfLines={1}
-                      className="min-w-0 flex-1 text-[15px] font-black text-ink"
+                      className="min-w-0 flex-1 text-[12px] font-black text-ink"
                     >
                       {editingSsid ? "Edit network" : "Add network"}
                     </Text>
@@ -520,10 +520,13 @@ export function WifiPanel({
                     </Text>
                   ) : null}
 
-                  <Text className="mt-5 text-[13px] font-black uppercase tracking-widest text-muted">
-                    Network name
-                  </Text>
-                  <Text className="mt-4 text-[13px] font-black uppercase tracking-widest text-muted">
+                  {/* U-124 ⑮: the field label rendered TWICE (two identical
+                      Text blocks stacked) and both at 13 px black caps — a
+                      label tier louder than the form's own title. One label,
+                      on the 10 px micro-label tier the rest of the panel
+                      uses; the input itself stays 16 px (native keyboard
+                      scaling). */}
+                  <Text className="mt-5 text-[10px] font-black uppercase tracking-widest text-muted">
                     Network name
                   </Text>
                   <TextInput
@@ -546,7 +549,7 @@ export function WifiPanel({
                     className="mt-2 h-14 rounded-lg border-2 border-line bg-surface px-4 text-[16px] text-ink"
                     testID="wifi-ssid"
                   />
-                  <Text className="mt-4 text-[13px] font-black uppercase tracking-widest text-muted">
+                  <Text className="mt-4 text-[10px] font-black uppercase tracking-widest text-muted">
                     Password
                   </Text>
                   <TextInput
