@@ -703,50 +703,16 @@ export function ConnectionSection({
       <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
         {method === "wifi" || method === "bluetooth" ? (
           <>
+            {/* U-124 ⑩ (owner 2026-10-24): "you can merge these two sections
+                about switch network and cars network if you can make things
+                simpler." ONE heading now names ONE section — where the car is
+                (the card) and the networks it can be switched to (the list)
+                live under it, in that order: facts first, actions under them.
+                The old separate "Switch networks" heading is what made them
+                read as two sections. */}
             <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
-              {manage ? "Switch networks" : "Networks"}
+              {manage ? "Car network" : "Networks"}
             </Text>
-
-            <WifiPanel
-              routers={routers}
-              scanned={carScan ?? []}
-              busy={busy}
-              reachable={anyLink}
-              pendingSsid={pendingJoinSsid}
-              manage={manage}
-              showScanned={scanShown}
-              sendCmd={sendCommand}
-              onSwitch={(s) => void switchRouter(s)}
-              onForget={(s) => void deleteRouter(s)}
-              onEdit={(s, p) => void editRouter(s, p)}
-              onAdd={(ssid, pass) =>
-                void (async () => {
-                  const plan = planSwitch({
-                    target: ssid,
-                    pass,
-                    entries: routers,
-                    ownApName: carApName,
-                  });
-                  if (!plan) {
-                    setMessage({
-                      tone: "error",
-                      text: "That network cannot be used.",
-                    });
-                    return;
-                  }
-                  const ok = await runOutcome(() => runSwitchPlan(plan));
-                  if (ok) {
-                    setPendingJoinSsid(ssid);
-                    setMessage({
-                      tone: "ok",
-                      text: `The car is switching to “${ssid}”.`,
-                    });
-                  }
-                })()
-              }
-              onScan={() => void scanNearby()}
-              onInputFocus={onInputFocus}
-            />
 
             {/* P8 (owner item E / F-91) + owner 2026-10-23: the car-network
                 section now shows BOTH where the car is AND the broadcast IP for
@@ -760,18 +726,6 @@ export function ConnectionSection({
               className="rounded-lg border border-line bg-card p-2"
               testID="car-network-card"
             >
-              <View className="flex-row items-center gap-1">
-                <Feather name="map-pin" size={12} color="#475569" />
-                <Text className="text-[10px] font-black text-ink">
-                  Car network
-                </Text>
-                {carNetworkHint || carSsidAnswer ? (
-                  <Text className="ml-auto text-[9px] font-bold text-success">
-                    saved
-                  </Text>
-                ) : null}
-              </View>
-
               {/* U-121 B2 (owner 2026-10-24): *"add the feature of the entering
                   the wifi network the car is at for the user along with the
                   broadcast ip address for the control and most of the time set
@@ -784,9 +738,17 @@ export function ConnectionSection({
                        the car, the fleet default only as a last resort (never
                        a free-text guess: the car uses it to find its own WS
                        client, not to be reconfigured). */}
-              <Text className="mt-1.5 text-[10px] font-black text-ink">
-                The car is on
-              </Text>
+              <View className="flex-row items-center gap-1">
+                <Feather name="map-pin" size={12} color="#475569" />
+                <Text className="text-[10px] font-black text-ink">
+                  The car is on
+                </Text>
+                {carNetworkHint || carSsidAnswer ? (
+                  <Text className="ml-auto text-[9px] font-bold text-success">
+                    saved
+                  </Text>
+                ) : null}
+              </View>
               <View className="mt-0.5 flex-row items-center gap-1.5">
                 <TextInput
                   value={ssidDraft ?? reportedSsid ?? ""}
@@ -882,6 +844,63 @@ export function ConnectionSection({
                   testID="car-network-save"
                 />
               </View>
+            </View>
+            {/* U-124 ⑩: the switch list is the section's ACTION half — and
+                with no link there is nothing it can act on. "If the car is not
+                connected already, make the switch the network section dull and
+                unusable": it is dimmed, and WifiPanel itself refuses every
+                row/form/scan touch while `reachable` is false (so a half-open
+                add form can never swallow a tap either). */}
+            <View
+              className={anyLink ? "mt-1.5" : "mt-1.5 opacity-40"}
+              testID="switch-networks"
+            >
+              <WifiPanel
+                routers={routers}
+                scanned={carScan ?? []}
+                busy={busy}
+                reachable={anyLink}
+                pendingSsid={pendingJoinSsid}
+                manage={manage}
+                showScanned={scanShown}
+                sendCmd={sendCommand}
+                onSwitch={(s) => void switchRouter(s)}
+                onForget={(s) => void deleteRouter(s)}
+                onEdit={(s, p) => void editRouter(s, p)}
+                onAdd={(ssid, pass) =>
+                  void (async () => {
+                    const plan = planSwitch({
+                      target: ssid,
+                      pass,
+                      entries: routers,
+                      ownApName: carApName,
+                    });
+                    if (!plan) {
+                      setMessage({
+                        tone: "error",
+                        text: "That network cannot be used.",
+                      });
+                      return;
+                    }
+                    const ok = await runOutcome(() => runSwitchPlan(plan));
+                    if (ok) {
+                      setPendingJoinSsid(ssid);
+                      setMessage({
+                        tone: "ok",
+                        text: `The car is switching to “${ssid}”.`,
+                      });
+                    }
+                  })()
+                }
+                onScan={() => void scanNearby()}
+                onInputFocus={onInputFocus}
+              />
+
+              {anyLink ? null : (
+                <Text className="mt-1 text-[10px] leading-tight text-muted">
+                  Connect to the car to switch, add or forget its networks.
+                </Text>
+              )}
             </View>
           </>
         ) : null}

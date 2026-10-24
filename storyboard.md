@@ -165,16 +165,16 @@ Diagnostics.
 
 ## The single-copy map — where a fact lives, and where it must NOT
 
-| Fact                                              | Its ONE home                              | Must not appear in                                              |
-| ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------- |
-| the phone's own network                           | merged row `remote-phone-network`         | the Connectivity panel — the _"This phone"_ box is deleted (A2) |
-| link status / the car's address                   | chrome row IP chip                        | a status bar inside the Connectivity panel (U-108 removed it)   |
-| disconnect a transport                            | merged row chips                          | the method cards, the chrome row                                |
-| what the car knows (paired cars / added networks) | Connectivity **left-bottom**, read-only   | —                                                               |
-| switch / add / edit / forget a network            | Connectivity **right pane** (the manager) | the left inventory — its rows carry no switch action (C2)       |
-| the car's Wi-Fi network + the control address     | **Car network** card (auto-filled)        | the chrome chip (broadcast IP only)                             |
-| the restart record                                | Tools → Diagnostics                       | the Remote deck (U-118)                                         |
-| nearby scan rows                                  | right pane, only after an explicit Search | anywhere unprompted (M1)                                        |
+| Fact                                              | Its ONE home                                                                                                                                                                                                                          | Must not appear in                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| the phone's own network                           | merged row `remote-phone-network`                                                                                                                                                                                                     | the Connectivity panel — the _"This phone"_ box is deleted (A2) |
+| link status / the car's address                   | chrome row IP chip                                                                                                                                                                                                                    | a status bar inside the Connectivity panel (U-108 removed it)   |
+| disconnect a transport                            | merged row chips                                                                                                                                                                                                                      | the method cards, the chrome row                                |
+| what the car knows (paired cars / added networks) | Connectivity **left-bottom**, read-only                                                                                                                                                                                               | —                                                               |
+| switch / add / edit / forget a network            | Connectivity **right pane** — ONE section now: the heading reads **Car network**, the facts card (the car's network + control address) sits ABOVE the switch list, and the list is dimmed **and inert** while no link is up (U-124 ⑩) | the left inventory — its rows carry no switch action (C2)       |
+| the car's Wi-Fi network + the control address     | **Car network** card (auto-filled)                                                                                                                                                                                                    | the chrome chip (broadcast IP only)                             |
+| the restart record                                | Tools → Diagnostics                                                                                                                                                                                                                   | the Remote deck (U-118)                                         |
+| nearby scan rows                                  | right pane, only after an explicit Search                                                                                                                                                                                             | anywhere unprompted (M1)                                        |
 
 ## Residues removed — do not re-add
 

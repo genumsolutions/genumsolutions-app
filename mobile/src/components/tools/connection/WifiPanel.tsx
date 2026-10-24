@@ -316,19 +316,19 @@ export function WifiPanel({
               <View className="flex-row items-center">
                 <Pressable
                   onPress={() => {
-                    if (!r.switchable || busy) return;
+                    if (!r.switchable || busy || !reachable) return;
                     onSwitch(r.ssid);
                   }}
-                  disabled={!r.switchable || busy}
+                  disabled={!r.switchable || busy || !reachable}
                   accessibilityRole="button"
                   accessibilityLabel={
-                    r.switchable
+                    r.switchable && reachable
                       ? `Use ${r.ssid}`
                       : `${r.ssid}, ${r.meta ?? ""}`
                   }
                   accessibilityState={{
                     selected: r.state === "active",
-                    disabled: !r.switchable,
+                    disabled: !r.switchable || !reachable,
                   }}
                   className="flex-1 flex-row items-center gap-2 px-2 py-1.5"
                   testID={`wifi-row-${r.ssid}`}
@@ -351,7 +351,7 @@ export function WifiPanel({
                     className={`flex-1 text-[12px] ${
                       r.state === "active"
                         ? "font-bold text-ink"
-                        : r.switchable
+                        : r.switchable && reachable
                           ? "font-semibold text-ink"
                           : "font-semibold text-muted"
                     }`}
@@ -377,7 +377,7 @@ export function WifiPanel({
                         setError(null);
                         setAdding(true);
                       }}
-                      disabled={busy}
+                      disabled={busy || !reachable}
                       accessibilityRole="button"
                       accessibilityLabel={`Edit ${r.ssid}`}
                       className="px-2 py-1.5"
@@ -389,7 +389,7 @@ export function WifiPanel({
                         compete with the one action that matters, switching. */}
                     <Pressable
                       onPress={() => onForget(r.ssid)}
-                      disabled={busy}
+                      disabled={busy || !reachable}
                       accessibilityRole="button"
                       accessibilityLabel={`Forget ${r.ssid}`}
                       className="px-2 py-1.5"
@@ -444,7 +444,7 @@ export function WifiPanel({
           {adding ? null : (
             <Pressable
               onPress={() => setAdding(true)}
-              disabled={!canAdd}
+              disabled={!canAdd || !reachable}
               accessibilityRole="button"
               accessibilityLabel="Add network"
               className="mt-1.5 flex-row items-center justify-center gap-1.5 py-1"

@@ -305,3 +305,69 @@ describe("U-121 C2 — the left-bottom inventory is DISPLAY-ONLY; the right pane
     expect(section).not.toContain('testID="conn-iot-entry"');
   });
 });
+
+// ── U-124 ⑩ (owner 2026-10-24) — ONE section, and it is inert with no link ──
+// "if the car is not connected already, make the switch the network section
+// dull and unusable. But you can merge these two sections about switch
+// network and cars network if you can make things simpler."
+describe("U-124 ⑩ — the right pane is ONE 'Car network' section", () => {
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(RAW_SECTION.length).toBeGreaterThan(1000);
+    expect(section).toContain('testID="car-network-card"');
+    expect(section).toContain("<WifiPanel");
+  });
+
+  it("ONE heading names the section — the second title is gone", () => {
+    expect(section).toContain('{manage ? "Car network" : "Networks"}');
+    // The old heading is what made the card and the list read as two
+    // sections. It must be gone from the RENDER (comments are stripped
+    // here, so this is code-level, not prose).
+    expect(section).not.toContain('"Switch networks"');
+    // …and the card no longer repeats the section's own words: its title row
+    // was removed and the `saved` badge moved onto "The car is on".
+    expect(section).not.toContain(
+      ">\n                  Car network\n                </Text>",
+    );
+  });
+
+  it("facts first: the card is rendered ABOVE the switch list", () => {
+    const cardAt = section.indexOf('testID="car-network-card"');
+    const listAt = section.indexOf("<WifiPanel");
+    expect(cardAt).toBeGreaterThan(0);
+    expect(listAt).toBeGreaterThan(cardAt);
+  });
+
+  it("with no link the list is DULL and says why", () => {
+    expect(section).toContain('testID="switch-networks"');
+    expect(section).toContain(
+      'className={anyLink ? "mt-1.5" : "mt-1.5 opacity-40"}',
+    );
+    expect(section).toContain(
+      "Connect to the car to switch, add or forget its networks.",
+    );
+    // Dulling alone is not "unusable" — the panel itself refuses (next rule).
+    expect(section).toContain("reachable={anyLink}");
+  });
+
+  it("WifiPanel refuses every car-bound touch while unreachable", () => {
+    const panel = readFileSync(
+      fileURLToPath(new NodeURL("./WifiPanel.tsx", import.meta.url)),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((l) => l.replace(/\/\/.*$/, ""))
+      .join("\n");
+    expect(panel).toContain("if (!r.switchable || busy || !reachable) return;");
+    expect(panel).toContain("disabled={!r.switchable || busy || !reachable}");
+    expect(panel).toContain("disabled: !r.switchable || !reachable");
+    expect(panel).toContain("disabled={!canAdd || !reachable}");
+    // edit + forget are car commands too (2 render sites); the scan already
+    // carried this exact gate, so the string appears three times — never two.
+    expect(panel.split("disabled={busy || !reachable}").length - 1).toBe(3);
+    // and the scan already was
+    expect(panel).toContain(
+      "disabled={busy || !reachable}\n          accessibilityRole",
+    );
+  });
+});
