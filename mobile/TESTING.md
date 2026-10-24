@@ -1,5 +1,48 @@
 # TESTING — Physical Device Test Checklist
 
+## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
+
+> Owner (2026-10-24): _"check the both project for the residues, dublicates, or
+> bugs or any discrepancies or the abnormalities. Also make the remote screen
+> hieracrhial in the size of the contents. also organize the remtoe screen and
+> the the tabs under this screen like conectivity and the others too. also make
+> the setting too organized and proper size and also mind the spaces of the
+> status bar of the phones and the position of the camera … some of the
+> sections got increased in the space twice or more i think during
+> rectififcation."
+>
+> Audit scope: BOTH repos (residues / duplicates / dead code / stale comments /
+> discrepancies). Findings + fixes below; the car repo had **NO actionable
+> findings** — every "removed-feature" string there lives in intentional NVS
+> migration code (`w.remove("ap_psave")` etc.) or historical records. Layout
+> truth: `storyboard.md` §0–5 + the measured wireframe
+> `TRACKS/remote-wireframe-2026-10-24.png` (not a device screenshot).
+> **Every row unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **896/896** (60 files) · prettier clean;
+> car: **unchanged** at 1.3.17 gates (syntax 9/9 · contract 0 · webpage-js 0 ·
+> mutate 137/137) — no car file touched.
+
+- [ ] **U-122-1 — ⭐ the shell respects the camera and the gesture bar.** On a
+      landscape phone with a punch-hole / side camera: nothing in the chrome
+      row or the merged row sits under the camera (the inset, floor 12 px,
+      applies on ALL FOUR sides), and the deck clears the gesture bar. Back and
+      the leftmost chip on the line below it start on the SAME left edge.
+- [ ] **U-122-2 — the tabs read as tabs.** D-pad · Joystick · Telemetry ·
+      Connectivity render as ONE segmented strip (single bordered pill
+      container, active view filled navy, `tablist` a11y role); tapping each
+      switches the deck and exactly one tab is filled.
+- [ ] **U-122-3 — the settings panel is grouped, closable and inset-safe.** The
+      gear opens a panel titled "Settings · <mode>" with an ✕ close (the scrim
+      closes it too); sections read **Car connection → Driving → Danger zone
+      LAST** — factory reset sits at the bottom, never between routine
+      settings. The panel anchors inside the insets (side camera / gesture bar
+      clear) and scrolls inside its own height.
+- [ ] **U-122-4 — the doubled spacing is gone.** The Connectivity panel's method
+      row sits one padding-step below the panel edge (the old 18 px top gap is
+      now 10 px), and the message strips ("the car may have frozen", connect
+      outcomes) read at a real 16 px line height instead of 10 px type in a
+      12 px box.
+
 ## U-121 round 2 — 2026-10-24: the owner's snag list (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FLASH **1.3.17**)
 
 > Owner (2026-10-24): _"the car resets again and again whenever i try to
@@ -22,7 +65,7 @@
       Flash **1.3.17**, Bluetooth ON (heap at the 13–20 kB floor), then switch
       the car to a router from the app: either the switch completes, or serial
       shows `[RADIO] step deferred: low heap …` → `[RADIO] switch abandoned:
-  low heap …` after 4 s. **No reset in either case**, `crash_count` flat,
+low heap …` after 4 s. **No reset in either case**, `crash_count` flat,
       and the same switch runs clean with Bluetooth OFF.
 - [ ] **U-121-A2 — the phone's network appears exactly ONCE.** On the Remote:
       one chip on the line below Back (`remote-phone-network`), and **no**

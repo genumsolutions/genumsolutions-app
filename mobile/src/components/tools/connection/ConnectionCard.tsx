@@ -241,8 +241,12 @@ export function InlineMessage({
         ? "text-success"
         : "text-muted";
   return (
-    <View className={`mt-1.5 rounded-md border px-2 py-1 ${toneClass}`}>
-      <Text className={`text-[10px] leading-3 ${textClass}`}>{children}</Text>
+    // 2026-10-24: the message box was px-2 py-1 with a 10 px font in a 12 px
+    // line box (leading-3) — the most urgent surface on the panel ("the car
+    // may have frozen") was also the most cramped. One step of padding and a
+    // real 16 px line height; same tokens, same tones.
+    <View className={`mt-1.5 rounded-md border px-2.5 py-1.5 ${toneClass}`}>
+      <Text className={`text-[10px] leading-4 ${textClass}`}>{children}</Text>
     </View>
   );
 }
