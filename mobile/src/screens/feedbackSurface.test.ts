@@ -104,3 +104,26 @@ describe("U-119c · the hub's connection message reaches the screen", () => {
     );
   });
 });
+
+// ── U-124 ⑦ (owner 2026-10-24): the strip gives back its height ──────────
+// "the other messages size of the status bar of the remote screen is little
+// bigger to watch — please reduce some size there too." The strip is the
+// InlineMessage primitive, so the rule lives on ConnectionCard.tsx.
+describe("U-124 ⑦ — the message strip is a note, not a panel", () => {
+  const card = strip(raw("../components/tools/connection/ConnectionCard.tsx"));
+
+  it("has a source to check (the rule must not pass vacuously)", () => {
+    expect(card).toContain("export function InlineMessage");
+    expect(card.length).toBeGreaterThan(1000);
+  });
+
+  it("tighter box, unchanged 10 px font tier", () => {
+    expect(card).toContain("mt-1 rounded-md border px-2 py-1");
+    expect(card).toContain("text-[10px] leading-[14px]");
+    // The taller U-122 shape (mt-1.5 / px-2.5 / py-1.5 / leading-4) is gone…
+    expect(card).not.toContain("mt-1.5 rounded-md border px-2.5 py-1.5");
+    expect(card).not.toContain("leading-4 ${textClass}");
+    // …and the reduction did NOT come out of the glyphs: the tier holds.
+    expect(card).not.toContain("text-[9px]");
+  });
+});

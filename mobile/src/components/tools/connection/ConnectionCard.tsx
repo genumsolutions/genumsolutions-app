@@ -241,12 +241,19 @@ export function InlineMessage({
         ? "text-success"
         : "text-muted";
   return (
-    // 2026-10-24: the message box was px-2 py-1 with a 10 px font in a 12 px
-    // line box (leading-3) — the most urgent surface on the panel ("the car
-    // may have frozen") was also the most cramped. One step of padding and a
-    // real 16 px line height; same tokens, same tones.
-    <View className={`mt-1.5 rounded-md border px-2.5 py-1.5 ${toneClass}`}>
-      <Text className={`text-[10px] leading-4 ${textClass}`}>{children}</Text>
+    // U-124 ⑦ (owner 2026-10-24): *"the other messages size of the status bar
+    // of the remote screen is little bigger to watch — please reduce some size
+    // there too."* U-122 had given this strip a full step of padding and a 16 px
+    // line because it was cramped at 10 px in a 12 px box; the honest middle is
+    // a tighter BOX, not smaller glyphs: the font stays on the scale's 10 px
+    // tier, while the box gives back its height (mt-1.5 → mt-1, px-2.5 → px-2,
+    // py-1.5 → py-1, leading-4 → 14 px). On the Remote deck — where every
+    // vertical pixel belongs to the drive controls — the strip is ~7 px shorter
+    // and reads as a status note instead of a panel.
+    <View className={`mt-1 rounded-md border px-2 py-1 ${toneClass}`}>
+      <Text className={`text-[10px] leading-[14px] ${textClass}`}>
+        {children}
+      </Text>
     </View>
   );
 }
