@@ -1,5 +1,43 @@
 # TESTING — Physical Device Test Checklist
 
+## U-123 round — 2026-10-24: the storyboard/wireframe re-review's six findings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = RUNSHEET records patch only)
+
+> Re-review of `storyboard.md` + `TRACKS/remote-wireframe-2026-10-24.png`
+> against the render. Six findings, all fixed: the storyboard §1 table row
+> that swallowed the gear slot · the type scale (mode 13→12, speed value
+> 11→12, telemetry labels 8→10 — nothing below the 9 px floor) · the settings
+> panel's doubled first divider · the below-fold Danger zone with no scroll
+> affordance · the phone chip's dead `onPress` + `shrink-0`/`flex-1`
+> contradiction · two stale size docs. Car repo: RUNSHEET staleness patched
+> (§1 heading 1.3.13→1.3.17, `fw` expectation → 1.3.17, live manifest hash,
+> newest-first tick order). **Every row unticked — F-61: green gates are not
+> device evidence.**
+
+- [ ] **U-123-1 — the type scale is one hierarchy on the device.** In the
+      chrome: Back reads strongest (14 px), mode name / speed value / tab
+      labels sit together at 12 px (mode and speed value were visibly off
+      tier), chips/labels at 11 px, and the merged row's Up/Heap/Sig labels
+      are legible 10 px — no text on the two bars is smaller than the 9 px
+      group headers.
+- [ ] **U-123-2 — the settings panel has one rhythm and no hidden section.**
+      Exactly ONE divider sits above each group (the doubled rule under the
+      header is gone), the panel's scroll indicator shows while it is taller
+      than the screen, and on the shortest landscape orientation the Danger
+      zone + Factory reset are reachable by scrolling — never invisible.
+- [ ] **U-123-3 — the phone chip on the first bar is information, not a
+      button.** Tapping it does nothing (no press fade, no fake button
+      announcement), it still truncates at ~200 px instead of hiding, and a
+      screen reader reads it as text ("Phone on <label>").
+- [ ] **U-123-4 — ⭐ the narrowest phone keeps every control (640 px, both
+      disconnect chips).** On the narrowest bench phone (≈640 px landscape)
+      with BOTH disconnect chips live (Bluetooth + Wi-Fi) plus the phone
+      chip: the merged row stays `h-9`, all four tabs (D-pad · Joystick ·
+      Telemetry · Connectivity) are fully visible and tappable at the right
+      edge — nothing clipped, nothing wrapped — and the compact telemetry
+      line is correctly absent below 700 px. If ANY element clips or wraps,
+      photograph it and report which one (this row exists because static math
+      says it might not fit).
+
 ## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
 
 > Owner (2026-10-24): _"check the both project for the residues, dublicates, or

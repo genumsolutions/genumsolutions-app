@@ -304,7 +304,7 @@ describe("U-120 Phase E — the auto-join says AND does 'last used router'", () 
 //      too (the car reports `;IP=` on STATE over Bluetooth as well);
 //   4. the phone's OWN network (name) moved here, onto the merged row —
 //      the Connectivity panel's "This phone" row is gone;
-//   5. the tab pills carry real tap sizes (px-3.5 py-2, 11 px bold);
+//   5. the tab pills carry real tap sizes (px-4 py-2, 12 px bold);
 //   6. the disconnect chips are real: bigger, transport icon + name + ✕.
 // =====================================================================
 describe("U-121 — the chrome chip is the broadcast IP, only while the page is on", () => {
@@ -354,5 +354,72 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
     // The old 9 px sliver sizing is gone from the row.
     expect(count(screen, "px-2.5 py-0.5")).toBe(0);
+  });
+});
+
+// =====================================================================
+// U-123 (owner 2026-10-24, the storyboard/wireframe re-review) — six
+// findings, each pinned here:
+//   1. storyboard §1's malformed table row (doc fix, in storyboard.md);
+//   2. the type scale: mode name AND speed value both live on the 12 px
+//      tier (were 13 / 11) and NO text sits below the scale's 9 px floor
+//      (the merged row's telemetry labels were 8 px);
+//   3. the settings panel's first group no longer doubles the divider;
+//   4. the settings panel advertises its scroll (danger zone discoverable);
+//   5. the phone chip is information: no dead press handler, no shrunk-0/
+//      flex-1 contradiction on one element;
+//   6. stale size comment in this file's U-121 header (fixed above).
+// =====================================================================
+describe("U-123 — the type scale, the settings rhythm, the honest chip", () => {
+  const modeChooser = strip(raw("../components/tools/ModeChooser.tsx"));
+  const telemetryView = strip(raw("../components/tools/DriveTelemetry.tsx"));
+
+  it("has sources to check (the rules must not pass vacuously)", () => {
+    expect(modeChooser.length).toBeGreaterThan(1000);
+    expect(telemetryView.length).toBeGreaterThan(1000);
+    expect(screen.length).toBeGreaterThan(5000);
+  });
+
+  it("mode name and speed value both render at the 12 px tier", () => {
+    // ModeChooser's trigger: was text-[13px] (above the declared tier).
+    expect(modeChooser).toContain("text-[12px] font-bold");
+    expect(modeChooser).not.toContain("text-[13px]");
+    // The Speed strip's VALUE: was font-mono text-[11px] (below the tier).
+    expect(screen).toContain("font-mono text-[12px] font-bold");
+    expect(count(screen, "font-mono text-[11px]")).toBe(0);
+  });
+
+  it("no text below the scale's floor: the telemetry labels were 8 px", () => {
+    expect(telemetryView).toContain(
+      "text-[10px] font-black uppercase tracking-[0.14em]",
+    );
+    expect(count(telemetryView, "text-[8px]")).toBe(0);
+  });
+
+  it("settings: one rule per group and the panel advertises its scroll", () => {
+    // The panel header's own border-b (the doubled rule above CAR
+    // CONNECTION) is gone.
+    expect(screen).not.toContain(
+      "justify-between gap-2 border-b border-line pb-1.5",
+    );
+    // The settings panel shows its indicator (danger zone below the fold on
+    // short screens must stay discoverable); the Connectivity pane keeps
+    // its own hidden indicator — one of each, no more.
+    expect(count(screen, "showsVerticalScrollIndicator={true}")).toBe(1);
+    expect(count(screen, "showsVerticalScrollIndicator={false}")).toBe(1);
+  });
+
+  it("the phone chip is information: no dead press, no flex contradiction", () => {
+    expect(count(screen, 'testID="remote-phone-network"')).toBe(1);
+    // The empty onPress (press feedback + an a11y button that did nothing)
+    // is gone, and so is shrink-0 fighting the chip's own flex-1.
+    expect(count(screen, "onPress={() => {}}")).toBe(0);
+    expect(screen).not.toContain(
+      "shrink-0 flex-row items-center gap-1.5 min-w-0 flex-1",
+    );
+    // It still TRUNCATES (max-w cap) and is never gated — Q2's single
+    // width gate stays telemetry-only.
+    expect(screen).toContain("max-w-[200px] rounded-full border border-line");
+    expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
   });
 });

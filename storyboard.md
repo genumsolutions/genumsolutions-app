@@ -36,18 +36,18 @@ row carries no per-row `px` anymore (its old `px-1` pushed it 4 px right of
 Back). The settings dropdown (region 5) is anchored the same way.
 
 **Type scale (the hierarchy, top = strongest):** 14 px Back · 12 px mode /
-speed value / tab labels · 11 px chips + settings labels · 10 px captions,
-strip messages, speed-strip label · 9 px group headers only.
+speed value / tab labels · 11 px chips + settings labels ·10 px captions, strip messages, speed-strip label, telemetry-field labels · 9 px group headers only.
 
 ## Regions, top to bottom
 
 ### 1 · Chrome row — the row the Back button sits on
 
-| Slot          | Content                                            | Rule                                                                                                                                                                                                                                                                  |
-| ------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| far left      | **Back** pill (`handleBack`)                       | the only way out; never shares its slot                                                                                                                                                                                                                               |
-| right of Back | **the ONE broadcast-IP chip** — `deck-link-status` | renders ONLY while `pageLinkReady` (a live link **and** the car reports it is serving its own page). Body = the IP ALONE: no transport label, no car network name, no device name. Tap opens the car's page (`telemetry.ip`, else `DEFAULT_AP_IP` on its own hotspot) |
-| spacer        | `flex-1`                                           | pushes the controls right — this is the **right-of-Back space** the owner asked to be used                                                                                                                                                                            |     | right (robocar) | **ModeChooser** · **`Spd` ValueStrip** · **Settings gear** (`h-11 w-11`, 44 px) | mode + speed are the top-strip controls in every mode (R-20); the gear opens region 5. U-122: the gear was 56 px — bigger than Back and than the drive controls it configures; 44 px is still a full touch target and restores the row's hierarchy |
+| Slot            | Content                                                                         | Rule                                                                                                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| far left        | **Back** pill (`handleBack`)                                                    | the only way out; never shares its slot                                                                                                                                                                                                                               |
+| right of Back   | **the ONE broadcast-IP chip** — `deck-link-status`                              | renders ONLY while `pageLinkReady` (a live link **and** the car reports it is serving its own page). Body = the IP ALONE: no transport label, no car network name, no device name. Tap opens the car's page (`telemetry.ip`, else `DEFAULT_AP_IP` on its own hotspot) |
+| spacer          | `flex-1`                                                                        | pushes the controls right — this is the **right-of-Back space** the owner asked to be used                                                                                                                                                                            |
+| right (robocar) | **ModeChooser** · **`Spd` ValueStrip** · **Settings gear** (`h-11 w-11`, 44 px) | mode + speed are the top-strip controls in every mode (R-20); the gear opens region 5. U-122: the gear was 56 px — bigger than Back and than the drive controls it configures; 44 px is still a full touch target and restores the row's hierarchy                    |
 
 ### 2 · Merged row — the line BELOW Back (`h-9`, constant)
 
@@ -71,7 +71,9 @@ This is the **line below the back button**. Order = the Q2 overflow priority
    **segmented strip** — a single `border-line bg-card` pill container
    (`accessibilityRole="tablist"`) with the active view filled `bg-navy` —
    instead of four loose bordered pills that read as more status chips. Every
-   tab carries a `selected` accessibility state.
+   tab carries a `selected` accessibility state. Renders only while
+   `isRobocar` — region 4's decks and drones drive themselves and show no tabs
+   (the row still carries its chips).
 
 Hard rules: the row **never grows** (it is `h-9`; if something stops fitting,
 telemetry drops first) · every disconnect chip = transport icon + name + ✕ and
@@ -103,8 +105,10 @@ Handheld / SmartHome) or `DroneControls`; no deck → `SensorGrid`.
 
 Absolute panel on the right (`w-72`, `z-40`) over a dismissible scrim (`z-30`),
 anchored from the insets: `top = max(insets.top,8)+48`, `right = max(insets.right,12)`,
-`maxHeight = height - top - max(insets.bottom,8) - 12` — a side camera or a
-gesture bar can no longer sit under it, and it scrolls inside that box.
+`maxHeight = height - top - max(insets.bottom,8) - 12` —a side camera or a gesture bar can no longer sit under it, and it scrolls
+inside that box. The panel's vertical scroll indicator is ON (U-123): on a
+short landscape screen the Danger zone sits below the fold, and nothing may
+hide that silently.
 
 Header row: **Settings · mode** + a real ✕ close (`remote-settings-close`).
 Then three `SettingsGroup` sections (divider + 9 px caps header, one rhythm):
@@ -166,8 +170,10 @@ Diagnostics.
 
 `TRACKS/remote-wireframe-2026-10-24.png` — the U-122 layout rendered at
 844×390 with a 47 px left camera inset (a MEASURED WIREFRAME of the new
-structure, not a device screenshot; every height/gap in it is the value the
-source uses).
+structure,not a device screenshot; every height/gap in it is the value the source uses).
+U-123 later nudged three type sizes (mode 13→12, speed value 11→12, telemetry
+labels 8→10) — the PNG's text metrics are the pre-U-123 ones; the structure is
+unchanged.
 
 ## Pins that keep this storyboard honest
 

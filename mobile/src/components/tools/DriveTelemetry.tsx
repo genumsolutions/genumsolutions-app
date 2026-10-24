@@ -74,7 +74,7 @@ export function TelemetryLine(props: DriveTelemetryProps) {
     <View className="min-w-0 flex-row items-center gap-2.5">
       {parts.map((p) => (
         <View key={p.label} className="flex-row items-center gap-1">
-          <Text className="text-[8px] font-black uppercase tracking-[0.14em] text-muted">
+          <Text className="text-[10px] font-black uppercase tracking-[0.14em] text-muted">
             {p.label}
           </Text>
           <Text
