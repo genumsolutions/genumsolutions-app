@@ -186,7 +186,7 @@ function SettingsGroup({
   children: React.ReactNode;
 }) {
   return (
-    <View className="mt-2 border-t border-line pt-1.5">
+    <View className="mt-1.5 border-t border-line pt-1">
       <Text className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-muted">
         {title}
       </Text>
@@ -1484,7 +1484,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               indicator is ON — on a short landscape screen the Danger zone
               sits below the fold and must stay discoverable. */}
           <ScrollView
-            className="absolute z-40 w-72 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
+            className="absolute z-40 w-80 max-w-[92%] rounded-2xl border border-line bg-card p-2 shadow-xl"
             style={{
               top: shellTop + 48,
               right: Math.max(insets.right, 12),
@@ -1493,11 +1493,11 @@ export function RemoteControlScreen({ navigation }: Props) {
             }}
             showsVerticalScrollIndicator={true}
           >
-            <View className="flex-row items-center justify-between gap-2 pb-1.5">
+            <View className="flex-row items-center justify-between gap-2 pb-1">
               <Text
                 numberOfLines={1}
                 ellipsizeMode="middle"
-                className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-wide text-muted"
+                className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-wide text-muted"
               >
                 Settings ·{" "}
                 {is2wd1mActive ? "2WD1M" : activeMode.name.split("·")[0].trim()}
@@ -1509,7 +1509,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 accessibilityLabel="Close settings"
                 testID="remote-settings-close"
               >
-                <Feather name="x" size={16} color="#64748b" />
+                <Feather name="x" size={15} color="#64748b" />
               </Pressable>
             </View>
 
@@ -1527,7 +1527,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               <View className="mt-1 flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Feather name="wifi" size={14} color="#64748b" />
-                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Wi-Fi
                   </Text>
                 </View>
@@ -1547,7 +1547,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               <View className="mt-1 flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Feather name="bluetooth" size={14} color="#64748b" />
-                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Bluetooth
                   </Text>
                 </View>
@@ -1575,7 +1575,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               <View className="mt-1 flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Feather name="eye" size={14} color="#64748b" />
-                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Webpage
                   </Text>
                 </View>
@@ -1605,14 +1605,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                 most recently used saved router (recency — pickBestRouter), else
                 the car stays on its own access point. Mirrors DevicePrefs and
                 the cloud profile. */}
-              <View className="mt-1.5 flex-row items-center justify-between gap-2">
+              <View className="mt-1 flex-row items-center justify-between gap-2">
                 <View className="min-w-0 flex-1 flex-row items-center gap-2">
                   <Feather name="refresh-cw" size={14} color="#64748b" />
                   <View className="min-w-0 flex-1">
-                    <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                    <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                       Auto-join last used router (app)
                     </Text>
-                    <Text className="text-[10px] leading-tight text-muted">
+                    <Text className="text-[9px] leading-tight text-muted">
                       When you open the car, the APP switches it to the last
                       used saved router.
                     </Text>
@@ -1641,8 +1641,8 @@ export function RemoteControlScreen({ navigation }: Props) {
                 className={`${is2wd1mActive ? "" : "opacity-40"}`}
                 pointerEvents={is2wd1mActive ? "auto" : "none"}
               >
-                <View className="mt-1.5 flex-row items-center justify-between">
-                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                <View className="mt-1 flex-row items-center justify-between">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Steering
                   </Text>
                   <View className="flex-row items-center gap-2">
@@ -1664,7 +1664,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   </View>
                 </View>
                 <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
-                  <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Trim
                   </Text>
                   <View className="flex-row items-center gap-2">
@@ -1687,7 +1687,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </View>
               </View>
               {!is2wd1mActive && (
-                <Text className="mt-1 text-[10px] leading-3 text-muted">
+                <Text className="mt-1 text-[9px] leading-3 text-muted">
                   Steering &amp; trim: 2WD1M only.
                 </Text>
               )}
@@ -1698,7 +1698,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 routine settings could reach a factory reset. Same red header
                 shape, now at the bottom of the panel where a destructive
                 action belongs. */}
-            <View className="mt-2.5 border-t border-line pt-2">
+            <View className="mt-2 border-t border-line pt-1.5">
               <View className="mb-1 flex-row items-center gap-1.5">
                 <Feather name="alert-triangle" size={12} color="#dc2626" />
                 <Text className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400">
@@ -1706,10 +1706,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </View>
               <View className="rounded-lg border border-red-500/40 bg-red-500/5 p-2">
-                <Text className="text-[11px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+                <Text className="text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
                   Factory reset the car
                 </Text>
-                <Text className="mt-0.5 text-[10px] leading-tight text-muted">
+                <Text className="mt-0.5 text-[9px] leading-tight text-muted">
                   Erases everything the car remembers — saved Wi-Fi routers, its
                   name and settings — and removes it from this phone. Restart
                   the car afterwards. This cannot be undone.
@@ -1745,7 +1745,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   }}
                   className="mt-1.5 items-center rounded-md border border-red-500 bg-red-500/10 py-2"
                 >
-                  <Text className="text-[11px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
+                  <Text className="text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
                     Reset car data
                   </Text>
                 </TouchableOpacity>
