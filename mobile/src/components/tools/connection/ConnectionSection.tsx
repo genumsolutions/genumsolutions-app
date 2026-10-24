@@ -94,6 +94,10 @@ import { WifiPanel } from "./WifiPanel";
 import { describeSecondLink } from "./linkOrder";
 import { CAR_MDNS_HOST } from "./discoveryPlan";
 import type { useControlHub } from "../useControlHub";
+// U-121 B2 (owner 2026-10-24): the fleet's own AP address — the broadcast IP
+// the control page is dialled at when the car is on its hotspot (and the
+// last resort when it has reported nothing yet).
+import { DEFAULT_AP_IP } from "../../../services/carProtocol";
 
 // 2026-10-23 (U-121 A2, owner: "remove this box as the whole"): the
 // "This phone" row and its `formatPhoneNetwork` re-export are GONE from this
@@ -213,6 +217,11 @@ export function ConnectionSection({
     // car, and the only writer that persists it into the profile.
     carNetworkHint,
     setCarNetworkHint,
+    // U-121 B2 (owner 2026-10-24): the SSID half of the same card — the
+    // Wi-Fi network the car is at, auto-filled from car truth, with the
+    // owner's typed override as the fallback.
+    carSsidAnswer,
+    setCarSsidAnswer,
     // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
@@ -243,6 +252,10 @@ export function ConnectionSection({
   // P8 (owner item E / F-91): the "Car network" input — edited locally,
   // saved by the guarded hub writer (which persists it per car).
   const [hintDraft, setHintDraft] = useState<string | null>(null);
+  // U-121 B2: the "Wi-Fi network the car is on" input — edited locally, saved
+  // by the guarded hub writer. While null the field SHOWS CAR TRUTH (below),
+  // so the common case needs no typing at all.
+  const [ssidDraft, setSsidDraft] = useState<string | null>(null);
 
   // M1: auto-sync the network section with the PHONE's network. When the
   // phone actually joins the pending router, the "Join <ssid> on this phone"
@@ -287,12 +300,21 @@ export function ConnectionSection({
     linkCap,
   });
   const reportedIp = telemetry.ip ?? null;
-  const reportedSsid = telemetry.ssid ?? carSsid ?? null;
+  // Car truth first (what the car is broadcasting right now), then the SSID it
+  // has configured, then the owner's own answer — so the field is auto-filled
+  // the moment anything real is known, and the typed answer is only what fills
+  // the gap when the car cannot say (no link / stale telemetry).
+  const reportedSsid = telemetry.ssid ?? carSsid ?? carSsidAnswer ?? null;
   const onOwnHotspot = carIsOnOwnHotspot({
     reportedSsid,
     ownApName: carApName,
   });
   const carOnRouter = anyLink && !onOwnHotspot && Boolean(reportedIp);
+  // U-121 B2: the broadcast IP FOR THE CONTROL PAGE — the car's own AP address
+  // while it sits on its hotspot, the STA IP it reports while on a router, and
+  // the fleet default only as a last resort (the P8 promise in the card's
+  // comment: both connection facts, auto-filled, in one place).
+  const controlIp = (onOwnHotspot ? null : reportedIp) ?? DEFAULT_AP_IP;
 
   // U-86: Wi-Fi is one target now. The car being on its own hotspot or on a
   // router is a fact about the car, not a mode the user picks, so there is
@@ -730,13 +752,87 @@ export function ConnectionSection({
                 <Text className="text-[10px] font-black text-ink">
                   Car network
                 </Text>
-                {carNetworkHint ? (
+                {carNetworkHint || carSsidAnswer ? (
                   <Text className="ml-auto text-[9px] font-bold text-success">
                     saved
                   </Text>
                 ) : null}
               </View>
-              <Text className="mt-0.5 text-[10px] leading-3 text-muted">
+
+              {/* U-121 B2 (owner 2026-10-24): *"add the feature of the entering
+                  the wifi network the car is at for the user along with the
+                  broadcast ip address for the control and most of the time set
+                  automatically and auto filled too"* — BOTH facts, in this one
+                  card, auto-filled most of the time:
+                    1. THE CAR'S WI-FI NETWORK — editable, persisted per car
+                       (carSsidAnswer), auto-filled from car truth so the
+                       common case needs no typing;
+                    2. THE BROADCAST IP FOR THE CONTROL — read-only, read from
+                       the car, the fleet default only as a last resort (never
+                       a free-text guess: the car uses it to find its own WS
+                       client, not to be reconfigured). */}
+              <Text className="mt-1.5 text-[10px] font-black text-ink">
+                The car is on
+              </Text>
+              <View className="mt-0.5 flex-row items-center gap-1.5">
+                <TextInput
+                  value={ssidDraft ?? reportedSsid ?? ""}
+                  onChangeText={setSsidDraft}
+                  onFocus={onInputFocus}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="the network the car is on"
+                  placeholderTextColor="#94a3b8"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1.5 text-[11px] text-ink"
+                  testID="car-network-ssid-input"
+                />
+                <Feather
+                  name="check"
+                  size={16}
+                  color="#1e3a8a"
+                  onPress={() => {
+                    tap();
+                    setCarSsidAnswer(ssidDraft ?? "");
+                    setSsidDraft(null);
+                    setMessage({
+                      tone: "ok",
+                      text: (ssidDraft ?? "").trim()
+                        ? "Car's network saved — used whenever the car cannot report it."
+                        : "Car's network cleared — the app follows the car's own report.",
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save the car's Wi-Fi network"
+                  testID="car-network-ssid-save"
+                />
+              </View>
+              <Text className="mt-0.5 text-[9px] leading-3 text-muted">
+                {reportedSsid
+                  ? `Auto-filled from the car ("${reportedSsid}") — type only when it cannot say.`
+                  : "The car has not reported it yet — type the network it is on."}
+              </Text>
+
+              <View
+                className="mt-1.5 flex-row items-center gap-1"
+                testID="car-network-ip"
+              >
+                <Feather name="radio" size={11} color="#475569" />
+                <Text className="text-[10px] font-black text-ink">
+                  Control address
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  className="ml-auto text-[10px] font-bold text-navy"
+                >
+                  {controlIp}
+                </Text>
+              </View>
+              <Text className="mt-0.5 text-[9px] leading-3 text-muted">
+                The broadcast IP the control page is dialled at — read from the
+                car whenever it reports one.
+              </Text>
+
+              <Text className="mt-1.5 text-[10px] leading-3 text-muted">
                 Where is the car? Its IP or name (e.g. 192.168.1.42 or{" "}
                 {CAR_MDNS_HOST}). Discovery looks here first; empty = let the
                 app find it automatically.
@@ -745,6 +841,7 @@ export function ConnectionSection({
                 <TextInput
                   value={hintDraft ?? carNetworkHint ?? ""}
                   onChangeText={setHintDraft}
+                  onFocus={onInputFocus}
                   autoCapitalize="none"
                   autoCorrect={false}
                   placeholder="IP or hostname"

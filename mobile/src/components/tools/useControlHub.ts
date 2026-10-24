@@ -583,6 +583,20 @@ export function useControlHub(routeCategory?: string) {
     setCarNetworkHintState(next);
     persistPrefsRef.current?.({ carNetworkHint: next });
   };
+  // U-121 B2 (owner 2026-10-24): the SSID half of the same "Car network"
+  // card — THE WI-FI NETWORK THE CAR IS AT. Same shape as the address half
+  // above: local state, change-guarded, profile-persisting single writer.
+  // Auto-filled from car truth in the card; this is the user's override and
+  // the app's fallback whenever telemetry.ssid is not there to read.
+  const [carSsidAnswer, setCarSsidAnswerState] = useState<string | null>(null);
+  const carSsidAnswerRef = useRef<string | null>(null);
+  carSsidAnswerRef.current = carSsidAnswer;
+  const setCarSsidAnswer = (value: string | null) => {
+    const next = value === null ? null : value.trim() || null;
+    if (next === carSsidAnswerRef.current) return;
+    setCarSsidAnswerState(next);
+    persistPrefsRef.current?.({ carSsidAnswer: next });
+  };
   // Live mirror for the phone-network watcher (avoids a stale closure).
   const lastRouterIpRef = useRef<string | null>(null);
   lastRouterIpRef.current = lastRouterIp;
@@ -1023,6 +1037,11 @@ export function useControlHub(routeCategory?: string) {
         setCarNetworkHintState(merged.prefs.carNetworkHint || null);
       else if (merged.prefs.carNetworkHint === null)
         setCarNetworkHintState(null);
+      // U-121 B2: the SSID answer restores with the profile too — the card
+      // must show what the owner last said the moment the profile loads.
+      if (typeof merged.prefs.carSsidAnswer === "string")
+        setCarSsidAnswerState(merged.prefs.carSsidAnswer || null);
+      else if (merged.prefs.carSsidAnswer === null) setCarSsidAnswerState(null);
       // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
       // toggle mirror too; restore it so the panel agrees with car truth.
       if (typeof merged.prefs.wifiEnabled === "boolean")
@@ -1108,6 +1127,15 @@ export function useControlHub(routeCategory?: string) {
         // because the base record omitted them entirely).
         wifiHistory: savedPrefs?.wifiHistory ?? [],
         fullscreen: savedPrefs?.fullscreen ?? false,
+        // U-121 B2: the two "Car network" answers ride EVERY patch. This
+        // backend REPLACES the stored record (deviceMemory.write = one
+        // setItem), so a field missing from this base is not "kept", it is
+        // ERASED by the next unrelated save — wifiHistory/fullscreen above
+        // exist for exactly that reason, and the card's two answers now do
+        // too (an owner who typed their car's network would otherwise lose it
+        // the next time the speed changed).
+        carNetworkHint,
+        carSsidAnswer,
         ...patch,
         // Last-save stamp: feeds last-saved-wins cloud merging.
         savedAt: Date.now(),
@@ -1156,6 +1184,8 @@ export function useControlHub(routeCategory?: string) {
       wifiEnabled,
       btEnabled,
       bootAutojoin,
+      carNetworkHint,
+      carSsidAnswer,
     ],
   );
 
@@ -4161,6 +4191,10 @@ export function useControlHub(routeCategory?: string) {
     // persisted per car, probed FIRST by discovery.
     carNetworkHint,
     setCarNetworkHint,
+    // U-121 B2 (owner 2026-10-24): the SSID half of the same card — the
+    // Wi-Fi network the car is at, auto-filled from car truth, owner-editable.
+    carSsidAnswer,
+    setCarSsidAnswer,
     // Profiles-sync (cloud mirror state for the current car profile)
     profileSync,
     // derived

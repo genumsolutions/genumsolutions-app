@@ -224,4 +224,50 @@ describe('P8 — ConnectionSection offers the "Car network" control', () => {
     expect(section).toContain("CAR_MDNS_HOST");
     expect(section).toContain("Discovery looks here first");
   });
+
+  // U-121 B2 (owner 2026-10-24): "add the feature of the entering the wifi
+  // network the car is at for the user along with the broadcast ip address for
+  // the control and most of the time set automatically and auto filled too."
+  it("the card carries BOTH facts the owner asked for, auto-filled from car truth", () => {
+    // 1. THE CAR'S WI-FI NETWORK — an editable field that SHOWS CAR TRUTH
+    //    until the owner types (draft wins only while there is one).
+    expect(section).toContain('testID="car-network-ssid-input"');
+    expect(section).toContain('ssidDraft ?? reportedSsid ?? ""');
+    expect(section).toContain('setCarSsidAnswer(ssidDraft ?? "");');
+    //    The auto-fill reads the car FIRST: live telemetry → the SSID it has
+    //    configured → only then the owner's own answer.
+    expect(section).toContain(
+      "const reportedSsid = telemetry.ssid ?? carSsid ?? carSsidAnswer ?? null;",
+    );
+    // 2. THE BROADCAST IP FOR THE CONTROL — computed, never typed: AP address
+    //    on the own hotspot, reported STA IP on a router, fleet default last.
+    expect(section).toContain('testID="car-network-ip"');
+    expect(section).toContain(
+      "const controlIp = (onOwnHotspot ? null : reportedIp) ?? DEFAULT_AP_IP;",
+    );
+    //    …and it stays READ-ONLY. The car uses that IP to find its own WS
+    //    client; it is not a reconfiguration field (FAILSAFE-U121 rule 2).
+    expect(section).not.toContain("value={controlIp}");
+  });
+
+  it("the SSID answer is a per-car PREF — written, restored and carried by every patch", () => {
+    // deviceMemory.write REPLACES the stored record, so a pref missing from
+    // the persist base is not kept — it is erased by the next unrelated save.
+    const hubRaw = readFileSync(
+      fileURLToPath(new NodeURL("../useControlHub.ts", import.meta.url)),
+      "utf8",
+    );
+    const hub = hubRaw
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((l) => l.replace(/\/\/.*$/, ""))
+      .join("\n");
+    expect(hub).toContain(
+      "persistPrefsRef.current?.({ carSsidAnswer: next });",
+    );
+    expect(hub).toContain("merged.prefs.carSsidAnswer");
+    expect(hub).toMatch(
+      /carNetworkHint,\s*\n\s*carSsidAnswer,\s*\n\s*\.\.\.patch,/,
+    );
+  });
 });
