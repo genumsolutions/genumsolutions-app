@@ -35,6 +35,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   Switch,
   Text,
   View,
@@ -261,6 +262,26 @@ export function RemoteControlScreen({ navigation }: Props) {
   const hub = useControlHub(routeCategory);
   const { width, height, isLandscape } = useViewport();
   const insets = useSafeAreaInsets();
+  // ── 2026-10-24 (owner: "omit the space of the phone on the top where the
+  // camera is situated as the black color by default and only use the
+  // remaining space" + "the phone's status bar is missing on the top, show
+  // that too in the remote screen").
+  //
+  // The top strip belongs to the PHONE, not to the deck: on an edge-to-edge
+  // build (Android 15+) the system status bar and the punch-hole camera sit
+  // INSIDE the app frame, and this screen was painting that strip with its own
+  // `bg-surface` — white status icons over a light surface read as "the status
+  // bar is missing", and the camera cutout sat on a light band.
+  //
+  // So the strip is claimed here: `cameraBand` is drawn SOLID BLACK (the
+  // phone's own chrome, whatever the theme says), the system status bar is
+  // asked for explicitly (light icons on that black band, never hidden), and
+  // the screen's content starts at `shellTop` — i.e. only the REMAINING space
+  // is used. Where the build is not edge-to-edge (`insets.top === 0`) the
+  // status bar lives above the window: the same black is applied there at
+  // runtime, so the strip looks the same either way.
+  const cameraBand = insets.top;
+  const shellTop = cameraBand + 8;
   // 2026-10-24: `setThemeMode` was destructured here and never used — the
   // theme switch lives on the Menu screen (MenuScreen.tsx). Only the current
   // mode is read (the chrome slider's dark-aware colours).
@@ -784,18 +805,27 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   return (
     <View className="flex-1 bg-surface">
-      {/* 2026-10-24 (owner: "mind the spaces of the status bar of the phones
-          and the position of the camera"): the shell is inset-driven on ALL
-          FOUR sides. Landscape phones put the status bar / punch-hole camera
-          on the LEFT or RIGHT edge (insets.left/right) and gesture nav sits at
-          the bottom (insets.bottom); the old layout padded only the top and a
-          fixed px-3, so a side camera could sit under the chrome row and the
-          bottom row could touch the gesture bar. 12 px is the floor per side,
-          the insets win whenever they are larger. */}
+      {/* ① + ⑤: the phone's own strip — black by default, status bar shown
+          over it (RN's StatusBar is stack-ordered, so the values set here
+          apply while this screen is mounted and revert on leaving it). */}
+      <StatusBar
+        hidden={false}
+        barStyle="light-content"
+        backgroundColor="#000000"
+      />
+      {cameraBand > 0 ? (
+        <View
+          testID="remote-camera-band"
+          style={{ height: cameraBand, backgroundColor: "#000000" }}
+        />
+      ) : null}
+      {/* 2026-10-24: `shellTop` replaces `Math.max(insets.top, 8)` — the
+          inset itself is now the black band above, so the content starts
+          below it with the same 8 px breathing room. */}
       <View
         className="flex-1 overflow-hidden"
         style={{
-          paddingTop: Math.max(insets.top, 8),
+          paddingTop: shellTop,
           paddingLeft: Math.max(insets.left, 12),
           paddingRight: Math.max(insets.right, 12),
           paddingBottom: Math.max(insets.bottom, 8),
@@ -1431,13 +1461,10 @@ export function RemoteControlScreen({ navigation }: Props) {
           <ScrollView
             className="absolute z-40 w-72 rounded-2xl border border-line bg-card p-2.5 shadow-xl"
             style={{
-              top: Math.max(insets.top, 8) + 48,
+              top: shellTop + 48,
               right: Math.max(insets.right, 12),
               maxHeight:
-                height -
-                (Math.max(insets.top, 8) + 48) -
-                Math.max(insets.bottom, 8) -
-                12,
+                height - (shellTop + 48) - Math.max(insets.bottom, 8) - 12,
             }}
             showsVerticalScrollIndicator={true}
           >
