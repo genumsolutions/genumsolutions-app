@@ -238,6 +238,12 @@ export function ConnectionSection({
     // (The panel is deliberately never handed the phone's own SSID: single
     // copy — that fact renders on the Remote's first bar only.)
     carNetMatch,
+    // U-124 ⑫ (owner 2026-10-24, "the ip is not hidden anywhere … when
+    // webpage is off"): the hub's page-serving opinion. The card's Control
+    // address is the address OF THE CAR'S WEB PAGE — with the page off there
+    // is no page to dial, so the IP is dropped from every surface, this one
+    // included (the Remote chrome chip hides for the same reason).
+    carPageServing,
     // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
@@ -858,25 +864,29 @@ export function ConnectionSection({
                 </View>
               ) : null}
 
-              <View
-                className="mt-1.5 flex-row items-center gap-1"
-                testID="car-network-ip"
-              >
-                <Feather name="radio" size={11} color="#475569" />
-                <Text className="text-[10px] font-black text-ink">
-                  Control address
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  className="ml-auto text-[10px] font-bold text-navy"
-                >
-                  {controlIp}
-                </Text>
-              </View>
-              <Text className="mt-0.5 text-[9px] leading-3 text-muted">
-                The broadcast IP the control page is dialled at — read from the
-                car whenever it reports one.
-              </Text>
+              {carPageServing?.current ? (
+                <>
+                  <View
+                    className="mt-1.5 flex-row items-center gap-1"
+                    testID="car-network-ip"
+                  >
+                    <Feather name="radio" size={11} color="#475569" />
+                    <Text className="text-[10px] font-black text-ink">
+                      Control address
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      className="ml-auto text-[10px] font-bold text-navy"
+                    >
+                      {controlIp}
+                    </Text>
+                  </View>
+                  <Text className="mt-0.5 text-[9px] leading-3 text-muted">
+                    The broadcast IP the control page is dialled at — read from
+                    the car whenever it reports one.
+                  </Text>
+                </>
+              ) : null}
 
               <Text className="mt-1.5 text-[10px] leading-3 text-muted">
                 Where is the car? Its IP or name (e.g. 192.168.1.42 or{" "}

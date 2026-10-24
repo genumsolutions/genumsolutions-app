@@ -337,8 +337,15 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     // public gate away from the raw `pageOn` cell; a remote reachability path
     // (HEAD/GET, on-the-wire page detection) is a separate concern and does
     // not feed this chip.
+    //
+    // U-124 ⑫ (owner 2026-10-24, "the ip is not hidden anywhere … when
+    // webpage is off"): the gate was `hub.carPageServing?.current ?? false`
+    // with NO live-link half — and the hub's opinion was a never-written ref
+    // OBJECT (always truthy), so the chip never hid. The opinion is now a
+    // real boolean (hub pin below) and the gate is the conjunction its own
+    // comment and the storyboard always described.
     expect(screen).toContain(
-      "const pageLinkReady = hub.carPageServing?.current ?? false;",
+      "const pageLinkReady = linked && (hub.carPageServing?.current ?? false);",
     );
     expect(screen).toContain("{pageLinkReady ? (");
     // The chip body is the IP alone: no transport label, no car network.
