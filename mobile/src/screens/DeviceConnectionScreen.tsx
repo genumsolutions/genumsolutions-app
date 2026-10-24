@@ -410,6 +410,12 @@ export function DeviceConnectionScreen({}: Props) {
       if (isWifi) {
         // The panels keep their draft address in the hub, so the shared socket
         // dials exactly what the user typed.
+        // U-69: await the handler's ConnectOutcome. The app must never show
+        // "Connected" when the link is actually closed — a failure now surfaces
+        // through the hub error, which is the only failure surface this screen
+        // renders (error -> the red box below). Without the await, the old
+        // handler returned normally on a failure and this button also reported
+        // success (the bug this fix targets).
         await handleWifiConnect();
       } else if (isBluetooth) {
         await handleScan();
