@@ -4136,6 +4136,28 @@ export function useControlHub(routeCategory?: string) {
     // cache (F-90), so the profile change is the dependency.
   }, [profileKeyRef.current]);
 
+  // U-124 ⑨ (owner 2026-10-24): "by matching its own network and prompt to
+  // change the phone's network if the two networks doesn match."
+  //
+  // The comparison lives HERE, not in the panel: this hook is the only place
+  // BOTH networks are known — the phone's SSID (the NetInfo watcher, refreshed
+  // on every network change) and the car's (its live STATE report, then its
+  // configured SSID, then the owner's own answer — the same precedence the
+  // Car-network card shows). It also keeps the single-copy rule intact: the
+  // panel never renders the PHONE's network (that fact has exactly one home,
+  // the Remote's first bar) — it only says whether the two agree, and names
+  // the CAR's network when they do not.
+  const matchPhone = (phoneSsid ?? "").trim().toLowerCase();
+  const matchCar = (telemetry.ssid ?? carSsid ?? carSsidAnswer ?? "")
+    .trim()
+    .toLowerCase();
+  const carNetMatch: "same" | "different" | "unknown" =
+    !matchPhone || !matchCar
+      ? "unknown"
+      : matchPhone === matchCar
+        ? "same"
+        : "different";
+
   return {
     // connection
     sppDevices,
@@ -4170,6 +4192,10 @@ export function useControlHub(routeCategory?: string) {
     // Reconnect / Leave / Cancel actions.
     phoneSsid,
     phoneNetworkLabel,
+    // U-124 ⑨: does this phone sit on the network the CAR is on? Derived
+    // above from both SSIDs — the panel consumes the VERDICT only, never the
+    // phone's own name.
+    carNetMatch,
     // U-121 Phase D: the linked car has stopped answering (may be frozen).
     carSilent,
     carRestartNotice,

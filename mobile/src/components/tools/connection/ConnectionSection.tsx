@@ -76,7 +76,14 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 
@@ -227,6 +234,10 @@ export function ConnectionSection({
     // owner's typed override as the fallback.
     carSsidAnswer,
     setCarSsidAnswer,
+    // U-124 ⑨: hub-derived verdict — does this PHONE sit on the car's network?
+    // (The panel is deliberately never handed the phone's own SSID: single
+    // copy — that fact renders on the Remote's first bar only.)
+    carNetMatch,
     // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
@@ -261,6 +272,10 @@ export function ConnectionSection({
   // by the guarded hub writer. While null the field SHOWS CAR TRUTH (below),
   // so the common case needs no typing at all.
   const [ssidDraft, setSsidDraft] = useState<string | null>(null);
+  // U-124 ⑨: the dropdown over that field. The owner: "there should be drop
+  // down selector too to select the network of the car". Choosing fills the
+  // field (the existing ✓ still persists it) — ONE way to save.
+  const [ssidPickOpen, setSsidPickOpen] = useState(false);
 
   // M1: auto-sync the network section with the PHONE's network. When the
   // phone actually joins the pending router, the "Join <ssid> on this phone"
@@ -362,6 +377,26 @@ export function ConnectionSection({
       }),
     [carNetworks, carApName, carOnRouter, reportedSsid],
   );
+
+  // The selector's own list: the car's own hotspot first (the way back to
+  // the car), then every network it knows — saved routers, then what it
+  // currently reports — deduped case-insensitively so one network is one row.
+  const netChoices = useMemo(() => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const push = (v?: string | null) => {
+      const t = (v ?? "").trim();
+      if (!t) return;
+      const k = t.toUpperCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push(t);
+    };
+    push(carApName);
+    for (const r of routers) push(r.ssid);
+    push(reportedSsid);
+    return out;
+  }, [carApName, routers, reportedSsid]);
 
   /** Run a hub action and report its REAL outcome (U-69). */
   const runOutcome = useCallback(
@@ -761,6 +796,19 @@ export function ConnectionSection({
                   className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1.5 text-[11px] text-ink"
                   testID="car-network-ssid-input"
                 />
+                <Pressable
+                  onPress={() => {
+                    tap();
+                    setSsidPickOpen(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose the car's network from a list"
+                  accessibilityState={{ expanded: ssidPickOpen }}
+                  className="self-stretch items-center justify-center rounded-md border border-line bg-surface px-2"
+                  testID="car-network-ssid-picker"
+                >
+                  <Feather name="chevron-down" size={16} color="#1e3a8a" />
+                </Pressable>
                 <Feather
                   name="check"
                   size={16}
@@ -786,6 +834,29 @@ export function ConnectionSection({
                   ? `Auto-filled from the car ("${reportedSsid}") — type only when it cannot say.`
                   : "The car has not reported it yet — type the network it is on."}
               </Text>
+
+              {/* U-124 ⑨: the MATCH, and the prompt it earns. Same one-line
+                  shape the owner approved for "Join <ssid> on this phone" —
+                  short, imperative, no paragraph. It names the CAR's network
+                  only: the PHONE's own network has exactly one home on this
+                  screen (the Remote's first bar), so the single-copy rule
+                  holds while the owner's "prompt to change the phone's
+                  network if the two networks doesn match" is answered. */}
+              {carNetMatch === "different" && reportedSsid ? (
+                <View
+                  className="mt-1.5 rounded-lg border border-line bg-card p-2"
+                  testID="car-net-mismatch"
+                >
+                  <View className="flex-row items-center gap-1.5">
+                    <Feather name="smartphone" size={12} color="#1e3a8a" />
+                    <Text className="flex-1 text-[11px] leading-4 text-ink">
+                      Switch this phone's Wi-Fi to{" "}
+                      <Text className="font-bold">{reportedSsid}</Text> to match
+                      the car
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
 
               <View
                 className="mt-1.5 flex-row items-center gap-1"
@@ -902,6 +973,94 @@ export function ConnectionSection({
                 </Text>
               )}
             </View>
+
+            {/* U-124 ⑨ — the dropdown itself: one list, one tap, the field
+                fills. The card keeps its own typing path (a network the car
+                has never heard of can still be named), so the selector is an
+                addition, not a replacement. */}
+            <Modal
+              transparent
+              visible={ssidPickOpen}
+              animationType="fade"
+              onRequestClose={() => setSsidPickOpen(false)}
+              statusBarTranslucent
+            >
+              <View
+                className="flex-1 items-center justify-center"
+                style={{ backgroundColor: "rgba(15,23,42,0.55)" }}
+              >
+                <Pressable
+                  className="absolute inset-0"
+                  onPress={() => setSsidPickOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close the network list"
+                />
+                <View className="relative w-[88%] max-w-[340px] rounded-2xl border border-line bg-card p-3">
+                  <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                    Which network is the car on?
+                  </Text>
+                  <ScrollView
+                    className="mt-2 max-h-[240px]"
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator
+                  >
+                    {netChoices.length === 0 ? (
+                      <Text className="py-1 text-[11px] text-muted">
+                        No networks known yet — type it below instead.
+                      </Text>
+                    ) : (
+                      netChoices.map((c) => {
+                        const active =
+                          c.toUpperCase() ===
+                          (ssidDraft ?? reportedSsid ?? "")
+                            .trim()
+                            .toUpperCase();
+                        return (
+                          <Pressable
+                            key={c}
+                            onPress={() => {
+                              tap();
+                              setSsidDraft(c);
+                              setSsidPickOpen(false);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`The car is on ${c}`}
+                            accessibilityState={{ selected: active }}
+                            className="flex-row items-center gap-2 rounded-lg px-2 py-2"
+                            testID={`car-network-ssid-option-${c}`}
+                          >
+                            <Feather
+                              name={active ? "check-circle" : "wifi"}
+                              size={13}
+                              color={active ? "#059669" : "#1e3a8a"}
+                            />
+                            <Text
+                              numberOfLines={1}
+                              className={`flex-1 text-[11px] font-semibold text-ink ${
+                                active ? "font-bold" : ""
+                              }`}
+                            >
+                              {c}
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    )}
+                  </ScrollView>
+                  <Pressable
+                    onPress={() => setSsidPickOpen(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Keep what is typed"
+                    className="mt-2 items-center rounded-lg border border-line bg-surface py-1.5"
+                    testID="car-network-ssid-picker-cancel"
+                  >
+                    <Text className="text-[11px] font-bold text-navy">
+                      Cancel
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Modal>
           </>
         ) : null}
       </View>
