@@ -27,27 +27,42 @@ notch camera on the LEFT or RIGHT edge — not the top. The shell therefore
 pads from the safe-area insets on **all four sides**, never a fixed value:
 
 ```
-paddingTop    = max(insets.top,    8)   paddingLeft  = max(insets.left,  12)
-paddingBottom = max(insets.bottom, 8)   paddingRight = max(insets.right, 12)
+cameraBand = insets.top              (drawn SOLID BLACK — U-124 ①)
+shellTop   = cameraBand + 8          (content origin, replaces paddingTop)
+paddingBottom = max(insets.bottom, 8)   paddingLeft  = max(insets.left,  12)
+                                       paddingRight = max(insets.right, 12)
 ```
+
+**U-124 ①+⑤** — the top strip belongs to the PHONE: `cameraBand` is claimed by
+this screen as a black band (`remote-camera-band`), the system status bar is
+asked for over it (light-content on black, never hidden, stack-ordered so it
+reverts on leaving), and every layer starts at `shellTop` — deck, settings
+dropdown (`top = shellTop + 48`) and all. On a build where the status bar
+lives above the window (`insets.top === 0`) the same black is applied at
+runtime, so the strip reads the same either way.
 
 Both bars (chrome row + merged row) start at the SAME shell inset — the merged
 row carries no per-row `px` anymore (its old `px-1` pushed it 4 px right of
 Back). The settings dropdown (region 5) is anchored the same way.
 
-**Type scale (the hierarchy, top = strongest):** 14 px Back · 12 px mode /
-speed value / tab labels · 11 px chips + settings labels ·10 px captions, strip messages, speed-strip label, telemetry-field labels · 9 px group headers only.
+**Type scale (the hierarchy, top = strongest — re-measured U-124, 2026-10-24):**
+18 px readout mode name · **14** px Back · **12** px broadcast-IP chip + mode +
+speed value · **11** px disconnect chips + tab labels + telemetry values +
+prompt buttons · **10** px settings labels, captions, strip messages,
+speed-strip label, telemetry-field labels · **9** px sub-captions + group
+headers only. Nothing on the screen sits below 9 px, and every tier change is
+a size the owner asked for (③ tabs, ④ settings, ⑦ strips, ⑪ the IP chip).
 
 ## Regions, top to bottom
 
 ### 1 · Chrome row — the row the Back button sits on
 
-| Slot            | Content                                                                         | Rule                                                                                                                                                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| far left        | **Back** pill (`handleBack`)                                                    | the only way out; never shares its slot                                                                                                                                                                                                                               |
-| right of Back   | **the ONE broadcast-IP chip** — `deck-link-status`                              | renders ONLY while `pageLinkReady` (a live link **and** the car reports it is serving its own page). Body = the IP ALONE: no transport label, no car network name, no device name. Tap opens the car's page (`telemetry.ip`, else `DEFAULT_AP_IP` on its own hotspot) |
-| spacer          | `flex-1`                                                                        | pushes the controls right — this is the **right-of-Back space** the owner asked to be used                                                                                                                                                                            |
-| right (robocar) | **ModeChooser** · **`Spd` ValueStrip** · **Settings gear** (`h-11 w-11`, 44 px) | mode + speed are the top-strip controls in every mode (R-20); the gear opens region 5. U-122: the gear was 56 px — bigger than Back and than the drive controls it configures; 44 px is still a full touch target and restores the row's hierarchy                    |
+| Slot            | Content                                                                                                   | Rule                                                                                                                                                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| far left        | **Back** pill (`handleBack`)                                                                              | the only way out; never shares its slot                                                                                                                                                                                                                               |
+| right of Back   | **the ONE broadcast-IP chip** — `deck-link-status` — 12 px (U-124 ⑪: it was the smallest link on the row) | renders ONLY while `pageLinkReady` (a live link **and** the car reports it is serving its own page). Body = the IP ALONE: no transport label, no car network name, no device name. Tap opens the car's page (`telemetry.ip`, else `DEFAULT_AP_IP` on its own hotspot) |
+| spacer          | `flex-1`                                                                                                  | pushes the controls right — this is the **right-of-Back space** the owner asked to be used                                                                                                                                                                            |
+| right (robocar) | **ModeChooser** · **`Spd` ValueStrip** · **Settings gear** (`h-11 w-11`, 44 px)                           | mode + speed are the top-strip controls in every mode (R-20); the gear opens region 5. U-122: the gear was 56 px — bigger than Back and than the drive controls it configures; 44 px is still a full touch target and restores the row's hierarchy                    |
 
 ### 2 · Merged row — the line BELOW Back (`h-9`, constant)
 
@@ -55,18 +70,26 @@ This is the **line below the back button**. Order = the Q2 overflow priority
 (first to drop on a narrow phone, never the controls):
 
 1. **phone's own network chip** — `remote-phone-network`. Truncates
-   (`max-w-[200px]`), never hides.
+   (`max-w-[168px]`), never hides, and is drawn with the **phone** glyph so it
+   cannot read as a second Wi-Fi control (U-124 ⑥).
 2. **Bluetooth disconnect** — `remote-disconnect-bt`.
 3. **Wi-Fi disconnect (hotspot variant)** — `remote-disconnect-wifi`, while the
    car is on its own AP.
 4. **Wi-Fi disconnect (router variant)** — `remote-disconnect-wifi`, while the
    car is on a router. 3 and 4 are ONE chip in two states; they never render
-   together.
+   together — and **both now require `wifiConnected`** (U-124 ⑥): sitting on
+   the car's hotspot with only Bluetooth linked must NOT offer a Wi-Fi
+   disconnect for a link that is not up. Chips are `px-3`, row gap `gap-1`.
 5. **Compact telemetry line** — the **only** width-gated element in the row
-   (`width >= MERGED_ROW_TELEMETRY_MIN_PX`). Dropping it is what keeps the
+   (`width >= MERGED_ROW_TELEMETRY_MIN_PX = 860` — the row measures 791 px
+   with it on, i.e. 815 of screen, so it appears only where the controls are
+   provably safe). Dropping it is what keeps the
    controls on screen; the same readings exist on the Telemetry tab.
 6. spacer → **the tab strip on the right**: **D-pad · Joystick · Telemetry ·
-   Connectivity** (`px-4 py-2`, 12 px bold — the "too small to click" fix).
+   Connectivity** (`px-3 py-1.5`, **11 px** bold — U-124 ③ re-measured the
+   strip: at `px-4 py-2`/12 px it needed 888 px of screen and was clipped at
+   the 640-844 px widths this screen runs at, and the pill was exactly `h-9`
+   tall so any system font scale clipped it vertically too).
    U-122 ("organize … the tabs under this screen"): the four are ONE
    **segmented strip** — a single `border-line bg-card` pill container
    (`accessibilityRole="tablist"`) with the active view filled `bg-navy` —
@@ -83,7 +106,9 @@ reachable from this screen.
 ### 3 · Message strips (exactly one of each)
 
 - `hub.connectionMessage` → one `InlineMessage`, auto-clears on the hub's 4 s
-  timer (there used to be 14 call sites and no renderer).
+  timer (there used to be 14 call sites and no renderer). The strip is
+  `mt-1 px-2 py-1` around `text-[10px] leading-[14px]` (U-124 ⑦): ~7 px
+  shorter per line than the U-122 shape, glyphs unchanged.
 - `hub.carSilent` → the freeze strip: _"The car has not answered for a while —
   it may have frozen…"_ (U-121 D: a live link says nothing about a live car).
 
@@ -103,10 +128,13 @@ Handheld / SmartHome) or `DroneControls`; no deck → `SensorGrid`.
 
 ### 5 · Settings dropdown (gear) — grouped, inset-anchored (U-122)
 
-Absolute panel on the right (`w-72`, `z-40`) over a dismissible scrim (`z-30`),
-anchored from the insets: `top = max(insets.top,8)+48`, `right = max(insets.right,12)`,
-`maxHeight = height - top - max(insets.bottom,8) - 12` —a side camera or a gesture bar can no longer sit under it, and it scrolls
-inside that box. The panel's vertical scroll indicator is ON (U-123): on a
+Absolute panel on the right (`w-80`, `max-w-[92%]`, `z-40`, `p-2`) over a
+dismissible scrim (`z-30`), anchored from the insets: `top = shellTop + 48`,
+`right = max(insets.right,12)`,
+`maxHeight = height - top - max(insets.bottom,8) - 12` — a side camera or a
+gesture bar can no longer sit under it, and it scrolls inside that box.
+U-124 ④: `w-72` → `w-80` because the longest label measured 215 px against
+187 px of room (it wrapped); 320 px gives it 223 px for its 196 px at 10 px. The panel's vertical scroll indicator is ON (U-123): on a
 short landscape screen the Danger zone sits below the fold, and nothing may
 hide that silently.
 
@@ -120,7 +148,11 @@ Then three `SettingsGroup` sections (divider + 9 px caps header, one rhythm):
 | Danger zone    | **Factory reset the car** — LAST, always. It used to sit between the connection toggles and the steering rows, so a stray tap in routine settings could reach it |
 
 The car's boot auto-join toggle stays **removed** (P3/Q1 — the firmware no
-longer hops at power-up). Labels are 11 px (were 10), subs 10 px (were 9).
+longer hops at power-up). Labels are **10 px** and subs **9 px** (U-124 ④
+re-measured the panel: the owner called the type "little big and over
+flowing"; the group headers keep their 9 px caps, so the tier is 10-over-9
+everywhere inside the panel and nothing in it is 11 px). One bottom rhythm:
+every row `mt-1`, groups `mt-1.5` + `pt-1`, danger `mt-2` + `pt-1.5`.
 
 ### 6 · Reconnect prompt
 
@@ -181,7 +213,12 @@ unchanged.
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | one IP chip right of Back, gated on the page               | `remoteChrome.test.ts` "issue 10" / "the chip renders ONLY behind a live link…"                                             |
 | the merged row's order, sizes and the single width gate    | `remoteChrome.test.ts` "issue 5+6", "the compact telemetry line is the ONLY width-gated thing…"                             |
-| each chip tears down only itself (3 render sites, 2 chips) | `remoteChrome.test.ts` "issue 3"                                                                                            |
+| each chip tears down only itself (3 render sites, 2 chips) | `remoteChrome.test.ts` "issue 3" (U-124 ⑥ also requires `wifiConnected` on BOTH variants)                                   |
+| the black camera band + the visible status bar (①⑤)        | `remoteChrome.test.ts` "U-124 ①+⑤" (4 rules)                                                                                |
+| the merged row's sizes and the 860 px telemetry gate (③)   | `remoteChrome.test.ts` "items 5+6" + "the compact telemetry line is the ONLY width-gated thing" (the 860 pin)               |
+| the settings window: width, tier and bottom rhythm (④)     | `remoteChrome.test.ts` "U-124 ④" (4 rules)                                                                                  |
+| the strip messages' size (⑦)                               | `feedbackSurface.test.ts` "U-124 ⑦" (2 rules)                                                                               |
+| the broadcast-IP chip's 12 px (⑪)                          | `remoteChrome.test.ts` "issue 10"                                                                                           |
 | the phone's network renders exactly once                   | `phoneNetwork.test.ts` (panel asserts ABSENT), `remoteChrome.test.ts` "the phone's own network chip lives on the FIRST bar" |
 | the connection surface is one panel with one manager       | `connectivityResponsiveness.test.ts` (car-network card, B2 ×2, C2 ×3), `pairedList.test.ts`, `dualLinkConnect.test.ts`      |
 

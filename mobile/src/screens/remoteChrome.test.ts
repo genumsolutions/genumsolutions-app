@@ -108,6 +108,10 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // No device name renders in the chrome label at all (A-25/A-38 kept by
     // construction — the helper that sanitized it is deleted, not dormant).
     expect(screen).not.toContain("friendlyBtName");
+    // U-124 ⑪ (owner 2026-10-24): "the broadcast ip show in the remote
+    // screen is little smaller font too" — the chip is the row's LINK, so it
+    // sits with mode/speed on the 12 px tier, above the 11 px chips/tabs.
+    expect(screen).toContain("text-[12px] font-bold text-navy");
   });
 
   it("issue 3: chips are per-live-method and each tears down ONLY itself", () => {

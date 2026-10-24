@@ -889,7 +889,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               <View className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
               <Text
                 numberOfLines={1}
-                className="min-w-0 shrink text-[11px] font-bold text-navy dark:text-sky-300"
+                className="min-w-0 shrink text-[12px] font-bold text-navy dark:text-sky-300"
               >
                 {ipChipText}
               </Text>
