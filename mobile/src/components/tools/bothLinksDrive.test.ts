@@ -7,13 +7,18 @@
 //    assumes it."  (PLAN-2026-10-15 open question Q3)
 //
 // So the decision is now PINNED, not open: there is no primary link.
-// `sendCommand` passes `chosenRadio: null` (the LinkManager's tie-breaker
-// stays unused here) and `routeCommand` fans a both-transports mode out to
-// both live radios; broadcast lines (mode tokens + emergency) ride every
-// live link. Idempotency is the CAR's half — every line carries an
-// absolute target (SPD140, ESTOP, a concrete mode token), and the app
-// never puts a relative token like MODECYCLE on the wire (cycleMode
-// resolves it first), so a copy on the second link changes nothing.
+// `sendCommand` passes `chosenRadio: wirelessMethod` — the radio the user
+// raised the LATEST Wi-Fi flow in (U-124 owner item ⑧: "i can connect to the
+// wifi signal too when the bluetooth is already connected") — which is a
+// TIE-BREAKER, never a primary: `routeCommand` only ever ADDS the chosen
+// radio to the fan-out, it never removes one that mode parity already allows,
+// so a both-transports mode still reaches both radios and a mode that lists
+// only Bluetooth still reaches a Wi-Fi link the user deliberately dialled.
+// Broadcast lines (mode tokens + emergency) ride every live link. Idempotency
+// is the CAR's half — every line carries an absolute target (SPD140, ESTOP, a
+// concrete mode token), and the app never puts a relative token like
+// MODECYCLE on the wire (cycleMode resolves it first), so a copy on the
+// second link changes nothing.
 //
 // WHICH FILE THIS READS (F-83): the RAW `useControlHub.ts` source,
 // comments stripped — the same convention as oneActiveLink.test.ts and
@@ -58,12 +63,15 @@ describe("Q3 — both links live: the fan-out has NO primary link", () => {
     expect(hub).toContain("const sendSystemLine = useCallback(");
   });
 
-  it("sendCommand routes through routeCommand with chosenRadio: null", () => {
+  it("sendCommand routes through routeCommand with the raised radio as tie-breaker", () => {
     const body = hubBody("sendCommand", "sendSystemLine");
     expect(body.length).toBeGreaterThan(100);
-    // The whole Q3 decision in one line: no link is primary, so parity
-    // decides — and for a both-transports mode (4WD4M) parity is BOTH.
-    expect(body).toContain("chosenRadio: null,");
+    // The Q3 decision, qualified by owner item ⑧: no link is PRIMARY (mode
+    // parity still decides which radios MAY carry a command), but the radio
+    // the user dialled is always added to the fan-out — so a Wi-Fi link
+    // raised beside a Bluetooth link carries commands even in a BT-only mode.
+    expect(body).toContain("chosenRadio: wirelessMethod,");
+    expect(body).not.toContain("chosenRadio: null,");
     expect(body).toContain("routeCommand({");
     // The broadcast set is consulted per command, so mode tokens and the
     // emergency/neutral lines reach every live radio.
@@ -85,6 +93,44 @@ describe("Q3 — both links live: the fan-out has NO primary link", () => {
       chosenRadio: null,
     });
     expect(r).toEqual({ bt: true, ws: true });
+  });
+
+  it("the tie-breaker only ever ADDS the radio the user dialled", () => {
+    // Owner item ⑧'s whole point: a BT-mode session with a live Wi-Fi link
+    // the user raised must ALSO carry over Wi-Fi ("control the car through
+    // the wifi with the broadcasted ip controls"), and the mirror holds —
+    // chosen=bluetooth never removes a Wi-Fi link that mode parity allows.
+    expect(
+      routeCommand({
+        broadcast: false,
+        btLive: true,
+        wsLive: true,
+        modeUsesBt: true,
+        modeUsesWifi: false,
+        chosenRadio: "wifi",
+      }),
+    ).toEqual({ bt: true, ws: true });
+    expect(
+      routeCommand({
+        broadcast: false,
+        btLive: true,
+        wsLive: true,
+        modeUsesBt: false,
+        modeUsesWifi: true,
+        chosenRadio: "bluetooth",
+      }),
+    ).toEqual({ bt: true, ws: true });
+    // A chosen radio whose link is NOT live still cannot carry anything.
+    expect(
+      routeCommand({
+        broadcast: false,
+        btLive: true,
+        wsLive: false,
+        modeUsesBt: true,
+        modeUsesWifi: false,
+        chosenRadio: "wifi",
+      }),
+    ).toEqual({ bt: true, ws: false });
   });
 
   it("broadcast lines ride every live link, never just one", () => {

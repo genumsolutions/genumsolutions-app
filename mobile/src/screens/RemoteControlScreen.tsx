@@ -72,7 +72,6 @@ import { DroneControls } from "../components/tools/DroneControls";
 import {
   ConnectionSection,
   InlineMessage,
-  type ConnectionMethodId,
 } from "../components/tools/connection";
 import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
 import {
@@ -343,6 +342,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     handleWifiDisconnect,
     carNetworks,
     phoneNetworkLabel,
+    connMethod,
+    setConnMethod,
   } = hub;
 
   const linked = connected || wifiConnected;
@@ -530,7 +531,12 @@ export function RemoteControlScreen({ navigation }: Props) {
   // default the method to Bluetooth so the left=method / right=network panes
   // both render on open — a null default left the panel as one full-width
   // column until a method was picked ("two separate formats").
-  const [connMethod, setConnMethod] = useState<ConnectionMethodId>("bluetooth");
+  //
+  // U-124 (owner item ⑧): the pick is the HUB's, not this screen's — it is
+  // persisted per device (`DevicePrefs.connMethod`), so reopening the Remote
+  // shows the method the user last raised (bluetooth first on a fresh device),
+  // and a connect raised through it is the radio `routeCommand` prefers when
+  // both links are live.
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null);
