@@ -117,10 +117,22 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // A1 (owner 2026-10-23, FAILSAFE item 4): the Wi-Fi chip is ONE chip in
     // TWO variants — "Wi-Fi (hotspot)" while the car is on its own AP, "Wi-Fi"
     // while it is on a router — and the router variant is gated on the Wi-Fi
-    // truth AND NOT on the hotspot, so the two can never render together. The
-    // old single `{wifiConnected ? (` gate is the pre-A1 shape.
-    expect(screen).toContain("{onOwnHotspot ? (");
+    // truth AND NOT on the hotspot, so the two can never render together.
+    //
+    // U-124 ⑥ (owner 2026-10-24, "when i connect the car through the bluetooth
+    // method only … multiple disconnect buttons … another wifi, which is
+    // duplicate") tightens A1: the HOTSPOT variant now requires the Wi-Fi link
+    // too. It used to key on the phone's own network, so a Bluetooth-only
+    // session sitting on the car's hotspot offered "disconnect Wi-Fi" for a
+    // link that was not up. Both variants still can never render together, and
+    // neither can render without a live Wi-Fi link.
+    expect(screen).not.toContain("{onOwnHotspot ? (");
+    expect(screen).toContain("{wifiConnected && onOwnHotspot ? (");
     expect(screen).toContain("{wifiConnected && !onOwnHotspot ? (");
+    // The phone's own network chip sits in the same row and is INFORMATION —
+    // it no longer borrows the Wi-Fi glyph from the disconnect chip beside it.
+    expect(screen).toContain('testID="remote-phone-network"');
+    expect(screen).toContain('name="smartphone"');
     // Each chip calls its per-method disconnect. The full teardown
     // (`handleDisconnect`) must not be reachable from this screen anymore —
     // "handleBtDisconnect()" does NOT contain the "handleDisconnect()"

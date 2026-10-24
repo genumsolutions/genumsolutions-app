@@ -971,7 +971,13 @@ export function RemoteControlScreen({ navigation }: Props) {
               testID="remote-phone-network"
               className="flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[200px] rounded-full border border-line bg-card px-3.5 py-2"
             >
-              <Feather name="wifi" size={13} color="#64748b" />
+              {/* U-124 ⑥ (owner 2026-10-24): this row already carries a Wi-Fi
+                  DISCONNECT chip, so a second Wi-Fi glyph here read as a
+                  second Wi-Fi control ("and another wifi, which is
+                  duplicate"). This chip is information about THIS PHONE's
+                  network, so it is drawn as the phone — no control, no
+                  confusion. */}
+              <Feather name="smartphone" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted truncate">
                 {phoneNetworkLabel}
               </Text>
@@ -996,7 +1002,16 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Feather name="x-circle" size={14} color="#ef4444" />
             </Pressable>
           ) : null}
-          {onOwnHotspot ? (
+          {/* U-124 ⑥ (owner 2026-10-24, "when i connect the car through the
+              bluetooth method only … multiple disconnect buttons … another
+              wifi, which is duplicate"): BOTH Wi-Fi variants now require the
+              Wi-Fi link itself. The hotspot variant used to key on the
+              PHONE's network alone, so sitting on the car's own hotspot while
+              only Bluetooth was linked still offered a "disconnect Wi-Fi"
+              button for a link that was not up — a second Wi-Fi control in a
+              BT-only status bar. At most ONE Wi-Fi chip ever renders, and only
+              while there is a Wi-Fi link to tear down. */}
+          {wifiConnected && onOwnHotspot ? (
             <Pressable
               onPress={() => {
                 feedbackTap();
