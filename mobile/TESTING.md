@@ -75,6 +75,16 @@
       renders (firmware half — `serveGhostPage` now declares its real
       Content-Length). F-61: source-level until flashed — FW 1.3.18 is
       UNFLASHED.
+- [ ] **U-124-7 — ⭐ the landscape screen's own chrome (2026-10-25 owner
+      fix).** On the Remote (landscape-locked): (a) the black strip above the
+      Back row is ONE status bar tall — no doubled band, the back line sits
+      right under the phone's status icons; (b) the punch-hole camera strip on
+      the LEFT edge (and the right, if the device reports one) is **solid
+      black**, not the theme surface, and the 12 px floor beyond it is normal
+      padding; (c) the status-bar chip left of the disconnect button reads
+      **`Wi-Fi`** (or `Wi-Fi · <network>`) — **never** a mask like
+      `192.168.245.0/24`. Photograph the top-left corner of the deck; if any of
+      the three is off, say which.
 
 ## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
 

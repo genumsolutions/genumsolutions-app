@@ -29,14 +29,6 @@ export type PhoneNetworkInput = {
   readonly connected: boolean;
   /** The Wi-Fi SSID, when the OS reports one. */
   readonly ssid: string | null;
-  /**
-   * U-124 ② (owner 2026-10-24): NetInfo's subnet ("192.168.245.0/24"). The
-   * OS withholds the SSID until the app holds the location permission; the
-   * subnet is the fact that is ALWAYS there and the one that actually decides
-   * whether this phone can reach the car (its own hotspot is a /24 no router
-   * uses), so it is the honest stand-in while the name is being asked for.
-   */
-  readonly subnet?: string | null;
 };
 
 /** The label the panel shows. Never empty — every state has honest copy. */
@@ -48,11 +40,16 @@ export function formatPhoneNetwork(input: PhoneNetworkInput): string {
     // The OS is withholding the name (permission not yet granted, or location
     // services off). "name hidden" was the old answer — the owner: *"shows the
     // wifi. name hidden, which is meaningless and should show the wifi network
-    // the app is connected to"*. The hub now ASKS for the permission so the
-    // real name lands; until the OS answers, the subnet names the network the
-    // phone actually sits on instead of printing a non-answer.
-    const subnet = input.subnet?.trim() || "";
-    return subnet ? `Wi-Fi · ${subnet}` : "Wi-Fi · name not shared";
+    // the app is connected to"*. The hub ASKS for the permission so the real
+    // name lands.
+    //
+    // 2026-10-25 (owner, second ruling): *"the remote screen show the wifi
+    // subnet mask which is stupid remove that"* — the U-124 ② stand-in that
+    // named the network by its subnet ("Wi-Fi · 192.168.245.0/24") is gone
+    // from this label, and the `subnet` field with it: a mask is not a name,
+    // and this chip's whole job is to name the network this PHONE is on. The
+    // chip says what it is until the permission lands the SSID.
+    return "Wi-Fi";
   }
   if (input.type === "cellular") return "Cellular";
   return input.type ? `Other · ${input.type}` : "Unknown network";

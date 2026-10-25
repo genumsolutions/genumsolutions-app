@@ -292,6 +292,25 @@ export function RemoteControlScreen({ navigation }: Props) {
   // runtime, so the strip looks the same either way.
   const cameraBand = insets.top;
   const shellTop = cameraBand + 8;
+  // ── 2026-10-25 (owner): *"unnecessary space on the top of the screen above
+  // the back button line and … weird space on the left of that back button
+  // where there is the hole for the camera … you forgot that page is
+  // landscape."* Two defects in ONE screen:
+  //
+  //   1. the top inset was counted TWICE. The band took `insets.top` px of
+  //      LAYOUT (a flow sibling above the shell) and the shell then padded by
+  //      `shellTop = insets.top + 8` — so the strip above the back row was
+  //      2× the status bar plus 8. The band is now an OVERLAY (absolute, no
+  //      layout height): the shell's `shellTop` is the one and only
+  //      clearance, exactly what the 2026-10-24 comment always claimed.
+  //   2. this screen is LANDSCAPE-LOCKED, and a landscape phone puts its
+  //      punch-hole camera on the SIDE edge — `insets.left`/`insets.right`
+  //      is where the hole is, and that strip was still painted with the
+  //      root's `bg-surface` (the "weird space" beside Back). It is the
+  //      phone's own chrome, so it is blacked out too, on whichever edge
+  //      carries the inset.
+  const sideBandLeft = insets.left;
+  const sideBandRight = insets.right;
   // 2026-10-24: `setThemeMode` was destructured here and never used — the
   // theme switch lives on the Menu screen (MenuScreen.tsx). Only the current
   // mode is read (the chrome slider's dark-aware colours).
@@ -830,10 +849,50 @@ export function RemoteControlScreen({ navigation }: Props) {
         barStyle="light-content"
         backgroundColor="#000000"
       />
+      {/* Both bands are OVERLAYS: they paint the phone's chrome black without
+          taking layout space, so the shell's own padding is the only
+          clearance. (As flow siblings they doubled the top inset — the
+          "unnecessary space above the back button line".) */}
       {cameraBand > 0 ? (
         <View
           testID="remote-camera-band"
-          style={{ height: cameraBand, backgroundColor: "#000000" }}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: cameraBand,
+            backgroundColor: "#000000",
+          }}
+        />
+      ) : null}
+      {sideBandLeft > 0 ? (
+        <View
+          testID="remote-camera-band-left"
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: sideBandLeft,
+            backgroundColor: "#000000",
+          }}
+        />
+      ) : null}
+      {sideBandRight > 0 ? (
+        <View
+          testID="remote-camera-band-right"
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: sideBandRight,
+            backgroundColor: "#000000",
+          }}
         />
       ) : null}
       {/* 2026-10-24: `shellTop` replaces `Math.max(insets.top, 8)` — the

@@ -456,6 +456,7 @@ describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar sho
     expect(screen).toContain("const cameraBand = insets.top;");
     expect(screen).toContain("const shellTop = cameraBand + 8;");
     expect(screen).toContain('testID="remote-camera-band"');
+    expect(screen).toContain('testID="remote-camera-band-left"');
   });
 
   it("the top inset is claimed as a SOLID BLACK band, not the theme surface", () => {
@@ -468,6 +469,38 @@ describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar sho
     // The band renders only when there IS an inset to claim — a non
     // edge-to-edge build keeps its 8 px floor and no empty black row.
     expect(screen).toContain("{cameraBand > 0 ? (");
+  });
+
+  it("the band is an OVERLAY — the top inset is counted ONCE", () => {
+    // 2026-10-25 (owner: "unnecessary space on the top of the screen above
+    // the back button line"). The band used to be a FLOW sibling: it took
+    // `insets.top` px of layout and the shell then padded by
+    // `shellTop = insets.top + 8`, so the strip above the back row was TWICE
+    // the status bar. Absolute = zero layout height, so `paddingTop:
+    // shellTop` is the one and only clearance.
+    expect(screen).toMatch(
+      /position: "absolute",\s+top: 0,\s+left: 0,\s+right: 0,\s+height: cameraBand,/,
+    );
+    expect(screen).toContain("paddingTop: shellTop,");
+  });
+
+  it("the LANDSCAPE camera hole is blacked out on the side edge", () => {
+    // 2026-10-25 (owner): "there is weird space on the left of that back
+    // button too where there is the hole for the camera position which should
+    // be blacked out … you forgot that page is landscape view." The screen is
+    // landscape-LOCKED, so the punch-hole is `insets.left`/`insets.right` —
+    // that strip was still the theme surface.
+    expect(screen).toContain("const sideBandLeft = insets.left;");
+    expect(screen).toContain("const sideBandRight = insets.right;");
+    expect(screen).toContain("{sideBandLeft > 0 ? (");
+    expect(screen).toContain("{sideBandRight > 0 ? (");
+    expect(screen).toContain('testID="remote-camera-band-right"');
+    // Full height, an overlay like the top band (it must not eat the shell's
+    // own inset padding), and it can never swallow a tap.
+    expect(screen).toMatch(
+      /sideBandLeft[\s\S]{0,220}position: "absolute",\s+top: 0,\s+bottom: 0,\s+left: 0,\s+width: sideBandLeft,/,
+    );
+    expect(screen).toContain('pointerEvents="none"');
   });
 
   it("the content uses only the REMAINING space, below the band", () => {
