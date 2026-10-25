@@ -1000,9 +1000,11 @@ export function useControlHub(routeCategory?: string) {
         setUseJoystickState(merged.prefs.useJoystick);
       if (merged.prefs.joystickLayout)
         setJoystickLayoutId(merged.prefs.joystickLayout);
-      // Auto-join router is always OFF — user must press Connect/Reconnect.
-      // Do not restore from profile (U-120 Phase C).
-      setAutoJoinRouterState(false);
+      // U-121 B2: restore the auto-join router setting from profile
+      // so the car remembers the last used router on power cycle.
+      // The WIFICFG;AUTOJOIN command will be sent when the user
+      // interacts with the toggle (see setCarTransportToggle below).
+      setAutoJoinRouterState(merged.prefs.autoJoinRouter ?? false);
       // P8: the user's "Car network" answer restores with the profile too —
       // a profile that forgot it would demote the manual override to a
       // once-per-session entry (F-91 says the override must PERSIST and win).
@@ -1212,6 +1214,15 @@ export function useControlHub(routeCategory?: string) {
   const setAutoJoinRouter = (value: boolean) => {
     setAutoJoinRouterState(value);
     persistPrefsRef.current?.({ autoJoinRouter: value });
+    // Send WIFICFG;AUTOJOIN;ON|OFF to the firmware so it stores the
+    // setting in NVS and honors it on power-up (armBootAutoJoin).
+    const on = value ? "ON" : "OFF";
+    if (!sendSystemLine(`WIFICFG;AUTOJOIN;${on}`)) {
+      showConnectionMessage(
+        `App auto-join ${value ? "enabled" : "disabled"} — connect to the car first.`,
+        "error",
+      );
+    }
   };
 
   // Connections-Hub (profiles): record a Wi-Fi join into the per-car history
