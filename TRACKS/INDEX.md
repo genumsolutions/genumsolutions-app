@@ -396,3 +396,39 @@ Implementation (app `mobile/`):
 Gates: `tsc --noEmit` 0 · `npm test` (see failures above). Version stays **3.2.7 / versionCode 60** — JS-only, ships on the OTA channel.
 
 Commit:** `6ec2887`. Pushed to `main` + `backup` on all three repos (app, website, car).
+
+## Phase 7 — Fresh-Start Wipe Status
+
+| Deliverable | Status | Location |
+|---|---|---|
+| **1. Car `FACTORY;RESET`** | N/A (car repo separate) | `Genum_4WD4M_CAR/WebServerComm.cpp` + `CrashLog.cpp` — wipes `botcfg` namespace |
+| **2. App `resetCarData()`** | ✅ Completed (Phase 7b) | `mobile/src/components/tools/useControlHub.ts` — wipes AsyncStorage car keys |
+| **3. DB Migration** | ⚠️ Pending — owner runs `20261013120000_phase7c_fresh_start_cleanup.sql` in Supabase SQL Editor | `genumsolutions-website/supabase/migrations/` — deletes car `1FB608` rows + retention |
+
+_**Note:** The car firmware NVS wipe and app AsyncStorage wipe are owner-executed steps.  
+The DB migration requires running SQL in your Supabase project. All three steps must complete  
+for a fresh start. After completion, I can help create new SESSION-*.md tracking files._
+
+## Phase 7 — Fresh-Start Debug Aids (App)
+
+| Aid | Location | Purpose |
+|-----|----------|---------|
+| **`resetCarData()`** | `useControlHub.ts` | Wipes ALL car-related AsyncStorage keys: `genum-car-profiles-v1`, `genum.device.*`, `genum.lastDevice`, `genum.crashReports.queue`, `genum.crashReports.last`, `genum.activeTransport.v1` |
+| **`genum.app.logs.ring`** | `appLogService.ts:RING_KEY` | Bounded ring of 250 warn/error lines; oldest drop first; fire-and-forget `appendLog()` |
+| **`genum.app.logs.pending`** | `appLogService.ts:QUEUE_KEY` | Queue of 50 pending upload rows; retried on link-up via `flushAppLogs()` |
+| **`genum.crashReports.queue`** | `crashReportService.ts:QUEUE_KEY` | Crash report queue of 50 rows; deduped against `genum.crashReports.last` |
+| **`genum.crashReports.last`** | `crashReportService.ts:LAST_SYNC_KEY` | Last synced crash-report key (board|boot|crash|reason) — prevents duplicate syncs |
+| **`genum.lastDevice`** | `useControlHub.ts:LAST_DEVICE_KEY` | Global spill of last device address + saved routers — visible even without live link |
+| **`deviceMemory.read/write()`** | `deviceProfileRegistryService.ts` | Per-device pref persistence keyed by `fw:<boardId>` — migrates on identity change |
+| **`supabase.from("app_logs").insert()`** | `appLogService.ts:pushRow()` | Uploads queued app logs to Supabase — best-effort, never throws |
+| **`supabase.from("device_crash_reports").insert()`** | `crashReportService.ts:pushRow()` | Uploads crash reports to Supabase — deduped by `crashReportKey()` |
+| **`syncCrashReport()`** | `crashReportService.ts` | One-entry point on connect; builds row, dedupes, pushes or queues |
+| **`flushCrashReports()`** | `crashReportService.ts` | Flushes all queued reports from prior dead zones |
+
+_**How to use after fresh start:**  
+1. Tap "Reset car data" in Remote screen (red button) → wipes all car AsyncStorage keys  
+2. Reconnect car → `resetCarData()` clears and reinitializes  
+3. `appendLog()` starts new ring; `syncCrashReport()` starts fresh crash sync  
+4. Check Supabase `app_logs` and `device_crash_reports` tables for fleet-wide diagnostics  
+5. Use `LOG;GET<N>` from car serial to read crash event history_
+
