@@ -750,7 +750,7 @@ export function parseTelemetryLine(line: string): CarTelemetry {
   // registry as its OWN line — `NETW;<ownAP>;<ssid>;…` — immediately after
   // every STATE, on EVERY transport. This branch did not exist, so over
   // Bluetooth the app received the line, matched nothing, and fell back to a
-  // stale local mirror: the router list existed on WiFi only, which made
+  // the router list existed on WiFi only (historical note, WiFi was the only link)
   // "add a router" a WiFi-shaped accident (F-66). Names only, never
   // passwords (W-14), and the car's own network leads the list by design.
   // A BARE `NETW` is a real shape: `buildNetworksLine` starts the buffer with

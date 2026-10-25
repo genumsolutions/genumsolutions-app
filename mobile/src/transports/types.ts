@@ -37,9 +37,6 @@
  * Registered placeholders (the remaining "what if every possible comm method"
  * registry the owner asked for — see guide/TRANSPORTS-WIFI-GUIDE.md, NOT in the
  * repo): bt-ble (needs firmware GATT-UART), mdns.
- *
- * The Internet/remote-link transports (mqtt, cloud-relay) were removed on
- * 2026-10-14 by owner directive; they will be rebuilt from scratch later.
  */
 export type TransportId =
   "bt-classic" | "bt-ble" | "wifi-ap-ws" | "wifi-sta-ws" | "http" | "mdns";

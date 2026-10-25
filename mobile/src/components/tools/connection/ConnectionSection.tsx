@@ -19,9 +19,8 @@
 //             "Connection method" box is the method only.
 //   METHOD  → two compact pills. U-97: *"show connection methods as three
 //             equal cards"* — visible and comparable at a glance, and only the
-//             selected method's setup card renders below them. (There were
-//             three; the Internet card was removed 2026-10-14 by owner
-//             directive, so the row now shows Bluetooth and Wi-Fi.)
+//             selected method's setup card renders below them. (The Internet
+//             card was removed, so the row now shows Bluetooth and Wi-Fi.)
 //   setup   → the selected method's job, and nothing else
 //   left-bottom → the THIS-CAR inventory, always visible (M1): paired cars
 //             (Bluetooth, friendly names only) or added networks (Wi-Fi).

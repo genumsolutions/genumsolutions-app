@@ -301,7 +301,7 @@ export async function setDeviceName(
  * Set (or clear) the owner's FAVOURITE flag for one unit.
  *
  * The `is_favourite` column has been read since the registry shipped and
- * never written, so the field was a dead column. The upsert payload carries
+ * never written before. The upsert payload carries
  * ONLY the three key/flag columns: `display_name` has a NOT NULL default and
  * the row already exists, so sending it (even as "") would silently wipe the
  * name the owner gave the car — the same narrow-patch class as F-44.

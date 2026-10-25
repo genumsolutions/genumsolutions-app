@@ -893,7 +893,7 @@ describe("fleet mode-cycle order (roboCarCatalog REMOTE_MODE_ORDER)", () => {
 // D6 / F-66 (U-68): the car broadcasts the saved-router registry as its own
 // `NETW;` line after every STATE, on EVERY transport. Before this branch
 // existed the line matched nothing, so over Bluetooth the app fell back to a
-// stale local mirror - the router feature existed on WiFi only.
+// the router feature existed on WiFi only (historical note)
 describe("parseTelemetryLine - the NETW saved-router line (all transports)", () => {
   it("parses the registry, own AP first, names only", () => {
     const t = parseTelemetryLine("NETW;4WD4MCar_WiFi;HomeNet;OfficeNet");

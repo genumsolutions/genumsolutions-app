@@ -263,7 +263,7 @@ describe("P5 — useControlHub adopts and exposes the car's verdict", () => {
   it("the verdict is NEVER persisted as a stored preference", () => {
     // It is a LIVE fact mirrored from the car's latched verdict; the car
     // re-broadcasts it on every line, so persisting it would resurrect a
-    // stale refusal after the car had already moved on (the F-85 shape,
+    // refusal after the car had already moved on (the F-85 shape,
     // borrowed one field left). The three transport toggles on the SAME
     // adoption block persist because they are store-owned; this one is not.
     expect(hub).not.toMatch(/persistPrefsRef\.current\?\.\(\{[^}]*linkCap/);

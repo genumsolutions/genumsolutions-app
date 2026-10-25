@@ -295,7 +295,7 @@ export class SppService {
     // Bugfix (connect-button dead until restart): a previous failed attempt
     // could leave connectingAddress pointing at this same device, which made
     // the guard above silently swallow every future connect() call. Clear the
-    // stale marker (and any dead socket) before dialing.
+    // stale marker before dialing.
     if (this.connectingAddress && this.connectingAddress !== address) {
       // A different connect is somehow in flight — neutralise it the same way
       // the timeout path would, instead of queuing behind a zombie.

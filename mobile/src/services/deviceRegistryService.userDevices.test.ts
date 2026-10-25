@@ -2,7 +2,7 @@
 // deviceRegistryService.userDevices tests — the two garage ACTIONS that
 // are not renames: the favourite flag and the row-level delete.
 //
-// Both existed as dead ends before U-95 Phase 4a:
+// Both existed before U-95 Phase 4a:
 //   • `is_favourite` was SELECTed into UserDevice and read nowhere else —
 //     a column nobody could ever set;
 //   • the garage card could rename a row but never unlink one, so "my
