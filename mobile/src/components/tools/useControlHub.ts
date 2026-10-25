@@ -1050,8 +1050,9 @@ export function useControlHub(routeCategory?: string) {
         setUseJoystickState(merged.prefs.useJoystick);
       if (merged.prefs.joystickLayout)
         setJoystickLayoutId(merged.prefs.joystickLayout);
-      if (merged.prefs.autoJoinRouter != null)
-        setAutoJoinRouterState(merged.prefs.autoJoinRouter);
+      // Auto-join router is always OFF — user must press Connect/Reconnect.
+      // Do not restore from profile (U-120 Phase C).
+      setAutoJoinRouterState(false);
       // P8: the user's "Car network" answer restores with the profile too —
       // a profile that forgot it would demote the manual override to a
       // once-per-session entry (F-91 says the override must PERSIST and win).
@@ -1065,13 +1066,14 @@ export function useControlHub(routeCategory?: string) {
         setCarSsidAnswerState(merged.prefs.carSsidAnswer || null);
       else if (merged.prefs.carSsidAnswer === null) setCarSsidAnswerState(null);
       // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
-      // toggle mirror too; restore it so the panel agrees with car truth.
+      // toggle mirror too; restore the Wi-Fi and Bluetooth toggles only —
+      // boot auto-join is forced OFF (U-120 Phase C).
       if (typeof merged.prefs.wifiEnabled === "boolean")
         setWifiEnabled(merged.prefs.wifiEnabled);
       if (typeof merged.prefs.btEnabled === "boolean")
         setBtEnabled(merged.prefs.btEnabled);
-      if (typeof merged.prefs.bootAutojoin === "boolean")
-        setBootAutojoin(merged.prefs.bootAutojoin);
+      // boot auto-join is always OFF — no automatic joining on restart.
+      setBootAutojoin(false);
       // U-124 (owner item ⑧): restore the connection method the user chose on
       // this device — the radio a connect (BT or Wi-Fi) is raised through. The
       // default (bluetooth) is the right pick for a first connect on this
