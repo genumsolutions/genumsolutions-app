@@ -271,8 +271,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const routeCategory = route.params?.category;
   const hub = useControlHub(routeCategory);
   const { width, height, isLandscape } = useViewport();
-  const insets = useSafeAreaInsets();
-  // ── 2026-10-24 (owner: "omit the space of the phone on the top where the
+  const insets = useSafeAreaInsets(); // ── 2026-10-24 (owner: "omit the space of the phone on the top where the
   // camera is situated as the black color by default and only use the
   // remaining space" + "the phone's status bar is missing on the top, show
   // that too in the remote screen").
@@ -308,9 +307,6 @@ export function RemoteControlScreen({ navigation }: Props) {
   // is used. Where the build is not edge-to-edge (`insets.top === 0`) the
   // status bar lives above the window: the same black is applied there at
   // runtime, so the strip looks the same either way.
-  // 2026-10-24: `setThemeMode` was destructured here and never used — the
-  // theme switch lives on the Menu screen (MenuScreen.tsx). Only the current
-  // mode is read (the chrome slider's dark-aware colours).
   const { themeMode } = useApp();
 
   const {
