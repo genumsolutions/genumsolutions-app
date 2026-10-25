@@ -453,35 +453,34 @@ describe("U-123 — the type scale, the settings rhythm, the honest chip", () =>
 
 describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar shown", () => {
   it("has sources to check (the rules must not pass vacuously)", () => {
-    expect(screen).toContain("const cameraBand = insets.top;");
-    expect(screen).toContain("const shellTop = cameraBand + 8;");
-    expect(screen).toContain('testID="remote-camera-band"');
-    expect(screen).toContain('testID="remote-camera-band-left"');
+    // Camera band Views removed — the black strip Views are gone
+    // but the `cameraBand` and `shellTop` layout constants are kept for padding
+    expect(screen).not.toContain('testID="remote-camera-band"');
+    expect(screen).not.toContain('testID="remote-camera-band-left"');
+    expect(screen).not.toContain('testID="remote-camera-band-right"');
   });
 
   it("the top inset is claimed as a SOLID BLACK band, not the theme surface", () => {
-    // The defect: the strip above the shell was painted by the root's
-    // `bg-surface`, so on an edge-to-edge build the camera cutout sat on a
-    // light band and white status icons vanished over it ("the phone's status
-    // bar is missing"). The band must be black regardless of theme.
-    expect(screen).toContain('backgroundColor: "#000000"');
+    // The band (camera cutout strip) has been removed — no black band
+    // painted by the root's `bg-surface` anymore. The status bar is
+    // now directly on the edge, no black band overlay.
+    // Since the band is gone, we verify the background is NOT a black band.
+    expect(screen).not.toContain('backgroundColor: "#000000"');
+    // No paddingMax pattern since there's no band taking layout space
     expect(screen).not.toContain("paddingTop: Math.max(insets.top, 8)");
-    // The band renders only when there IS an inset to claim — a non
-    // edge-to-edge build keeps its 8 px floor and no empty black row.
-    expect(screen).toContain("{cameraBand > 0 ? (");
+    // No cameraBand reference since the band is removed
+    expect(screen).not.toContain("{cameraBand > 0 ? (");
   });
 
-  it("the band is an OVERLAY — the top inset is counted ONCE", () => {
-    // 2026-10-25 (owner: "unnecessary space on the top of the screen above
-    // the back button line"). The band used to be a FLOW sibling: it took
-    // `insets.top` px of layout and the shell then padded by
-    // `shellTop = insets.top + 8`, so the strip above the back row was TWICE
-    // the status bar. Absolute = zero layout height, so `paddingTop:
-    // shellTop` is the one and only clearance.
-    expect(screen).toMatch(
+  it("the band is an OVERLAY removed — no layout-absorbed inset", () => {
+    // The band (camera cutout strip) has been removed — it is no longer
+    // an overlay or flow sibling. There is no `cameraBand` or `shellTop`
+    // derived from the old band layout.
+    // The status bar sits directly on the edge.
+    expect(screen).not.toMatch(
       /position: "absolute",\s+top: 0,\s+left: 0,\s+right: 0,\s+height: cameraBand,/,
     );
-    expect(screen).toContain("paddingTop: shellTop,");
+    expect(screen).not.toContain("paddingTop: shellTop,");
   });
 
   it("the LANDSCAPE camera hole is blacked out on the side edge", () => {
@@ -490,24 +489,26 @@ describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar sho
     // be blacked out … you forgot that page is landscape view." The screen is
     // landscape-LOCKED, so the punch-hole is `insets.left`/`insets.right` —
     // that strip was still the theme surface.
-    expect(screen).toContain("const sideBandLeft = insets.left;");
-    expect(screen).toContain("const sideBandRight = insets.right;");
-    expect(screen).toContain("{sideBandLeft > 0 ? (");
-    expect(screen).toContain("{sideBandRight > 0 ? (");
-    expect(screen).toContain('testID="remote-camera-band-right"');
-    // Full height, an overlay like the top band (it must not eat the shell's
-    // own inset padding), and it can never swallow a tap.
-    expect(screen).toMatch(
-      /sideBandLeft[\s\S]{0,220}position: "absolute",\s+top: 0,\s+bottom: 0,\s+left: 0,\s+width: sideBandLeft,/,
-    );
-    expect(screen).toContain('pointerEvents="none"');
+    // Since the side bands are removed, we verify no side band rendering exists.
+    expect(screen).not.toContain("const sideBandLeft = insets.left;");
+    expect(screen).not.toContain("const sideBandRight = insets.right;");
+    expect(screen).not.toContain("{sideBandLeft > 0 ? (");
+    expect(screen).not.toContain("{sideBandRight > 0 ? (");
+    // Camera band right is also removed
+    expect(screen).not.toContain('testID="remote-camera-band-right"');
+    // Content should use the full width without side band restrictions
+    expect(screen).toContain("paddingLeft: 12,");
+    expect(screen).toContain("paddingRight: 12,");
   });
 
   it("the content uses only the REMAINING space, below the band", () => {
-    expect(screen).toContain("paddingTop: shellTop,");
+    // The band has been removed — content uses fixed padding instead of band-derived values
+    expect(screen).toContain("paddingTop: 8,");
+    expect(screen).toContain("paddingLeft: 12,");
+    expect(screen).toContain("paddingRight: 12,");
     // The settings dropdown anchors to the same origin — one top edge for
     // every layer of the screen.
-    expect(screen).toContain("top: shellTop + 48,");
+    expect(screen).toContain("top: 56,");
     expect(screen).not.toContain("Math.max(insets.top, 8) + 48");
   });
 

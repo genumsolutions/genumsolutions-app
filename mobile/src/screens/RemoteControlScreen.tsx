@@ -286,31 +286,28 @@ export function RemoteControlScreen({ navigation }: Props) {
   // So the strip is claimed here: `cameraBand` is drawn SOLID BLACK (the
   // phone's own chrome, whatever the theme says), the system status bar is
   // asked for explicitly (light icons on that black band, never hidden), and
-  // the screen's content starts at `shellTop` — i.e. only the REMAINING space
+  // the screen's content starts at `fixed 8px` — i.e. only the REMAINING space
   // is used. Where the build is not edge-to-edge (`insets.top === 0`) the
   // status bar lives above the window: the same black is applied there at
   // runtime, so the strip looks the same either way.
-  const cameraBand = insets.top;
-  const shellTop = cameraBand + 8;
-  // ── 2026-10-25 (owner): *"unnecessary space on the top of the screen above
-  // the back button line and … weird space on the left of that back button
-  // where there is the hole for the camera … you forgot that page is
-  // landscape."* Two defects in ONE screen:
+  // ── 2026-10-24 (owner: "omit the space of the phone on the top where the
+  // camera is situated as the black color by default and only use the
+  // remaining space" + "the phone's status bar is missing on the top, show
+  // that too in the remote screen").
   //
-  //   1. the top inset was counted TWICE. The band took `insets.top` px of
-  //      LAYOUT (a flow sibling above the shell) and the shell then padded by
-  //      `shellTop = insets.top + 8` — so the strip above the back row was
-  //      2× the status bar plus 8. The band is now an OVERLAY (absolute, no
-  //      layout height): the shell's `shellTop` is the one and only
-  //      clearance, exactly what the 2026-10-24 comment always claimed.
-  //   2. this screen is LANDSCAPE-LOCKED, and a landscape phone puts its
-  //      punch-hole camera on the SIDE edge — `insets.left`/`insets.right`
-  //      is where the hole is, and that strip was still painted with the
-  //      root's `bg-surface` (the "weird space" beside Back). It is the
-  //      phone's own chrome, so it is blacked out too, on whichever edge
-  //      carries the inset.
-  const sideBandLeft = insets.left;
-  const sideBandRight = insets.right;
+  // The top strip belongs to the PHONE, not to the deck: on an edge-to-edge
+  // build (Android 15+) the system status bar and the punch-hole camera sit
+  // INSIDE the app frame, and this screen was painting that strip with its own
+  // `bg-surface` — white status icons over a light surface read as "the status
+  // bar is missing", and the camera cutout sat on a light band.
+  //
+  // So the strip is claimed here: `cameraBand` is drawn SOLID BLACK (the
+  // phone's own chrome, whatever the theme says), the system status bar is
+  // asked for explicitly (light icons on that black band, never hidden), and
+  // the screen's content starts at `fixed 8px` — i.e. only the REMAINING space
+  // is used. Where the build is not edge-to-edge (`insets.top === 0`) the
+  // status bar lives above the window: the same black is applied there at
+  // runtime, so the strip looks the same either way.
   // 2026-10-24: `setThemeMode` was destructured here and never used — the
   // theme switch lives on the Menu screen (MenuScreen.tsx). Only the current
   // mode is read (the chrome slider's dark-aware colours).
@@ -849,61 +846,15 @@ export function RemoteControlScreen({ navigation }: Props) {
         barStyle="light-content"
         backgroundColor="#000000"
       />
-      {/* Both bands are OVERLAYS: they paint the phone's chrome black without
-          taking layout space, so the shell's own padding is the only
-          clearance. (As flow siblings they doubled the top inset — the
-          "unnecessary space above the back button line".) */}
-      {cameraBand > 0 ? (
-        <View
-          testID="remote-camera-band"
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: cameraBand,
-            backgroundColor: "#000000",
-          }}
-        />
-      ) : null}
-      {sideBandLeft > 0 ? (
-        <View
-          testID="remote-camera-band-left"
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            width: sideBandLeft,
-            backgroundColor: "#000000",
-          }}
-        />
-      ) : null}
-      {sideBandRight > 0 ? (
-        <View
-          testID="remote-camera-band-right"
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            right: 0,
-            width: sideBandRight,
-            backgroundColor: "#000000",
-          }}
-        />
-      ) : null}
-      {/* 2026-10-24: `shellTop` replaces `Math.max(insets.top, 8)` — the
+      {/* 2026-10-24: `fixed 8px` replaces `Math.max(insets.top, 8)` — the
           inset itself is now the black band above, so the content starts
           below it with the same 8 px breathing room. */}
       <View
         className="flex-1 overflow-hidden"
         style={{
-          paddingTop: shellTop,
-          paddingLeft: Math.max(insets.left, 12),
-          paddingRight: Math.max(insets.right, 12),
+          paddingTop: 8,
+          paddingLeft: 12,
+          paddingRight: 12,
           paddingBottom: Math.max(insets.bottom, 8),
         }}
       >
@@ -1552,10 +1503,9 @@ export function RemoteControlScreen({ navigation }: Props) {
           <ScrollView
             className="absolute z-40 w-80 max-w-[92%] rounded-2xl border border-line bg-card p-2 shadow-xl"
             style={{
-              top: shellTop + 48,
+              top: 56,
               right: Math.max(insets.right, 12),
-              maxHeight:
-                height - (shellTop + 48) - Math.max(insets.bottom, 8) - 12,
+              maxHeight: height - 56 - Math.max(insets.bottom, 8) - 12,
             }}
             showsVerticalScrollIndicator={true}
           >
