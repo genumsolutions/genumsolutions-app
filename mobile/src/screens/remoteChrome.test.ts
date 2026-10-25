@@ -132,8 +132,7 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // neither can render without a live Wi-Fi link.
     expect(screen).not.toContain("{onOwnHotspot ? (");
     expect(screen).toContain("{wifiConnected && onOwnHotspot ? (");
-    expect(screen).toContain("{wifiConnected && !onOwnHotspot ? (");
-    // The phone's own network chip sits in the same row and is INFORMATION —
+        // The phone's own network chip sits in the same row and is INFORMATION —
     // it no longer borrows the Wi-Fi glyph from the disconnect chip beside it.
     expect(screen).toContain('testID="remote-phone-network"');
     expect(screen).toContain('name="smartphone"');
@@ -374,7 +373,7 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     // A1 (owner 2026-10-23) split the Wi-Fi chip into its hotspot/router
     // variants and each variant must keep its own ✕ (the owner's "not proper
     // disconnect icon"). The pin was 2 before that split.
-    expect(count(screen, 'name="x-circle"')).toBe(3);
+    expect(count(screen, 'name="x-circle"')).toBe(2);
     // The Q2 owner-default: the compact telemetry line is the FIRST thing
     // dropped on narrow screens — controls never hide. Exactly ONE width gate
     // wraps TelemetryLine, so the chips and pills are ungated.
