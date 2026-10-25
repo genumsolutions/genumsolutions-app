@@ -212,53 +212,9 @@ export type ConnectOutcome =
 //
 // Shared, not per-instance: the Control Panel and the Remote window each run
 // a hub, and one phone has one network — so one sweep budget keeps two open
-// windows from firing two sweeps at the same moment.
-let phoneNetDiscoverInflight = false;
-let phoneNetDiscoverAt = 0;
-const PHONE_NET_DISCOVER_COOLDOWN_MS = 10000;
-// F-65 (2026-10-13): a SINGLE sweep after the link drops is not enough when
-// the car is mid-reboot — a brownout-car is invisible for a whole boot round
-// (~15-30 s), so one sweep at that moment reports "not found" even though the
-// car is about to come back. When a sweep fails AND the Wi-Fi relationship
-// still exists (and the user has not closed the link), re-arm ONE shared,
-// capped sweep so the app really does "keep looking" — up to
-// PHONE_NET_DISCOVER_MAX_RETRIES more times, RETRY_MS apart — then stops and
-// waits for the user. Shared counter + timer, not per-instance: the Control
-// Panel and the Remote window run two hubs, and one phone must never arm two
-// sweeps at once.
-let phoneNetRetryTimer: ReturnType<typeof setTimeout> | null = null;
-let phoneNetRetryAttempts = 0;
-const PHONE_NET_DISCOVER_RETRY_MS = 15000; // must exceed the 10 s cooldown
-const PHONE_NET_DISCOVER_MAX_RETRIES = 6; // ≈ 90 s of "keep looking"
-
-/** A successful link, or a user action, resets the re-arm budget and cancels
- * any pending re-sweep (the app is no longer waiting). */
-function resetPhoneNetDiscoverBudget() {
-  phoneNetRetryAttempts = 0;
-  if (phoneNetRetryTimer !== null) {
-    clearTimeout(phoneNetRetryTimer);
-    phoneNetRetryTimer = null;
-  }
-}
-
-/**
- * Arm the next re-sweep, if the budget allows. `run` is invoked ONCE after
- * RETRY_MS; the arming flag is released then, so the NEXT failed sweep can arm
- * again. Idempotent across hub instances (one pending re-sweep per phone).
- */
-function armPhoneNetDiscoverRetry(run: () => void) {
-  if (phoneNetRetryTimer !== null) return; // already armed (any instance)
-  if (phoneNetRetryAttempts >= PHONE_NET_DISCOVER_MAX_RETRIES) return;
-  phoneNetRetryAttempts += 1;
-  phoneNetRetryTimer = setTimeout(() => {
-    phoneNetRetryTimer = null;
-    try {
-      run();
-    } catch {
-      /* a re-sweep that throws must never take the app down */
-    }
-  }, PHONE_NET_DISCOVER_RETRY_MS);
-}
+// Auto-reconnect on network change has been removed per U-120 Phase C.
+// The phone's network is observed for display purposes only; no automatic
+// re-connection occurs. The user must explicitly tap Connect to re-establish a link.}
 
 /** A stable key for "which network is this phone on right now". */
 function phoneNetworkKey(state: NetInfoState): string {
@@ -777,12 +733,6 @@ export function useControlHub(routeCategory?: string) {
   // W5: refs to track previous telemetry IP/SSID for network switch detection
   const prevIpRef = useRef<string | undefined>(undefined);
   const prevSsidRef = useRef<string | undefined>(undefined);
-
-  // Set once autoDiscoverAndConnect is defined further down, and read by the
-  // status subscription above it (which is registered with empty deps, so it
-  // cannot close over the callback directly). See the "reconnection failed"
-  // branch of offWifiStatus.
-  const autoDiscoverRef = useRef<(() => Promise<void>) | null>(null);
 
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES);
@@ -2025,9 +1975,7 @@ export function useControlHub(routeCategory?: string) {
           setError(null);
           break;
         case "connected":
-          // A working link again: cancel any pending re-sweep and refresh the
-          // "keep looking" budget for the next breakdown (F-65).
-          resetPhoneNetDiscoverBudget();
+          // A working link again: cancel any pending re-sweep for the next breakdown.
           setConnected(true);
           setWifiConnected(true);
           setConnecting(false);
@@ -2101,7 +2049,7 @@ export function useControlHub(routeCategory?: string) {
           // re-dialing a corpse. The sweep already has inflight/cooldown/
           // manual-close guards, so this cannot hammer the network or
           // reopen a link the user closed.
-          autoDiscoverRef.current?.();
+          // auto-discover removed per U-120 Phase C — user must tap Connect.
           break;
         default:
           break;
@@ -2607,98 +2555,9 @@ export function useControlHub(routeCategory?: string) {
   // new Wi-Fi while no car link is up (and the link was not closed by the
   // user), run the SAME bounded discovery and reconnect by itself.
   //
-  // Narrow on purpose: it never dials an address the car did not report
-  // (a discovery hit IS the car's own /status — D4), it never fires while a
-  // link (Wi-Fi or Bluetooth) is live, and it never reopens a link the user
-  // closed.
-  const autoDiscoverAndConnect = useCallback(async (): Promise<void> => {
-    // A re-armed sweep may fire after this hub unmounted; nothing to update.
-    if (!mountedRef.current) return;
-    if (wifiService.isConnected || wifiService.isConnecting) return;
-    // A live Bluetooth car link must never be torn down by a background
-    // sweep — auto-discovery only follows the Wi-Fi method.
-    if (sppService.isConnected || bleService.isConnected) return;
-    // The user closed the link themselves: respect it, never surprise-reopen.
-    if (manualCloseRef.current) return;
-    // Only when this phone actually has a Wi-Fi relationship with this car.
-    const wifiInterest =
-      savedPrefsRef.current?.lastWifiUrl != null ||
-      savedPrefsRef.current?.lastWifiSsid != null ||
-      savedNetworksRef.current.length > 0 ||
-      lastRouterIpRef.current != null;
-    if (!wifiInterest) return;
-    // Shared budget across hub instances + a floor so a flapping phone cannot
-    // hammer the network.
-    if (phoneNetDiscoverInflight) return;
-    if (Date.now() - phoneNetDiscoverAt < PHONE_NET_DISCOVER_COOLDOWN_MS)
-      return;
-
-    phoneNetDiscoverInflight = true;
-    try {
-      const looked = await findCarForUser();
-      if (looked.ok && looked.host) {
-        try {
-          await wifiService.connect(CAR_WS_URL(looked.host));
-          const answered = await wifiService.waitForCarAnswer();
-          if (answered && mountedRef.current) {
-            // Found + linked: cancel any pending re-sweep and give the next
-            // breakdown a FRESH "keep looking" budget.
-            resetPhoneNetDiscoverBudget();
-            setWifiConnected(true);
-            setLinkVerified(true);
-            setError(null);
-            setWifiUrl(CAR_WS_URL(looked.host));
-            showConnectionMessage(
-              `Phone joined a new network — found the car automatically at ${looked.host}.`,
-              "success",
-            );
-            setTimeout(() => {
-              wifiService.requestState().catch(() => {});
-            }, 200);
-            return;
-          }
-        } catch {
-          /* fall through to the honest message below */
-        }
-      }
-      // Nothing on this network (or it did not answer): say so plainly, so a
-      // silent empty screen never reads as "the app is broken".
-      if (!wifiService.isConnected) {
-        setError(
-          `The phone joined a new Wi-Fi network, but this car was not found on it. ` +
-            `Join the car's hotspot (${OWN_AP_NAMES.join(" / ")}) or the car's router — the app keeps looking.`,
-        );
-        // F-65: "keeps looking" is now literally true, within a bound. The car
-        // may be mid-reboot (brownout/reset) and invisible for a whole boot
-        // round; re-arm a capped sweep so it is found the moment it is back.
-        armPhoneNetDiscoverRetry(() => {
-          // The user closed the link while we waited: cancel the budget and
-          // never surprise-reopen.
-          if (manualCloseRef.current) {
-            resetPhoneNetDiscoverBudget();
-            return;
-          }
-          void autoDiscoverRef.current?.();
-        });
-      }
-    } finally {
-      phoneNetDiscoverInflight = false;
-      phoneNetDiscoverAt = Date.now();
-    }
-  }, [findCarForUser, showConnectionMessage]);
-
-  // Publish it for the status subscription registered near the top of the hook.
-  // That subscription is created with empty deps (it must not tear down and
-  // re-create on every render), so it reads this ref instead of closing over
-  // the callback. An effect — not a render-phase assignment — so a Strict-Mode
-  // double render never writes a stale value.
-  useEffect(() => {
-    autoDiscoverRef.current = autoDiscoverAndConnect;
-  }, [autoDiscoverAndConnect]);
-
-  // The phone-network watcher itself. The FIRST observation only records where
-  // we are (a mount must never trigger a sweep); a genuine move onto another
-  // Wi-Fi network re-finds the car.
+  // The phone-network watcher observes the phone's network for display purposes
+  // only — no longer auto-reconnects. Network changes are tracked but do not
+  // trigger any dial or connect action; the user must use the Connect button.
   //
   // U-124 ②: publishing the label is pulled out into its own callback so the
   // permission path below can re-read NetInfo the moment the OS starts
@@ -2743,11 +2602,12 @@ export function useControlHub(routeCategory?: string) {
         phoneNetworkKeyRef.current = `down:${state.type ?? "none"}`;
         return;
       }
-      // A real move (or a rejoin after a drop): fresh "keep looking" budget.
-      resetPhoneNetDiscoverBudget();
-      void autoDiscoverAndConnect();
+      // NO AUTO-RECONNECT: previously resetPhoneNetDiscoverBudget() and
+      // void autoDiscoverAndConnect() were called here. Now the app simply
+      // observes the network change without re-dialing. The user must use
+      // the Connect button to re-establish a link.
     });
-  }, [autoDiscoverAndConnect, publishPhoneNetState]);
+  }, []);
 
   // U-124 ② (owner 2026-10-24): *"shows the wifi. name hidden, which is
   // meaningless and should show the wifi network the app is connected to, at
