@@ -846,13 +846,13 @@ export function RemoteControlScreen({ navigation }: Props) {
         barStyle="light-content"
         backgroundColor="#000000"
       />
-      {/* 2026-10-24: `fixed 8px` replaces `Math.max(insets.top, 8)` — the
+      {/* 2026-10-24: `Math.max(insets.top, 8)` replaces the fixed 8px — the
           inset itself is now the black band above, so the content starts
           below it with the same 8 px breathing room. */}
       <View
         className="flex-1 overflow-hidden"
         style={{
-          paddingTop: 8,
+          paddingTop: Math.max(insets.top, 8),
           paddingLeft: 12,
           paddingRight: 12,
           paddingBottom: Math.max(insets.bottom, 8),
