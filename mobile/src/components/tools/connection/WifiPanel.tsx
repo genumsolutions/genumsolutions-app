@@ -519,13 +519,6 @@ export function WifiPanel({
                       password.
                     </Text>
                   ) : null}
-
-                  {/* U-124 ⑮: the field label rendered TWICE (two identical
-                      Text blocks stacked) and both at 13 px black caps — a
-                      label tier louder than the form's own title. One label,
-                      on the 10 px micro-label tier the rest of the panel
-                      uses; the input itself stays 16 px (native keyboard
-                      scaling). */}
                   <Text className="mt-5 text-[10px] font-black uppercase tracking-widest text-muted">
                     Network name
                   </Text>
