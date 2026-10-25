@@ -374,7 +374,7 @@ export function useControlHub(routeCategory?: string) {
   // migration is needed — a stale row is simply ignored.
   const [pageOn, setPageOnState] = useState<boolean | null>(null);
   const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
-  const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
+  const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(false);
   // P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict, as the
   // car last said it. `null` = the car has not said (pre-1.3.13 firmware).
   // This is a LIVE fact, not a stored preference — it mirrors the car's latched
@@ -579,10 +579,9 @@ export function useControlHub(routeCategory?: string) {
   // JSON `id`). STABLE profile identity — beats the BT MAC / WiFi identity
   // in the memory key, so a car keeps one profile across renames and links.
   const carFwIdRef = useRef<string | null>(null);
-  // Connections-Hub: per-car auto-join toggle (smart-link). Default on.
-  // P7 / issue 8: renamed like useJoystick — the public setter returned
-  // below persists through the guarded writer.
-  const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(true);
+  // Connections-Hub: per-car auto-join toggle (smart-link). Default off —
+  // user must press Connect/Reconnect. Auto-join removed per U-120 Phase C.
+  const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(false);
   // One write per join guard for the wifi-history recorder.
   const wifiJoinKeyRef = useRef<string>("");
   // Connections-Hub (smart-link): the car-side scan result (ROUTERS;SCAN),
