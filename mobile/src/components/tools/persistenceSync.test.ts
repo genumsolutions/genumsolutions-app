@@ -208,7 +208,7 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
       "persistPrefsRef.current?.({ autoJoinRouter: value });",
     );
     expect(code).toContain(
-      "const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(true);",
+      "const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(false);",
     );
     const retAt = code.indexOf("    setAutoJoinRouter,");
     expect(retAt).toBeGreaterThan(at);
