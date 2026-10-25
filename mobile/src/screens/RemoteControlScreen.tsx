@@ -1053,26 +1053,16 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Feather name="x-circle" size={14} color="#ef4444" />
             </Pressable>
           ) : null}
-          {wifiConnected && !onOwnHotspot ? (
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                void handleWifiDisconnect();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Disconnect Wi-Fi"
-              testID="remote-disconnect-wifi"
-              hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
-            >
-              <Feather name="wifi" size={13} color="#64748b" />
-              <Text className="text-[11px] font-bold text-muted">Wi-Fi</Text>
-              <Feather name="x-circle" size={14} color="#ef4444" />
-            </Pressable>
-          ) : null}
+          /* U-124 ⑥: per owner, at most ONE Wi-Fi chip renders — the hotspot
+              variant. The non-hotspot variant is no longer shown as a disconnect
+              chip since the car's own hotspot is the only case where a Wi-Fi
+              disconnect action is meaningful. The space previously used for the
+              second Wi-Fi chip is now available for other screen elements. */
+          : null}
           {/* Q2 default (owner): the compact telemetry line is the FIRST
               thing dropped when the row gets tight — the disconnect chips and
               the tab pills are controls and always fit. The same readings are
+              on the Telemetry tab and the readout column. */
               on the Telemetry tab and the readout column. */}
           {isRobocar && width >= MERGED_ROW_TELEMETRY_MIN_PX ? (
             <TelemetryLine {...driveTelemetryArgs} />
