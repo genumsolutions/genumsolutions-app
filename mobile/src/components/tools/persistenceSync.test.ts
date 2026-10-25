@@ -111,7 +111,7 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
     // The registry is edited on other surfaces (a second phone, ROUTERS;ADD
     // / DEL answers). The adopt block feeds live state; the profile must
     // follow, change-guarded on the same mirror, or a restart resurrects the
-    // stale list from disk.
+
     const at = code.indexOf("const incomingRouters =");
     expect(at).toBeGreaterThan(0);
     const block = slice(at, 1000);

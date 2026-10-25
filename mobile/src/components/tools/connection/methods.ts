@@ -1,6 +1,6 @@
 // =====================================================================
 // connection/methods — THE TWO METHODS (U-68 rebuild, 2026-10-02;
-// Internet removed 2026-10-14 by owner directive).
+// Note: quote predates removal
 //
 // Owner directive, verbatim: *"please keep only these method for now,
 // Bluwtooth, Wifi(LAN), Internet"* and *"offer bluetooh comminication with
@@ -11,10 +11,9 @@
 //
 // NOTE: that quote PREDATES the removal below — it names Internet because at
 // the time it was still offered (honestly, as unavailable). On 2026-10-14 the
-// owner dropped the Internet/remote-link ("control from anywhere") method
-// entirely; it is gone from this model and will be rebuilt from scratch later.
-// The quote is kept as the historical record of the original brief, not as the
-// current requirement.
+// owner dropped the Internet/remote-link method entirely; it is gone from this
+// model and will be rebuilt from scratch later. The quote is kept as the historical
+// record of the original brief, not as the current requirement.
 //
 // This module is the single declaration of what can be connected to. It is
 // pure data + pure predicates: no I/O, no React, no services. A screen may

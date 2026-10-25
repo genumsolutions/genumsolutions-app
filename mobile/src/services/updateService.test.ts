@@ -130,7 +130,7 @@ describe("downloadAndInstall (R-20a cache-target behavior)", () => {
     const [first, second] = __instances;
     expect(second).not.toBe(first); // a fresh File is constructed
     expect(first.deleted).toBe(false); // first run: nothing stale to delete
-    expect(second.deleted).toBe(true); // stale file removed
+    expect(second.deleted).toBe(true);
     // THE order contract: delete strictly before the fresh download.
     expect(__events).toEqual(["download", "delete", "download"]);
     expect(File.downloadFileAsync).toHaveBeenCalledTimes(2);
