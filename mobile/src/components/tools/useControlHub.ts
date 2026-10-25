@@ -2768,7 +2768,8 @@ export function useControlHub(routeCategory?: string) {
   useEffect(() => {
     if (ssidPermissionAskedRef.current) return;
     if (phoneSsid) return;
-    if (!phoneNetworkLabel?.startsWith("Wi-Fi")) return;
+    if (!phoneNetworkLabel?.startsWith("Wi-Fi") && phoneNetworkLabel !== null)
+      return;
     ssidPermissionAskedRef.current = true;
     void (async () => {
       try {
