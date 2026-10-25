@@ -909,18 +909,18 @@ export function useControlHub(routeCategory?: string) {
           if (resolved.trim != null) setTrim(resolved.trim);
           if (resolved.useJoystick != null)
             setUseJoystickState(resolved.useJoystick);
-          if (resolved.autoJoinRouter != null)
-            setAutoJoinRouterState(resolved.autoJoinRouter);
+          // Auto-join router is always OFF — user must press Connect/Reconnect.
+          // Do not restore from profile (U-120 Phase C).
+          setAutoJoinRouterState(false);
+          // Boot auto-join is always OFF — no automatic joining on restart.
+          setBootAutojoin(false);
           // U-105 (1.3.5): restore the per-car transport toggles (Wi-Fi /
-          // Bluetooth / boot auto-join) when their profile is resolved, so the
-          // panel shows car truth before any link is brought up. `undefined`
+          // Bluetooth) when their profile is resolved, so the panel shows car truth before any link is brought up. `undefined`
           // (older firmware / never persisted) stays "don't know", never OFF.
           if (typeof resolved.wifiEnabled === "boolean")
             setWifiEnabled(resolved.wifiEnabled);
           if (typeof resolved.btEnabled === "boolean")
             setBtEnabled(resolved.btEnabled);
-          if (typeof resolved.bootAutojoin === "boolean")
-            setBootAutojoin(resolved.bootAutojoin);
           // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
           // (never the password â€” that lives only in flight + the car's NVS).
           if (resolved.lastWifiSsid)
