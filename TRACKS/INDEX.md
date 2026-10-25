@@ -1,6 +1,46 @@
 # genumsolutions-app TRACKS — app·website sync 2026-09-18
 
-> ✅ **2026-10-24 (latest) — U-123 SHIPPED (JS-only → same-version OTA 3.2.7/60;
+> ✅ **2026-10-25 (latest) — U-124 SHIPPED (JS-only → same-version OTA 3.2.7/60;
+> car half = ONE firmware line, FW **1.3.18**, UNFLASHED): the connect-outcome
+> fix, the re-measured chrome, and *"the ip is not hidden anywhere … fix these
+> when webpage is off"*. Items, as the source labels them: **①** the camera
+> band is claimed SOLID BLACK (the phone's status bar was disappearing into
+> the theme surface) + **⑤** the bar is asked for, light-on-black, never hidden
+> · **②** the phone's network is NAMED — the hub asks for the SSID's
+> `ACCESS_FINE_LOCATION` once, one writer publishes ssid+label+subnet, and the
+> formatter never prints a bare "name hidden" · **③** the tab strip
+> **re-measured** (`px-4 py-2`/12 px = 888 px of screen → `px-3 py-1.5`/11 px;
+> row ships at **791 px** with telemetry, gate stays 860) · **④** settings
+> `w-72` → `w-80` + the panel steps down to the 10 px tier (the longest label
+> was 215 px in 187 px of room) · **⑥** BOTH Wi-Fi chip variants now require
+> `wifiConnected` (no Wi-Fi disconnect offered on a Bluetooth-only link) ·
+> **⑦** the message strip gives back ~7 px of box, glyphs unchanged · **⑧**
+> the chosen radio only ever ADDS to the fan-out (Q3 pinned) · **⑨** the
+> car-network dropdown + the hub-derived same/different/unknown prompt · **⑩**
+> Connectivity's right pane is ONE `Car network` section, dimmed AND inert
+> with no link · **⑪** the broadcast-IP chip moves to the 12 px tier · **⑫**
+> `hub.carPageServing` was a never-written ref whose object read always-truthy
+> → now the OBJECT derived from `pageOn`, so the chip gate is finally
+> `linked && …` and the Connectivity **Control address** row hides too (car
+> twin = the white screen, `serveGhostPage`'s `Content-Length: 0`) · **⑮** one
+> `Network name` label, 10 px labels / 12 px title. Plus the connect-outcome
+> fix: `handleConnect`/`handleWifiConnect` return a `ConnectOutcome`, the
+> failure path clears the outbound state first, the panel renders the real
+> outcome, `DeviceConnectionScreen` awaits the WiFi handler — a failed connect
+> can no longer read as "Connected". **Note:** the source carries ①–⑫ and ⑮;
+> nothing carries **⑬/⑭** — confirm with the owner before calling the list
+> complete. Pins: `useControlHubConnectOutcome` (2) · `phoneNetwork` ② ·
+> `remoteChrome` ①+⑤ (4) / ④ (4) / issue 3 / items 5+6 / issue 10 ·
+> `feedbackSurface` ⑦ (2) · `carNetworkPicker` ⑨ ·
+> `connectivityResponsiveness` ⑩ (5) · `pageServingTruth` ⑫ (4) ·
+> `addFormType` ⑮ · `bothLinksDrive` ⑧. Gates: app tsc 0 · vitest
+> **934/934** (64 files) · prettier clean; car syntax 9/9 · contract 0
+> (new `page-state` ordering assert) · webpage-js PASS · mutate **138/138**
+> (M144 new). Device rows: `mobile/TESTING.md` **U-124-1..6** (unticked,
+> F-61) + car `DEVICE-TESTS.md` **U-124-⑫**. Session notes:
+> `TRACKS/SESSION-2026-10-25-U124.md` + car twin.
+
+> ✅ **2026-10-24 — U-123 SHIPPED (JS-only → same-version OTA 3.2.7/60;
 > car half = RUNSHEET records patch only): the storyboard/wireframe re-review's
 > six findings, one fix each.** **1** the storyboard §1 table's swallowed
 > `right (robocar)` row split back into its own row · **2** type scale made
