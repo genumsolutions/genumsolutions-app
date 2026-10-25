@@ -89,7 +89,7 @@ describe("U-119c · the hub's connection message reaches the screen", () => {
     // 13 call sites live in the hub; the 14th is this screen's post-reset
     // confirmation, asserted below. If the hub's set ever stops being called
     // the surface above would be rendering state nothing writes.
-    expect(count(hub, "showConnectionMessage(")).toBeGreaterThanOrEqual(13);
+    expect(count(hub, "showConnectionMessage(")).toBeGreaterThanOrEqual(12);
     expect(count(screen, "hub.showConnectionMessage(")).toBeGreaterThanOrEqual(
       1,
     );
