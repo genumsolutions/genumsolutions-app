@@ -38,7 +38,7 @@
       photograph it and report which one (this row exists because static math
       says it might not fit).
 
-## U-124 round — 2026-10-24: the connect-outcome fix (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = records patch only)
+## U-124 round — 2026-10-24/25: the connect-outcome fix, the re-measured chrome and the hidden IP (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FW **1.3.18**'s one-line ghost-page fix + records)
 
 > Owner: the connect layer fixed the fake-success defect — `handleConnect` and
 > `handleWifiConnect` now return `ConnectOutcome` instead of swallowing a
