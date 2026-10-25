@@ -161,8 +161,11 @@ describe("P8 — the watcher reacts to link down/up, not only SSID moves", () =>
     const watcherAt = hubCode.indexOf("phoneNetworkKey(state)");
     expect(watcherAt).toBeGreaterThan(0);
     const tail = hubCode.slice(watcherAt, watcherAt + 900);
-    expect(tail).toContain("resetPhoneNetDiscoverBudget();");
-    expect(tail).toContain("void autoDiscoverAndConnect();");
+    // Auto-reconnect removed per U-120 Phase C: the watcher now only observes
+    // the phone's network for display; no auto-dial occurs.
+    expect(tail).not.toContain("autoDiscoverAndConnect");
+    // The budget reset is no longer called on network change - user taps Connect instead
+    expect(tail).not.toContain("resetPhoneNetDiscoverBudget");
   });
 });
 

@@ -233,28 +233,35 @@ describe("2026-10-10 — a dropped link is noticed, and recovery re-finds the ca
     // inflight/cooldown/manual-close guards), so the "error" case hands off
     // to it. Note it is read through a ref: this subscription is created with
     // empty deps and cannot close over a callback defined further down.
+    // Auto-reconnect removed per U-120 Phase C: the error case no longer
+    // auto-dials; the user must tap Connect to re-establish.
     const cases = wifiStatusCases();
     const errored = cases.find(
       (c) => c.includes("setWifiConnected(false)") && c.includes("setError("),
     );
     expect(errored).toBeTruthy();
-    expect(errored).toContain("autoDiscoverRef.current?.()");
+    // Auto-discover removed: no auto-dial in error case
+    expect(errored).not.toContain("autoDiscoverRef.current?.()");
   });
 
   it("the ref is published by an effect, never by a render-phase write", () => {
     // A render-phase assignment would let a Strict-Mode double render publish
     // a stale callback; and the subscription above has empty deps, so it MUST
     // go through the ref rather than the callback.
+    // Auto-discover removed per U-120 Phase C: the ref is no longer wired.
+    // The watcher now only observes the phone's network for display purposes.
     const flat = code.replace(/\s+/g, " ");
-    expect(flat).toContain("autoDiscoverRef.current = autoDiscoverAndConnect;");
-    expect(flat).toContain("}, [autoDiscoverAndConnect]);");
-    // …and it must sit inside a useEffect, not run during render.
-    const at = flat.indexOf(
-      "autoDiscoverRef.current = autoDiscoverAndConnect;",
+    // The auto-discover assignment is no longer in the code
+    expect(flat).not.toContain(
+      "autoDiscoverRef.current = autoDiscoverAndConnect",
     );
-    const enclosing = flat.lastIndexOf("useEffect(", at);
-    expect(enclosing).toBeGreaterThanOrEqual(0);
-    expect(at - enclosing).toBeLessThan(200);
+    // The useEffect still exists but with empty deps, no auto-discover callback
+    expect(flat).not.toContain(
+      "autoDiscoverRef.current = autoDiscoverAndConnect",
+    );
+    // The ref declaration may exist but is not assigned a callback anymore
+    const autoDiscoverRefAt = flat.indexOf("autoDiscoverRef");
+    expect(autoDiscoverRefAt).toBe(-1);
   });
 });
 
