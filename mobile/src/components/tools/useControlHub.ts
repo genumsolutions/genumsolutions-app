@@ -293,19 +293,6 @@ function phoneSsidOf(state: NetInfoState): string | null {
   return ssid || null;
 }
 
-/** U-124 ② (owner 2026-10-24): the SUBNET of the network this phone sits on
-    (NetInfo `details.subnet`, e.g. "192.168.245.0/24"). Always reported where
-    the SSID is gated, and it is the half that decides reachability: the car's
-    own hotspot is a /24 no home router uses. */
-function phoneSubnetOf(state: NetInfoState): string | null {
-  if (state.type !== "wifi" || state.isConnected !== true) return null;
-  const details = state.details as unknown as
-    Record<string, unknown> | undefined;
-  const subnet =
-    typeof details?.["subnet"] === "string" ? details["subnet"].trim() : "";
-  return subnet || null;
-}
-
 export function useControlHub(routeCategory?: string) {
   // The `transports/` LinkManager registry is NOT wired here: the live
   // connection UI is the `connection/methods.ts` picker, and the hub's own
@@ -2722,14 +2709,15 @@ export function useControlHub(routeCategory?: string) {
     const ssid = phoneSsidOf(state);
     setPhoneSsid(ssid);
     // U-118: and keep the rendered label in step with it (same event, so the
-    // SSID and the label can never disagree). U-124 ②: the subnet rides along
-    // so a still-unnamed network is still NAMED (never "name hidden").
+    // SSID and the label can never disagree). 2026-10-25 (owner): the subnet
+    // that used to ride along as a stand-in name is GONE — a mask is not a
+    // name, and the chip on the Remote's first bar is there to NAME the
+    // network this phone is on.
     setPhoneNetworkLabel(
       formatPhoneNetwork({
         type: state.type ?? "",
         connected: state.isConnected === true,
         ssid,
-        subnet: phoneSubnetOf(state),
       }),
     );
   }, []);
@@ -2774,7 +2762,7 @@ export function useControlHub(routeCategory?: string) {
   // live and UNNAMED, request the permission ONCE and re-read NetInfo when it
   // is granted (the label then carries the real network name). A phone that
   // already answers is never prompted, a refusal is accepted silently (the
-  // subnet fallback keeps the row honest), and nothing here can block the
+  // chip says "Wi-Fi" until a name arrives), and nothing here can block the
   // screen.
   const ssidPermissionAskedRef = useRef(false);
   useEffect(() => {

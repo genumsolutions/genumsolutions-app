@@ -7,8 +7,11 @@
 > band is claimed SOLID BLACK (the phone's status bar was disappearing into
 > the theme surface) + **⑤** the bar is asked for, light-on-black, never hidden
 > · **②** the phone's network is NAMED — the hub asks for the SSID's
-> `ACCESS_FINE_LOCATION` once, one writer publishes ssid+label+subnet, and the
-> formatter never prints a bare "name hidden" · **③** the tab strip
+> `ACCESS_FINE_LOCATION` once, one writer publishes ssid+label, and the
+> formatter never prints "name hidden" — nor, since the owner's 2026-10-25
+> second ruling (*"the wifi subnet mask … is stupid remove that"*), a subnet
+> mask: an unnamed network says `Wi-Fi`, and the `subnet` field +
+> `phoneSubnetOf()` are deleted with it · **③** the tab strip
 > **re-measured** (`px-4 py-2`/12 px = 888 px of screen → `px-3 py-1.5`/11 px;
 > row ships at **791 px** with telemetry, gate stays 860) · **④** settings
 > `w-72` → `w-80` + the panel steps down to the 10 px tier (the longest label
@@ -39,6 +42,16 @@
 > (M144 new). Device rows: `mobile/TESTING.md` **U-124-1..6** (unticked,
 > F-61) + car `DEVICE-TESTS.md` **U-124-⑫**. Session notes:
 > `TRACKS/SESSION-2026-10-25-U124.md` + car twin.
+>
+> **2026-10-25 follow-up (same session):** the landscape screen's own chrome
+> fixed — the top inset was counted **TWICE** (the black band took layout
+> height *and* the shell padded by `insets.top + 8`), so the band is an
+> **overlay** now and `shellTop` is the single clearance (the owner's
+> "unnecessary space above the back button line"); and the punch-hole strip
+> beside Back — `insets.left`/`insets.right`, because this screen is
+> landscape-locked — was still the theme surface, so both edges are blacked out
+> (`remote-camera-band-left` / `-right`). Pins: `remoteChrome.test.ts`
+> "U-124 ①+⑤" +2 rules. Gates: tsc 0 · vitest (see the commit) · prettier clean.
 
 > ✅ **2026-10-24 — U-123 SHIPPED (JS-only → same-version OTA 3.2.7/60;
 > car half = RUNSHEET records patch only): the storyboard/wireframe re-review's

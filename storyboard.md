@@ -27,8 +27,10 @@ notch camera on the LEFT or RIGHT edge — not the top. The shell therefore
 pads from the safe-area insets on **all four sides**, never a fixed value:
 
 ```
-cameraBand = insets.top              (drawn SOLID BLACK — U-124 ①)
-shellTop   = cameraBand + 8          (content origin, replaces paddingTop)
+cameraBand = insets.top              (SOLID BLACK OVERLAY — U-124 ①, counted ONCE)
+shellTop   = cameraBand + 8          (the ONE top clearance — paddingTop)
+sideBands  = insets.left / insets.right   (SOLID BLACK OVERLAYS — the landscape
+              punch-hole strip, 2026-10-25)
 paddingBottom = max(insets.bottom, 8)   paddingLeft  = max(insets.left,  12)
                                        paddingRight = max(insets.right, 12)
 ```
@@ -40,6 +42,15 @@ reverts on leaving), and every layer starts at `shellTop` — deck, settings
 dropdown (`top = shellTop + 48`) and all. On a build where the status bar
 lives above the window (`insets.top === 0`) the same black is applied at
 runtime, so the strip reads the same either way.
+
+**2026-10-25 (owner) — two fixes for the landscape screen:** the band is an
+**overlay** now. As a flow sibling it took `insets.top` px of layout *and* the
+shell padded by `shellTop`, so the strip above the back row was **twice** the
+status bar — the "unnecessary space on the top". And the camera hole is on the
+**SIDE** in landscape: `insets.left`/`insets.right` (the strip beside Back) was
+still the theme surface — the "weird space" — so both edges are blacked out
+with `remote-camera-band-left` / `-right`, full height, `pointerEvents="none"`,
+and only where an inset actually exists.
 
 Both bars (chrome row + merged row) start at the SAME shell inset — the merged
 row carries no per-row `px` anymore (its old `px-1` pushed it 4 px right of
@@ -214,7 +225,8 @@ unchanged.
 | one IP chip right of Back, gated on the page               | `remoteChrome.test.ts` "issue 10" / "the chip renders ONLY behind a live link…"                                             |
 | the merged row's order, sizes and the single width gate    | `remoteChrome.test.ts` "issue 5+6", "the compact telemetry line is the ONLY width-gated thing…"                             |
 | each chip tears down only itself (3 render sites, 2 chips) | `remoteChrome.test.ts` "issue 3" (U-124 ⑥ also requires `wifiConnected` on BOTH variants)                                   |
-| the black camera band + the visible status bar (①⑤)        | `remoteChrome.test.ts` "U-124 ①+⑤" (4 rules)                                                                                |
+| the black camera band + the visible status bar (①⑤)        | `remoteChrome.test.ts` "U-124 ①+⑤" (6 rules — incl. the band is an OVERLAY, so the top inset counts ONCE, and the side bands)     |
+| the status-bar chip never prints a subnet mask             | `phoneNetwork.test.ts` "the formatter never prints 'name hidden' — nor a subnet mask" + the `phoneSubnetOf` absence rules        |
 | the merged row's sizes and the 860 px telemetry gate (③)   | `remoteChrome.test.ts` "items 5+6" + "the compact telemetry line is the ONLY width-gated thing" (the 860 pin)               |
 | the settings window: width, tier and bottom rhythm (④)     | `remoteChrome.test.ts` "U-124 ④" (4 rules)                                                                                  |
 | the strip messages' size (⑦)                               | `feedbackSurface.test.ts` "U-124 ⑦" (2 rules)                                                                               |

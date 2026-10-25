@@ -108,9 +108,12 @@ describe("U-121 — the phone-network label lives on the Remote's first bar, NOW
 // ── U-124 ② (owner 2026-10-24): the label must NAME the network ──────────
 // "shows the wifi. name hidden, which is meaningless and should show the
 // wifi network the app is connected to, at all time and in sync with the
-// phone's network." Two halves: the hub goes and GETS the name (the location
-// permission Android gates the SSID behind), and the formatter never prints a
-// non-answer while a fact it does have (the subnet) is sitting right there.
+// phone's network." The hub goes and GETS the name (the location permission
+// Android gates the SSID behind).
+//
+// 2026-10-25 (owner, second ruling): "the remote screen show the wifi subnet
+// mask which is stupid remove that" — the U-124 ② stand-in that named a
+// still-unnamed network by its subnet is gone; a mask is not a name.
 describe("U-124 ② — the phone's network is NAMED, and asked for when withheld", () => {
   it("the hub asks for the permission the SSID is gated behind, once", () => {
     expect(hub).toContain(
@@ -127,7 +130,11 @@ describe("U-124 ② — the phone's network is NAMED, and asked for when withhel
 
   it("one writer publishes ssid + label together (they can never disagree)", () => {
     expect(hub).toContain("const publishPhoneNetState = useCallback(");
-    expect(hub).toContain("subnet: phoneSubnetOf(state),");
+    expect(hub).toContain("ssid,\n      }),\n    );");
+    // The subnet stand-in is GONE from the pipeline (2026-10-25): no field,
+    // no reader, no residue.
+    expect(hub).not.toContain("phoneSubnetOf");
+    expect(hub).not.toContain("subnet: ");
     // The old inline pair inside the watcher is gone — the watcher calls the
     // one writer, so a second copy of the label logic cannot drift.
     expect(hub).not.toContain(
@@ -135,27 +142,25 @@ describe("U-124 ② — the phone's network is NAMED, and asked for when withhel
     );
   });
 
-  it("the formatter never prints 'name hidden' again", () => {
+  it("the formatter never prints 'name hidden' — nor a subnet mask", () => {
     expect(
       formatPhoneNetwork({ type: "wifi", connected: true, ssid: "Home" }),
     ).toBe("Wi-Fi · Home");
-    // Unnamed + subnet: the network is still NAMED by the fact that decides
-    // reachability (the car's own hotspot is 192.168.245.0/24).
-    expect(
-      formatPhoneNetwork({
-        type: "wifi",
-        connected: true,
-        ssid: null,
-        subnet: "192.168.245.0/24",
-      }),
-    ).toBe("Wi-Fi · 192.168.245.0/24");
-    // No fact at all: say so plainly — never the old non-answer.
-    expect(
-      formatPhoneNetwork({ type: "wifi", connected: true, ssid: null }),
-    ).not.toContain("name hidden");
-    expect(
-      formatPhoneNetwork({ type: "wifi", connected: true, ssid: null }),
-    ).toContain("name not shared");
+    // A still-unnamed network says what it is. It never prints the mask
+    // ("Wi-Fi · 192.168.245.0/24") — the owner's 2026-10-25 ruling — and
+    // never the old non-answer.
+    const unnamed = formatPhoneNetwork({
+      type: "wifi",
+      connected: true,
+      ssid: null,
+    });
+    expect(unnamed).toBe("Wi-Fi");
+    expect(unnamed).not.toMatch(/\d+\.\d+\.\d+\.\d+/);
+    expect(unnamed).not.toContain("name hidden");
+    expect(unnamed).not.toContain("name not shared");
+    // The chip still starts with "Wi-Fi" — that is what gates the one
+    // permission ask in the hub.
+    expect(unnamed.startsWith("Wi-Fi")).toBe(true);
     // The honest states around it still hold.
     expect(
       formatPhoneNetwork({ type: "none", connected: false, ssid: null }),
