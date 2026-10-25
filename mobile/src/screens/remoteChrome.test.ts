@@ -467,7 +467,7 @@ describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar sho
     // Since the band is gone, we verify the background is NOT a black band.
     expect(screen).not.toContain('backgroundColor: "#000000"');
     // No paddingMax pattern since there's no band taking layout space
-    expect(screen).not.toContain("paddingTop: Math.max(insets.top, 8)");
+    expect(screen).not.toContain("paddingTop: insets.top");
     // No cameraBand reference since the band is removed
     expect(screen).not.toContain("{cameraBand > 0 ? (");
   });
@@ -503,7 +503,7 @@ describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar sho
 
   it("the content uses only the REMAINING space, below the band", () => {
     // The band has been removed — content uses fixed padding instead of band-derived values
-    expect(screen).toContain("paddingTop: 8,");
+    expect(screen).toContain("paddingTop: Math.max(insets.top, 8),");
     expect(screen).toContain("paddingLeft: 12,");
     expect(screen).toContain("paddingRight: 12,");
     // The settings dropdown anchors to the same origin — one top edge for
