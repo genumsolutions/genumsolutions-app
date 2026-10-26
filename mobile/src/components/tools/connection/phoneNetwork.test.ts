@@ -1,19 +1,11 @@
 // =====================================================================
-// U-121 (owner 2026-10-23): the phone's OWN network label — the source of
-// truth is the hub's NetInfo watcher and the only expression of it that
-// survives in code is `phoneNetworkLabel` (one useState pair + one render
-// site). This test pins that invariant by reading the RAW source of
-// useControlHub.ts, ConnectionSection.tsx and RemoteControlScreen.tsx with
-// comments stripped.
+// The phone's OWN network label remains available to connection flows through
+// the hub, but is intentionally absent from the Remote status row.
 //
 //   1. the hub owns the label source
-//   2. the Connectivity panel does NOT carry it — owner 2026-10-23:
-//      "remove this box as the whole". Exactly ONE surface renders the label
-//      (the Remote's first bar), so the pair of copies the owner saw as
-//      "duplicate messages like the words, wifi network name hidden" cannot
-//      come back
-//   3. the Remote's FIRST bar carries it (testID `remote-phone-network`) —
-//      the phone's network is ON the Remote, where the owner asked for it
+//   2. the Connectivity panel does NOT carry it
+//   3. the Remote's FIRST bar does NOT carry it (the owner called the text and
+//      blank space below Back stale and unnecessary)
 //   4. the Raw ssid never leaks — only the formatted label, ever (issue 4)
 // =====================================================================
 
@@ -64,7 +56,7 @@ function chromeRaw(): string {
 const RAW_CHROME = chromeRaw();
 const chrome = strip(RAW_CHROME);
 
-describe("U-121 — the phone-network label lives on the Remote's first bar, NOWHERE else", () => {
+describe("phone-network label ownership", () => {
   it("the hub owns the phone-network label source", () => {
     expect(hub).toContain("phoneNetworkLabel,");
     expect(hub).toContain(
@@ -89,10 +81,11 @@ describe("U-121 — the phone-network label lives on the Remote's first bar, NOW
     expect(section).not.toContain("This phone");
     expect(section).not.toContain("phoneNetworkLabel");
   });
-  it("the Remote's FIRST bar carries it with a stable testID", () => {
-    expect(chrome).toContain('testID="remote-phone-network"');
-    expect(chrome).toContain("{phoneNetworkLabel}");
-    expect(chrome).toContain("phoneNetworkLabel,");
+  it("the Remote status row omits the stale phone-network chip", () => {
+    expect(chrome).not.toContain('testID="remote-phone-network"');
+    expect(chrome).not.toContain("{phoneNetworkLabel}");
+    expect(chrome).not.toContain("phoneNetworkLabel,");
+    expect(chrome).not.toContain('name="smartphone"');
     // The raw ssid stays out of the chrome (issue 4) — the LABEL renders.
     expect(chrome).not.toContain("phoneSsid");
   });

@@ -279,4 +279,20 @@ describe("WifiService link verification (R1)", () => {
     expect(statuses).toContain("disconnected");
     expect(statuses).not.toContain("reconnecting");
   });
+
+  it("does NOT announce 'reconnecting' after a user starts safe-stop writes", async () => {
+    const service = new WifiService();
+    const statuses: string[] = [];
+    service.onStatus((kind) => statuses.push(kind));
+    const pending = service.connect("ws://192.168.245.1:81");
+    open(latest());
+    await pending;
+
+    service.markManualClose();
+    latest().close();
+    latest().onclose?.();
+
+    expect(statuses).toContain("disconnected");
+    expect(statuses).not.toContain("reconnecting");
+  });
 });

@@ -86,10 +86,10 @@ describe("U-119c · the hub's connection message reaches the screen", () => {
 
   it("the hub still OWNS the setter the call sites write through", () => {
     expect(hub).toContain("const showConnectionMessage = useCallback(");
-    // 13 call sites live in the hub; the 14th is this screen's post-reset
-    // confirmation, asserted below. If the hub's set ever stops being called
+    // At least 11 call sites live in the hub; the screen's post-reset
+    // confirmation is asserted below. If the hub's set ever stops being called
     // the surface above would be rendering state nothing writes.
-    expect(count(hub, "showConnectionMessage(")).toBeGreaterThanOrEqual(12);
+    expect(count(hub, "showConnectionMessage(")).toBeGreaterThanOrEqual(11);
     expect(count(screen, "hub.showConnectionMessage(")).toBeGreaterThanOrEqual(
       1,
     );

@@ -118,16 +118,14 @@ describe("U-120 Phase D — item 7: the network selector by the IP field", () =>
     expect(body).toContain("setWifiUrl(`ws://${bare}:81`);");
     // Car elsewhere → tell it to join over a LIVE link only (the car cannot
     // hear a fire-and-forget with no link); the new IP then arrives on
-    // STATE;IP and the hub's smart-link auto-dial prefills the field.    expect(body).toContain("if (connected || wifiConnected) routerUse(ssid);");
+    // STATE;IP and the hub's smart-link auto-dial prefills the field.
+    expect(body).toContain("if (connected || wifiConnected) routerUse(ssid);");
   });
 });
-describe("U-121 Phase C + owner clarification (2026-10-23) — the phone's own network moved to the Remote's first bar, and the Connectivity panel no longer leads with it", () => {
+describe("the phone's own network is not rendered by DeviceConnectionScreen", () => {
   it("the phone-network row is no longer rendered by DeviceConnectionScreen", () => {
-    // U-121 Phase C moved the phone's own network label out of this screen.
-    // It now lives on the Remote's FIRST bar (`remote-phone-network`, rendered
-    // from RemoteControlScreen). The Connectivity panel's left pane also no
-    // longer leads with "This phone" — that line was removed, and the phone's
-    // network is shown on the Remote, where the owner asked for it.
+    // The phone's network label is intentionally omitted from both the
+    // connection screen and Remote status row.
     expect(screen).not.toContain("phoneNetworkLabel,");
     expect(screen).not.toContain('{phoneNetworkLabel ?? "…"}');
   });

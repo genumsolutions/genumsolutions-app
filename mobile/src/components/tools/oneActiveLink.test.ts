@@ -128,6 +128,25 @@ describe("U-105 — the one-active-link teardown is GONE (both transports stay l
     const helper = body("handleWifiDisconnect", "handleWifiProvision");
     expect(helper).toContain("setLinkVerified(false)");
   });
+
+  it("manual safe-stop marks shared transports before sending stop commands", () => {
+    const wifi = body("handleWifiDisconnect", "handleBtDisconnect");
+    const bluetooth = body("handleBtDisconnect", "handleWifiProvision");
+    expect(wifi.indexOf("wifiService.markManualClose();")).toBeGreaterThan(-1);
+    expect(wifi.indexOf("wifiService.markManualClose();")).toBeLessThan(
+      wifi.indexOf('await wifiService.sendLine("S")'),
+    );
+    expect(bluetooth.indexOf("sppService.manualClose = true;")).toBeGreaterThan(
+      -1,
+    );
+    expect(bluetooth.indexOf("sppService.manualClose = true;")).toBeLessThan(
+      bluetooth.indexOf('await sppService.sendLine("S")'),
+    );
+    const reconnecting = wifiStatusCases().find((c) =>
+      c.includes('setReconnectMethod("Wi-Fi")'),
+    );
+    expect(reconnecting).toContain("!wifiService.isManualClose");
+  });
 });
 
 // =====================================================================
@@ -156,7 +175,9 @@ describe("U-105 — the three transport toggles ride", () => {
     expect(code).toContain(
       'sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`)',
     );
-    expect(code).toContain("persistPrefsRef.current?.({ [patch]: on })");
+    expect(code).toContain(
+      'patch === "bootAutojoin"\n          ? { bootAutojoin: on, autoJoinRouter: on }',
+    );
   });
 
   it("the query uses the same `;?` shape the car answers", () => {
@@ -177,7 +198,9 @@ describe("U-105 — the three transport toggles ride", () => {
     expect(code).toContain('reply.startsWith("WIFICFG;AUTOJOIN;")');
     expect(code).toContain("persistPrefs({ wifiEnabled: on })");
     expect(code).toContain("persistPrefs({ btEnabled: on })");
-    expect(code).toContain("persistPrefs({ bootAutojoin: on })");
+    expect(code).toContain(
+      "persistPrefs({ bootAutojoin: on, autoJoinRouter: on })",
+    );
   });
 
   it("the removed settings are GONE from the wire and the state", () => {

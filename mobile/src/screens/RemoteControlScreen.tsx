@@ -384,7 +384,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     handleBtDisconnect,
     handleWifiDisconnect,
     carNetworks,
-    phoneNetworkLabel,
     connMethod,
     setConnMethod,
   } = hub;
@@ -724,11 +723,8 @@ export function RemoteControlScreen({ navigation }: Props) {
     </View>
   ) : null;
 
-  // U-110 (owner 2026-10-14): the reconnect / restart prompts are now CENTERED
-  // MODAL overlays — a dimmed card in the middle of the screen over the drive
-  // deck, not a banner pinned to the bottom edge (the owner asked for a
-  // "separate screen" in the middle). Both prompts share one shell so they read
-  // identically.
+  // The reconnect prompt is a centered modal over the drive deck, not a banner
+  // pinned to the bottom edge.
   const renderPromptShell = (
     tone: "amber" | "sky",
     title: string,
@@ -769,11 +765,9 @@ export function RemoteControlScreen({ navigation }: Props) {
     </Modal>
   );
 
-  // P1 (owner 2026-10-17): ONE prompt-state decision drives the deck. The pure
-  // `resolveLinkPrompt` owns "which prompt belongs on screen right now?" from
-  // the live facts; this renderer only paints what it returns. That kills the
-  // two independent gates (a stale prompt can no longer outlive its cause) and
-  // removes the restart card's third action.
+  // ONE prompt-state decision drives the deck. `resolveLinkPrompt` only returns
+  // a prompt for an unexpected drop; a restart notice can adjust its copy but
+  // cannot make the dialog appear on its own.
   const linkPrompt = resolveLinkPrompt({
     linked,
     btLinked,
@@ -971,10 +965,9 @@ export function RemoteControlScreen({ navigation }: Props) {
         </View>
         {/* ── U-113 P2 (owner issues 2/3/4), rebuilt by U-121 (2026-10-23):
             the ONE merged row below Back. Order = the Q2 overflow priority:
-            the phone's own network chip (truncates, never hides) > disconnect
-            chips (only for LIVE methods, each tearing down ONLY its own
-            transport — issue 3) > tab pills > the compact telemetry line
-            (hidden first on narrow screens). Constant height so the deck
+            disconnect chips (only for LIVE methods, each tearing down ONLY
+            its own transport — issue 3) > tab pills > the compact telemetry
+            line (hidden first on narrow screens). Constant height so the deck
             never shifts. U-121 (items 5+6): the row grew h-7 → h-9 and the
             pills/chips carry real tap sizes with a REAL disconnect mark
             (transport icon + name + ✕), per the owner's "too small to click"
@@ -983,29 +976,6 @@ export function RemoteControlScreen({ navigation }: Props) {
             start at the SAME shell inset, so the two bars line up on the left
             edge (the old px-1 pushed this row 4 px right of Back). */}
         <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1">
-          {phoneNetworkLabel ? (
-            // U-123 (re-review finding 5): this chip is INFORMATION. It used
-            // to be a Pressable with an empty onPress — press feedback and an
-            // a11y "button" that did nothing — plus a shrink-0 that fought
-            // its own flex-1. A plain truncating View: capped at 200 px,
-            // never hidden (Q2's single width gate stays telemetry-only).
-            <View
-              accessibilityLabel={`Phone on ${phoneNetworkLabel}`}
-              testID="remote-phone-network"
-              className="flex-row items-center gap-1.5 min-w-0 flex-1 max-w-[168px] rounded-full border border-line bg-card px-3 py-2"
-            >
-              {/* U-124 ⑥ (owner 2026-10-24): this row already carries a Wi-Fi
-                  DISCONNECT chip, so a second Wi-Fi glyph here read as a
-                  second Wi-Fi control ("and another wifi, which is
-                  duplicate"). This chip is information about THIS PHONE's
-                  network, so it is drawn as the phone — no control, no
-                  confusion. */}
-              <Feather name="smartphone" size={13} color="#64748b" />
-              <Text className="text-[11px] font-bold text-muted truncate">
-                {phoneNetworkLabel}
-              </Text>
-            </View>
-          ) : null}
           {btLinked ? (
             <Pressable
               onPress={() => {
@@ -1053,16 +1023,9 @@ export function RemoteControlScreen({ navigation }: Props) {
               <Feather name="x-circle" size={14} color="#ef4444" />
             </Pressable>
           ) : null}
-          /* U-124 ⑥: per owner, at most ONE Wi-Fi chip renders — the hotspot
-              variant. The non-hotspot variant is no longer shown as a disconnect
-              chip since the car's own hotspot is the only case where a Wi-Fi
-              disconnect action is meaningful. The space previously used for the
-              second Wi-Fi chip is now available for other screen elements. */
-          : null}
           {/* Q2 default (owner): the compact telemetry line is the FIRST
               thing dropped when the row gets tight — the disconnect chips and
               the tab pills are controls and always fit. The same readings are
-              on the Telemetry tab and the readout column. */
               on the Telemetry tab and the readout column. */}
           {isRobocar && width >= MERGED_ROW_TELEMETRY_MIN_PX ? (
             <TelemetryLine {...driveTelemetryArgs} />
@@ -1594,29 +1557,18 @@ export function RemoteControlScreen({ navigation }: Props) {
                 />
               </View>
 
-              {/* P3 · Q1 (owner, 2026-10-15): the CAR's boot auto-join toggle
-                (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`) was REMOVED from this
-                panel — it only ever rejoined the last router, which the owner
-                called useless (issue 12). The firmware half of Q1's default
-                (stop the boot hop) rides P5; the app's smart-link auto-join
-                below is now the ONLY auto-join control here. */}
-
-              {/* U-R3 (owner 2026-10-12) → U-120 item 12 (owner 2026-10-22):
-                smart-link auto-join — the APP's setting, and it says AND does
-                "auto-join LAST USED router": on car selection the app joins the
-                most recently used saved router (recency — pickBestRouter), else
-                the car stays on its own access point. Mirrors DevicePrefs and
-                the cloud profile. */}
+              {/* The car checks the remembered router at boot and keeps its
+                own access point when the router is absent. */}
               <View className="mt-1 flex-row items-center justify-between gap-2">
                 <View className="min-w-0 flex-1 flex-row items-center gap-2">
                   <Feather name="refresh-cw" size={14} color="#64748b" />
                   <View className="min-w-0 flex-1">
                     <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                      Auto-join last used router (app)
+                      Remember last used router
                     </Text>
                     <Text className="text-[9px] leading-tight text-muted">
-                      When you open the car, the APP switches it to the last
-                      used saved router.
+                      At power-up, use it if available; otherwise keep the car's
+                      own AP.
                     </Text>
                   </View>
                 </View>
@@ -1629,7 +1581,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   disabled={!linked}
                   trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                   thumbColor="#ffffff"
-                  accessibilityLabel="App auto-join: on connect, switch the car to the last used saved router"
+                  accessibilityLabel="Remember the last used router at power-up; keep the car's own access point if it is unavailable"
                 />
               </View>
             </SettingsGroup>
@@ -1757,11 +1709,8 @@ export function RemoteControlScreen({ navigation }: Props) {
         </>
       )}
 
-      {/* P1 (owner 2026-10-17): the reconnect / car-restart prompt. A single
-            decision (`resolveLinkPrompt`) picks at most ONE centered modal —
-            the reconnect card only while no link is up, the restart card while
-            a boot-count change is pending. Each carries exactly Reconnect +
-            Cancel. */}
+      {/* A single decision picks at most one centered modal. It appears only
+          after an unexpected disconnect and offers Reconnect or Cancel. */}
       {renderLinkPrompt()}
     </View>
   );

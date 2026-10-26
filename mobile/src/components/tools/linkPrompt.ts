@@ -22,10 +22,9 @@
 // reset record (U-118), no "stopping itself on link loss" narration, no
 // last-reset numbers — one title, one sentence, two buttons.
 //
-// A detected restart still MATTERS here, only as the CAUSE of the dropped
-// link: it may raise the reconnect card earlier (the car rebooted and no
-// link is up — the prompt is a true claim about NOW) and it swaps in one
-// plain sentence.
+// A detected restart may explain an unexpected drop and swaps in one plain
+// sentence, but it never raises a prompt on its own. This keeps an old restart
+// notice from reopening the dialog after a user-initiated disconnect.
 //
 // It remains PURE — it takes the live link facts and returns the ONE prompt
 // the screen should show, or null. When the fact that raised a prompt clears,
@@ -86,12 +85,11 @@ const RESTART_CAUSE_BODY = (method: LinkPromptMethod) =>
  * The ONE decision: which prompt belongs on screen right now, given the live
  * link facts. Returns null when nothing should be shown.
  *
- * Gate: a link is DOWN (never while one is up) AND the user has a true reason
- * — an unexpected drop awaits their yes/no, OR the car rebooted (which is
- * itself why the link died).
+ * Gate: a link is DOWN (never while one is up) AND an unexpected disconnect
+ * awaits the user's yes/no. A restart notice only changes the copy.
  */
 export function resolveLinkPrompt(args: LinkPromptArgs): LinkPrompt | null {
-  if (!args.linked && (args.reconnectDue || args.restart != null)) {
+  if (!args.linked && args.reconnectDue) {
     return {
       kind: "reconnect",
       tone: "amber",
