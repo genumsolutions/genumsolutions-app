@@ -156,15 +156,16 @@ describe("U-118 — resolveLinkPrompt: the reconnect card is a claim about NOW",
 });
 
 describe("U-118 — a restart is a CAUSE, never a record", () => {
-  it("a restart with no link raises the ONE reconnect card", () => {
-    // The restart is why the link died, so it may prompt on its own — but it
-    // prompts with the RECONNECT card, nothing else.
-    const p = resolveLinkPrompt(facts({ restart, linked: false }));
-    expect(p?.kind).toBe("reconnect");
+  it("a restart notice alone never raises a reconnect card", () => {
+    // A previous restart notice must not reopen the prompt after the user
+    // intentionally disconnected.
+    expect(resolveLinkPrompt(facts({ restart, linked: false }))).toBeNull();
   });
 
-  it("the copy names the restart plainly — no numbers, no record", () => {
-    const p = resolveLinkPrompt(facts({ restart, linked: false }));
+  it("a real unexpected drop may use the restart as plain cause copy", () => {
+    const p = resolveLinkPrompt(
+      facts({ restart, reconnectDue: true, linked: false }),
+    );
     const body = p && p.kind === "reconnect" ? p.body : "";
     expect(body).toContain("Your car restarted");
     // THE U-118 RULE: the last-reset record never reaches this card.
@@ -194,7 +195,7 @@ describe("U-118 — a restart is a CAUSE, never a record", () => {
     ).toBeNull();
   });
 
-  it("restart + a pending drop still yields exactly one card", () => {
+  it("restart + an unexpected drop still yields exactly one card", () => {
     const p = resolveLinkPrompt(
       facts({ restart, reconnectDue: true, linked: false }),
     );
@@ -218,7 +219,7 @@ describe("U-118 — the screen wires exactly ONE prompt decision", () => {
   it("calls resolveLinkPrompt with the live link facts", () => {
     expect(screen).toContain("resolveLinkPrompt({");
     // The facts it must feed: link truth, the pending-drop flag + METHOD,
-    // the restart CAUSE.
+    // and optional restart context for the copy.
     expect(screen).toContain("reconnectDue,");
     expect(screen).toContain("method: reconnectMethod");
     expect(screen).toContain("restart: carRestartNotice");
@@ -300,11 +301,15 @@ describe("U-120 Phase C — reconnecting is never automatic", () => {
     expect(wifi).not.toContain("MAX_RECONNECTS");
   });
 
-  it("an unexpected drop raises the dialog with its method (both transports)", () => {
+  it("only an established, unexpected SPP drop can raise the Bluetooth dialog", () => {
     // SPP drop → Bluetooth; Wi-Fi drop (the old re-dial case) → Wi-Fi.
     expect(hub).toContain('setReconnectMethod("Bluetooth")');
     expect(hub).toContain('setReconnectMethod("Wi-Fi")');
-    // A MANUAL drop never asks (disconnect is an answer already).
+    expect(hub).toContain(
+      "const hadLiveConnection = sppWasConnectedRef.current;",
+    );
+    expect(hub).toContain("hadLiveConnection &&");
+    // A manual drop or failed initial dial never asks.
     expect(hub).toContain("setReconnectDue(false)");
   });
 

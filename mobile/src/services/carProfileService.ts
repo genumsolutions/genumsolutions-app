@@ -157,7 +157,10 @@ export function toCloudRecord(
     // second device restores the smart-link recency fallback too. Names
     // only — never passwords.
     last_wifi_ssid: prefs.lastWifiSsid ?? null,
-    auto_join_router: prefs.autoJoinRouter ?? true,
+    // The car's boot setting is authoritative for the shared
+    // remembered-router control. Prefer it over legacy app-only smart-link
+    // values so an old cloud profile cannot turn the setting back on.
+    auto_join_router: prefs.bootAutojoin ?? prefs.autoJoinRouter ?? false,
     // U-105 (1.3.5): the car's transport toggles mirror (null = never read /
     // older firmware — consumers must NOT treat that as a preference for OFF).
     wifi_enabled: prefs.wifiEnabled ?? null,
@@ -303,9 +306,11 @@ export function prefsFromCloudSettings(
       base.lastWifiSsid ??
       null,
     autoJoinRouter:
+      SYNCABLE_SETTINGS.boot_autojoin(s.boot_autojoin) ??
       SYNCABLE_SETTINGS.auto_join_router(s.auto_join_router) ??
+      base.bootAutojoin ??
       base.autoJoinRouter ??
-      true,
+      false,
     wifiEnabled:
       SYNCABLE_SETTINGS.wifi_enabled(s.wifi_enabled) ?? base.wifiEnabled,
     btEnabled: SYNCABLE_SETTINGS.bt_enabled(s.bt_enabled) ?? base.btEnabled,

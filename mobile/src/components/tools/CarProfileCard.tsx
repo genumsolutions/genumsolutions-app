@@ -401,18 +401,16 @@ export function CarProfileCard({
         </View>
       )}
 
-      {/* Smart-link toggle — the user's control for auto-join (owner item 12,
-          U-120: it says AND does "last used router"). Only rendered when props
-          are provided. */}
+      {/* Remembered-router boot setting. Only rendered when props are provided. */}
       {showAutoJoin && (
         <View className="mt-3 flex-row items-center gap-3 border-t border-line pt-3">
           <View className="min-w-0 flex-1">
             <Text className="text-xs font-bold text-ink">
-              Auto-join last used router (app)
+              Remember last used router
             </Text>
             <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-              On car selection: join the last used saved router — else stay on
-              its own access point.
+              At power-up, join it if available; otherwise keep the car's own
+              access point.
             </Text>
           </View>
           <Switch

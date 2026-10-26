@@ -132,10 +132,9 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // neither can render without a live Wi-Fi link.
     expect(screen).not.toContain("{onOwnHotspot ? (");
     expect(screen).toContain("{wifiConnected && onOwnHotspot ? (");
-        // The phone's own network chip sits in the same row and is INFORMATION —
-    // it no longer borrows the Wi-Fi glyph from the disconnect chip beside it.
-    expect(screen).toContain('testID="remote-phone-network"');
-    expect(screen).toContain('name="smartphone"');
+    // The stale phone-network chip is not part of the remote status row.
+    expect(screen).not.toContain('testID="remote-phone-network"');
+    expect(screen).not.toContain('name="smartphone"');
     // Each chip calls its per-method disconnect. The full teardown
     // (`handleDisconnect`) must not be reachable from this screen anymore —
     // "handleBtDisconnect()" does NOT contain the "handleDisconnect()"
@@ -257,68 +256,56 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
 // U-120 Phase E (owner item 12, 2026-10-22) — "in the setting it is auto
 // join LAST USED router, not other ways — in sense and operations."
 //
-// SENSE: every surface that names the switch (Remote settings, the car
-// profile card, the smart-link toast) says "last used router" and NOTHING
-// says "strongest saved router" anymore. OPERATIONS: pickBestRouter is
-// recency-only (pinned in carProfileService.test.ts) and the strength
-// machinery that fed the old rule — the ROUTERS;SCAN ask, the 6 s wait,
-// the scan-arrival early fire — is deleted from the hub, not bypassed.
+// The switch controls the car's persisted boot preference only. The app must
+// not issue a second router join after a link comes up; the firmware owns the
+// boot-time reachability check and AP fallback.
 // =====================================================================
-describe("U-120 Phase E — the auto-join says AND does 'last used router'", () => {
+describe("remembered-router setting is firmware boot behavior", () => {
   const profile = strip(raw("../components/tools/CarProfileCard.tsx"));
 
   it("has sources to check (the rules must not pass vacuously)", () => {
     expect(profile.length).toBeGreaterThan(2000);
-    expect(profile).toContain("Auto-join");
-    expect(screen).toContain("Auto-join");
+    expect(profile).toContain("Remember last used router");
+    expect(screen).toContain("Remember last used router");
   });
 
-  it("sense: the Remote settings switch names the LAST USED router", () => {
-    expect(screen).toContain("Auto-join last used router (app)");
-    expect(screen).toMatch(/the last used\s+saved router/);
+  it("sense: the Remote settings switch names the remembered router", () => {
+    expect(screen).toContain("Remember last used router");
+    expect(screen).toContain("At power-up, use it if available");
     expect(screen).toContain(
-      'accessibilityLabel="App auto-join: on connect, switch the car to the last used saved router"',
+      'accessibilityLabel="Remember the last used router at power-up; keep the car\'s own access point if it is unavailable"',
     );
     expect(screen).not.toContain("strongest saved router");
     expect(screen).not.toContain("Auto-join saved router (app)");
   });
 
   it("sense: the car profile card carries the same words", () => {
-    expect(profile).toContain("Auto-join last used router (app)");
-    expect(profile).toMatch(/join the last used saved router/);
+    expect(profile).toContain("Remember last used router");
+    expect(profile).toMatch(/At power-up, join it if available/);
     expect(profile).not.toContain("strongest saved router");
     expect(profile).not.toContain("Auto-join saved router (app)");
   });
 
-  it("sense: the smart-link toast points at the same setting name", () => {
-    expect(hub).toContain("Auto-join last used router (app)");
-    expect(hub).not.toContain("Auto-join saved router (app)");
-  });
-
-  it("operations: the strength-scan machinery is GONE from the hub", () => {
-    // The old rule waited ≤ SMART_LINK_SCAN_MS for ROUTERS;SCAN strength and
-    // fired the strongest heard router (a scan answer early-fired it).
-    expect(hub).not.toContain("SMART_LINK_SCAN_MS");
-    expect(hub).not.toContain("smartLinkFallbackTimerRef");
-    expect(hub).not.toContain("carScanRef");
-    expect(hub).not.toContain('buildRouterCommand("SCAN"');
-    // The ONE remaining pick is the recency pick, fired on link verify.
-    expect(hub).toContain("const best = pickBestRouter({");
-    expect(hub).toContain("history: savedPrefs?.wifiHistory,");
+  it("does not issue a second app-side router join when a link comes up", () => {
+    expect(hub).not.toContain("smartLinkFiredRef");
+    expect(hub).not.toContain("fireRouterUse");
+    expect(hub).not.toContain("pickBestRouter(");
+    expect(hub).toContain(
+      'sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`)',
+    );
   });
 });
 
 // =====================================================================
-// U-121 (owner 2026-10-23) — the chrome tells the truth about the PAGE,
-// and the first bar carries the phone's own network.
+// U-121 (owner 2026-10-23) — the chrome tells the truth about the PAGE;
+// the Remote status row contains no phone-network chip.
 //
 //   1. the chrome chip is THE BROADCAST IP ALONE — no "BT+WiFi" transport
 //      label, no car network name;
 //   2. it renders ONLY while the Webpage toggle is ON in the car (car truth
 //      `pageOn`) behind a live link — and it resolves over a BT-only link
 //      too (the car reports `;IP=` on STATE over Bluetooth as well);
-//   4. the phone's OWN network (name) moved here, onto the merged row —
-//      the Connectivity panel's "This phone" row is gone;
+//   4. the stale phone-network label and its unused left-side space are gone;
 //   5. the tab pills carry real tap sizes (px-4 py-2, 12 px bold — U-124 ③
 //      re-measured them to px-3 py-1.5, 11 px, so the text fits the row);
 //   6. the disconnect chips are real: bigger, transport icon + name + ✕.
@@ -353,10 +340,11 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     expect(screen).not.toContain("carNetworks[0]");
   });
 
-  it("the phone's own network chip lives on the FIRST bar (merged row)", () => {
-    expect(screen).toContain('testID="remote-phone-network"');
-    expect(screen).toContain("{phoneNetworkLabel}");
-    // It TRUNCATES instead of hiding, so Q2's drop rule stays telemetry-only.
+  it("the remote row contains no stale phone-network label", () => {
+    expect(screen).not.toContain('testID="remote-phone-network"');
+    expect(screen).not.toContain("{phoneNetworkLabel}");
+    expect(screen).not.toContain('name="smartphone"');
+    // Q2's telemetry drop rule remains the only width gate.
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
   });
 
@@ -435,17 +423,11 @@ describe("U-123 — the type scale, the settings rhythm, the honest chip", () =>
     expect(count(screen, "showsVerticalScrollIndicator={false}")).toBe(1);
   });
 
-  it("the phone chip is information: no dead press, no flex contradiction", () => {
-    expect(count(screen, 'testID="remote-phone-network"')).toBe(1);
-    // The empty onPress (press feedback + an a11y button that did nothing)
-    // is gone, and so is shrink-0 fighting the chip's own flex-1.
-    expect(count(screen, "onPress={() => {}}")).toBe(0);
+  it("does not render the stale network chip or reserve its width", () => {
+    expect(count(screen, 'testID="remote-phone-network"')).toBe(0);
     expect(screen).not.toContain(
-      "shrink-0 flex-row items-center gap-1.5 min-w-0 flex-1",
+      "max-w-[168px] rounded-full border border-line",
     );
-    // It still TRUNCATES (max-w cap) and is never gated — Q2's single
-    // width gate stays telemetry-only.
-    expect(screen).toContain("max-w-[168px] rounded-full border border-line");
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
   });
 });
@@ -529,7 +511,7 @@ describe("U-124 ④ — the settings window fits its own content", () => {
   });
 
   it("the window is WIDER (288 → 320) so the long labels stop wrapping", () => {
-    // Measured in headless Chrome: "Auto-join last used router (app)" at the
+    // Measured in headless Chrome: "Remember last used router" at the
     // old 11 px is 215 px wide and only had 187 px of room in w-72/p-2.5 —
     // it wrapped, which is the "over flowing" the owner saw. At 10 px in
     // w-80/p-2 it is 196 px in 223 px of room: one line, with margin for a

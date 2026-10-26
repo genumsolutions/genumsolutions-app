@@ -48,11 +48,7 @@ import {
   type ProfileSyncState,
   type CarProfileCloudRecord,
 } from "../../services/carProfileService";
-import {
-  addBtId,
-  pickBestRouter,
-  upsertWifiHistory,
-} from "../../services/carProfileService";
+import { addBtId, upsertWifiHistory } from "../../services/carProfileService";
 import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
 import { registerCurrentDevice } from "../../services/deviceRegistryService";
 import { syncCrashReport } from "../../services/crashReportService";
@@ -330,7 +326,7 @@ export function useControlHub(routeCategory?: string) {
   // migration is needed — a stale row is simply ignored.
   const [pageOn, setPageOnState] = useState<boolean | null>(null);
   const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
-  const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(false);
+  const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
   // P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict, as the
   // car last said it. `null` = the car has not said (pre-1.3.13 firmware).
   // This is a LIVE fact, not a stored preference — it mirrors the car's latched
@@ -535,9 +531,11 @@ export function useControlHub(routeCategory?: string) {
   // JSON `id`). STABLE profile identity — beats the BT MAC / WiFi identity
   // in the memory key, so a car keeps one profile across renames and links.
   const carFwIdRef = useRef<string | null>(null);
-  // Connections-Hub: per-car auto-join toggle (smart-link). Default off —
-  // user must press Connect/Reconnect. Auto-join removed per U-120 Phase C.
+  // The app preference mirrors the car's persisted boot AUTOJOIN setting;
+  // when enabled it also permits the app's existing smart-link behavior.
   const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(false);
+  const autoJoinRouterRef = useRef(autoJoinRouter);
+  autoJoinRouterRef.current = autoJoinRouter;
   // One write per join guard for the wifi-history recorder.
   const wifiJoinKeyRef = useRef<string>("");
   // Connections-Hub (smart-link): the car-side scan result (ROUTERS;SCAN),
@@ -607,11 +605,6 @@ export function useControlHub(routeCategory?: string) {
       ROUTER_SWITCH_NOTICE_MS,
     );
   }, []);
-  // Smart-link session state: which profile has been offered a router join in
-  // the CURRENT link session (reset when the link drops). U-120 item 12: the
-  // pick is recency-only now, so there is no strength scan to wait for — the
-  // join fires as soon as the link verifies (no timer, no ROUTERS;SCAN).
-  const smartLinkFiredRef = useRef<string | null>(null);
   /**
    * D2 (U-68): how long a router request waits for the car's answer before it
    * is reported as unanswered. The car answers inside one STATE broadcast
@@ -728,7 +721,10 @@ export function useControlHub(routeCategory?: string) {
   // guard / backoff timer) is GONE with the silent retries themselves.
   // FIN-44: last status message seen by the dedupe gate (see onStatus below).
   const sppStatusMsgRef = useRef<string | null>(null);
-  const sppLastAddressRef = useRef<string | null>(null);
+  const sppWasConnectedRef = useRef(sppService.isConnected);
+  const sppLastAddressRef = useRef<string | null>(
+    sppService.getConnectionInfo().address,
+  );
 
   // W5: refs to track previous telemetry IP/SSID for network switch detection
   const prevIpRef = useRef<string | undefined>(undefined);
@@ -859,11 +855,12 @@ export function useControlHub(routeCategory?: string) {
           if (resolved.trim != null) setTrim(resolved.trim);
           if (resolved.useJoystick != null)
             setUseJoystickState(resolved.useJoystick);
-          // Auto-join router is always OFF — user must press Connect/Reconnect.
-          // Do not restore from profile (U-120 Phase C).
-          setAutoJoinRouterState(false);
-          // Boot auto-join is always OFF — no automatic joining on restart.
-          setBootAutojoin(false);
+          const rememberedRouterEnabled =
+            resolved.bootAutojoin ?? resolved.autoJoinRouter ?? false;
+          setAutoJoinRouterState(rememberedRouterEnabled);
+          // The firmware's setting is live car truth; wait for its STATE
+          // frame before deciding whether a restored app preference needs sync.
+          setBootAutojoin(null);
           // U-105 (1.3.5): restore the per-car transport toggles (Wi-Fi /
           // Bluetooth) when their profile is resolved, so the panel shows car truth before any link is brought up. `undefined`
           // (older firmware / never persisted) stays "don't know", never OFF.
@@ -1000,11 +997,9 @@ export function useControlHub(routeCategory?: string) {
         setUseJoystickState(merged.prefs.useJoystick);
       if (merged.prefs.joystickLayout)
         setJoystickLayoutId(merged.prefs.joystickLayout);
-      // U-121 B2: restore the auto-join router setting from profile
-      // so the car remembers the last used router on power cycle.
-      // The WIFICFG;AUTOJOIN command will be sent when the user
-      // interacts with the toggle (see setCarTransportToggle below).
-      setAutoJoinRouterState(merged.prefs.autoJoinRouter ?? false);
+      const rememberedRouterEnabled =
+        merged.prefs.bootAutojoin ?? merged.prefs.autoJoinRouter ?? false;
+      setAutoJoinRouterState(rememberedRouterEnabled);
       // P8: the user's "Car network" answer restores with the profile too —
       // a profile that forgot it would demote the manual override to a
       // once-per-session entry (F-91 says the override must PERSIST and win).
@@ -1018,14 +1013,13 @@ export function useControlHub(routeCategory?: string) {
         setCarSsidAnswerState(merged.prefs.carSsidAnswer || null);
       else if (merged.prefs.carSsidAnswer === null) setCarSsidAnswerState(null);
       // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
-      // toggle mirror too; restore the Wi-Fi and Bluetooth toggles only —
-      // boot auto-join is forced OFF (U-120 Phase C).
+      // toggle mirror too; the firmware's boot-auto-join fact is refreshed
+      // from the car after the link comes up.
       if (typeof merged.prefs.wifiEnabled === "boolean")
         setWifiEnabled(merged.prefs.wifiEnabled);
       if (typeof merged.prefs.btEnabled === "boolean")
         setBtEnabled(merged.prefs.btEnabled);
-      // boot auto-join is always OFF — no automatic joining on restart.
-      setBootAutojoin(false);
+      setBootAutojoin(null);
       // U-124 (owner item ⑧): restore the connection method the user chose on
       // this device — the radio a connect (BT or Wi-Fi) is raised through. The
       // default (bluetooth) is the right pick for a first connect on this
@@ -1197,34 +1191,14 @@ export function useControlHub(routeCategory?: string) {
   const persistPrefsRef = useRef(persistPrefs);
   persistPrefsRef.current = persistPrefs;
 
-  // P7 / issue 8: the two per-car controls that were RAW useState setters —
-  // the D-pad/Joystick pill on the Remote screen and the "auto-join saved
-  // router" switch (screen + CarProfileCard) — updated live state only and
-  // never touched the profile, so both preferences died with the app session
-  // (the owner's "store in the app pronto"). They keep their public names so
-  // every call site persists without knowing it; the two RESTORE paths above
-  // use the raw setters on purpose — loading a profile is not a user edit and
-  // must not write back. Same guarded coalescing writer as everything else,
-  // so the two writers that share this prefs key can never clobber each
-  // other's fields.
+  // P7 / issue 8: the Remote joystick preference persists through the
+  // coalescing profile writer. The remembered-router switch is wired to the
+  // car-backed AUTOJOIN setter below, which persists both the app preference
+  // and the firmware setting.
   const setUseJoystick = (value: boolean) => {
     setUseJoystickState(value);
     persistPrefsRef.current?.({ useJoystick: value });
   };
-  const setAutoJoinRouter = (value: boolean) => {
-    setAutoJoinRouterState(value);
-    persistPrefsRef.current?.({ autoJoinRouter: value });
-    // Send WIFICFG;AUTOJOIN;ON|OFF to the firmware so it stores the
-    // setting in NVS and honors it on power-up (armBootAutoJoin).
-    const on = value ? "ON" : "OFF";
-    if (!sendSystemLine(`WIFICFG;AUTOJOIN;${on}`)) {
-      showConnectionMessage(
-        `App auto-join ${value ? "enabled" : "disabled"} — connect to the car first.`,
-        "error",
-      );
-    }
-  };
-
   // Connections-Hub (profiles): record a Wi-Fi join into the per-car history
   // (names only) once per join, and remember the last verified router URL.
   // `telemetry.connected === true` is the STA-joined signal from firmware;
@@ -1689,14 +1663,20 @@ export function useControlHub(routeCategory?: string) {
         if (
           typeof t.bootAutojoin === "boolean" &&
           protect("bootAutojoin", t.bootAutojoin) &&
-          cur.bootAutojoin !== t.bootAutojoin
+          (cur.bootAutojoin !== t.bootAutojoin ||
+            autoJoinRouterRef.current !== t.bootAutojoin)
         ) {
           transportToggleRef.current = {
             ...transportToggleRef.current,
             bootAutojoin: t.bootAutojoin,
           };
           setBootAutojoin(t.bootAutojoin);
-          persistPrefsRef.current?.({ bootAutojoin: t.bootAutojoin });
+          setAutoJoinRouterState(t.bootAutojoin);
+          autoJoinRouterRef.current = t.bootAutojoin;
+          persistPrefsRef.current?.({
+            bootAutojoin: t.bootAutojoin,
+            autoJoinRouter: t.bootAutojoin,
+          });
         }
         // U-117: the car's WEB PAGE state (`;PAGE=` / `page_on`) is adopted
         // with the same change-guard as its siblings — the steady 1 Hz echo
@@ -1841,10 +1821,12 @@ export function useControlHub(routeCategory?: string) {
       });
       switch (kind) {
         case "connecting":
+          sppWasConnectedRef.current = false;
           setSppStatusMsg("");
           setReconnectDue(false);
           break;
         case "connected":
+          sppWasConnectedRef.current = true;
           setSppStatus("connected");
           setSppStatusMsg(message ?? "Connected");
           setReconnectDue(false);
@@ -1874,7 +1856,9 @@ export function useControlHub(routeCategory?: string) {
             sppService.requestState().catch(() => {});
           }, 200);
           break;
-        case "disconnected":
+        case "disconnected": {
+          const hadLiveConnection = sppWasConnectedRef.current;
+          sppWasConnectedRef.current = false;
           setSppStatus("disconnected");
           setSppStatusMsg("");
           setDeviceName("");
@@ -1903,6 +1887,7 @@ export function useControlHub(routeCategory?: string) {
           // skips raising it while the car is reachable on Wi-Fi/BLE.
           // A manual disconnect clears the prompt instead (nothing to ask).
           if (
+            hadLiveConnection &&
             !manualCloseRef.current &&
             !sppService.manualClose &&
             sppLastAddressRef.current &&
@@ -1914,7 +1899,10 @@ export function useControlHub(routeCategory?: string) {
             setReconnectDue(false);
           }
           break;
-        case "error":
+        }
+        case "error": {
+          const hadLiveConnection = sppWasConnectedRef.current;
+          sppWasConnectedRef.current = false;
           setSppStatusMsg(presentationMsg ?? "Connection error");
           setDeviceName("");
           // U-98: same rule as "disconnected" — a failed Bluetooth attempt
@@ -1931,6 +1919,7 @@ export function useControlHub(routeCategory?: string) {
           // U-120 Phase C: same rule as "disconnected" — no automatic
           // retry; the user is asked, with the method named, and decides.
           if (
+            hadLiveConnection &&
             !manualCloseRef.current &&
             !sppService.manualClose &&
             sppLastAddressRef.current &&
@@ -1942,6 +1931,7 @@ export function useControlHub(routeCategory?: string) {
             setReconnectDue(false);
           }
           break;
+        }
         default:
           break;
       }
@@ -2039,9 +2029,14 @@ export function useControlHub(routeCategory?: string) {
           }
           // U-110's rule at presentation level too: while the car answers on
           // Bluetooth, a Wi-Fi-shaped loss is stale — don't ask.
-          if (!(sppService.isConnected || bleService.isConnected)) {
+          if (
+            !wifiService.isManualClose &&
+            !(sppService.isConnected || bleService.isConnected)
+          ) {
             setReconnectDue(true);
             setReconnectMethod("Wi-Fi");
+          } else {
+            setReconnectDue(false);
           }
           break;
         case "error":
@@ -2658,6 +2653,7 @@ export function useControlHub(routeCategory?: string) {
 
   const handleWifiDisconnect = useCallback(async () => {
     manualCloseRef.current = true;
+    wifiService.markManualClose();
     // Safe-stop: send stop commands before closing (only over the live socket).
     if (wifiService.isConnected) {
       try {
@@ -2697,6 +2693,7 @@ export function useControlHub(routeCategory?: string) {
   // auto-reconnect from reopening a link the user deliberately dropped.
   const handleBtDisconnect = useCallback(async () => {
     manualCloseRef.current = true;
+    sppService.manualClose = true;
     // Safe-stop: neutral commands over each LIVE BT transport before closing.
     if (sppService.isConnected) {
       try {
@@ -2875,14 +2872,17 @@ export function useControlHub(routeCategory?: string) {
           reply.slice("WIFICFG;AUTOJOIN;".length).trim().toUpperCase() === "ON";
         if (
           toggleChangeProtectedRef.current("bootAutojoin", on) &&
-          transportToggleRef.current.bootAutojoin !== on
+          (transportToggleRef.current.bootAutojoin !== on ||
+            autoJoinRouterRef.current !== on)
         ) {
           transportToggleRef.current = {
             ...transportToggleRef.current,
             bootAutojoin: on,
           };
           setBootAutojoin(on);
-          persistPrefs({ bootAutojoin: on });
+          setAutoJoinRouterState(on);
+          autoJoinRouterRef.current = on;
+          persistPrefs({ bootAutojoin: on, autoJoinRouter: on });
         }
       }
       lastProvisionReplyRef.current = reply;
@@ -2982,6 +2982,8 @@ export function useControlHub(routeCategory?: string) {
     // power cycle (owner: "remember state after restart").
     persistPrefsRef.current?.({ modeId: activeMode.id });
     manualCloseRef.current = true;
+    sppService.manualClose = true;
+    wifiService.markManualClose();
     // Safe-stop: send neutral commands over every live transport.
     try {
       await sppService.sendLine("SPD0");
@@ -3117,18 +3119,31 @@ export function useControlHub(routeCategory?: string) {
       }[which] as "wifiEnabled" | "btEnabled" | "bootAutojoin";
       if (patch === "wifiEnabled") setWifiEnabled(on);
       else if (patch === "btEnabled") setBtEnabled(on);
-      else setBootAutojoin(on);
+      else {
+        setBootAutojoin(on);
+        setAutoJoinRouterState(on);
+        autoJoinRouterRef.current = on;
+      }
       toggleCommitRef.current = { which: patch, value: on, at: Date.now() };
-      persistPrefsRef.current?.({ [patch]: on });
+      persistPrefsRef.current?.(
+        patch === "bootAutojoin"
+          ? { bootAutojoin: on, autoJoinRouter: on }
+          : { [patch]: on },
+      );
       if (!sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`)) {
         showConnectionMessage(
-          `Turn the ${patch.replace(/([A-Z])/g, " $1").trim()} transport ${on ? "on" : "off"} — connect to the car first.`,
+          which === "AUTOJOIN"
+            ? `Remembered-router startup ${on ? "enabled" : "disabled"} — connect to the car first.`
+            : `Turn the ${patch.replace(/([A-Z])/g, " $1").trim()} transport ${on ? "on" : "off"} — connect to the car first.`,
           "error",
         );
       }
     },
     [sendSystemLine, showConnectionMessage],
   );
+  const setAutoJoinRouter = (value: boolean) => {
+    setCarTransportToggle("AUTOJOIN", value);
+  };
   const queryCarTransportToggle = useCallback(
     (which: "WIFI" | "BT" | "AUTOJOIN" | "PAGE") => {
       // U-117: PAGE queries the web-page server state (`WIFICFG;WIFI;PAGE;?`)
@@ -3407,71 +3422,6 @@ export function useControlHub(routeCategory?: string) {
     persistPrefsRef.current?.({ savedRouters: [] });
     setDriveStatusOnce("All routers cleared");
   }, [sendCommand]);
-
-  // ---- Smart-link: auto-join the LAST USED saved router ON CAR SELECTION. ----
-  // When the link verifies, if the car is sitting on its OWN access point and
-  // THIS car has saved routers, join the most recently used one (recency —
-  // owner item 12: "auto-join last used router", NOT the strongest signal the
-  // antenna hears; the strength scan went with the rule). User-controlled via
-  // autoJoinRouter (per-car profile toggle). Fires once per link session; a
-  // fresh link re-arms it.
-  const fireRouterUse = useCallback(
-    (ssid: string) => {
-      if (smartLinkFiredRef.current) return;
-      smartLinkFiredRef.current = profileKeyRef.current;
-      routerUse(ssid);
-      // 2026-10-02 review: say the join is AUTOMATIC and name the toggle
-      // that turns it off. The owner's evening bench session read an
-      // unexplained router switch (and, on the unflashed binary, the car
-      // RESET it triggered) as "the app is broken" — an after-the-fact
-      // toast that never said "automatic" invited that read. This is the
-      // same narration-hides-an-action failure F-59's confirm rule fixed,
-      // in its automation form.
-      showConnectionMessage(
-        `Smart-link joined "${ssid}" automatically — connect your phone to it to drive. Turn this off under Saved settings → Auto-join last used router (app).`,
-        "success",
-      );
-    },
-    [routerUse, showConnectionMessage],
-  );
-  useEffect(() => {
-    // Re-arm on every fresh link session.
-    if (!linkVerified || !profileKey || !autoJoinRouter) {
-      smartLinkFiredRef.current = null;
-      return;
-    }
-    if (smartLinkFiredRef.current === profileKey) return;
-    // Router-capable car only (own AP + ROUTERS;* vocabulary).
-    const routerCapable = !!carApName || carNetworks.length > 0 || !!carSsid;
-    if (!routerCapable) return;
-    const saved = savedPrefs?.savedRouters ?? [];
-    if (saved.length === 0) return;
-    // Already satisfied: the car is on a saved router right now.
-    if (carSsid && saved.includes(carSsid)) {
-      smartLinkFiredRef.current = profileKey;
-      return;
-    }
-    // Never kick a car off a router we don't know about.
-    if (carSsid) return;
-    // U-120 item 12: the pick is recency-only — no strength scan to ask for
-    // and no timer to wait out. Join the last used saved router NOW (the
-    // once-per-session guard above decides whether this runs at all).
-    const best = pickBestRouter({
-      saved,
-      history: savedPrefs?.wifiHistory,
-      lastSsid: savedPrefs?.lastWifiSsid,
-    });
-    if (best) fireRouterUse(best);
-  }, [
-    linkVerified,
-    profileKey,
-    autoJoinRouter,
-    carApName,
-    carSsid,
-    carNetworks,
-    savedPrefs,
-    fireRouterUse,
-  ]);
 
   // Auto-dial: when the car announces its new router IP (STATE;IP=<ip>) after
   // a smart-link USE, pre-fill the WS URL toward the router so the user only
@@ -3793,6 +3743,8 @@ export function useControlHub(routeCategory?: string) {
     // clears, so does the prompt).
     setCarRestartNotice(null);
     manualCloseRef.current = true;
+    sppService.manualClose = true;
+    wifiService.markManualClose();
   }, []);
 
   /**

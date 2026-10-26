@@ -217,6 +217,20 @@ describe("toCloudRecord", () => {
     expect(record.settings.bt_enabled).toBeNull();
     expect(record.settings.boot_autojoin).toBeNull();
   });
+
+  it("the firmware boot setting overrides a stale legacy app preference", () => {
+    const record = toCloudRecord(
+      {
+        address: "fw:1A2B3C",
+        name: "4WD4M",
+        autoJoinRouter: true,
+        bootAutojoin: false,
+      } as never,
+      "fw:1A2B3C",
+    );
+    expect(record.settings.auto_join_router).toBe(false);
+    expect(record.settings.boot_autojoin).toBe(false);
+  });
 });
 
 describe("pickBestRouter (smart-link)", () => {
@@ -382,6 +396,15 @@ describe("profiles sync engine (last-saved-wins)", () => {
     expect(prefs.speed).toBe(200);
     expect(prefs.trim).toBe(5);
     expect(prefs.savedRouters).toEqual(["Home", "Shop"]);
+  });
+
+  it("a saved firmware boot setting wins over a legacy app-only setting", () => {
+    const prefs = prefsFromCloudSettings(
+      { auto_join_router: true, boot_autojoin: false },
+      { ...base, bootAutojoin: true, autoJoinRouter: true },
+    );
+    expect(prefs.bootAutojoin).toBe(false);
+    expect(prefs.autoJoinRouter).toBe(false);
   });
 
   it("prefsFromCloudSettings drops corrupt/foreign values", () => {

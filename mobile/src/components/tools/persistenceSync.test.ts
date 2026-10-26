@@ -144,7 +144,11 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
       expect(block).toContain(
         `transportToggleRef.current = {\n            ...transportToggleRef.current,\n            ${key}: on,\n          };`,
       );
-      expect(block).toContain(`persistPrefs({ ${key}: on });`);
+      expect(block).toContain(
+        key === "bootAutojoin"
+          ? "persistPrefs({ bootAutojoin: on, autoJoinRouter: on });"
+          : `persistPrefs({ ${key}: on });`,
+      );
     }
   });
 
@@ -197,16 +201,16 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
     expect(retAt).toBeGreaterThan(at);
   });
 
-  it("the auto-join-router switch persists through the guarded writer", () => {
-    // Same shape: CarProfileCard and the Remote screen both flip this, and
-    // both got the persisting wrapper for free by keeping the public name.
+  it("the remembered-router switch mirrors and persists the car's boot setting", () => {
     const at = code.indexOf("const setAutoJoinRouter = (value: boolean) => {");
     expect(at).toBeGreaterThan(0);
-    const block = slice(at, 220);
-    expect(block).toContain("setAutoJoinRouterState(value);");
-    expect(block).toContain(
-      "persistPrefsRef.current?.({ autoJoinRouter: value });",
+    const block = slice(at, 180);
+    expect(block).toContain('setCarTransportToggle("AUTOJOIN", value);');
+    expect(code).toContain("setAutoJoinRouterState(on);");
+    expect(code).toContain(
+      'patch === "bootAutojoin"\n          ? { bootAutojoin: on, autoJoinRouter: on }',
     );
+    expect(code).toContain("autoJoinRouter: t.bootAutojoin");
     expect(code).toContain(
       "const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(false);",
     );

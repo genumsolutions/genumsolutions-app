@@ -78,6 +78,15 @@ export class WifiService {
     return this.socketUrl;
   }
 
+  get isManualClose(): boolean {
+    return this.manualClose;
+  }
+
+  /** Mark an explicit user teardown before its safe-stop writes begin. */
+  markManualClose(): void {
+    this.manualClose = true;
+  }
+
   onTelemetry(cb: TelemetryCallback): () => void {
     this.telemetryCallbacks.add(cb);
     return () => {

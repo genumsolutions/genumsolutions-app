@@ -144,8 +144,8 @@ export type DevicePrefs = {
    * `carSsid` is the hub's live CAR-truth state, not a preference.
    */
   carSsidAnswer?: string | null;
-  /** Connections-Hub round: auto-join saved router on connect (smart-link),
-      else go straight to the car's own AP. Default true. */
+  /** Legacy cloud/local alias for the firmware's remembered-router boot
+      preference. Prefer `bootAutojoin` when available. */
   autoJoinRouter?: boolean;
   /**
    * U-124 (owner item ⑧, 2026-10-24): *"when the bluetooth is connected the
