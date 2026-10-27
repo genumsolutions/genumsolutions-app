@@ -29,6 +29,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { isCarPageReachable } from "../components/tools/CarPageServingState";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -82,10 +83,51 @@ describe("U-124 ⑫ — the broadcast IP hides when the car's page is off", () =
     expect(hub).toContain("pageStateOld.current = pageServingNow;");
   });
 
-  it("the Remote chip gate is live link AND the page-serving opinion", () => {
-    expect(screen).toContain(
-      "const pageLinkReady = linked && (hub.carPageServing?.current ?? false);",
+  it("the webpage is reachable only while page and Wi-Fi are enabled", () => {
+    expect(
+      isCarPageReachable(
+        { current: true, old: true, changeFlag: false },
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      isCarPageReachable(
+        { current: true, old: true, changeFlag: false },
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      isCarPageReachable(
+        { current: false, old: false, changeFlag: false },
+        true,
+      ),
+    ).toBe(false);
+    expect(
+      isCarPageReachable(
+        { current: true, old: true, changeFlag: false },
+        null,
+      ),
+    ).toBe(true);
+  });
+
+  it("the webpage switch sends only the page-server command", () => {
+    const start = hub.indexOf("const setPageOn = useCallback");
+    const end = hub.indexOf("const sendEnvelopeCommand = useCallback", start);
+    expect(end).toBeGreaterThan(start);
+    const pageToggle = hub.slice(start, end);
+    expect(start).toBeGreaterThan(-1);
+    expect(pageToggle).toContain(
+      'WIFICFG;WIFI;PAGE;${on ? "ON" : "OFF"}',
     );
+    expect(pageToggle).not.toContain("setWifiEnabled");
+    expect(pageToggle).not.toContain("setCarTransportToggle");
+  });
+
+  it("the Remote chip gate requires a live link, page, Wi-Fi, and a known IP", () => {
+    expect(screen).toContain(
+      "isCarPageReachable(hub.carPageServing, hub.wifiEnabled) &&",
+    );
+    expect(screen).toContain("pageIp !== null;");
     expect(screen).toContain("{pageLinkReady ? (");
     // The old always-truthy gate string cannot come back.
     expect(screen).not.toContain(
@@ -100,16 +142,19 @@ describe("U-124 ⑫ — the broadcast IP hides when the car's page is off", () =
     expect(gateLine ?? "").not.toContain("hub.pageOn");
   });
 
-  it("the card's Control address hides on the same opinion", () => {
+  it("the card's Control address hides when the page or Wi-Fi is off", () => {
     // The row + its caption live inside the opinion's branch — the second
     // surface where the IP was "not hidden anywhere".
-    expect(section).toContain("{carPageServing?.current ? (");
+    expect(section).toContain(
+      "isCarPageReachable(carPageServing, wifiEnabled) && controlIp !== null;",
+    );
+    expect(section).toContain("{controlPageReachable ? (");
     expect(section).toContain('testID="car-network-ip"');
     expect(section).toContain("carPageServing,");
-    // And the row still computes the honest address for when it shows.
-    expect(section).toContain(
-      "const controlIp = (onOwnHotspot ? null : reportedIp) ?? DEFAULT_AP_IP;",
-    );
+    expect(section).toContain("const controlIp = carWebPageIp({");
+    expect(section).not.toContain("?? DEFAULT_AP_IP");
     expect(section).not.toContain("value={controlIp}");
+    // The Remote telemetry IP is gated by the same page/Wi-Fi truth.
+    expect(screen).toContain("{pageLinkReady && pageIp ? (");
   });
 });

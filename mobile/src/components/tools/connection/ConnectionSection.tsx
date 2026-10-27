@@ -89,6 +89,7 @@ import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import {
   CONNECTION_METHODS,
   carIsOnOwnHotspot,
+  carWebPageIp,
   methodOfTarget,
   normalizeRouters,
   planSwitch,
@@ -104,11 +105,8 @@ import { ActionButton, ConnectionCard, InlineMessage } from "./ConnectionCard";
 import { WifiPanel } from "./WifiPanel";
 import { describeSecondLink } from "./linkOrder";
 import { CAR_MDNS_HOST } from "./discoveryPlan";
+import { isCarPageReachable } from "../CarPageServingState";
 import type { useControlHub } from "../useControlHub";
-// U-121 B2 (owner 2026-10-24): the fleet's own AP address — the broadcast IP
-// the control page is dialled at when the car is on its hotspot (and the
-// last resort when it has reported nothing yet).
-import { DEFAULT_AP_IP } from "../../../services/carProtocol";
 
 // 2026-10-23 (U-121 A2, owner: "remove this box as the whole"): the
 // "This phone" row and its `formatPhoneNetwork` re-export are GONE from this
@@ -243,6 +241,7 @@ export function ConnectionSection({
     // is no page to dial, so the IP is dropped from every surface, this one
     // included (the Remote chrome chip hides for the same reason).
     carPageServing,
+    wifiEnabled,
     // P5 (firmware 1.3.13): the car's LINK-CAPACITY verdict. `false` = the car
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
@@ -333,13 +332,16 @@ export function ConnectionSection({
   const onOwnHotspot = carIsOnOwnHotspot({
     reportedSsid,
     ownApName: carApName,
+    reportedIp,
   });
   const carOnRouter = anyLink && !onOwnHotspot && Boolean(reportedIp);
-  // U-121 B2: the broadcast IP FOR THE CONTROL PAGE — the car's own AP address
-  // while it sits on its hotspot, the STA IP it reports while on a router, and
-  // the fleet default only as a last resort (the P8 promise in the card's
-  // comment: both connection facts, auto-filled, in one place).
-  const controlIp = (onOwnHotspot ? null : reportedIp) ?? DEFAULT_AP_IP;
+  const controlIp = carWebPageIp({
+    reportedIp,
+    reportedSsid,
+    ownApName: carApName,
+  });
+  const controlPageReachable =
+    isCarPageReachable(carPageServing, wifiEnabled) && controlIp !== null;
 
   // U-86: Wi-Fi is one target now. The car being on its own hotspot or on a
   // router is a fact about the car, not a mode the user picks, so there is
@@ -863,7 +865,7 @@ export function ConnectionSection({
                 </View>
               ) : null}
 
-              {carPageServing?.current ? (
+              {controlPageReachable ? (
                 <>
                   <View
                     className="mt-1.5 flex-row items-center gap-1"

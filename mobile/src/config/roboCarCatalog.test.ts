@@ -76,6 +76,12 @@ describe("LOCAL_CAR_MODES", () => {
     }
   });
 
+  it("the 4WD4M car advertises only transports supported by its firmware", () => {
+    const fourWd = LOCAL_CAR_MODES.find((mode) => mode.token === "4WD4M");
+    expect(fourWd?.transport).toEqual(["classic-bt", "wifi"]);
+    expect(fourWd?.transport).not.toContain("ble");
+  });
+
   it("every mode has a deviceIndex in 0..8", () => {
     const idxs = LOCAL_CAR_MODES.map((m) => m.deviceIndex);
     expect(idxs.sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);

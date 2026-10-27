@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAR_AP_WS_URL,
   carIsOnOwnHotspot,
+  carWebPageIp,
   carWebPageUrl,
   isCarApGateway,
   resolveDial,
@@ -82,6 +83,17 @@ describe("car-wifi - one target, the car's own address (U-86)", () => {
     expect(d!.source).toBe("car-ap-constant");
   });
 
+  it("does not dial an invalid reported address or guess the AP", () => {
+    expect(
+      resolveDial({
+        target: "car-wifi",
+        reportedIp: "0.0.0.0",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
+
   it("strips a scheme the car reported rather than double-prefixing it", () => {
     const d = resolveDial({
       target: "car-wifi",
@@ -130,6 +142,55 @@ describe("own-hotspot detection reads the car's SSID first", () => {
       false,
     );
   });
+
+  it("uses the reported AP gateway when the SSID is unavailable", () => {
+    expect(
+      carIsOnOwnHotspot({
+        reportedSsid: null,
+        ownApName: AP,
+        reportedIp: "192.168.245.1",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("the webpage address follows the car's current network", () => {
+  it("uses the car AP address when its AP is identified without an IP", () => {
+    expect(
+      carWebPageIp({
+        reportedIp: null,
+        reportedSsid: AP,
+        ownApName: AP,
+      }),
+    ).toBe("192.168.245.1");
+  });
+
+  it("uses a reported router address, never the AP fallback", () => {
+    expect(
+      carWebPageIp({
+        reportedIp: "192.168.1.34",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBe("192.168.1.34");
+    expect(
+      carWebPageIp({
+        reportedIp: null,
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects an unusable broadcast address", () => {
+    expect(
+      carWebPageIp({
+        reportedIp: "0.0.0.0",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("the car's web page is built from the same reported truth", () => {
@@ -140,5 +201,6 @@ describe("the car's web page is built from the same reported truth", () => {
   it("has no page when nothing was reported", () => {
     expect(carWebPageUrl(null)).toBeNull();
     expect(carWebPageUrl("  ")).toBeNull();
+    expect(carWebPageUrl("999.1.1.1")).toBeNull();
   });
 });

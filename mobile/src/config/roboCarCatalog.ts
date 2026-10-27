@@ -120,7 +120,7 @@ export const LOCAL_CAR_MODES: CarMode[] = [
     // directly in 4WD4M. Listing WiFi here is a factual correction — the
     // previous ["ble","classic-bt"] described pre-v2 donor behaviour and is
     // what made WiFi look unsupported in the mode chooser.
-    transport: ["ble", "classic-bt", "wifi"],
+    transport: ["classic-bt", "wifi"],
     remoteWith: "ESP REMOTE or app",
     controls: ["drive-tank"],
     requiresConnection: true,

@@ -76,6 +76,16 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
     expect(code).toContain('startsWith("ws://")');
   });
 
+  it("persists the connection method passed by the current selection", () => {
+    const at = code.indexOf("const setConnMethod = useCallback");
+    expect(at).toBeGreaterThan(0);
+    const block = slice(at, 300);
+    expect(block).toContain(
+      "setConnMethodState(method);\n    persistPrefsRef.current?.({ connMethod: method });",
+    );
+    expect(block).not.toContain("persistPrefsRef.current?.({ connMethod });");
+  });
+
   it("an ADOPTED mode (the car's own button) reaches the per-car profile", () => {
     // selectMode() persists `{ modeId: m.id }` for a USER pick; the telemetry
     // adopt block must do the same for CAR truth, or the app resurrected the

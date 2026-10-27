@@ -42,6 +42,30 @@ export function isCarApGateway(ip: string | null | undefined): boolean {
   return CAR_AP_GATEWAYS.includes(host);
 }
 
+function reportedHost(ip: string | null | undefined): string | null {
+  const value = (ip ?? "").trim();
+  if (!value) return null;
+  const host =
+    value
+      .replace(/^wss?:\/\//i, "")
+      .split("/")[0]
+      ?.split(":")[0] ?? "";
+  const octets = host.split(".");
+  if (
+    octets.length !== 4 ||
+    octets.some(
+      (octet) =>
+        !/^\d{1,3}$/.test(octet) ||
+        Number(octet) < 0 ||
+        Number(octet) > 255,
+    ) ||
+    host === "0.0.0.0"
+  ) {
+    return null;
+  }
+  return host;
+}
+
 /** The car's own-hotspot WebSocket address. A constant, not a default. */
 export const CAR_AP_WS_URL = `ws://${CAR_AP_GATEWAYS[0]}:${CAR_WS_PORT}`;
 
@@ -65,33 +89,37 @@ export type DialContext = {
   readonly ownApName: string | null;
 };
 
-function hostOf(address: string): string {
-  return (
-    address
-      .replace(/^wss?:\/\//i, "")
-      .split("/")[0]
-      ?.split(":")[0] ?? ""
-  );
-}
-
 /** True when the car says it is sitting on its own broadcast hotspot. */
 export function carIsOnOwnHotspot(ctx: {
   reportedSsid: string | null;
   ownApName: string | null;
+  reportedIp?: string | null;
 }): boolean {
   const ssid = (ctx.reportedSsid ?? "").trim().toUpperCase();
   const own = (ctx.ownApName ?? "").trim().toUpperCase();
-  if (own && ssid === own) return true;
-  if (ssid && CAR_AP_NAMES_UPPER.has(ssid)) return true;
-  // No usable SSID: fall back to the address. The gateway is only ever
-  // reported while the car is on its own hotspot, so a gateway address with
-  // no contradicting SSID is honest evidence of that state.
-  return false;
+  if (ssid) return (own !== "" && ssid === own) || CAR_AP_NAMES_UPPER.has(ssid);
+  return isCarApGateway(ctx.reportedIp);
 }
 
 const CAR_AP_NAMES_UPPER: ReadonlySet<string> = new Set(
   ["4WD4MCar_WiFi"].map((n) => n.toUpperCase()),
 );
+
+/**
+ * The address the car's own page is reachable at, or null until its router
+ * address is known. Never substitute the AP gateway while the car reports a
+ * different network; that would advertise an address on the wrong subnet.
+ */
+export function carWebPageIp(ctx: {
+  reportedIp: string | null | undefined;
+  reportedSsid: string | null;
+  ownApName: string | null;
+}): string | null {
+  if (carIsOnOwnHotspot(ctx)) {
+    return reportedHost(ctx.reportedIp) ?? CAR_AP_GATEWAYS[0];
+  }
+  return reportedHost(ctx.reportedIp);
+}
 
 /**
  * The single dial for a target, or `null` when no honest dial exists.
@@ -115,14 +143,13 @@ export function resolveDial(ctx: DialContext): Dial {
   if (reported) {
     // A reported address is car truth: use it whether it is the car's own
     // hotspot gateway or a router lease.
-    const host = hostOf(reported);
-    if (host) {
-      return {
-        url: `ws://${host}:${CAR_WS_PORT}`,
-        source: "car-reported",
-        reportedIp: reported,
-      };
-    }
+    const host = reportedHost(reported);
+    if (!host) return null;
+    return {
+      url: `ws://${host}:${CAR_WS_PORT}`,
+      source: "car-reported",
+      reportedIp: reported,
+    };
   }
   // Nothing reported. The AP constant is honest here and only here.
   return {
@@ -134,9 +161,7 @@ export function resolveDial(ctx: DialContext): Dial {
 
 /** The car's web page, for the "open the car's page" affordance. */
 export function carWebPageUrl(reportedIp: string | null): string | null {
-  const t = (reportedIp ?? "").trim();
-  if (!t) return null;
-  const host = hostOf(t);
+  const host = reportedHost(reportedIp);
   if (!host) return null;
   return `http://${host}:${CAR_HTTP_PORT}`;
 }
