@@ -131,7 +131,8 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     // link that was not up. Both variants still can never render together, and
     // neither can render without a live Wi-Fi link.
     expect(screen).not.toContain("{onOwnHotspot ? (");
-    expect(screen).toContain("{wifiConnected && onOwnHotspot ? (");
+    expect(screen).toContain("{wifiConnected ? (");
+    expect(screen).toContain('"Disconnect Wi-Fi (router)"');
     // The stale phone-network chip is not part of the remote status row.
     expect(screen).not.toContain('testID="remote-phone-network"');
     expect(screen).not.toContain('name="smartphone"');
@@ -317,22 +318,18 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
   });
 
   it("the chip renders ONLY behind a live link while the car serves its page", () => {
-    // The ONE gate: a live link AND the hub's local page-serving truth
-    // (`hub.carPageServing.current`, adopted from `;PAGE=`/`page_on`,
-    // change-guarded and queried on link-up since U-117). U-120 renamed the
-    // public gate away from the raw `pageOn` cell; a remote reachability path
-    // (HEAD/GET, on-the-wire page detection) is a separate concern and does
-    // not feed this chip.
+    // The gate requires a live link, car page enabled, Wi-Fi transport enabled,
+    // and a valid address for the car's current network.
     //
     // U-124 ⑫ (owner 2026-10-24, "the ip is not hidden anywhere … when
     // webpage is off"): the gate was `hub.carPageServing?.current ?? false`
     // with NO live-link half — and the hub's opinion was a never-written ref
     // OBJECT (always truthy), so the chip never hid. The opinion is now a
-    // real boolean (hub pin below) and the gate is the conjunction its own
-    // comment and the storyboard always described.
+    // real boolean (hub pin below).
     expect(screen).toContain(
-      "const pageLinkReady = linked && (hub.carPageServing?.current ?? false);",
+      "isCarPageReachable(hub.carPageServing, hub.wifiEnabled) &&",
     );
+    expect(screen).toContain("pageIp !== null;");
     expect(screen).toContain("{pageLinkReady ? (");
     // The chip body is the IP alone: no transport label, no car network.
     expect(screen).toContain("{ipChipText}");

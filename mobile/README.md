@@ -88,5 +88,7 @@ Build notes:
 - LongPaths is disabled on `E:\`, so release Gradle builds run from a mirror at `C:\bs`
   (keep `C:\bs` in sync with `mobile/`, including `keystores/` and `.env.local`).
 - Upload the signed APK with `node scripts/upload-release.mjs` (secrets in `.env.local`).
-- OTA hot-patches: `ota-only.yml` (JS-only, same version). `runtimeVersion` stays `1.0.0`
-  unless a native rebuild ships.
+- OTA hot-patches: `ota-only.yml` is JS-only and does not bump the app version.
+  `app.json` currently derives `runtimeVersion` from `appVersion`, so an OTA only
+  applies to a native build with the same app version; publish a matching native build
+  before changing the app version.

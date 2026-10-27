@@ -16,3 +16,10 @@ export interface CarPageServingState {
   old: boolean;
   changeFlag: boolean;
 }
+
+export function isCarPageReachable(
+  pageServing: CarPageServingState | null | undefined,
+  wifiEnabled: boolean | null | undefined,
+): boolean {
+  return pageServing?.current === true && wifiEnabled !== false;
+}

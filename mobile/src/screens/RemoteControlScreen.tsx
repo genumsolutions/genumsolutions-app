@@ -74,11 +74,13 @@ import {
   ConnectionSection,
   InlineMessage,
 } from "../components/tools/connection";
-import { DEFAULT_AP_IP, DEFAULT_WS_URL } from "../services/carProtocol";
+import { DEFAULT_WS_URL } from "../services/carProtocol";
 import {
-  isCarApGateway,
   carIsOnOwnHotspot,
+  carWebPageIp,
+  carWebPageUrl,
 } from "../components/tools/connection/dial";
+import { isCarPageReachable } from "../components/tools/CarPageServingState";
 import {
   LOCAL_CAR_MODES,
   type CarMode,
@@ -401,7 +403,6 @@ export function RemoteControlScreen({ navigation }: Props) {
   // The hub's opinion is now a real boolean (useControlHub, U-124 ⑫), and the
   // gate is the conjunction its own docs always described: no link or page
   // off ⇒ no chip, because there is no page to open.
-  const pageLinkReady = linked && (hub.carPageServing?.current ?? false);
   // U-105 (1.3.5, owner 2026-10-13): Bluetooth and Wi-Fi stay live TOGETHER by
   // default — the parallel + power-save settings are gone. Whenever both links
   // are open the strip and sub-header name BOTH at once (the car's OLED says
@@ -409,14 +410,13 @@ export function RemoteControlScreen({ navigation }: Props) {
   const parallelBoth = connected && wifiConnected;
   const isRobocar = !isDrone && !isNonRobocar;
 
-  // W5: determine if car is on its own hotspot and the correct IP to display
+  // Distinguish the own hotspot from a router so the page address never
+  // falls back to the AP gateway while the car is on a different network.
   const onOwnHotspot = carIsOnOwnHotspot({
     reportedSsid: telemetry.ssid ?? null,
     ownApName: carApName ?? null,
+    reportedIp: telemetry.ip ?? null,
   });
-  // Car is on router if WiFi connected and NOT on own hotspot
-  const carOnRouter = wifiConnected && !onOwnHotspot;
-
   // U-113 P2 (owner issue 10): the chrome row shows the car's broadcast IP
   // as THE link to the car's page, so this is the ONE IP expression left.
   // Honesty kept from U-108/W5: a known STA IP first, the AP address (named
@@ -424,11 +424,16 @@ export function RemoteControlScreen({ navigation }: Props) {
   // guess — otherwise. The old 1 s NAME⇄IP alternation and its second copy of
   // this expression died with the tabs-row chip (issue 4/10); the SSID still
   // shows on the OLED mirror and in the Connectivity panel.
-  const ipChipText = telemetry.ip
-    ? telemetry.ip
-    : onOwnHotspot
-      ? `${DEFAULT_AP_IP} (AP)`
-      : "—";
+  const pageIp = carWebPageIp({
+    reportedIp: telemetry.ip,
+    reportedSsid: telemetry.ssid ?? null,
+    ownApName: carApName ?? null,
+  });
+  const pageLinkReady =
+    linked &&
+    isCarPageReachable(hub.carPageServing, hub.wifiEnabled) &&
+    pageIp !== null;
+  const ipChipText = pageIp ?? "";
 
   // U-121 (owner 2026-10-23, items 1+2): the chrome chip is THE BROADCAST IP
   // ALONE — no "BT+WiFi" transport label, no car network name — and it renders
@@ -545,21 +550,14 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // ── Weblink handlers ──
   // A-36: the IP chip is ALWAYS tappable — with a reachable STA IP we open the
-  // car's web page directly; offline/AP-fallback we open the car's own AP page
-  // (v2 default: the 4WD4M car's 192.168.245.1; donor cars use .244), so
-  // "nothing happens" is gone even unconnected.
+  // car's web page directly. The address is only advertised when the car's
+  // current network gives us a usable page IP.
   const handleOpenWebPage = useCallback(() => {
-    let url: string | null = null;
-    if (telemetry.ip) {
-      url = `http://${telemetry.ip}`;
-    } else if (onOwnHotspot) {
-      url = `http://${DEFAULT_AP_IP}`;
-    }
-    // If on router but no IP yet, don't open anything (url stays null)
+    const url = carWebPageUrl(pageIp);
     if (url) {
       void Linking.openURL(url).catch(() => undefined);
     }
-  }, [telemetry.ip, onOwnHotspot]);
+  }, [pageIp]);
 
   // Phase 2 (owner 2026-10-12): the router callbacks that used to feed
   // RouterPanel are gone — the Connectivity panel now renders ConnectionSection,
@@ -877,17 +875,15 @@ export function RemoteControlScreen({ navigation }: Props) {
               own page server is reachable from any live link, so a BT-only
               session still shows the IP while the page is ON. Tap opens the
               car's page (A-36 kept): the reachable STA IP directly, the car's
-              own AP page as the honest fallback. */}
+              own AP page only when the car reports that it is on its AP. */}
           {pageLinkReady ? (
             <Pressable
               onPress={handleOpenWebPage}
               accessibilityRole="link"
               accessibilityLabel={
-                telemetry.ip
-                  ? `Open car web page at ${telemetry.ip}`
-                  : onOwnHotspot
-                    ? `Open car web page at ${DEFAULT_AP_IP} (AP)`
-                    : "Car IP not available yet"
+                pageIp
+                  ? `Open car web page at ${pageIp}`
+                  : "Car IP not available yet"
               }
               testID="deck-link-status"
               hitSlop={8}
@@ -1004,21 +1000,25 @@ export function RemoteControlScreen({ navigation }: Props) {
               button for a link that was not up — a second Wi-Fi control in a
               BT-only status bar. At most ONE Wi-Fi chip ever renders, and only
               while there is a Wi-Fi link to tear down. */}
-          {wifiConnected && onOwnHotspot ? (
+          {wifiConnected ? (
             <Pressable
               onPress={() => {
                 feedbackTap();
                 void handleWifiDisconnect();
               }}
               accessibilityRole="button"
-              accessibilityLabel="Disconnect Wi-Fi (hotspot)"
+              accessibilityLabel={
+                onOwnHotspot
+                  ? "Disconnect Wi-Fi (hotspot)"
+                  : "Disconnect Wi-Fi (router)"
+              }
               testID="remote-disconnect-wifi"
               hitSlop={8}
               className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
             >
               <Feather name="wifi" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted">
-                Wi-Fi (hotspot)
+                {onOwnHotspot ? "Wi-Fi (hotspot)" : "Wi-Fi (router)"}
               </Text>
               <Feather name="x-circle" size={14} color="#ef4444" />
             </Pressable>
@@ -1406,7 +1406,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                       {driveStatus || "Stop"}
                     </Text>
                   </View>
-                  {(telemetry.ip || wifiConnected) && (
+                  {pageLinkReady && pageIp ? (
                     <View className="flex-row items-baseline justify-between gap-2">
                       <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                         IP
@@ -1415,16 +1415,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                         numberOfLines={1}
                         className="font-mono text-base font-bold text-ink dark:text-white"
                       >
-                        {telemetry.ip
-                          ? telemetry.ip
-                          : onOwnHotspot
-                            ? `${DEFAULT_AP_IP} (AP)`
-                            : carOnRouter
-                              ? "—"
-                              : DEFAULT_AP_IP}
+                        {pageIp}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
               </View>
             )}

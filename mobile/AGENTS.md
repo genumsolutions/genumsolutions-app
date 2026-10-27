@@ -69,5 +69,6 @@ scripts/sync-app-fallback.mjs`) and push it.
 - **OTA** (`ota-only.yml`): the SAME-VERSION hot-patch channel for emergency JS/asset fixes
   between releases. It never bumps the version. Because a release commit also touches
   `mobile/src`, the workflow's `release-guard` step skips the run whenever app.json versionCode is
-  newer than the published manifest. Runtime implications: `runtimeVersion` stays constant
-  (`1.0.0`) for a native generation — never bump it without a native rebuild.
+  newer than the published manifest. `app.json` derives `runtimeVersion` from `appVersion`,
+  so an OTA only applies to a native build with that same app version; publish a matching
+  native build before changing the app version.

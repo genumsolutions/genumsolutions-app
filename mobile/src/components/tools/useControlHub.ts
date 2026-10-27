@@ -261,7 +261,11 @@ export function useControlHub(routeCategory?: string) {
   // connected) starts out showing an existing live link instead of "no
   // device", and keeps working when nothing is linked (simulation). ----
   const [sppDevices, setSppDevices] = useState<SppDevice[]>([]);
-  const [connected, setConnected] = useState(sppService.isConnected);
+  const [connected, setConnected] = useState(
+    sppService.isConnected ||
+      bleService.isConnected ||
+      wifiService.isConnected,
+  );
   // U-113 P2 (issue 3): `connected` is the SHARED "some link is up" flag — a
   // Wi-Fi connect sets it too. The Remote screen's Bluetooth chip must show
   // only while a BT transport is REALLY linked, so BT truth gets its own
@@ -277,7 +281,7 @@ export function useControlHub(routeCategory?: string) {
   // is also the radio a command is dialled over when the active mode lists
   // BOTH transports. Owned by the device: a disconnected connect never
   // changes it.
-  const [connMethod, setConnMethod] = useState<"bluetooth" | "wifi">(
+  const [connMethod, setConnMethodState] = useState<"bluetooth" | "wifi">(
     "bluetooth",
   );
   // The connection method the Wi-Fi flow was first raised in — captured when
@@ -295,7 +299,7 @@ export function useControlHub(routeCategory?: string) {
   const [connectingAddress, setConnectingAddress] = useState<string | null>(
     null,
   );
-  const [wifiConnected, setWifiConnected] = useState(false);
+  const [wifiConnected, setWifiConnected] = useState(wifiService.isConnected);
   // U-108 Phase 4: the SSID the PHONE is joined to (null = not on Wi-Fi), so the
   // deck can always say which network it sits on before a switch.
   const [phoneSsid, setPhoneSsid] = useState<string | null>(null);
@@ -1025,7 +1029,7 @@ export function useControlHub(routeCategory?: string) {
       // default (bluetooth) is the right pick for a first connect on this
       // device; a remembered pick survives a power cycle.
       if (typeof merged.prefs.connMethod === "string")
-        setConnMethod(
+        setConnMethodState(
           merged.prefs.connMethod === "bluetooth" ? "bluetooth" : "wifi",
         );
       if (typeof merged.prefs.wirelessMethod === "string")
@@ -1190,6 +1194,11 @@ export function useControlHub(routeCategory?: string) {
   // (and without stale captures) when called from deep in the input chain.
   const persistPrefsRef = useRef(persistPrefs);
   persistPrefsRef.current = persistPrefs;
+
+  const setConnMethod = useCallback((method: "bluetooth" | "wifi") => {
+    setConnMethodState(method);
+    persistPrefsRef.current?.({ connMethod: method });
+  }, []);
 
   // P7 / issue 8: the Remote joystick preference persists through the
   // coalescing profile writer. The remembered-router switch is wired to the
@@ -2260,8 +2269,8 @@ export function useControlHub(routeCategory?: string) {
       // the NEXT connect to this same device re-raises over the same radio
       // (the owner's bench item ⑧: "i can connect to the wifi signal too when
       // the bluetooth is already connected").
-      setConnMethod("bluetooth");
-      persistPrefsRef.current?.({ connMethod });
+      setConnMethodState("bluetooth");
+      persistPrefsRef.current?.({ connMethod: "bluetooth" });
       setConnectingAddress(device.address);
       setError(null);
       manualCloseRef.current = false;
@@ -2280,7 +2289,7 @@ export function useControlHub(routeCategory?: string) {
         showConnectionMessage(`Connected to ${device.name}`, "success");
         // Persist the chosen method with the device profile so the next
         // connect to this same device raises over the same radio.
-        persistPrefsRef.current?.({ connMethod });
+        persistPrefsRef.current?.({ connMethod: "bluetooth" });
         // Seed wirelessMethod so the SAME radio is used when the car is
         // reached a second time from a Wi-Fi connect.
         setWirelessMethod("bluetooth");
@@ -2458,6 +2467,8 @@ export function useControlHub(routeCategory?: string) {
         if (answered) {
           setWifiConnected(true);
           setError(null);
+          setConnMethodState("wifi");
+          persistPrefsRef.current?.({ connMethod: "wifi" });
           showConnectionMessage(`Connected to car via WiFi`, "success");
           setTimeout(() => {
             wifiService.requestState().catch(() => {});
@@ -2477,6 +2488,8 @@ export function useControlHub(routeCategory?: string) {
               setWifiConnected(true);
               setLinkVerified(true);
               setError(null);
+              setConnMethodState("wifi");
+              persistPrefsRef.current?.({ connMethod: "wifi" });
               showConnectionMessage(
                 `Car found automatically at ${lookedHalf.host} — connected.`,
                 "success",
@@ -2514,6 +2527,8 @@ export function useControlHub(routeCategory?: string) {
               setWifiConnected(true);
               setLinkVerified(true);
               setError(null);
+              setConnMethodState("wifi");
+              persistPrefsRef.current?.({ connMethod: "wifi" });
               showConnectionMessage(
                 `Car found automatically at ${looked.host} — connected.`,
                 "success",

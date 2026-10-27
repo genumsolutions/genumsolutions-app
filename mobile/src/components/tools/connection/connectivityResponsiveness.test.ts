@@ -243,11 +243,14 @@ describe('P8 — ConnectionSection offers the "Car network" control', () => {
       "const reportedSsid = telemetry.ssid ?? carSsid ?? carSsidAnswer ?? null;",
     );
     // 2. THE BROADCAST IP FOR THE CONTROL — computed, never typed: AP address
-    //    on the own hotspot, reported STA IP on a router, fleet default last.
+    //    on the own hotspot, reported STA IP on a router, and no AP guess when
+    //    the car's router address is not known.
     expect(section).toContain('testID="car-network-ip"');
+    expect(section).toContain("const controlIp = carWebPageIp({");
     expect(section).toContain(
-      "const controlIp = (onOwnHotspot ? null : reportedIp) ?? DEFAULT_AP_IP;",
+      "isCarPageReachable(carPageServing, wifiEnabled) && controlIp !== null;",
     );
+    expect(section).not.toContain("?? DEFAULT_AP_IP");
     //    …and it stays READ-ONLY. The car uses that IP to find its own WS
     //    client; it is not a reconfiguration field (FAILSAFE-U121 rule 2).
     expect(section).not.toContain("value={controlIp}");

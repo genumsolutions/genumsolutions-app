@@ -62,20 +62,27 @@
 - [ ] **U-124-4 — the WiFi connect awaits the outcome.** `DeviceConnectionScreen`'
       s `connect()` awaits `handleWifiConnect()` instead of letting a
       non-awaited failure resolve to success.
-- [ ] **U-124-5 — with the Webpage toggle OFF the broadcast IP is hidden on
+- [ ] **U-124-5 — the page address follows BOTH the Webpage and Wi-Fi toggles.**
+      With the car linked over Wi-Fi, turn the Webpage OFF and confirm the Wi-Fi
+      transport remains ON and connected while the page address disappears.
+      Turn the page ON and confirm the address returns. Then turn Wi-Fi OFF:
+      the address must disappear even if the webpage setting remains ON.
+      Re-enable Wi-Fi and confirm the address returns with the car-reported
+      router IP or own-hotspot gateway, as appropriate.
+- [ ] **U-124-6 — with the Webpage toggle OFF the broadcast IP is hidden on
       EVERY surface.** Remote: no chip right of Back (`deck-link-status`
-      absent — gate is now `linked && carPageServing.current`, the hub
-      opinion a real boolean); Connectivity: the card's **Control address**
+      absent — gate requires a live link, an enabled page and Wi-Fi, and a
+      known address); Connectivity: the card's **Control address**
       row absent (`car-network-ip` not rendered). Toggle ON over a live link
-      → both return. Pinned `pageServingTruth.test.ts` (4 rules); car twin:
+      → both return. Pinned `pageServingTruth.test.ts`; car twin:
       FW 1.3.18 contract `page-state` + M144.
-- [ ] **U-124-6 — the car's page in a browser while the toggle is OFF shows
+- [ ] **U-124-7 — the car's page in a browser while the toggle is OFF shows
       the “turned off” message, NOT a white screen.** Join the car's network,
       open its IP in a phone browser with the page off: the ghost page's text
       renders (firmware half — `serveGhostPage` now declares its real
       Content-Length). F-61: source-level until flashed — FW 1.3.18 is
       UNFLASHED.
-- [ ] **U-124-7 — ⭐ the landscape screen's own chrome (2026-10-25 owner
+- [ ] **U-124-8 — ⭐ the landscape screen's own chrome (2026-10-25 owner
       fix).** On the Remote (landscape-locked): (a) the black strip above the
       Back row is ONE status bar tall — no doubled band, the back line sits
       right under the phone's status icons; (b) the punch-hole camera strip on
@@ -85,6 +92,11 @@
       **`Wi-Fi`** (or `Wi-Fi · <network>`) — **never** a mask like
       `192.168.245.0/24`. Photograph the top-left corner of the deck; if any of
       the three is off, say which.
+- [ ] **U-124-9 — per-link disconnect controls are consistent.** In an external
+      router network, connect Wi-Fi and open Remote: its Wi-Fi disconnect control
+      must appear and disconnect only Wi-Fi. Connect Bluetooth and verify the
+      Bluetooth control appears; with both links up, both controls appear and
+      each drops only its own transport. Repeat with the car's own hotspot.
 
 ## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
 
