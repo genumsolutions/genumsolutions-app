@@ -56,7 +56,14 @@ on:
       - "mobile/package-lock.json"
       - "mobile/plugins/**"
       - "mobile/keystores/**"
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload the APK and release manifest to Supabase
+        required: false
+        default: true
+        type: boolean
+        # Set false for a device-test build that must not contact Supabase.
 
 concurrency:
   group: release-apk
@@ -265,6 +272,7 @@ jobs:
           fi
 
       - name: Build signed release APK
+        id: build-apk
         run: |
           cd android
           chmod +x ./gradlew
@@ -272,19 +280,22 @@ jobs:
           ls -l app/build/outputs/apk/release/
 
       - name: Upload APK + release manifest
-        if: steps.check-supabase.outputs.configured == 'true'
+        if: >-
+          steps.check-supabase.outputs.configured == 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.publish)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
 
-      - name: Upload unsigned/debug release as artifact (when Supabase not configured)
-        if: steps.check-supabase.outputs.configured != 'true'
+      - name: Retain release APK as a workflow artifact
+        if: always() && steps.build-apk.outcome == 'success'
         uses: actions/upload-artifact@v5
         with:
-          name: app-release
+          name: genum-solutions-apk-${{ github.run_number }}
           path: mobile/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           if-no-files-found: error
+          retention-days: 7
 
       # NOTE: the release build intentionally does NOT publish an OTA bundle.
       # The APK + manifest version/versionCode ALWAYS bump on a release, and an
