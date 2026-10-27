@@ -447,14 +447,11 @@ export function ConnectionSection({
           name: name ?? address,
           bonded: bonded === true,
         });
-        // U-69 fixed: the hub now returns a ConnectOutcome, so a FAILED link
-        // is impossible to mistake for success. The message card always shows
-        // the REAL result of the action, never the old "Connected to <car>".
-        setMessage(
-          outcome.ok
-            ? { tone: "ok", text: outcome.message }
-            : { tone: "error", text: outcome.reason ?? "Connection failed." },
-        );
+        // Link outcomes are shown once by the hub's bottom feedback surface.
+        // Keep only outcomes that have no usable explanation in that surface.
+        if (!outcome.ok && !outcome.reason) {
+          setMessage({ tone: "error", text: "Connection failed." });
+        }
       } finally {
         setBusy(false);
       }
@@ -501,11 +498,9 @@ export function ConnectionSection({
       setMessage(null);
       try {
         const outcome = await handleWifiConnect(dial.url);
-        setMessage(
-          outcome.ok
-            ? { tone: "ok", text: outcome.message }
-            : { tone: "error", text: outcome.reason ?? "Connection failed." },
-        );
+        if (!outcome.ok && !outcome.reason) {
+          setMessage({ tone: "error", text: "Connection failed." });
+        }
       } finally {
         setBusy(false);
       }

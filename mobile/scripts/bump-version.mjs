@@ -6,6 +6,7 @@
 //   src/config/site.ts      APP_VERSION (display string)
 //   package.json            "version"
 //   package-lock.json       "version" (root + package entry)
+//   android/app/build.gradle versionName + versionCode (local native build)
 //
 // The website does NOT get bumped here on purpose: the /app download page
 // reads the LIVE release.json manifest (written only when an upload actually
@@ -91,6 +92,14 @@ changed =
   ) || changed;
 console.log(`  app.json            -> ${VERSION} (${VERSION_CODE})`);
 if (!existsSync(appJsonPath)) throw new Error(`File not found: ${appJsonPath}`);
+
+// 1b) Keep the checked-in native Gradle project in sync for local APK builds.
+changed =
+  editFile(resolve(rootDir, "android/app/build.gradle"), (src) =>
+    src
+      .replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`)
+      .replace(/versionName\s+"[^"]+"/, `versionName "${VERSION}"`),
+  ) || changed;
 
 // 2) src/config/site.ts -> APP_VERSION
 // Quote-agnostic (2026-09-23 sweep): prettier (pre-commit) renders site.ts

@@ -61,19 +61,22 @@ describe("U-119c · the hub's connection message reaches the screen", () => {
   });
 
   it("RENDERS hub.connectionMessage — the state that used to be set and never drawn", () => {
-    // One occurrence in the ternary guard, one as the child text.
-    expect(count(screen, "hub.connectionMessage")).toBe(2);
-    expect(screen).toContain("{hub.connectionMessage ? (");
+    // The fixed-height footer hosts either the connection outcome or the
+    // silent-car warning without changing the controls' layout.
+    expect(count(screen, "hub.connectionMessage")).toBe(3);
+    expect(screen).toContain("{hub.connectionMessage || hub.carSilent ? (");
+    expect(screen).toContain('className="h-12 flex-shrink-0 justify-end"');
+    expect(screen).not.toContain('className="absolute left-3 right-3 z-50');
   });
 
   it("renders an error as an error, not as a green success line", () => {
-    expect(screen).toContain(
-      'hub.connectionMsgType === "error" ? "error" : "ok"',
-    );
+    expect(screen).toContain('hub.connectionMsgType !== "error"');
   });
 
   it("exactly ONE strip exists (9029a79 removed three duplicate toasts)", () => {
-    expect(count(screen, "tone={hub.connectionMsgType")).toBe(1);
+    expect(count(screen, "{hub.connectionMessage || hub.carSilent ? (")).toBe(
+      1,
+    );
   });
 
   it("the hub still exposes both halves of the pair to the screen", () => {

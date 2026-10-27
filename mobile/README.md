@@ -78,6 +78,7 @@ Bump together on every release so installs update over-the-top:
 - `version` + `android.versionCode` in `app.json` (single source of truth)
 - `APP_VERSION` in `src/config/site.ts`
 - `package.json` `version` + lock (via `node scripts/bump-version.mjs <ver> <code>`)
+- checked-in `android/app/build.gradle` `versionName` + `versionCode` (kept in sync by the same script)
 
 The website's bundled fallback (`genumsolutions-website/lib/company.ts` → `androidApp`) is
 **NOT** bumped in advance — the `/app` page reads the LIVE `release.json` manifest. After an

@@ -113,20 +113,50 @@ describe("U-105 — the one-active-link teardown is GONE (both transports stay l
     const clearing = cases.filter((c) => c.includes("setLinkVerified(false)"));
     expect(clearing.length).toBeGreaterThanOrEqual(2);
     for (const c of clearing) {
-      expect(c).toContain("if (!wifiService.isConnected)");
-      // the clear must be INSIDE that guard, not merely mentioned nearby
-      expect(c.indexOf("if (!wifiService.isConnected)")).toBeLessThan(
-        c.indexOf("setLinkVerified(false)"),
+      expect(c).toContain(
+        "if (!wifiService.isConnected && !bleService.isConnected)",
       );
+      // the clear must be INSIDE that guard, not merely mentioned nearby
+      expect(
+        c.indexOf("if (!wifiService.isConnected && !bleService.isConnected)"),
+      ).toBeLessThan(c.indexOf("setLinkVerified(false)"));
     }
   });
 
-  it("dropping the Wi-Fi link leaves nothing verified", () => {
-    // A manual Wi-Fi disconnect genuinely ends that link: a stale
-    // `linkVerified = true` would read as "live" on the next status paint
-    // before any car has answered.
-    const helper = body("handleWifiDisconnect", "handleWifiProvision");
+  it("Wi-Fi loss preserves verification when a Bluetooth link is still live", () => {
+    const cases = wifiStatusCases().filter((c) =>
+      ["disconnected", "reconnecting", "error"].some((status) =>
+        c.startsWith(`${status}"`),
+      ),
+    );
+    expect(cases).toHaveLength(3);
+    for (const c of cases) {
+      expect(c).toContain(
+        "if (!sppService.isConnected && !bleService.isConnected)",
+      );
+      expect(
+        c.indexOf("if (!sppService.isConnected && !bleService.isConnected)"),
+      ).toBeLessThan(c.indexOf("setLinkVerified(false)"));
+    }
+  });
+
+  it("manual Wi-Fi disconnect clears verification only when Bluetooth is also down", () => {
+    const helper = body("handleWifiDisconnect", "handleBtDisconnect");
+    expect(helper).toContain("const bluetoothStillConnected =");
+    expect(helper).toContain("if (!bluetoothStillConnected)");
     expect(helper).toContain("setLinkVerified(false)");
+  });
+
+  it("disconnect actions serialize taps and always clear progress", () => {
+    const wifi = body("handleWifiDisconnect", "handleBtDisconnect");
+    const bluetooth = body("handleBtDisconnect", "handleWifiProvision");
+    for (const helper of [wifi, bluetooth]) {
+      expect(helper).toContain("if (disconnectingRef.current) return;");
+      expect(helper).toContain("disconnectingRef.current = true;");
+      expect(helper).toContain("disconnectingRef.current = false;");
+      expect(helper).toContain("finally");
+      expect(helper).toContain("setDisconnectingLink(null)");
+    }
   });
 
   it("manual safe-stop marks shared transports before sending stop commands", () => {

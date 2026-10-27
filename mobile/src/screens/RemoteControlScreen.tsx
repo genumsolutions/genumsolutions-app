@@ -729,7 +729,12 @@ export function RemoteControlScreen({ navigation }: Props) {
     body: React.ReactNode,
     actions: React.ReactNode,
   ) => (
-    <Modal transparent visible animationType="fade">
+    <Modal
+      transparent
+      visible
+      animationType="fade"
+      onRequestClose={handleReconnectPromptCancel}
+    >
       <View
         className="flex-1 items-center justify-center px-6"
         style={{ backgroundColor: "rgba(15,23,42,0.7)" }}
@@ -981,14 +986,25 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Disconnect Bluetooth"
               testID="remote-disconnect-bt"
+              disabled={hub.disconnectingLink !== null}
+              accessibilityState={{
+                disabled: hub.disconnectingLink !== null,
+                busy: hub.disconnectingLink === "bluetooth",
+              }}
               hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
+              className={`shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 ${hub.disconnectingLink !== null ? "opacity-60" : "active:opacity-70"}`}
             >
               <Feather name="bluetooth" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted">
-                Bluetooth
+                {hub.disconnectingLink === "bluetooth"
+                  ? "Disconnecting…"
+                  : "Bluetooth"}
               </Text>
-              <Feather name="x-circle" size={14} color="#ef4444" />
+              {hub.disconnectingLink === "bluetooth" ? (
+                <Feather name="clock" size={13} color="#64748b" />
+              ) : (
+                <Feather name="x-circle" size={14} color="#ef4444" />
+              )}
             </Pressable>
           ) : null}
           {/* U-124 ⑥ (owner 2026-10-24, "when i connect the car through the
@@ -1013,14 +1029,27 @@ export function RemoteControlScreen({ navigation }: Props) {
                   : "Disconnect Wi-Fi (router)"
               }
               testID="remote-disconnect-wifi"
+              disabled={hub.disconnectingLink !== null}
+              accessibilityState={{
+                disabled: hub.disconnectingLink !== null,
+                busy: hub.disconnectingLink === "wifi",
+              }}
               hitSlop={8}
-              className="shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 active:opacity-70"
+              className={`shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 ${hub.disconnectingLink !== null ? "opacity-60" : "active:opacity-70"}`}
             >
               <Feather name="wifi" size={13} color="#64748b" />
               <Text className="text-[11px] font-bold text-muted">
-                {onOwnHotspot ? "Wi-Fi (hotspot)" : "Wi-Fi (router)"}
+                {hub.disconnectingLink === "wifi"
+                  ? "Disconnecting…"
+                  : onOwnHotspot
+                    ? "Wi-Fi (hotspot)"
+                    : "Wi-Fi (router)"}
               </Text>
-              <Feather name="x-circle" size={14} color="#ef4444" />
+              {hub.disconnectingLink === "wifi" ? (
+                <Feather name="clock" size={13} color="#64748b" />
+              ) : (
+                <Feather name="x-circle" size={14} color="#ef4444" />
+              )}
             </Pressable>
           ) : null}
           {/* Q2 default (owner): the compact telemetry line is the FIRST
@@ -1123,40 +1152,12 @@ export function RemoteControlScreen({ navigation }: Props) {
         {/* U-113 P2 (issue 2): the tab pills MOVED into the single merged row
             above — the second h-7 row below Back is gone and the drive deck
             gains its ~28 px. */}
-        {/* U-119c (owner 2026-10-21): THE FEEDBACK SURFACE. The hub has
-            14 showConnectionMessage() call sites that set `connectionMessage`
-            and NOTHING rendered it — so the user was told nothing after an
-            action. That includes two the code itself calls safety-critical:
-              • F-59 narration: "Smart-link joined <ssid> AUTOMATICALLY …" —
-                the comment on that call says a toast that never said
-                "automatic" read to the owner as "the app is broken".
-              • the post-reset confirmation "Car data reset — power cycle the
-                car", fired from this screen's reset button, so a successful
-                factory reset produced NO acknowledgement at all.
-            The duplicate "Connected to" toasts were deliberately removed in
-            9029a79 (only the status header remained); this restores ONE strip,
-            not three, and it auto-clears on the hub's own 4 s timer. Reuses the
-            existing InlineMessage primitive (ConnectionSection / WifiPanel) so
-            no new design language lands here. */}
-        {hub.connectionMessage ? (
-          <InlineMessage
-            tone={hub.connectionMsgType === "error" ? "error" : "ok"}
-          >
-            {hub.connectionMessage}
-          </InlineMessage>
-        ) : null}
         {/* U-121 Phase D (owner 2026-10-23): "the car freezes and the app
             doesn't know about that." A link being up says nothing about a
             live car — the owner's freeze (BT on, Wi-Fi drop, heap collapse)
             keeps the transport nominally up while the car answers NOTHING.
             The hub's pure `isCarSilent` detector names that state honestly,
             and this strip says what to do about it. */}
-        {hub.carSilent ? (
-          <InlineMessage tone="error">
-            The car has not answered for a while — it may have frozen. Check its
-            power (a heap collapse can lock it up), then Reconnect.
-          </InlineMessage>
-        ) : null}
         {/* ── Content area ── */}
         {isDrone || isNonRobocar ? (
           /* U-58 (owner report 2026-09-30 — "everything merging and overlapping
@@ -1424,6 +1425,28 @@ export function RemoteControlScreen({ navigation }: Props) {
             )}
           </View>
         )}
+        <View className="h-12 flex-shrink-0 justify-end">
+          {hub.connectionMessage || hub.carSilent ? (
+            <View
+              pointerEvents="none"
+              accessibilityLiveRegion="polite"
+              className="w-full items-center"
+            >
+              <View className="w-full max-w-[520px]">
+                <InlineMessage
+                  tone={
+                    hub.connectionMessage && hub.connectionMsgType !== "error"
+                      ? "ok"
+                      : "error"
+                  }
+                >
+                  {hub.connectionMessage ??
+                    "The car has not answered for a while — it may have frozen. Check its power and reconnect when it is ready."}
+                </InlineMessage>
+              </View>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       {/* ── Settings dropdown ── */}

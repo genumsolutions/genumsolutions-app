@@ -133,7 +133,7 @@ describe("U-121 Phase D — the hub stamps frames and evaluates the rule", () =>
 
 describe("U-121 Phase D — the Remote deck says so honestly", () => {
   it("the strip renders from the hub verdict with an honest instruction", () => {
-    expect(screen).toContain("{hub.carSilent ? (");
+    expect(screen).toContain("{hub.connectionMessage || hub.carSilent ? (");
     expect(screen).toContain("may have frozen");
     // It reuses the ONE inline-message primitive — no new design language.
     expect(screen).toContain("The car has not answered for a while");
