@@ -262,9 +262,7 @@ export function useControlHub(routeCategory?: string) {
   // device", and keeps working when nothing is linked (simulation). ----
   const [sppDevices, setSppDevices] = useState<SppDevice[]>([]);
   const [connected, setConnected] = useState(
-    sppService.isConnected ||
-      bleService.isConnected ||
-      wifiService.isConnected,
+    sppService.isConnected || bleService.isConnected || wifiService.isConnected,
   );
   // U-113 P2 (issue 3): `connected` is the SHARED "some link is up" flag — a
   // Wi-Fi connect sets it too. The Remote screen's Bluetooth chip must show
@@ -374,6 +372,9 @@ export function useControlHub(routeCategory?: string) {
   );
   const [connectionMsgType, setConnectionMsgType] = useState<
     "success" | "error" | null
+  >(null);
+  const [disconnectingLink, setDisconnectingLink] = useState<
+    "bluetooth" | "wifi" | null
   >(null);
   const [sppStatus, setSppStatus] = useState<
     "idle" | "connecting" | "connected" | "disconnected" | "error"
@@ -716,6 +717,7 @@ export function useControlHub(routeCategory?: string) {
 
   const mountedRef = useRef(true);
   const manualCloseRef = useRef(false);
+  const disconnectingRef = useRef(false);
   const lastDriveCmdAtRef = useRef<Record<string, number>>({});
   const connectionMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -1879,9 +1881,11 @@ export function useControlHub(routeCategory?: string) {
           // clearing here unconditionally would put a live, answered Wi-Fi link
           // back on "Connecting…" (gold dot) and stop the REQ_STATE poll, which
           // is keyed on `connected`.
-          if (!wifiService.isConnected) {
+          if (!wifiService.isConnected && !bleService.isConnected) {
             setConnected(false);
-            setLinkVerified(false);
+            if (!sppService.isConnected && !bleService.isConnected) {
+              setLinkVerified(false);
+            }
           }
           // U-113 P2: SPP is down — hide the BT chip unless BLE still holds
           // a link (the two BT transports are independent transports).
@@ -1916,7 +1920,7 @@ export function useControlHub(routeCategory?: string) {
           setDeviceName("");
           // U-98: same rule as "disconnected" — a failed Bluetooth attempt
           // must not un-verify the Wi-Fi link that is still up.
-          if (!wifiService.isConnected) {
+          if (!wifiService.isConnected && !bleService.isConnected) {
             setConnected(false);
             setLinkVerified(false);
           }
@@ -1995,7 +1999,6 @@ export function useControlHub(routeCategory?: string) {
           // session (same reset the SPP handler does on its own reconnect).
           setCarStubMap({});
           setCarAvailMap({});
-          showConnectionMessage("WiFi connected", "success");
           setTimeout(() => {
             wifiService
               .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
@@ -2010,7 +2013,9 @@ export function useControlHub(routeCategory?: string) {
           // next status frame read as "live" before any car had answered —
           // which is exactly the stale-visual report ("the app is still in the
           // old state").
-          setLinkVerified(false);
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setLinkVerified(false);
+          }
           // U-120 Phase C: "disconnected" is the MANUAL path (disconnect()).
           // The user chose to drop the link — no dialog asks them to reconnect.
           setReconnectDue(false);
@@ -2031,7 +2036,9 @@ export function useControlHub(routeCategory?: string) {
         case "reconnecting":
           setWifiConnected(false);
           setConnecting(false);
-          setLinkVerified(false);
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setLinkVerified(false);
+          }
           if (!sppService.isConnected && !bleService.isConnected) {
             setConnected(false);
             setDeviceName("");
@@ -2051,7 +2058,9 @@ export function useControlHub(routeCategory?: string) {
         case "error":
           setWifiConnected(false);
           setConnecting(false);
-          setLinkVerified(false);
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setLinkVerified(false);
+          }
           setError(message ?? "WiFi connection lost");
           if (!sppService.isConnected && !bleService.isConnected) {
             setConnected(false);
@@ -2317,6 +2326,7 @@ export function useControlHub(routeCategory?: string) {
         setConnectingAddress(null);
         setSppDevices([]);
         setError(reason);
+        if (mountedRef.current) showConnectionMessage(reason, "error");
         return { ok: false, reason };
       }
     },
@@ -2423,8 +2433,8 @@ export function useControlHub(routeCategory?: string) {
       // callback clears only the connect action itself.
       setError(null);
       setConnecting(false);
-      setLinkVerified(false);
-      setWifiConnected(false);
+      setLinkVerified(sppService.isConnected || bleService.isConnected);
+      if (!wifiService.isConnected) setWifiConnected(false);
       setConnectingAddress(null);
       // OPS-2: the ToolsScreen bridge calls setWifiUrl(options.url) and then
       // this handler in the SAME tick — the `wifiUrl` state has not re-rendered
@@ -2434,6 +2444,7 @@ export function useControlHub(routeCategory?: string) {
       if (!effectiveUrl) {
         const reason = `Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`;
         setError(reason);
+        showConnectionMessage(reason, "error");
         return { ok: false, reason };
       }
       const wsUrl =
@@ -2449,7 +2460,7 @@ export function useControlHub(routeCategory?: string) {
       // never touched here (a disconnected connect never changes it).
       setWirelessMethod("wifi");
       setConnecting(true);
-      setLinkVerified(false);
+      setLinkVerified(sppService.isConnected || bleService.isConnected);
       // Deliver over the ONE shared socket every hub reads — the SAME
       // WebSocket the website page (http://192.168.245.1) uses for drive.
       // R1: connect() only proves the socket opened, so wait for the car to
@@ -2463,7 +2474,9 @@ export function useControlHub(routeCategory?: string) {
             reason: "The app closed before the car answered.",
           };
         }
-        setLinkVerified(answered);
+        setLinkVerified(
+          answered || sppService.isConnected || bleService.isConnected,
+        );
         if (answered) {
           setWifiConnected(true);
           setError(null);
@@ -2509,7 +2522,9 @@ export function useControlHub(routeCategory?: string) {
         const reasonHalfOpen =
           "The car did not answer at that address. Check the car is powered and that this phone is on the same network as the car.";
         setWifiConnected(false);
+        setLinkVerified(sppService.isConnected || bleService.isConnected);
         setError(reasonHalfOpen);
+        showConnectionMessage(reasonHalfOpen, "error");
         return { ok: false, reason: reasonHalfOpen };
       } catch (e) {
         // U-80 (owner 2026-10-03, "automatic"): the phone probably just followed
@@ -2555,10 +2570,11 @@ export function useControlHub(routeCategory?: string) {
         if (mountedRef.current) {
           setError(reason);
           setWifiConnected(false);
-          setLinkVerified(false);
+          setLinkVerified(sppService.isConnected || bleService.isConnected);
           setConnecting(false);
           setConnectingAddress(null);
         }
+        if (mountedRef.current) showConnectionMessage(reason, "error");
         return { ok: false, reason };
       } finally {
         if (mountedRef.current) setConnecting(false);
@@ -2667,6 +2683,9 @@ export function useControlHub(routeCategory?: string) {
   }, [phoneSsid, phoneNetworkLabel, publishPhoneNetState]);
 
   const handleWifiDisconnect = useCallback(async () => {
+    if (disconnectingRef.current) return;
+    disconnectingRef.current = true;
+    setDisconnectingLink("wifi");
     manualCloseRef.current = true;
     wifiService.markManualClose();
     // Safe-stop: send stop commands before closing (only over the live socket).
@@ -2682,21 +2701,33 @@ export function useControlHub(routeCategory?: string) {
         /* ignore */
       }
     }
-    await wifiService.disconnect();
-    setWifiConnected(false);
-    // U-98: with one live link at a time, dropping the Wi-Fi link leaves
-    // NOTHING verified. Stale `true` here is what would let the next status
-    // read as "live" before any car has answered.
-    setLinkVerified(false);
-    setError(null);
-    // W5: clear stale telemetry so the UI doesn't show old IP/SSID after disconnect
-    setTelemetry((prev) => ({
-      ...prev,
-      ip: undefined,
-      ssid: undefined,
-      connected: undefined,
-    }));
-  }, []);
+    try {
+      await wifiService.disconnect();
+      setWifiConnected(false);
+      const bluetoothStillConnected =
+        sppService.isConnected || bleService.isConnected;
+      if (!bluetoothStillConnected) {
+        setConnected(false);
+        setLinkVerified(false);
+        setDeviceName("");
+        setTelemetry((prev) => ({
+          ...prev,
+          ip: undefined,
+          ssid: undefined,
+          connected: undefined,
+        }));
+      }
+      setError(null);
+      showConnectionMessage("Wi-Fi disconnected.", "success");
+    } catch (e) {
+      const reason =
+        e instanceof Error ? e.message : "The Wi-Fi link could not be closed.";
+      showConnectionMessage(`Could not disconnect Wi-Fi: ${reason}`, "error");
+    } finally {
+      disconnectingRef.current = false;
+      setDisconnectingLink(null);
+    }
+  }, [showConnectionMessage]);
 
   // U-113 P2 (owner issue 3): a BLUETOOTH-ONLY disconnect. The Remote
   // screen's BT chip used to call the full `handleDisconnect`, which tore
@@ -2707,48 +2738,76 @@ export function useControlHub(routeCategory?: string) {
   // the BT status handlers already follow). `manualCloseRef` stops the SPP
   // auto-reconnect from reopening a link the user deliberately dropped.
   const handleBtDisconnect = useCallback(async () => {
+    if (disconnectingRef.current) return;
+    disconnectingRef.current = true;
+    setDisconnectingLink("bluetooth");
     manualCloseRef.current = true;
     sppService.manualClose = true;
-    // Safe-stop: neutral commands over each LIVE BT transport before closing.
-    if (sppService.isConnected) {
-      try {
-        await sppService.sendLine("S");
-      } catch {
-        /* ignore — link may already be dead */
+    try {
+      // Safe-stop: neutral commands over each LIVE BT transport before closing.
+      if (sppService.isConnected) {
+        try {
+          await sppService.sendLine("S");
+        } catch {
+          /* ignore — link may already be dead */
+        }
+        try {
+          await sppService.sendLine("SPD0");
+        } catch {
+          /* ignore */
+        }
       }
-      try {
-        await sppService.sendLine("SPD0");
-      } catch {
-        /* ignore */
+      if (bleService.isConnected) {
+        try {
+          await bleService.sendLine("S");
+        } catch {
+          /* ignore */
+        }
+        try {
+          await bleService.sendLine("SPD0");
+        } catch {
+          /* ignore */
+        }
+        await bleService.disconnect();
       }
+      await sppService.disconnect();
+      setBtLinked(false);
+      // A live Wi-Fi link keeps the shared truth (`connected` / `linkVerified` /
+      // deviceName belong to whatever link remains); with no Wi-Fi socket up
+      // this is a full link loss and must un-verify it.
+      if (!wifiService.isConnected) {
+        setConnected(false);
+        if (!sppService.isConnected && !bleService.isConnected) {
+          setLinkVerified(false);
+        }
+        setDeviceName("");
+      }
+      // The car heard S / SPD0 over BT — "Stop" is honest on every surface.
+      setDriveStatusOnce("Stop");
+      setDriveDirOnce("S");
+      showConnectionMessage("Bluetooth disconnected.", "success");
+    } catch (e) {
+      const bluetoothStillConnected =
+        sppService.isConnected || bleService.isConnected;
+      setBtLinked(bluetoothStillConnected);
+      if (!bluetoothStillConnected && !wifiService.isConnected) {
+        setConnected(false);
+        setLinkVerified(false);
+        setDeviceName("");
+      }
+      const reason =
+        e instanceof Error
+          ? e.message
+          : "The Bluetooth link could not be closed.";
+      showConnectionMessage(
+        `Could not disconnect Bluetooth: ${reason}`,
+        "error",
+      );
+    } finally {
+      disconnectingRef.current = false;
+      setDisconnectingLink(null);
     }
-    if (bleService.isConnected) {
-      try {
-        await bleService.sendLine("S");
-      } catch {
-        /* ignore */
-      }
-      try {
-        await bleService.sendLine("SPD0");
-      } catch {
-        /* ignore */
-      }
-      await bleService.disconnect();
-    }
-    await sppService.disconnect();
-    setBtLinked(false);
-    // A live Wi-Fi link keeps the shared truth (`connected` / `linkVerified` /
-    // deviceName belong to whatever link remains); with no Wi-Fi socket up
-    // this is a full link loss and must un-verify it.
-    if (!wifiService.isConnected) {
-      setConnected(false);
-      setLinkVerified(false);
-      setDeviceName("");
-    }
-    // The car heard S / SPD0 over BT — "Stop" is honest on every surface.
-    setDriveStatusOnce("Stop");
-    setDriveDirOnce("S");
-  }, []);
+  }, [showConnectionMessage]);
 
   // ---- v1.4.0 WiFi provisioning (app → BT → car) ----
   // Sends WIFICFG;<ssid>;<password> over the Bluetooth link; the car stores
@@ -4018,6 +4077,7 @@ export function useControlHub(routeCategory?: string) {
     error,
     connectionMessage,
     connectionMsgType,
+    disconnectingLink,
     sppStatus,
     sppStatusMsg,
     // P5 (owner item F, 2026-10-17 / firmware 1.3.13): the car's LINK-CAPACITY

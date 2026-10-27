@@ -109,10 +109,13 @@ describe("U-118 — resolveLinkPrompt: the reconnect card is a claim about NOW",
   it("shows the reconnect card only when nothing is up", () => {
     const p = resolveLinkPrompt(facts({ reconnectDue: true, linked: false }));
     expect(p?.kind).toBe("reconnect");
-    // U-120 item 8: ONE yes/no question naming the METHOD — no link-state
-    // narration, no "stopping itself on link loss" sentence.
-    expect(p && p.kind === "reconnect" ? p.body : "").toBe(
-      "Reconnect to your car over Bluetooth?",
+    // U-120 item 8: name the method, explain why controls are paused, and give
+    // the user a bounded retry expectation instead of repeating a bare prompt.
+    expect(p && p.kind === "reconnect" ? p.body : "").toContain(
+      "The Bluetooth link is down, so controls are paused.",
+    );
+    expect(p && p.kind === "reconnect" ? p.body : "").toContain(
+      "Reconnect makes one attempt;",
     );
     expect(p && p.kind === "reconnect" ? p.title : "").toBe(
       "Bluetooth disconnected",
@@ -131,8 +134,8 @@ describe("U-118 — resolveLinkPrompt: the reconnect card is a claim about NOW",
     expect(p && p.kind === "reconnect" ? p.title : "").toBe(
       "Wi-Fi disconnected",
     );
-    expect(p && p.kind === "reconnect" ? p.body : "").toBe(
-      "Reconnect to your car over Wi-Fi?",
+    expect(p && p.kind === "reconnect" ? p.body : "").toContain(
+      "The Wi-Fi link is down, so controls are paused.",
     );
     expect(p && p.kind === "reconnect" ? p.method : "").toBe("Wi-Fi");
   });

@@ -210,8 +210,9 @@ export function targetUnavailableReason(
     (target.id === "bt-spp" || target.id === "car-wifi")
   ) {
     return (
-      "The car is low on memory right now — it will hold one link only. " +
-      "Disconnect the current link first if you need this one."
+      "The car has low free memory, so it is allowing one link only to prevent " +
+      "a freeze or reset. Keep using the current link, or switch off the other " +
+      "transport in Settings before trying again."
     );
   }
   if (target.needsCarOnRouter && !ctx.carOnOwnRouter) {

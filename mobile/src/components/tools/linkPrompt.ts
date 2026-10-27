@@ -75,11 +75,11 @@ export type LinkPromptArgs = {
 
 /** The one question the card asks — the method is the only detail kept. */
 const RECONNECT_BODY = (method: LinkPromptMethod) =>
-  `Reconnect to your car over ${method}?`;
+  `The ${method} link is down, so controls are paused. Check the car is powered on and nearby. Reconnect makes one attempt; if the car is still starting, wait a moment before trying again.`;
 
 /** Cause copy when the car rebooted — a sentence, never the reset RECORD. */
 const RESTART_CAUSE_BODY = (method: LinkPromptMethod) =>
-  `Your car restarted. Reconnect to it over ${method}?`;
+  `Your car restarted and the ${method} link is down. Wait for startup to finish, then tap Reconnect for one attempt or Cancel to stay disconnected.`;
 
 /**
  * The ONE decision: which prompt belongs on screen right now, given the live

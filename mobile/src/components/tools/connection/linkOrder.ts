@@ -95,7 +95,7 @@ export function describeSecondLink(facts: SecondLinkFacts): SecondLinkState {
       raise === null
         ? null
         : refusedByCar
-          ? `The car refused ${LABEL[raise]} as a second link (low memory). The connection will not open — disconnect the current link first.`
+          ? `The car reports low memory and refused ${LABEL[raise]} to prevent a freeze or reset. Keep using the current link, or switch off the other transport in Settings before trying again.`
           : `${LABEL[raise]} coming up…`,
   };
 }

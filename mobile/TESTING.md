@@ -1,5 +1,36 @@
 # TESTING — Physical Device Test Checklist
 
+## U-125 round — 2026-10-25: dual-link heap verdict and stable connection feedback (app **3.2.8/61** + car **1.3.19** — DEVICE VERIFY PENDING)
+
+> Install the locally built 3.2.8/61 APK and flash firmware 1.3.19. The app
+> must use the car's live `LINKCAP` verdict, keep an incumbent method usable,
+> and show connection outcomes in a fixed bottom lane. **All rows are unticked:
+> source tests do not replace a real-phone + car pass (F-61).**
+
+- [ ] **U-125-1 — the first method remains available; low heap blocks only the
+      second.** Connect by Bluetooth or Wi-Fi. With `LINKCAP=0` / `link_cap:0`,
+      confirm only the other method is disabled and the explanation names low
+      memory, the one-link limit, and the safe next step. Controls over the
+      incumbent link still work. Reverse the first-link order and repeat.
+- [ ] **U-125-2 — capacity verdicts are respected in both directions.** With
+      `LINKCAP=1`, confirm the second method is offered; with `LINKCAP=0`,
+      confirm it is not. A car that omits `LINKCAP` remains usable and does not
+      acquire a made-up refusal.
+- [ ] **U-125-3 — disconnect is single-shot and method-specific.** Start a
+      Bluetooth or Wi-Fi disconnect and tap again while it is pending. The
+      action disables and reads “Disconnecting…”; only one disconnect runs.
+      The other live method remains connected. A failed close gives one clear
+      error; a manual close does not raise an unexpected-reconnect dialog.
+- [ ] **U-125-4 — connection feedback stays in its fixed bottom lane.** Repeat
+      successful/failed Bluetooth and Wi-Fi connects, manual disconnects, and
+      the car-silent warning. Each outcome appears once at the bottom; no
+      second message appears under Connect, the controls do not move when a
+      message appears, and the message neither covers nor blocks controls.
+- [ ] **U-125-5 — reconnect prompt is one informative decision.** Cause one
+      unexpected Wi-Fi drop, then one unexpected Bluetooth drop. Each shows
+      one method-specific dialog with the paused-control context and retry
+      guidance; repeated status events do not stack dialogs or silently retry.
+
 ## U-123 round — 2026-10-24: the storyboard/wireframe re-review's six findings (app 3.2.7/60 JS-only OTA — DEVICEVERIFY PENDING; car half = RUNSHEET records patch only)
 
 > Re-review of `storyboard.md` + `TRACKS/remote-wireframe-2026-10-24.png`
