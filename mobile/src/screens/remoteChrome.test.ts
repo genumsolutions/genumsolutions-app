@@ -278,7 +278,6 @@ describe("remembered-router setting is firmware boot behavior", () => {
 
   it("sense: the Remote settings switch names the remembered router", () => {
     expect(screen).toContain("Remember last used router");
-    expect(screen).toContain("At power-up, use it if available");
     expect(screen).toContain(
       'accessibilityLabel="Remember the last used router at power-up; keep the car\'s own access point if it is unavailable"',
     );
@@ -509,45 +508,27 @@ describe("U-124 ①+⑤ — the phone's strip: black camera band, status bar sho
 // width of the setting window too."
 describe("U-124 ④ — the settings window fits its own content", () => {
   it("has sources to check (the rules must not pass vacuously)", () => {
-    expect(screen).toContain("w-80 max-w-[92%]");
+    expect(screen).toContain("w-96 max-w-[94%]");
     expect(screen.length).toBeGreaterThan(5000);
   });
 
-  it("the window is WIDER (288 → 320) so the long labels stop wrapping", () => {
-    // Measured in headless Chrome: "Remember last used router" at the
-    // old 11 px is 215 px wide and only had 187 px of room in w-72/p-2.5 —
-    // it wrapped, which is the "over flowing" the owner saw. At 10 px in
-    // w-80/p-2 it is 196 px in 223 px of room: one line, with margin for a
-    // system font scale.
+  it("widens the window and gives controls room for touch targets", () => {
     expect(screen).not.toContain("w-72 rounded-2xl");
     expect(screen).toContain(
-      "w-80 max-w-[92%] rounded-2xl border border-line bg-card p-2",
+      "w-96 max-w-[94%] rounded-2xl border border-line bg-card p-3",
     );
+    expect(screen).toContain("h-10 w-10 items-center justify-center");
+    expect(screen).toContain("h-11 items-center justify-center rounded-md");
   });
 
-  it("the panel's own type steps DOWN one tier, hierarchy kept", () => {
-    // Every row label + the danger title + the reset button sit on the 10 px
-    // captions tier; the captions under them on the 9 px floor; group headers
-    // stay 9 px caps; nothing in the panel is 11 px anymore — the 11 px that
-    // REMAIN on this screen are the chrome-row chips, the tabs and the prompt
-    // buttons, i.e. the tier ABOVE the panel.
-    expect(count(screen, "text-[11px] font-bold uppercase")).toBe(0);
-    expect(count(screen, "text-[11px] font-bold")).toBeGreaterThan(0);
-    expect(count(screen, "text-[9px] leading-tight text-muted")).toBe(2);
-    expect(count(screen, "text-[9px] leading-3 text-muted")).toBe(1);
-  });
-
-  it("every setting item closes with the same, tighter bottom gap", () => {
-    // The old rhythm mixed mt-1 / mt-1.5 / mt-2.5 tops and pt-1.5 / pt-2
-    // under the rules, so the bottom of one item did not match the next.
-    expect(count(screen, "mt-1.5 flex-row items-center justify-between")).toBe(
-      0,
+  it("keeps menu items concise and makes reset a clear, confirmed action", () => {
+    expect(screen).not.toContain("At power-up, use it if available");
+    expect(screen).not.toContain("Steering &amp; trim: 2WD1M only.");
+    expect(screen).not.toContain("Erases everything the car remembers");
+    expect(screen).toContain(
+      'accessibilityLabel="Remember the last used router',
     );
-    expect(count(screen, "mt-2.5 border-t border-line")).toBe(0);
-    expect(count(screen, "mt-1.5 border-t border-line pt-1")).toBe(1);
-    expect(count(screen, "mt-2 border-t border-line pt-1.5")).toBe(1);
-    expect(
-      count(screen, 'className="mt-1 flex-row items-center justify-between'),
-    ).toBeGreaterThanOrEqual(5);
+    expect(screen).toContain('"Reset car",');
+    expect(screen).toContain("This erases saved Wi-Fi networks");
   });
 });
