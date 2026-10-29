@@ -166,7 +166,7 @@ function StepperPill({
         borderless: true,
         radius: 20,
       }}
-      className="h-8 w-8 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
+      className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card disabled:opacity-40"
     >
       <Feather name={icon} size={14} color="#64748b" />
     </Pressable>
@@ -1425,28 +1425,26 @@ export function RemoteControlScreen({ navigation }: Props) {
             )}
           </View>
         )}
-        <View className="h-12 flex-shrink-0 justify-end">
-          {hub.connectionMessage || hub.carSilent ? (
-            <View
-              pointerEvents="none"
-              accessibilityLiveRegion="polite"
-              className="w-full items-center"
-            >
-              <View className="w-full max-w-[520px]">
-                <InlineMessage
-                  tone={
-                    hub.connectionMessage && hub.connectionMsgType !== "error"
-                      ? "ok"
-                      : "error"
-                  }
-                >
-                  {hub.connectionMessage ??
-                    "The car has not answered for a while — it may have frozen. Check its power and reconnect when it is ready."}
-                </InlineMessage>
-              </View>
+        {hub.connectionMessage || hub.carSilent ? (
+          <View
+            pointerEvents="none"
+            accessibilityLiveRegion="polite"
+            className="mt-1 flex-shrink-0 w-full items-center"
+          >
+            <View className="w-full max-w-[520px]">
+              <InlineMessage
+                tone={
+                  hub.connectionMessage && hub.connectionMsgType !== "error"
+                    ? "ok"
+                    : "error"
+                }
+              >
+                {hub.connectionMessage ??
+                  "The car has not answered for a while — it may have frozen. Check its power and reconnect when it is ready."}
+              </InlineMessage>
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
       </View>
 
       {/* ── Settings dropdown ── */}
@@ -1467,7 +1465,7 @@ export function RemoteControlScreen({ navigation }: Props) {
               indicator is ON — on a short landscape screen the Danger zone
               sits below the fold and must stay discoverable. */}
           <ScrollView
-            className="absolute z-40 w-80 max-w-[92%] rounded-2xl border border-line bg-card p-2 shadow-xl"
+            className="absolute z-40 w-96 max-w-[94%] rounded-2xl border border-line bg-card p-3 shadow-xl"
             style={{
               top: 56,
               right: Math.max(insets.right, 12),
@@ -1506,7 +1504,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 at two-OFFs is disabled. Each mirrors the car's NVS and rides to
                 DevicePrefs + cloud. (P3 2026-10-15: the third toggle here, the
                 CAR's boot auto-join, was removed — see below.) */}
-              <View className="mt-1 flex-row items-center justify-between">
+              <View className="mt-1 min-h-11 flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Feather name="wifi" size={14} color="#64748b" />
                   <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
@@ -1526,7 +1524,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 />
               </View>
 
-              <View className="mt-1 flex-row items-center justify-between">
+              <View className="mt-1 min-h-11 flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Feather name="bluetooth" size={14} color="#64748b" />
                   <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
@@ -1554,7 +1552,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 2026-10-24: this comment used to sit ABOVE THE FACTORY-RESET
                 block (a cut/paste residue of an earlier rectification) — it
                 belongs here, on the toggle it explains. */}
-              <View className="mt-1 flex-row items-center justify-between">
+              <View className="mt-1 min-h-11 flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Feather name="eye" size={14} color="#64748b" />
                   <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
@@ -1576,16 +1574,12 @@ export function RemoteControlScreen({ navigation }: Props) {
 
               {/* The car checks the remembered router at boot and keeps its
                 own access point when the router is absent. */}
-              <View className="mt-1 flex-row items-center justify-between gap-2">
+              <View className="mt-1 min-h-11 flex-row items-center justify-between gap-2">
                 <View className="min-w-0 flex-1 flex-row items-center gap-2">
                   <Feather name="refresh-cw" size={14} color="#64748b" />
                   <View className="min-w-0 flex-1">
                     <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                       Remember last used router
-                    </Text>
-                    <Text className="text-[9px] leading-tight text-muted">
-                      At power-up, use it if available; otherwise keep the car's
-                      own AP.
                     </Text>
                   </View>
                 </View>
@@ -1612,7 +1606,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 className={`${is2wd1mActive ? "" : "opacity-40"}`}
                 pointerEvents={is2wd1mActive ? "auto" : "none"}
               >
-                <View className="mt-1 flex-row items-center justify-between">
+                <View className="mt-1 min-h-11 flex-row items-center justify-between">
                   <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Steering
                   </Text>
@@ -1634,7 +1628,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                     </View>
                   </View>
                 </View>
-                <View className="mt-1 flex-row items-center justify-between border-t border-line pt-1">
+                <View className="mt-1 min-h-11 flex-row items-center justify-between border-t border-line pt-1">
                   <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
                     Trim
                   </Text>
@@ -1657,11 +1651,6 @@ export function RemoteControlScreen({ navigation }: Props) {
                   </View>
                 </View>
               </View>
-              {!is2wd1mActive && (
-                <Text className="mt-1 text-[9px] leading-3 text-muted">
-                  Steering &amp; trim: 2WD1M only.
-                </Text>
-              )}
             </SettingsGroup>
 
             {/* Group 3 — Danger zone, LAST. 2026-10-24: it used to sit between
@@ -1669,7 +1658,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                 routine settings could reach a factory reset. Same red header
                 shape, now at the bottom of the panel where a destructive
                 action belongs. */}
-            <View className="mt-2 border-t border-line pt-1.5">
+            <View className="mt-2 border-t border-line pt-2">
               <View className="mb-1 flex-row items-center gap-1.5">
                 <Feather name="alert-triangle" size={12} color="#dc2626" />
                 <Text className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400">
@@ -1677,20 +1666,14 @@ export function RemoteControlScreen({ navigation }: Props) {
                 </Text>
               </View>
               <View className="rounded-lg border border-red-500/40 bg-red-500/5 p-2">
-                <Text className="text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
-                  Factory reset the car
-                </Text>
-                <Text className="mt-0.5 text-[9px] leading-tight text-muted">
-                  Erases everything the car remembers — saved Wi-Fi routers, its
-                  name and settings — and removes it from this phone. Restart
-                  the car afterwards. This cannot be undone.
-                </Text>
                 <TouchableOpacity
                   testID="reset-car-data"
+                  accessibilityRole="button"
+                  accessibilityLabel="Reset car data"
                   onPress={async () => {
                     Alert.alert(
                       "Factory reset the car?",
-                      "The car erases its saved Wi-Fi routers, name and settings, and this phone forgets the car. Restart the car afterwards to finish. This cannot be undone.",
+                      "This erases saved Wi-Fi networks, the car name and settings, and removes the car from this phone. Restart the car to finish.",
                       [
                         { text: "Cancel", style: "cancel" },
                         {
@@ -1714,10 +1697,10 @@ export function RemoteControlScreen({ navigation }: Props) {
                       ],
                     );
                   }}
-                  className="mt-1.5 items-center rounded-md border border-red-500 bg-red-500/10 py-2"
+                  className="h-11 items-center justify-center rounded-md border border-red-500 bg-red-500/10"
                 >
                   <Text className="text-[10px] font-black uppercase tracking-wide text-red-600 dark:text-red-400">
-                    Reset car data
+                    Reset car
                   </Text>
                 </TouchableOpacity>
               </View>

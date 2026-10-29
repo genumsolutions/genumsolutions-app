@@ -61,11 +61,14 @@ describe("U-119c · the hub's connection message reaches the screen", () => {
   });
 
   it("RENDERS hub.connectionMessage — the state that used to be set and never drawn", () => {
-    // The fixed-height footer hosts either the connection outcome or the
-    // silent-car warning without changing the controls' layout.
+    // The footer is mounted only while a message is present, so the idle
+    // screen keeps those pixels for the drive controls.
     expect(count(screen, "hub.connectionMessage")).toBe(3);
     expect(screen).toContain("{hub.connectionMessage || hub.carSilent ? (");
-    expect(screen).toContain('className="h-12 flex-shrink-0 justify-end"');
+    expect(screen).toContain(
+      'className="mt-1 flex-shrink-0 w-full items-center"',
+    );
+    expect(screen).not.toContain('className="h-12 flex-shrink-0 justify-end"');
     expect(screen).not.toContain('className="absolute left-3 right-3 z-50');
   });
 
