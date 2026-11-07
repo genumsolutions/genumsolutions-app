@@ -58,13 +58,20 @@ async function main() {
   const adminUrl = `${url}/storage/v1/object/${BUCKET}/${MANIFEST_FILE}`;
 
   // Read the CURRENT manifest (authoritative — never invent version/size).
-  const res = await fetch(`${publicUrl}?_t=${Date.now()}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Could not read current release.json (${res.status}).`);
+  let current;
+  try {
+    const res = await fetch(`${publicUrl}?_t=${Date.now()}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`Could not read current release.json (${res.status}).`);
+    }
+    current = await res.json();
+  } catch (err) {
+    throw new Error(
+      `Could not reach release.json at ${publicUrl}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-  const current = await res.json();
   if (!current || typeof current.version !== "string") {
     throw new Error("Current release.json is missing a version field.");
   }
