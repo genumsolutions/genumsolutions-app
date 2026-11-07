@@ -288,13 +288,24 @@ jobs:
           ls -l app/build/outputs/apk/release/
 
       - name: Upload APK + release manifest
+        id: upload
         if: >-
           steps.check-supabase.outputs.configured == 'true' &&
           (github.event_name != 'workflow_dispatch' || inputs.publish)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+        run: |
+          set +e
+          node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          UPLOAD_EXIT=$?
+          if [ $UPLOAD_EXIT -eq 0 ]; then
+            echo "uploaded=true" >> "$GITHUB_OUTPUT"
+            echo "✅ APK + release manifest published."
+          else
+            echo "::error::APK or manifest upload failed (exit $UPLOAD_EXIT)."
+          fi
+          exit $UPLOAD_EXIT
 
       - name: Retain release APK as a workflow artifact
         if: always() && steps.build-apk.outcome == 'success'
@@ -304,6 +315,19 @@ jobs:
           path: mobile/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           if-no-files-found: error
           retention-days: 7
+
+      # ── Sync the repo apk/ mirror with the newly published release ──────
+      # release.yml owns NEW versions (version bumps in app.json). After a
+      # successful APK + manifest upload, this step refreshes the repo-root
+      # genumsolutions-app/apk/ folder so the repo itself carries every published
+      # versioned APK and the latest APK.
+      #
+      # The mirror is read-only against Supabase: it downloads the current
+      # release.json and the APK files it names, keeps genuine files, and never
+      # mutates the bucket. It is safe to run after every successful upload.
+      - name: Sync repo apk/ mirror with published release
+        if: steps.upload.outputs.uploaded == 'true'
+        run: node ../../root-apk-sync.mjs
 
       # NOTE: the release build intentionally does NOT publish an OTA bundle.
       # The APK + manifest version/versionCode ALWAYS bump on a release, and an
