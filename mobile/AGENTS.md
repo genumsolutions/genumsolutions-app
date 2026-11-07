@@ -46,7 +46,7 @@ signing key changes.
   `C:\bs` as a mirror of `mobile/` (including `keystores/`).
 - `C:\bs\.env.local` also holds `SUPABASE_ACCESS_TOKEN` (a Supabase personal access token, launched
   2026-10-08, **expires ~2026-11-07**) for applying migrations without the CLI via the Management API
-  `POST /v1/projects/bkylfnlybtsujwzropru/database/query` (one SQL statement per request). It is a
+  `POST /v1/projects/jxgmbodzkmxanuwfaqxo/database/query` (one SQL statement per request). It is a
   secret: never print or commit it; rotate before it expires.
 - Build the signed release APK from `C:\bs\android` via `gradlew assembleRelease`, then upload with
   `node scripts/upload-release.mjs` (secrets in `C:\bs\.env.local`). This pushes the APK + a

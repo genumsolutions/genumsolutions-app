@@ -320,8 +320,11 @@ upload-release.mjs → (website) sync-app-fallback.mjs`.
   and `mobile/src/config/parity.test.ts` now pins APP_VERSION ↔ app.json, the 9-mode
   catalogue, and the shared `app-releases` bucket URLs (62 tests + typecheck + doctor
   18/18 green).
-- `.gitleaks.toml` allowlists ONLY the public anon key (ref `bkylfnlybtsujwzropru`) — the
-  service-role key stays in env only. Never print secrets.
+- `.gitleaks.toml` allowlists ONLY the public anon key of the **retired** project
+  (`bkylfnlybtsujwzropru`, which no longer resolves — see the 2026-11-07 project move in
+  `genumsolutions-website/TRACKS/INDEX.md`); it covers the historical occurrences only. The
+  current anon key is never committed — it is read from `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+  The service-role key stays in env only. Never print secrets.
 - Env copies: `mobile/.env.local`, `C:\bs\.env.local` (build mirror — `E:\` LongPaths disabled).
 
 _Created 2026-09-18. Update status column on every change; never delete without owner OK._

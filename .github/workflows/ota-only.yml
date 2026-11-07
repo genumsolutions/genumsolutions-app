@@ -72,7 +72,7 @@ jobs:
         id: release-guard
         run: |
           APP_CODE=$(node -p "require('./app.json').expo.android.versionCode")
-          if ! MANIFEST=$(curl -sS --fail --max-time 15 "https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json"); then
+          if ! MANIFEST=$(curl -sS --fail --max-time 15 "https://jxgmbodzkmxanuwfaqxo.supabase.co/storage/v1/object/public/app-releases/release.json"); then
             echo "No published manifest yet — nothing to hot-patch; skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
