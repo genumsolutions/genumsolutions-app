@@ -65,5 +65,5 @@ jobs:
             echo "OK: latest published bundle ($SHA) is an ancestor of the pushed tip — the JS content is delivered."
             exit 0
           fi
-          echo "::error::The latest published bundle ($SHA) is NOT part of this push — a JS-only push to main ended with no OTA publish. Check the OTA Only run for this SHA (skipped by the release-guard? publish step failed?) and re-publish before merging anything else."
+          echo "::error::The latest published bundle ($SHA) is NOT part of this push — a JS-only push to main ended with no OTA publish. Check the OTA Only run for this SHA (was it skipped by the release guard? did the publish step fail?) and re-publish before merging anything else."
           exit 1

@@ -61,34 +61,43 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      # Guard: a release commit (version bump in app.json) ALSO touches
-      # mobile/src (e.g. APP_VERSION in site.ts), which triggers this workflow
-      # on the same push. Publishing an OTA bundle for that commit would
-      # deliver the NEW APP_VERSION to devices still on the OLD native APK,
-      # making them self-report the new version and suppress the "new APK
-      # available" pill. Skip the whole run whenever app.json versionCode is
-      # newer than the currently-published manifest — release.yml owns those.
-      - name: Skip OTA on release (version bump) pushes
+      # ── Decide whether this push should publish an OTA bundle ─────────
+      # Standard practice for this repo:
+      #   • version bump pushes (app.json versionCode increases) are owned by
+      #     release.yml and install as a new APK;
+      #   • every other mobile/src or mobile/assets push publishes a same-version
+      #     OTA bundle so testers get JS/asset fixes without reinstalling.
+      #
+      # The guard below is deliberately vocal: when it skips, it says exactly
+      # why, so a silent skip is no longer the default outcome.
+      - name: Decide whether to publish an OTA bundle
         id: release-guard
         run: |
           APP_CODE=$(node -p "require('./app.json').expo.android.versionCode")
           if ! MANIFEST=$(curl -sS --fail --max-time 15 "https://jxgmbodzkmxanuwfaqxo.supabase.co/storage/v1/object/public/app-releases/release.json"); then
-            echo "No published manifest yet — nothing to hot-patch; skipping."
+            echo "No published manifest yet — nothing to hot-patch; skipping OTA."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=no_published_manifest" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           MF_CODE=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).version_code ?? 0))" "$MANIFEST")
           MF_VERSION=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).version ?? ''))" "$MANIFEST")
           APP_VERSION=$(node -p "require('./app.json').expo.version")
           if [ "$APP_CODE" -gt "$MF_CODE" ]; then
-            echo "app.json versionCode $APP_CODE is newer than published manifest $MF_CODE — this push is a RELEASE, OTA channel skips (release.yml publishes it)."
+            echo "OTA skipped: app.json versionCode $APP_CODE is newer than published manifest $MF_CODE."
+            echo "This push is a RELEASE. release.yml owns the new APK; OTA stays on the old runtime."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=version_bump" >> "$GITHUB_OUTPUT"
           elif [ "$APP_VERSION" != "$MF_VERSION" ]; then
-            echo "APP_VERSION ($APP_VERSION) differs from manifest version ($MF_VERSION) — version bump in site.ts, OTA channel skips."
+            echo "OTA skipped: APP_VERSION ($APP_VERSION) differs from manifest version ($MF_VERSION)."
+            echo "This looks like a version- or metadata-only change; OTA channel skips."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=version_mismatch" >> "$GITHUB_OUTPUT"
           else
-            echo "app.json versionCode $APP_CODE matches published $MF_CODE, APP_VERSION matches — same-version OTA hot-patch proceeds."
+            echo "OTA proceeding: app.json versionCode $APP_CODE matches published $MF_CODE,"
+            echo "APP_VERSION matches manifest version ($MF_VERSION). Same-version hot-patch."
             echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=none" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install dependencies
@@ -110,18 +119,39 @@ jobs:
         if: steps.release-guard.outputs.skip != 'true'
         run: node scripts/check-supabase-ref.mjs --require
 
-      # ── Publish OTA bundle (JS/asset only) ──────────────
-      # OTA bundles are delivered by Expo's servers and apply on next app
-      # load. They keep the SAME app version - no APK is rebuilt.
       - name: Publish OTA update
         if: steps.release-guard.outputs.skip != 'true'
-        run: npx eas-cli update --branch main --message "OTA-only push (${{ github.sha }})" --non-interactive
+        id: publish-ota
+        run: |
+          set +e
+          npx eas-cli update --branch main --message "OTA-only push (${{ github.sha }})" --non-interactive
+          PUBLISH_EXIT=$?
+          if [ $PUBLISH_EXIT -eq 0 ]; then
+            echo "✅ OTA bundle published: ${{ github.sha }}"
+          else
+            echo "::error::OTA publish failed with exit code $PUBLISH_EXIT"
+          fi
+          echo "publish_exit=$PUBLISH_EXIT" >> "$GITHUB_OUTPUT"
+          exit $PUBLISH_EXIT
 
       # ── Sync release.json metadata (notes + updated_at) ──
       # The APK fields are untouched (same version, no new APK). This only
       # flicks the human-facing note + timestamp so the website /app page
       # and the in-app "Last published" line reflect the short update.
+      #
+      # This runs even when the OTA publish step itself skipped/failed, but
+      # only when the release-guard allowed an OTA path and Supabase creds are
+      # present. When publish failed, the metadata still gets a clear note so
+      # the repo/CI history shows the broken delivery instead of a silent gap.
       - name: Sync OTA manifest metadata
-        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' && steps.release-guard.outputs.skip != 'true'
-        run: node scripts/sync-ota-manifest.mjs --message "Short update (${{ github.sha }})"
-        continue-on-error: true
+        if: steps.release-guard.outputs.skip != 'true' && env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
+        run: |
+          set +e
+          node scripts/sync-ota-manifest.mjs --message "Short update (${{ github.sha }})"
+          SYNC_EXIT=$?
+          if [ $SYNC_EXIT -eq 0 ]; then
+            echo "✅ OTA manifest metadata synced."
+          else
+            echo "::warning::OTA manifest metadata sync failed (exit $SYNC_EXIT)."
+          fi
+          exit $SYNC_EXIT
