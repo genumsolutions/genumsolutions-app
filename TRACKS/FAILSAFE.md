@@ -43,9 +43,9 @@ Do-not-break invariants + recovery during the app·website sync effort. Master p
 - **Crash sync must never break a connection.** `syncCrashReport`/`flushCrashReports` catch
   everything and return, and the hub calls them fire-and-forget (`void`). A diagnostics network
   failure cannot fail a link. Keep it that way.
-- **`device_crash_reports` is APPLIED (2026-10-08)** to project `bkylfnlybtsujwzropru`, verified
+- **`device_crash_reports` is APPLIED (2026-10-08)** to project `jxgmbodzkmxanuwfaqxo`, verified
   (24 cols / 4 indexes / 3 RLS policies; anon insert tested then removed). To apply future
-  migrations without the CLI: `POST https://api.supabase.com/v1/projects/bkylfnlybtsujwzropru/database/query`
+  migrations without the CLI: `POST https://api.supabase.com/v1/projects/jxgmbodzkmxanuwfaqxo/database/query`
   with `Authorization: Bearer <access token>`, ONE statement per request (multi-statement bodies
   413). The token is in `C:\bs\.env.local` (`SUPABASE_ACCESS_TOKEN`, gitignored, expires
   ~2026-11-07). Never print or commit it.

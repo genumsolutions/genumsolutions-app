@@ -11,7 +11,7 @@ import type { CheckoutInput, Order } from "../types";
 
 // Supabase Edge Function URLs (configured via environment)
 export const EDGE_BASE =
-  "https://bkylfnlybtsujwzropru.supabase.co/functions/v1";
+  "https://jxgmbodzkmxanuwfaqxo.supabase.co/functions/v1";
 
 export const edgeUrls = {
   paymentEsewa: `${EDGE_BASE}/payment-esewa`,

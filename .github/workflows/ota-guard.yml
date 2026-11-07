@@ -45,7 +45,7 @@ jobs:
       - name: The latest published bundle must name a pushed commit
         run: |
           set -e
-          MANIFEST_URL="https://bkylfnlybtsujwzropru.supabase.co/storage/v1/object/public/app-releases/release.json"
+          MANIFEST_URL="https://jxgmbodzkmxanuwfaqxo.supabase.co/storage/v1/object/public/app-releases/release.json"
           if ! MANIFEST=$(curl -sS --fail --max-time 15 "$MANIFEST_URL"); then
             echo "::error::release.json is unreachable — the OTA delivery state is unknown. If no bundle was ever published this is expected once (bootstrap); otherwise investigate the storage bucket."
             exit 1

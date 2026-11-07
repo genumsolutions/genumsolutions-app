@@ -80,6 +80,6 @@ describe("update channel parity (shared app-releases bucket)", () => {
     const ref = (url: string) =>
       url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
     expect(ref(APK_URL)).toBe(ref(RELEASE_MANIFEST_URL));
-    expect(ref(APK_URL)).toBe("bkylfnlybtsujwzropru");
+    expect(ref(APK_URL)).toBe("jxgmbodzkmxanuwfaqxo");
   });
 });

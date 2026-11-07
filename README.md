@@ -8,7 +8,7 @@ native app with its own UI/UX. **Not** a WebView wrapper.
   shared `app-releases` Supabase bucket; the sibling `genumsolutions-website` repo syncs
   its bundled fallback from that manifest (`scripts/sync-app-fallback.mjs`).
 - Shared contract with `genumsolutions-website`:
-  - **Supabase project** `bkylfnlybtsujwzropru` — schema single source of truth is
+  - **Supabase project** `jxgmbodzkmxanuwfaqxo` — schema single source of truth is
     `genumsolutions-website/supabase/schema.sql` (this repo's `mobile/supabase/` is empty).
   - **DB tables:** `products`, `services`, `carts`, `orders`, `profiles`,
     `robo_car_modes`, `company_info`, `site_content`, `customer_messages`,
