@@ -16,6 +16,7 @@
 //   node scripts/upload-release.mjs --keep <n>            (versioned APKs to keep)
 // =====================================================================
 import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSupabaseEnv } from "./supabase-env.mjs";
@@ -36,6 +37,32 @@ const defaultApk = resolve(
   "releases",
   `genum-solutions-${VERSION}-arm64-v8a.apk`,
 );
+
+// The commit this release was built from. OTA Guard (ota-guard.yml) parses a
+// short SHA out of the manifest's `notes` and refuses the push unless that
+// commit is an ancestor of the pushed tip — i.e. unless a bundle/APK that
+// carries the JS actually shipped. Without the SHA the guard can only fail.
+// GITHUB_SHA is set by Actions; the git fallback covers a local run.
+export function currentCommitSha() {
+  const fromEnv = String(process.env.GITHUB_SHA || "").trim();
+  if (/^[0-9a-f]{7,40}$/i.test(fromEnv))
+    return fromEnv.slice(0, 12).toLowerCase();
+  try {
+    const sha = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      cwd: rootDir,
+      encoding: "utf8",
+    }).trim();
+    return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.toLowerCase() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function buildReleaseNotes(sha) {
+  const base =
+    "Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates.";
+  return sha ? `${base} (${sha})` : base;
+}
 
 const BUCKET = "app-releases";
 const LATEST_FILE = "genum-solutions-latest.apk";
@@ -157,6 +184,12 @@ async function main() {
 
   const body = readFileSync(apkPath);
   const sizeBytes = body.length;
+  const commitSha = currentCommitSha();
+  if (!commitSha) {
+    console.warn(
+      "Warning: no commit SHA available (no GITHUB_SHA / git) — OTA Guard will not be able to verify this release.",
+    );
+  }
   // Decimal MB (1,000,000 bytes) — matches what download managers, browsers,
   // Google Play and file explorers show. Never 1024-based "MiB" labels.
   const actualSizeMb = +(sizeBytes / 1_000_000).toFixed(1);
@@ -219,8 +252,7 @@ async function main() {
       sizeLabel: `${actualSizeMb} MB`,
       releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
       appsPagePath: "/app",
-      notes:
-        "Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates.",
+      notes: buildReleaseNotes(commitSha),
       updated_at: new Date().toISOString(),
     },
     null,
@@ -256,7 +288,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
-  process.exit(1);
-});
+// Only run when executed directly — importing this module (e.g. to unit-test
+// buildReleaseNotes) must never upload anything.
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}

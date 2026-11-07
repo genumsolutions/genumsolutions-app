@@ -163,6 +163,14 @@ jobs:
             echo "::warning title=Supabase not configured::Skipping APK upload; SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set."
           fi
 
+      # Fail BEFORE the expensive build when the secrets inlined by Metro point
+      # at a different Supabase project than the app's own release URLs. A stale
+      # secret still builds green and only breaks on a phone, so this is the
+      # only place it can be caught. See scripts/check-supabase-ref.mjs.
+      - name: Verify Supabase project (env vs release URLs)
+        if: steps.check-supabase.outputs.configured == 'true'
+        run: node scripts/check-supabase-ref.mjs
+
       - name: Install dependencies
         run: npm ci
 

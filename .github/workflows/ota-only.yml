@@ -103,6 +103,13 @@ jobs:
         if: steps.release-guard.outputs.skip != 'true'
         run: npm run doctor
 
+      # An OTA bundle carries the EXPO_PUBLIC_* values forever, so a stale
+      # secret would ship a bundle whose backend no longer resolves. Fail before
+      # publishing instead. See scripts/check-supabase-ref.mjs.
+      - name: Verify Supabase project (env vs release URLs)
+        if: steps.release-guard.outputs.skip != 'true'
+        run: node scripts/check-supabase-ref.mjs --require
+
       # ── Publish OTA bundle (JS/asset only) ──────────────
       # OTA bundles are delivered by Expo's servers and apply on next app
       # load. They keep the SAME app version - no APK is rebuilt.
