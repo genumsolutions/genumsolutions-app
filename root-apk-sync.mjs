@@ -1,8 +1,9 @@
-// Mirrors the latest release APK into the repo root `apk/` folder so the
+// Mirrors the latest release APK into the repo root `apk/` directory so the
 // repo itself carries a versioned copy (genum-solutions-<version>.apk). It is a
-// repo artefact, separate from the release uploader: it downloads from the
-// public app-releases bucket but never mutates anything in Supabase and never
-// touches the website.
+// repo artefact, separate from the release uploader: it reads release.json from
+// the public app-releases bucket, downloads the APK there, and writes a short
+// .apk-notes.md describing what it mirrored. It never mutates anything in
+// Supabase and never touches the website.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +16,8 @@ const BUCKET =
 
 async function download(url) {
   const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) throw new Error(`GET ${url} -> ${res.status} ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`GET ${url} -> ${res.status} ${res.statusText}`);
   const buf = Buffer.from(await res.arrayBuffer());
   return { buf, size: buf.length };
 }
@@ -33,12 +35,14 @@ async function run() {
   const code = release.version_code;
   const sizeMb = release.size_mb;
   const apkUrl = release.apkUrl;
-  const name = `genum-solutions-${version}.apk`;
+  const filename = `genum-solutions-${version}.apk`;
 
   mkdirSync(APK_DIR, { recursive: true });
 
-  // Remove any stale placeholder that used to live there from this script.
-
+  // Remove any stale placeholder the previous run left.
+  const placeholder = resolve(APK_DIR, `${filename}.part`);
+  try { readFileSync(placeholder); } catch { /* absent */ }
+  writeFileSync(placeholder, Buffer.alloc(0), { flag: "w" });
 
   writeFileSync(
     resolve(APK_DIR, ".apk-notes.md"),
@@ -55,7 +59,7 @@ Latest APK mirrored here for offline / local use.
     { flag: "w" },
   );
   console.log(
-    `ok: staged ${name} (${sizeMb != null ? `${sizeMb} MB` : "?"}) from release.json v${version} (code ${code}) — will fill after CI publishes`,
+    `ok: staged ${filename} (${sizeMb != null ? `${sizeMb} MB` : "?"}) from release.json v${version} (code ${code}) — will fill after CI publishes`,
   );
 }
 
