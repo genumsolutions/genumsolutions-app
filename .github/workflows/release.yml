@@ -325,9 +325,15 @@ jobs:
       # The mirror is read-only against Supabase: it downloads the current
       # release.json and the APK files it names, keeps genuine files, and never
       # mutates the bucket. It is safe to run after every successful upload.
+      #
+      # NOTE: `../../root-apk-sync.mjs` resolves from the step working-directory
+      # (mobile/), i.e. `mobile/../../root-apk-sync.mjs` -> repo_root/root-apk-sync.mjs.
+      # Uses the default checkout path (no custom `path:` on the checkout step) so
+      # this path is stable; if the checkout is ever moved, update this path too.
       - name: Sync repo apk/ mirror with published release
+        working-directory: .
         if: steps.upload.outputs.uploaded == 'true'
-        run: node ../../root-apk-sync.mjs
+        run: node root-apk-sync.mjs
 
       # NOTE: the release build intentionally does NOT publish an OTA bundle.
       # The APK + manifest version/versionCode ALWAYS bump on a release, and an
