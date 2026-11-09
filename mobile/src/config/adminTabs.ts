@@ -32,3 +32,22 @@ export const ADMIN_TABS = [
   "Logs",
   "Settings",
 ] as const;
+
+export type AdminTab = (typeof ADMIN_TABS)[number];
+
+// U-UI1 (2026-11-09): one line per tab, rendered under the tab strip on both
+// clients. This is the app-side copy of the website's TAB_HINTS
+// (components/admin/admin-types.ts); both parity tests compare the maps, so the
+// console explains itself with the same words on either surface. Keep values
+// free of double quotes — the tests parse them out of the source text.
+export const ADMIN_TAB_HINTS: Record<AdminTab, string> = {
+  Dashboard: "Revenue, orders and traffic at a glance.",
+  Orders: "Every order, its payment state and the pilot finance lines.",
+  "Electronic Products": "The /products catalog — pricing, stock and photos.",
+  "3D Products": "The /3d-printing catalog.",
+  Projects: "Bundles sold on /projects, including pre-packaged kits.",
+  Content: "Services, journal posts and the home page copy.",
+  Users: "Accounts, roles, orders and each person's project profiles.",
+  Logs: "User activity, project profiles and field diagnostics.",
+  Settings: "Company details, training programs and pilot costs.",
+};

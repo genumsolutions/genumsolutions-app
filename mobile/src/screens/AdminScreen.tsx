@@ -1,10 +1,14 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs (11): Dashboard · Orders · Electronic Products · 3D Products · Projects
-// · Content · Users · System Logs · User Logs · Profile Entries · Settings.
+// Tabs (9): Dashboard · Orders · Electronic Products · 3D Products · Projects
+// · Content · Users · Logs · Settings.
 // U-R3: "System Logs" added (fleet crash reports + app logs).
 // U-R4: "User Logs" + "Profile Entries" added (per-user audit log and
 // per-user car/project profiles from the shared Supabase tables).
+// U-R5: those two and "System Logs" merged into one "Logs" tab.
+// U-UI1 (2026-11-09): chrome rebuilt to match the website — role/email console
+// bar with the tab's refresh control, one-row uppercase tab strip, and the
+// shared per-tab description (ADMIN_TAB_HINTS).
 // This line used to say "Catalog" and "6 tabs" — Catalog was split into three.
 // =====================================================================
 import React, {
@@ -32,6 +36,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { ADMIN_TAB_HINTS } from "../config/adminTabs";
 import { PlatformPager } from "../components/PlatformPager";
 import type {
   PagerViewOnPageSelectedEvent,
@@ -164,6 +169,11 @@ const TABS: Tab[] = [
   "Settings",
 ];
 
+// U-UI1 (2026-11-09): measured widths, not an assumed 96 px per tab. The old
+// scroll math multiplied a fixed width while the labels themselves differ in
+// length (Electronic Products vs Logs), so the active tab drifted off-centre.
+const TAB_MIN_WIDTH = 96;
+
 export function AdminScreen() {
   const { isAdmin, isOwner, signOut, user: currentUser } = useApp();
   // Staff can operate every admin panel except deletions; isAdmin means
@@ -178,6 +188,9 @@ export function AdminScreen() {
     Dashboard: true,
   });
   const [loading, setLoading] = useState(false);
+  // U-UI1: stamped after each successful tab load, shown in the console bar.
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const tabOffsets = useRef<number[]>([]);
   const [backHandlerRef, setBackHandlerRef] =
     useState<BackHandlerRemove | null>(null);
 
@@ -247,13 +260,14 @@ export function AdminScreen() {
   // Use useLayoutEffect so the scroll happens before the screen paints the
   // re-render — this keeps the tab strip highlight and scroll position in sync
   // with the pager's selected page, whether the change came from a swipe or a
-  // tab tap. The -40 offset keeps the active tab visually centered.
-  // Each tab is fixed at 96px wide (w-[96px] shrink-0) so the math is exact.
+  // tab tap. Offsets come from each tab's measured layout (U-UI1), so a long
+  // label no longer throws the centring off.
   useLayoutEffect(() => {
     const index = TABS.indexOf(tab);
     if (index < 0) return;
+    const offset = tabOffsets.current[index] ?? index * TAB_MIN_WIDTH;
     tabScrollRef.current?.scrollTo({
-      x: index * 96 - 40,
+      x: Math.max(0, offset - 40),
       y: 0,
       animated: false,
     });
@@ -513,6 +527,7 @@ export function AdminScreen() {
         setPilotCostLines(await listAdminPilotCostLines());
         setCurriculumHighlights(await listAdminCurriculumHighlights());
       }
+      setRefreshedAt(new Date());
     } catch (e) {
       logger.error("admin", "Admin load error:", e);
     } finally {
@@ -1551,14 +1566,61 @@ export function AdminScreen() {
           </Pressable>
         </>
       ) : null}
+      {/* U-UI1 (2026-11-09): console bar. Mirrors the website's admin header:
+          who you are (role chip + email), freshness of the data, and the one
+          refresh control for the current tab. The refresh spinner lives inside
+          the button instead of floating over the content (U-47v5), so nothing
+          shifts when a load starts or ends. */}
+      <View className="shrink-0 border-b border-line bg-card px-4 py-2">
+        <View className="flex-row items-center gap-2.5">
+          <View
+            className={`rounded-full px-2.5 py-1 ${canDelete ? "bg-navy" : "border border-line"}`}
+          >
+            <Text
+              className={`text-[9px] font-black uppercase tracking-[0.14em] ${canDelete ? "text-white" : "text-navy"}`}
+            >
+              {isOwner ? "Owner" : canDelete ? "Admin" : "Staff"}
+            </Text>
+          </View>
+          <Text
+            numberOfLines={1}
+            className="min-w-0 flex-1 text-[11px] font-medium text-muted"
+          >
+            {currentUser?.email ?? "Signed in"}
+          </Text>
+          {refreshedAt ? (
+            <Text className="shrink-0 text-[10px] text-muted">
+              {`Updated ${refreshedAt.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`}
+            </Text>
+          ) : null}
+          <Pressable
+            onPress={() => void loadTab()}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel={`Refresh ${tab}`}
+            className="h-7 w-7 items-center justify-center rounded-full border border-line"
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#1e3a8a" />
+            ) : (
+              <Feather name="refresh-cw" size={13} color="#1e3a8a" />
+            )}
+          </Pressable>
+        </View>
+      </View>
+
       {/* Tab bar — grow-0 keeps the strip at its own height: RN ScrollViews
           default to flexGrow:1, so without it the strip stretches into a huge
           empty band under the tabs whenever the tab content is shorter than
           the screen.
           U-47v2 (owner): the strip must be ONE ROW on every device — tabs get
           a minimum width and nowrap text so nothing wraps to a second row; the
-          strip scrolls horizontally instead (layout measurz from the ref, no
-          fixed 96px assumption). */}
+          strip scrolls horizontally instead (offsets measured in onLayout).
+          U-UI1: same uppercase treatment and active underline as the website's
+          sticky strip, so the two consoles read as one product. */}
       <View className="grow-0 shrink-0 border-b border-line bg-card">
         <ScrollView
           ref={tabScrollRef}
@@ -1566,19 +1628,22 @@ export function AdminScreen() {
           showsHorizontalScrollIndicator={false}
         >
           <View className="flex-row">
-            {TABS.map((t) => (
+            {TABS.map((t, index) => (
               <Pressable
                 key={t}
                 onPress={() => goToTab(t)}
+                onLayout={(event) => {
+                  tabOffsets.current[index] = event.nativeEvent.layout.x;
+                }}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: tab === t }}
                 accessibilityLabel={t}
-                className={`shrink-0 border-b-2 px-4 py-3 ${tab === t ? "border-navy" : "border-transparent"}`}
-                style={{ minWidth: 88 }}
+                className={`shrink-0 border-b-2 px-4 py-2.5 ${tab === t ? "border-navy" : "border-transparent"}`}
+                style={{ minWidth: TAB_MIN_WIDTH }}
               >
                 <Text
                   numberOfLines={1}
-                  className={`text-xs font-bold ${tab === t ? "text-navy" : "text-muted"}`}
+                  className={`text-[11px] font-black uppercase tracking-[0.08em] ${tab === t ? "text-navy" : "text-muted"}`}
                 >
                   {t}
                 </Text>
@@ -1588,17 +1653,13 @@ export function AdminScreen() {
         </ScrollView>
       </View>
 
-      {/* U-47v5 (owner: the refresh spinner shifted every tab's content
-          down/up as it appeared): the loader is now an absolutely-positioned
-          pill floating below the tab strip — it reserves NO layout space, so
-          content never moves when a refresh starts or ends. */}
-      {loading ? (
-        <View className="absolute left-0 right-0 top-16 z-10 items-center">
-          <View className="rounded-full border border-line bg-card px-3 py-1 shadow-card">
-            <ActivityIndicator size="small" color="#1e3a8a" />
-          </View>
-        </View>
-      ) : null}
+      {/* What this tab is for — the website renders the identical sentence
+          from its TAB_HINTS map, so the two consoles explain themselves alike. */}
+      <View className="shrink-0 border-b border-line bg-mist px-4 py-1.5">
+        <Text className="text-[11px] leading-4 text-muted">
+          {ADMIN_TAB_HINTS[tab]}
+        </Text>
+      </View>
 
       {/* Swipeable tab content — each of the 8 tabs is a pager
            page synced with the tab strip above (swipe -> onPageSelected
