@@ -18,7 +18,6 @@ mobile/
 │   ├── config/              # App-wide configuration
 │   │   ├── adminTabs.ts     # Admin tab parity config
 │   │   ├── company.ts       # Company info type + fallback
-│   │   ├── adminTabs.ts     # Admin tab definitions
 │   │   ├── site.ts          # APP_VERSION, config
 │   │   ├── socials.ts       # Social media URLs
 │   │   └── push.ts          # Push notification config
@@ -163,7 +162,61 @@ See `docs/APP_ADMIN_COMPLETE.md` for complete admin UI documentation.
 
 Mirrors the admin Users tab structure.
 
-### 8. Version Management
+### 8. Product & Checkout Flow (mirrored with website)
+
+#### Product Detail Screen (`ProductDetailScreen.tsx`)
+
+Mirrors `ProductDetailPro` on the website:
+
+- **Gallery**: full-screen image with thumbnail strip (U-23)
+- **Header**: category badge, product name, description, price, SKU, import meta (design by, license, source)
+- **Specs table**: structured specs from `importMeta.structuredSpecs` or parsed from `specs` lines
+- **Audience/Warranty split**: two-column info row
+- **Color/Delivery split**: two-column info row
+- **Project info** (Project packages only): objectives, materials, learning outcomes, build steps, prerequisites, deliverables, maintenance notes, documentation/video links
+- **Project components** (Project packages): horizontal scroll of linked components with qty badges
+- **Used in projects** (non-project): horizontal scroll of projects using this component
+- **Related products**: horizontal scroll of same-category → same-type products
+- **CTA bar** (sticky bottom): qty stepper + Add to build list / Request quote / Control this car
+
+#### Cart Screen (`CartScreen.tsx`)
+
+Mirrors the website's checkout build list:
+
+- **Cart header**: back chevron + "Your build list" title + subtitle
+- **Empty states**: offline (wifi-off icon) vs empty cart (shopping-cart icon)
+- **Line item**: photo + name (2-line clamp) + per-unit price + qty stepper (±) + line total + Remove
+- **Footer**: Subtotal + Total + delivery note + Checkout button + Continue shopping
+
+#### Checkout Screen (`CheckoutScreen.tsx`)
+
+Mirrors the website's checkout page with the same 3 payment methods:
+
+- **Order summary**: items list (qty × name + line total) + total
+- **Delivery details**: name, email, phone, address fields
+- **Payment method picker**: COD / eSewa / Khalti radio cards
+- **Place order button**: disabled until all fields filled + signed in
+
+#### Payment methods (identical across both):
+
+| Method           | App                                            | Website                                          | Shared                    |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------ | ------------------------- |
+| Cash on delivery | `createOrder({provider:'cod'})` → OrderSuccess | `POST /api/orders` → success page                | Both write `orders` table |
+| eSewa            | `initiateEsewaPayment` → WebBrowser → confirm  | `POST /api/checkout/esewa` → form → confirm      | Both use eSewa v2         |
+| Khalti           | `initiateKhaltiPayment` → WebBrowser → confirm | `POST /api/checkout/khalti` → redirect → confirm | Both use Khalti v2        |
+
+Both re-price server-side, confirm server-to-server, write to immutable `transactions` ledger, and are idempotent.
+
+#### Shared data contract:
+
+- Products: same `products` table, same fields (id, name, price, stock, category, specs, etc.)
+- Cart: app uses local state + Supabase `cart_items`; website uses client-side cart state
+- Orders: same `orders` table, same fields (items JSON, totalNpr, customerName, email, phone, address, provider, status)
+- Both require sign-in to checkout
+- Both record cart_adds habit (fire-and-forget)
+- Both clear cart after successful order
+
+### 9. Version Management
 
 Version pins that must move **together**:
 
@@ -174,14 +227,14 @@ Version pins that must move **together**:
 
 Current: managed by `node scripts/bump-version.mjs <ver> <code>`.
 
-### 9. Release & Update Channels
+### 10. Release & Update Channels
 
 - `version` + `android.versionCode` in `app.json` (single source of truth)
 - OTA hot-patches: `ota-only.yml` is JS-only, does not bump app version
 - `app.json` derives `runtimeVersion` from `appVersion`
 - Upload signed APK with `node scripts/upload-release.mjs`
 
-### 10. Google Sign-In
+### 11. Google Sign-In
 
 Native (`@react-native-google-signin/google-signin`), not routed through any WebView.
 
@@ -191,7 +244,7 @@ Setup:
 2. Add `genumsolutions://auth` to Supabase → Authentication → URL Configuration → Redirect URLs
 3. Android OAuth client's SHA-1 must match release signing keystore
 
-## Environment Variables
+### 12. Environment Variables
 
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=        # project URL
@@ -204,16 +257,17 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
 
 Only the **anon key** reaches the app bundle. The service-role key stays out of it.
 
-## Build Notes
+### 13. Build Notes
 
 - LongPaths is disabled on `E:\`, so release Gradle builds run from a mirror at `C:\bs`
 - Keep `C:\bs` in sync with `mobile/`, including `keystores/` and `.env.local`
 
-## Test Status
+### 14. Test Status
 
 - **955 vitest tests** across 65 files — all passing
 - **TypeScript `tsc --noEmit`** — 0 errors
 - **Admin parity tests** — enforce identical tab structure with website
+- **Product/checkout parity**: ProductDetailScreen ↔ ProductDetailPro, CartScreen ↔ checkout build list, CheckoutScreen ↔ checkout page — all mirror the same data model
 
 ## Documentation Deliverables
 
