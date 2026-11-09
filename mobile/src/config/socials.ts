@@ -34,3 +34,39 @@ export function socialLinks(
   ];
   return all.filter((link) => link.url.trim().length > 0);
 }
+
+/**
+ * Normalize an admin-entered WhatsApp number to the digits-only form the
+ * wa.me link format expects: strips everything except digits.
+ * '+977 986-1842 552' -> '9779861842552'.
+ *
+ * Mirrors website lib/socials.ts normalizeWhatsappNumber() 1:1.
+ */
+export function normalizeWhatsappNumber(raw: string): string {
+  return raw.replace(/[^\d]/g, "");
+}
+
+/**
+ * Sanity-check a stored number: 8-15 digits after the country code.
+ *
+ * Mirrors website lib/socials.ts isValidWhatsappNumber() 1:1.
+ */
+export function isValidWhatsappNumber(value: string): boolean {
+  return /^\d{8,15}$/.test(normalizeWhatsappNumber(value));
+}
+
+/**
+ * Build a wa.me deep link with an optional prefilled message.
+ *
+ * Mirrors website lib/socials.ts whatsappLink() 1:1.
+ * Note: the app's company.ts already exports whatsappLink() — this is the
+ * website-side helper. The app uses its own copy in company.ts.
+ */
+export function whatsappLink(whatsappNumber: string, message?: string): string {
+  const digits = normalizeWhatsappNumber(whatsappNumber);
+  if (!digits) return "";
+  const query = message?.trim()
+    ? `?text=${encodeURIComponent(message.trim())}`
+    : "";
+  return `https://wa.me/${digits}${query}`;
+}
