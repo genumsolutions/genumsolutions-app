@@ -24,9 +24,17 @@ website share ONLY the Supabase database (`products`, `services`, `carts`, `orde
   (`src/services/bleService.ts`, `sppService.ts`, `wifiService.ts`, `carProtocol.ts`).
 
 > **Shared schema source of truth:** `genumsolutions-website/supabase/schema.sql` (sibling
-> repo). The app's `mobile/supabase/` folder is intentionally empty. Keep fallback config
-> files here (`roboCarCatalog.ts`, `project-catalog.ts`, `journal.ts`, `company.ts`) in sync
-> with the website's `lib/` mirrors and the live DB.
+> repo). The app's `mobile/supabase/` folder is intentionally empty (no local DB provisioning).
+> The `mobile/supabase/functions/` folder contains **reference copies** of two Supabase Edge
+> Functions that the app calls remotely (`contact` via `edgeUrls.contact`, `newsletter-subscribe`
+> via `supabase.functions.invoke()`). These copies are for documentation only — they are NOT
+> compiled by the app's TypeScript check (`tsconfig.json` excludes `supabase/functions/` because
+> the Deno imports are not resolvable in the app's Expo/TS context). The real deployed functions
+> live in `genumsolutions-website/supabase/functions/`. Keep these reference copies in sync with
+> the website sources when the functions change.
+>
+> Keep fallback config files here (`roboCarCatalog.ts`, `project-catalog.ts`, `journal.ts`,
+> `company.ts`) in sync with the website's `lib/` mirrors and the live DB.
 
 ---
 
