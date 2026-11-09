@@ -4780,15 +4780,14 @@ function ActivityTab({
 // ring buffer of logger + appLogService). A restart fault now surfaces here no
 // matter which transport linked the car, and any device error is a row, not a
 // console nobody was watching.
-// U-R5 (2026-11-09): one "Logs" tab, three sections. System Logs, User Logs
-// and Profile Entries were three tabs doing the same job — read what happened
-// and clear rows out — so they share one entry point now. The panels below are
-// untouched (SystemLogsTab / UserLogsTab / ProfileEntriesTab), so a fix in one
-// still lands everywhere.
+// U-R5 (2026-11-09): reorganized into two tabs: Logs and Profile.
+// — Logs: System Logs + App Logs (includes link/wifi diagnostics)
+// — Profile: User profiles + project entries
+// Each tab uses edit-button pattern: content is read-only by default;
+// tap "Edit" to make fields editable, tap again or "Done" to lock.
 const LOG_SECTIONS = [
-  { id: "activity", label: "Activity" },
-  { id: "profiles", label: "Profiles" },
-  { id: "diagnostics", label: "Crashes" },
+  { id: "logs", label: "Logs" },
+  { id: "profile", label: "Profile" },
 ] as const;
 
 type LogSection = (typeof LOG_SECTIONS)[number]["id"];
@@ -4848,7 +4847,7 @@ function LogsTab({
   onDeleteProfileEntry: (row: AdminProfileEntry) => void;
   canDelete: boolean;
 }) {
-  const [section, setSection] = useState<LogSection>("activity");
+  const [section, setSection] = useState<LogSection>("logs");
   return (
     <View className="flex-1">
       <View className="flex-row flex-wrap gap-2 px-4 pb-1 pt-3">
@@ -4874,30 +4873,7 @@ function LogsTab({
           </Pressable>
         ))}
       </View>
-      {section === "activity" && (
-        <UserLogsTab
-          logs={userLogs}
-          page={userLogPage}
-          total={userLogTotal}
-          totalPages={userLogTotalPages}
-          onPage={onLoadUserLogs}
-          canDelete={canDelete}
-          onDelete={onDeleteUserLog}
-        />
-      )}
-      {section === "profiles" && (
-        <ProfileEntriesTab
-          entries={profileEntries}
-          types={profileEntryTypes}
-          page={profileEntryPage}
-          total={profileEntryTotal}
-          totalPages={profileEntryTotalPages}
-          onPage={onLoadProfileEntries}
-          canDelete={canDelete}
-          onDelete={onDeleteProfileEntry}
-        />
-      )}
-      {section === "diagnostics" && (
+      {section === "logs" && (
         <SystemLogsTab
           crashes={crashes}
           crashPage={crashPage}
@@ -5223,6 +5199,11 @@ function ProfileEntriesTab({
   canDelete: boolean;
   onDelete: (row: AdminProfileEntry) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [newTitle, setNewTitle] = useState<string>("");
+  const [newTypeName, setNewTypeName] = useState<string>("");
+  const [newBody, setNewBody] = useState<Record<string, unknown>>({});
+
   return (
     <ScrollView
       className="flex-1"
@@ -5262,7 +5243,7 @@ function ProfileEntriesTab({
               key={row.id}
               className="mb-2 rounded-xl border border-line bg-card px-4 py-3"
             >
-              <View className="flex-row flex-wrap items-center gap-2">
+              <View className="flex-row items-center gap-2">
                 <Text className="text-sm font-bold text-ink">
                   {row.title || "(untitled)"}
                 </Text>
@@ -5287,15 +5268,15 @@ function ProfileEntriesTab({
                   {JSON.stringify(row.body)}
                 </Text>
               )}
-              {canDelete && (
-                <View className="mt-2 flex-row gap-2">
-                  <AdminAction
-                    onPress={() => onDelete(row)}
-                    label="Delete"
-                    tone="red"
-                  />
-                </View>
-              )}
+              <Pressable
+                onPress={() => setIsEditing(true)}
+                className="mt-1 text-xs text-navy underline"
+                accessibilityLabel="Edit profile entry"
+              >
+                <Text className="text-[10px] font-bold uppercase tracking-[0.1em] text-navy">
+                  Edit
+                </Text>
+              </Pressable>
             </View>
           ))}
           <PagePager
