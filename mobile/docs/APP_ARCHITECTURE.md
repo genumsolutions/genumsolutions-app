@@ -262,7 +262,87 @@ Only the **anon key** reaches the app bundle. The service-role key stays out of 
 - LongPaths is disabled on `E:\`, so release Gradle builds run from a mirror at `C:\bs`
 - Keep `C:\bs` in sync with `mobile/`, including `keystores/` and `.env.local`
 
-### 14. Test Status
+### 10. Test Status
+
+- **955 vitest tests** across 65 files — all passing
+- **TypeScript `tsc --noEmit`** — 0 errors
+- **Admin parity tests** — enforce identical tab structure with website
+- **Product/checkout parity**: ProductDetailScreen ↔ ProductDetailPro, CartScreen ↔ checkout build list, CheckoutScreen ↔ checkout page — all mirror the same data model
+- **Contact/account/services/projects parity**: all 4 screens mirror website equivalents — documented in section 8
+
+### 9. Version Management
+
+- **955 vitest tests** across 65 files — all passing
+- **TypeScript `tsc --noEmit`** — 0 errors
+- **Admin parity tests** — enforce identical tab structure with website
+- **Product/checkout parity**: ProductDetailScreen ↔ ProductDetailPro, CartScreen ↔ checkout build list, CheckoutScreen ↔ checkout page — all mirror the same data model
+
+### 8. Mirror: Contact, Account, Services, Projects
+
+The app already mirrors the website for these flows. No code changes needed.
+
+#### Contact Screen ↔ Contact Page
+
+| Element          | App (`ContactScreen.tsx`)                               | Website (`app/contact/page.tsx`)                       | Shared                         |
+| ---------------- | ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------ |
+| Contact details  | Company from Supabase `company_info` (bundled fallback) | Company from Supabase `company_info` (cached fallback) | Same `company_info` table      |
+| Address          | Tap opens geo: URL                                      | Text shown                                             | Same company row               |
+| Email            | Tap opens mailto: URL                                   | Text shown                                             | Same company row               |
+| Phone            | Tap opens tel: URL                                      | Text shown                                             | Same company row               |
+| WhatsApp         | Chat link via `whatsappLink()`                          | Chat link via `whatsappLink()`                         | Same `socials.ts` helper       |
+| Socials          | Social pill chips via `SocialsRow`                      | Social links via `socialLinks()`                       | Same `company_info` row        |
+| Inquiry form     | Native form (name/email/message) → `POST /contact` edge | Client form (name/email/message) → `POST /api/contact` | Same `customer_messages` table |
+| Field limits     | name max 100, email max 254, message max 5000           | same limits enforced server-side                       | Same validation                |
+| Email validation | regex client-side                                       | regex server-side                                      | Same pattern                   |
+| Status feedback  | in-screen text, success/error                           | in-form text, success/error                            | Same UX pattern                |
+| Legal links      | Privacy / Terms navigation                              | Footer links                                           | Same legal pages               |
+
+#### Account Screen ↔ Account Page
+
+| Element         | App (`AccountScreen.tsx`)                                             | Website (`app/account/page.tsx` + `AccountPanel.tsx`) | Shared                              |
+| --------------- | --------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| Auth gate       | Redirect to sign-in if not signed in                                  | AuthPanel if no session                               | Same Supabase auth                  |
+| Header          | Avatar (initials) + name + email + admin/staff badge + sign out       | Avatar (initials) + name + email + tier + log out     | Same `profiles` table               |
+| Stats (3 cards) | Orders / build-list items / support messages                          | Orders / build-list items / support messages          | Same data sources                   |
+| My collection   | Product cards from `user_collection` (RLS own-rows)                   | MyCollection component from `user_collection`         | Same `user_collection` table        |
+| Your activity   | Habit counters (views/searches/cart_adds/orders) — hidden if all zero | Same habit counters — hidden if all zero              | Same `user_habits` table            |
+| Your orders     | Status pill + provider + total + line items                           | Status pill + provider + total + line items           | Same `orders` table                 |
+| Your details    | Edit profile (name/phone/address) form                                | Edit profile (name/phone/address) form                | Same `profiles` table               |
+| Your messages   | Support history with status pills                                     | Support history with status pills                     | Same `customer_messages` table      |
+| Newsletter      | Email + consent checkbox + subscribe button                           | Email + consent checkbox + subscribe button           | Same `newsletter_subscribers` table |
+| Push settings   | (on Menu tab)                                                         | PushNotificationSettings component                    | Same push subscription              |
+| Robot prefs     | (on UserPreferencesScreen)                                            | RobotPreferencesPanel                                 | Same robot settings                 |
+| Car profiles    | (on UserPreferencesScreen)                                            | CarProfilesPanel                                      | Same car profiles                   |
+
+#### Services Screen ↔ Services Page
+
+| Element                   | App (`ServicesScreen.tsx`)                                          | Website (`app/services/page.tsx` + `ServicesGrid.tsx`)              | Shared                    |
+| ------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------- |
+| Data source               | Supabase `services` table via `getServices()`                       | Supabase `services` table via `listServices()`                      | Same `services` table     |
+| Fields                    | id, name, category, priceLabel, description, tag, sortOrder, active | id, name, category, priceLabel, description, tag, sortOrder, active | Same `Service` type       |
+| Filter                    | Category chips (derived from DB rows)                               | Category dropdown (derived from DB rows)                            | Same categories           |
+| Search                    | Text input, filters by name/tag/id/description                      | Text input, filters by name/description                             | Same search intent        |
+| Display                   | Card with name + tag badge + description + priceLabel               | ArticleCard with title + tag + description + priceLabel             | Same card data            |
+| Empty state               | "No services match your filters"                                    | "No services in this category"                                      | Same empty handling       |
+| Pagination                | PagePager (6 per page)                                              | Load all on server, paginate client-side                            | Different impl, same data |
+| Quote CTA                 | (none on list — per-item detail)                                    | "Request a quote" link to /contact                                  | Same intent               |
+| Training programs section | (not on services screen)                                            | Training programs + pilot costs + STEM highlights                   | Website-only add-on       |
+
+#### Projects Screen ↔ Projects Page
+
+| Element      | App (`ProjectsScreen.tsx`)                          | Website (`app/projects/page.tsx` + `ProjectsCatalog.tsx`)       | Shared                          |
+| ------------ | --------------------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
+| Data source  | Supabase `products` table (project packages + kits) | Supabase `products` via `getManagedProducts()` + `applyScope()` | Same `products` table           |
+| Filter       | 6 project categories from `project_categories`      | 6 project categories from `project_categories`                  | Same `project_categories` table |
+| Search       | Text input, filters by name/note/description        | Text input, filters by name/note/description                    | Same search intent              |
+| Display      | 2-column grid, minimal ProductCard                  | 2-col grid on mobile, up to 5 at xl, ProductCard                | Same ProductCard component      |
+| Empty state  | "No projects found matching your filters"           | "No projects found matching your filters"                       | Same empty handling             |
+| Pagination   | PagePager (8 per page)                              | "See more" button + page indicator                              | Same pagination intent          |
+| Coming soon  | Empty categories flagged                            | Empty categories flagged                                        | Same UX                         |
+| Include kits | Pre-packaged Kits ride along (U-44)                 | `includeKits` prop re-adds kits                                 | Same decision                   |
+| Tools CTA    | (none)                                              | "Test & control on the IoT Controller" link to /tools           | Website-only add-on             |
+
+### 9. Version Management
 
 - **955 vitest tests** across 65 files — all passing
 - **TypeScript `tsc --noEmit`** — 0 errors
