@@ -1,7 +1,10 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs (9): Dashboard · Orders · Electronic Products · 3D Products · Projects · Content · Users · System Logs · Settings.
+// Tabs (11): Dashboard · Orders · Electronic Products · 3D Products · Projects
+// · Content · Users · System Logs · User Logs · Profile Entries · Settings.
 // U-R3: "System Logs" added (fleet crash reports + app logs).
+// U-R4: "User Logs" + "Profile Entries" added (per-user audit log and
+// per-user car/project profiles from the shared Supabase tables).
 // This line used to say "Catalog" and "6 tabs" — Catalog was split into three.
 // =====================================================================
 import React, {
@@ -74,6 +77,13 @@ import {
   listAdminActivity,
   listDeviceCrashReports,
   listAppLogs,
+  deleteDeviceCrashReport,
+  deleteAppLog,
+  listUserActivityLogs,
+  deleteUserActivityLog,
+  listUserProfileEntries,
+  listProfileEntryTypes,
+  deleteUserProfileEntry,
   listAdminJournalPosts,
   upsertAdminJournalPost,
   deleteAdminJournalPost,
@@ -103,6 +113,9 @@ import {
   type ActivityEntry,
   type AdminCrashReport,
   type AdminAppLog,
+  type AdminUserLog,
+  type AdminProfileEntry,
+  type AdminProfileEntryType,
   type ProjectComponentLink,
   listProjectComponents,
   saveProjectComponents,
@@ -125,6 +138,8 @@ type Tab =
   | "Content"
   | "Users"
   | "System Logs"
+  | "User Logs"
+  | "Profile Entries"
   | "Settings";
 
 // U-44 (2026-09-26, owner): the Catalog tab becomes THREE tabs mirroring the
@@ -141,6 +156,8 @@ const TABS: Tab[] = [
   "Content",
   "Users",
   "System Logs",
+  "User Logs",
+  "Profile Entries",
   "Settings",
 ];
 
@@ -312,6 +329,20 @@ export function AdminScreen() {
   const [appLogTotal, setAppLogTotal] = useState(0);
   const [appLogTotalPages, setAppLogTotalPages] = useState(1);
 
+  // User Logs + Profile Entries (U-R4): per-user audit log and per-user
+  // car/project profiles from the shared tables.
+  const [userLogs, setUserLogs] = useState<AdminUserLog[]>([]);
+  const [userLogPage, setUserLogPage] = useState(1);
+  const [userLogTotal, setUserLogTotal] = useState(0);
+  const [userLogTotalPages, setUserLogTotalPages] = useState(1);
+  const [profileEntries, setProfileEntries] = useState<AdminProfileEntry[]>([]);
+  const [profileEntryTypes, setProfileEntryTypes] = useState<
+    AdminProfileEntryType[]
+  >([]);
+  const [profileEntryPage, setProfileEntryPage] = useState(1);
+  const [profileEntryTotal, setProfileEntryTotal] = useState(0);
+  const [profileEntryTotalPages, setProfileEntryTotalPages] = useState(1);
+
   // Settings (company + programs)
   const [companyInfo, setCompanyInfo] = useState<AdminCompanyInfo | null>(null);
   const [trainingPrograms, setTrainingPrograms] = useState<
@@ -468,6 +499,11 @@ export function AdminScreen() {
       } else if (tab === "System Logs") {
         void loadCrashReports(1);
         void loadAppLogs(1);
+      } else if (tab === "User Logs") {
+        void loadUserLogs(1);
+      } else if (tab === "Profile Entries") {
+        void loadProfileEntries(1);
+        setProfileEntryTypes(await listProfileEntryTypes());
       } else if (tab === "Settings") {
         setCompanyInfo(await getCompanyInfo());
         setTrainingPrograms(await listAdminTrainingPrograms());
@@ -1008,6 +1044,131 @@ export function AdminScreen() {
     setAppLogTotalPages(result.totalPages);
   }
 
+  // User Logs + Profile Entries (U-R4): newest-first, 20 rows per page.
+  async function loadUserLogs(page: number) {
+    const result = await listUserActivityLogs(page, 20);
+    setUserLogs(result.entries);
+    setUserLogPage(result.page);
+    setUserLogTotal(result.total);
+    setUserLogTotalPages(result.totalPages);
+  }
+
+  async function loadProfileEntries(page: number) {
+    const result = await listUserProfileEntries(page, 20);
+    setProfileEntries(result.entries);
+    setProfileEntryPage(result.page);
+    setProfileEntryTotal(result.total);
+    setProfileEntryTotalPages(result.totalPages);
+  }
+
+  function handleDeleteCrashReport(row: AdminCrashReport) {
+    if (!canDelete) return;
+    Alert.alert(
+      "Delete crash report",
+      `Remove the report for ${row.boardId || "this board"}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDeviceCrashReport(row.id);
+              void loadCrashReports(crashReportPage);
+            } catch (e) {
+              logger.error("admin", "Crash report delete error:", e);
+              Alert.alert(
+                "Could not delete",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  function handleDeleteAppLog(row: AdminAppLog) {
+    if (!canDelete) return;
+    Alert.alert(
+      "Delete log line",
+      "Remove this app log entry? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAppLog(row.id);
+              void loadAppLogs(appLogPage);
+            } catch (e) {
+              logger.error("admin", "App log delete error:", e);
+              Alert.alert(
+                "Could not delete",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  function handleDeleteUserLog(row: AdminUserLog) {
+    if (!canDelete) return;
+    Alert.alert(
+      "Delete log entry",
+      `Remove this "${row.action || "(no action)"}" entry? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteUserActivityLog(row.id);
+              void loadUserLogs(userLogPage);
+            } catch (e) {
+              logger.error("admin", "User log delete error:", e);
+              Alert.alert(
+                "Could not delete",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  function handleDeleteProfileEntry(row: AdminProfileEntry) {
+    if (!canDelete) return;
+    Alert.alert(
+      "Delete profile entry",
+      `Remove "${row.title || row.typeName || "this entry"}"? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteUserProfileEntry(row.id);
+              void loadProfileEntries(profileEntryPage);
+            } catch (e) {
+              logger.error("admin", "Profile entry delete error:", e);
+              Alert.alert(
+                "Could not delete",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
   function handleDeleteUser(user: AdminUser) {
     if (!isOwner) return;
     Alert.alert(
@@ -1317,11 +1478,39 @@ export function AdminScreen() {
             crashTotal={crashReportTotal}
             crashTotalPages={crashReportTotalPages}
             onLoadCrashes={(p) => void loadCrashReports(p)}
+            onDeleteCrash={handleDeleteCrashReport}
             logs={appLogs}
             logPage={appLogPage}
             logTotal={appLogTotal}
             logTotalPages={appLogTotalPages}
             onLoadLogs={(p) => void loadAppLogs(p)}
+            onDeleteLog={handleDeleteAppLog}
+            canDelete={canDelete}
+          />
+        );
+      case "User Logs":
+        return (
+          <UserLogsTab
+            logs={userLogs}
+            page={userLogPage}
+            total={userLogTotal}
+            totalPages={userLogTotalPages}
+            onPage={(p) => void loadUserLogs(p)}
+            canDelete={canDelete}
+            onDelete={handleDeleteUserLog}
+          />
+        );
+      case "Profile Entries":
+        return (
+          <ProfileEntriesTab
+            entries={profileEntries}
+            types={profileEntryTypes}
+            page={profileEntryPage}
+            total={profileEntryTotal}
+            totalPages={profileEntryTotalPages}
+            onPage={(p) => void loadProfileEntries(p)}
+            canDelete={canDelete}
+            onDelete={handleDeleteProfileEntry}
           />
         );
       case "Settings":
@@ -4303,22 +4492,28 @@ function SystemLogsTab({
   crashTotal,
   crashTotalPages,
   onLoadCrashes,
+  onDeleteCrash,
   logs,
   logPage,
   logTotal,
   logTotalPages,
   onLoadLogs,
+  onDeleteLog,
+  canDelete,
 }: {
   crashes: AdminCrashReport[];
   crashPage: number;
   crashTotal: number;
   crashTotalPages: number;
   onLoadCrashes: (page: number) => void;
+  onDeleteCrash: (row: AdminCrashReport) => void;
   logs: AdminAppLog[];
   logPage: number;
   logTotal: number;
   logTotalPages: number;
   onLoadLogs: (page: number) => void;
+  onDeleteLog: (row: AdminAppLog) => void;
+  canDelete: boolean;
 }) {
   return (
     <ScrollView
@@ -4390,6 +4585,15 @@ function SystemLogsTab({
                 boot #{row.bootCount ?? "?"} · {row.connectionMethod} ·{" "}
                 {new Date(row.reportedAt).toLocaleString()}
               </Text>
+              {canDelete && (
+                <View className="mt-2 flex-row gap-2">
+                  <AdminAction
+                    onPress={() => onDeleteCrash(row)}
+                    label="Delete"
+                    tone="red"
+                  />
+                </View>
+              )}
             </View>
           ))}
           <PagePager
@@ -4451,6 +4655,15 @@ function SystemLogsTab({
               <Text className="mt-0.5 text-xs text-muted">
                 {new Date(row.createdAt).toLocaleString()}
               </Text>
+              {canDelete && (
+                <View className="mt-2 flex-row gap-2">
+                  <AdminAction
+                    onPress={() => onDeleteLog(row)}
+                    label="Delete"
+                    tone="red"
+                  />
+                </View>
+              )}
             </View>
           ))}
           <PagePager
@@ -4459,6 +4672,206 @@ function SystemLogsTab({
             onPage={onLoadLogs}
             label="log"
             totalItems={logTotal}
+          />
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+// U-R4 (2026-11-09): "User Logs" — the per-user audit log written by the app
+// (user_activity_log). Same data the website's AdminUserLogs panel renders,
+// read here with the signed-in admin session; staff can read, admins delete.
+function UserLogsTab({
+  logs,
+  page,
+  total,
+  totalPages,
+  onPage,
+  canDelete,
+  onDelete,
+}: {
+  logs: AdminUserLog[];
+  page: number;
+  total: number;
+  totalPages: number;
+  onPage: (page: number) => void;
+  canDelete: boolean;
+  onDelete: (row: AdminUserLog) => void;
+}) {
+  return (
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+    >
+      <Text className="mb-1 text-base font-black text-ink">
+        User activity log
+      </Text>
+      <Text className="mb-3 text-xs text-muted">
+        Per-user audit entries written by the app, newest first.
+      </Text>
+      {logs.length === 0 ? (
+        <View className="items-center py-8">
+          <Feather name="activity" size={32} color="#cbd5e1" />
+          <Text className="mt-3 text-sm text-muted">
+            No user activity logged yet.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {logs.map((row) => (
+            <View
+              key={row.id}
+              className="mb-2 rounded-xl border border-line bg-card px-4 py-3"
+            >
+              <View className="flex-row flex-wrap items-center gap-2">
+                <Text className="font-mono text-xs text-muted">
+                  {row.action || "(no action)"}
+                </Text>
+                {row.entityType ? (
+                  <Text className="text-xs text-muted">{row.entityType}</Text>
+                ) : null}
+                <Text className="ml-auto text-xs text-muted">
+                  {new Date(row.createdAt).toLocaleString()}
+                </Text>
+              </View>
+              {row.userId ? (
+                <Text className="mt-0.5 font-mono text-[10px] text-muted">
+                  user {row.userId.slice(0, 8)}…
+                </Text>
+              ) : null}
+              {Object.keys(row.details).length > 0 && (
+                <Text className="mt-1 break-words text-xs text-muted">
+                  {JSON.stringify(row.details)}
+                </Text>
+              )}
+              {canDelete && (
+                <View className="mt-2 flex-row gap-2">
+                  <AdminAction
+                    onPress={() => onDelete(row)}
+                    label="Delete"
+                    tone="red"
+                  />
+                </View>
+              )}
+            </View>
+          ))}
+          <PagePager
+            page={page}
+            totalPages={totalPages}
+            onPage={onPage}
+            label="entry"
+            totalItems={total}
+          />
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+// U-R4 (2026-11-09): "Profile Entries" — per-user car/project profiles
+// (user_profile_entries joined to profile_entry_types). Mirrors the website's
+// AdminProfileEntries panel.
+function ProfileEntriesTab({
+  entries,
+  types,
+  page,
+  total,
+  totalPages,
+  onPage,
+  canDelete,
+  onDelete,
+}: {
+  entries: AdminProfileEntry[];
+  types: AdminProfileEntryType[];
+  page: number;
+  total: number;
+  totalPages: number;
+  onPage: (page: number) => void;
+  canDelete: boolean;
+  onDelete: (row: AdminProfileEntry) => void;
+}) {
+  return (
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+    >
+      <Text className="mb-1 text-base font-black text-ink">
+        Profile entries
+      </Text>
+      <Text className="mb-3 text-xs text-muted">
+        Car and project profiles saved under each user, newest first.
+      </Text>
+      {types.length > 0 && (
+        <View className="mb-3 flex-row flex-wrap gap-2">
+          {types.map((type) => (
+            <View
+              key={type.id}
+              className="rounded-full border border-line px-2.5 py-1"
+            >
+              <Text className="text-[10px] font-bold uppercase text-muted">
+                {type.name}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+      {entries.length === 0 ? (
+        <View className="items-center py-8">
+          <Feather name="users" size={32} color="#cbd5e1" />
+          <Text className="mt-3 text-sm text-muted">
+            No profile entries saved yet.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {entries.map((row) => (
+            <View
+              key={row.id}
+              className="mb-2 rounded-xl border border-line bg-card px-4 py-3"
+            >
+              <View className="flex-row flex-wrap items-center gap-2">
+                <Text className="text-sm font-bold text-ink">
+                  {row.title || "(untitled)"}
+                </Text>
+                {row.typeName ? (
+                  <View className="rounded bg-slate-100 px-1.5 py-0.5">
+                    <Text className="text-[10px] font-black uppercase tracking-wide text-slate-600">
+                      {row.typeName}
+                    </Text>
+                  </View>
+                ) : null}
+                <Text className="ml-auto text-xs text-muted">
+                  {new Date(row.createdAt).toLocaleString()}
+                </Text>
+              </View>
+              {row.userId ? (
+                <Text className="mt-0.5 font-mono text-[10px] text-muted">
+                  user {row.userId.slice(0, 8)}…
+                </Text>
+              ) : null}
+              {Object.keys(row.body).length > 0 && (
+                <Text className="mt-1 break-words text-xs text-muted">
+                  {JSON.stringify(row.body)}
+                </Text>
+              )}
+              {canDelete && (
+                <View className="mt-2 flex-row gap-2">
+                  <AdminAction
+                    onPress={() => onDelete(row)}
+                    label="Delete"
+                    tone="red"
+                  />
+                </View>
+              )}
+            </View>
+          ))}
+          <PagePager
+            page={page}
+            totalPages={totalPages}
+            onPage={onPage}
+            label="entry"
+            totalItems={total}
           />
         </>
       )}
