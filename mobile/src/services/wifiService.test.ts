@@ -19,6 +19,12 @@ vi.mock("./logger", () => ({
 
 import { WifiService } from "./wifiService";
 
+type CloseEventLike = {
+  code?: number;
+  reason?: string;
+  wasClean?: boolean;
+};
+
 type FakeSocket = {
   readyState: number;
   sent: string[];
@@ -26,7 +32,7 @@ type FakeSocket = {
   send: (line: string) => void;
   onopen: (() => void) | null;
   onmessage: ((e: { data: string }) => void) | null;
-  onclose: (() => void) | null;
+  onclose: ((e?: CloseEventLike) => void) | null;
   onerror: (() => void) | null;
 };
 
@@ -84,7 +90,7 @@ class FakeWebSocket {
   get onclose() {
     return this.impl.onclose;
   }
-  set onclose(fn: (() => void) | null) {
+  set onclose(fn: ((e?: CloseEventLike) => void) | null) {
     this.impl.onclose = fn;
   }
   get onerror() {
@@ -278,6 +284,60 @@ describe("WifiService link verification (R1)", () => {
     await service.disconnect();
     expect(statuses).toContain("disconnected");
     expect(statuses).not.toContain("reconnecting");
+  });
+
+  // U-LINK1 (2026-11-09): two hubs share this service (Control Panel + Remote
+  // window) and the reconnect dialog can fire while an attempt is running. The
+  // second connect used to close the half-open socket and dial again, so every
+  // such collision cost the car an extra handshake — the firmware's documented
+  // low-heap window, and the phone saw the link "reset" for no visible reason.
+  it("shares ONE socket when two hubs dial the same car at the same time", async () => {
+    const service = new WifiService();
+    const statuses: string[] = [];
+    service.onStatus((kind) => statuses.push(kind));
+
+    const first = service.connect("ws://192.168.245.1:81");
+    const second = service.connect("ws://192.168.245.1:81"); // still CONNECTING
+    await Promise.all([first, second]);
+
+    expect(sockets).toHaveLength(1);
+    // The in-flight attempt already announced itself; a second "connecting"
+    // would just flicker every hub's UI.
+    expect(statuses.filter((s) => s === "connecting")).toHaveLength(1);
+
+    open(latest());
+    expect(service.isConnected).toBe(true);
+  });
+
+  it("still re-dials when the second dial is for a DIFFERENT car", async () => {
+    const service = new WifiService();
+    const first = service.connect("ws://192.168.245.1:81");
+    const second = service.connect("ws://192.168.1.42:81");
+    await Promise.all([first, second]);
+    expect(sockets).toHaveLength(2);
+  });
+
+  // U-LINK1: the close reason used to be discarded, so an intermittent drop
+  // arrived as "it resets sometimes" with nothing to diagnose. Keep the wire
+  // facts for the hub to ship to app_logs.
+  it("records the close code, uptime and frames of an unexpected drop", async () => {
+    const service = new WifiService();
+    const pending = service.connect("ws://192.168.245.1:81");
+    open(latest());
+    await pending;
+    feed(latest(), "STATE;MODE=4WD4M;SPD=0;STATUS=Stopped");
+    feed(latest(), "STATE;MODE=4WD4M;SPD=0;STATUS=Stopped");
+
+    latest().readyState = 3;
+    latest().onclose?.({ code: 1006, reason: "abnormal", wasClean: false });
+
+    expect(service.lastClose).toMatchObject({
+      code: 1006,
+      reason: "abnormal",
+      wasClean: false,
+      frames: 2,
+    });
+    expect(service.lastClose?.uptimeMs).toBeGreaterThanOrEqual(0);
   });
 
   it("does NOT announce 'reconnecting' after a user starts safe-stop writes", async () => {

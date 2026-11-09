@@ -5,7 +5,9 @@ native app with its own UI/UX. **Not** a WebView wrapper.
 
 - Entry app code: `mobile/` (see `mobile/README.md` and `mobile/AGENTS.md`).
 - Operating docs: `docs/ADMIN_COHERENCE.md` (the 9-tab admin contract shared with
-  the website) and `docs/STORAGE_BUDGET.md` (shared free-tier image/storage budget).
+  the website), `docs/STORAGE_BUDGET.md` (shared free-tier image/storage budget), and
+  `docs/LINK_RESILIENCE.md` (why the car link drops, what the app does, how to read
+  a drop from the admin logs).
 - Releases: `mobile/scripts/upload-release.mjs` publishes APK + `release.json` to the
   shared `app-releases` Supabase bucket; the sibling `genumsolutions-website` repo syncs
   its bundled fallback from that manifest (`scripts/sync-app-fallback.mjs`).

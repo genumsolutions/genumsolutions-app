@@ -49,6 +49,22 @@ const CONNECT_TIMEOUT_MS = 8000;
 // alive (STATE / CAPS / REPLY / TEL), and report the difference to the user.
 const CAR_ANSWER_TIMEOUT_MS = 5000;
 
+/**
+ * What the socket said when it closed. The app used to throw this away —
+ * `onclose` took no argument — so an intermittent drop reached the field report
+ * as "it resets sometimes" with nothing to go on. Recorded for every close and
+ * shipped to app_logs by the hub when the drop is unexpected.
+ */
+export type WifiCloseInfo = {
+  code?: number;
+  reason?: string;
+  wasClean?: boolean;
+  /** How long the socket had been open, in ms. */
+  uptimeMs: number;
+  /** Inbound frames received on that socket (telemetry, replies, …). */
+  frames: number;
+};
+
 export class WifiService {
   private socket: WebSocket | null = null;
   private socketUrl: string | null = null;
@@ -57,6 +73,9 @@ export class WifiService {
   private verified = false;
   private telemetryCallbacks: Set<TelemetryCallback> = new Set();
   private statusCallbacks: Set<StatusCallback> = new Set();
+  private openedAt: number | null = null;
+  private frames = 0;
+  private lastCloseInfo: WifiCloseInfo | null = null;
 
   get isConnected(): boolean {
     return this.socket !== null && this.socket.readyState === WebSocket.OPEN;
@@ -80,6 +99,11 @@ export class WifiService {
 
   get isManualClose(): boolean {
     return this.manualClose;
+  }
+
+  /** Why the previous socket closed (null before any close). */
+  get lastClose(): WifiCloseInfo | null {
+    return this.lastCloseInfo;
   }
 
   /** Mark an explicit user teardown before its safe-stop writes begin. */
@@ -133,13 +157,22 @@ export class WifiService {
   async connect(url: string): Promise<void> {
     this.manualClose = false;
 
-    if (
-      this.socket &&
-      this.socket.readyState === WebSocket.OPEN &&
-      this.socketUrl === url
-    ) {
+    if (this.socket && this.socketUrl === url) {
+      const state = this.socket.readyState;
       // Already live on this car — no second socket.
-      return;
+      if (state === WebSocket.OPEN) return;
+      // A dial to this SAME car is still in flight. Join it instead of closing
+      // and re-dialing (U-LINK1, 2026-11-09). Two hubs share this service (the
+      // Control Panel and the Remote window), and the reconnect dialog can fire
+      // while an attempt is already running, so this path was reached routinely.
+      // Each extra dial cost the car another full WebSocket handshake — and the
+      // 4WD4M firmware documents free heap collapsing to ~15 KB during exactly
+      // these collisions, which is when the "working" link resets abruptly. The
+      // caller's next step (`waitForCarAnswer`) is service-level, so returning
+      // here loses nothing. `connectingMarker`/`verified` are already correct
+      // for the attempt in flight; re-emitting "connecting" would just flicker
+      // every hub's UI.
+      if (state === WebSocket.CONNECTING) return;
     }
     if (this.socket) {
       try {
@@ -197,6 +230,8 @@ export class WifiService {
       clearTimeout(connectTimer);
       this.connectingMarker = false;
       if (this.socket !== socket) return;
+      this.openedAt = Date.now();
+      this.frames = 0;
       this.emitStatus("connected", url);
     };
 
@@ -204,6 +239,7 @@ export class WifiService {
       try {
         const raw = typeof event.data === "string" ? event.data : "";
         if (!raw) return;
+        if (this.socket === socket) this.frames += 1;
         const telemetry = parseTelemetryLine(raw);
         if (Object.keys(telemetry).length > 0) {
           // First real frame on this socket: the car is alive, not just
@@ -216,12 +252,29 @@ export class WifiService {
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event?: {
+      code?: number;
+      reason?: string;
+      wasClean?: boolean;
+    }) => {
       clearTimeout(connectTimer);
       const isCurrent = this.socket === socket;
       if (isCurrent) {
         this.socket = null;
         this.socketUrl = null;
+        // Record WHY, before the state above is flattened. A close after a
+        // connect is `stale` churn and is classified below.
+        this.lastCloseInfo = {
+          code: event?.code,
+          reason: event?.reason || undefined,
+          wasClean: event?.wasClean,
+          uptimeMs: this.openedAt == null ? 0 : Date.now() - this.openedAt,
+          frames: this.frames,
+        };
+        // `__DEV__` is a React Native global that does not exist in the node
+        // test env, so guard the reference rather than assume it.
+        if (typeof __DEV__ !== "undefined" && __DEV__)
+          logger.warn("wifi", "socket closed", this.lastCloseInfo);
       }
       this.connectingMarker = false;
       // A NEWER socket replaced us (connect() closed this one to re-dial) —

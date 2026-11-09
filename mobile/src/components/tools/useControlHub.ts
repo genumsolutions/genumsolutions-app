@@ -52,7 +52,7 @@ import { addBtId, upsertWifiHistory } from "../../services/carProfileService";
 import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
 import { registerCurrentDevice } from "../../services/deviceRegistryService";
 import { syncCrashReport } from "../../services/crashReportService";
-import { flushAppLogs } from "../../services/appLogService";
+import { appendLog, flushAppLogs } from "../../services/appLogService";
 import {
   encodeEnvelopeWire,
   isEnvelopeIntakeEnabled,
@@ -2107,6 +2107,19 @@ export function useControlHub(routeCategory?: string) {
             setReconnectMethod("Wi-Fi");
           } else {
             setReconnectDue(false);
+          }
+          // U-LINK1 (2026-11-09): an unexpected drop used to leave no trace
+          // anywhere — the owner could only report that it "resets sometime".
+          // Ship the socket's own closing facts (code, reason, uptime, frames)
+          // to app_logs, where the admin Logs tab can read them, so the next
+          // occurrence is diagnosable instead of anecdotal.
+          if (!wifiService.isManualClose) {
+            void appendLog({
+              scope: "link/wifi",
+              level: "warn",
+              message: "Wi-Fi link dropped",
+              detail: wifiService.lastClose,
+            });
           }
           break;
         case "error":
