@@ -1454,6 +1454,7 @@ export type AdminCompanyInfo = {
   vatLabel: string;
   description: string;
   // C5: socials + WhatsApp (admin-editable). Empty = unused.
+  url?: string;
   whatsappNumber: string;
   facebookUrl: string;
   instagramUrl: string;
