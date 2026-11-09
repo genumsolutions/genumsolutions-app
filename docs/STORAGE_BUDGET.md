@@ -35,6 +35,13 @@ fails if the two ever disagree.
 - **Lists page at 20 rows** (`PAGE_SIZE`) so opening an admin tab does not pull
   a whole table over the network on a metered connection.
 
+## Maintenance runs from the website repo
+
+`images:optimize`, `images:verify`, `images:sweep` and `backup` all need the
+service-role key, which the app must never carry. Run them from
+`genumsolutions-website`; `images:sweep` is the one that removes product photos
+no row references any more, and it is a dry run unless `--delete` is passed.
+
 ## What the app must not add
 
 - No direct `storage.from("product-images").upload()` calls — that bypasses the
