@@ -2,6 +2,8 @@
 // services/companyService.ts resolves (shared `company_info` table, the
 // same row the website's company-store reads). Kept in sync with the
 // website's lib/company.ts, which also seeds the DB row.
+import { normalizeWhatsappNumber } from "./socials";
+
 export type Company = {
   name: string;
   shortName: string;
@@ -37,10 +39,7 @@ export const company: Company = {
 };
 
 // C5: WhatsApp helpers (mirrored from the website's lib/socials.ts).
-export function normalizeWhatsappNumber(raw: string): string {
-  return raw.replace(/[^\d]/g, "");
-}
-
+// normalizeWhatsappNumber lives in socials.ts (same directory).
 export function whatsappLink(whatsappNumber: string, message?: string): string {
   const digits = normalizeWhatsappNumber(whatsappNumber);
   if (!digits) return "";
