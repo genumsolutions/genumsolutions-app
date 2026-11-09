@@ -1457,7 +1457,7 @@ export function AdminScreen() {
       case "Users":
         return (
           <Sub>
-            <UsersTab
+            <UsersSection
               users={users}
               total={usersTotal}
               page={usersPage}
@@ -1476,6 +1476,7 @@ export function AdminScreen() {
             <MessagesTab
               messages={messages}
               total={messagesTotal}
+
               page={messagesPage}
               totalPages={messagesTotalPages}
               onPage={(p) => void loadMessages(p)}
@@ -4040,131 +4041,7 @@ function UserProjectProfileManager({
 // One user row in the admin Users tab: identity, role + tier badges, the
 // role/tier toggle buttons (admin+), an owner-only delete button, and the
 // expandable robot-preferences manager.
-function UserCard({
-  item,
-  canDelete,
-  isOwner,
-  onToggleRole,
-  onToggleTier,
-  onDeleteUser,
-  currentUserId,
-}: {
-  item: AdminUser;
-  canDelete: boolean;
-  isOwner: boolean;
-  onToggleRole: (u: AdminUser) => void;
-  onToggleTier: (u: AdminUser) => void;
-  onDeleteUser: (u: AdminUser) => void;
-  currentUserId: string;
-}) {
-  const [expanded, setExpanded] = useState<boolean>(false);
-  return (
-    <View className="mb-3 rounded-xl border border-line bg-card p-4">
-      {/* U-47v4 (owner: admin buttons overflow the screen on phones): the
-          user row used to be a single flex-row with a shrink-0 stacked
-          action column — on narrow phones the pills pushed past the right
-          edge. Info and actions now stack, and the action row wraps. */}
-      <View className="gap-2">
-        <View className="min-w-0 flex-1">
-          <Text className="text-sm font-bold text-ink" numberOfLines={1}>
-            {item.name || "—"}{" "}
-            <Text className="font-normal text-muted">· {item.email}</Text>
-          </Text>
-          {item.phone ? (
-            <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text>
-          ) : null}
-          {item.address ? (
-            <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
-              {item.address}
-            </Text>
-          ) : null}
-          {item.createdAt ? (
-            <Text className="mt-0.5 text-xs text-muted">
-              Joined {new Date(item.createdAt).toLocaleDateString()}
-              {item.lastSeenAt
-                ? ` · Last seen ${new Date(item.lastSeenAt).toLocaleDateString()}`
-                : ""}
-            </Text>
-          ) : null}
-          <View className="mt-1 flex-row gap-1">
-            <Text
-              className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.role === "owner" ? "bg-ink text-white" : item.role === "admin" ? "bg-amber-100 text-amber-700" : item.role === "staff" ? "bg-navy text-white" : "bg-sky text-navy"}`}
-            >
-              {item.role}
-            </Text>
-            <Text
-              className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${item.tier === "pro" ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted"}`}
-            >
-              {item.tier}
-            </Text>
-          </View>
-        </View>
-        <View className="flex-row flex-wrap justify-end gap-1.5">
-          {canDelete && item.role !== "owner" && (
-            <Pressable
-              onPress={() => onToggleRole(item)}
-              className="rounded-full border border-line px-3 py-1.5"
-            >
-              <Text
-                className={`text-xs font-bold ${item.role === "admin" ? "text-red-600" : "text-navy"}`}
-              >
-                {item.role === "admin"
-                  ? "Revoke admin"
-                  : item.role === "staff"
-                    ? "Promote to admin"
-                    : "Make admin"}
-              </Text>
-            </Pressable>
-          )}
-          <Pressable
-            onPress={() => onToggleTier(item)}
-            className="rounded-full border border-line px-3 py-1.5"
-          >
-            <Text
-              className={`text-xs font-bold ${item.tier === "pro" ? "text-red-600" : "text-emerald-700"}`}
-            >
-              {item.tier === "pro" ? "Make Free" : "Make Pro"}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setExpanded(!expanded)}
-            className="rounded-full border border-line px-3 py-1.5"
-          >
-            <Text className="text-xs font-bold text-navy">
-              {expanded ? "Hide profiles" : "Profiles"}
-            </Text>
-          </Pressable>
-          {isOwner && item.id !== currentUserId && (
-            <Pressable
-              onPress={() => onDeleteUser(item)}
-              className="rounded-full border border-red-200 px-3 py-1.5"
-            >
-              <Text className="text-xs font-bold text-red-600">
-                Delete user
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-      {expanded && (
-        <>
-          <UserRobotSettingsManager
-            userId={item.id}
-            email={item.email}
-            canDelete={canDelete}
-          />
-          <UserProjectProfileManager
-            userId={item.id}
-            email={item.email}
-            canDelete={canDelete}
-          />
-        </>
-      )}
-    </View>
-  );
-}
-
-function UsersTab({
+function UsersSection({
   users,
   total,
   page,
@@ -4195,10 +4072,216 @@ function UsersTab({
   onDeleteUser: (u: AdminUser) => void;
   currentUserId: string;
 }) {
+  // Section state
+  const [showUserDir, setShowUserDir] = useState(true);
+  const [showCarProfiles, setShowCarProfiles] = useState(true);
+  const [showRobotProfiles, setShowRobotProfiles] = useState(true);
+  const [userDirSearch, setUserDirSearch] = useState("");
+  const [carSearch, setCarSearch] = useState("");
+  const [robotSearch, setRobotSearch] = useState("");
+
+  // Filter users into categories
+  const filteredUsers = users.filter((user) => {
+    const matchesQuery =
+      !userDirSearch ||
+      user.name.toLowerCase().includes(userDirSearch.toLowerCase()) ||
+      user.email.toLowerCase().includes(userDirSearch.toLowerCase());
+    return matchesQuery;
+  });
+
+  // Render user directory section header
+  const renderUserDirHeader = () => (
+    <View className="mb-3">
+      <Text className="font-display text-sm font-bold text-muted uppercase tracking-wide">
+        User Directory ({filteredUsers.length})
+      </Text>
+      <View className="mt-2 flex-row gap-2">
+        <TextInput
+          value={userDirSearch}
+          onChangeText={setUserDirSearch}
+          onSubmitEditing={onApply}
+          returnKeyType="search"
+          placeholder="Search users..."
+          className="flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
+        />
+        <Pressable onPress={onApply} className="rounded-lg bg-navy px-4 py-2">
+          <Text className="text-xs font-black text-white">Apply</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  // Render car profile card
+  const renderCarProfile = (carProfile: any) => (
+    <View
+      key={carProfile.profile_key || carProfile.unique_id}
+      className="mb-3 rounded-xl border border-line bg-card p-4"
+    >
+      <Text className="font-display text-sm font-bold text-ink">
+        {carProfile.car_name || "Unnamed Car"}
+      </Text>
+      <View className="mt-2 grid grid-cols-2 gap-2">
+        <View>
+          <Text className="text-xs text-muted">profile_key</Text>
+          <Text className="mt-0.5 text-sm font-mono text-ink">
+            {carProfile.profile_key || "—"}
+          </Text>
+        </View>
+        <View>
+          <Text className="text-xs text-muted">unique_id</Text>
+          <Text className="mt-0.5 text-sm text-ink">
+            {carProfile.unique_id || "—"}
+          </Text>
+        </View>
+      </View>
+      <View className="mt-2 grid grid-cols-2 gap-2">
+        <View>
+          <Text className="text-xs text-muted">firmware</Text>
+          <Text className="mt-0.5 text-sm">
+            {carProfile.settings?.firmware || "—"}
+          </Text>
+        </View>
+        <View>
+          <Text className="text-xs text-muted">last_seen</Text>
+          <Text className="mt-0.5 text-sm">
+            {carProfile.settings?.last_seen || "—"}
+          </Text>
+        </View>
+      </View>
+      <View className="mt-3 flex-row justify-end gap-1">
+        <Pressable
+          onPress={() => setCarEditing(!carEditing)}
+          className="rounded-full border border-line px-2 py-1 text-xs font-bold text-navy"
+        >
+          Edit
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  // Render edit form for car profile
+  const [editCar, setEditCar] = useState<{
+    profile_key: string;
+    car_name: string;
+    settings: any;
+  } | null>(null);
+  const [carEditing, setCarEditing] = useState(false);
+
+  const saveCarProfile = async (
+    profileKey: string,
+    carName: string,
+    settings: any,
+  ) => {
+    try {
+      await upsertAdminCarProfile(currentUserId, profileKey, carName, settings);
+      setCarEditing(false);
+      setEditCar(null);
+      onApply();
+    } catch (e) {
+      logger.error("admin", "Car profile save error:", e);
+      Alert.alert(
+        "Save failed",
+        e instanceof Error ? e.message : "Could not save car profile.",
+      );
+    }
+  };
+
+  const cancelCarProfile = () => {
+    setEditCar(null);
+    setCarEditing(false);
+  };
+
+  // Render robot profile card
+  const renderRobotProfile = (robotSettings: any) => (
+    <View
+      key={robotSettings.unique_id || robotSettings.robot_code}
+      className="mb-3 rounded-xl border border-line bg-card p-4"
+    >
+      <Text className="font-display text-sm font-bold text-ink">
+        Robot {robotSettings?.robot_code || robotSettings.robot_code || "—"}
+      </Text>
+      <View className="mt-2 grid grid-cols-2 gap-2">
+        <View>
+          <Text className="text-xs text-muted">robot_code</Text>
+          <Text className="mt-0.5 text-sm font-mono text-ink">
+            {robotSettings.robot_code || "—"}
+          </Text>
+        </View>
+        <View>
+          <Text className="text-xs text-muted">telemetry_channel</Text>
+          <Text className="mt-0.5 text-sm">
+            {robotSettings.telemetry_channel || "—"}
+          </Text>
+        </View>
+      </View>
+      <View className="mt-2 grid grid-cols-2 gap-2">
+        <View>
+          <Text className="text-xs text-muted">parameters</Text>
+          <Text className="mt-0.5 text-sm">
+            {JSON.stringify(robotSettings.parameters || {})}
+          </Text>
+        </View>
+        <View>
+          <Text className="text-xs text-muted">profile_key</Text>
+          <Text className="mt-0.5 text-sm font-mono text-ink">
+            {robotSettings.profile_key || "—"}
+          </Text>
+        </View>
+      </View>
+      <View className="mt-3 flex-row justify-end gap-1">
+        <Pressable
+          onPress={() => setRobotEditing(!robotEditing)}
+          className="rounded-full border border-line px-2 py-1 text-xs font-bold text-navy"
+        >
+          Edit
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  // Render edit form for robot profile
+  const [editRobot, setEditRobot] = useState<{
+    robot_code: string;
+    telemetry_channel: string;
+    parameters: any;
+    profile_key: string;
+  } | null>(null);
+  const [robotEditing, setRobotEditing] = useState(false);
+
+  const saveRobotProfile = async (
+    robotCode: string,
+    telemetryChannel: string,
+    parameters: any,
+    profileKey: string,
+  ) => {
+    try {
+      await upsertUserRobotSettings(
+        currentUserId,
+        robotCode,
+        telemetryChannel,
+        parameters,
+      );
+      setRobotEditing(false);
+      setEditRobot(null);
+      onApply();
+    } catch (e) {
+      logger.error("admin", "Robot profile save error:", e);
+      Alert.alert(
+        "Save failed",
+        e instanceof Error ? e.message : "Could not save robot profile.",
+      );
+    }
+  };
+
+  const cancelRobotProfile = () => {
+    setEditRobot(null);
+    setRobotEditing(false);
+  };
+
   return (
     <View className="flex-1">
       <FlatList
-        data={users}
+        data={filteredUsers}
         keyExtractor={(u) => u.id}
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
@@ -4207,24 +4290,7 @@ function UsersTab({
             <Text className="font-display text-xl font-bold text-ink">
               Users ({total})
             </Text>
-            <View className="mt-3 flex-row gap-2">
-              <View className="flex-1">
-                <TextInput
-                  value={query}
-                  onChangeText={onQueryChange}
-                  onSubmitEditing={onApply}
-                  returnKeyType="search"
-                  placeholder="Search by name or email…"
-                  className="rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
-                />
-              </View>
-              <Pressable
-                onPress={onApply}
-                className="rounded-lg bg-navy px-4 py-2"
-              >
-                <Text className="text-xs font-black text-white">Apply</Text>
-              </Pressable>
-            </View>
+            <View className="mb-3 flex-row gap-2">{renderUserDirHeader()}</View>
           </View>
         }
         ListEmptyComponent={
@@ -4238,17 +4304,343 @@ function UsersTab({
           ) : null
         }
         renderItem={({ item }) => (
-          <UserCard
-            item={item}
-            canDelete={canDelete}
-            isOwner={isOwner}
-            onToggleRole={onToggleRole}
-            onToggleTier={onToggleTier}
-            onDeleteUser={onDeleteUser}
-            currentUserId={currentUserId}
-          />
+          <View className="mb-3 rounded-xl border border-line bg-card p-4">
+            <Text className="font-display text-sm font-bold text-ink">
+              {item.name || "—"}
+            </Text>
+            <Text className="font-normal text-muted">· {item.email}</Text>
+            {item.phone ? (
+              <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text>
+            ) : null}
+            {item.address ? (
+              <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
+                {item.address}
+              </Text>
+            ) : null}
+            {item.createdAt ? (
+              <Text className="mt-0.5 text-xs text-muted">
+                Joined {new Date(item.createdAt).toLocaleDateString()}
+                {item.lastSeenAt
+                  ? " · Last seen " +
+                    new Date(item.lastSeenAt).toLocaleDateString()
+                  : ""}
+              </Text>
+            ) : null}
+            <View className="mt-1 flex-row gap-1">
+              <Text
+                className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${
+                  item.role === "owner"
+                    ? "bg-ink text-white"
+                    : item.role === "admin"
+                      ? "bg-amber-100 text-amber-700"
+                      : item.role === "staff"
+                        ? "bg-navy text-white"
+                        : "bg-sky text-navy"
+                }`}
+              >
+                {item.role}
+              </Text>
+              <Text
+                className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${
+                  item.tier === "pro"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-mist text-muted"
+                }`}
+              >
+                {item.tier}
+              </Text>
+            </View>
+          </View>
         )}
       />
+      {showUserDir && <View className="mt-3">{renderUserDirHeader()}</View>}
+      {showCarProfiles && (
+        <View className="mt-3">
+          <Text className="font-display text-sm font-bold text-muted uppercase tracking-wide">
+            Car Profiles ({filteredUsers.length})
+          </Text>
+          {filteredUsers.length > 0 && (
+            <FlatList
+              data={filteredUsers.flatMap((u) => u.car_profiles || [])}
+              keyExtractor={(c) => c.profile_key || c.unique_id}
+              contentContainerStyle={{ padding: 8 }}
+              renderItem={({ item }) => (
+                <View className="mb-3 rounded-xl border border-line bg-card p-4">
+                  <View className="flex-row justify-between">
+                    <Text className="font-display text-sm font-bold text-ink">
+                      {item.car_name || "Unnamed Car"}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        setEditCar(item);
+                        setCarEditing(true);
+                      }}
+                      className="rounded-full border border-line px-2 py-1 text-xs font-bold text-navy"
+                    >
+                      Edit
+                    </Pressable>
+                  </View>
+                  <View className="mt-2 flex-row gap-4 text-xs">
+                    <View>
+                      <Text className="text-muted">profile_key</Text>
+                      <Text className="font-mono">
+                        {item.profile_key || "—"}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-muted">unique_id</Text>
+                      <Text className="font-mono">{item.unique_id || "—"}</Text>
+                    </View>
+                  </View>
+                  {canDelete && (
+                    <Pressable
+                      onPress={async () => {
+                        Alert.alert(
+                          "Delete car profile",
+                          "Remove this car profile? This cannot be undone.",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  await deleteAdminCarProfile(
+                                    currentUserId,
+                                    item.profile_key,
+                                  );
+                                  onApply();
+                                } catch (e) {
+                                  logger.error(
+                                    "admin",
+                                    "Car profile delete error:",
+                                    e,
+                                  );
+                                  Alert.alert(
+                                    "Could not delete",
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Please try again.",
+                                  );
+                                }
+                              },
+                            },
+                          ],
+                        );
+                      }}
+                      className="mt-2 rounded-lg border border-red-500/30 px-3 py-1 text-xs font-bold text-red-600"
+                    >
+                      Delete
+                    </Pressable>
+                  )}
+                </View>
+              )}
+              horizontal={false}
+            />
+          )}
+          {editCar && (
+            <View className="mt-3 rounded-xl border border-line bg-card p-4">
+              <Text className="font-display text-xs font-bold uppercase tracking-wide text-muted">
+                Edit Car Profile
+              </Text>
+              <View className="mt-2 grid grid-cols-2 gap-2">
+                <TextInput
+                  value={editCar.car_name || ""}
+                  onChangeText={(text) =>
+                    setEditCar({ ...editCar, car_name: text })
+                  }
+                  placeholder="Car name"
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+                <TextInput
+                  value={JSON.stringify(editCar.settings || {})}
+                  onChangeText={(text) => {
+                    try {
+                      const parsed = JSON.parse(text);
+                      setEditCar({ ...editCar, settings: parsed });
+                    } catch {
+                      // keep current if invalid JSON
+                    }
+                  }}
+                  multiline
+                  numberOfLines={3}
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </View>
+              <View className="mt-3 flex-row justify-end gap-1">
+                <Pressable
+                  onPress={() =>
+                    saveCarProfile(
+                      editCar.profile_key,
+                      editCar.car_name,
+                      editCar.settings,
+                    )
+                  }
+                  disabled={carEditing}
+                  className="rounded-lg bg-emerald-600 px-4 py-2"
+                >
+                  <Text className="text-xs font-black text-white">Save</Text>
+                </Pressable>
+                <Pressable
+                  onPress={cancelCarProfile}
+                  className="rounded-lg border border-line px-4 py-2"
+                >
+                  <Text className="text-xs font-black text-navy">Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+      {showRobotProfiles && (
+        <View className="mt-3">
+          <Text className="font-display text-sm font-bold text-muted uppercase tracking-wide">
+            Robot Profiles ({filteredUsers.length})
+          </Text>
+          {filteredUsers.length > 0 && (
+            <FlatList
+              data={filteredUsers.flatMap((u) => u.robot_user_settings || [])}
+              keyExtractor={(r) => r.robot_code || r.profile_key}
+              contentContainerStyle={{ padding: 8 }}
+              renderItem={({ item }) => (
+                <View className="mb-3 rounded-xl border border-line bg-card p-4">
+                  <View className="flex-row justify-between">
+                    <Text className="font-display text-sm font-bold text-ink">
+                      Robot {item.robot_code || "—"}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        setEditRobot(item);
+                        setRobotEditing(true);
+                      }}
+                      className="rounded-full border border-line px-2 py-1 text-xs font-bold text-navy"
+                    >
+                      Edit
+                    </Pressable>
+                  </View>
+                  <View className="mt-2 flex-row gap-4 text-xs">
+                    <View>
+                      <Text className="text-muted">robot_code</Text>
+                      <Text className="font-mono">
+                        {item.robot_code || "—"}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-muted">telemetry_channel</Text>
+                      <Text className="font-mono">
+                        {item.telemetry_channel || "—"}
+                      </Text>
+                    </View>
+                  </View>
+                  {canDelete && (
+                    <Pressable
+                      onPress={async () => {
+                        Alert.alert(
+                          "Delete robot profile",
+                          "Remove this robot profile? This cannot be undone.",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  await deleteUserRobotSetting(
+                                    currentUserId,
+                                    item.robot_code,
+                                  );
+                                  onApply();
+                                } catch (e) {
+                                  logger.error(
+                                    "admin",
+                                    "Robot profile delete error:",
+                                    e,
+                                  );
+                                  Alert.alert(
+                                    "Could not delete",
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Please try again.",
+                                  );
+                                }
+                              },
+                            },
+                          ],
+                        );
+                      }}
+                      className="mt-2 rounded-lg border border-red-500/30 px-3 py-1 text-xs font-bold text-red-600"
+                    >
+                      Delete
+                    </Pressable>
+                  )}
+                </View>
+              )}
+              horizontal={false}
+            />
+          )}
+          {editRobot && (
+            <View className="mt-3 rounded-xl border border-line bg-card p-4">
+              <Text className="font-display text-xs font-bold uppercase tracking-wide text-muted">
+                Edit Robot Profile
+              </Text>
+              <View className="mt-2 grid grid-cols-2 gap-2">
+                <TextInput
+                  value={editRobot.robot_code || ""}
+                  onChangeText={(text) =>
+                    setEditRobot({ ...editRobot, robot_code: text })
+                  }
+                  placeholder="Robot code"
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+                <TextInput
+                  value={editRobot.telemetry_channel || ""}
+                  onChangeText={(text) =>
+                    setEditRobot({ ...editRobot, telemetry_channel: text })
+                  }
+                  placeholder="Telemetry channel"
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+                <TextInput
+                  value={JSON.stringify(editRobot.parameters || {})}
+                  onChangeText={(text) => {
+                    try {
+                      const parsed = JSON.parse(text);
+                      setEditRobot({ ...editRobot, parameters: parsed });
+                    } catch {
+                      // keep current if invalid JSON
+                    }
+                  }}
+                  multiline
+                  numberOfLines={3}
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </View>
+              <View className="mt-3 flex-row justify-end gap-1">
+                <Pressable
+                  onPress={() =>
+                    saveRobotProfile(
+                      editRobot.robot_code,
+                      editRobot.telemetry_channel,
+                      editRobot.parameters,
+                      editRobot.profile_key,
+                    )
+                  }
+                  disabled={robotEditing}
+                  className="rounded-lg bg-emerald-600 px-4 py-2"
+                >
+                  <Text className="text-xs font-black text-white">Save</Text>
+                </Pressable>
+                <Pressable
+                  onPress={cancelRobotProfile}
+                  className="rounded-lg border border-line px-4 py-2"
+                >
+                  <Text className="text-xs font-black text-navy">Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }

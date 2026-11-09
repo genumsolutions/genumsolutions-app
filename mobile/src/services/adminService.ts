@@ -85,6 +85,18 @@ export type AdminUser = {
   tier: "free" | "pro";
   lastSeenAt: string | null;
   createdAt: string | null;
+  car_profiles?: Array<{
+    profile_key: string;
+    car_name: string;
+    unique_id: string;
+    settings: Record<string, unknown>;
+  }>;
+  robot_user_settings?: Array<{
+    robot_code: string;
+    telemetry_channel: string;
+    parameters: Record<string, unknown>;
+    profile_key: string;
+  }>;
 };
 
 export type AdminMessage = {
