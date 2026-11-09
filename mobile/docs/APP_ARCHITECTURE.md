@@ -19,7 +19,7 @@ mobile/
 │   │   ├── adminTabs.ts     # Admin tab parity config
 │   │   ├── company.ts       # Company info type + fallback
 │   │   ├── site.ts          # APP_VERSION, config
-│   │   ├── socials.ts       # Social media URLs
+│   │   ├── socials.ts       # Social media URLs + WhatsApp helpers
 │   │   └── push.ts          # Push notification config
 │   ├── context/             # React context providers
 │   │   └── AppContext.tsx   # Auth + cart state
@@ -61,7 +61,7 @@ mobile/
 │   │   ├── productService.ts
 │   │   ├── serviceService.ts
 │   │   ├── cartService.ts
-│   │   ├── orderService.ts
+│   │   ├── orderService.ts  # Orders + contact edge URLs
 │   │   ├── projectService.ts
 │   │   ├── carProfileService.ts
 │   │   ├── bleService.ts
@@ -70,7 +70,8 @@ mobile/
 │   │   ├── carProtocol.ts
 │   │   ├── logger.ts
 │   │   ├── biometricsService.ts
-│   │   └── appLogService.ts
+│   │   ├── appLogService.ts
+│   │   └── newsletterService.ts
 │   ├── types/               # TypeScript types
 │   │   └── index.ts
 │   └── lib/                 # Utility functions
@@ -90,7 +91,7 @@ The app's `mobile/supabase/` folder is intentionally empty.
 **Keep these in sync:**
 
 - `src/config/company.ts` ↔ website `lib/company.ts`
-- `src/config/socials.ts` ↔ website socials config
+- `src/config/socials.ts` ↔ website `lib/socials.ts`
 - `src/types/galleryImages.ts` ↔ website product image catalog
 
 ### 2. Navigation
@@ -162,7 +163,79 @@ See `docs/APP_ADMIN_COMPLETE.md` for complete admin UI documentation.
 
 Mirrors the admin Users tab structure.
 
-### 8. Product & Checkout Flow (mirrored with website)
+### 8. Mirror: Contact, Account, Services, Projects
+
+The app already mirrors the website for these flows. No code changes needed.
+
+#### Contact Screen ↔ Contact Page
+
+| Element          | App (`ContactScreen.tsx`)                               | Website (`app/contact/page.tsx`)                       | Shared                         |
+| ---------------- | ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------ |
+| Contact details  | Company from Supabase `company_info` (bundled fallback) | Company from Supabase `company_info` (cached fallback) | Same `company_info` table      |
+| Address          | Tap opens geo: URL                                      | Text shown                                             | Same company row               |
+| Email            | Tap opens mailto: URL                                   | Text shown                                             | Same company row               |
+| Phone            | Tap opens tel: URL                                      | Text shown                                             | Same company row               |
+| WhatsApp         | Chat link via `whatsappLink()`                          | Chat link via `whatsappLink()`                         | Same `socials.ts` helper       |
+| Socials          | Social pill chips via `SocialsRow`                      | Social links via `socialLinks()`                       | Same `company_info` row        |
+| Inquiry form     | Native form (name/email/message) → `POST /contact` edge | Client form (name/email/message) → `POST /api/contact` | Same `customer_messages` table |
+| Field limits     | name max 100, email max 254, message max 5000           | same limits enforced server-side                       | Same validation                |
+| Email validation | regex client-side                                       | regex server-side                                      | Same pattern                   |
+| Status feedback  | in-screen text, success/error                           | in-form text, success/error                            | Same UX pattern                |
+| Legal links      | Privacy / Terms navigation                              | Footer links                                           | Same legal pages               |
+
+**Contact form transport difference:**
+
+- App: calls Supabase edge function `contact` via `edgeUrls.contact` (`EDGE_BASE/contact`) in `src/services/orderService.ts`
+- Website: calls Next.js API route `POST /api/contact` in `app/api/contact/route.ts`
+- Both write to the same `customer_messages` table, both rate-limit, both validate the same fields
+
+#### Account Screen ↔ Account Page
+
+| Element         | App (`AccountScreen.tsx`)                                             | Website (`app/account/page.tsx` + `AccountPanel.tsx`) | Shared                              |
+| --------------- | --------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| Auth gate       | Redirect to sign-in if not signed in                                  | AuthPanel if no session                               | Same Supabase auth                  |
+| Header          | Avatar (initials) + name + email + admin/staff badge + sign out       | Avatar (initials) + name + email + tier + log out     | Same `profiles` table               |
+| Stats (3 cards) | Orders / build-list items / support messages                          | Orders / build-list items / support messages          | Same data sources                   |
+| My collection   | Product cards from `user_collection` (RLS own-rows)                   | MyCollection component from `user_collection`         | Same `user_collection` table        |
+| Your activity   | Habit counters (views/searches/cart_adds/orders) — hidden if all zero | Same habit counters — hidden if all zero              | Same `user_habits` table            |
+| Your orders     | Status pill + provider + total + line items                           | Status pill + provider + total + line items           | Same `orders` table                 |
+| Your details    | Edit profile (name/phone/address) form                                | Edit profile (name/phone/address) form                | Same `profiles` table               |
+| Your messages   | Support history with status pills                                     | Support history with status pills                     | Same `customer_messages` table      |
+| Newsletter      | Email + consent checkbox + subscribe button                           | Email + consent checkbox + subscribe button           | Same `newsletter_subscribers` table |
+| Push settings   | (on Menu tab)                                                         | PushNotificationSettings component                    | Same push subscription              |
+| Robot prefs     | (on UserPreferencesScreen)                                            | RobotPreferencesPanel                                 | Same robot settings                 |
+| Car profiles    | (on UserPreferencesScreen)                                            | CarProfilesPanel                                      | Same car profiles                   |
+
+#### Services Screen ↔ Services Page
+
+| Element                   | App (`ServicesScreen.tsx`)                                          | Website (`app/services/page.tsx` + `ServicesGrid.tsx`)              | Shared                    |
+| ------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------- |
+| Data source               | Supabase `services` table via `getServices()`                       | Supabase `services` table via `listServices()`                      | Same `services` table     |
+| Fields                    | id, name, category, priceLabel, description, tag, sortOrder, active | id, name, category, priceLabel, description, tag, sortOrder, active | Same `Service` type       |
+| Filter                    | Category chips (derived from DB rows)                               | Category dropdown (derived from DB rows)                            | Same categories           |
+| Search                    | Text input, filters by name/tag/id/description                      | Text input, filters by name/description                             | Same search intent        |
+| Display                   | Card with name + tag badge + description + priceLabel               | ArticleCard with title + tag + description + priceLabel             | Same card data            |
+| Empty state               | "No services match your filters"                                    | "No services in this category"                                      | Same empty handling       |
+| Pagination                | PagePager (6 per page)                                              | Load all on server, paginate client-side                            | Different impl, same data |
+| Quote CTA                 | (none on list — per-item detail)                                    | "Request a quote" link to /contact                                  | Same intent               |
+| Training programs section | (not on services screen)                                            | Training programs + pilot costs + STEM highlights                   | Website-only add-on       |
+| Process steps             | (not on app)                                                        | 4-step how-it-works section                                         | Website-only add-on       |
+
+#### Projects Screen ↔ Projects Page
+
+| Element      | App (`ProjectsScreen.tsx`)                          | Website (`app/projects/page.tsx` + `ProjectsCatalog.tsx`)       | Shared                          |
+| ------------ | --------------------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
+| Data source  | Supabase `products` table (project packages + kits) | Supabase `products` via `getManagedProducts()` + `applyScope()` | Same `products` table           |
+| Filter       | 6 project categories from `project_categories`      | 6 project categories from `project_categories`                  | Same `project_categories` table |
+| Search       | Text input, filters by name/note/description        | Text input, filters by name/note/description                    | Same search intent              |
+| Display      | 2-column grid, minimal ProductCard                  | 2-col grid on mobile, up to 5 at xl, ProductCard                | Same ProductCard component      |
+| Empty state  | "No projects found matching your filters"           | "No projects found matching your filters"                       | Same empty handling             |
+| Pagination   | PagePager (8 per page)                              | "See more" button + page indicator                              | Same pagination intent          |
+| Coming soon  | Empty categories flagged                            | Empty categories flagged                                        | Same UX                         |
+| Include kits | Pre-packaged Kits ride along (U-44)                 | `includeKits` prop re-adds kits                                 | Same decision                   |
+| Tools CTA    | (none)                                              | "Test & control on the IoT Controller" link to /tools           | Website-only add-on             |
+
+### 9. Product & Checkout Flow (mirrored with website)
 
 #### Product Detail Screen (`ProductDetailScreen.tsx`)
 
@@ -216,7 +289,7 @@ Both re-price server-side, confirm server-to-server, write to immutable `transac
 - Both record cart_adds habit (fire-and-forget)
 - Both clear cart after successful order
 
-### 9. Version Management
+### 10. Version Management
 
 Version pins that must move **together**:
 
@@ -227,14 +300,14 @@ Version pins that must move **together**:
 
 Current: managed by `node scripts/bump-version.mjs <ver> <code>`.
 
-### 10. Release & Update Channels
+### 11. Release & Update Channels
 
 - `version` + `android.versionCode` in `app.json` (single source of truth)
 - OTA hot-patches: `ota-only.yml` is JS-only, does not bump app version
 - `app.json` derives `runtimeVersion` from `appVersion`
 - Upload signed APK with `node scripts/upload-release.mjs`
 
-### 11. Google Sign-In
+### 12. Google Sign-In
 
 Native (`@react-native-google-signin/google-signin`), not routed through any WebView.
 
@@ -244,7 +317,7 @@ Setup:
 2. Add `genumsolutions://auth` to Supabase → Authentication → URL Configuration → Redirect URLs
 3. Android OAuth client's SHA-1 must match release signing keystore
 
-### 12. Environment Variables
+### 13. Environment Variables
 
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=        # project URL
@@ -257,12 +330,12 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
 
 Only the **anon key** reaches the app bundle. The service-role key stays out of it.
 
-### 13. Build Notes
+### 14. Build Notes
 
 - LongPaths is disabled on `E:\`, so release Gradle builds run from a mirror at `C:\bs`
 - Keep `C:\bs` in sync with `mobile/`, including `keystores/` and `.env.local`
 
-### 10. Test Status
+### 15. Test Status
 
 - **955 vitest tests** across 65 files — all passing
 - **TypeScript `tsc --noEmit`** — 0 errors
@@ -270,84 +343,49 @@ Only the **anon key** reaches the app bundle. The service-role key stays out of 
 - **Product/checkout parity**: ProductDetailScreen ↔ ProductDetailPro, CartScreen ↔ checkout build list, CheckoutScreen ↔ checkout page — all mirror the same data model
 - **Contact/account/services/projects parity**: all 4 screens mirror website equivalents — documented in section 8
 
-### 9. Version Management
+### 16. Shared Types with Website
 
-- **955 vitest tests** across 65 files — all passing
-- **TypeScript `tsc --noEmit`** — 0 errors
-- **Admin parity tests** — enforce identical tab structure with website
-- **Product/checkout parity**: ProductDetailScreen ↔ ProductDetailPro, CartScreen ↔ checkout build list, CheckoutScreen ↔ checkout page — all mirror the same data model
+The app and website share types that must stay in sync. The website is the source of truth for each.
 
-### 8. Mirror: Contact, Account, Services, Projects
+#### Company type (`src/config/company.ts` ↔ `lib/company.ts`)
 
-The app already mirrors the website for these flows. No code changes needed.
+| Repo                        | Fields             | Notes                                                                             |
+| --------------------------- | ------------------ | --------------------------------------------------------------------------------- |
+| Website `lib/company.ts`    | 17 fields (full)   | Source of truth                                                                   |
+| App `src/config/company.ts` | 12 fields (subset) | Deliberate — app doesn't need `url`, `city`, `country`, `vatLabel`, `description` |
 
-#### Contact Screen ↔ Contact Page
+The 5 omitted fields are website-only: used for SEO metadata, sitemap, JSON-LD, and admin Settings form. The 12 shared fields are identical in type, name, and bundled value.
 
-| Element          | App (`ContactScreen.tsx`)                               | Website (`app/contact/page.tsx`)                       | Shared                         |
-| ---------------- | ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------ |
-| Contact details  | Company from Supabase `company_info` (bundled fallback) | Company from Supabase `company_info` (cached fallback) | Same `company_info` table      |
-| Address          | Tap opens geo: URL                                      | Text shown                                             | Same company row               |
-| Email            | Tap opens mailto: URL                                   | Text shown                                             | Same company row               |
-| Phone            | Tap opens tel: URL                                      | Text shown                                             | Same company row               |
-| WhatsApp         | Chat link via `whatsappLink()`                          | Chat link via `whatsappLink()`                         | Same `socials.ts` helper       |
-| Socials          | Social pill chips via `SocialsRow`                      | Social links via `socialLinks()`                       | Same `company_info` row        |
-| Inquiry form     | Native form (name/email/message) → `POST /contact` edge | Client form (name/email/message) → `POST /api/contact` | Same `customer_messages` table |
-| Field limits     | name max 100, email max 254, message max 5000           | same limits enforced server-side                       | Same validation                |
-| Email validation | regex client-side                                       | regex server-side                                      | Same pattern                   |
-| Status feedback  | in-screen text, success/error                           | in-form text, success/error                            | Same UX pattern                |
-| Legal links      | Privacy / Terms navigation                              | Footer links                                           | Same legal pages               |
+#### Socials helpers (`src/config/socials.ts` ↔ `lib/socials.ts`)
 
-#### Account Screen ↔ Account Page
+Both repos have identical 4 helpers:
 
-| Element         | App (`AccountScreen.tsx`)                                             | Website (`app/account/page.tsx` + `AccountPanel.tsx`) | Shared                              |
-| --------------- | --------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------- |
-| Auth gate       | Redirect to sign-in if not signed in                                  | AuthPanel if no session                               | Same Supabase auth                  |
-| Header          | Avatar (initials) + name + email + admin/staff badge + sign out       | Avatar (initials) + name + email + tier + log out     | Same `profiles` table               |
-| Stats (3 cards) | Orders / build-list items / support messages                          | Orders / build-list items / support messages          | Same data sources                   |
-| My collection   | Product cards from `user_collection` (RLS own-rows)                   | MyCollection component from `user_collection`         | Same `user_collection` table        |
-| Your activity   | Habit counters (views/searches/cart_adds/orders) — hidden if all zero | Same habit counters — hidden if all zero              | Same `user_habits` table            |
-| Your orders     | Status pill + provider + total + line items                           | Status pill + provider + total + line items           | Same `orders` table                 |
-| Your details    | Edit profile (name/phone/address) form                                | Edit profile (name/phone/address) form                | Same `profiles` table               |
-| Your messages   | Support history with status pills                                     | Support history with status pills                     | Same `customer_messages` table      |
-| Newsletter      | Email + consent checkbox + subscribe button                           | Email + consent checkbox + subscribe button           | Same `newsletter_subscribers` table |
-| Push settings   | (on Menu tab)                                                         | PushNotificationSettings component                    | Same push subscription              |
-| Robot prefs     | (on UserPreferencesScreen)                                            | RobotPreferencesPanel                                 | Same robot settings                 |
-| Car profiles    | (on UserPreferencesScreen)                                            | CarProfilesPanel                                      | Same car profiles                   |
+- `socialLinks(company)` — returns Facebook/Instagram/TikTok/LinkedIn/YouTube links
+- `normalizeWhatsappNumber(raw)` — strips non-digits
+- `isValidWhatsappNumber(value)` — validates 8-15 digits
+- `whatsappLink(number, message?)` — builds wa.me URL
 
-#### Services Screen ↔ Services Page
+#### Service type (`src/types/index.ts` ↔ `lib/services.ts`)
 
-| Element                   | App (`ServicesScreen.tsx`)                                          | Website (`app/services/page.tsx` + `ServicesGrid.tsx`)              | Shared                    |
-| ------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------- |
-| Data source               | Supabase `services` table via `getServices()`                       | Supabase `services` table via `listServices()`                      | Same `services` table     |
-| Fields                    | id, name, category, priceLabel, description, tag, sortOrder, active | id, name, category, priceLabel, description, tag, sortOrder, active | Same `Service` type       |
-| Filter                    | Category chips (derived from DB rows)                               | Category dropdown (derived from DB rows)                            | Same categories           |
-| Search                    | Text input, filters by name/tag/id/description                      | Text input, filters by name/description                             | Same search intent        |
-| Display                   | Card with name + tag badge + description + priceLabel               | ArticleCard with title + tag + description + priceLabel             | Same card data            |
-| Empty state               | "No services match your filters"                                    | "No services in this category"                                      | Same empty handling       |
-| Pagination                | PagePager (6 per page)                                              | Load all on server, paginate client-side                            | Different impl, same data |
-| Quote CTA                 | (none on list — per-item detail)                                    | "Request a quote" link to /contact                                  | Same intent               |
-| Training programs section | (not on services screen)                                            | Training programs + pilot costs + STEM highlights                   | Website-only add-on       |
+| Field                                                               | App          | Website | Match                       |
+| ------------------------------------------------------------------- | ------------ | ------- | --------------------------- |
+| id, name, category, priceLabel, description, tag, sortOrder, active | ✅           | ✅      | Yes                         |
+| createdAt, updatedAt                                                | ❌ (omitted) | ✅      | App doesn't need timestamps |
 
-#### Projects Screen ↔ Projects Page
+#### Product/catalog types (`src/types/index.ts` ↔ `lib/catalog.ts`)
 
-| Element      | App (`ProjectsScreen.tsx`)                          | Website (`app/projects/page.tsx` + `ProjectsCatalog.tsx`)       | Shared                          |
-| ------------ | --------------------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
-| Data source  | Supabase `products` table (project packages + kits) | Supabase `products` via `getManagedProducts()` + `applyScope()` | Same `products` table           |
-| Filter       | 6 project categories from `project_categories`      | 6 project categories from `project_categories`                  | Same `project_categories` table |
-| Search       | Text input, filters by name/note/description        | Text input, filters by name/note/description                    | Same search intent              |
-| Display      | 2-column grid, minimal ProductCard                  | 2-col grid on mobile, up to 5 at xl, ProductCard                | Same ProductCard component      |
-| Empty state  | "No projects found matching your filters"           | "No projects found matching your filters"                       | Same empty handling             |
-| Pagination   | PagePager (8 per page)                              | "See more" button + page indicator                              | Same pagination intent          |
-| Coming soon  | Empty categories flagged                            | Empty categories flagged                                        | Same UX                         |
-| Include kits | Pre-packaged Kits ride along (U-44)                 | `includeKits` prop re-adds kits                                 | Same decision                   |
-| Tools CTA    | (none)                                              | "Test & control on the IoT Controller" link to /tools           | Website-only add-on             |
+Both repos read from the same `products` table. The app's `Product` type is a subset — it omits website-only fields like JSON-LD metadata, SEO fields, and blog-specific fields. The shared fields (id, name, price, stock, category, specs, image, etc.) are identical.
 
-### 9. Version Management
+#### Order type (`src/types/index.ts` ↔ shared `orders` table)
 
-- **955 vitest tests** across 65 files — all passing
-- **TypeScript `tsc --noEmit`** — 0 errors
-- **Admin parity tests** — enforce identical tab structure with website
-- **Product/checkout parity**: ProductDetailScreen ↔ ProductDetailPro, CartScreen ↔ checkout build list, CheckoutScreen ↔ checkout page — all mirror the same data model
+Both repos use the same `orders` table. The app's `Order` type matches the table columns used by both (id, items, total_npr, status, provider, created_at, etc.).
+
+#### Sync rule
+
+When the website adds a field to a shared type:
+
+1. If the app needs it → add to app type + update bundled fallback in `company.ts`
+2. If the app doesn't need it → leave the app as a subset, document in this section
 
 ## Documentation Deliverables
 
