@@ -1099,9 +1099,165 @@ export async function listAppLogs(
   };
 }
 
+// --- User logs + per-user profile entries (U-R4 2026-11-09) ---
+// The shared tables behind the website's AdminUserLogs / AdminProfileEntries
+// panels: user_activity_log, user_profile_entries, profile_entry_types.
+// RLS (supabase/migrations/20261109_user_logs_staff_rls.sql): staff read all
+// rows, admins delete. The app reads with the signed-in session, so no
+// service-role key ever ships to a phone. Queries stay paginated (20/page) to
+// keep DB egress inside the free tier.
+
+export type AdminUserLog = {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+};
+
+export function mapUserLogRow(row: RawRow): AdminUserLog {
+  return {
+    id: String(row.id ?? ""),
+    userId: row.user_id != null ? String(row.user_id) : null,
+    action: String(row.action ?? ""),
+    entityType: String(row.entity_type ?? ""),
+    entityId: row.entity_id != null ? String(row.entity_id) : null,
+    details: (row.details as Record<string, unknown> | null) ?? {},
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listUserActivityLogs(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminUserLog[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("user_activity_log")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapUserLogRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function deleteUserActivityLog(id: string) {
+  const { error } = await supabase
+    .from("user_activity_log")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export type AdminProfileEntryType = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type AdminProfileEntry = {
+  id: string;
+  userId: string;
+  typeId: string;
+  typeName: string;
+  title: string;
+  body: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function mapProfileEntryRow(row: RawRow): AdminProfileEntry {
+  const type = row.profile_entry_types as { name?: string } | null | undefined;
+  return {
+    id: String(row.id ?? ""),
+    userId: String(row.user_id ?? ""),
+    typeId: String(row.type_id ?? ""),
+    typeName: String(type?.name ?? ""),
+    title: String(row.title ?? ""),
+    body: (row.body as Record<string, unknown> | null) ?? {},
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? ""),
+  };
+}
+
+export async function listUserProfileEntries(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminProfileEntry[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("user_profile_entries")
+    // Embedded join, same shape the website's listUserProfileEntries uses.
+    .select("*, profile_entry_types(name)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapProfileEntryRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function listProfileEntryTypes(): Promise<
+  AdminProfileEntryType[]
+> {
+  const { data, error } = await supabase
+    .from("profile_entry_types")
+    .select("id, name, description")
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: RawRow) => ({
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
+  }));
+}
+
+export async function deleteUserProfileEntry(id: string) {
+  const { error } = await supabase
+    .from("user_profile_entries")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // --- Dashboard analytics (page_views) ---
 // Mirrors the website's getPageViewStats: total/today views, top paths, and
 // a per-day traffic series. RLS: admins may read page_views.
+
+// Admin delete for the fleet diagnostics. RLS:
+// supabase/migrations/20261109_admin_manage_rls.sql grants admins DELETE on
+// device_crash_reports and app_logs, so the app can manage them without a
+// service-role key (the website deletes through /api/admin/logs instead).
+export async function deleteDeviceCrashReport(id: string) {
+  const { error } = await supabase
+    .from("device_crash_reports")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteAppLog(id: string) {
+  const { error } = await supabase.from("app_logs").delete().eq("id", id);
+  if (error) throw error;
+}
 
 export type AdminAnalytics = {
   totalViews: number;

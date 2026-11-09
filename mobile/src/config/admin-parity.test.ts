@@ -13,10 +13,12 @@ import { ADMIN_TABS } from "./adminTabs";
 // =====================================================================
 
 describe("admin tab inventory (website <-> app mirror, B-6)", () => {
-  it("exposes the 9 canonical tabs in the canonical order", () => {
+  it("exposes the 11 canonical tabs in the canonical order", () => {
     // U-44 (2026-09-26, owner): Catalog split into three catalog tabs that
     // mirror the customer storefront (Electronic Products / 3D Products /
     // Projects). U-R3 (2026-10-12): "System Logs" added (fleet diagnostics).
+    // U-R4 (2026-11-09): "User Logs" + "Profile Entries" added — both clients
+    // read the shared user_activity_log / user_profile_entries tables.
     expect(ADMIN_TABS).toEqual([
       "Dashboard",
       "Orders",
@@ -26,6 +28,8 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
       "Content",
       "Users",
       "System Logs",
+      "User Logs",
+      "Profile Entries",
       "Settings",
     ]);
   });
@@ -49,14 +53,7 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
       // website's literals double-quoted.
       .map((s) => s.trim().replace(/^["']|["']$/g, ""))
       .filter(Boolean);
-    // U-R4 (2026-11-09): the website added "User Logs" and "Profile Entries",
-    // which are web-admin panels backed by server routes and have no app
-    // screen yet. They are website-only until the app ships equivalents; the
-    // rest must still match exactly, in order.
-    const WEBSITE_ONLY_TABS = ["User Logs", "Profile Entries"];
-    expect(webTabs.filter((t) => !WEBSITE_ONLY_TABS.includes(t))).toEqual([
-      ...ADMIN_TABS,
-    ]);
+    expect(webTabs).toEqual([...ADMIN_TABS]);
   });
 
   it("is reflected verbatim in the app AdminScreen tab strip", () => {

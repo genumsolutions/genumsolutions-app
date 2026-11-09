@@ -14,6 +14,10 @@
 // (/3d-printing), Projects (/projects, + Pre-packaged Kits). Must match the
 // website's tests/admin-parity.test.ts ADMIN_TABS exactly.
 // U-R3: "System Logs" added — fleet crash reports + app logs.
+// U-R4 (2026-11-09): "User Logs" + "Profile Entries" added — per-user audit
+// log and per-user car/project profiles, read from the shared Supabase tables
+// (user_activity_log / user_profile_entries / profile_entry_types). Both
+// clients now expose the identical 11-tab inventory.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",
@@ -23,5 +27,7 @@ export const ADMIN_TABS = [
   "Content",
   "Users",
   "System Logs",
+  "User Logs",
+  "Profile Entries",
   "Settings",
 ] as const;
