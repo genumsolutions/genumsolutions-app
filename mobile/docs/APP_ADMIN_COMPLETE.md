@@ -149,6 +149,192 @@ const LOG_SECTIONS = [
 
 ---
 
+## 1.7 Users Tab (UsersSection)
+
+**Location**: `UsersSection` function (line ~4044), rendered when top-tab label = `"Users"`
+
+**Props** (from AdminScreen, line ~1459):
+
+- `users: AdminUser[]` — array of admin users
+- `total: number` — total user count
+- `page: number` — current page
+- `totalPages: number` — total pages
+- `query: string` — search query
+- `onQueryChange: (q: string) => void` — query change handler
+- `onApply: () => void` — apply/search handler
+- `onPage: (p: number) => void` — page change handler
+- `canDelete: boolean` — delete capability
+- `isOwner: boolean` — owner status
+- `onToggleRole: (u: AdminUser) => void` — role toggle
+- `onToggleTier: (u: AdminUser) => void` — tier toggle
+- `onDeleteUser: (u: AdminUser) => void` — delete user
+- `currentUserId: string` — current user ID
+
+**State variables**:
+
+- `showUserDir: boolean` — show user directory section (default: true)
+- `showCarProfiles: boolean` — show car profiles section (default: true)
+- `showRobotProfiles: boolean` — show robot profiles section (default: true)
+- `userDirSearch: string` — user directory search text
+- `carSearch: string` — car profile search text
+- `robotSearch: string` — robot profile search text
+- `editCar: { profile_key: string; car_name: string; settings: any } | null` — car being edited
+- `carEditing: boolean` — car edit mode active
+- `editRobot: { robot_code: string; telemetry_channel: string; parameters: any; profile_key: string } | null` — robot being edited
+- `robotEditing: boolean` — robot edit mode active
+
+**Filter logic**:
+
+- `filteredUsers` filters users by `userDirSearch` (name or email match)
+
+### 1.7.1 User Directory Section
+
+**Header** (renderUserDirHeader, line ~4096):
+
+- Title: `"User Directory ({filteredUsers.length})"`
+- Search input: `TextInput` with `userDirSearch` value, `onApply` on submit
+- Apply button: `Pressable` with `onApply` handler
+
+**User Cards** (renderItem, line ~4260):
+
+Each user card is a `View` with:
+
+- Name (bold, font-display)
+- Email (muted)
+- Phone (if present)
+- Address (if present, max 1 line)
+- Created at / last seen date (if present)
+- Role badge (pill style, color-coded: owner=ink, admin=amber, staff=navy, other=sky)
+- Tier badge (pill style, color-coded: pro=emerald, other=mist)
+
+**Car Profiles Section Header** (line ~4330):
+
+- Title: `"Car Profiles ({filteredUsers.length})"`
+
+**Car Profile Card** (renderItem, line ~4343):
+
+Each car profile card is a `View` with:
+
+- Car name (bold, font-display) or "Unnamed Car"
+- Edit button (pill, navy text)
+- Distinguished fields:
+  - `profile_key` (font-mono)
+  - `unique_id` (font-mono)
+- Delete button (if `canDelete`, red border, red text)
+
+**Edit Car Form** (line ~4399):
+
+- Title: `"Edit Car Profile"`
+- Car name input (TextInput)
+- Settings JSON input (multiline TextInput)
+- Save button (emerald bg, disabled during edit)
+- Cancel button (border, navy text)
+
+**Save handler** (saveCarProfile, line ~4160):
+
+- Calls `upsertAdminCarProfile(currentUserId, profileKey, carName, settings)`
+- On success: closes edit mode, calls `onApply()`
+- On error: shows Alert with error message
+
+**Delete handler** (line ~4375):
+
+- Calls `deleteAdminCarProfile(currentUserId, profileKey)`
+- On success: calls `onApply()`
+- On error: shows Alert with error message
+
+### 1.7.2 Robot Profiles Section
+
+**Section Header** (line ~4490):
+
+- Title: `"Robot Profiles ({filteredUsers.length})"`
+
+**Robot Profile Card** (renderItem, line ~4503):
+
+Each robot profile card is a `View` with:
+
+- Robot label (bold, font-display): `"Robot {robot_code}"`
+- Edit button (pill, navy text)
+- Fields:
+  - `robot_code` (font-mono)
+  - `telemetry_channel` (font-mono)
+- Delete button (if `canDelete`, red border, red text)
+
+**Edit Robot Form** (line ~4518):
+
+- Title: `"Edit Robot Profile"`
+- Robot code input (TextInput)
+- Telemetry channel input (TextInput)
+- Parameters JSON input (multiline TextInput)
+- Save button (emerald bg, disabled during edit)
+- Cancel button (border, navy text)
+
+**Save handler** (saveRobotProfile, line ~4225):
+
+- Calls `upsertUserRobotSettings(currentUserId, robotCode, telemetryChannel, parameters)`
+- On success: closes edit mode, calls `onApply()`
+- On error: shows Alert with error message
+
+**Delete handler** (line ~4495):
+
+- Calls `deleteUserRobotSetting(currentUserId, robotCode)`
+- On success: calls `onApply()`
+- On error: shows Alert with error message
+
+### 1.7.3 Edit-Button Pattern (Users Tab)
+
+Each car/robot profile follows the edit-button pattern:
+
+1. **Read-only by default**: Card shows profile data with Edit button
+2. **Edit reveals form**: Tap Edit → edit state set, form appears below
+3. **Save persists**: Tap Save → async save, on success close edit mode
+4. **Cancel discards**: Tap Cancel → close edit mode without saving
+
+### 1.7.4 Data Model
+
+**AdminUser** type (extended, line ~80 in adminService.ts):
+
+```typescript
+type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  address: string;
+  role: string;
+  tier: "free" | "pro";
+  lastSeenAt: string | null;
+  createdAt: string | null;
+  car_profiles?: Array<{
+    profile_key: string;
+    car_name: string;
+    unique_id: string;
+    settings: Record<string, unknown>;
+  }>;
+  robot_user_settings?: Array<{
+    robot_code: string;
+    telemetry_channel: string;
+    parameters: Record<string, unknown>;
+    profile_key: string;
+  }>;
+};
+```
+
+**Car profile distinguished fields**:
+
+- `profile_key`: Stable identity (`fw:<boardId>` or BT MAC)
+- `car_name`: Human-readable name
+- `unique_id`: Unique identifier
+- `settings`: JSON settings object (firmware, last_seen, etc.)
+
+**Robot profile fields**:
+
+- `robot_code`: Robot identifier
+- `telemetry_channel`: Telemetry channel name
+- `parameters`: JSON parameters object
+- `profile_key`: Profile key reference
+
+---
+
 ## 2. Supporting Files
 
 ### 2.1 `src/config/adminTabs.ts`
