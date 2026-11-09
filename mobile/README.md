@@ -30,6 +30,50 @@ website share ONLY the Supabase database (`products`, `services`, `carts`, `orde
 
 ---
 
+## Admin Dashboard (Nov 2026)
+
+The admin dashboard (`AdminScreen.tsx`) has a 10-tab layout:
+
+| Tab                 | Description                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| Dashboard           | Main overview                                                |
+| Orders              | Order management                                             |
+| Electronic Products | Product catalog                                              |
+| 3D Products         | 3D printing catalog                                          |
+| Projects            | Project packages                                             |
+| Content             | Services, journal, home copy                                 |
+| Users               | User directory + car profiles + robot profiles (3 sections)  |
+| Logs                | System logs + user activity + fleet diagnostics (3 sections) |
+| Settings            | Company info (17 fields) + training programs + pilot costs   |
+| Profile             | User profile entries (edit-button pattern)                   |
+
+### Users Tab — 3 Sections
+
+The **Users** tab (`UsersSection`) has 3 sections:
+
+1. **User Directory** — Searchable user list with name, email, phone, address, role, tier
+2. **Car Profiles** — Per-car profiles with distinguished identity fields:
+   - `profile_key` (stable: fw:boardId / BT MAC / wifi:uuid)
+   - `car_name` (display name)
+   - `unique_id` (unique identifier)
+   - `settings` (JSON settings blob)
+3. **Robot Profiles** — Per-robot settings with robot_code, telemetry_channel, parameters
+
+**Edit-button pattern** (all sections):
+
+- Read-only by default
+- Tap "Edit" → form reveals
+- Tap "Save" → persists and locks
+- Tap "Cancel" → discards and returns to read-only
+
+### Logs Tab — 3 Sections
+
+1. **User Activity** — `user_activity_log` rows
+2. **User Profiles** — `user_profile_entries` rows with edit per row
+3. **Fleet Diagnostics** — Crash reports + app logs with scope filter
+
+---
+
 ## Run locally
 
 ```bash
