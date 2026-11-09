@@ -3763,7 +3763,11 @@ function UserProjectProfileManager({
   const [rows, setRows] = useState<AdminCarProfile[] | null>(null);
   const [profileKey, setProfileKey] = useState("");
   const [carName, setCarName] = useState("");
+  // Settings are edited as JSON, exactly like the website's Users panel: the
+  // real objects can be nested or contain arrays, and a key=value textarea
+  // would silently flatten them on save.
   const [values, setValues] = useState("");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -3776,45 +3780,46 @@ function UserProjectProfileManager({
     load();
   }, [load]);
 
-  function parseValues(src: string): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
-    for (const line of src.split("\n")) {
-      const idx = line.indexOf("=");
-      if (idx <= 0) continue;
-      const key = line.slice(0, idx).trim();
-      const raw = line.slice(idx + 1).trim();
-      if (!key || !raw) continue;
-      if (/^-?\d+(\.\d+)?$/.test(raw)) out[key] = Number(raw);
-      else if (raw === "true" || raw === "false") out[key] = raw === "true";
-      else out[key] = raw;
-    }
-    return out;
+  function resetDraft() {
+    setProfileKey("");
+    setCarName("");
+    setValues("");
+    setEditingKey(null);
   }
 
-  async function handleSave(existing?: AdminCarProfile) {
+  /** Prefill the form with a row so an admin edits the real object, not a
+   *  flattened one. The key stays fixed — it is the board's identity. */
+  function startEdit(row: AdminCarProfile) {
+    setEditingKey(row.profileKey);
+    setProfileKey(row.profileKey);
+    setCarName(row.carName);
+    setValues(JSON.stringify(row.settings ?? {}, null, 2));
     setErr("");
-    const key = (existing?.profileKey ?? profileKey).trim();
+  }
+
+  async function handleSave() {
+    setErr("");
+    const key = profileKey.trim();
     if (!key) {
       setErr("A profile key is required (e.g. fw:1FB608).");
       return;
     }
+    let settings: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(values.trim() || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setErr("Settings must be a JSON object.");
+        return;
+      }
+      settings = parsed as Record<string, unknown>;
+    } catch {
+      setErr("Settings must be valid JSON.");
+      return;
+    }
     setBusy(true);
     try {
-      const settings =
-        existing && values.trim()
-          ? parseValues(values)
-          : existing
-            ? existing.settings
-            : parseValues(values);
-      await upsertAdminCarProfile(
-        userId,
-        key,
-        (existing ? carName || existing.carName : carName).trim() || key,
-        settings,
-      );
-      setProfileKey("");
-      setCarName("");
-      setValues("");
+      await upsertAdminCarProfile(userId, key, carName.trim() || key, settings);
+      resetDraft();
       load();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save the profile.");
@@ -3870,15 +3875,26 @@ function UserProjectProfileManager({
                 </Text>
               </Text>
               {canDelete && (
-                <Pressable
-                  onPress={() => void handleDelete(row.profileKey)}
-                  disabled={busy}
-                  className="shrink-0 rounded border border-line px-2 py-0.5"
-                >
-                  <Text className="text-[10px] font-bold text-red-600">
-                    Delete
-                  </Text>
-                </Pressable>
+                <View className="shrink-0 flex-row gap-1">
+                  <Pressable
+                    onPress={() => startEdit(row)}
+                    disabled={busy}
+                    className="rounded border border-line px-2 py-0.5"
+                  >
+                    <Text className="text-[10px] font-bold text-navy">
+                      Edit
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void handleDelete(row.profileKey)}
+                    disabled={busy}
+                    className="rounded border border-line px-2 py-0.5"
+                  >
+                    <Text className="text-[10px] font-bold text-red-600">
+                      Delete
+                    </Text>
+                  </Pressable>
+                </View>
               )}
             </View>
             <Text className="mt-1 text-[11px] text-muted" numberOfLines={3}>
@@ -3895,15 +3911,20 @@ function UserProjectProfileManager({
       {canDelete ? (
         <>
           <Text className="mt-3 text-xs font-bold text-ink">
-            Add / update a project profile for {email}
+            {editingKey
+              ? `Editing ${editingKey} for ${email}`
+              : `Add a project profile for ${email}`}
           </Text>
           <TextInput
             value={profileKey}
             onChangeText={setProfileKey}
             autoCapitalize="none"
+            editable={!editingKey}
             placeholder="Profile key (e.g. fw:1FB608)"
             placeholderTextColor="#94a3b8"
-            className="mt-1 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink"
+            className={`mt-1 rounded border border-line px-2 py-1.5 text-xs ${
+              editingKey ? "bg-mist text-muted" : "bg-card text-ink"
+            }`}
           />
           <TextInput
             value={carName}
@@ -3915,13 +3936,11 @@ function UserProjectProfileManager({
           <TextInput
             value={values}
             onChangeText={setValues}
-            placeholder={
-              "One key=value per line, e.g.\nmode_id=4wd4m\nspeed=170"
-            }
+            placeholder={'Settings JSON, e.g.\n{"mode_id":"4wd4m","speed":170}'}
             placeholderTextColor="#94a3b8"
             multiline
             style={{ textAlignVertical: "top" }}
-            className="mt-1 min-h-16 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink"
+            className="mt-1 min-h-16 rounded border border-line bg-card px-2 py-1.5 font-mono text-xs text-ink"
           />
           <View className="mt-2 flex-row flex-wrap items-center gap-2">
             <Pressable
@@ -3930,9 +3949,18 @@ function UserProjectProfileManager({
               className="rounded-full bg-navy px-4 py-1.5"
             >
               <Text className="text-[11px] font-black text-white">
-                Save project profile
+                {editingKey ? "Save changes" : "Save project profile"}
               </Text>
             </Pressable>
+            {editingKey ? (
+              <Pressable
+                onPress={resetDraft}
+                disabled={busy}
+                className="rounded-full border border-line px-4 py-1.5"
+              >
+                <Text className="text-[11px] font-black text-ink">Cancel</Text>
+              </Pressable>
+            ) : null}
             {err ? (
               <Text
                 className="flex-1 text-[11px] text-red-600"
