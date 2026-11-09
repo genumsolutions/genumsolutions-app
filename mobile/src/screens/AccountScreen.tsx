@@ -244,6 +244,22 @@ export function AccountScreen() {
 
   // C8: ScrollView root — long profiles clipped on small screens before, and
   // this gives the screen pull-to-refresh over orders + messages.
+  // Mirror website's skeleton loading state (3 stat cards + header block).
+  if (ordersLoading && messagesLoading && collectionLoading) {
+    return (
+      <View className="flex-1 bg-surface">
+        <View className="h-40 animate-pulse rounded-2xl border border-line bg-card mx-5 mt-4" />
+        <View className="mt-4 flex-row gap-3 px-5">
+          <View className="h-28 animate-pulse flex-1 rounded-2xl border border-line bg-card" />
+          <View className="h-28 animate-pulse flex-1 rounded-2xl border border-line bg-card" />
+          <View className="h-28 animate-pulse flex-1 rounded-2xl border border-line bg-card" />
+        </View>
+      </View>
+    );
+  }
+
+  // C8: ScrollView root — long profiles clipped on small screens before, and
+  // this gives the screen pull-to-refresh over orders + messages.
   return (
     <ScrollView
       className="flex-1 bg-surface"
