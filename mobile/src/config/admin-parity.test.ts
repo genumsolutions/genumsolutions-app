@@ -49,7 +49,14 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
       // website's literals double-quoted.
       .map((s) => s.trim().replace(/^["']|["']$/g, ""))
       .filter(Boolean);
-    expect(webTabs).toEqual([...ADMIN_TABS]);
+    // U-R4 (2026-11-09): the website added "User Logs" and "Profile Entries",
+    // which are web-admin panels backed by server routes and have no app
+    // screen yet. They are website-only until the app ships equivalents; the
+    // rest must still match exactly, in order.
+    const WEBSITE_ONLY_TABS = ["User Logs", "Profile Entries"];
+    expect(webTabs.filter((t) => !WEBSITE_ONLY_TABS.includes(t))).toEqual([
+      ...ADMIN_TABS,
+    ]);
   });
 
   it("is reflected verbatim in the app AdminScreen tab strip", () => {
