@@ -5713,6 +5713,15 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
+          <Text className="mb-1 text-xs font-bold text-muted">Website URL</Text>
+          <TextInput
+            value={company.url}
+            onChangeText={(url) => patch({ url })}
+            autoCapitalize="none"
+            placeholder="https://example.com"
+            {...field}
+            className={`mb-3 ${inputClass}`}
+          />
           <Text className="mb-1 text-xs font-bold text-muted">YouTube URL</Text>
           <TextInput
             value={company.youtubeUrl}
