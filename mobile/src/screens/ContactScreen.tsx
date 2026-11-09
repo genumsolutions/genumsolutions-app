@@ -70,7 +70,7 @@ export function ContactScreen() {
       return;
     }
     setSending(true);
-    setStatus(null);
+    setStatus({ text: "Sending...", isError: false });
     try {
       await sendContactInquiry(name.trim(), email.trim(), message.trim());
       setStatus({
