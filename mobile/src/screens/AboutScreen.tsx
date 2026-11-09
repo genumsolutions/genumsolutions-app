@@ -5,6 +5,13 @@ import React from "react";
 import { ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 
+const stats = [
+  { value: "25+", label: "projects completed" },
+  { value: "10+", label: "years in engineering" },
+  { value: "50+", label: "clients served" },
+  { value: "500+", label: "students trained" },
+];
+
 const points = [
   {
     icon: "cpu" as const,
@@ -38,33 +45,199 @@ export function AboutScreen() {
         About
       </Text>
       <Text className="mt-1 font-display text-2xl font-bold leading-tight tracking-tight text-ink">
-        Technology you can touch, test, and trust.
+        Engineering with a reason to exist.
       </Text>
       <Text className="mt-3 text-sm leading-6 text-muted">
-        Robotics kits, project solutions, fabrication, open tools, and training
-        for curious builders, schools, and teams — designed in Kathmandu,
-        delivered across Nepal.
+        GENUM brings a decade of telecom, IoT, embedded systems, project
+        delivery, and STEAM education experience into a company built for
+        practical technology.
       </Text>
 
+      {/* Stats row — mirrors website /about stat cards */}
       <View className="mt-5 space-y-3">
-        {points.map((p) => (
-          <View
-            key={p.title}
-            className="flex-row items-start rounded-2xl border border-line bg-card p-4"
-          >
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-navy-light">
-              <Feather name={p.icon} size={18} color="#1e3a8a" />
+        <View className="flex-row flex-wrap gap-3">
+          {stats.map((s) => (
+            <View key={s.label} className="flex-1">
+              <View className="border-t-2 border-ink pt-3">
+                <Text className="font-display text-2xl font-bold text-ink">
+                  {s.value}
+                </Text>
+                <Text className="mt-1 text-xs text-muted">{s.label}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* How we work — mirrors website /about how-we-work section */}
+      <View className="mt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          How we work
+        </Text>
+        <Text className="mt-2 font-display text-xl font-bold text-ink">
+          Make the complex useful.
+        </Text>
+        <Text className="mt-3 text-sm leading-6 text-muted">
+          GENUM started with a fascination for how things communicate wirelessly
+          and grew through telecom infrastructure, embedded systems, smart
+          automation, cloud-connected devices, and technical education. The
+          company now gives that experience a home: products people can build
+          with, services that solve real problems, and training that leaves
+          people more capable than when they arrived.
+        </Text>
+        <Text className="mt-3 text-sm leading-6 text-muted">
+          Our working values are simple: innovation with evidence, collaboration
+          with clear ownership, and continuous growth through testing and
+          sharing.
+        </Text>
+      </View>
+
+      {/* What we do — mirrors website /about what-we-do 4-card grid */}
+      <View className="mt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          What we do
+        </Text>
+        <Text className="mt-2 font-display text-xl font-bold text-ink">
+          Our work in practice.
+        </Text>
+        <View className="mt-3 space-y-3">
+          <View className="flex-row items-start rounded-2xl border border-line bg-card p-4">
+            <View className="shrink-0">
+              <Feather name="shopping-bag" size={18} color="#1e3a8a" />
             </View>
             <View className="ml-3 min-w-0 flex-1">
               <Text numberOfLines={1} className="text-base font-bold text-ink">
-                {p.title}
+                Products & components
               </Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
-                {p.body}
+                Robotics kits, controllers, sensors, motors, and modules —
+                sourced, tested, and ready to build with.
+              </Text>
+              <Text className="mt-2 text-xs font-bold text-navy">
+                Browse catalog
               </Text>
             </View>
           </View>
-        ))}
+          <View className="flex-row items-start rounded-2xl border border-line bg-card p-4">
+            <View className="shrink-0">
+              <Feather name="layers" size={18} color="#1e3a8a" />
+            </View>
+            <View className="ml-3 min-w-0 flex-1">
+              <Text numberOfLines={1} className="text-base font-bold text-ink">
+                Projects & robot cars
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                Assembled robot-car builds and named project packages for
+                teaching, automation, and prototyping.
+              </Text>
+              <Text className="mt-2 text-xs font-bold text-navy">
+                See projects
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border border-line bg-card p-4">
+            <View className="shrink-0">
+              <Feather name="bar-chart" size={18} color="#1e3a8a" />
+            </View>
+            <View className="ml-3 min-w-0 flex-1">
+              <Text numberOfLines={1} className="text-base font-bold text-ink">
+                Services & training
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                Web delivery, 3D printing, school STEM packages, teacher
+                workshops, and curriculum programs.
+              </Text>
+              <Text className="mt-2 text-xs font-bold text-navy">
+                View services
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border border-line bg-card p-4">
+            <View className="shrink-0">
+              <Feather name="tool" size={18} color="#1e3a8a" />
+            </View>
+            <View className="ml-3 min-w-0 flex-1">
+              <Text numberOfLines={1} className="text-base font-bold text-ink">
+                Open tools
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                Free and open-source tools for makers, educators, and
+                developers.
+              </Text>
+              <Text className="mt-2 text-xs font-bold text-navy">
+                Explore tools
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Technical foundation — mirrors website /about competencies grid */}
+      <View className="mt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Technical foundation
+        </Text>
+        <Text className="mt-2 font-display text-xl font-bold text-ink">
+          Capabilities we bring to every project.
+        </Text>
+        <View className="mt-3 space-y-3">
+          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-base font-bold text-ink">
+                Microcontrollers
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                ESP32, Arduino, STM32, and ARM-based systems
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-base font-bold text-ink">
+                Cloud platforms
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                AWS, Azure, Google Cloud, Firebase, and IoT backends
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-base font-bold text-ink">IoT networks</Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                WiFi, Bluetooth, LoRaWAN, MQTT, CoAP, and Zigbee
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-base font-bold text-ink">
+                Embedded systems
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                Firmware, real-time systems, and hardware-software integration
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-base font-bold text-ink">Programming</Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                Python, C++, JavaScript, Java, and Embedded C
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-base font-bold text-ink">
+                STEAM education
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                Curriculum development, mentoring, and technical workshops
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
     </ScrollView>
   );
