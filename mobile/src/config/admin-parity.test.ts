@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ADMIN_TABS } from "./adminTabs";
+import { ADMIN_TAB_HINTS, ADMIN_TABS } from "./adminTabs";
 
 // =====================================================================
 // Admin-surface parity guard (was "ARCHITECTURE.md B-6"; that spec is NOT in
@@ -11,6 +11,29 @@ import { ADMIN_TABS } from "./adminTabs";
 // `components/admin/admin-types.ts` (TABS); the app's in
 // `src/config/adminTabs.ts`. Change both + both tests together.
 // =====================================================================
+
+/**
+ * Pull the hints map out of the source text. Values are single-line
+ * double-quoted strings by construction (no quotes inside).
+ */
+function readHints(
+  source: string,
+  declaration: string,
+): Record<string, string> {
+  const block = source.match(
+    new RegExp(`export const ${declaration}[^=]*= \\{([\\s\\S]*?)\\n\\};`),
+  );
+  const out: Record<string, string> = {};
+  for (const line of (block?.[1] ?? "").split(/\r?\n/)) {
+    const match = line.match(
+      /^\s*(?:"([^"]+)"|([A-Za-z][\w ]*))\s*:\s*"([^"]*)"/,
+    );
+    if (!match) continue;
+    const key = match[1] ?? match[2];
+    if (key) out[key] = match[3] ?? "";
+  }
+  return out;
+}
 
 describe("admin tab inventory (website <-> app mirror, B-6)", () => {
   it("exposes the 9 canonical tabs in the canonical order", () => {
@@ -68,5 +91,22 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
         `tab '${tab}' not found in AdminScreen.tsx`,
       ).toBe(true);
     }
+  });
+
+  // U-UI1 (2026-11-09): the per-tab description is shared console copy now —
+  // the app renders ADMIN_TAB_HINTS under the strip and the website renders the
+  // same sentences from TAB_HINTS. Guard coverage and cross-repo equality.
+  it("describes every tab with the same sentences the website uses", () => {
+    expect(Object.keys(ADMIN_TAB_HINTS).sort()).toEqual([...ADMIN_TABS].sort());
+    for (const [tab, hint] of Object.entries(ADMIN_TAB_HINTS))
+      expect(hint.length, `empty hint for ${tab}`).toBeGreaterThan(10);
+
+    const websitePath = resolve(
+      __dirname,
+      "../../../../genumsolutions-website/components/admin/admin-types.ts",
+    );
+    if (!existsSync(websitePath)) return; // website repo absent (CI layout)
+    const webHints = readHints(readFileSync(websitePath, "utf8"), "TAB_HINTS");
+    expect(webHints).toEqual({ ...ADMIN_TAB_HINTS });
   });
 });
