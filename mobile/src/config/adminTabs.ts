@@ -16,8 +16,11 @@
 // U-R3: "System Logs" added — fleet crash reports + app logs.
 // U-R4 (2026-11-09): "User Logs" + "Profile Entries" added — per-user audit
 // log and per-user car/project profiles, read from the shared Supabase tables
-// (user_activity_log / user_profile_entries / profile_entry_types). Both
-// clients now expose the identical 11-tab inventory.
+// (user_activity_log / user_profile_entries / profile_entry_types).
+// U-R5 (2026-11-09): those two and "System Logs" merged into ONE "Logs" tab
+// with three sections, because all three answered the same question (what
+// happened?) and each cost its own click. Both clients now expose the
+// identical 9-tab inventory.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",
@@ -26,8 +29,6 @@ export const ADMIN_TABS = [
   "Projects",
   "Content",
   "Users",
-  "System Logs",
-  "User Logs",
-  "Profile Entries",
+  "Logs",
   "Settings",
 ] as const;

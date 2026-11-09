@@ -400,6 +400,13 @@ export function useControlHub(routeCategory?: string) {
   const [reconnectDue, setReconnectDue] = useState(false);
   const [reconnectMethod, setReconnectMethod] =
     useState<LinkPromptMethod>("Bluetooth");
+  // U-125: when the drop is fresh (within the reconnect window) the dialog copy
+  // can mention the car was stable before it went quiet, instead of only saying
+  // it is silent now. `reconnectWindowMs` is generous enough that a real
+  // freeze-and-reset cycle is still "fresh" when the user sees the dialog.
+  const RECONNECT_WINDOW_MS = 30_000;
+  const [reconnectWindowFresh, setReconnectWindowFresh] =
+    useState<boolean>(false);
   // U-121 Phase D (owner 2026-10-23): the app KNOWS when the car stops
   // answering. A live transport says nothing about a live car — the owner's
   // freeze report (BT on, Wi-Fi drops, heap collapses to ~15 KB, the car
@@ -726,15 +733,62 @@ export function useControlHub(routeCategory?: string) {
   // U-120 Phase C: the SPP auto-reconnect machinery (attempts / re-arm
   // guard / backoff timer) is GONE with the silent retries themselves.
   // FIN-44: last status message seen by the dedupe gate (see onStatus below).
+  //
+  // U-125 (4WD4M freeze/reset loop, owner 2026-11-08): the EXTRA reset-line
+  // fan-out that used to be sent on every unexpected link drop was removed
+  // alongside the auto-reconnect. It was a redundancy on top of the safe-stop
+  // teardown (SPD0 / SERVO90 / S / REQ_STATE) already sent by `disconnect()`.
+  // Sending a second FACTORY;RESET or ESTOP storm across a link that is already
+  // dropping contributed to the car's freeze-then-soft-reset behaviour (the car
+  // accepted the duplicate safety lines while its heap was already collapsed).
+  // The safe-stop lines are enough; nothing extra is sent on drop.
   const sppStatusMsgRef = useRef<string | null>(null);
   const sppWasConnectedRef = useRef(sppService.isConnected);
   const sppLastAddressRef = useRef<string | null>(
     sppService.getConnectionInfo().address,
   );
 
+  /**
+   * U-125 (4WD4M freeze/reset loop, owner 2026-11-08): when a link drops
+   * unexpectedly, the only honest thing the app can do is name the drop and wait
+   * for the user to decide. Re-sending a storm of safety/reset lines across a
+   * link that is already dropping was a redundancy on top of the safe-stop
+   * teardown (SPD0 / SERVO90 / S / REQ_STATE) the teardown itself sends, and it
+   * fed the car's freeze-then-soft-reset behaviour when its heap was already
+   * collapsed. Nothing extra is sent on drop; the notice is the recovery point.
+   *
+   * U-125: the last link-down instant, so the reconnect dialog can say *when*
+   * the car went silent instead of only *that* it went silent (the owner's
+   * freeze report is time-sensitive — "it was fine and then it froze").
+   */
+  const lastDisconnectAtRef = useRef<number | null>(null);
+  const [lastDisconnectAgo, setLastDisconnectAgo] = useState<number | null>(
+    null,
+  );
+
   // W5: refs to track previous telemetry IP/SSID for network switch detection
   const prevIpRef = useRef<string | undefined>(undefined);
   const prevSsidRef = useRef<string | undefined>(undefined);
+  // U-125: the auto-dismiss timer for the reconnection-notice chip, independent
+  // of the reconnect dialog itself (the chip is a quiet hint; the dialog is the
+  // decision point).
+  const reconnectNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  /**
+   * A reconnection notice the Remote deck shows instead of a silent fail. It is
+   * the app's honest read of the drop — not a second stack of safety lines, not
+   * an automatic re-dial.
+   */
+  const [reconnectingNotice, setReconnectingNotice] = useState<string | null>(
+    null,
+  );
+
+  // U-125(2): the reconnect dialog chip is the quiet pre-dialog hint. When the
+  // drop is fresh the chip mirrors the dialog title text; otherwise it is the
+  // plain "link went down" hint. Dismisses on a real link coming back, on a
+  // manual disconnect, or after the notice window elapses without a new link.
 
   // Car-mode catalogue: DB-first with bundled fallback
   const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES);

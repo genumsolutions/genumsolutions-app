@@ -44,6 +44,7 @@ import { isProjectPackage } from "../services/projectService";
 import { applyComponentsScope } from "../services/productService";
 import { galleryImages } from "../types";
 import { logger } from "../services/logger";
+import { IMAGE_BUDGET_HINT } from "../lib/imageLimits";
 import {
   loadBiometricsPref,
   authenticate as biometricAuthenticate,
@@ -70,6 +71,10 @@ import {
   listUserRobotSettings,
   upsertUserRobotSettings,
   deleteUserRobotSetting,
+  type AdminCarProfile,
+  listUserCarProfiles,
+  upsertAdminCarProfile,
+  deleteAdminCarProfile,
   listAdminMessages,
   markMessageReplied,
   fetchDashboardStats,
@@ -137,9 +142,7 @@ type Tab =
   | "Projects"
   | "Content"
   | "Users"
-  | "System Logs"
-  | "User Logs"
-  | "Profile Entries"
+  | "Logs"
   | "Settings";
 
 // U-44 (2026-09-26, owner): the Catalog tab becomes THREE tabs mirroring the
@@ -155,9 +158,9 @@ const TABS: Tab[] = [
   "Projects",
   "Content",
   "Users",
-  "System Logs",
-  "User Logs",
-  "Profile Entries",
+  // U-R5 (2026-11-09): System Logs + User Logs + Profile Entries merged into
+  // one "Logs" tab with three sections (same panels, one entry point).
+  "Logs",
   "Settings",
 ];
 
@@ -496,12 +499,12 @@ export function AdminScreen() {
       } else if (tab === "Users") {
         void loadUsers(1);
         void loadMessages(1);
-      } else if (tab === "System Logs") {
+      } else if (tab === "Logs") {
+        // One tab, three sections: load all of them so switching sections is
+        // instant and never re-hits the API on the free tier.
         void loadCrashReports(1);
         void loadAppLogs(1);
-      } else if (tab === "User Logs") {
         void loadUserLogs(1);
-      } else if (tab === "Profile Entries") {
         void loadProfileEntries(1);
         setProfileEntryTypes(await listProfileEntryTypes());
       } else if (tab === "Settings") {
@@ -1470,47 +1473,35 @@ export function AdminScreen() {
             />
           </Sub>
         );
-      case "System Logs":
+      case "Logs":
         return (
-          <SystemLogsTab
+          <LogsTab
             crashes={crashReports}
             crashPage={crashReportPage}
             crashTotal={crashReportTotal}
             crashTotalPages={crashReportTotalPages}
             onLoadCrashes={(p) => void loadCrashReports(p)}
             onDeleteCrash={handleDeleteCrashReport}
-            logs={appLogs}
+            appLogs={appLogs}
             logPage={appLogPage}
             logTotal={appLogTotal}
             logTotalPages={appLogTotalPages}
             onLoadLogs={(p) => void loadAppLogs(p)}
             onDeleteLog={handleDeleteAppLog}
+            userLogs={userLogs}
+            userLogPage={userLogPage}
+            userLogTotal={userLogTotal}
+            userLogTotalPages={userLogTotalPages}
+            onLoadUserLogs={(p) => void loadUserLogs(p)}
+            onDeleteUserLog={handleDeleteUserLog}
+            profileEntries={profileEntries}
+            profileEntryTypes={profileEntryTypes}
+            profileEntryPage={profileEntryPage}
+            profileEntryTotal={profileEntryTotal}
+            profileEntryTotalPages={profileEntryTotalPages}
+            onLoadProfileEntries={(p) => void loadProfileEntries(p)}
+            onDeleteProfileEntry={handleDeleteProfileEntry}
             canDelete={canDelete}
-          />
-        );
-      case "User Logs":
-        return (
-          <UserLogsTab
-            logs={userLogs}
-            page={userLogPage}
-            total={userLogTotal}
-            totalPages={userLogTotalPages}
-            onPage={(p) => void loadUserLogs(p)}
-            canDelete={canDelete}
-            onDelete={handleDeleteUserLog}
-          />
-        );
-      case "Profile Entries":
-        return (
-          <ProfileEntriesTab
-            entries={profileEntries}
-            types={profileEntryTypes}
-            page={profileEntryPage}
-            total={profileEntryTotal}
-            totalPages={profileEntryTotalPages}
-            onPage={(p) => void loadProfileEntries(p)}
-            canDelete={canDelete}
-            onDelete={handleDeleteProfileEntry}
           />
         );
       case "Settings":
@@ -1684,6 +1675,12 @@ export function AdminScreen() {
                 onSubmitEditing={() => void confirmImportLink()}
                 className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink"
               />
+              {/* The budget is stated where the import starts, not buried in docs:
+                  the edge function re-encodes every picture, keeps at most 8 per
+                  item, and skips anything over 4 MB. */}
+              <Text className="mt-2 text-[11px] leading-4 text-muted">
+                {IMAGE_BUDGET_HINT}
+              </Text>
               <View className="mt-4 flex-row items-center justify-end gap-2">
                 <Pressable
                   onPress={dismissImportLink}
@@ -3750,6 +3747,207 @@ function UserRobotSettingsManager({
   );
 }
 
+// Project (car) profiles for one user — the same car_profiles rows the build
+// screen writes and the website's admin Users panel manages. Read is staff+,
+// write is admin+ (enforced by RLS and by the website API alike), so the
+// controls hide for staff instead of failing on tap.
+function UserProjectProfileManager({
+  userId,
+  email,
+  canDelete,
+}: {
+  userId: string;
+  email: string;
+  canDelete: boolean;
+}) {
+  const [rows, setRows] = useState<AdminCarProfile[] | null>(null);
+  const [profileKey, setProfileKey] = useState("");
+  const [carName, setCarName] = useState("");
+  const [values, setValues] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const load = useCallback(() => {
+    void listUserCarProfiles(userId)
+      .then(setRows)
+      .catch(() => setRows([]));
+  }, [userId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function parseValues(src: string): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const line of src.split("\n")) {
+      const idx = line.indexOf("=");
+      if (idx <= 0) continue;
+      const key = line.slice(0, idx).trim();
+      const raw = line.slice(idx + 1).trim();
+      if (!key || !raw) continue;
+      if (/^-?\d+(\.\d+)?$/.test(raw)) out[key] = Number(raw);
+      else if (raw === "true" || raw === "false") out[key] = raw === "true";
+      else out[key] = raw;
+    }
+    return out;
+  }
+
+  async function handleSave(existing?: AdminCarProfile) {
+    setErr("");
+    const key = (existing?.profileKey ?? profileKey).trim();
+    if (!key) {
+      setErr("A profile key is required (e.g. fw:1FB608).");
+      return;
+    }
+    setBusy(true);
+    try {
+      const settings =
+        existing && values.trim()
+          ? parseValues(values)
+          : existing
+            ? existing.settings
+            : parseValues(values);
+      await upsertAdminCarProfile(
+        userId,
+        key,
+        (existing ? carName || existing.carName : carName).trim() || key,
+        settings,
+      );
+      setProfileKey("");
+      setCarName("");
+      setValues("");
+      load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save the profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete(key: string) {
+    setBusy(true);
+    try {
+      await deleteAdminCarProfile(userId, key);
+      load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not delete the profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (rows === null)
+    return (
+      <Text className="py-2 text-xs text-muted">Loading project profiles…</Text>
+    );
+
+  return (
+    <View className="mt-3 rounded-lg border border-line bg-surface p-3">
+      <Text className="text-xs font-black uppercase tracking-widest text-navy">
+        Project profiles ({rows.length})
+      </Text>
+      <Text className="mt-0.5 text-[11px] leading-4 text-muted">
+        car_profiles rows — the board key is its stable identity. No Wi-Fi
+        passwords are stored here.
+      </Text>
+      {rows.length === 0 ? (
+        <Text className="mt-2 text-xs text-muted">
+          No project profiles for this user.
+        </Text>
+      ) : (
+        rows.map((row) => (
+          <View
+            key={row.id || row.profileKey}
+            className="mt-2 rounded border border-line bg-card p-2"
+          >
+            <View className="flex-row items-center justify-between gap-2">
+              <Text
+                className="min-w-0 flex-1 text-xs font-bold text-ink"
+                numberOfLines={1}
+              >
+                {row.carName || "Untitled profile"}{" "}
+                <Text className="font-normal text-muted">
+                  · {row.profileKey}
+                </Text>
+              </Text>
+              {canDelete && (
+                <Pressable
+                  onPress={() => void handleDelete(row.profileKey)}
+                  disabled={busy}
+                  className="shrink-0 rounded border border-line px-2 py-0.5"
+                >
+                  <Text className="text-[10px] font-bold text-red-600">
+                    Delete
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+            <Text className="mt-1 text-[11px] text-muted" numberOfLines={3}>
+              {Object.entries(row.settings)
+                .map(
+                  ([k, v]) =>
+                    `${k}=${Array.isArray(v) ? v.join("|") : String(v)}`,
+                )
+                .join(" · ") || "(empty)"}
+            </Text>
+          </View>
+        ))
+      )}
+      {canDelete ? (
+        <>
+          <Text className="mt-3 text-xs font-bold text-ink">
+            Add / update a project profile for {email}
+          </Text>
+          <TextInput
+            value={profileKey}
+            onChangeText={setProfileKey}
+            autoCapitalize="none"
+            placeholder="Profile key (e.g. fw:1FB608)"
+            placeholderTextColor="#94a3b8"
+            className="mt-1 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink"
+          />
+          <TextInput
+            value={carName}
+            onChangeText={setCarName}
+            placeholder="Display name (e.g. 4WD Car)"
+            placeholderTextColor="#94a3b8"
+            className="mt-1 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink"
+          />
+          <TextInput
+            value={values}
+            onChangeText={setValues}
+            placeholder={
+              "One key=value per line, e.g.\nmode_id=4wd4m\nspeed=170"
+            }
+            placeholderTextColor="#94a3b8"
+            multiline
+            style={{ textAlignVertical: "top" }}
+            className="mt-1 min-h-16 rounded border border-line bg-card px-2 py-1.5 text-xs text-ink"
+          />
+          <View className="mt-2 flex-row flex-wrap items-center gap-2">
+            <Pressable
+              onPress={() => void handleSave()}
+              disabled={busy}
+              className="rounded-full bg-navy px-4 py-1.5"
+            >
+              <Text className="text-[11px] font-black text-white">
+                Save project profile
+              </Text>
+            </Pressable>
+            {err ? (
+              <Text
+                className="flex-1 text-[11px] text-red-600"
+                numberOfLines={2}
+              >
+                {err}
+              </Text>
+            ) : null}
+          </View>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 // One user row in the admin Users tab: identity, role + tier badges, the
 // role/tier toggle buttons (admin+), an owner-only delete button, and the
 // expandable robot-preferences manager.
@@ -3844,7 +4042,7 @@ function UserCard({
             className="rounded-full border border-line px-3 py-1.5"
           >
             <Text className="text-xs font-bold text-navy">
-              {expanded ? "Hide robots" : "Robot prefs"}
+              {expanded ? "Hide profiles" : "Profiles"}
             </Text>
           </Pressable>
           {isOwner && item.id !== currentUserId && (
@@ -3860,11 +4058,18 @@ function UserCard({
         </View>
       </View>
       {expanded && (
-        <UserRobotSettingsManager
-          userId={item.id}
-          email={item.email}
-          canDelete={canDelete}
-        />
+        <>
+          <UserRobotSettingsManager
+            userId={item.id}
+            email={item.email}
+            canDelete={canDelete}
+          />
+          <UserProjectProfileManager
+            userId={item.id}
+            email={item.email}
+            canDelete={canDelete}
+          />
+        </>
       )}
     </View>
   );
@@ -4486,6 +4691,144 @@ function ActivityTab({
 // ring buffer of logger + appLogService). A restart fault now surfaces here no
 // matter which transport linked the car, and any device error is a row, not a
 // console nobody was watching.
+// U-R5 (2026-11-09): one "Logs" tab, three sections. System Logs, User Logs
+// and Profile Entries were three tabs doing the same job — read what happened
+// and clear rows out — so they share one entry point now. The panels below are
+// untouched (SystemLogsTab / UserLogsTab / ProfileEntriesTab), so a fix in one
+// still lands everywhere.
+const LOG_SECTIONS = [
+  { id: "activity", label: "Activity" },
+  { id: "profiles", label: "Profiles" },
+  { id: "diagnostics", label: "Crashes" },
+] as const;
+
+type LogSection = (typeof LOG_SECTIONS)[number]["id"];
+
+function LogsTab({
+  crashes,
+  crashPage,
+  crashTotal,
+  crashTotalPages,
+  onLoadCrashes,
+  onDeleteCrash,
+  appLogs,
+  logPage,
+  logTotal,
+  logTotalPages,
+  onLoadLogs,
+  onDeleteLog,
+  userLogs,
+  userLogPage,
+  userLogTotal,
+  userLogTotalPages,
+  onLoadUserLogs,
+  onDeleteUserLog,
+  profileEntries,
+  profileEntryTypes,
+  profileEntryPage,
+  profileEntryTotal,
+  profileEntryTotalPages,
+  onLoadProfileEntries,
+  onDeleteProfileEntry,
+  canDelete,
+}: {
+  crashes: AdminCrashReport[];
+  crashPage: number;
+  crashTotal: number;
+  crashTotalPages: number;
+  onLoadCrashes: (page: number) => void;
+  onDeleteCrash: (row: AdminCrashReport) => void;
+  appLogs: AdminAppLog[];
+  logPage: number;
+  logTotal: number;
+  logTotalPages: number;
+  onLoadLogs: (page: number) => void;
+  onDeleteLog: (row: AdminAppLog) => void;
+  userLogs: AdminUserLog[];
+  userLogPage: number;
+  userLogTotal: number;
+  userLogTotalPages: number;
+  onLoadUserLogs: (page: number) => void;
+  onDeleteUserLog: (row: AdminUserLog) => void;
+  profileEntries: AdminProfileEntry[];
+  profileEntryTypes: AdminProfileEntryType[];
+  profileEntryPage: number;
+  profileEntryTotal: number;
+  profileEntryTotalPages: number;
+  onLoadProfileEntries: (page: number) => void;
+  onDeleteProfileEntry: (row: AdminProfileEntry) => void;
+  canDelete: boolean;
+}) {
+  const [section, setSection] = useState<LogSection>("activity");
+  return (
+    <View className="flex-1">
+      <View className="flex-row flex-wrap gap-2 px-4 pb-1 pt-3">
+        {LOG_SECTIONS.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => setSection(item.id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: section === item.id }}
+            className={`rounded-full border px-3.5 py-1.5 ${
+              section === item.id
+                ? "border-navy bg-navy"
+                : "border-line bg-card"
+            }`}
+          >
+            <Text
+              className={`text-[11px] font-black ${
+                section === item.id ? "text-white" : "text-navy"
+              }`}
+            >
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      {section === "activity" && (
+        <UserLogsTab
+          logs={userLogs}
+          page={userLogPage}
+          total={userLogTotal}
+          totalPages={userLogTotalPages}
+          onPage={onLoadUserLogs}
+          canDelete={canDelete}
+          onDelete={onDeleteUserLog}
+        />
+      )}
+      {section === "profiles" && (
+        <ProfileEntriesTab
+          entries={profileEntries}
+          types={profileEntryTypes}
+          page={profileEntryPage}
+          total={profileEntryTotal}
+          totalPages={profileEntryTotalPages}
+          onPage={onLoadProfileEntries}
+          canDelete={canDelete}
+          onDelete={onDeleteProfileEntry}
+        />
+      )}
+      {section === "diagnostics" && (
+        <SystemLogsTab
+          crashes={crashes}
+          crashPage={crashPage}
+          crashTotal={crashTotal}
+          crashTotalPages={crashTotalPages}
+          onLoadCrashes={onLoadCrashes}
+          onDeleteCrash={onDeleteCrash}
+          logs={appLogs}
+          logPage={logPage}
+          logTotal={logTotal}
+          logTotalPages={logTotalPages}
+          onLoadLogs={onLoadLogs}
+          onDeleteLog={onDeleteLog}
+          canDelete={canDelete}
+        />
+      )}
+    </View>
+  );
+}
+
 function SystemLogsTab({
   crashes,
   crashPage,
