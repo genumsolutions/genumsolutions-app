@@ -9,6 +9,7 @@
 // always undefined, which emptied the ProjectPackages tab).
 // =====================================================================
 import { supabase } from "../config/supabase";
+import { clampGallery } from "../lib/imageLimits";
 
 export type AdminOrder = {
   id: string;
@@ -226,7 +227,10 @@ export function toProductRow(product: AdminProduct): RawRow {
     audience: product.audience,
     difficulty: product.difficulty,
     warranty: product.warranty,
-    gallery: product.gallery,
+    // Same per-item budget as the website (src/lib/imageLimits.ts): the DB
+    // must never receive more pictures than the free-tier Storage budget
+    // expects, whatever the editor posted.
+    gallery: clampGallery(product.gallery),
     import_meta: product.importMeta,
     updated_at: new Date().toISOString(),
   };
@@ -834,6 +838,71 @@ export async function deleteUserRobotSetting(userId: string, robotId: string) {
     .delete()
     .eq("user_id", userId)
     .eq("robot_id", robotId);
+  if (error) throw error;
+}
+
+// --- Project (car) profiles ------------------------------------------------
+// car_profiles rows: the per-car / per-project profiles the build screen
+// writes and the website's CarProfilesPanel also reads. Staff can read every
+// user's rows (RLS "staff read car profiles"); writes need admin+, matching
+// the website's /api/admin/users car-profile actions.
+
+export type AdminCarProfile = {
+  id: string;
+  profileKey: string;
+  carName: string;
+  uniqueId: string;
+  settings: Record<string, unknown>;
+  updatedAt: string;
+};
+
+export async function listUserCarProfiles(
+  userId: string,
+): Promise<AdminCarProfile[]> {
+  const { data, error } = await supabase
+    .from("car_profiles")
+    .select("id, profile_key, car_name, unique_id, settings, updated_at")
+    .eq("user_id", userId)
+    .order("car_name", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: String(row.id ?? ""),
+    profileKey: String(row.profile_key ?? ""),
+    carName: String(row.car_name ?? ""),
+    uniqueId: String(row.unique_id ?? ""),
+    settings: (row.settings as Record<string, unknown>) || {},
+    updatedAt: String(row.updated_at ?? ""),
+  }));
+}
+
+export async function upsertAdminCarProfile(
+  userId: string,
+  profileKey: string,
+  carName: string,
+  settings: Record<string, unknown>,
+) {
+  const { error } = await supabase.from("car_profiles").upsert(
+    {
+      user_id: userId,
+      profile_key: profileKey,
+      car_name: carName || profileKey,
+      settings,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,profile_key" },
+  );
+  if (error) throw error;
+}
+
+export async function deleteAdminCarProfile(
+  userId: string,
+  profileKey: string,
+) {
+  const { error } = await supabase
+    .from("car_profiles")
+    .delete()
+    .eq("user_id", userId)
+    .eq("profile_key", profileKey);
   if (error) throw error;
 }
 
