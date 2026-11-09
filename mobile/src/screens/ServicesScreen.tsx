@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   FlatList,
   Text,
-  Pressable,
   TextInput,
   View,
 } from "react-native";
@@ -21,7 +20,6 @@ import type { Service } from "../types";
 export function ServicesScreen() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [page, setPage] = useState(1);
   const pageSize = 6;
@@ -33,10 +31,10 @@ export function ServicesScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Reset pagination whenever the filters change.
+  // Reset pagination whenever the category changes.
   useEffect(() => {
     setPage(1);
-  }, [category, query]);
+  }, [category]);
 
   const categories = useMemo(
     () => [
@@ -47,17 +45,11 @@ export function ServicesScreen() {
   );
 
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     return services.filter((s) => {
       const matchesCategory = category === "All" || s.category === category;
-      const matchesQuery =
-        !needle ||
-        `${s.name} ${s.tag} ${s.id} ${s.description}`
-          .toLowerCase()
-          .includes(needle);
-      return matchesCategory && matchesQuery && s.active !== false;
+      return matchesCategory && s.active !== false;
     });
-  }, [services, category, query]);
+  }, [services, category]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
@@ -85,28 +77,6 @@ export function ServicesScreen() {
             What GENUM does
           </Text>
 
-          {/* Search */}
-          <View className="mt-4 flex-row items-center rounded-xl border border-line bg-card px-3">
-            <Feather name="search" size={16} color="#64748b" />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search services…"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-              className="flex-1 px-2 py-2.5 text-sm text-ink"
-            />
-            {query.length > 0 && (
-              <Pressable
-                onPress={() => setQuery("")}
-                accessibilityLabel="Clear search"
-                className="p-1 active:opacity-60"
-              >
-                <Feather name="x" size={16} color="#64748b" />
-              </Pressable>
-            )}
-          </View>
-
           {/* Category filter (derived from the DB rows) */}
           {categories.length > 1 && (
             <View className="mt-2">
@@ -131,7 +101,7 @@ export function ServicesScreen() {
         <View className="items-center py-16">
           <Feather name="inbox" size={40} color="#cbd5e1" />
           <Text className="mt-3 text-sm text-muted">
-            No services match your filters.
+            No services in this category. Contact us for details.
           </Text>
         </View>
       }
