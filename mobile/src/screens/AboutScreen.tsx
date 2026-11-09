@@ -1,11 +1,15 @@
 // =====================================================================
 // AboutScreen - company overview (native UI).
+// Live stats from the same DB the storefront reads (products + project
+// categories), bundled fallback when the read has not resolved yet.
 // =====================================================================
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getProducts } from "../services/productService";
+import { getProjectCategories } from "../services/projectCategoryService";
 
-const stats = [
+const STATIC_STATS = [
   { value: "25+", label: "projects completed" },
   { value: "10+", label: "years in engineering" },
   { value: "50+", label: "clients served" },
@@ -35,7 +39,51 @@ const points = [
   },
 ];
 
+// Compute live stats from the product catalog (same DB the storefront reads).
+type LiveStat = [string, string];
+
+function computeLiveStats(
+  products: ReturnType<typeof getProducts> extends Promise<infer T> ? T : never,
+): LiveStat[] {
+  const electronic = products.filter(
+    (p) =>
+      !["Robot Cars", "Pre-packaged Kits"].includes(p.category) &&
+      p.category?.trim().toLowerCase() !== "3d models" &&
+      p.productType !== "Project package",
+  ).length;
+  const projectPackages = products.filter(
+    (p) =>
+      p.productType === "Project package" || p.category === "Pre-packaged Kits",
+  ).length;
+  return [
+    [String(electronic), "electronic components in store"],
+    [String(projectPackages), "project packages & builds"],
+  ];
+}
+
 export function AboutScreen() {
+  const [liveStats, setLiveStats] = useState<LiveStat[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    getProducts()
+      .then((products) => {
+        if (active) {
+          setLiveStats(computeLiveStats(products));
+        }
+      })
+      .catch(() => {
+        if (active) setLiveStats([]);
+      })
+      .finally(() => {
+        if (active) setStatsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <ScrollView
       className="flex-1 bg-surface"
@@ -56,7 +104,7 @@ export function AboutScreen() {
       {/* Stats row — mirrors website /about stat cards */}
       <View className="mt-5 space-y-3">
         <View className="flex-row flex-wrap gap-3">
-          {stats.map((s) => (
+          {STATIC_STATS.map((s) => (
             <View key={s.label} className="flex-1">
               <View className="border-t-2 border-ink pt-3">
                 <Text className="font-display text-2xl font-bold text-ink">
@@ -68,6 +116,33 @@ export function AboutScreen() {
           ))}
         </View>
       </View>
+
+      {/* Live store stats — mirrors website /about liveCounts section */}
+      {statsLoading ? (
+        <View className="mt-5">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <View
+              key={i}
+              className="h-16 animate-pulse rounded-2xl border border-line bg-card"
+            />
+          ))}
+        </View>
+      ) : liveStats.length > 0 ? (
+        <View className="mt-5">
+          <View className="flex-row flex-wrap gap-3">
+            {liveStats.map(([value, label]) => (
+              <View key={label} className="flex-1">
+                <View className="border-t-2 border-ink pt-3">
+                  <Text className="font-display text-2xl font-bold text-navy">
+                    {value}
+                  </Text>
+                  <Text className="mt-1 text-xs text-muted">{label}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {/* How we work — mirrors website /about how-we-work section */}
       <View className="mt-6">
