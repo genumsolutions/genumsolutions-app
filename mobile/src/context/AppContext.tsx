@@ -93,6 +93,35 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// =====================================================================
+// Role resolution
+//
+// Mirrors the website's lib/roles.ts. Two rules matter for the admin
+// dashboard gate (`isStaff` / `isAdmin` in the context value):
+//   1. the sole owner address is owner even when its profiles row is missing
+//      or predates the promotion trigger, and
+//   2. a stored role is compared normalized, so "Admin ", "ADMIN" or a stray
+//      value can never silently collapse to customer and hide the console.
+// =====================================================================
+const OWNER_EMAIL = "genumsolutions@gmail.com";
+
+type Role = "customer" | "staff" | "admin" | "owner";
+
+function isOwnerEmail(email: unknown): boolean {
+  return (
+    typeof email === "string" && email.trim().toLowerCase() === OWNER_EMAIL
+  );
+}
+
+function normalizeRole(value: unknown): Role {
+  const role = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return role === "staff" || role === "admin" || role === "owner"
+    ? role
+    : "customer";
+}
+
 /**
  * Build a GenumUser from a Supabase session. If the profile fetch fails
  * (e.g., offline), fall back to the session's user_metadata/app_metadata so
@@ -123,7 +152,7 @@ async function genumUserFromSession(
     // Offline or network error: profile is null, will fall back to metadata
   }
 
-  const rawRole = String(profile?.role || app.role || "customer");
+  const rawRole = normalizeRole(profile?.role || app.role || meta.role);
   const tier: "free" | "pro" =
     rawRole === "staff" ||
     rawRole === "admin" ||
@@ -135,7 +164,9 @@ async function genumUserFromSession(
   // If profile fetch failed and we have a cached user, use its tier/role
   // (offline grace: cached entitlement survives network failure)
   const effectiveTier = profile ? tier : (fallbackUser?.tier ?? tier);
-  const effectiveRole = profile ? rawRole : (fallbackUser?.role ?? rawRole);
+  const effectiveRole = profile
+    ? rawRole
+    : normalizeRole(fallbackUser?.role ?? rawRole);
 
   return {
     id: session.user?.id ?? "",
@@ -157,12 +188,9 @@ async function genumUserFromSession(
         "" ||
         fallbackUser?.address) ??
       "",
-    role:
-      effectiveRole === "staff" ||
-      effectiveRole === "admin" ||
-      effectiveRole === "owner"
-        ? effectiveRole
-        : "customer",
+    // Owner is decided by address as well as by the stored role, so a
+    // missing/legacy profiles row can never lock the owner out of /admin.
+    role: isOwnerEmail(session.user?.email) ? "owner" : effectiveRole,
     tier: effectiveTier,
   };
 }
