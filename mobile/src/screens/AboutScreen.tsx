@@ -4,10 +4,24 @@
 // categories), bundled fallback when the read has not resolved yet.
 // =====================================================================
 import React, { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { getProducts } from "../services/productService";
 import { getProjectCategories } from "../services/projectCategoryService";
+
+type Nav = NativeStackNavigationProp<
+  { Main: { screen: "Shop" | "Printing" | "Projects" | "Tools" } },
+  "Main"
+>;
+
+const SHOP_LINKS = [
+  { label: "Shop components", screen: "Shop" as const },
+  { label: "3D products", screen: "Printing" as const },
+  { label: "Projects", screen: "Projects" as const },
+  { label: "Open tools", screen: "Tools" as const },
+];
 
 const STATIC_STATS = [
   { value: "25+", label: "projects completed" },
@@ -62,6 +76,7 @@ function computeLiveStats(
 }
 
 export function AboutScreen() {
+  const navigation = useNavigation<Nav>();
   const [liveStats, setLiveStats] = useState<LiveStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -143,6 +158,25 @@ export function AboutScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* Cross-link CTAs — mirrors website /about shop-links row */}
+      <View className="mt-5">
+        <View className="flex-row flex-wrap gap-2">
+          {SHOP_LINKS.map((link) => (
+            <Pressable
+              key={link.label}
+              onPress={() =>
+                navigation.navigate("Main", { screen: link.screen })
+              }
+              className="rounded-full border border-line px-4 py-2"
+            >
+              <Text className="text-xs font-black text-ink transition hover:border-navy hover:text-navy">
+                {link.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
 
       {/* How we work — mirrors website /about how-we-work section */}
       <View className="mt-6">
