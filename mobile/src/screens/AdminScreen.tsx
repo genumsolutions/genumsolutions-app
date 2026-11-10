@@ -3815,6 +3815,7 @@ function UserProjectProfileManager({
   canDelete: boolean;
 }) {
   const [rows, setRows] = useState<AdminCarProfile[] | null>(null);
+  const [detailsKey, setDetailsKey] = useState<string | null>(null);
   const [profileKey, setProfileKey] = useState("");
   const [carName, setCarName] = useState("");
   // Settings are edited as JSON, exactly like the website's Users panel: the
@@ -3905,8 +3906,8 @@ function UserProjectProfileManager({
         Project profiles ({rows.length})
       </Text>
       <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-        car_profiles rows — the board key is its stable identity. No Wi-Fi
-        passwords are stored here.
+        Project profiles saved for this user. Names and settings are shown in
+        plain language; connection details stay hidden.
       </Text>
       {rows.length === 0 ? (
         <Text className="mt-2 text-xs text-muted">
@@ -3923,10 +3924,7 @@ function UserProjectProfileManager({
                 className="min-w-0 flex-1 text-xs font-bold text-ink"
                 numberOfLines={1}
               >
-                {row.carName || "Untitled profile"}{" "}
-                <Text className="font-normal text-muted">
-                  · {row.profileKey}
-                </Text>
+                {row.carName || "Untitled project"}
               </Text>
               {canDelete && (
                 <View className="shrink-0 flex-row gap-1">
@@ -3951,6 +3949,27 @@ function UserProjectProfileManager({
                 </View>
               )}
             </View>
+            <Text className="mt-0.5 text-[11px] text-muted">
+              {Object.keys(row.settings || {}).length} saved settings
+            </Text>
+            <Pressable
+              onPress={() =>
+                setDetailsKey(
+                  detailsKey === row.profileKey ? null : row.profileKey,
+                )
+              }
+              className="mt-1 self-start rounded-full border border-line px-2 py-0.5"
+            >
+              <Text className="text-[10px] font-bold text-navy">
+                {detailsKey === row.profileKey ? "Hide details" : "Details"}
+              </Text>
+            </Pressable>
+            {detailsKey === row.profileKey && (
+              <Text className="mt-1 font-mono text-[10px] text-muted">
+                Connection ID: {row.profileKey}
+                {row.uniqueId ? ` · Device ID: ${row.uniqueId}` : ""}
+              </Text>
+            )}
             <Text className="mt-1 text-[11px] text-muted" numberOfLines={3}>
               {Object.entries(row.settings)
                 .map(
