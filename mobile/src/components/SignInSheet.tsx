@@ -3,7 +3,7 @@
 // All auth goes directly to Supabase (no WebView involved).
 // =====================================================================
 import { Feather } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,13 +22,14 @@ import { useApp } from "../context/AppContext";
 import { GoogleLogo } from "./GoogleLogo";
 
 function AlreadySignedIn() {
-  const { isSignedIn, setAuthSheetOpen, authError } = useApp();
+  // The sign-in flows already clear authError on success (AppContext), so this
+  // only has to get the sheet out of the way once a session exists.
+  const { isSignedIn, setAuthSheetOpen } = useApp();
   useEffect(() => {
     if (isSignedIn) {
       setAuthSheetOpen(false);
-      setAuthError(null);
     }
-  }, [isSignedIn, setAuthSheetOpen, setAuthError]);
+  }, [isSignedIn, setAuthSheetOpen]);
   return isSignedIn ? (
     <View className="flex-1 items-center justify-center bg-surface px-8">
       <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
@@ -56,6 +57,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
   const {
     authBusy,
     authError,
+    isSignedIn,
     signInWithPassword,
     signUp,
     signInWithGoogle,
@@ -129,226 +131,231 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
         : "We’ll email you a link to reset your password.";
 
   return (
-    <AlreadySignedIn visible={visible} onRequestClose={() => {}} />
-    <Modal
-      visible={visible && !isSignedIn}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior="padding"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 40}
+    <>
+      <AlreadySignedIn />
+      <Modal
+        visible={visible && !isSignedIn}
+        transparent
+        animationType="slide"
+        onRequestClose={handleClose}
       >
-        <Pressable
-          style={styles.backdrop}
-          onPress={handleClose}
-          disabled={closeDisabled}
-        />
-
-        <View
-          style={{ paddingBottom: Math.max(insets.bottom, 12), paddingTop: 18 }}
-          className="rounded-t-3xl bg-card"
+        <KeyboardAvoidingView
+          style={styles.root}
+          behavior="padding"
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 40}
         >
-          <View className="mb-3 h-1 w-10 self-center rounded-full bg-line" />
+          <Pressable
+            style={styles.backdrop}
+            onPress={handleClose}
+            disabled={closeDisabled}
+          />
 
-          <View className="flex-row items-start justify-between px-5">
-            <View className="flex-1 pr-4">
-              <Text className="font-display text-xl font-bold tracking-tight text-navy">
-                {title}
-              </Text>
-              <Text className="mt-0.5 text-sm text-muted">{subtitle}</Text>
-            </View>
-            <Pressable
-              onPress={handleClose}
-              disabled={closeDisabled}
-              accessibilityLabel="Close sign in"
-              className="h-9 w-9 items-center justify-center rounded-full bg-mist"
-            >
-              <Feather name="x" size={18} color="#1e3a8a" />
-            </Pressable>
-          </View>
-
-          {/* Mode tabs */}
-          <View className="mx-5 mt-4 flex-row rounded-full bg-mist p-1">
-            {(
-              [
-                ["signin", "Sign in"],
-                ["signup", "Create"],
-                ["forgot", "Reset"],
-              ] as [Mode, string][]
-            ).map(([m, label]) => {
-              const active = mode === m;
-              return (
-                <Pressable
-                  key={m}
-                  onPress={() => switchMode(m)}
-                  disabled={closeDisabled}
-                  className={`flex-1 items-center rounded-full py-2 ${active ? "bg-card" : ""}`}
-                >
-                  <Text
-                    className={`text-xs font-bold ${active ? "text-navy" : "text-muted"}`}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
+          <View
+            style={{
+              paddingBottom: Math.max(insets.bottom, 12),
+              paddingTop: 18,
+            }}
+            className="rounded-t-3xl bg-card"
           >
-            {!supabaseConfigured ? (
-              <View className="mb-3 rounded-xl border border-line bg-mist px-4 py-3">
-                <Text className="text-xs text-muted">
-                  Sign-in is not configured in this build yet.
+            <View className="mb-3 h-1 w-10 self-center rounded-full bg-line" />
+
+            <View className="flex-row items-start justify-between px-5">
+              <View className="flex-1 pr-4">
+                <Text className="font-display text-xl font-bold tracking-tight text-navy">
+                  {title}
                 </Text>
+                <Text className="mt-0.5 text-sm text-muted">{subtitle}</Text>
               </View>
-            ) : null}
+              <Pressable
+                onPress={handleClose}
+                disabled={closeDisabled}
+                accessibilityLabel="Close sign in"
+                className="h-9 w-9 items-center justify-center rounded-full bg-mist"
+              >
+                <Feather name="x" size={18} color="#1e3a8a" />
+              </Pressable>
+            </View>
 
-            {mode === "signup" ? (
-              <>
-                <Text className="mb-1 text-xs font-bold uppercase tracking-wide text-border">
-                  Full name
-                </Text>
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Your name"
-                  placeholderTextColor="#94a3b8"
-                  autoCorrect={false}
-                  accessibilityLabel="Full name"
-                  className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
-                />
-              </>
-            ) : null}
-
-            <Text className="mb-1 mt-3 text-xs font-bold uppercase tracking-wide text-border">
-              Email
-            </Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              accessibilityLabel="Email"
-              className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
-            />
-
-            {mode !== "forgot" ? (
-              <>
-                <Text className="mb-1 mt-3 text-xs font-bold uppercase tracking-wide text-border">
-                  Password
-                </Text>
-                <View className="flex-row items-center rounded-xl border border-border bg-surface">
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor="#94a3b8"
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    textContentType={
-                      mode === "signup" ? "newPassword" : "password"
-                    }
-                    accessibilityLabel="Password"
-                    onSubmitEditing={() => void handlePrimary()}
-                    className="flex-1 px-4 py-3 text-sm text-ink"
-                  />
+            {/* Mode tabs */}
+            <View className="mx-5 mt-4 flex-row rounded-full bg-mist p-1">
+              {(
+                [
+                  ["signin", "Sign in"],
+                  ["signup", "Create"],
+                  ["forgot", "Reset"],
+                ] as [Mode, string][]
+              ).map(([m, label]) => {
+                const active = mode === m;
+                return (
                   <Pressable
-                    onPress={() => setShowPassword((v) => !v)}
-                    accessibilityLabel={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                    className="px-3 py-3 active:opacity-60"
+                    key={m}
+                    onPress={() => switchMode(m)}
+                    disabled={closeDisabled}
+                    className={`flex-1 items-center rounded-full py-2 ${active ? "bg-card" : ""}`}
                   >
-                    <Feather
-                      name={showPassword ? "eye-off" : "eye"}
-                      size={17}
-                      color="#64748b"
-                    />
+                    <Text
+                      className={`text-xs font-bold ${active ? "text-navy" : "text-muted"}`}
+                    >
+                      {label}
+                    </Text>
                   </Pressable>
-                </View>
-              </>
-            ) : null}
+                );
+              })}
+            </View>
 
-            {notice ? (
-              <View className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <Text className="text-xs font-medium text-emerald-700">
-                  {notice}
-                </Text>
-              </View>
-            ) : null}
-
-            {authError ? (
-              <View className="mt-3 flex-row items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <Feather name="alert-circle" size={15} color="#dc2626" />
-                <Text className="flex-1 text-xs font-medium text-red-600">
-                  {authError}
-                </Text>
-              </View>
-            ) : null}
-
-            <Pressable
-              onPress={() => void handlePrimary()}
-              disabled={!canSubmit}
-              accessibilityRole="button"
-              className={`mt-4 flex-row items-center justify-center rounded-xl py-3.5 ${canSubmit ? "bg-navy" : "bg-navy/40"}`}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
             >
-              {authBusy ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text className="text-sm font-bold text-white">
-                  {mode === "signin"
-                    ? "Sign in"
-                    : mode === "signup"
-                      ? "Create account"
-                      : "Send reset link"}
-                </Text>
-              )}
-            </Pressable>
-
-            {mode === "signin" && supabaseConfigured && googleConfigured ? (
-              <>
-                <View className="mt-5 flex-row items-center gap-3">
-                  <View className="h-px flex-1 bg-line" />
-                  <Text className="text-xs font-bold uppercase tracking-widest text-border">
-                    or
+              {!supabaseConfigured ? (
+                <View className="mb-3 rounded-xl border border-line bg-mist px-4 py-3">
+                  <Text className="text-xs text-muted">
+                    Sign-in is not configured in this build yet.
                   </Text>
-                  <View className="h-px flex-1 bg-line" />
                 </View>
-                <Pressable
-                  onPress={() => void signInWithGoogle()}
-                  disabled={authBusy}
-                  accessibilityRole="button"
-                  className="mt-5 flex-row items-center justify-center rounded-xl border border-border bg-card py-3.5 disabled:opacity-60"
-                >
-                  {authBusy ? (
-                    <ActivityIndicator size="small" color="#1e3a8a" />
-                  ) : (
-                    <>
-                      <View className="h-5 w-5 items-center justify-center">
-                        <GoogleLogo size={20} />
-                      </View>
-                      <Text className="ml-2.5 text-sm font-bold text-ink">
-                        Continue with Google
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              </>
-            ) : null}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+              ) : null}
+
+              {mode === "signup" ? (
+                <>
+                  <Text className="mb-1 text-xs font-bold uppercase tracking-wide text-border">
+                    Full name
+                  </Text>
+                  <TextInput
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Your name"
+                    placeholderTextColor="#94a3b8"
+                    autoCorrect={false}
+                    accessibilityLabel="Full name"
+                    className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
+                  />
+                </>
+              ) : null}
+
+              <Text className="mb-1 mt-3 text-xs font-bold uppercase tracking-wide text-border">
+                Email
+              </Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                accessibilityLabel="Email"
+                className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
+              />
+
+              {mode !== "forgot" ? (
+                <>
+                  <Text className="mb-1 mt-3 text-xs font-bold uppercase tracking-wide text-border">
+                    Password
+                  </Text>
+                  <View className="flex-row items-center rounded-xl border border-border bg-surface">
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="••••••••"
+                      placeholderTextColor="#94a3b8"
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      textContentType={
+                        mode === "signup" ? "newPassword" : "password"
+                      }
+                      accessibilityLabel="Password"
+                      onSubmitEditing={() => void handlePrimary()}
+                      className="flex-1 px-4 py-3 text-sm text-ink"
+                    />
+                    <Pressable
+                      onPress={() => setShowPassword((v) => !v)}
+                      accessibilityLabel={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      className="px-3 py-3 active:opacity-60"
+                    >
+                      <Feather
+                        name={showPassword ? "eye-off" : "eye"}
+                        size={17}
+                        color="#64748b"
+                      />
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
+
+              {notice ? (
+                <View className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <Text className="text-xs font-medium text-emerald-700">
+                    {notice}
+                  </Text>
+                </View>
+              ) : null}
+
+              {authError ? (
+                <View className="mt-3 flex-row items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                  <Feather name="alert-circle" size={15} color="#dc2626" />
+                  <Text className="flex-1 text-xs font-medium text-red-600">
+                    {authError}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                onPress={() => void handlePrimary()}
+                disabled={!canSubmit}
+                accessibilityRole="button"
+                className={`mt-4 flex-row items-center justify-center rounded-xl py-3.5 ${canSubmit ? "bg-navy" : "bg-navy/40"}`}
+              >
+                {authBusy ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text className="text-sm font-bold text-white">
+                    {mode === "signin"
+                      ? "Sign in"
+                      : mode === "signup"
+                        ? "Create account"
+                        : "Send reset link"}
+                  </Text>
+                )}
+              </Pressable>
+
+              {mode === "signin" && supabaseConfigured && googleConfigured ? (
+                <>
+                  <View className="mt-5 flex-row items-center gap-3">
+                    <View className="h-px flex-1 bg-line" />
+                    <Text className="text-xs font-bold uppercase tracking-widest text-border">
+                      or
+                    </Text>
+                    <View className="h-px flex-1 bg-line" />
+                  </View>
+                  <Pressable
+                    onPress={() => void signInWithGoogle()}
+                    disabled={authBusy}
+                    accessibilityRole="button"
+                    className="mt-5 flex-row items-center justify-center rounded-xl border border-border bg-card py-3.5 disabled:opacity-60"
+                  >
+                    {authBusy ? (
+                      <ActivityIndicator size="small" color="#1e3a8a" />
+                    ) : (
+                      <>
+                        <View className="h-5 w-5 items-center justify-center">
+                          <GoogleLogo size={20} />
+                        </View>
+                        <Text className="ml-2.5 text-sm font-bold text-ink">
+                          Continue with Google
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              ) : null}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
