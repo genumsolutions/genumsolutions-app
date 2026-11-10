@@ -178,11 +178,12 @@ export function AboutScreen() {
                   navigation.push(link.route);
                 }
               }}
-              className="rounded-full border border-line px-4 py-2"
+              className="rounded-full border border-line px-4 py-2 active:opacity-60"
             >
-              <Text className="text-xs font-black text-ink transition hover:border-navy hover:text-navy">
-                {link.label}
-              </Text>
+              {/* No `transition`/`hover:` here: those are CSS-only and would
+                  silently do nothing on native. Pressable feedback is the
+                  `active:opacity-60` above, the same idiom HomeScreen uses. */}
+              <Text className="text-xs font-black text-navy">{link.label}</Text>
             </Pressable>
           ))}
         </View>
