@@ -21,6 +21,7 @@ The website (`components/admin/admin-types.ts`) and the app (`src/config/adminTa
 
 - Show the project name first. Technical IDs, connection IDs and raw settings stay in a "Technical details" section.
 - Each connected car/project keeps one stable identity (firmware board id, Bluetooth MAC, or Wi-Fi identity). Never show two identities for the same car.
+- When the same board id appears under more than one transport key, the app merges those rows into one record keyed by the firmware board id.
 - User preferences group devices by project, with rename, edit and forget actions in one place.
 - Admin car/project profiles use the same plain-language labels as the app.
 
