@@ -136,7 +136,8 @@ export function PrintingScreen() {
             p.active !== false,
         ),
       );
-      setOffline(source === "cache");
+      // "bundled" (the website's fallback catalog) is offline data too.
+      setOffline(source !== "live");
     } catch {
       // keep previous data
     } finally {

@@ -71,7 +71,9 @@ export function ShopScreen() {
     try {
       const { products, source } = await getProductsWithSource();
       setProducts(products);
-      setOffline(source === "cache");
+      // "bundled" is the website's own fallback catalog, so it is still
+      // offline data as far as the shopper is concerned.
+      setOffline(source !== "live");
     } catch {
       // keep previous data
     } finally {

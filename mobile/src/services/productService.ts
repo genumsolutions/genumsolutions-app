@@ -8,7 +8,8 @@
 // =====================================================================
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { logger } from "./logger";
-import { supabase } from "../config/supabase";
+import { supabase, supabaseConfigured } from "../config/supabase";
+import { BUNDLED_PRODUCTS } from "../config/bundledProducts";
 import type { Product, ProductType, Difficulty } from "../types";
 
 // U-47v2: bumped from v1 to v2 to invalidate every device's pre-fix cached
@@ -233,38 +234,51 @@ export function listActiveProductIds(): Promise<string[]> {
 }
 
 /** Best-effort catalog: try Supabase, fall back to a local cache. */
+// Mirror of the website's content-store fallbacks (lib/content-store.ts):
+// no credentials -> bundled catalog; error -> cache; empty table -> bundled.
+// Without this the app returned [] offline, so About's live-stats block
+// vanished while the website still reported its 55 bundled components.
 export async function getProducts(): Promise<Product[]> {
+  if (!supabaseConfigured) return BUNDLED_PRODUCTS;
   try {
     const list = await getProductsFromSupabase();
     cacheProducts(list);
-    return list;
+    return list.length > 0 ? list : BUNDLED_PRODUCTS;
   } catch (e) {
     // C8: was silent — a dead catalog now leaves a trace before cache fallback.
     logger.error("catalog", "live catalog fetch failed, serving cache", e);
     const cached = await cachedProducts();
-    return cached ?? [];
+    return cached && cached.length > 0 ? cached : BUNDLED_PRODUCTS;
   }
 }
 
-export type CatalogSource = "live" | "cache";
+export type CatalogSource = "live" | "cache" | "bundled";
 
 /** Like getProducts(), but also reports whether the data is live or cached. */
 export async function getProductsWithSource(): Promise<{
   products: Product[];
   source: CatalogSource;
 }> {
+  if (!supabaseConfigured)
+    return { products: BUNDLED_PRODUCTS, source: "bundled" };
   try {
     const list = await getProductsFromSupabase();
     cacheProducts(list);
+    if (list.length === 0)
+      return { products: BUNDLED_PRODUCTS, source: "bundled" };
     return { products: list, source: "live" };
   } catch (e) {
     logger.error("catalog", "live catalog fetch failed, serving cache", e);
     const cached = await cachedProducts();
-    return { products: cached ?? [], source: "cache" };
+    if (cached && cached.length > 0)
+      return { products: cached, source: "cache" };
+    return { products: BUNDLED_PRODUCTS, source: "bundled" };
   }
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
+  if (!supabaseConfigured)
+    return BUNDLED_PRODUCTS.find((p) => p.id === id) ?? null;
   try {
     const { data, error } = await supabase
       .from("products")
@@ -278,10 +292,14 @@ export async function getProductById(id: string): Promise<Product | null> {
     logger.error("catalog", `product ${id} fetch failed, serving cache`, e);
     try {
       const cached = await cachedProducts();
-      return cached?.find((p) => p.id === id) ?? null;
+      return (
+        cached?.find((p) => p.id === id) ??
+        BUNDLED_PRODUCTS.find((p) => p.id === id) ??
+        null
+      );
     } catch (e2) {
       logger.warn("catalog", "cache read failed", e2);
-      return null;
+      return BUNDLED_PRODUCTS.find((p) => p.id === id) ?? null;
     }
   }
 }
@@ -290,6 +308,11 @@ export async function getProductById(id: string): Promise<Product | null> {
 export async function getProductByIdWithSource(
   id: string,
 ): Promise<{ product: Product | null; source: CatalogSource }> {
+  if (!supabaseConfigured)
+    return {
+      product: BUNDLED_PRODUCTS.find((p) => p.id === id) ?? null,
+      source: "bundled",
+    };
   try {
     const { data, error } = await supabase
       .from("products")
@@ -306,12 +329,19 @@ export async function getProductByIdWithSource(
     logger.error("catalog", `product ${id} fetch failed, serving cache`, e);
     try {
       const cached = await cachedProducts();
+      const found =
+        cached?.find((p) => p.id === id) ??
+        BUNDLED_PRODUCTS.find((p) => p.id === id) ??
+        null;
       return {
-        product: cached?.find((p) => p.id === id) ?? null,
-        source: "cache",
+        product: found,
+        source: cached?.length ? "cache" : "bundled",
       };
     } catch {
-      return { product: null, source: "cache" };
+      return {
+        product: BUNDLED_PRODUCTS.find((p) => p.id === id) ?? null,
+        source: "bundled",
+      };
     }
   }
 }

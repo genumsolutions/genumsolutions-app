@@ -1,7 +1,10 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    // scripts/generate-bundled-catalog.mts imports the sibling website's
+    // catalog-data.ts by its full path; the script runs under tsx, never ships.
+    "allowImportingTsExtensions": true
   },
   "exclude": ["supabase/functions"]
 }

@@ -142,40 +142,23 @@ test.describe("App vs website", () => {
       readCounts(website, LIVE_LABELS),
     ]);
 
-    // Credential-less CI cannot reach the DB, and the two surfaces degrade in
-    // deliberately different ways: the website renders its bundled products,
-    // while the app's catalog is DB-only by design, so it hides the stats
-    // block rather than printing a screen of zeroes. In that case the website
-    // side is still held to all four rows (it must not quietly drop one), and
-    // the app side is documented instead of compared.
-    if (Object.keys(appCounts).length === 0) {
-      test
-        .info()
-        .annotations.push(
-          {
-            type: "data source",
-            description:
-              "app has no catalog offline — About stats block not rendered",
-          },
-          { type: "website counts", description: JSON.stringify(webCounts) },
-        );
-      expect(Object.keys(webCounts).sort()).toEqual([...LIVE_LABELS].sort());
-      await website.close();
-      return;
-    }
+    test.info().annotations.push({
+      type: "data source",
+      description: `app ${JSON.stringify(appCounts)} vs website ${JSON.stringify(webCounts)}`,
+    });
 
     // Every row must exist on BOTH sides — a missing row is the failure the
     // app had before it published only two of the four.
     expect(Object.keys(appCounts).sort()).toEqual([...LIVE_LABELS].sort());
     expect(Object.keys(webCounts).sort()).toEqual([...LIVE_LABELS].sort());
 
-    // …and when the app does have data, the numbers must agree, since both
-    // read the same products table. A mismatch here usually means the two
-    // surfaces were started against different data sources — point the
-    // website at the same credentials the app was built with.
+    // …and the numbers must agree. With credentials both read the same
+    // products table; without them both serve the same bundled catalog
+    // (the app bundles the website's, so 55/0/0/7 either way). A mismatch
+    // means the two surfaces were started against different data sources.
     expect(
       appCounts,
-      `About counts differ. If the website was started without credentials it serves its bundled catalog while the app reads the live DB; run both with the same data source.`,
+      `About counts differ — run both surfaces against the same data source (live DB or bundled catalog).`,
     ).toEqual(webCounts);
 
     await website.close();
@@ -208,6 +191,121 @@ test.describe("App vs website", () => {
     const expected = HOME_BAND.map((h) => h.name);
     expect(appOrder).toEqual(expected);
     expect(webOrder).toEqual(expected);
+
+    await website.close();
+  });
+
+  test("Services lists the website's training programs, pilot costs and curriculum bands", async ({
+    page,
+    context,
+  }) => {
+    await openAppScreen(page, "Services");
+    await expect(vis(page, "What GENUM does")).toBeVisible();
+
+    const website = await context.newPage();
+    await website.goto(`${WEBSITE_URL}/services`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      website
+        .getByText("Useful support from first idea to finished result.")
+        .first(),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Scrape the source of truth. All three sections are DB-first with
+    // bundled fallbacks on BOTH surfaces, so this works with or without
+    // credentials — which is what lets the CI parity job run it.
+    const site = await website.evaluate(() => {
+      const text = (el: Element | string | null | undefined) =>
+        (typeof el === "string" ? el : (el?.textContent ?? ""))
+          .trim()
+          .replace(/\s+/g, " ");
+
+      const programs = Array.from(
+        document.querySelectorAll("#training h3"),
+      ).map(text);
+
+      // Pilot table: <th scope=row>item (+note span)</th><td>cost</td>.
+      const pilot = Array.from(
+        document.querySelectorAll("#pilots tbody tr"),
+      ).map((row) => ({
+        item: text(row.querySelector("th")?.childNodes[0]?.textContent),
+        cost: text(row.querySelector("td")),
+        note: text(row.querySelector("th span")),
+      }));
+
+      // Curriculum bands: each highlight card opens with its age-band label.
+      // Matched on the label's own styling (uppercase tracking) plus a digit,
+      // because the site uppercases it with CSS and the section also holds
+      // ordinary paragraphs.
+      const bands = Array.from(
+        document.querySelectorAll<HTMLElement>("#pilots p"),
+      )
+        .filter((el) => el.className.includes("uppercase"))
+        .map(text)
+        .filter((t) => t && /\d/.test(t));
+
+      return { programs, pilot, bands };
+    });
+
+    // Guard the guard: if the website markup moved, fail loudly instead of
+    // silently comparing nothing.
+    expect(site.programs.length, "website training programs").toBeGreaterThan(
+      0,
+    );
+    expect(site.pilot.length, "website pilot cost rows").toBeGreaterThan(0);
+    expect(site.bands.length, "website curriculum bands").toBeGreaterThan(0);
+
+    test.info().annotations.push({
+      type: "compared",
+      description: `${site.programs.length} programs, ${site.pilot.length} pilot rows, ${site.bands.length} curriculum bands`,
+    });
+
+    // 1. Every program title on the site is a card on the app.
+    for (const title of site.programs) {
+      await expect(
+        vis(page, title),
+        `program missing on app: ${title}`,
+      ).toBeVisible();
+    }
+
+    // 2. Every pilot line item, its cost and its note — the app shows the
+    //    note inline on the same row, the site puts it under the item.
+    for (const row of site.pilot) {
+      // Substring, not exact: the app puts "— note" inline after the item in
+      // the same <Text>, while the site puts the note under it.
+      await expect(
+        page
+          .getByText(row.item, { exact: false })
+          .filter({ visible: true })
+          .first(),
+        `pilot item missing on app: ${row.item}`,
+      ).toBeVisible();
+      await expect(
+        page
+          .getByText(row.cost, { exact: true })
+          .filter({ visible: true })
+          .first(),
+        `pilot cost missing on app: ${row.cost}`,
+      ).toBeVisible();
+      if (row.note) {
+        await expect(
+          page
+            .getByText(row.note, { exact: false })
+            .filter({ visible: true })
+            .first(),
+          `pilot note missing on app: ${row.note}`,
+        ).toBeVisible();
+      }
+    }
+
+    // 3. Every curriculum band label ("Grades 6-8", …) survives.
+    for (const band of site.bands) {
+      await expect(
+        page.getByText(band, { exact: true }).filter({ visible: true }).first(),
+        `curriculum band missing on app: ${band}`,
+      ).toBeVisible();
+    }
 
     await website.close();
   });

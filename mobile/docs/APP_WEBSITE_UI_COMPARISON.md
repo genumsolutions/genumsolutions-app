@@ -472,7 +472,21 @@ The app's `CI` workflow now runs that spec on every push and PR. It is a **third
 4. exports the app's web bundle and runs `npx playwright test website-parity` with `WEBSITE_URL=http://127.0.0.1:3000`,
 5. uploads `mobile/test-results` as the `parity-report` artifact and prints the website server log.
 
-The job is honest about what it can prove without a database. The app's catalog is DB-only by design, so with placeholder credentials it hides the About stats block instead of printing zeroes, while this website falls back to its bundled products (55 components, 0 models, 7 categories). The spec therefore compares **labels and section order** in CI and skips the numeric comparison, annotating the report with the reason; with real credentials on both sides (local dev, or any deployed URL) it compares the numbers too and the run passes only when they agree.
+With no credentials both surfaces fall back to the **same catalog** (see "Bundled catalog" below), so CI compares the real numbers too — 55 components / 0 3D models / 0 project packages / 7 categories on both — plus the Home band order and every Services training program, pilot line item and cost, and curriculum band.
+
+#### Bundled catalog (Nov 2026)
+
+The app's store reads the shared `products` table. A missing/failed read used to return `[]`, so credential-less builds (CI, a fresh clone, airplane mode) showed an About page with **no live-stats block** while this site happily rendered its bundled 55. `mobile/src/config/bundledProducts.ts` now ships a generated copy of `lib/catalog-data.ts` (same 55 products, `project_category` → `projectCategory`), and `productService` mirrors `lib/content-store.ts` exactly:
+
+| Situation      | Website                     | App                            |
+| -------------- | --------------------------- | ------------------------------ |
+| No credentials | `localProducts`             | `BUNDLED_PRODUCTS`             |
+| Table empty    | `localProducts`             | `BUNDLED_PRODUCTS`             |
+| Read failed    | cache, else `localProducts` | cache, else `BUNDLED_PRODUCTS` |
+
+The file is **generated, never hand-edited**: `mobile/scripts/generate-bundled-catalog.mts` imports the website's `catalog-data.ts` and rewrites it (`npx tsx scripts/generate-bundled-catalog.mts` from `mobile/`, with the website checked out as a sibling). Regenerate whenever the website catalog changes. `src/config/bundledProducts.test.ts` guards the 55 count, the required fields, and the About counts (55 / 0 / 0 / 7) so a stale regeneration fails the app's unit tests instead of drifting silently.
+
+`CatalogSource` grew a `bundled` value; Shop and Printing show their offline notice for anything that is not `live`, so the shipped fallback is presented honestly.
 
 #### Home training headline (aligned Nov 2026)
 
@@ -484,15 +498,25 @@ Note that the site keeps the curriculum eyebrow ("100+ project curriculum") insi
 
 A cross-surface audit of `numberOfLines` (Nov 2026) settled which single-line clamps are parity and which were drift:
 
-| App element                                 | App                       | Website counterpart                                | Verdict                                  |
-| ------------------------------------------- | ------------------------- | -------------------------------------------------- | ---------------------------------------- |
-| `ProductCard` name, My-collection card name | `numberOfLines={1}`       | `truncate` (`ProductCard.tsx`, `MyCollection.tsx`) | **Matches** — both clip to one line      |
-| Cart line name                              | `numberOfLines={2}`       | `line-clamp-2` (`app/checkout/page.tsx`)           | **Matches**                              |
-| Account order rows (item + meta)            | `numberOfLines={1}`       | `truncate` (`AccountPanel.tsx`)                    | **Matches**                              |
-| Account welcome line + email                | was `numberOfLines={1}`   | unclamped `<h?>` / `<p>`                           | **Fixed** — clamps removed               |
-| Journal post title                          | was `numberOfLines={2}`   | unclamped `<h2>` (`app/journal/page.tsx`)          | **Fixed** — clamp removed                |
-| About "what we do" card titles              | was `numberOfLines={1}`   | unclamped `<h3>` (`ArticleCard`)                   | **Fixed** — clamp removed                |
-| Services / training card titles             | was clamped beside a pill | unclamped                                          | **Fixed** — title owns a full-width line |
+| App element                                 | App                                         | Website counterpart                                | Verdict                                           |
+| ------------------------------------------- | ------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| `ProductCard` name, My-collection card name | `numberOfLines={1}`                         | `truncate` (`ProductCard.tsx`, `MyCollection.tsx`) | **Matches** — both clip to one line               |
+| Cart line name                              | `numberOfLines={2}`                         | `line-clamp-2` (`app/checkout/page.tsx`)           | **Matches**                                       |
+| Account order rows (item + meta)            | `numberOfLines={1}`                         | `truncate` (`AccountPanel.tsx`)                    | **Matches**                                       |
+| Account welcome line + email                | was `numberOfLines={1}`                     | unclamped `<h?>` / `<p>`                           | **Fixed** — clamps removed                        |
+| Journal post title                          | was `numberOfLines={2}`                     | unclamped `<h2>` (`app/journal/page.tsx`)          | **Fixed** — clamp removed                         |
+| About "what we do" card titles              | was `numberOfLines={1}`                     | unclamped `<h3>` (`ArticleCard`)                   | **Fixed** — clamp removed                         |     | Services / training card titles | was clamped beside a pill | unclamped | **Fixed** — title owns a full-width line |
+| Home training card title                    | was `numberOfLines={2}`                     | unclamped `<h3>`                                   | **Fixed** — clamp removed                         |
+| Home pilot line item                        | was `numberOfLines={1}`                     | unclamped `<span>`                                 | **Fixed** — clamp removed (cost stays `shrink-0`) |
+| Product detail license value                | was `numberOfLines={2}`                     | unclamped `<dd>`                                   | **Fixed** — clamp removed                         |
+| Product detail spec values                  | was `numberOfLines={1}` ("R5 overflow fix") | unclamped `<dd>`                                   | **Fixed** — values wrap                           |
+| Tools category card title                   | was `numberOfLines={1}`                     | unclamped `<h2>`                                   | **Fixed** — clamp removed                         |
+| Projects screen                             | —                                           | —                                                  | **No clamps at all**                              |
+
+Two clamps were kept on purpose, and neither is a title:
+
+- **Home service-card description** (`numberOfLines={2}`): the site's cards are equal-height flex columns, the app's Home band is a compact stack; the description is body copy, and the full text lives on the service card in `/services`.
+- **Tools category filter pill** (`numberOfLines={1}`): the app's filters sit in a horizontal scroll row where a wrapping pill would break the row; the site wraps them onto a second line because it has the width.
 
 Rule of thumb: only copy a clamp the website actually applies. Anything the website lets wrap must wrap in the app too, because a clamped title reads as a different product name ("Robotics Lab Consul…").
 

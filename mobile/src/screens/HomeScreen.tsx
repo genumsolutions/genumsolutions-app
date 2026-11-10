@@ -337,10 +337,9 @@ export function HomeScreen() {
                       {/* Same fix as ServicesScreen: the title owns a full-width
                           line, because beside the duration pill it clamped to
                           "K–5 Ro…" and the program name was unreadable. */}
-                      <Text
-                        numberOfLines={2}
-                        className="font-display text-lg font-bold leading-snug text-ink"
-                      >
+                      {/* No clamp: the website's home renders the program title
+                          as an unclamped <h3> beside the duration pill. */}
+                      <Text className="font-display text-lg font-bold leading-snug text-ink">
                         {prog.title}
                       </Text>
                       <View className="mt-1 flex-row flex-wrap items-center gap-2">
@@ -380,10 +379,9 @@ export function HomeScreen() {
                       key={item}
                       className="flex-row items-center justify-between border-b border-line py-2"
                     >
-                      <Text
-                        numberOfLines={1}
-                        className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink"
-                      >
+                      {/* No clamp: website rows wrap the pilot item and keep
+                          the cost `shrink-0` (the app's note stays inline). */}
+                      <Text className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink">
                         {item}
                         <Text className="text-xs font-normal text-muted">
                           {" "}
