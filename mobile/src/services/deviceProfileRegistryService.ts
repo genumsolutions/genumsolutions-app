@@ -239,7 +239,11 @@ export async function fetchKnownDevices(): Promise<{
   }
 
   // Newest first, then name — stable, useful ordering.
-  const devices = [...byKey.values()].sort(
+  // One identity per car: when the same firmware board id appears under more
+  // than one transport key (fw:/BT MAC/wifi:), collapse those rows into the
+  // highest-priority key so a car is never listed twice.
+  const deduped = dedupeDevicesByIdentity([...byKey.values()]);
+  const devices = deduped.sort(
     (a, b) =>
       (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.name.localeCompare(b.name),
   );
@@ -429,6 +433,61 @@ export async function pushLocalDevicesToCloud(): Promise<{
     if (result.ok) pushed += 1;
   }
   return { pushed, offline: false };
+}
+
+function profileKeyScore(key: string): number {
+  if (key.startsWith("fw:")) return 3;
+  if (key.startsWith("wifi:")) return 1;
+  return 2; // Bluetooth MAC / board id
+}
+
+function dedupeDevicesByIdentity(devices: KnownDevice[]): KnownDevice[] {
+  const ungrouped: KnownDevice[] = [];
+  const groups = new Map<string, KnownDevice[]>();
+  for (const device of devices) {
+    if (device.uniqueId) {
+      const list = groups.get(device.uniqueId) ?? [];
+      list.push(device);
+      groups.set(device.uniqueId, list);
+    } else {
+      ungrouped.push(device);
+    }
+  }
+  const result: KnownDevice[] = [...ungrouped];
+  for (const [, list] of groups) {
+    if (list.length === 1) {
+      result.push(list[0]);
+      continue;
+    }
+    const canonical = list.reduce((best, current) =>
+      profileKeyScore(current.profileKey) > profileKeyScore(best.profileKey)
+        ? current
+        : best,
+    );
+    const merged: KnownDevice = { ...canonical };
+    for (const device of list) {
+      if (device === canonical) continue;
+      merged.mirrored = merged.mirrored || device.mirrored;
+      if (!merged.btIds.length && device.btIds.length)
+        merged.btIds = device.btIds;
+      if (!merged.savedRouters.length && device.savedRouters.length)
+        merged.savedRouters = device.savedRouters;
+      if (!merged.uniqueId && device.uniqueId)
+        merged.uniqueId = device.uniqueId;
+      if (device.lastSeenAt) {
+        merged.lastSeenAt = Math.max(merged.lastSeenAt ?? 0, device.lastSeenAt);
+      }
+      if (!merged.settings && device.settings)
+        merged.settings = device.settings;
+      if (!merged.name || merged.name === `Car ${merged.uniqueId ?? ""}`) {
+        if (device.name && device.name !== `Car ${device.uniqueId ?? ""}`) {
+          merged.name = device.name;
+        }
+      }
+    }
+    result.push(merged);
+  }
+  return result;
 }
 
 /** Re-export so the screen imports from ONE module. */
