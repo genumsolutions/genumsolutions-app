@@ -163,8 +163,9 @@ jobs:
         run: |
           npx --yes tsx scripts/generate-bundled-catalog.mts --website ../website
           if ! git diff --quiet -- src/config/bundledProducts.ts; then
-            echo "::error::src/config/bundledProducts.ts is stale — run 'npx tsx scripts/generate-bundled-catalog.mts' from mobile/ (website as a sibling) and commit the result."
+            echo "::error::src/config/bundledProducts.ts is stale — run 'npx tsx scripts/generate-bundled-catalog.mts' from mobile/ (website as a sibling) and commit the result. If the website catalog changed in a commit that is not on this run's checkout, re-run the job."
             git diff --stat -- src/config/bundledProducts.ts
+            git --no-pager diff -- src/config/bundledProducts.ts | head -80
             exit 1
           fi
           echo "bundled catalog matches the website"
