@@ -6,14 +6,7 @@
 // and curriculum highlights (same DB tables, same DB-first + fallback).
 // =====================================================================
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
