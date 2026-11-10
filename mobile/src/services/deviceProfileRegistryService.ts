@@ -467,22 +467,29 @@ function dedupeDevicesByIdentity(devices: KnownDevice[]): KnownDevice[] {
     const merged: KnownDevice = { ...canonical };
     for (const device of list) {
       if (device === canonical) continue;
-      merged.mirrored = merged.mirrored || device.mirrored;
-      if (!merged.btIds.length && device.btIds.length)
-        merged.btIds = device.btIds;
-      if (!merged.savedRouters.length && device.savedRouters.length)
-        merged.savedRouters = device.savedRouters;
+      // A group is mirrored if ANY of its rows came from the cloud.
+      merged.mirrored =
+        merged.mirrored || device.mirrored || device.source === "cloud";
+      merged.btIds = Array.from(
+        new Set([...(merged.btIds ?? []), ...(device.btIds ?? [])]),
+      );
+      merged.savedRouters = Array.from(
+        new Set([
+          ...(merged.savedRouters ?? []),
+          ...(device.savedRouters ?? []),
+        ]),
+      );
       if (!merged.uniqueId && device.uniqueId)
         merged.uniqueId = device.uniqueId;
       if (device.lastSeenAt) {
         merged.lastSeenAt = Math.max(merged.lastSeenAt ?? 0, device.lastSeenAt);
       }
-      if (!merged.settings && device.settings)
+      // Cloud rows win on display fields, mirroring the same-key merge rule.
+      if (device.source === "cloud") {
+        if (device.name) merged.name = device.name;
+        if (device.settings) merged.settings = device.settings;
+      } else if (!merged.settings && device.settings) {
         merged.settings = device.settings;
-      if (!merged.name || merged.name === `Car ${merged.uniqueId ?? ""}`) {
-        if (device.name && device.name !== `Car ${device.uniqueId ?? ""}`) {
-          merged.name = device.name;
-        }
       }
     }
     result.push(merged);
