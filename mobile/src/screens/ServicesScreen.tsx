@@ -133,21 +133,20 @@ export function ServicesScreen() {
               key={item.id}
               className="mb-3 overflow-hidden rounded-2xl border border-line bg-card p-5"
             >
-              <View className="flex-row items-center justify-between">
-                <Text
-                  numberOfLines={1}
-                  className="min-w-0 flex-1 font-display text-lg font-bold leading-snug text-ink"
-                >
-                  {item.name}
-                </Text>
-                {item.tag ? (
-                  <View className="ml-2 shrink-0 rounded-full bg-sky px-2.5 py-0.5">
-                    <Text className="text-xs font-black uppercase text-navy">
-                      {item.tag}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+              {/* Mirrors the website's ArticleCard: the tag sits on its own
+                  line ABOVE a full-width title. Sharing the row clamped names
+                  to "Robotics Lab Consul…" — and ArticleCard's <h3> never
+                  truncates, so neither does this. */}
+              {item.tag ? (
+                <View className="self-start rounded-full bg-sky px-2.5 py-0.5">
+                  <Text className="text-xs font-black uppercase text-navy">
+                    {item.tag}
+                  </Text>
+                </View>
+              ) : null}
+              <Text className="mt-2 font-display text-lg font-bold leading-snug text-ink">
+                {item.name}
+              </Text>
               <Text className="mt-2 text-sm leading-6 text-muted">
                 {item.description}
               </Text>

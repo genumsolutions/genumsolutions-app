@@ -203,10 +203,7 @@ export function HomeScreen() {
                     onPress={() => navigation.push("Services")}
                     className="mb-2 overflow-hidden rounded-2xl border border-line bg-card p-4"
                   >
-                    <Text
-                      numberOfLines={1}
-                      className="font-display text-lg font-bold leading-snug text-ink"
-                    >
+                    <Text className="font-display text-lg font-bold leading-snug text-ink">
                       {s.name}
                     </Text>
                     <Text
@@ -335,20 +332,23 @@ export function HomeScreen() {
                       key={prog.title}
                       className="rounded-2xl border border-line bg-card p-4"
                     >
-                      <View className="flex-row items-center justify-between gap-2">
-                        <Text
-                          numberOfLines={1}
-                          className="min-w-0 flex-1 font-display text-lg font-bold text-ink"
-                        >
-                          {prog.title}
+                      {/* Same fix as ServicesScreen: the title owns a full-width
+                          line, because beside the duration pill it clamped to
+                          "K–5 Ro…" and the program name was unreadable. */}
+                      <Text
+                        numberOfLines={2}
+                        className="font-display text-lg font-bold leading-snug text-ink"
+                      >
+                        {prog.title}
+                      </Text>
+                      <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                        <Text className="text-xs font-black uppercase tracking-wide text-gold">
+                          {prog.audience}
                         </Text>
                         <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">
                           {prog.duration}
                         </Text>
                       </View>
-                      <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
-                        {prog.audience}
-                      </Text>
                       <Text className="mt-2 text-sm leading-6 text-muted">
                         {prog.description}
                       </Text>

@@ -73,6 +73,46 @@ async function topOf(locator: Locator): Promise<number> {
   return box!.y;
 }
 
+/**
+ * Any LARGE text that is actually clipped, rather than merely present.
+ *
+ * React Native Web renders `numberOfLines` as CSS ellipsis / line-clamp, so a
+ * truncated title still passes every "is it visible" check — the card title
+ * read "Robotics Lab Consul…" and the program titles "K–5 Ro…" while green.
+ * Heading-sized text (>= 17px) must therefore fit its box: no horizontal
+ * overflow, no vertical clamp. Small deliberate single-line text (pilot-cost
+ * notes) is exempt on purpose.
+ */
+async function truncatedHeadings(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const found: string[] = [];
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>("div, span, p, h1, h2, h3"),
+    );
+    for (const el of nodes) {
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (parseFloat(style.fontSize) < 17) continue;
+      if (!el.textContent?.trim()) continue;
+      const clipped =
+        el.scrollWidth > el.clientWidth + 1 ||
+        el.scrollHeight > el.clientHeight + 1;
+      if (clipped) {
+        found.push(`"${el.textContent.trim().slice(0, 48)}"`);
+      }
+    }
+    return found;
+  });
+}
+
+async function expectNoTruncatedHeadings(page: Page) {
+  const clipped = await truncatedHeadings(page);
+  expect(
+    clipped,
+    `headings are clipped on screen: ${clipped.join(", ")}`,
+  ).toEqual([]);
+}
+
 async function expectNoSidewaysScroll(page: Page) {
   const { scroll, client } = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth,
@@ -83,6 +123,58 @@ async function expectNoSidewaysScroll(page: Page) {
     `page scrolls sideways (${scroll}px content in ${client}px viewport)`,
   ).toBeLessThanOrEqual(client + 1);
 }
+
+test.describe("HomeScreen layout", () => {
+  test("renders its program band in website order, below the hero", async ({
+    page,
+  }) => {
+    // Home is the boot screen — no navigation needed.
+    await page.goto("/");
+    const hero = visMatch(page, /Technology you can touch/);
+    await expect(hero).toBeVisible({ timeout: 30_000 });
+
+    const curriculum = vis(page, "100+ project curriculum");
+    const training = vis(page, "Training programs");
+    const pilot = vis(page, "Illustrative pilot costing");
+
+    for (const [name, locator] of [
+      ["curriculum", curriculum],
+      ["training programs", training],
+      ["pilot costing", pilot],
+    ] as const) {
+      await expect(locator, `${name} is not visible on Home`).toBeVisible();
+    }
+
+    // The website's home order is curriculum, then training, then pilot.
+    const [yHero, yCurriculum, yTraining, yPilot] = await Promise.all([
+      topOf(hero),
+      topOf(curriculum),
+      topOf(training),
+      topOf(pilot),
+    ]);
+    expect(yCurriculum, "curriculum must be below the hero").toBeGreaterThan(
+      yHero,
+    );
+    expect(yTraining, "training must follow curriculum").toBeGreaterThan(
+      yCurriculum,
+    );
+    expect(yPilot, "pilot costing must follow training").toBeGreaterThan(
+      yTraining,
+    );
+
+    await expectNoTruncatedHeadings(page);
+    await expectNoSidewaysScroll(page);
+    await capture(page, "home");
+
+    for (const [name, locator] of [
+      ["home-training", training],
+      ["home-pilot", pilot],
+    ] as const) {
+      await locator.scrollIntoViewIfNeeded();
+      await capture(page, name);
+    }
+  });
+});
 
 test.describe("ServicesScreen layout", () => {
   test("renders the program sections below the service grid, in website order", async ({
@@ -110,21 +202,8 @@ test.describe("ServicesScreen layout", () => {
     await expect(visMatch(page, /NPR 8,40,000/)).toBeVisible();
     await expect(visMatch(page, /Outcome:/)).toBeVisible();
 
-    // GUARD: a training-program title must have room to be READ. It used to
-    // share its row with the duration pill and clamped to "K–5 Ro…" — about
-    // 70 px wide — while still passing every "is it visible" check. 150 px is
-    // roughly half the 390 px viewport, comfortably less than a full-width
-    // title and far more than the truncated one.
-    const titleBox = await page
-      .getByText(/^K–5|^K-5|^STE|^Tea/)
-      .filter({ visible: true })
-      .first()
-      .boundingBox();
-    expect(titleBox, "no training title found").not.toBeNull();
-    expect(
-      Math.round(titleBox!.width),
-      "training title is squeezed — is the duration pill sharing its row again?",
-    ).toBeGreaterThan(150);
+    // Headings must FIT, not merely exist — see truncatedHeadings().
+    await expectNoTruncatedHeadings(page);
 
     // Vertical order: grid heading, then training, then pilot, then curriculum.
     const [yHeading, yTraining, yPilot, yCurriculum] = await Promise.all([
@@ -200,6 +279,7 @@ test.describe("AboutScreen layout", () => {
       "how-we-work must follow the CTA row",
     ).toBeGreaterThan(yCta);
 
+    await expectNoTruncatedHeadings(page);
     await expectNoSidewaysScroll(page);
     await capture(page, "about");
   });
