@@ -46,6 +46,10 @@ import {
   type KnownDevice,
 } from "../services/deviceProfileRegistryService";
 import { feedbackTap } from "../services/hapticsService";
+import {
+  fetchUserCrashReports,
+  type UserCrashReport,
+} from "../services/crashReportService";
 
 type DraftPair = { key: string; value: string };
 

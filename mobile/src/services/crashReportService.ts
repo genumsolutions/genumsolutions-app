@@ -298,3 +298,58 @@ export async function syncCrashReport(
     return { sent: false, queued: false };
   }
 }
+
+/**
+ * Read the signed-in user's own crash reports (RLS: read own). Used by the
+ * User Preferences hub to surface firmware health per project. Never throws;
+ * returns an empty list on failure or when signed out.
+ */
+export type UserCrashReport = {
+  id: string;
+  boardId: string;
+  modelId: string | null;
+  fwVersion: string;
+  connectionMethod: string;
+  resetReason: string | null;
+  bootCount: number | null;
+  crashCount: number | null;
+  lastCrashPhase: string | null;
+  lastCrashHeap: number | null;
+  hasCrash: boolean;
+  reportedAt: string;
+};
+
+export async function fetchUserCrashReports(
+  userId: string,
+): Promise<UserCrashReport[]> {
+  if (!userId) return [];
+  try {
+    const { data, error } = await supabase
+      .from("device_crash_reports")
+      .select(
+        "id, board_id, model_id, fw_version, connection_method, reset_reason, boot_count, crash_count, last_crash_phase, last_crash_heap, has_crash, reported_at",
+      )
+      .eq("user_id", userId)
+      .order("reported_at", { ascending: false })
+      .limit(50);
+    if (error) return [];
+    return (data ?? []).map((row: any) => ({
+      id: String(row.id ?? ""),
+      boardId: String(row.board_id ?? ""),
+      modelId: row.model_id != null ? String(row.model_id) : null,
+      fwVersion: String(row.fw_version ?? ""),
+      connectionMethod: String(row.connection_method ?? ""),
+      resetReason: row.reset_reason != null ? String(row.reset_reason) : null,
+      bootCount: typeof row.boot_count === "number" ? row.boot_count : null,
+      crashCount: typeof row.crash_count === "number" ? row.crash_count : null,
+      lastCrashPhase:
+        row.last_crash_phase != null ? String(row.last_crash_phase) : null,
+      lastCrashHeap:
+        typeof row.last_crash_heap === "number" ? row.last_crash_heap : null,
+      hasCrash: Boolean(row.has_crash),
+      reportedAt: String(row.reported_at ?? ""),
+    }));
+  } catch {
+    return [];
+  }
+}
