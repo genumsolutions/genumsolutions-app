@@ -306,11 +306,9 @@ export function ProductDetailScreen() {
                   <Text className="text-xs font-black uppercase tracking-widest text-navy">
                     License
                   </Text>
-                  <Text
-                    className="max-w-[70%] text-sm text-ink"
-                    numberOfLines={2}
-                    ellipsizeMode="tail"
-                  >
+                  {/* No clamp: the website renders the license as a plain <dd>
+                      that wraps however long the SPDX string is. */}
+                  <Text className="max-w-[70%] text-sm text-ink">
                     {String(product.importMeta.license)}
                   </Text>
                 </View>
@@ -692,10 +690,9 @@ function Info({ label, value }: { label: string; value: string }) {
       <Text className="text-xs font-bold uppercase tracking-wide text-border">
         {label}
       </Text>
-      {/* R5 overflow fix: values ellipsize within the wrapped row. */}
-      <Text numberOfLines={1} className="mt-0.5 text-sm font-semibold text-ink">
-        {value}
-      </Text>
+      {/* Values wrap like the website's <dd className="text-right text-sm">;
+          the R5 ellipsis hid the tail of longer specs ("Nepal-wide courier"). */}
+      <Text className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
     </View>
   );
 }

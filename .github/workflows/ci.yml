@@ -99,13 +99,11 @@ jobs:
   # them. It needs the website repo, which the e2e job above does not have —
   # hence a separate job that checks out both repos.
   #
-  # What it can prove without credentials: the website still publishes all
-  # four About live-stats rows, and the Home program band appears in the same
-  # order on both surfaces. What it cannot prove here is that the NUMBERS
-  # match — the app's catalog is DB-only, so with no credentials it hides the
-  # stats block, while the website falls back to its bundled products. The
-  # spec skips the numeric comparison in that case and annotates the report;
-  # run it locally with real credentials to exercise the strict path.
+  # With no credentials both surfaces serve the same bundled catalog (the app
+  # ships a generated copy of the website's), so this job compares the real
+  # numbers too: 55 / 0 / 0 / 7 on both. It also checks the Home program band
+  # order and that every Services training program, pilot line item/cost and
+  # curriculum band the website lists exists in the app.
   parity:
     name: App vs website (Playwright)
     runs-on: ubuntu-latest

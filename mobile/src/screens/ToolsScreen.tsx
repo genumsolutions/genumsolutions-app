@@ -386,10 +386,8 @@ export function ToolsScreen() {
               />
             </View>
             <View className="ml-3 min-w-0 flex-1">
-              <Text
-                numberOfLines={1}
-                className="font-display text-lg font-bold text-ink"
-              >
+              {/* No clamp: the website's OpenTools headings are unclamped. */}
+              <Text className="font-display text-lg font-bold text-ink">
                 {category.name}
               </Text>
             </View>
