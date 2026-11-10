@@ -59,25 +59,38 @@ const points = [
   },
 ];
 
-// Compute live stats from the product catalog (same DB the storefront reads).
+// Compute live stats from the product catalog (same DB the storefront reads),
+// mirroring the website's /about liveCounts — all FOUR rows, in its order:
+// components, models, projects, then the project-category count. The app used
+// to publish only the first and third, which is why getProjectCategories sat
+// imported and unused here.
 type LiveStat = [string, string];
 
 function computeLiveStats(
   products: ReturnType<typeof getProducts> extends Promise<infer T> ? T : never,
+  projectCategoryCount: number,
 ): LiveStat[] {
-  const electronic = products.filter(
+  const active = products.filter((p) => p.active !== false);
+  const electronic = active.filter(
     (p) =>
       !["Robot Cars", "Pre-packaged Kits"].includes(p.category) &&
       p.category?.trim().toLowerCase() !== "3d models" &&
       p.productType !== "Project package",
   ).length;
-  const projectPackages = products.filter(
+  const models = active.filter(
+    (p) => p.category?.trim().toLowerCase() === "3d models",
+  ).length;
+  const projectPackages = active.filter(
     (p) =>
       p.productType === "Project package" || p.category === "Pre-packaged Kits",
   ).length;
   return [
     [String(electronic), "electronic components in store"],
+    [String(models), "3D models printed on demand"],
     [String(projectPackages), "project packages & builds"],
+    // The website falls back to 3 when the categories read is empty; match it
+    // so the two pages never disagree on this row.
+    [String(projectCategoryCount || 3), "project categories supported"],
   ];
 }
 
@@ -88,10 +101,12 @@ export function AboutScreen() {
 
   useEffect(() => {
     let active = true;
-    getProducts()
-      .then((products) => {
+    // Both reads feed the same four rows; a failing categories read still
+    // lets the product counts render (and vice-versa), like the website.
+    Promise.all([getProducts(), getProjectCategories().catch(() => [])])
+      .then(([products, categories]) => {
         if (active) {
-          setLiveStats(computeLiveStats(products));
+          setLiveStats(computeLiveStats(products, categories.length));
         }
       })
       .catch(() => {
@@ -141,7 +156,7 @@ export function AboutScreen() {
       {/* Live store stats — mirrors website /about liveCounts section */}
       {statsLoading ? (
         <View className="mt-5">
-          {Array.from({ length: 2 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
             <View
               key={i}
               className="h-16 animate-pulse rounded-2xl border border-line bg-card"
@@ -226,7 +241,9 @@ export function AboutScreen() {
               <Feather name="shopping-bag" size={18} color="#1e3a8a" />
             </View>
             <View className="ml-3 min-w-0 flex-1">
-              <Text numberOfLines={1} className="text-base font-bold text-ink">
+              {/* No numberOfLines: the website renders these four as ArticleCard
+                  <h3>s, unclamped, so the app must not clip them either. */}
+              <Text className="text-base font-bold text-ink">
                 Products & components
               </Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
@@ -243,7 +260,9 @@ export function AboutScreen() {
               <Feather name="layers" size={18} color="#1e3a8a" />
             </View>
             <View className="ml-3 min-w-0 flex-1">
-              <Text numberOfLines={1} className="text-base font-bold text-ink">
+              {/* No numberOfLines: the website renders these four as ArticleCard
+                  <h3>s, unclamped, so the app must not clip them either. */}
+              <Text className="text-base font-bold text-ink">
                 Projects & robot cars
               </Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
@@ -260,7 +279,9 @@ export function AboutScreen() {
               <Feather name="bar-chart" size={18} color="#1e3a8a" />
             </View>
             <View className="ml-3 min-w-0 flex-1">
-              <Text numberOfLines={1} className="text-base font-bold text-ink">
+              {/* No numberOfLines: the website renders these four as ArticleCard
+                  <h3>s, unclamped, so the app must not clip them either. */}
+              <Text className="text-base font-bold text-ink">
                 Services & training
               </Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
@@ -277,9 +298,9 @@ export function AboutScreen() {
               <Feather name="tool" size={18} color="#1e3a8a" />
             </View>
             <View className="ml-3 min-w-0 flex-1">
-              <Text numberOfLines={1} className="text-base font-bold text-ink">
-                Open tools
-              </Text>
+              {/* No numberOfLines: the website renders these four as ArticleCard
+                  <h3>s, unclamped, so the app must not clip them either. */}
+              <Text className="text-base font-bold text-ink">Open tools</Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
                 Free and open-source tools for makers, educators, and
                 developers.

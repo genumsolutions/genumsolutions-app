@@ -79,7 +79,7 @@ async function topOf(locator: Locator): Promise<number> {
  * React Native Web renders `numberOfLines` as CSS ellipsis / line-clamp, so a
  * truncated title still passes every "is it visible" check — the card title
  * read "Robotics Lab Consul…" and the program titles "K–5 Ro…" while green.
- * Heading-sized text (>= 17px) must therefore fit its box: no horizontal
+ * Heading-sized text (>= 15px) must therefore fit its box: no horizontal
  * overflow, no vertical clamp. Small deliberate single-line text (pilot-cost
  * notes) is exempt on purpose.
  */
@@ -90,9 +90,13 @@ async function truncatedHeadings(page: Page): Promise<string[]> {
       document.querySelectorAll<HTMLElement>("div, span, p, h1, h2, h3"),
     );
     for (const el of nodes) {
+      // LEAVES only. A wrapping container inherits a font size and its
+      // children make scrollHeight exceed clientHeight, which reported whole
+      // sections ("ServicesWhat GENUM does…") instead of the title at fault.
+      if (el.childElementCount > 0) continue;
       const style = getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
-      if (parseFloat(style.fontSize) < 17) continue;
+      if (parseFloat(style.fontSize) < 15) continue;
       if (!el.textContent?.trim()) continue;
       const clipped =
         el.scrollWidth > el.clientWidth + 1 ||

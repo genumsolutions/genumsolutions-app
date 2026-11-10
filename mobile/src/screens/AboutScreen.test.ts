@@ -55,20 +55,29 @@ function isComponentsCatalogRow(
 
 type LiveStat = [string, string];
 
-function computeLiveStats(products: Product[]): LiveStat[] {
-  const electronic = products.filter(
+function computeLiveStats(
+  products: Product[],
+  projectCategoryCount: number,
+): LiveStat[] {
+  const active = products.filter((p) => p.active !== false);
+  const electronic = active.filter(
     (p) =>
       !["Robot Cars", "Pre-packaged Kits"].includes(p.category) &&
       p.category?.trim().toLowerCase() !== "3d models" &&
       p.productType !== "Project package",
   ).length;
-  const projectPackages = products.filter(
+  const models = active.filter(
+    (p) => p.category?.trim().toLowerCase() === "3d models",
+  ).length;
+  const projectPackages = active.filter(
     (p) =>
       p.productType === "Project package" || p.category === "Pre-packaged Kits",
   ).length;
   return [
     [String(electronic), "electronic components in store"],
+    [String(models), "3D models printed on demand"],
     [String(projectPackages), "project packages & builds"],
+    [String(projectCategoryCount || 3), "project categories supported"],
   ];
 }
 
@@ -82,9 +91,11 @@ describe("AboutScreen computeLiveStats — parity with website /about liveCounts
       mk({ id: "p5", productType: "Project package" }), // excluded — projects scope
       mk({ id: "p6", category: "Pre-packaged Kits" }), // excluded — projects scope
     ];
-    expect(computeLiveStats(products)).toEqual([
+    expect(computeLiveStats(products, 3)).toEqual([
       ["2", "electronic components in store"],
+      ["1", "3D models printed on demand"],
       ["2", "project packages & builds"],
+      ["3", "project categories supported"],
     ]);
   });
 
@@ -94,16 +105,20 @@ describe("AboutScreen computeLiveStats — parity with website /about liveCounts
       mk({ id: "p2", category: "Pre-packaged Kits" }),
       mk({ id: "p3", category: "Electronic Components" }), // not a package
     ];
-    expect(computeLiveStats(products)).toEqual([
+    expect(computeLiveStats(products, 5)).toEqual([
       ["1", "electronic components in store"],
+      ["0", "3D models printed on demand"],
       ["2", "project packages & builds"],
+      ["5", "project categories supported"],
     ]);
   });
 
-  it("returns 0/0 for an empty catalog (offline fallback)", () => {
-    expect(computeLiveStats([])).toEqual([
+  it("falls back to 3 categories on an empty catalog, like the website", () => {
+    expect(computeLiveStats([], 0)).toEqual([
       ["0", "electronic components in store"],
+      ["0", "3D models printed on demand"],
       ["0", "project packages & builds"],
+      ["3", "project categories supported"],
     ]);
   });
 
@@ -116,20 +131,23 @@ describe("AboutScreen computeLiveStats — parity with website /about liveCounts
       mk({ id: "p2", category: "3D Models", name: "Robot Chassis STL" }),
       mk({ id: "p3", category: "Robot Cars", name: "4WD Car" }),
     ];
-    const stats = computeLiveStats(products);
+    const stats = computeLiveStats(products, 3);
     expect(stats[0][0]).toBe("1"); // only ESP32 — 3D model excluded
-    expect(stats[1][0]).toBe("0");
+    expect(stats[1][0]).toBe("1"); // and counted as a 3D model instead
   });
 
-  it("trusts getProducts output (already active-only) — no extra inactive filter", () => {
-    // getProducts returns only active products; computeLiveStats trusts
-    // the input. This mirrors the website storefront assumption.
+  it("excludes inactive products, like the website's liveCounts", () => {
     const products = [
       mk({ id: "p1", category: "Sensors", name: "Active Sensor" }),
-      mk({ id: "p2", category: "Sensors", name: "Also Active (same input)" }),
+      mk({
+        id: "p2",
+        category: "Sensors",
+        name: "Retired Sensor",
+        active: false,
+      }),
     ];
-    const stats = computeLiveStats(products);
-    expect(stats[0][0]).toBe("2");
+    const stats = computeLiveStats(products, 3);
+    expect(stats[0][0]).toBe("1");
   });
 });
 

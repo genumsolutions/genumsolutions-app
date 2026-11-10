@@ -451,6 +451,17 @@ Both projects share the same architectural patterns:
 
 **Note on source labels:** The app uses `app-account` and `app-checkout` as source labels; the website uses `footer` and `checkout`. These are different string values but both are just stored in the `source` column of `newsletter_subscribers` — they don't interfere. The admin newsletter list shows both.
 
+### Layout & Cross-Surface Testing (Nov 2026)
+
+The app repo gained a browser-level check that the source-assertion suites cannot provide:
+
+| Check                        | Where                  | What it proves                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/smoke.spec.ts`          | app CI (every push/PR) | Renders the exported web bundle in Chromium at 390×844 and asserts the program sections sit below the service grid in the website's order, that About's CTAs fit the viewport, and that no heading-sized text is clipped (`truncatedHeadings()`, proven by mutation). Screenshots upload as a CI artifact. |
+| `e2e/website-parity.spec.ts` | opt-in (`WEBSITE_URL`) | Renders BOTH surfaces and compares them: the same four About live stats with the same numbers, and the same program-band order on Home.                                                                                                                                                                    |
+
+The second one exists because parity is a claim about two running products, not two files: it catches the case where the app publishes two of the website's four About stats, or words a band differently.
+
 ### Sync Responsibilities
 
 - **Schema**: `supabase/schema.sql` is the source of truth. The app reads from the same DB.
@@ -463,13 +474,12 @@ Both projects share the same architectural patterns:
 
 ## 14. Customer-Facing Page Parity (Nov 2026)
 
-| Page               | App Screen                | Website Page                                            | Shared Sections                                                                                                                                                                                                      |
-| ------------------ | ------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **About**          | `AboutScreen.tsx`         | `app/about/page.tsx`                                    | Hero, stats (4 static + 2 live from DB via getProducts()), how we work, what we do (4 cards), technical foundation (6 competencies), **cross-link CTAs row** (Shop components / 3D products / Projects / Open tools) |
-| **Product detail** | `ProductDetailScreen.tsx` | `app/products/[slug]/page.tsx` → `ProductDetailPro.tsx` | Gallery, description, price, product info grid, specs, project info (projects only), components/projects cross-links, related products, pinned CTA                                                                   |
-| **Contact**        | `ContactScreen.tsx`       | `app/contact/page.tsx`                                  | Company details (address/email/phone/whatsapp), socials, inquiry form (name/email/message), Send button, status feedback                                                                                             |
-| **Services**       | `ServicesScreen.tsx`      | `app/services/page.tsx` → `ServicesPage.tsx`            | Category filter, service cards, empty state + **training programs, illustrative pilot costing, curriculum highlights** (DB-first via `getProgramsContent()`, bundled fallback)                                       |
-| **Account**        | `AccountScreen.tsx`       | `app/account/page.tsx`                                  | Header, stats (3), collection, activity, orders, details, newsletter, messages                                                                                                                                       |
+| Page | App Screen | Website Page | Shared Sections |
+| ------------------ | ------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- || **About** | `AboutScreen.tsx` | `app/about/page.tsx` | Hero, stats (4 static + **4 live** from the DB: components, 3D models, project packages, project categories — the same four rows `liveCounts` publishes), how we work, what we do (4 cards), technical foundation (6 competencies), **cross-link CTAs row** (Shop components / 3D products / Projects / Open tools) |
+| **Product detail** | `ProductDetailScreen.tsx` | `app/products/[slug]/page.tsx` → `ProductDetailPro.tsx` | Gallery, description, price, product info grid, specs, project info (projects only), components/projects cross-links, related products, pinned CTA |
+| **Contact** | `ContactScreen.tsx` | `app/contact/page.tsx` | Company details (address/email/phone/whatsapp), socials, inquiry form (name/email/message), Send button, status feedback |
+| **Services** | `ServicesScreen.tsx` | `app/services/page.tsx` → `ServicesPage.tsx` | Category filter, service cards, empty state + **training programs, illustrative pilot costing, curriculum highlights** (DB-first via `getProgramsContent()`, bundled fallback) |
+| **Account** | `AccountScreen.tsx` | `app/account/page.tsx` | Header, stats (3), collection, activity, orders, details, newsletter, messages |
 
 ### ProductDetailScreen vs ProductDetailPro — Parity Note
 
