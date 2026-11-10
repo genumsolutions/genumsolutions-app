@@ -321,10 +321,12 @@ export function HomeScreen() {
                 </View>
               </View>
 
-              {/* Training programs */}
+              {/* Training programs — the website's home renders this band under
+                  the headline "Training programs that build careers." (its h2),
+                  not as an uppercase eyebrow, so the copy and weight match. */}
               <View className="px-5 pt-6">
-                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
-                  Training programs
+                <Text className="font-display text-xl font-bold tracking-tight text-ink">
+                  Training programs that build careers.
                 </Text>
                 <View className="mt-4 space-y-3">
                   {trainingPrograms.map((prog) => (

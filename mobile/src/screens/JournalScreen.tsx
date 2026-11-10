@@ -75,10 +75,9 @@ export function JournalScreen() {
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
                 {post.tag}
               </Text>
-              <Text
-                numberOfLines={2}
-                className="mt-3 font-display text-xl font-bold text-ink"
-              >
+              {/* No clamp: the website's /journal renders the post title as a
+                  plain <h2> (text-xl font-bold), so long titles wrap there. */}
+              <Text className="mt-3 font-display text-xl font-bold text-ink">
                 {post.title}
               </Text>
               <Text className="mt-2 text-sm leading-6 text-muted">
