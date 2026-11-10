@@ -1,10 +1,10 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true,
-    // scripts/generate-bundled-catalog.mts imports the sibling website's
-    // catalog-data.ts by its full path; the script runs under tsx, never ships.
-    "allowImportingTsExtensions": true
+    "strict": true
   },
-  "exclude": ["supabase/functions"]
+  // scripts/ holds dev-only tools that reach outside the repo (the catalog
+  // generator imports the sibling website), so they are not part of the app's
+  // typecheck — CI has no website checkout.
+  "exclude": ["supabase/functions", "scripts"]
 }

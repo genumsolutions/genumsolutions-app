@@ -21,6 +21,8 @@ import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { format } from "prettier";
+
 import { localProducts } from "../../../genumsolutions-website/lib/catalog-data.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -55,5 +57,11 @@ import type { Product } from "../types";
 
 export const BUNDLED_PRODUCTS: Product[] = `;
 
-writeFileSync(outFile, `${header}${JSON.stringify(mapped, null, 2)};\n`);
+// Prettier-formatted on purpose: lint-staged reformats staged files, so
+// emitting raw JSON made every regeneration look like a 2,000-line diff.
+const formatted = await format(`${header}${JSON.stringify(mapped, null, 2)};\n`, {
+  parser: "typescript",
+});
+
+writeFileSync(outFile, formatted);
 console.log(`wrote ${mapped.length} products to ${outFile}`);
