@@ -173,8 +173,8 @@ const LOG_SECTIONS = [
 **State variables**:
 
 - `showUserDir: boolean` — show user directory section (default: true)
-- `showCarProfiles: boolean` — show car profiles section (default: true)
-- `showRobotProfiles: boolean` — show robot profiles section (default: true)
+- `showCarProfiles: boolean` — show legacy flat car profiles section (default: false)
+- `showRobotProfiles: boolean` — show legacy flat robot profiles section (default: false)
 - `userDirSearch: string` — user directory search text
 - `carSearch: string` — car profile search text
 - `robotSearch: string` — robot profile search text
