@@ -526,10 +526,9 @@ export function UserPreferencesScreen() {
                           </Text>
                           <Text
                             numberOfLines={1}
-                            className="mt-0.5 font-mono text-[11px] text-muted"
+                            className="mt-0.5 text-[11px] text-muted"
                           >
-                            {row.robotId} · {Object.keys(row.settings).length}{" "}
-                            keys
+                            {Object.keys(row.settings).length} saved settings
                           </Text>
                         </View>
                         <Pressable
