@@ -455,10 +455,11 @@ Both projects share the same architectural patterns:
 
 The app repo gained a browser-level check that the source-assertion suites cannot provide:
 
-| Check                        | Where                                                     | What it proves                                                                                                                                                                                                                                                                                             |
-| ---------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/smoke.spec.ts`          | app CI (every push/PR)                                    | Renders the exported web bundle in Chromium at 390×844 and asserts the program sections sit below the service grid in the website's order, that About's CTAs fit the viewport, and that no heading-sized text is clipped (`truncatedHeadings()`, proven by mutation). Screenshots upload as a CI artifact. |
-| `e2e/website-parity.spec.ts` | app CI `parity` job, and any local run with `WEBSITE_URL` | Renders BOTH surfaces and compares them: the same four About live stats with the same numbers, and the same program-band order on Home.                                                                                                                                                                    |
+| Check                         | Where                                                     | What it proves                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/smoke.spec.ts`           | app CI (every push/PR)                                    | Renders the exported web bundle in Chromium at 390×844 and asserts the program sections sit below the service grid in the website's order, that About's CTAs fit the viewport, and that no heading-sized text is clipped (`truncatedHeadings()`, proven by mutation). Screenshots upload as a CI artifact. |
+| `e2e/website-parity.spec.ts`  | app CI `parity` job, and any local run with `WEBSITE_URL` | Renders BOTH surfaces and compares them: the same four About live stats with the same numbers, and the same program-band order on Home.                                                                                                                                                                    |
+| `e2e/offline-catalog.spec.ts` | app, local (`npx playwright test offline-catalog`)        | Renders the exported web bundle with placeholder (offline) credentials and asserts the Projects screen lists all 5 bundled packages (dropdown `All categories (5)`, `Robo Car` filter → 3) and the 3D Printing screen lists both bundled models (`MAHA LAXMI`, `Lord Shiva Statue…`) with `Request quote`. |
 
 The second one exists because parity is a claim about two running products, not two files: it catches the case where the app publishes two of the website's four About stats, or words a band differently.
 
@@ -484,7 +485,7 @@ The app's store reads the shared `products` table. A missing/failed read used to
 | Table empty    | `localProducts`             | `BUNDLED_PRODUCTS`             |
 | Read failed    | cache, else `localProducts` | cache, else `BUNDLED_PRODUCTS` |
 
-The file is **generated, never hand-edited**: `mobile/scripts/generate-bundled-catalog.mts` imports the website's `catalog-data.ts` and rewrites it (`npx tsx scripts/generate-bundled-catalog.mts` from `mobile/`, with the website checked out as a sibling — or `--website <dir>`). Regenerate whenever the website catalog changes. `src/config/bundledProducts.test.ts` guards the 62-product count, the required fields, and the About counts (55 / 2 / 5 / 7) so a stale regeneration fails the app's unit tests instead of drifting silently. CI's `parity` job also regenerates the file against the checked-out website and fails if the committed copy differs, so drift cannot land.
+The file is **generated, never hand-edited**: `mobile/scripts/generate-bundled-catalog.mts` imports the website's `catalog-data.ts` and rewrites it (`npx tsx scripts/generate-bundled-catalog.mts` from `mobile/`, with the website checked out as a sibling — or `--website <dir>`). Regenerate whenever the website catalog changes. `src/config/bundledProducts.test.ts` guards the 62-product count, the required fields, and the About counts (55 / 2 / 5 / 7) so a stale regeneration fails the app's unit tests instead of drifting silently. CI's `parity` job also regenerates the file against the checked-out website and fails if the committed copy differs, so drift cannot land. The website side mirrors this with `tests/catalog-extras.test.ts`, which fails when `catalog-extras-data.ts` is older than the newest row it claims to contain (or when its provenance/counts drift). A weekly `snapshot-catalog-extras.yml` workflow re-runs the snapshot against the live DB and opens a PR when it has drifted.
 
 **The fallbacks cover the whole inventory, not just the retail 55.** The owner's 3D models and project packages are created in the admin panel and link-import, so they exist only in the database — the website's fallback used to show 55 / 0 / 0 while live showed 55 / 2 / 5, and every client under-reported whenever Supabase was unreachable. They are now snapshotted into `lib/catalog-extras-data.ts` by `npm run snapshot:catalog-extras` (same generated-never-hand-edited rule) and appended to `localProducts`, so the offline catalog is 62 products and every surface — website `/about`, `/projects`, `/3d-printing`, app About, app Shop, app Projects — reports the live numbers with no database at all. Re-run the snapshot after adding or editing a model/package; a 3D model's MakerWorld `importMeta` (`designId` is stored as a number, typed as a string) is normalised by the snapshot script.
 
@@ -586,8 +587,8 @@ Both use the same DB-first + bundled fallback pattern. The app shows these on th
 
 ## 15. Test Status
 
-- **App:** 978 vitest tests across 67 files, plus 3 Playwright layout tests and 2 opt-in app-vs-website parity tests — all passing
-- **Website:** 301 vitest tests across 24 files — all passing
+- **App:** 982 vitest tests across 68 files, plus 3 Playwright layout tests, 2 opt-in app-vs-website parity tests and 2 offline-catalog tests — all passing
+- **Website:** 306 vitest tests across 25 files — all passing
 - **Both repos:** `tsc --noEmit` passes 0 errors
 - **Parity tests:** enforce identical tab structure on both repos
 
@@ -595,7 +596,7 @@ Both use the same DB-first + bundled fallback pattern. The app shows these on th
 
 _Report generated: 2026-11-09_
 _Comparison between: genumsolutions-app/mobile and genumsolutions-website_
-_Both repos: TypeScript 0 errors, green CI on all tests (982 mobile + 301 website)_
+_Both repos: TypeScript 0 errors, green CI on all tests (982 mobile + 306 website)_
 _Users tab: 3-section structure mirrored (User Directory, Car Profiles, Robot Profiles)_
 _Logs tab: 3-section structure mirrored (User Activity, User Profiles, Fleet Diagnostics)_
 _Company info: 17 fields mirrored with url field_
