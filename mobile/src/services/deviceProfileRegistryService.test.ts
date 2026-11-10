@@ -170,6 +170,35 @@ describe("fetchKnownDevices (the union)", () => {
     expect(d.settings?.speed).toBe(200);
   });
 
+  it("merges one car across Bluetooth and Wi-Fi keys by its board id", async () => {
+    await localMemory.write(
+      "fw:ZZZZZZ",
+      prefs({ uniqueId: "ZZZZZZ", btIds: ["BT:99"] }),
+    );
+    await rememberDeviceKey("fw:ZZZZZZ");
+    mocks.selectEqOrder.mockImplementation(async () => ({
+      data: [
+        {
+          profile_key: "11:22:33:44:55:66",
+          car_name: "Cloud BT car",
+          unique_id: "ZZZZZZ",
+          settings: { speed: 180 },
+          wifi_history: [],
+          updated_at: "2026-09-30T00:00:00Z",
+        },
+      ],
+      error: null,
+    }));
+    const { devices } = await fetchKnownDevices();
+    expect(devices).toHaveLength(1);
+    const d = devices[0]!;
+    expect(d.profileKey).toBe("fw:ZZZZZZ");
+    expect(d.mirrored).toBe(true);
+    expect(d.name).toBe("Cloud BT car");
+    expect(d.btIds).toEqual(["BT:99"]);
+    expect(d.settings?.speed).toBe(180);
+  });
+
   it("keeps local-only btIds when the cloud row has none", async () => {
     await localMemory.write("fw:CCCCCC", prefs({ btIds: ["AA:22"] }));
     await rememberDeviceKey("fw:CCCCCC");
