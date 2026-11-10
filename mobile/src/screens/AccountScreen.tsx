@@ -283,14 +283,13 @@ export function AccountScreen() {
                   Customer account
                 </Text>
                 <Text
+                  // No clamp: the website's AccountPanel prints the welcome
+                  // line and email unclamped (text-xl / text-sm).
                   className="mt-0.5 font-display text-xl font-bold tracking-tight text-ink"
-                  numberOfLines={1}
                 >
                   Welcome, {user?.name || "Genum user"}.
                 </Text>
-                <Text className="mt-0.5 text-sm text-muted" numberOfLines={1}>
-                  {user?.email}
-                </Text>
+                <Text className="mt-0.5 text-sm text-muted">{user?.email}</Text>
               </View>
             </View>
             {isStaff && (

@@ -22,7 +22,7 @@
 // Each section is therefore scrolled into view and captured separately.
 //
 // Locator note: React Navigation keeps every stack screen mounted, so
-// HomeScreen's own "What GENUM does" / "Training programs" text is still in
+// HomeScreen's own "What GENUM does" / training-headline text is still in
 // the DOM (hidden) while ServicesScreen is showing. Every locator here is
 // therefore filtered to VISIBLE elements — `.first()` alone picks the
 // hidden HomeScreen copy and fails.
@@ -138,7 +138,7 @@ test.describe("HomeScreen layout", () => {
     await expect(hero).toBeVisible({ timeout: 30_000 });
 
     const curriculum = vis(page, "100+ project curriculum");
-    const training = vis(page, "Training programs");
+    const training = vis(page, "Training programs that build careers.");
     const pilot = vis(page, "Illustrative pilot costing");
 
     for (const [name, locator] of [
@@ -189,6 +189,8 @@ test.describe("ServicesScreen layout", () => {
     const heading = vis(page, "What GENUM does");
     await expect(heading).toBeVisible();
 
+    // /services keeps the shorter "Training programs" heading (it mirrors
+    // website /services); only the Home band carries the headline sentence.
     const training = vis(page, "Training programs");
     const pilot = vis(page, "Illustrative pilot costing");
     const curriculum = vis(page, "100+ project curriculum");

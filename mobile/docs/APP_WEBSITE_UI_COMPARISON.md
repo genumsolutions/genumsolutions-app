@@ -455,12 +455,46 @@ Both projects share the same architectural patterns:
 
 The app repo gained a browser-level check that the source-assertion suites cannot provide:
 
-| Check                        | Where                  | What it proves                                                                                                                                                                                                                                                                                             |
-| ---------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `e2e/smoke.spec.ts`          | app CI (every push/PR) | Renders the exported web bundle in Chromium at 390×844 and asserts the program sections sit below the service grid in the website's order, that About's CTAs fit the viewport, and that no heading-sized text is clipped (`truncatedHeadings()`, proven by mutation). Screenshots upload as a CI artifact. |
-| `e2e/website-parity.spec.ts` | opt-in (`WEBSITE_URL`) | Renders BOTH surfaces and compares them: the same four About live stats with the same numbers, and the same program-band order on Home.                                                                                                                                                                    |
+| Check                        | Where                                                     | What it proves                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/smoke.spec.ts`          | app CI (every push/PR)                                    | Renders the exported web bundle in Chromium at 390×844 and asserts the program sections sit below the service grid in the website's order, that About's CTAs fit the viewport, and that no heading-sized text is clipped (`truncatedHeadings()`, proven by mutation). Screenshots upload as a CI artifact. |
+| `e2e/website-parity.spec.ts` | app CI `parity` job, and any local run with `WEBSITE_URL` | Renders BOTH surfaces and compares them: the same four About live stats with the same numbers, and the same program-band order on Home.                                                                                                                                                                    |
 
 The second one exists because parity is a claim about two running products, not two files: it catches the case where the app publishes two of the website's four About stats, or words a band differently.
+
+#### The `parity` CI job (Nov 2026)
+
+The app's `CI` workflow now runs that spec on every push and PR. It is a **third job** rather than a step in `e2e`, because it needs the website source, which the app repo does not contain:
+
+1. checks out this repo to `website/` (public, so the app repo's job token can clone it) and the app to the workspace root,
+2. `npm ci` in both,
+3. starts `next dev` on :3000 with **placeholder** Supabase credentials and waits for `/about` to answer,
+4. exports the app's web bundle and runs `npx playwright test website-parity` with `WEBSITE_URL=http://127.0.0.1:3000`,
+5. uploads `mobile/test-results` as the `parity-report` artifact and prints the website server log.
+
+The job is honest about what it can prove without a database. The app's catalog is DB-only by design, so with placeholder credentials it hides the About stats block instead of printing zeroes, while this website falls back to its bundled products (55 components, 0 models, 7 categories). The spec therefore compares **labels and section order** in CI and skips the numeric comparison, annotating the report with the reason; with real credentials on both sides (local dev, or any deployed URL) it compares the numbers too and the run passes only when they agree.
+
+#### Home training headline (aligned Nov 2026)
+
+The app's Home training band used to be an uppercase eyebrow reading "Training programs", while this site's Home renders the same band under the headline **"Training programs that build careers."** (`app/page.tsx`, `#training-heading`). The app now uses that sentence verbatim in the website's headline treatment (`font-display text-xl font-bold tracking-tight`, one step down from the site's `text-3xl` to suit 390 px) instead of an all-caps label. Since the copy is now identical, `e2e/website-parity.spec.ts` matches that band on the full sentence rather than a prefix.
+
+Note that the site keeps the curriculum eyebrow ("100+ project curriculum") inside the same `<section>` as this headline, while the app splits them into two stacked bands; the parity spec only pins the order of the three headings, which holds either way.
+
+#### Title clamping is deliberate, not a bug
+
+A cross-surface audit of `numberOfLines` (Nov 2026) settled which single-line clamps are parity and which were drift:
+
+| App element                                 | App                       | Website counterpart                                | Verdict                                  |
+| ------------------------------------------- | ------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| `ProductCard` name, My-collection card name | `numberOfLines={1}`       | `truncate` (`ProductCard.tsx`, `MyCollection.tsx`) | **Matches** — both clip to one line      |
+| Cart line name                              | `numberOfLines={2}`       | `line-clamp-2` (`app/checkout/page.tsx`)           | **Matches**                              |
+| Account order rows (item + meta)            | `numberOfLines={1}`       | `truncate` (`AccountPanel.tsx`)                    | **Matches**                              |
+| Account welcome line + email                | was `numberOfLines={1}`   | unclamped `<h?>` / `<p>`                           | **Fixed** — clamps removed               |
+| Journal post title                          | was `numberOfLines={2}`   | unclamped `<h2>` (`app/journal/page.tsx`)          | **Fixed** — clamp removed                |
+| About "what we do" card titles              | was `numberOfLines={1}`   | unclamped `<h3>` (`ArticleCard`)                   | **Fixed** — clamp removed                |
+| Services / training card titles             | was clamped beside a pill | unclamped                                          | **Fixed** — title owns a full-width line |
+
+Rule of thumb: only copy a clamp the website actually applies. Anything the website lets wrap must wrap in the app too, because a clamped title reads as a different product name ("Robotics Lab Consul…").
 
 ### Sync Responsibilities
 
@@ -526,7 +560,7 @@ Both use the same DB-first + bundled fallback pattern. The app shows these on th
 
 ## 15. Test Status
 
-- **App:** 955 vitest tests across 65 files — all passing
+- **App:** 978 vitest tests across 67 files, plus 3 Playwright layout tests and 2 opt-in app-vs-website parity tests — all passing
 - **Website:** 301 vitest tests across 24 files — all passing
 - **Both repos:** `tsc --noEmit` passes 0 errors
 - **Parity tests:** enforce identical tab structure on both repos

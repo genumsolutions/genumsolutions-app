@@ -93,3 +93,92 @@ jobs:
           path: mobile/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+  # App-vs-website parity. The app is a mirror of the public website, so this
+  # job renders BOTH surfaces side by side in one Playwright run and diffs
+  # them. It needs the website repo, which the e2e job above does not have —
+  # hence a separate job that checks out both repos.
+  #
+  # What it can prove without credentials: the website still publishes all
+  # four About live-stats rows, and the Home program band appears in the same
+  # order on both surfaces. What it cannot prove here is that the NUMBERS
+  # match — the app's catalog is DB-only, so with no credentials it hides the
+  # stats block, while the website falls back to its bundled products. The
+  # spec skips the numeric comparison in that case and annotates the report;
+  # run it locally with real credentials to exercise the strict path.
+  parity:
+    name: App vs website (Playwright)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v5
+
+      # Public repo, so the job's default token can clone it.
+      - name: Checkout website
+        uses: actions/checkout@v5
+        with:
+          repository: genumsolutions/genumsolutions-website
+          path: website
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            website/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
+
+      # next dev compiles on demand and needs no build step. Credentials are
+      # placeholders: lib/supabase refuses to construct a client without a
+      # URL, and the pages then paint their bundled content.
+      - name: Start website
+        working-directory: website
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+        run: |
+          nohup npm run dev > "$RUNNER_TEMP/website.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:3000/about; then
+              echo "website ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "website never became ready:"; tail -40 "$RUNNER_TEMP/website.log"; exit 1
+
+      - name: Install Chromium
+        working-directory: mobile
+        run: npx playwright install --with-deps chromium
+
+      - name: Export web bundle
+        working-directory: mobile
+        run: npx expo export --platform web
+
+      - name: Compare app against website
+        working-directory: mobile
+        env:
+          WEBSITE_URL: http://127.0.0.1:3000
+        run: npx playwright test website-parity
+
+      - name: Website server log
+        if: always()
+        run: tail -60 "$RUNNER_TEMP/website.log" 2>/dev/null || true
+
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report
+          path: mobile/test-results
+          retention-days: 7
+          if-no-files-found: ignore
