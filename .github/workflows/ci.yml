@@ -48,3 +48,48 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Layout smoke test — typecheck and vitest prove what the SOURCE says;
+  # this renders the exported bundle in Chromium at 390x844 and looks at it.
+  # It exists because two real defects passed every other check: a training
+  # title clamped to "K–5 Ro…" and a card title to "Robotics Lab Consul…".
+  e2e:
+    name: Layout smoke (Playwright)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # No .env.local in CI, so the bundle keeps the placeholder Supabase host:
+      # every read fails fast and the screens paint their bundled content. That
+      # is why the assertions only target strings true with or without a DB.
+      - name: Export web bundle
+        run: npx expo export --platform web
+
+      - name: Layout smoke test
+        run: npx playwright test
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: mobile/test-results
+          retention-days: 7
+          if-no-files-found: ignore
