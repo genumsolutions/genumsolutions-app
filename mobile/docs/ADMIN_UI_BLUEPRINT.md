@@ -2,28 +2,95 @@
 
 ## Overview
 
-Admin screen located at `src/screens/AdminScreen.tsx`. Provides centralized admin dashboard for managing company settings, user profiles, logs, and system configuration.
+Admin screen located at `src/screens/AdminScreen.tsx`. Provides a centralized admin
+console for the shared Supabase data: orders, the three catalogs, projects, site
+content, users and their fleet profiles, diagnostics, and company settings.
+
+Strictly read-only for staff: `isAdmin` means admin-or-owner (deletion rights) and only
+the sole owner may delete users.
 
 ## Top-Level Tab Navigation
 
-Primary navigation at the top of the admin screen. Tabs are defined in `LOG_SECTIONS` constant and rendered as pill-shaped buttons.
+The top bar is a horizontally scrolling strip of pill buttons driven by the `TABS`
+array (`AdminScreen.tsx` line ~158). There are **nine** tabs, in this order:
 
-| Tab ID      | Label     | Content                                                                                                                          |
-| ----------- | --------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `"logs"`    | `Logs`    | System logs + App logs (includes `link/wifi` diagnostics). Initial section state: `"logs"`.                                      |
-| `"profile"` | `Profile` | User profiles + project entries. Uses edit-button pattern: read-only by default, tap "Edit" reveals form, "Save"/"Cancel" locks. |
+| #   | Tab (`Tab` union member) | Content component                                                |
+| --- | ------------------------ | ---------------------------------------------------------------- |
+| 1   | `Dashboard`              | KPIs, order/revenue trend, recent activity                       |
+| 2   | `Orders`                 | Every order, payment state, pilot finance lines                  |
+| 3   | `Electronic Products`    | The `/products` catalog — pricing, stock, photos                 |
+| 4   | `3D Products`            | The `/3d-printing` catalog                                       |
+| 5   | `Projects`               | Bundles sold on `/projects`, including pre-packaged kits         |
+| 6   | `Content`                | Services, journal posts, home page copy                          |
+| 7   | `Users`                  | Accounts, roles, tiers, plus the car- and robot-profile sections |
+| 8   | `Logs`                   | Diagnostics — see the inner sections below                       |
+| 9   | `Settings`               | Company info, training programs, pilot costs                     |
 
-**Old tabs (removed):** `activity`, `profiles`, `diagnostics` — merged into the two-tab structure above.
+- Active tab state: `const [tab, setTab] = useState<Tab>("Dashboard")` — the console
+  opens on **Dashboard**.
+- **Profile is not a tenth tab.** It is an inner section of the Logs tab (next heading).
+
+**Structure history:** the old top-level `activity`, `profiles` and `diagnostics` tabs
+were merged into the single `Logs` tab by U-R5 (2026-11-09). A later doc revision
+mistakenly collapsed that merge into a "two-tab admin" (Logs + Profile); the bar has
+been the nine tabs above since U-R5, and this file was corrected to match the code.
+
+## Logs Tab — two inner sections (`LOG_SECTIONS`)
+
+Inside the Logs tab, a second row of pills selects the section. These are the
+`LOG_SECTIONS` entries, and the initial section is `"logs"`:
+
+```ts
+const LOG_SECTIONS = [
+  { id: "logs", label: "Logs" },
+  { id: "profile", label: "Profile" },
+] as const;
+type LogSection = (typeof LOG_SECTIONS)[number]["id"];
+```
+
+- State: `const [section, setSection] = useState<LogSection>("logs")` inside `LogsTab`.
+- Pill styling: `rounded-full border px-3.5 py-1.5`, active is `border-navy bg-navy`
+  with white text (`text-[11px] font-black`); each pill sets `accessibilityState.selected`.
+
+**`logs` section → `SystemLogsTab`**, which renders two blocks in one scroll view:
+
+1. **Car crash / restart reports** — one row per connection session, synced by the app
+   from each car's stored restart record. Empty state: "No crash reports synced yet."
+   with an `alert-triangle` icon.
+2. **App logs** — the `app_logs` rows, including the `link/wifi` diagnostic scope.
+
+Both blocks are paginated (`crashPage`/`crashTotalPages`, `logPage`/`logTotalPages`)
+and both respect `canDelete`.
+
+**`profile` section → `ProfileEntriesTab`** — the edit-button pattern below.
 
 ## Tab Styling & Width
 
-- Tab widths are measured dynamically, not assumed 96px per tab.
-- `TAB_MIN_WIDTH = 96` constant used for layout calculations.
-- Active tab centered using calculated widths rather than fixed widths.
+- Tab widths are **measured**, not assumed: the active tab is centred from collected
+  offsets (`tabOffsets.current[index] ?? index * TAB_MIN_WIDTH`) so it never drifts,
+  because labels differ in length ("Electronic Products" vs "Logs").
+- `TAB_MIN_WIDTH = 96` is the minimum width floor passed as `style={{ minWidth }}`.
+- This was U-UI1 (2026-11-09); the old code multiplied a fixed width per tab.
+
+## Settings Tab
+
+- Tab labelled `Settings`; renders the `SettingsTab` component with `company`,
+  `setCompany`, `canDelete`, `onCompanySaved`, and
+  `onEditingChange={setSettingsEditing}`.
+- Company info is read-only by default; **Edit** reveals inputs, **Save** / **Cancel**
+  locks again — the same pattern as `ProfileEntriesTab`.
+
+## Biometric Admin Lock (C7)
+
+Local opt-in, enabled from **Menu → Security** (`loadBiometricsPref`). When enabled,
+`AdminScreen` authenticates on entry via `biometricAuthenticate("Unlock the admin
+console")`; if the device reports no biometric support after the pref was turned on,
+the pref is cleared rather than locking the operator out. See `biometricsService`.
 
 ## ProfileEntriesTab — Edit Button Pattern
 
-**Location:** `src/screens/AdminScreen.tsx` within `ProfileEntriesTab` component.
+**Location:** `src/screens/AdminScreen.tsx`, `ProfileEntriesTab` component. Reached via
+Logs → the `profile` pill.
 
 **State:**
 
@@ -32,72 +99,64 @@ Primary navigation at the top of the admin screen. Tabs are defined in `LOG_SECT
 - `newTypeName: string` — pre-filled type name
 - `newBody: Record<string, unknown>` — pre-filled body data
 
-**Read-Only Mode (isEditing = false):**
+**Read-only mode (`isEditing = false`):**
 
-- Each entry displays as read-only `View` with title and body preview
-- Rightmost cell contains a `Pressable` with label "Edit" (class: `text-xs text-navy uppercase tracking-[0.1em]`)
-- Tapping the "Edit" Pressable sets `isEditing = true`, revealing the form
+- Each entry is a read-only `View` with a title and a body preview.
+- The rightmost cell holds a `Pressable` labelled "Edit"
+  (`text-xs text-navy uppercase tracking-[0.1em]`); tapping it sets `isEditing = true`.
 
-**Editing Mode (isEditing = true):**
+**Editing mode (`isEditing = true`):**
 
-- Form reveals with three fields: `newTitle`, `newTypeName`, `newBody`
-- "Save" button persists changes and sets `isEditing = false`
-- "Cancel" button closes the form without saving, sets `isEditing = false`
-- Form fields can be cleared/reset
+- The form reveals three fields: `newTitle`, `newTypeName`, `newBody`.
+- **Save** persists and sets `isEditing = false`; **Cancel** closes without saving.
+- Form fields can be cleared / reset.
 
-**Entry Row Structure:**
+**Entry row structure:**
 
-- `View` with `flexRow items-center gap-2` layout
-- Left: `Text` showing `{row.title || "(untitled)"}` (text-sm font-bold text-ink)
-- Middle: `Text` showing JSON preview of body
-- Right: "Edit" Pressable (when not editing) or Save/Cancel inputs (when editing)
-
-## SystemLogsTab
-
-- Displays `SystemLogsTab` with `crashes` prop (always visible, regardless of active tab)
-- Contains crash/fault logging data from the car system
-
-## LogsTab Section State
-
-- `const [section, setSection] = useState<LogSection>("logs")`
-- Only two sections: `"logs"` and `"profile"`
-- `"logs"` section shows `SystemLogsTab` (crashes) — `"profile"` section shows `ProfileEntriesTab`
-
-## Settings Tab
-
-- Tab labeled `"Settings"` in the top tab bar
-- Integrates with `SettingsTab` component (imported from external)
-- Passes: `company`, `setCompany`, `canDelete`, `onCompanySaved`, `onEditingChange={setSettingsEditing}`
-- Company info displays read-only by default; "Edit" reveals inputs, "Save"/"Cancel" locks (same pattern as ProfileEntriesTab but for company info)
+- `View` laid out `flex-row items-center gap-2`.
+- Left: `Text` with `{row.title || "(untitled)"}` (`text-sm font-bold text-ink`).
+- Middle: `Text` with the JSON body preview.
+- Right: the "Edit" `Pressable`, or the Save/Cancel controls while editing.
 
 ## Admin Screen Structure Summary
 
 ```
 AdminScreen.tsx
-├── Top tab bar: ["Dashboard", "Orders", ..., "Logs", "Settings"]
-│   - Active tab controlled by useState
-│   - Two main tabs: "Logs" and "Profile" (U-R5 reorganization)
-│   - "Settings" tab passes data to SettingsTab component
-├── Active tab content
-│   - "Logs" → SystemLogsTab + app logs (link/wifi diagnostics)
-│   - "Profile" → ProfileEntriesTab (edit-button pattern)
-│   - "Settings" → SettingsTab (company info edit pattern)
-└── Persistent bottom section: biometric lock overlay (C7)
+├── Top tab bar — TABS (9): Dashboard · Orders · Electronic Products · 3D Products
+│   · Projects · Content · Users · Logs · Settings        [default: "Dashboard"]
+├── Active tab content (TABS.map → component)
+│   ├── "Logs"    → LogsTab
+│   │              ├── LOG_SECTIONS pills: [ Logs | Profile ]
+│   │              ├── "logs"    → SystemLogsTab (crash reports + app logs)
+│   │              └── "profile" → ProfileEntriesTab (edit-button pattern)
+│   └── "Settings" → SettingsTab (company info edit pattern)
+└── C7 biometric admin lock — interposed before entry when opted in
 ```
 
 ## Key Constants & Types
 
-- `LOG_SECTIONS`: `[{ id: "logs", label: "Logs" }, { id: "profile", label: "Profile" }] as const`
-- `LogSection` type: `(typeof LOG_SECTIONS)[number]["id"]`
-- `TAB_MIN_WIDTH`: `96` (minimum pixel width for tab calculation)
+- `TABS`: the nine `Tab` union members listed above.
+- `Tab`: union of those nine names.
+- `LOG_SECTIONS`: `[{ id: "logs", label: "Logs" }, { id: "profile", label: "Profile" }]`
+- `LogSection`: `(typeof LOG_SECTIONS)[number]["id"]`
+- `TAB_MIN_WIDTH`: `96` (minimum tab width; actual offsets are measured)
 
 ## Edit-Button Pattern (Reusable)
 
-Used in both `ProfileEntriesTab` and `AdminSettings` (website):
+Used by `ProfileEntriesTab`, `SettingsTab`, and the car/robot profile sections in the
+Users tab — and, on the website, by `AdminSettings` and `AdminUsers`:
 
-1. Content displays **read-only** by default
-2. User taps **"Edit"** → form/inputs become active
-3. User taps **"Save"** → changes are persisted, content locks
-4. User taps **"Cancel"** → form closes, content returns to read-only (no changes)
+1. Content displays **read-only** by default.
+2. The user taps **Edit** → form / inputs become active and pre-filled.
+3. The user taps **Save** → changes persist, content locks.
+4. The user taps **Cancel** → form closes, content returns to read-only (no changes).
+5. While saving, a busy flag disables Save.
+6. Permissions differ by action, and the platform splits them differently:
+   - **App:** staff may still _edit_, while deletions are gated by
+     `canDelete = isAdmin` — every delete handler early-returns when `!canDelete`,
+     and `canDelete` is passed down to the list components.
+   - **Website:** `AdminUsers` additionally disables the Edit control for staff with a
+     tooltip naming the restriction. That tooltip is a website behaviour; the app does
+     not have it, so do not read this line as describing both.
 
-This pattern ensures consistency across the app: users always know how to enter edit mode and lock changes.
+This keeps editing predictable across both clients: the same gesture everywhere.
