@@ -43,9 +43,8 @@ export type GenumUser = {
   email: string;
   phone: string;
   address: string;
-  role: string;
-  /** Account tier from profiles.tier (admin-managed). Pro unlocks the
-   *  per-robot preference profiles (the Remote window is open to all). */
+  role: string; /** Account tier from profiles.tier (admin-managed). All tiers now have
+   * full access — pro unlocks removed, all users have the same capabilities. */
   tier: "free" | "pro";
 };
 
@@ -686,11 +685,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user?.role === "owner",
       isAdmin: user?.role === "admin" || user?.role === "owner",
       isOwner: user?.role === "owner",
-      isPro:
-        user?.tier === "pro" ||
-        user?.role === "staff" ||
-        user?.role === "admin" ||
-        user?.role === "owner",
+      isPro: true, // All tiers now have pro features — pro unlocks removed, all users have full access
       cartCount,
       setCart,
       authSheetOpen,
