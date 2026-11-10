@@ -12,23 +12,22 @@ Both the app and website provide admin functionality for managing company settin
 
 ## 1. Top-Level Tab/Section Structure
 
-### App (mobile) — 9 tabs
+### App (mobile) — 8 tabs
 
-The app uses a **9-tab horizontal bar** at the top of `AdminScreen.tsx`:
+The app uses a **8-tab horizontal bar** at the top of `AdminScreen.tsx`:
 
-| Tab          | Label                   | Section Component | Description                                                                                                  |
-| ------------ | ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| `dashboard`  | **Dashboard**           | `DashboardTab`    | KPIs, order/revenue trend, recent activity feed                                                              |
-| `orders`     | **Orders**              | `OrdersTab`       | Every order, payment state, pilot finance lines                                                              |
-| `electronic` | **Electronic Products** | `ElectronicsTab`  | `/products` catalog — pricing, stock, photos                                                                 |
-| `threed`     | **3D Products**         | `ThreeDTab`       | `/3d-printing` catalog                                                                                       |
-| `projects`   | **Projects**            | `ProjectsTab`     | Bundles sold on `/projects` including pre-packaged kits                                                      |
-| `content`    | **Content**             | `ContentTab`      | Services, journal posts, home page copy                                                                      |
-| `users`      | **Users**               | `UsersTab`        | Accounts, roles, tiers, per-user directories/profile, robot/car profiles                                     |
-| `logs`       | **Logs**                | `LogsTab`         | User activity + user profiles + field diagnostics (U-R5 merged from System Logs, User Logs, Profile Entries) |
-| `settings`   | **Settings**            | `SettingsTab`     | Company info (all 17 fields), training programs, pilot costs                                                 |
+| Tab          | Label                   | Section Component | Description                                                              |
+| ------------ | ----------------------- | ----------------- | ------------------------------------------------------------------------ |
+| `dashboard`  | **Dashboard**           | `DashboardTab`    | KPIs, order/revenue trend, recent activity feed                          |
+| `orders`     | **Orders**              | `OrdersTab`       | Every order, payment state, pilot finance lines                          |
+| `electronic` | **Electronic Products** | `ElectronicsTab`  | `/products` catalog — pricing, stock, photos                             |
+| `threed`     | **3D Products**         | `ThreeDTab`       | `/3d-printing` catalog                                                   |
+| `projects`   | **Projects**            | `ProjectsTab`     | Bundles sold on `/projects` including pre-packaged kits                  |
+| `content`    | **Content**             | `ContentTab`      | Services, journal posts, home page copy                                  |
+| `users`      | **Users**               | `UsersTab`        | Accounts, roles, tiers, per-user directories/profile, robot/car profiles |
+| `settings`   | **Settings**            | `SettingsTab`     | Company info (all 17 fields), training programs, pilot costs             |
 
-The nine entries above are the whole bar — `TABS` in `AdminScreen.tsx` has exactly these. **Profile is not a tenth tab:** `ProfileEntriesTab` is an inner section of the Logs tab, selected by the `LOG_SECTIONS` pills (`logs`, `profile`) inside `LogsTab`. The app then shows User Activity / User Profiles / Fleet Diagnostics under `logs`, and the profile-entry list under `profile`.
+The eight entries above are the whole bar — `TABS` in `AdminScreen.tsx` has exactly these. **Profile is not a tenth tab:** `ProfileEntriesTab` is an inner section of the Logs tab, selected by the `LOG_SECTIONS` pills (`logs`, `profile`) inside `LogsTab`. The app then shows User Activity / User Profiles / Fleet Diagnostics under `logs`, and the profile-entry list under `profile`.
 
 ### Website — Multi-panel layout
 
@@ -51,7 +50,7 @@ The website uses Next.js page routes with React components for each admin panel:
 
 - Tab order is **identical** on both clients (enforced by parity tests: `admin-parity.test.ts` on both repos).
 - The app uses a **single screen with horizontal tabs** at the top; the website uses **multi-panel navigation** with sidebar/links.
-- Both expose the same admin operations: Dashboard, Orders, Products, Projects, Content, Users, Logs, Settings, Profile.
+- Both expose the same admin operations: Dashboard, Orders, Products, Projects, Content, Users, Settings.
 - The Users tab on both now has **3 sections** (User Directory, Car Profiles, Robot Profiles) — mirrored.
 - The Logs tab on both now has **3 sections** (User Activity, User Profiles, Fleet Diagnostics) — mirrored.
 
@@ -339,7 +338,7 @@ The `profile_key` is the **stable identity** that persists across app reinstalls
 
 | Feature                     | App                                                                            | Website                                  | Mirrored?                  |
 | --------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------- | -------------------------- |
-| Tab order (9 tabs)          | Identical order                                                                | Identical order                          | ✅ Yes                     |
+| Tab order (8 tabs)          | Identical order                                                                | Identical order                          | ✅ Yes                     |
 | Users tab structure         | 3 sections (User Directory, Car Profiles, Robot Profiles)                      | 3 sections (same)                        | ✅ Yes                     |
 | Edit-button pattern         | Read-only → Edit → form → Save/Cancel                                          | Same                                     | ✅ Yes                     |
 | Company info fields         | 12 fields (subset, no url/city/country/vatLabel/description)                   | 17 fields (incl. url)                    | ⚠️ App uses subset         |

@@ -4066,6 +4066,9 @@ function UsersSection({
 }) {
   // Section state
   const [showUserDir, setShowUserDir] = useState(true);
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>(
+    {},
+  );
   const [showCarProfiles, setShowCarProfiles] = useState(true);
   const [showRobotProfiles, setShowRobotProfiles] = useState(true);
   const [userDirSearch, setUserDirSearch] = useState("");
@@ -4342,6 +4345,33 @@ function UsersSection({
                 {item.tier}
               </Text>
             </View>
+            <Pressable
+              onPress={() =>
+                setExpandedUsers((prev) => ({
+                  ...prev,
+                  [item.id]: !prev[item.id],
+                }))
+              }
+              className="mt-2 self-start rounded-full border border-line px-3 py-1"
+            >
+              <Text className="text-[11px] font-bold text-navy">
+                {expandedUsers[item.id] ? "Hide projects" : "Show projects"}
+              </Text>
+            </Pressable>
+            {expandedUsers[item.id] && (
+              <View className="mt-3">
+                <UserProjectProfileManager
+                  userId={item.id}
+                  email={item.email}
+                  canDelete={canDelete}
+                />
+                <UserRobotSettingsManager
+                  userId={item.id}
+                  email={item.email}
+                  canDelete={canDelete}
+                />
+              </View>
+            )}
           </View>
         )}
       />
