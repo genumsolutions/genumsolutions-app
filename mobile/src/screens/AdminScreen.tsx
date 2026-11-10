@@ -4069,8 +4069,11 @@ function UsersSection({
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>(
     {},
   );
-  const [showCarProfiles, setShowCarProfiles] = useState(true);
-  const [showRobotProfiles, setShowRobotProfiles] = useState(true);
+  // Flat per-user profile lists are superseded by the expandable per-user
+  // project hierarchy above; keep them off by default to avoid duplicate,
+  // admin-scoped rows.
+  const [showCarProfiles, setShowCarProfiles] = useState(false);
+  const [showRobotProfiles, setShowRobotProfiles] = useState(false);
   const [userDirSearch, setUserDirSearch] = useState("");
   const [carSearch, setCarSearch] = useState("");
   const [robotSearch, setRobotSearch] = useState("");
