@@ -3,8 +3,21 @@
 // Mirrors website /about liveCounts: same DB tables, same three-catalog
 // split (applyComponentsScope contract from productService.ts).
 // =====================================================================
+import { readFileSync } from "node:fs";
+import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, it, expect } from "vitest";
 import type { Product, ProductType } from "../types";
+
+/** Raw TSX with comments stripped — same convention as remoteChrome.test.ts.
+    The CTA rules below match real JSX, so comment prose must not satisfy them. */
+const src = readFileSync(
+  fileURLToPath(new NodeURL("./AboutScreen.tsx", import.meta.url)),
+  "utf8",
+)
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .split("\n")
+  .map((l) => l.replace(/\/\/.*$/, ""))
+  .join("\n");
 
 type StatRow = Pick<Product, "category" | "productType" | "active"> & {
   id: string;
@@ -117,5 +130,51 @@ describe("AboutScreen computeLiveStats — parity with website /about liveCounts
     ];
     const stats = computeLiveStats(products);
     expect(stats[0][0]).toBe("2");
+  });
+});
+
+// =====================================================================
+// Cross-link CTAs — the website /about shop-links row.
+// =====================================================================
+describe("AboutScreen cross-link CTAs — same four links as website /about", () => {
+  const LABELS = ["Shop components", "3D products", "Projects", "Open tools"];
+
+  it("offers all four destinations in the website's order", () => {
+    let previous = -1;
+    for (const label of LABELS) {
+      const index = src.indexOf(`label: "${label}"`);
+      expect(index, `missing CTA: ${label}`).toBeGreaterThan(previous);
+      previous = index;
+    }
+  });
+
+  it("sends the two TAB destinations through Main, not as stack routes", () => {
+    expect(src).toContain('{ label: "Shop components", tab: "Shop" }');
+    expect(src).toContain('{ label: "3D products", tab: "Printing" }');
+    expect(src).toContain('navigation.navigate("Main", { screen: link.tab })');
+  });
+
+  it("PUSHES Projects and Open tools — neither is a bottom tab", () => {
+    // The regression this guards: typing all four as `Main` tab screens
+    // compiles against a locally invented param type and then throws at
+    // runtime, because MainTabParamList is Home/Printing/Shop/Menu only.
+    expect(src).toContain('{ label: "Projects", route: "Projects" }');
+    expect(src).toContain('{ label: "Open tools", route: "Tools" }');
+    expect(src).toContain("navigation.push(link.route)");
+  });
+
+  it("types its navigator against the real RootStackParamList", () => {
+    expect(src).toContain("import type { RootStackParamList }");
+    expect(src).toContain(
+      'NativeStackNavigationProp<RootStackParamList, "About">',
+    );
+  });
+
+  it("uses no CSS-only hover/transition classes on the native buttons", () => {
+    // `transition` and `hover:` do nothing on native and sat on the Text
+    // where they could not restyle the border anyway.
+    expect(src).not.toContain("transition");
+    expect(src).not.toContain("hover:");
+    expect(src).toContain("active:opacity-60");
   });
 });
