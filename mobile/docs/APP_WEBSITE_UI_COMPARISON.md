@@ -238,16 +238,16 @@ Used in: SettingsTab (company), ProfileEntriesTab, UsersTab (car profiles, robot
 
 ## 6. Terminology & Labels
 
-| Term                        | App                                                                                                                                                     | Website                | Mirrored? |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------- |
-| **Edit button label**       | "Edit"                                                                                                                                                  | "Edit"                 | ✅ Yes    |
-| **Save button label**       | "Save"                                                                                                                                                  | "Save"                 | ✅ Yes    |
-| **Cancel button label**     | "Cancel"                                                                                                                                                | "Cancel"               | ✅ Yes    |
-| **Delete button label**     | "Delete"                                                                                                                                                | "Delete"               | ✅ Yes    |
-| **Company section heading** | "Company information"                                                                                                                                   | "Company information"  | ✅ Yes    |
-| **Tab labels**              | "Dashboard", "Orders", "Electronic Products", "3D Products", "Projects", "Content", "Users", "Logs", "Settings" (9 — Profile is a Logs section, see §1) | Same (via parity test) | ✅ Yes    |
-| **Users section labels**    | "User Directory", "Car Profiles", "Robot Profiles"                                                                                                      | Same                   | ✅ Yes    |
-| **Logs section labels**     | "User Activity", "User Profiles", "Fleet Diagnostics"                                                                                                   | Same                   | ✅ Yes    |
+| Term                        | App                                                                                                                                                                           | Website                | Mirrored? |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------- |
+| **Edit button label**       | "Edit"                                                                                                                                                                        | "Edit"                 | ✅ Yes    |
+| **Save button label**       | "Save"                                                                                                                                                                        | "Save"                 | ✅ Yes    |
+| **Cancel button label**     | "Cancel"                                                                                                                                                                      | "Cancel"               | ✅ Yes    |
+| **Delete button label**     | "Delete"                                                                                                                                                                      | "Delete"               | ✅ Yes    |
+| **Company section heading** | "Company information"                                                                                                                                                         | "Company information"  | ✅ Yes    |
+| **Tab labels**              | "Dashboard", "Orders", "Electronic Products", "3D Products", "Projects", "Content", "Users", "Settings" (8 — Logs merged into Users; Messages + newsletter moved to Settings) | Same (via parity test) | ✅ Yes    |
+| **Users section labels**    | "User Directory", "Car Profiles", "Robot Profiles"                                                                                                                            | Same                   | ✅ Yes    |
+| **Logs section labels**     | "User Activity", "User Profiles", "Fleet Diagnostics"                                                                                                                         | Same                   | ✅ Yes    |
 
 ---
 

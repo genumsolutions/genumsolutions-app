@@ -29,7 +29,6 @@ export const ADMIN_TABS = [
   "Projects",
   "Content",
   "Users",
-  "Logs",
   "Settings",
 ] as const;
 
@@ -47,7 +46,6 @@ export const ADMIN_TAB_HINTS: Record<AdminTab, string> = {
   "3D Products": "The /3d-printing catalog.",
   Projects: "Bundles sold on /projects, including pre-packaged kits.",
   Content: "Services, journal posts and the home page copy.",
-  Users: "Accounts, roles, orders and each person's project profiles.",
-  Logs: "User activity, project profiles and field diagnostics.",
-  Settings: "Company details, training programs and pilot costs.",
+  Users: "Accounts, roles, orders, project profiles, activity and diagnostics.",
+  Settings: "Company details, customer messages and newsletter subscribers.",
 };

@@ -147,7 +147,6 @@ type Tab =
   | "Projects"
   | "Content"
   | "Users"
-  | "Logs"
   | "Settings";
 
 // U-44 (2026-09-26, owner): the Catalog tab becomes THREE tabs mirroring the
@@ -163,9 +162,6 @@ const TABS: Tab[] = [
   "Projects",
   "Content",
   "Users",
-  // U-R5 (2026-11-09): System Logs + User Logs + Profile Entries merged into
-  // one "Logs" tab with three sections (same panels, one entry point).
-  "Logs",
   "Settings",
 ];
 
@@ -512,10 +508,7 @@ export function AdminScreen() {
         }
       } else if (tab === "Users") {
         void loadUsers(1);
-        void loadMessages(1);
-      } else if (tab === "Logs") {
-        // One tab, three sections: load all of them so switching sections is
-        // instant and never re-hits the API on the free tier.
+        // Merged Users tab: also load activity, profiles and diagnostics.
         void loadCrashReports(1);
         void loadAppLogs(1);
         void loadUserLogs(1);
@@ -526,6 +519,7 @@ export function AdminScreen() {
         setTrainingPrograms(await listAdminTrainingPrograms());
         setPilotCostLines(await listAdminPilotCostLines());
         setCurriculumHighlights(await listAdminCurriculumHighlights());
+        void loadMessages(1);
       }
       setRefreshedAt(new Date());
     } catch (e) {
@@ -1473,10 +1467,52 @@ export function AdminScreen() {
               onDeleteUser={handleDeleteUser}
               currentUserId={currentUser?.id ?? ""}
             />
+            <LogsTab
+              crashes={crashReports}
+              crashPage={crashReportPage}
+              crashTotal={crashReportTotal}
+              crashTotalPages={crashReportTotalPages}
+              onLoadCrashes={(p) => void loadCrashReports(p)}
+              onDeleteCrash={handleDeleteCrashReport}
+              appLogs={appLogs}
+              logPage={appLogPage}
+              logTotal={appLogTotal}
+              logTotalPages={appLogTotalPages}
+              onLoadLogs={(p) => void loadAppLogs(p)}
+              onDeleteLog={handleDeleteAppLog}
+              userLogs={userLogs}
+              userLogPage={userLogPage}
+              userLogTotal={userLogTotal}
+              userLogTotalPages={userLogTotalPages}
+              onLoadUserLogs={(p) => void loadUserLogs(p)}
+              onDeleteUserLog={handleDeleteUserLog}
+              profileEntries={profileEntries}
+              profileEntryTypes={profileEntryTypes}
+              profileEntryPage={profileEntryPage}
+              profileEntryTotal={profileEntryTotal}
+              profileEntryTotalPages={profileEntryTotalPages}
+              onLoadProfileEntries={(p) => void loadProfileEntries(p)}
+              onDeleteProfileEntry={handleDeleteProfileEntry}
+              canDelete={canDelete}
+            />
+          </Sub>
+        );
+      case "Settings":
+        return (
+          <Sub>
+            <SettingsTab
+              company={companyInfo}
+              setCompany={setCompanyInfo}
+              canDelete={canDelete}
+              onCompanySaved={async (next) => {
+                await saveCompanyInfo(next);
+                setCompanyInfo(next);
+              }}
+              onEditingChange={setSettingsEditing}
+            />
             <MessagesTab
               messages={messages}
               total={messagesTotal}
-
               page={messagesPage}
               totalPages={messagesTotalPages}
               onPage={(p) => void loadMessages(p)}
@@ -1488,50 +1524,6 @@ export function AdminScreen() {
               onMarkReplied={handleMarkReplied}
             />
           </Sub>
-        );
-      case "Logs":
-        return (
-          <LogsTab
-            crashes={crashReports}
-            crashPage={crashReportPage}
-            crashTotal={crashReportTotal}
-            crashTotalPages={crashReportTotalPages}
-            onLoadCrashes={(p) => void loadCrashReports(p)}
-            onDeleteCrash={handleDeleteCrashReport}
-            appLogs={appLogs}
-            logPage={appLogPage}
-            logTotal={appLogTotal}
-            logTotalPages={appLogTotalPages}
-            onLoadLogs={(p) => void loadAppLogs(p)}
-            onDeleteLog={handleDeleteAppLog}
-            userLogs={userLogs}
-            userLogPage={userLogPage}
-            userLogTotal={userLogTotal}
-            userLogTotalPages={userLogTotalPages}
-            onLoadUserLogs={(p) => void loadUserLogs(p)}
-            onDeleteUserLog={handleDeleteUserLog}
-            profileEntries={profileEntries}
-            profileEntryTypes={profileEntryTypes}
-            profileEntryPage={profileEntryPage}
-            profileEntryTotal={profileEntryTotal}
-            profileEntryTotalPages={profileEntryTotalPages}
-            onLoadProfileEntries={(p) => void loadProfileEntries(p)}
-            onDeleteProfileEntry={handleDeleteProfileEntry}
-            canDelete={canDelete}
-          />
-        );
-      case "Settings":
-        return (
-          <SettingsTab
-            company={companyInfo}
-            setCompany={setCompanyInfo}
-            canDelete={canDelete}
-            onCompanySaved={async (next) => {
-              await saveCompanyInfo(next);
-              setCompanyInfo(next);
-            }}
-            onEditingChange={setSettingsEditing}
-          />
         );
     }
   }

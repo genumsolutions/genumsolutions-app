@@ -74,6 +74,8 @@ export function UserPreferencesScreen() {
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [deviceBusy, setDeviceBusy] = useState(false);
+  // Technical identifiers stay hidden by default; reveal on demand.
+  const [detailsKey, setDetailsKey] = useState<string | null>(null);
 
   // Editor state: null = list view; a robotId = editing (or '' = creating).
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -313,7 +315,7 @@ export function UserPreferencesScreen() {
               <View className="flex-row items-center gap-1">
                 <Feather name="hard-drive" size={12} color="#1e3a8a" />
                 <Text className="text-[11px] font-black uppercase tracking-wide text-muted">
-                  My devices ({devices.length})
+                  My projects ({devices.length})
                 </Text>
                 {devicesOffline ? (
                   <View className="ml-auto rounded-full bg-amber-100 px-2 py-0.5">
@@ -356,16 +358,21 @@ export function UserPreferencesScreen() {
                           >
                             {device.name}
                           </Text>
-                          <Text
-                            numberOfLines={1}
-                            className="mt-0.5 font-mono text-[11px] text-muted"
-                          >
-                            {device.profileKey}
-                            {device.uniqueId &&
-                            !device.profileKey.startsWith("fw:")
-                              ? ` · #${device.uniqueId}`
-                              : ""}
-                          </Text>
+                          {detailsKey === device.profileKey ? (
+                            <Text
+                              numberOfLines={2}
+                              className="mt-0.5 font-mono text-[11px] text-muted"
+                            >
+                              Connection ID: {device.profileKey}
+                              {device.uniqueId
+                                ? ` · Device ID: ${device.uniqueId}`
+                                : ""}
+                            </Text>
+                          ) : (
+                            <Text className="mt-0.5 text-[11px] text-muted">
+                              Tap Details to see connection information.
+                            </Text>
+                          )}
                         </View>
                         {device.mirrored ? (
                           <View className="ml-2 shrink-0 rounded-full bg-emerald-100 px-2 py-0.5">
@@ -451,6 +458,23 @@ export function UserPreferencesScreen() {
                           >
                             <Text className="text-xs font-bold text-navy">
                               Set name
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() =>
+                              setDetailsKey(
+                                detailsKey === device.profileKey
+                                  ? null
+                                  : device.profileKey,
+                              )
+                            }
+                            className="rounded-full border border-line px-3 py-1.5"
+                            hitSlop={6}
+                          >
+                            <Text className="text-xs font-bold text-navy">
+                              {detailsKey === device.profileKey
+                                ? "Hide details"
+                                : "Details"}
                             </Text>
                           </Pressable>
                           <Pressable
