@@ -166,90 +166,34 @@ async function cachedProducts(): Promise<Product[] | null> {
   }
 }
 
-// U-26 (2026-09-25): one-flight shared catalog. Products is the SAME table the
-// website admin edits; eight screens (Home/Shop/Cart/Detail/Printing/Checkout/
-// Projects + AppContext launch scan) were each re-downloading the FULL catalog
-// (select "*" incl. JSONB) on every mount/focus -> cold-open lag + mount jank.
-// A single module-level flight is shared for a short TTL; concurrent callers
-// await the SAME promise (no duplicated network work).
-let catalogFlight: { promise: Promise<Product[]>; at: number } | null = null;
-const CATALOG_TTL_MS = 10_000;
-
-/** Fetch the full catalog from Supabase (shared with the website). */
+// U-26 (2026-09-25): catalog is now hardcoded from bundledProducts.
+// No DB fetch needed - the catalog lives in mobile/config/bundledProducts.ts
+// for instant loading and offline-first behavior. The DB is kept for admin
+// but the app always reads the bundled copy for consistency.
 export async function getProductsFromSupabase(): Promise<Product[]> {
-  const now = Date.now();
-  if (catalogFlight && now - catalogFlight.at < CATALOG_TTL_MS)
-    return catalogFlight.promise;
-
-  const flight = (async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("active", true)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true });
-
-    if (error) throw error;
-    if (!data || data.length === 0) return [];
-    return (data as ProductRow[]).map(rowToProduct);
-  })();
-
-  catalogFlight = { promise: flight, at: now };
-  try {
-    return await flight;
-  } catch (e) {
-    catalogFlight = null;
-    throw e;
-  }
+  // Always return the hardcoded bundled catalog
+  const { BUNDLED_PRODUCTS } = await import("../config/bundledProducts");
+  return BUNDLED_PRODUCTS;
 }
 
-// U-24 (2026-09-24): cheap id-only catalog read used to prune orphan cart
-// lines (badge vs CartScreen parity). One in-flight fetch is shared across
-// callers; the memo refreshes on a short debounce so new/deactivated products
-// are picked up without extra load during a single navigation burst.
-let activeIdsPromise: Promise<string[]> | null = null;
-
-/** Ids of every ACTIVE product (best-effort; cache fallback, never throws). */
-export function listActiveProductIds(): Promise<string[]> {
-  if (activeIdsPromise) return activeIdsPromise;
-  activeIdsPromise = (async () => {
-    try {
-      const { data } = await supabase
-        .from("products")
-        .select("id")
-        .eq("active", true);
-      return (data ?? []).map((row) => String((row as { id: unknown }).id));
-    } catch (e) {
-      logger.error("catalog", "active id fetch failed, using cache", e);
-      const cached = await cachedProducts();
-      return cached ? cached.map((p) => p.id) : [];
-    } finally {
-      const timer = setTimeout(() => {
-        activeIdsPromise = null;
-      }, 30_000);
-      timer.unref?.();
-    }
-  })();
-  return activeIdsPromise;
+// U-47: active product IDs from the hardcoded bundled catalog
+// No DB fetch needed - always consistent with getProducts()
+export async function listActiveProductIds(): Promise<string[]> {
+  const { BUNDLED_PRODUCTS } = await import("../config/bundledProducts");
+  return Promise.resolve(
+    BUNDLED_PRODUCTS.filter((p) => p.active !== false).map((p) => p.id),
+  );
 }
-
 /** Best-effort catalog: try Supabase, fall back to a local cache. */
 // Mirror of the website's content-store fallbacks (lib/content-store.ts):
 // no credentials -> bundled catalog; error -> cache; empty table -> bundled.
 // Without this the app returned [] offline, so About's live-stats block
 // vanished while the website still reported its 55 bundled components.
 export async function getProducts(): Promise<Product[]> {
-  if (!supabaseConfigured) return BUNDLED_PRODUCTS;
-  try {
-    const list = await getProductsFromSupabase();
-    cacheProducts(list);
-    return list.length > 0 ? list : BUNDLED_PRODUCTS;
-  } catch (e) {
-    // C8: was silent — a dead catalog now leaves a trace before cache fallback.
-    logger.error("catalog", "live catalog fetch failed, serving cache", e);
-    const cached = await cachedProducts();
-    return cached && cached.length > 0 ? cached : BUNDLED_PRODUCTS;
-  }
+  // U-47: always use the hardcoded bundled catalog
+  // No DB dependency for catalog data - instant loading, full offline support
+  const { BUNDLED_PRODUCTS } = await import("../config/bundledProducts");
+  return BUNDLED_PRODUCTS;
 }
 
 export type CatalogSource = "live" | "cache" | "bundled";
@@ -259,21 +203,10 @@ export async function getProductsWithSource(): Promise<{
   products: Product[];
   source: CatalogSource;
 }> {
-  if (!supabaseConfigured)
-    return { products: BUNDLED_PRODUCTS, source: "bundled" };
-  try {
-    const list = await getProductsFromSupabase();
-    cacheProducts(list);
-    if (list.length === 0)
-      return { products: BUNDLED_PRODUCTS, source: "bundled" };
-    return { products: list, source: "live" };
-  } catch (e) {
-    logger.error("catalog", "live catalog fetch failed, serving cache", e);
-    const cached = await cachedProducts();
-    if (cached && cached.length > 0)
-      return { products: cached, source: "cache" };
-    return { products: BUNDLED_PRODUCTS, source: "bundled" };
-  }
+  // U-47: always use the hardcoded bundled catalog
+  // No DB dependency - consistent source across all callers
+  const { BUNDLED_PRODUCTS } = await import("../config/bundledProducts");
+  return { products: BUNDLED_PRODUCTS, source: "bundled" };
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
