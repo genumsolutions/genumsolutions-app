@@ -262,7 +262,7 @@ Used in: SettingsTab (company), ProfileEntriesTab, UsersTab (car profiles, robot
 - **Form Handling:** Controlled components via state setters
 - **API Calls:** Supabase SDK calls (`supabase.from("company_info").select("*...`).single()`)
 - **Logging:** `appendLog({scope: "link/wifi", ...})` in `useControlHub.ts` for link diagnostics
-- **Tests:** 955 vitest tests across 65 files — all passing
+- **Tests:** 982 vitest tests across 68 files — all passing
 - **TypeCheck:** `tsc --noEmit` passes 0 errors
 
 ### Website (Next.js + React + TypeScript)
@@ -387,7 +387,7 @@ Both projects share the same architectural patterns:
 | **WhatsApp helpers**                 | `src/config/socials.ts` (normalize + isValid + link)                                                   | `lib/socials.ts` (same 3 helpers)                                                       | ✅ Yes — mirrored Nov 2026              |
 | **Version sync**                     | `app.json` + `src/config/site.ts`                                                                      | N/A (website version in package.json)                                                   | ⚠️ Different pattern                    |
 | **Release**                          | APK upload + OTA hot-patches                                                                           | Vercel deployment                                                                       | ✅ Both use git-pushed CI               |
-| **Testing**                          | 955 vitest tests                                                                                       | 301 vitest tests                                                                        | ✅ Both use vitest                      |
+| **Testing**                          | 982 vitest tests                                                                                       | 301 vitest tests                                                                        | ✅ Both use vitest                      |
 | **Contact form**                     | Edge function call to `contact` → `customer_messages` table, Resend email                              | `/api/contact` route → same edge function + table, Resend email                         | ✅ Same edge function + table           |
 | **Newsletter**                       | `newsletter-subscribe` edge function → `newsletter_subscribers` table                                  | `/api/newsletter` route → `lib/newsletter.ts` → same table                              | ✅ Same table, different transport      |     | **Services empty state** | "No services in this category. Contact us for details." (category only) | "No services in this category. Contact us for details." (category only) | ✅ Yes — aligned Nov 2026      |
 | **Services filter scope**            | Category-only (search removed Nov 2026)                                                                | Category-only                                                                           | ✅ Yes — aligned Nov 2026               |
@@ -472,11 +472,11 @@ The app's `CI` workflow now runs that spec on every push and PR. It is a **third
 4. exports the app's web bundle and runs `npx playwright test website-parity` with `WEBSITE_URL=http://127.0.0.1:3000`,
 5. uploads `mobile/test-results` as the `parity-report` artifact and prints the website server log.
 
-With no credentials both surfaces fall back to the **same catalog** (see "Bundled catalog" below), so CI compares the real numbers too — 55 components / 0 3D models / 0 project packages / 7 categories on both — plus the Home band order and every Services training program, pilot line item and cost, and curriculum band.
+With no credentials both surfaces fall back to the **same catalog** (see "Bundled catalog" below), so CI compares the real numbers too — 55 components / 2 3D models / 5 project packages / 7 categories on both, which are also the **live** numbers — plus the Home band order and every Services training program, pilot line item and cost, and curriculum band.
 
 #### Bundled catalog (Nov 2026)
 
-The app's store reads the shared `products` table. A missing/failed read used to return `[]`, so credential-less builds (CI, a fresh clone, airplane mode) showed an About page with **no live-stats block** while this site happily rendered its bundled 55. `mobile/src/config/bundledProducts.ts` now ships a generated copy of `lib/catalog-data.ts` (same 55 products, `project_category` → `projectCategory`), and `productService` mirrors `lib/content-store.ts` exactly:
+The app's store reads the shared `products` table. A missing/failed read used to return `[]`, so credential-less builds (CI, a fresh clone, airplane mode) showed an About page with **no live-stats block** while this site rendered its bundled products. `mobile/src/config/bundledProducts.ts` now ships a generated copy of `lib/catalog-data.ts` (`project_category` → `projectCategory`), and `productService` mirrors `lib/content-store.ts` exactly:
 
 | Situation      | Website                     | App                            |
 | -------------- | --------------------------- | ------------------------------ |
@@ -484,7 +484,9 @@ The app's store reads the shared `products` table. A missing/failed read used to
 | Table empty    | `localProducts`             | `BUNDLED_PRODUCTS`             |
 | Read failed    | cache, else `localProducts` | cache, else `BUNDLED_PRODUCTS` |
 
-The file is **generated, never hand-edited**: `mobile/scripts/generate-bundled-catalog.mts` imports the website's `catalog-data.ts` and rewrites it (`npx tsx scripts/generate-bundled-catalog.mts` from `mobile/`, with the website checked out as a sibling). Regenerate whenever the website catalog changes. `src/config/bundledProducts.test.ts` guards the 55 count, the required fields, and the About counts (55 / 0 / 0 / 7) so a stale regeneration fails the app's unit tests instead of drifting silently.
+The file is **generated, never hand-edited**: `mobile/scripts/generate-bundled-catalog.mts` imports the website's `catalog-data.ts` and rewrites it (`npx tsx scripts/generate-bundled-catalog.mts` from `mobile/`, with the website checked out as a sibling — or `--website <dir>`). Regenerate whenever the website catalog changes. `src/config/bundledProducts.test.ts` guards the 62-product count, the required fields, and the About counts (55 / 2 / 5 / 7) so a stale regeneration fails the app's unit tests instead of drifting silently. CI's `parity` job also regenerates the file against the checked-out website and fails if the committed copy differs, so drift cannot land.
+
+**The fallbacks cover the whole inventory, not just the retail 55.** The owner's 3D models and project packages are created in the admin panel and link-import, so they exist only in the database — the website's fallback used to show 55 / 0 / 0 while live showed 55 / 2 / 5, and every client under-reported whenever Supabase was unreachable. They are now snapshotted into `lib/catalog-extras-data.ts` by `npm run snapshot:catalog-extras` (same generated-never-hand-edited rule) and appended to `localProducts`, so the offline catalog is 62 products and every surface — website `/about`, `/projects`, `/3d-printing`, app About, app Shop, app Projects — reports the live numbers with no database at all. Re-run the snapshot after adding or editing a model/package; a 3D model's MakerWorld `importMeta` (`designId` is stored as a number, typed as a string) is normalised by the snapshot script.
 
 `CatalogSource` grew a `bundled` value; Shop and Printing show their offline notice for anything that is not `live`, so the shipped fallback is presented honestly.
 
@@ -593,7 +595,7 @@ Both use the same DB-first + bundled fallback pattern. The app shows these on th
 
 _Report generated: 2026-11-09_
 _Comparison between: genumsolutions-app/mobile and genumsolutions-website_
-_Both repos: TypeScript 0 errors, green CI on all tests (955 mobile + 301 website)_
+_Both repos: TypeScript 0 errors, green CI on all tests (982 mobile + 301 website)_
 _Users tab: 3-section structure mirrored (User Directory, Car Profiles, Robot Profiles)_
 _Logs tab: 3-section structure mirrored (User Activity, User Profiles, Fleet Diagnostics)_
 _Company info: 17 fields mirrored with url field_

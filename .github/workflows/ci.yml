@@ -154,6 +154,21 @@ jobs:
           done
           echo "website never became ready:"; tail -40 "$RUNNER_TEMP/website.log"; exit 1
 
+      # The bundled catalog is generated from the website's fallback catalog,
+      # so it drifts silently the moment the website catalog changes. Rebuild
+      # it against the checked-out website and fail if the committed copy
+      # differs — the fix is to run the generator locally and commit.
+      - name: Bundled catalog is current
+        working-directory: mobile
+        run: |
+          npx --yes tsx scripts/generate-bundled-catalog.mts --website ../website
+          if ! git diff --quiet -- src/config/bundledProducts.ts; then
+            echo "::error::src/config/bundledProducts.ts is stale — run 'npx tsx scripts/generate-bundled-catalog.mts' from mobile/ (website as a sibling) and commit the result."
+            git diff --stat -- src/config/bundledProducts.ts
+            exit 1
+          fi
+          echo "bundled catalog matches the website"
+
       - name: Install Chromium
         working-directory: mobile
         run: npx playwright install --with-deps chromium
