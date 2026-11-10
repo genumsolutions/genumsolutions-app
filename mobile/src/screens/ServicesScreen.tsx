@@ -183,20 +183,24 @@ export function ServicesScreen() {
                 key={prog.title}
                 className="rounded-2xl border border-line bg-card p-4"
               >
-                <View className="flex-row items-center justify-between gap-2">
-                  <Text
-                    numberOfLines={1}
-                    className="min-w-0 flex-1 font-display text-lg font-bold text-ink"
-                  >
-                    {prog.title}
+                {/* The title owns its own full-width line. Side-by-side with
+                    the duration pill it was squeezed to "K–5 Ro…" on a 390 px
+                    phone — the pill can be long ("13-week pilot + months 4–12
+                    support") and left the name unreadable. */}
+                <Text
+                  numberOfLines={2}
+                  className="font-display text-lg font-bold leading-snug text-ink"
+                >
+                  {prog.title}
+                </Text>
+                <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                  <Text className="text-xs font-black uppercase tracking-wide text-gold">
+                    {prog.audience}
                   </Text>
                   <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">
                     {prog.duration}
                   </Text>
                 </View>
-                <Text className="mt-1 text-xs font-black uppercase tracking-wide text-gold">
-                  {prog.audience}
-                </Text>
                 <Text className="mt-2 text-sm leading-6 text-muted">
                   {prog.description}
                 </Text>
