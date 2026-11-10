@@ -10,17 +10,23 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { getProducts } from "../services/productService";
 import { getProjectCategories } from "../services/projectCategoryService";
+import type { RootStackParamList } from "../navigation/types";
 
-type Nav = NativeStackNavigationProp<
-  { Main: { screen: "Shop" | "Printing" | "Projects" | "Tools" } },
-  "Main"
->;
+type Nav = NativeStackNavigationProp<RootStackParamList, "About">;
 
-const SHOP_LINKS = [
-  { label: "Shop components", screen: "Shop" as const },
-  { label: "3D products", screen: "Printing" as const },
-  { label: "Projects", screen: "Projects" as const },
-  { label: "Open tools", screen: "Tools" as const },
+// Mirrors the website /about shop-links row. Shop and 3D products are bottom
+// TABS (navigate through Main); Projects and Open tools are plain STACK
+// routes pushed directly — they have no tab. The earlier draft typed all
+// four as Main tab screens, which type-checked against a locally invented
+// param type but pointed two buttons at screens that are not tabs.
+const SHOP_LINKS: (
+  | { label: string; tab: "Shop" | "Printing" }
+  | { label: string; route: "Projects" | "Tools" }
+)[] = [
+  { label: "Shop components", tab: "Shop" },
+  { label: "3D products", tab: "Printing" },
+  { label: "Projects", route: "Projects" },
+  { label: "Open tools", route: "Tools" },
 ];
 
 const STATIC_STATS = [
@@ -165,9 +171,13 @@ export function AboutScreen() {
           {SHOP_LINKS.map((link) => (
             <Pressable
               key={link.label}
-              onPress={() =>
-                navigation.navigate("Main", { screen: link.screen })
-              }
+              onPress={() => {
+                if ("tab" in link) {
+                  navigation.navigate("Main", { screen: link.tab });
+                } else {
+                  navigation.push(link.route);
+                }
+              }}
               className="rounded-full border border-line px-4 py-2"
             >
               <Text className="text-xs font-black text-ink transition hover:border-navy hover:text-navy">
