@@ -21,6 +21,29 @@ import { supabaseConfigured, googleConfigured } from "../config/supabase";
 import { useApp } from "../context/AppContext";
 import { GoogleLogo } from "./GoogleLogo";
 
+function AlreadySignedIn() {
+  const { isSignedIn, setAuthSheetOpen, authError } = useApp();
+  useEffect(() => {
+    if (isSignedIn) {
+      setAuthSheetOpen(false);
+      setAuthError(null);
+    }
+  }, [isSignedIn, setAuthSheetOpen, setAuthError]);
+  return isSignedIn ? (
+    <View className="flex-1 items-center justify-center bg-surface px-8">
+      <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
+        <Feather name="check" size={26} color="#ffffff" />
+      </View>
+      <Text className="mt-4 font-display text-xl font-bold text-ink">
+        Already signed in
+      </Text>
+      <Text className="mt-1 text-center text-sm text-muted">
+        Your account is active. The sheet will close automatically.
+      </Text>
+    </View>
+  ) : null;
+}
+
 type Props = {
   visible: boolean;
   onRequestClose: () => void;
@@ -106,8 +129,9 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
         : "We’ll email you a link to reset your password.";
 
   return (
+    <AlreadySignedIn visible={visible} onRequestClose={() => {}} />
     <Modal
-      visible={visible}
+      visible={visible && !isSignedIn}
       transparent
       animationType="slide"
       onRequestClose={handleClose}
