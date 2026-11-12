@@ -10,3 +10,6 @@ node_modules/
 .claude/
 # Local image-tooling venv (Pillow) used for asset resizing — never commit.
 .venv-imgtools/
+
+# Local build tooling (JDK/CMake/NDK shims) - never commit
+.tools/
