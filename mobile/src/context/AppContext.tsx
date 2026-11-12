@@ -143,16 +143,29 @@ async function genumUserFromSession(
   const meta = (session.user?.user_metadata ?? {}) as Record<string, unknown>;
   const app = (session.user?.app_metadata ?? {}) as Record<string, unknown>;
   let profile: ProfileRow | null = null;
-  let profileReadOk = false;
 
   try {
+    // `tier` is optional: a shared database that has not received the tier
+    // migration fails the WHOLE select for an unknown column (PostgREST
+    // 42703), which used to leave profile = null and demote every staff/admin
+    // account to "customer" — hiding the Admin dashboard for everyone except
+    // the owner (matched by email). Never let an optional column decide the
+    // role: retry without it so the role-critical columns still resolve.
     const profileResult = await supabase
       .from("profiles")
       .select("name, phone, address, role, tier")
       .eq("id", session.user.id)
       .maybeSingle();
-    profileReadOk = !profileResult.error;
-    profile = (profileResult.data as ProfileRow | null) ?? null;
+    if (profileResult.error) {
+      const core = await supabase
+        .from("profiles")
+        .select("name, phone, address, role")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      profile = (core.data as ProfileRow | null) ?? null;
+    } else {
+      profile = (profileResult.data as ProfileRow | null) ?? null;
+    }
   } catch {
     // Offline or network error: fall back to metadata/cached user below.
   }
@@ -170,8 +183,7 @@ async function genumUserFromSession(
   ];
   // Prefer any non-customer role from profile/metadata/cache so admin & staff
   // accounts keep dashboard access even when one source is stale/unreadable.
-  const effectiveRole =
-    candidates.find((r) => r !== "customer") ?? "customer";
+  const effectiveRole = candidates.find((r) => r !== "customer") ?? "customer";
 
   const tier: "free" | "pro" =
     effectiveRole === "staff" ||
@@ -188,10 +200,14 @@ async function genumUserFromSession(
 
   return {
     id: session.user?.id ?? "",
-    name: (p?.name as string | undefined) || metaName || fallbackUser?.name || "",
+    name:
+      (p?.name as string | undefined) || metaName || fallbackUser?.name || "",
     email: session.user?.email ?? fallbackUser?.email ?? "",
     phone:
-      (p?.phone as string | undefined) || metaPhone || fallbackUser?.phone || "",
+      (p?.phone as string | undefined) ||
+      metaPhone ||
+      fallbackUser?.phone ||
+      "",
     address:
       (p?.address as string | undefined) ||
       metaAddress ||
