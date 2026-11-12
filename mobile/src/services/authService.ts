@@ -90,6 +90,12 @@ export function mapAuthError(message: string): string {
   if (/not configured/i.test(m)) {
     return "Sign-in is not set up yet. Please try email & password.";
   }
+  // A new Google account is refused by the database (block_new_google_account)
+  // so signing in can never silently create an account. GoTrue wraps the
+  // trigger message as "Database error saving new user", so map it here.
+  if (/database error saving new user|signups not allowed/i.test(m)) {
+    return "No account found for that Google address. Create an account first, then sign in with Google.";
+  }
   return m;
 }
 
@@ -188,10 +194,13 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
         token: response.data.idToken,
       });
       if (error) {
+        const mapped = mapAuthError(error.message);
         return {
           status: "error",
           message:
-            "Google sign-in failed. Please try signing in with email, or make sure Google is configured in the Supabase dashboard.",
+            mapped === error.message
+              ? "Google sign-in failed. Please try signing in with email, or make sure Google is configured in the Supabase dashboard."
+              : mapped,
         };
       }
       if (data.session) await persistSession(data.session);
