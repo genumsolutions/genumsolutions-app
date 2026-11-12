@@ -1285,8 +1285,11 @@ function AdminConsole() {
   }, []);
 
   function renderTabContent(t: Tab) {
+    // Every tab below returns its own vertically scrolling list/ScrollView
+    // with the shared 16px page padding, so this wrapper must NOT scroll too:
+    // a second same-axis ScrollView swallowed the inner one on Android.
     const Sub = ({ children }: { children: React.ReactNode }) => (
-      <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
+      <View className="flex-1">{children}</View>
     );
     switch (t) {
       case "Dashboard":
@@ -1632,7 +1635,8 @@ function AdminConsole() {
             disabled={loading}
             accessibilityRole="button"
             accessibilityLabel={`Refresh ${tab}`}
-            className="h-7 w-7 items-center justify-center rounded-full border border-line"
+            hitSlop={4}
+            className="h-9 w-9 items-center justify-center rounded-full border border-line"
           >
             {loading ? (
               <ActivityIndicator size="small" color="#1e3a8a" />
@@ -1669,8 +1673,8 @@ function AdminConsole() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: tab === t }}
                 accessibilityLabel={t}
-                className={`shrink-0 border-b-2 px-4 py-2.5 ${tab === t ? "border-navy" : "border-transparent"}`}
-                style={{ minWidth: TAB_MIN_WIDTH }}
+                className={`shrink-0 justify-center border-b-2 px-4 ${tab === t ? "border-navy" : "border-transparent"}`}
+                style={{ minWidth: TAB_MIN_WIDTH, minHeight: 44 }}
               >
                 <Text
                   numberOfLines={1}
@@ -3044,7 +3048,8 @@ function ProductEditor({
               onPress={() => patch({ image: "" })}
               accessibilityRole="button"
               accessibilityLabel="Remove product image"
-              className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full border border-line bg-card"
+              hitSlop={8}
+              className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full border border-line bg-card"
             >
               <Text className="text-xs font-black text-ink">×</Text>
             </Pressable>
@@ -3082,7 +3087,8 @@ function ProductEditor({
                   }
                   accessibilityRole="button"
                   accessibilityLabel={`Remove gallery image ${i + 1}`}
-                  className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full border border-line bg-card"
+                  hitSlop={8}
+                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full border border-line bg-card"
                 >
                   <Text className="text-xs font-black text-ink">×</Text>
                 </Pressable>
