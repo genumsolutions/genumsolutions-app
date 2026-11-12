@@ -82,7 +82,7 @@ type AppContextValue = {
     email: string,
     password: string,
   ) => Promise<"ok" | "confirm" | "error">;
-  signInWithGoogle: (intent?: "signin" | "register") => Promise<boolean>;
+  signInWithGoogle: (intent?: "signin" | "signup") => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   resendConfirmation: (email: string) => Promise<boolean>;
   requestEmailCode: (email: string) => Promise<boolean>;
@@ -708,14 +708,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setAuthBusy(true);
       setAuthError(null);
+      const address = email.trim().toLowerCase();
+      const WEBSITE_URL = "https://genumsolutions-website.vercel.app";
       try {
         await auth.signInWithPassword(email, password);
+        void fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "clear", email: address }),
+        }).catch(() => {});
         setAuthSheetOpen(false);
         applyAuthed();
         notifyAuth("Signed in successfully.");
         return true;
       } catch (e) {
-        return applyError(e instanceof Error ? e.message : "Sign-in failed.");
+        const message = e instanceof Error ? e.message : "Sign-in failed.";
+        // Only wrong-password failures count toward the suspicion lock; "email
+        // not confirmed" and other errors must not.
+        if (/invalid login credentials/i.test(message)) {
+          void fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "fail", email: address }),
+          }).catch(() => {});
+        }
+        return applyError(message);
       }
     },
     [applyAuthed, applyError],
@@ -780,13 +797,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
           setAuthSheetOpen(false);
           applyAuthed();
-          notifyAuth("Registered and signed in.");
+          notifyAuth("Signed up and signed in.");
           return "ok";
         }
         // confirmation email required
         setAuthBusy(false);
         setAuthError(null);
-        notifyAuth("Registered. Check your email to confirm your account.");
+        notifyAuth("Signed up. Check your email to confirm your account.");
         return "confirm";
       } catch (e) {
         applyError(e instanceof Error ? e.message : "Sign-up failed.");
@@ -818,7 +835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const signInWithGoogle = useCallback(
-    async (intent: "signin" | "register" = "signin") => {
+    async (intent: "signin" | "signup" = "signin") => {
       if (!supabaseConfigured) {
         setAuthError("Sign-in is not configured yet.");
         return false;
@@ -830,8 +847,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAuthSheetOpen(false);
         applyAuthed();
         notifyAuth(
-          intent === "register"
-            ? "Registered and signed in."
+          intent === "signup"
+            ? "Signed up and signed in."
             : "Signed in successfully.",
         );
         return true;

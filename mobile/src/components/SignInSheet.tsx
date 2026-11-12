@@ -6,7 +6,7 @@
 // mode, the primary action, then "or Continue with Google" (sign-in and
 // sign-up), then text links to switch modes (never lingering tabs). The
 // sheet is capped to the viewport and the body scrolls inside that cap, so
-// the Register / Google buttons can't be pushed off the bottom of a
+// the Sign up / Google buttons can't be pushed off the bottom of a
 // small screen with the keyboard open.
 // =====================================================================
 import { Feather } from "@expo/vector-icons";
@@ -161,24 +161,13 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
       if (await checkSuspicion(address)) return;
       const ok = await signInWithPassword(email, password);
       if (ok) {
-        void fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "clear", email: address }),
-        }).catch(() => {});
         resetForm();
-      } else {
-        void fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "fail", email: address }),
-        }).catch(() => {});
       }
     } else if (mode === "signup") {
       const result = await signUp(name, email, password);
       if (result === "ok") resetForm();
       else if (result === "confirm") {
-        // Nothing else to do on the register form: send them to the confirm step.
+        // Nothing else to do on the sign-up form: send them to the confirm step.
         // The default mailer sends a confirmation link (not a visible code), so
         // opening the link is the reliable path; a code can be entered if present.
         const pending = email.trim().toLowerCase();
@@ -186,7 +175,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
         setVerifyPurpose("signup");
         setMode("verify");
         setNotice(
-          `Registered. Open the confirmation link we emailed to ${pending} to finish registering, then sign in here. If that email includes a code, you can enter it below.`,
+          `Signed up. Open the confirmation link we emailed to ${pending} to finish signing up, then sign in here. If that email includes a code, you can enter it below.`,
         );
       }
     } else if (mode === "verify") {
@@ -234,7 +223,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     mode === "signin"
       ? "Sign in to sync your build list and orders."
       : mode === "signup"
-        ? "Register once for orders, saved builds, and support."
+        ? "Sign up once for orders, saved builds, and support."
         : mode === "verify"
           ? "Confirm your email to continue. Open the link we sent, or enter a code if your email includes one."
           : "We’ll email you a link to reset your password.";
@@ -453,7 +442,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   {mode === "signin"
                     ? "Sign in"
                     : mode === "signup"
-                      ? "Register"
+                      ? "Sign up"
                       : mode === "verify"
                         ? "Confirm code"
                         : "Send reset link"}
@@ -476,7 +465,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                 <Pressable
                   onPress={() =>
                     void signInWithGoogle(
-                      mode === "signup" ? "register" : "signin",
+                      mode === "signup" ? "signup" : "signin",
                     )
                   }
                   disabled={authBusy}
@@ -488,7 +477,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   </View>
                   <Text className="ml-2.5 text-sm font-bold text-ink">
                     {mode === "signup"
-                      ? "Register with Google"
+                      ? "Sign up with Google"
                       : "Continue with Google"}
                   </Text>
                 </Pressable>
@@ -504,7 +493,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   className="py-1.5 active:opacity-60"
                 >
                   <Text className="text-sm font-semibold text-navy">
-                    New here? Register
+                    New here? Sign up
                   </Text>
                 </Pressable>
               ) : null}
