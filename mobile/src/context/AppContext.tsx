@@ -158,25 +158,20 @@ async function genumUserFromSession(
   }
 
   const p = profile;
-  const metaRole = normalizeRole(app.role ?? meta.role);
+  const metaRole = normalizeRole(app.role ?? meta.role ?? meta.user_role);
   const fallbackRole = normalizeRole(fallbackUser?.role);
   const profileRoleRaw =
     p && typeof p.role === "string" && p.role.trim() ? p.role : null;
   const profileRole = profileRoleRaw ? normalizeRole(profileRoleRaw) : null;
+  const candidates: Array<"customer" | "staff" | "admin" | "owner"> = [
+    profileRole ?? "customer",
+    metaRole,
+    fallbackRole,
+  ];
+  // Prefer any non-customer role from profile/metadata/cache so admin & staff
+  // accounts keep dashboard access even when one source is stale/unreadable.
   const effectiveRole =
-    profileReadOk && profileRole
-      ? profileRole
-      : profileReadOk && p
-        ? metaRole !== "customer"
-          ? metaRole
-          : fallbackRole !== "customer"
-            ? fallbackRole
-            : "customer"
-        : metaRole !== "customer"
-          ? metaRole
-          : fallbackRole !== "customer"
-            ? fallbackRole
-            : "customer";
+    candidates.find((r) => r !== "customer") ?? "customer";
 
   const tier: "free" | "pro" =
     effectiveRole === "staff" ||
