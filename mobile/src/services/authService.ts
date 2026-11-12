@@ -134,8 +134,8 @@ export async function signInWithPassword(
  * here with the same email and password. Same link the website sends, so a
  * registration started on either surface behaves identically.
  */
-const CONFIRMATION_REDIRECT =
-  "https://genumsolutions-website.vercel.app/auth/callback?next=%2Faccount%3Fwelcome%3D1";
+const WEBSITE_URL = "https://genumsolutions-website.vercel.app";
+const CONFIRMATION_REDIRECT = `${WEBSITE_URL}/auth/callback?next=%2Faccount%3Fwelcome%3D1`;
 
 export async function signUp(
   name: string,
@@ -156,6 +156,42 @@ export async function signUp(
   // must confirm their email before signing in.
   if (data.session) await persistSession(data.session);
   return data.session;
+}
+
+/**
+ * Verifies a one-time code mailed to the customer - either the code that
+ * confirms a new registration or the one sent when a sign-in looks suspicious.
+ */
+export async function verifyEmailCode(
+  purpose: "signup" | "signin",
+  email: string,
+  token: string,
+): Promise<Session> {
+  if (!supabaseConfigured) throw new Error("not configured");
+  const address = email.trim().toLowerCase();
+  const { data, error } = await supabase.auth.verifyOtp(
+    purpose === "signin"
+      ? { type: "email", email: address, token }
+      : { type: "signup", email: address, token },
+  );
+  if (error) throw new Error(error.message);
+  if (!data.session)
+    throw new Error("Code accepted but no session was returned.");
+  await persistSession(data.session);
+  return data.session;
+}
+
+/** Sends a one-time sign-in code after suspicious attempts. Never creates an account. */
+export async function requestEmailCode(email: string): Promise<void> {
+  if (!supabaseConfigured) throw new Error("not configured");
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo: CONFIRMATION_REDIRECT,
+    },
+  });
+  if (error) throw new Error(error.message);
 }
 
 /** Re-send the registration confirmation email for an unconfirmed address. */
@@ -197,7 +233,39 @@ async function clearCachedGoogleAccount(): Promise<void> {
   }
 }
 
-export async function signInWithGoogle(): Promise<GoogleAuthResult> {
+/**
+ * A Google trip from the SIGN-IN form must not register anybody. The app knows
+ * the mode it was opened in, so a session that belongs to a row created seconds
+ * ago is handed back to the website, which deletes it with the service role
+ * (the app has no service key, and deleting your own fresh row is the only
+ * thing this endpoint will do). "Register with Google" passes intent=register
+ * and keeps the account.
+ */
+async function discardUnregisteredGoogleAccount(
+  session: Session,
+): Promise<boolean> {
+  const created = new Date(session.user?.created_at || 0).getTime();
+  if (!Number.isFinite(created) || Date.now() - created > 5 * 60_000)
+    return false;
+  try {
+    const response = await fetch(`${WEBSITE_URL}/api/auth/google/fresh`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!response.ok) return false;
+    const data = (await response.json().catch(() => ({}))) as {
+      created?: boolean;
+    };
+    return Boolean(data.created);
+  } catch {
+    // Offline: keep the session rather than locking a real customer out.
+    return false;
+  }
+}
+
+export async function signInWithGoogle(
+  intent: "signin" | "register" = "signin",
+): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
     return { status: "error", message: mapAuthError("not configured") };
   }
@@ -230,7 +298,21 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
               : mapped,
         };
       }
-      if (data.session) await persistSession(data.session);
+      if (data.session) {
+        if (
+          intent === "signin" &&
+          (await discardUnregisteredGoogleAccount(data.session))
+        ) {
+          await supabase.auth.signOut();
+          await clearStoredSession();
+          return {
+            status: "error",
+            message:
+              "No account found for that Google address. Register first, then use Google to sign in.",
+          };
+        }
+        await persistSession(data.session);
+      }
       return { status: "ok", session: data.session! };
     }
     return { status: "cancelled" };

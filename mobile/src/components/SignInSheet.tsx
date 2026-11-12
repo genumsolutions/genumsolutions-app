@@ -33,9 +33,11 @@ type Props = {
   onRequestClose: () => void;
 };
 
-type Mode = "signin" | "signup" | "forgot";
+type Mode = "signin" | "signup" | "forgot" | "verify";
+type VerifyPurpose = "signup" | "signin";
 
 const labelClass = "mb-1 text-xs font-bold uppercase tracking-wide text-border";
+const WEBSITE_URL = "https://genumsolutions-website.vercel.app";
 
 export function SignInSheet({ visible, onRequestClose }: Props) {
   const insets = useSafeAreaInsets();
@@ -50,16 +52,20 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     signInWithGoogle,
     resetPassword,
     resendConfirmation,
+    requestEmailCode,
+    verifyEmailCode,
   } = useApp();
 
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // Address waiting on a confirmation email, so the notice can offer a resend.
+  // Address waiting on a confirmation/suspicion code, so the notice can offer a resend.
   const [pendingEmail, setPendingEmail] = useState("");
+  const [verifyPurpose, setVerifyPurpose] = useState<VerifyPurpose>("signup");
   const bodyRef = useRef<ScrollView>(null);
 
   const closeDisabled = authBusy;
@@ -68,9 +74,11 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     setName("");
     setEmail("");
     setPassword("");
+    setCode("");
     setShowPassword(false);
     setNotice(null);
     setPendingEmail("");
+    setVerifyPurpose("signup");
     setMode("signin");
     clearAuthError();
   };
@@ -110,29 +118,82 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
   const canSubmit =
     mode === "forgot"
       ? emailValid && !authBusy
-      : mode === "signup"
-        ? name.trim().length >= 2 &&
-          emailValid &&
-          password.length >= 6 &&
-          !authBusy
-        : emailValid && password.length > 0 && !authBusy;
+      : mode === "verify"
+        ? /^\d{6,10}$/.test(code.replace(/\s+/g, "")) && !authBusy
+        : mode === "signup"
+          ? name.trim().length >= 2 &&
+            emailValid &&
+            password.length >= 6 &&
+            !authBusy
+          : emailValid && password.length > 0 && !authBusy;
+
+  async function checkSuspicion(address: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check", email: address }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        requiresVerification?: boolean;
+        message?: string;
+      };
+      if (data.requiresVerification) {
+        setPendingEmail(address);
+        setVerifyPurpose("signin");
+        setMode("verify");
+        setNotice(
+          data.message ||
+            "For your security, enter the one-time code we emailed you.",
+        );
+        return true;
+      }
+    } catch {
+      // If the check is unreachable, fall through to a normal sign-in attempt.
+    }
+    return false;
+  }
 
   const handlePrimary = async () => {
     if (!canSubmit) return;
     if (mode === "signin") {
+      const address = email.trim().toLowerCase();
+      if (await checkSuspicion(address)) return;
       const ok = await signInWithPassword(email, password);
-      if (ok) resetForm();
+      if (ok) {
+        void fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "clear", email: address }),
+        }).catch(() => {});
+        resetForm();
+      } else {
+        void fetch(`${WEBSITE_URL}/api/auth/suspicion`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "fail", email: address }),
+        }).catch(() => {});
+      }
     } else if (mode === "signup") {
       const result = await signUp(name, email, password);
       if (result === "ok") resetForm();
       else if (result === "confirm") {
-        // Nothing else to do on the register form: send them back to Sign in
-        // with the confirmation notice, same as the website.
+        // Nothing else to do on the register form: send them to the code step.
         const pending = email.trim().toLowerCase();
-        switchMode("signin");
         setPendingEmail(pending);
-        setNotice("Registered. Check your email to confirm it, then sign in.");
+        setVerifyPurpose("signup");
+        setMode("verify");
+        setNotice(
+          `Registered. We emailed a one-time code to ${pending} - enter it below, or open the link in that email.`,
+        );
       }
+    } else if (mode === "verify") {
+      const ok = await verifyEmailCode(
+        verifyPurpose,
+        pendingEmail,
+        code.replace(/\s+/g, ""),
+      );
+      if (ok) resetForm();
     } else {
       const ok = await resetPassword(email);
       if (ok) {
@@ -143,17 +204,18 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     }
   };
 
-  // A confirmation email that never arrives leaves the account unusable, so the
-  // notice carries a resend - same behaviour as the website's AuthPanel.
+  // A confirmation/suspicion email that never arrives leaves the account stuck,
+  // so the notice carries a resend - same behaviour as the website's AuthPanel.
   const handleResend = async () => {
     if (!pendingEmail) return;
-    const ok = await resendConfirmation(pendingEmail);
+    const ok =
+      verifyPurpose === "signin"
+        ? await requestEmailCode(pendingEmail)
+        : await resendConfirmation(pendingEmail);
     if (!ok) return;
     const sentTo = pendingEmail;
-    switchMode("signin");
-    setPendingEmail(sentTo);
     setNotice(
-      `Confirmation email sent to ${sentTo}. Check spam if it is not there in a minute.`,
+      `Email sent to ${sentTo}. Check spam if it is not there in a minute.`,
     );
   };
 
@@ -162,14 +224,18 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
       ? "Welcome back"
       : mode === "signup"
         ? "Register"
-        : "Reset password";
+        : mode === "verify"
+          ? "Enter your code"
+          : "Reset password";
 
   const subtitle =
     mode === "signin"
       ? "Sign in to sync your build list and orders."
       : mode === "signup"
         ? "Register once for orders, saved builds, and support."
-        : "We’ll email you a link to reset your password.";
+        : mode === "verify"
+          ? "We emailed a one-time code. Enter it here, or open the link in that email."
+          : "We’ll email you a link to reset your password.";
 
   return (
     <Modal
@@ -248,7 +314,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                     className="mt-1.5 self-start active:opacity-60"
                   >
                     <Text className="text-xs font-bold uppercase tracking-widest text-emerald-700 underline">
-                      Resend confirmation email
+                      Resend email
                     </Text>
                   </Pressable>
                 ) : null}
@@ -280,26 +346,46 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
               </>
             ) : null}
 
-            <Text
-              className={`${labelClass} ${mode === "signup" ? "mt-4" : ""}`}
-            >
-              Email
-            </Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              autoComplete="email"
-              textContentType="emailAddress"
-              accessibilityLabel="Email"
-              className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
-            />
+            {mode !== "verify" ? (
+              <>
+                <Text
+                  className={`${labelClass} ${mode === "signup" ? "mt-4" : ""}`}
+                >
+                  Email
+                </Text>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  accessibilityLabel="Email"
+                  className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
+                />
+              </>
+            ) : (
+              <>
+                <Text className={labelClass}>Code sent to {pendingEmail}</Text>
+                <TextInput
+                  value={code}
+                  onChangeText={setCode}
+                  placeholder="12345678"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="number-pad"
+                  autoComplete="one-time-code"
+                  textContentType="oneTimeCode"
+                  accessibilityLabel="Confirmation code"
+                  className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-ink"
+                  style={{ letterSpacing: 6 }}
+                />
+              </>
+            )}
 
-            {mode !== "forgot" ? (
+            {mode !== "forgot" && mode !== "verify" ? (
               <>
                 <Text className={`${labelClass} mt-4`}>Password</Text>
                 <View className="flex-row items-center rounded-xl border border-border bg-surface">
@@ -366,12 +452,17 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                     ? "Sign in"
                     : mode === "signup"
                       ? "Register"
-                      : "Send reset link"}
+                      : mode === "verify"
+                        ? "Confirm code"
+                        : "Send reset link"}
                 </Text>
               )}
             </Pressable>
 
-            {mode !== "forgot" && supabaseConfigured && googleConfigured ? (
+            {mode !== "forgot" &&
+            mode !== "verify" &&
+            supabaseConfigured &&
+            googleConfigured ? (
               <>
                 <View className="mt-5 flex-row items-center gap-3">
                   <View className="h-px flex-1 bg-line" />
@@ -381,7 +472,11 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   <View className="h-px flex-1 bg-line" />
                 </View>
                 <Pressable
-                  onPress={() => void signInWithGoogle()}
+                  onPress={() =>
+                    void signInWithGoogle(
+                      mode === "signup" ? "register" : "signin",
+                    )
+                  }
                   disabled={authBusy}
                   accessibilityRole="button"
                   className="mt-4 flex-row items-center justify-center rounded-xl border border-border bg-card py-3.5 disabled:opacity-60"
@@ -419,7 +514,9 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   className="py-1.5 active:opacity-60"
                 >
                   <Text className="text-sm font-semibold text-navy">
-                    I already have an account
+                    {mode === "verify"
+                      ? "Use a different email"
+                      : "I already have an account"}
                   </Text>
                 </Pressable>
               ) : null}
