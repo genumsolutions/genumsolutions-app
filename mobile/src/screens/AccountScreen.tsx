@@ -24,7 +24,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { useApp } from "../context/AppContext";
@@ -82,6 +82,7 @@ export function AccountScreen() {
     signOut,
     cartCount,
     setAuthSheetOpen,
+    refreshProfile,
   } = useApp();
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -178,6 +179,14 @@ export function AccountScreen() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // A role promotion (website Users tab) must surface here without a
+  // re-login: re-read the profile whenever this screen gains focus.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshProfile();
+    }, [refreshProfile]),
+  );
 
   useEffect(() => {
     if (user) {

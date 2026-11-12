@@ -8,9 +8,9 @@
 // no more hand-written, double-padded View+Switch markup. Each row keeps
 // a consistent 48pt-tall touch target and a muted icon chip.
 // =====================================================================
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ScrollView, Text, View, Pressable, Switch } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { useApp } from "../context/AppContext";
@@ -50,13 +50,20 @@ const COMPANY: Dest[] = [
 
 export function MenuScreen() {
   const navigation = useNavigation<any>();
-  const { isStaff, isPro, themeMode, setThemeMode } = useApp();
+  const { isStaff, isPro, themeMode, setThemeMode, refreshProfile } = useApp();
 
   // C7: haptics toggle (everyone). Default ON, hydrated once on mount.
   const [hapticsOn, setHapticsOn] = useState(true);
   useEffect(() => {
     void loadHapticsPref().then(setHapticsOn);
   }, []);
+
+  // Keep the staff-only Admin group honest after a role change on the website.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshProfile();
+    }, [refreshProfile]),
+  );
 
   // C7: biometric admin lock (staff only). The support probe decides
   // whether the row renders at all; unsupported devices show nothing.

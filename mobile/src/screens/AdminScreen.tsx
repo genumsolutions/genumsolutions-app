@@ -170,7 +170,31 @@ const TABS: Tab[] = [
 // length (Electronic Products vs Logs), so the active tab drifted off-centre.
 const TAB_MIN_WIDTH = 96;
 
+// Staff-only console: the website redirects every non-staff visitor away from
+// /admin, so the app must not render it for a customer either (deep link, or a
+// screen left on the stack after a role change).
 export function AdminScreen() {
+  const { isStaff } = useApp();
+  if (!isStaff) {
+    return (
+      <View className="flex-1 items-center justify-center bg-surface px-8">
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
+          <Feather name="shield" size={26} color="#ffffff" />
+        </View>
+        <Text className="mt-4 font-display text-xl font-bold text-ink">
+          Staff only
+        </Text>
+        <Text className="mt-1 text-center text-sm text-muted">
+          The admin dashboard is for GENUM staff accounts. Sign in with a staff,
+          admin, or owner account to continue.
+        </Text>
+      </View>
+    );
+  }
+  return <AdminConsole />;
+}
+
+function AdminConsole() {
   const { isAdmin, isOwner, signOut, user: currentUser } = useApp();
   // Staff can operate every admin panel except deletions; isAdmin means
   // admin+owner (deletion rights). Only the sole owner may delete users
@@ -996,37 +1020,51 @@ export function AdminScreen() {
     );
   }
 
-  function handleToggleUserRole(user: AdminUser) {
-    const newRole = user.role === "admin" ? "customer" : "admin";
-    if (newRole === "customer" && user.id === currentUser?.id) {
-      Alert.alert("Not allowed", "You cannot revoke your own admin role.");
+  async function applyUserRole(
+    user: AdminUser,
+    role: "customer" | "staff" | "admin",
+  ) {
+    if (role === user.role) return;
+    if (role === "customer" && user.id === currentUser?.id) {
+      Alert.alert("Not allowed", "You cannot revoke your own role.");
       return;
     }
+    try {
+      await toggleAdminRole(user.id, role);
+      void loadUsers(usersPage);
+    } catch (e) {
+      logger.error("admin", "Role change error:", e);
+      Alert.alert(
+        "Could not change role",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    }
+  }
+
+  // customer < staff < admin; the owner account is fixed. Mirrors the
+  // website Users tab (profiles.role via the admin-set-role function).
+  function handleToggleUserRole(user: AdminUser) {
+    if (!canDelete || user.role === "owner") return;
+    const choices: { role: "customer" | "staff" | "admin"; label: string }[] = [
+      { role: "customer", label: "Customer" },
+      { role: "staff", label: "Staff" },
+      { role: "admin", label: "Admin" },
+    ];
     Alert.alert(
       "Change role",
-      newRole === "admin"
-        ? `Grant admin access to ${user.email}?`
-        : `Revoke admin access from ${user.email}?`,
+      `${user.email} is currently ${user.role}. Choose the new role.`,
       [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: newRole === "admin" ? "Make admin" : "Revoke admin",
-          style: newRole === "admin" ? "default" : "destructive",
-          onPress: async () => {
-            try {
-              await toggleAdminRole(user.id, newRole);
-              void loadUsers(usersPage);
-            } catch (e) {
-              logger.error("admin", "Role toggle error:", e);
-              // Surface the failure — role changes previously failed silently
-              // (the DB trigger rejected the direct anon-key update).
-              Alert.alert(
-                "Could not change role",
-                e instanceof Error ? e.message : "Please try again.",
-              );
-            }
-          },
-        },
+        ...choices
+          .filter((c) => c.role !== user.role)
+          .map((c) => ({
+            text: c.label,
+            style:
+              c.role === "customer"
+                ? ("destructive" as const)
+                : ("default" as const),
+            onPress: () => void applyUserRole(user, c.role),
+          })),
+        { text: "Cancel", style: "cancel" as const },
       ],
     );
   }
@@ -4192,6 +4230,39 @@ function UsersSection({
               >
                 {item.tier}
               </Text>
+            </View>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              {canDelete && item.role !== "owner" ? (
+                <Pressable
+                  onPress={() => onToggleRole(item)}
+                  accessibilityRole="button"
+                  className="rounded-full border border-line px-3 py-1"
+                >
+                  <Text className="text-[11px] font-bold text-navy">
+                    Change role
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => onToggleTier(item)}
+                accessibilityRole="button"
+                className="rounded-full border border-line px-3 py-1"
+              >
+                <Text className="text-[11px] font-bold text-navy">
+                  {item.tier === "pro" ? "Make free" : "Make pro"}
+                </Text>
+              </Pressable>
+              {isOwner && item.role !== "owner" ? (
+                <Pressable
+                  onPress={() => onDeleteUser(item)}
+                  accessibilityRole="button"
+                  className="rounded-full border border-red-200 px-3 py-1"
+                >
+                  <Text className="text-[11px] font-bold text-red-600">
+                    Delete account
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={() =>

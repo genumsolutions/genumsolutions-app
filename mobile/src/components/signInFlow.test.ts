@@ -43,6 +43,7 @@ const account = strip(source("../screens/AccountScreen.tsx"));
 const accountSheet = strip(source("./AccountSheet.tsx"));
 const menu = strip(source("../screens/MenuScreen.tsx"));
 const context = strip(source("../context/AppContext.tsx"));
+const admin = strip(source("../screens/AdminScreen.tsx"));
 
 describe("sign-in sheet never strands a signed-in user on create account", () => {
   it("hides itself while signed in and closes when a session lands", () => {
@@ -95,5 +96,20 @@ describe("staff roles get the Admin dashboard in the app", () => {
   it("the Menu tab keeps its staff-only Admin group", () => {
     expect(menu).toContain("{isStaff ? (");
     expect(menu).toContain("Admin dashboard");
+  });
+});
+
+describe("the admin console mirrors the website's role matrix", () => {
+  it("is staff-gated like the website /admin route", () => {
+    expect(admin).toContain("const { isStaff } = useApp();");
+    expect(admin).toContain("Staff only");
+  });
+
+  it("offers the same role choices as the website Users tab", () => {
+    expect(admin).toContain('{ role: "customer", label: "Customer" }');
+    expect(admin).toContain('{ role: "staff", label: "Staff" }');
+    expect(admin).toContain('{ role: "admin", label: "Admin" }');
+    expect(admin).toContain("Delete account");
+    expect(admin).toContain("if (!isOwner) return;");
   });
 });
