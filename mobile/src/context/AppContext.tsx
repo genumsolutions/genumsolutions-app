@@ -293,6 +293,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const sub = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         cachedRestoreRef.current = false;
+        // A Google sign-in started from the sign-in form may create a brand-new
+        // account that we must reject. While that decision is in flight the
+        // session must not flash the UI into a logged-in state. If the check
+        // allows the session, re-apply it after the flag clears.
+        if (auth.isRejectingGoogleSignIn(session.user?.id)) {
+          const pendingId = session.user?.id;
+          const retry = () => {
+            setTimeout(() => {
+              void (async () => {
+                if (auth.isRejectingGoogleSignIn(pendingId)) {
+                  retry();
+                  return;
+                }
+                const { data } = await supabase.auth.getSession();
+                const current = data.session;
+                if (!current || current.user?.id !== pendingId) return;
+                try {
+                  const stored = await auth
+                    .loadStoredSession()
+                    .catch(() => null);
+                  const fallbackUser = stored?.user ?? null;
+                  const g = await genumUserFromSession(current, fallbackUser);
+                  if (auth.isRejectingGoogleSignIn(pendingId)) return;
+                  setUser(g);
+                  await auth.persistSession(current, g);
+                  await settings.syncOnSignIn(applyThemeOnly);
+                } catch (e: unknown) {
+                  logger.error(
+                    "auth",
+                    "session apply after rejection check failed",
+                    e,
+                  );
+                }
+              })();
+            }, 120);
+          };
+          retry();
+          return;
+        }
         // Supabase holds its auth lock while it notifies listeners. Querying
         // `profiles` from inside this callback therefore stalls sign-in and
         // can run before the token is attached, leaving staff/admin roles as
@@ -306,9 +345,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // reaching this handler is always valid.)
         setTimeout(() => {
           void (async () => {
+            if (auth.isRejectingGoogleSignIn(session.user?.id)) return;
             const stored = await auth.loadStoredSession().catch(() => null);
             const fallbackUser = stored?.user ?? null;
             const g = await genumUserFromSession(session, fallbackUser);
+            if (auth.isRejectingGoogleSignIn(session.user?.id)) return;
             setUser(g);
             await auth.persistSession(session, g);
             await settings.syncOnSignIn(applyThemeOnly);
