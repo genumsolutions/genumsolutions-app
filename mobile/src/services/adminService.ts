@@ -1583,7 +1583,7 @@ export async function upsertAdminTrainingProgram(
     })
     .select();
   if (error) throw error;
-  return data[0];
+  return data?.[0];
 }
 
 export async function deleteAdminTrainingProgram(id: string) {
@@ -1635,7 +1635,7 @@ export async function upsertAdminPilotCostLine(line: AdminPilotCostLine) {
     })
     .select();
   if (error) throw error;
-  return data[0];
+  return data?.[0];
 }
 
 export async function deleteAdminPilotCostLine(id: string) {
@@ -1688,7 +1688,7 @@ export async function upsertAdminCurriculumHighlight(
     })
     .select();
   if (error) throw error;
-  return data[0];
+  return data?.[0];
 }
 
 export async function deleteAdminCurriculumHighlight(id: string) {

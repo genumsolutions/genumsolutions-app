@@ -71,21 +71,29 @@ export function ProjectsScreen() {
   // ONE list: every active Project package (kit rows ride along per U-44).
   const allProjects = useMemo(
     () =>
-      products.filter(
-        (p) =>
-          p.active !== false &&
-          (p.productType === "Project package" ||
-            p.category === "Pre-packaged Kits"),
-      ),
+      products.filter((p) => {
+        if (p.active === false) return false;
+        const type = String(p.productType ?? "").trim().toLowerCase();
+        const cat = String(p.category ?? "").trim().toLowerCase();
+        return (
+          type === "project package" ||
+          cat === "pre-packaged kits" ||
+          cat === "prepackaged kits"
+        );
+      }),
     [products],
   );
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return allProjects.filter((p) => {
-      if (category !== "All" && p.projectCategory !== category) return false;
+      if (category !== "All") {
+        const selected = category.trim().toLowerCase();
+        const pc = String(p.projectCategory ?? "").trim().toLowerCase();
+        if (pc !== selected) return false;
+      }
       if (!needle) return true;
-      return `${p.name} ${p.note} ${p.description}`
+      return `${p.name ?? ""} ${p.note ?? ""} ${p.description ?? ""}`
         .toLowerCase()
         .includes(needle);
     });
