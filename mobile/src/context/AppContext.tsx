@@ -70,6 +70,7 @@ type AppContextValue = {
   authBusy: boolean;
   authError: string | null;
   clearAuthError: () => void;
+  refreshProfile: () => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
   signUp: (
     name: string,
@@ -251,21 +252,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const sub = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         cachedRestoreRef.current = false;
+        // Supabase holds its auth lock while it notifies listeners. Querying
+        // `profiles` from inside this callback therefore stalls sign-in and
+        // can run before the token is attached, leaving staff/admin roles as
+        // "customer" (only the owner, matched by email, kept the Admin
+        // dashboard). Defer past the lock.
         // Re-persist on every change (sign-in, restore, TOKEN_REFRESHED):
         // the in-memory session is lost on restart and the access token is
         // rotated ~hourly, so the SecureStore snapshot must always hold the
         // CURRENT pair — otherwise a cold start would restore a stale token.
         // (A transient offline refresh is preserved by GoTrue, so a session
         // reaching this handler is always valid.)
-        void genumUserFromSession(session)
-          .then((g) => {
-            setUser(g);
-            return auth.persistSession(session, g);
-          })
-          .then(() => settings.syncOnSignIn(applyThemeOnly))
-          .catch((e: unknown) =>
-            logger.error("auth", "session event handling failed", e),
-          );
+        setTimeout(() => {
+          void genumUserFromSession(session)
+            .then((g) => {
+              setUser(g);
+              return auth.persistSession(session, g);
+            })
+            .then(() => settings.syncOnSignIn(applyThemeOnly))
+            .catch((e: unknown) =>
+              logger.error("auth", "session event handling failed", e),
+            );
+        }, 0);
       } else {
         // SIGNED_OUT is the only event this branch deserves — a genuine
         // sign-out or a server-rejected refresh. INITIAL_SESSION(null) at a
@@ -692,6 +700,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [applyError],
   );
 
+  /** Re-read the signed-in profile (role/tier/name). Called when the Account
+   *  or Menu surface gains focus, so a promotion to staff/admin made in the
+   *  website's Users tab shows the Admin dashboard without a re-login. */
+  const refreshProfile = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      if (!session) return;
+      setUser(await genumUserFromSession(session));
+    } catch (e) {
+      logger.warn("auth", "profile refresh failed", e);
+    }
+  }, []);
+
   const signOut = useCallback(() => {
     void auth.signOut();
     setUser(null);
@@ -726,6 +748,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       authBusy,
       authError,
       clearAuthError,
+      refreshProfile,
       signInWithPassword,
       signUp,
       signInWithGoogle,
@@ -752,6 +775,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       authBusy,
       authError,
       clearAuthError,
+      refreshProfile,
       signInWithPassword,
       signUp,
       signInWithGoogle,
