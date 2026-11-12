@@ -234,7 +234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [carModes, setCarModes] = useState<CarMode[]>([]);
-  const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("light");
   const [updatePill, setUpdatePill] = useState<UpdatePill | null>(null);
   const [appUpdated, setAppUpdated] = useState(false);
   // True while a cached (offline) user is shown pending the real session; the
