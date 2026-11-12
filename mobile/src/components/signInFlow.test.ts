@@ -62,11 +62,12 @@ describe("sign-in sheet never strands a signed-in user on create account", () =>
     expect(sheet).not.toContain('["forgot", "Reset"]');
   });
 
-  it("returns to Sign in after a sign-up that needs email confirmation", () => {
+  it("moves to code verification after a sign-up that needs email confirmation", () => {
     const signupStart = sheet.indexOf("const result = await signUp(");
-    const signupBlock = sheet.slice(signupStart, signupStart + 500);
-    expect(signupBlock).toContain('switchMode("signin");');
-    expect(signupBlock).toContain("Check your email to confirm it");
+    const signupBlock = sheet.slice(signupStart, signupStart + 700);
+    expect(signupBlock).toContain('setMode("verify")');
+    expect(signupBlock).toContain("setPendingEmail(pending)");
+    expect(signupBlock).toContain("one-time code");
   });
 
   it("clears a stale auth error when switching forms", () => {
