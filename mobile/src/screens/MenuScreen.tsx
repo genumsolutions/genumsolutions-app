@@ -229,7 +229,7 @@ export function MenuScreen() {
         <MenuGroup title="Admin">
           <MenuItem
             icon="settings"
-            label="Admin Dashboard"
+            label="Admin dashboard"
             onPress={() => navigation.push("Admin")}
           />
         </MenuGroup>
