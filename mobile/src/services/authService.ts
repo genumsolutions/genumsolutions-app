@@ -132,6 +132,7 @@ export async function signUp(
   if (error) throw new Error(error.message);
   // If confirmation is required the returned session may be null; the user
   // must confirm their email before signing in.
+  if (data.session) await persistSession(data.session);
   return data.session;
 }
 

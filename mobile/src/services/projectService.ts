@@ -15,9 +15,12 @@ export function isProjectPackage(p: {
   productType?: string | null;
   category?: string | null;
 }): boolean {
+  const type = String(p.productType ?? "").trim().toLowerCase();
+  const category = String(p.category ?? "").trim().toLowerCase();
   return (
-    p.productType === "Project package" ||
-    p.category === "Robot Cars" ||
-    p.category === "Pre-packaged Kits"
+    type === "project package" ||
+    category === "robot cars" ||
+    category === "pre-packaged kits" ||
+    category === "prepackaged kits"
   );
 }

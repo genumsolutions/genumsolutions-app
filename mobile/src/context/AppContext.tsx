@@ -125,23 +125,24 @@ function normalizeRole(value: unknown): Role {
 }
 
 /**
- * Build a GenumUser from a Supabase session. If the profile fetch fails
- * (e.g., offline), fall back to the session's user_metadata/app_metadata so
- * the cached tier/role survive network hand-offs (W6: 48-hour offline grace).
+ * Build a GenumUser from a Supabase session. Profile is authoritative when
+ * readable, but metadata/cached fallbacks keep staff/admin access working if
+ * the profile read is unavailable or stale (mirrors website role handling).
  */
 async function genumUserFromSession(
   session: Session,
   fallbackUser?: auth.StoredSessionUser | null,
 ): Promise<auth.StoredSessionUser> {
-  const meta = session.user?.user_metadata ?? {};
-  const app = session.user?.app_metadata ?? {};
+  const meta = (session.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const app = (session.user?.app_metadata ?? {}) as Record<string, unknown>;
   let profile: {
-    name?: string;
-    phone?: string;
-    address?: string;
-    role?: string;
-    tier?: "free" | "pro";
+    name?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    role?: string | null;
+    tier?: "free" | "pro" | null;
   } | null = null;
+  let profileReadOk = false;
 
   try {
     const profileResult = await supabase
@@ -149,51 +150,67 @@ async function genumUserFromSession(
       .select("name, phone, address, role, tier")
       .eq("id", session.user.id)
       .maybeSingle();
-    profile = profileResult.data;
+    profileReadOk = !profileResult.error;
+    profile = (profileResult.data ?? null) as typeof profile;
   } catch {
-    // Offline or network error: profile is null, will fall back to metadata
+    // Offline or network error: fall back to metadata/cached user below.
   }
 
-  const rawRole = normalizeRole(profile?.role || app.role || meta.role);
+  const metaRole = normalizeRole(app.role ?? meta.role);
+  const fallbackRole = normalizeRole(fallbackUser?.role);
+  const profileRoleRaw =
+    profile && typeof profile.role === "string" && profile.role.trim()
+      ? profile.role
+      : null;
+  const profileRole = profileRoleRaw ? normalizeRole(profileRoleRaw) : null;
+  const effectiveRole =
+    profileReadOk && profileRole
+      ? profileRole
+      : profileReadOk && profile
+        ? metaRole !== "customer"
+          ? metaRole
+          : fallbackRole !== "customer"
+            ? fallbackRole
+            : "customer"
+        : metaRole !== "customer"
+          ? metaRole
+          : fallbackRole !== "customer"
+            ? fallbackRole
+            : "customer";
+
   const tier: "free" | "pro" =
-    rawRole === "staff" ||
-    rawRole === "admin" ||
-    rawRole === "owner" ||
-    profile?.tier === "pro"
+    effectiveRole === "staff" ||
+    effectiveRole === "admin" ||
+    effectiveRole === "owner" ||
+    profile?.tier === "pro" ||
+    fallbackUser?.tier === "pro"
       ? "pro"
       : "free";
 
-  // If profile fetch failed and we have a cached user, use its tier/role
-  // (offline grace: cached entitlement survives network failure)
-  const effectiveTier = profile ? tier : (fallbackUser?.tier ?? tier);
-  const effectiveRole = profile
-    ? rawRole
-    : normalizeRole(fallbackUser?.role ?? rawRole);
+  const metaName = typeof meta.name === "string" ? meta.name : "";
+  const metaPhone = typeof meta.phone === "string" ? meta.phone : "";
+  const metaAddress = typeof meta.address === "string" ? meta.address : "";
 
   return {
     id: session.user?.id ?? "",
     name:
-      (profile?.name ||
-        (typeof meta.name === "string" ? meta.name : "") ||
-        fallbackUser?.name) ??
+      (profile?.name as string | undefined) ||
+      metaName ||
+      fallbackUser?.name ||
       "",
-    email: session.user?.email ?? "",
+    email: session.user?.email ?? fallbackUser?.email ?? "",
     phone:
-      (profile?.phone ||
-        session.user?.user_metadata?.phone ||
-        "" ||
-        fallbackUser?.phone) ??
+      (profile?.phone as string | undefined) ||
+      metaPhone ||
+      fallbackUser?.phone ||
       "",
     address:
-      (profile?.address ||
-        session.user?.user_metadata?.address ||
-        "" ||
-        fallbackUser?.address) ??
+      (profile?.address as string | undefined) ||
+      metaAddress ||
+      fallbackUser?.address ||
       "",
-    // Owner is decided by address as well as by the stored role, so a
-    // missing/legacy profiles row can never lock the owner out of /admin.
     role: isOwnerEmail(session.user?.email) ? "owner" : effectiveRole,
-    tier: effectiveTier,
+    tier,
   };
 }
 
@@ -264,15 +281,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // (A transient offline refresh is preserved by GoTrue, so a session
         // reaching this handler is always valid.)
         setTimeout(() => {
-          void genumUserFromSession(session)
-            .then((g) => {
-              setUser(g);
-              return auth.persistSession(session, g);
-            })
-            .then(() => settings.syncOnSignIn(applyThemeOnly))
-            .catch((e: unknown) =>
-              logger.error("auth", "session event handling failed", e),
-            );
+          void (async () => {
+            const stored = await auth.loadStoredSession().catch(() => null);
+            const fallbackUser = stored?.user ?? null;
+            const g = await genumUserFromSession(session, fallbackUser);
+            setUser(g);
+            await auth.persistSession(session, g);
+            await settings.syncOnSignIn(applyThemeOnly);
+          })().catch((e: unknown) =>
+            logger.error("auth", "session event handling failed", e),
+          );
         }, 0);
       } else {
         // SIGNED_OUT is the only event this branch deserves — a genuine
@@ -708,7 +726,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession();
       const session = data.session;
       if (!session) return;
-      setUser(await genumUserFromSession(session));
+      const stored = await auth.loadStoredSession().catch(() => null);
+      const fallbackUser = stored?.user ?? null;
+      const g = await genumUserFromSession(session, fallbackUser);
+      setUser(g);
+      await auth.persistSession(session, g);
     } catch (e) {
       logger.warn("auth", "profile refresh failed", e);
     }
