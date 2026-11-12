@@ -133,15 +133,16 @@ async function genumUserFromSession(
   session: Session,
   fallbackUser?: auth.StoredSessionUser | null,
 ): Promise<auth.StoredSessionUser> {
-  const meta = (session.user?.user_metadata ?? {}) as Record<string, unknown>;
-  const app = (session.user?.app_metadata ?? {}) as Record<string, unknown>;
-  let profile: {
+  type ProfileRow = {
     name?: string | null;
     phone?: string | null;
     address?: string | null;
     role?: string | null;
     tier?: "free" | "pro" | null;
-  } | null = null;
+  };
+  const meta = (session.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const app = (session.user?.app_metadata ?? {}) as Record<string, unknown>;
+  let profile: ProfileRow | null = null;
   let profileReadOk = false;
 
   try {
@@ -151,22 +152,21 @@ async function genumUserFromSession(
       .eq("id", session.user.id)
       .maybeSingle();
     profileReadOk = !profileResult.error;
-    profile = (profileResult.data ?? null) as typeof profile;
+    profile = (profileResult.data as ProfileRow | null) ?? null;
   } catch {
     // Offline or network error: fall back to metadata/cached user below.
   }
 
+  const p = profile;
   const metaRole = normalizeRole(app.role ?? meta.role);
   const fallbackRole = normalizeRole(fallbackUser?.role);
   const profileRoleRaw =
-    profile && typeof profile.role === "string" && profile.role.trim()
-      ? profile.role
-      : null;
+    p && typeof p.role === "string" && p.role.trim() ? p.role : null;
   const profileRole = profileRoleRaw ? normalizeRole(profileRoleRaw) : null;
   const effectiveRole =
     profileReadOk && profileRole
       ? profileRole
-      : profileReadOk && profile
+      : profileReadOk && p
         ? metaRole !== "customer"
           ? metaRole
           : fallbackRole !== "customer"
@@ -182,7 +182,7 @@ async function genumUserFromSession(
     effectiveRole === "staff" ||
     effectiveRole === "admin" ||
     effectiveRole === "owner" ||
-    profile?.tier === "pro" ||
+    p?.tier === "pro" ||
     fallbackUser?.tier === "pro"
       ? "pro"
       : "free";
@@ -193,19 +193,12 @@ async function genumUserFromSession(
 
   return {
     id: session.user?.id ?? "",
-    name:
-      (profile?.name as string | undefined) ||
-      metaName ||
-      fallbackUser?.name ||
-      "",
+    name: (p?.name as string | undefined) || metaName || fallbackUser?.name || "",
     email: session.user?.email ?? fallbackUser?.email ?? "",
     phone:
-      (profile?.phone as string | undefined) ||
-      metaPhone ||
-      fallbackUser?.phone ||
-      "",
+      (p?.phone as string | undefined) || metaPhone || fallbackUser?.phone || "",
     address:
-      (profile?.address as string | undefined) ||
+      (p?.address as string | undefined) ||
       metaAddress ||
       fallbackUser?.address ||
       "",
