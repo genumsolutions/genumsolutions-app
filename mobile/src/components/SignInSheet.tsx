@@ -178,13 +178,15 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
       const result = await signUp(name, email, password);
       if (result === "ok") resetForm();
       else if (result === "confirm") {
-        // Nothing else to do on the register form: send them to the code step.
+        // Nothing else to do on the register form: send them to the confirm step.
+        // The default mailer sends a confirmation link (not a visible code), so
+        // opening the link is the reliable path; a code can be entered if present.
         const pending = email.trim().toLowerCase();
         setPendingEmail(pending);
         setVerifyPurpose("signup");
         setMode("verify");
         setNotice(
-          `Registered. We emailed a one-time code to ${pending} - enter it below, or open the link in that email.`,
+          `Registered. Open the confirmation link we emailed to ${pending} to finish registering, then sign in here. If that email includes a code, you can enter it below.`,
         );
       }
     } else if (mode === "verify") {
@@ -234,7 +236,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
       : mode === "signup"
         ? "Register once for orders, saved builds, and support."
         : mode === "verify"
-          ? "We emailed a one-time code. Enter it here, or open the link in that email."
+          ? "Confirm your email to continue. Open the link we sent, or enter a code if your email includes one."
           : "We’ll email you a link to reset your password.";
 
   return (
