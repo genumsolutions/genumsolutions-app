@@ -137,17 +137,6 @@ export async function signInWithPassword(
 const WEBSITE_URL = "https://genumsolutions-website.vercel.app";
 const CONFIRMATION_REDIRECT = `${WEBSITE_URL}/auth/callback?next=%2Faccount%3Fwelcome%3D1`;
 
-// Sessions for brand-new Google accounts created from the sign-in form must not
-// flash the app into a logged-in state while we verify and undo them. AppContext
-// skips applying any session whose user id is in this set.
-const rejectingGoogleUserIds = new Set<string>();
-
-export function isRejectingGoogleSignIn(
-  userId: string | undefined | null,
-): boolean {
-  return Boolean(userId && rejectingGoogleUserIds.has(userId));
-}
-
 export async function signUp(
   name: string,
   email: string,
@@ -244,39 +233,7 @@ async function clearCachedGoogleAccount(): Promise<void> {
   }
 }
 
-/**
- * A Google trip from the SIGN-IN form must not register anybody. The app knows
- * the mode it was opened in, so a session that belongs to a row created seconds
- * ago is handed back to the website, which deletes it with the service role
- * (the app has no service key, and deleting your own fresh row is the only
- * thing this endpoint will do). "Register with Google" passes intent=register
- * and keeps the account.
- */
-async function discardUnregisteredGoogleAccount(
-  session: Session,
-): Promise<boolean> {
-  const created = new Date(session.user?.created_at || 0).getTime();
-  if (!Number.isFinite(created) || Date.now() - created > 5 * 60_000)
-    return false;
-  try {
-    const response = await fetch(`${WEBSITE_URL}/api/auth/google/fresh`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (!response.ok) return false;
-    const data = (await response.json().catch(() => ({}))) as {
-      created?: boolean;
-    };
-    return Boolean(data.created);
-  } catch {
-    // Offline: keep the session rather than locking a real customer out.
-    return false;
-  }
-}
-
-export async function signInWithGoogle(
-  intent: "signin" | "signup" = "signin",
-): Promise<GoogleAuthResult> {
+export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
     return { status: "error", message: mapAuthError("not configured") };
   }
@@ -310,32 +267,11 @@ export async function signInWithGoogle(
         };
       }
       if (data.session) {
-        if (intent === "signin") {
-          const created = new Date(
-            data.session.user?.created_at || 0,
-          ).getTime();
-          const maybeFresh =
-            Number.isFinite(created) && Date.now() - created <= 5 * 60_000;
-          if (maybeFresh) {
-            rejectingGoogleUserIds.add(data.session.user.id);
-            try {
-              const rejected = await discardUnregisteredGoogleAccount(
-                data.session,
-              );
-              if (rejected) {
-                await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-                await clearStoredSession();
-                return {
-                  status: "error",
-                  message:
-                    "No account found for that Google address. Sign up first, then use Google to sign in.",
-                };
-              }
-            } finally {
-              rejectingGoogleUserIds.delete(data.session.user.id);
-            }
-          }
-        }
+        // A Google identity with no account yet IS a registration: Supabase
+        // creates the row and Google has already verified the address. Never
+        // create-then-delete a fresh account to enforce sign-in-only semantics
+        // - that silently removed real sign-ups (and their session) moments
+        // after registering.
         await persistSession(data.session);
       }
       return { status: "ok", session: data.session! };
