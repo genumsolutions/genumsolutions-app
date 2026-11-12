@@ -300,9 +300,25 @@ export function AccountScreen() {
               </View>
             )}
           </View>
+          {/* Website header parity: every staff role gets a direct Admin
+              dashboard entry, not only admins/owners. */}
+          {isStaff ? (
+            <Pressable
+              onPress={() => navigation.push("Admin")}
+              accessibilityRole="button"
+              accessibilityLabel="Open admin dashboard"
+              className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-2.5"
+            >
+              <Feather name="shield" size={15} color="#ffffff" />
+              <Text className="text-sm font-bold text-white">
+                Admin dashboard
+              </Text>
+              <Feather name="arrow-right" size={15} color="#ffffff" />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={signOut}
-            className="mt-4 items-center rounded-full border border-red-200 bg-card py-2.5"
+            className={`${isStaff ? "mt-2" : "mt-4"} items-center rounded-full border border-red-200 bg-card py-2.5`}
           >
             <Text className="text-sm font-bold text-red-600">Log out</Text>
           </Pressable>

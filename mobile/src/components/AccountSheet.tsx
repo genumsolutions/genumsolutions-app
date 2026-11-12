@@ -92,7 +92,7 @@ function MenuRow({
 export function AccountSheet({ visible, onRequestClose }: Props) {
   const insets = useSafeAreaInsets();
   const { width, height } = useViewport();
-  const { user, isSignedIn, isAdmin, signOut } = useApp();
+  const { user, isSignedIn, isStaff, isAdmin, isOwner, signOut } = useApp();
   const nav = useNavigation<any>();
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -222,10 +222,10 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
                   <Text className="min-w-0 flex-1 truncate text-base font-bold text-ink">
                     {user?.name || "User"}
                   </Text>
-                  {isAdmin && (
+                  {isStaff && (
                     <View className="shrink-0 rounded-full bg-gold px-2 py-0.5">
                       <Text className="text-[10px] font-black uppercase tracking-wide text-ink">
-                        Admin
+                        {isOwner ? "Owner" : isAdmin ? "Admin" : "Staff"}
                       </Text>
                     </View>
                   )}
@@ -300,11 +300,11 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
               sub="Edit name, phone, address"
               onPress={navProfile}
             />
-            {isAdmin && (
+            {isStaff && (
               <MenuRow
                 icon="shield"
-                label="Admin Panel"
-                sub="Manage orders & store"
+                label="Admin dashboard"
+                sub="Manage orders, catalog & users"
                 onPress={navAdmin}
               />
             )}

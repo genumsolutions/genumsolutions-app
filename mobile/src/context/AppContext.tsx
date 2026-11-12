@@ -69,6 +69,7 @@ type AppContextValue = {
   setAccountSheetOpen: (open: boolean) => void;
   authBusy: boolean;
   authError: string | null;
+  clearAuthError: () => void;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
   signUp: (
     name: string,
@@ -594,6 +595,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, pushCartToServer, refreshCartCount]);
 
+  const clearAuthError = useCallback(() => setAuthError(null), []);
+
   const applyAuthed = useCallback(() => {
     setAuthError(null);
     setAuthBusy(false);
@@ -722,6 +725,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccountSheetOpen,
       authBusy,
       authError,
+      clearAuthError,
       signInWithPassword,
       signUp,
       signInWithGoogle,
@@ -747,6 +751,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccountSheetOpen,
       authBusy,
       authError,
+      clearAuthError,
       signInWithPassword,
       signUp,
       signInWithGoogle,
