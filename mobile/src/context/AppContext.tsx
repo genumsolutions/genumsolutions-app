@@ -79,6 +79,7 @@ type AppContextValue = {
   ) => Promise<"ok" | "confirm" | "error">;
   signInWithGoogle: () => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
+  resendConfirmation: (email: string) => Promise<boolean>;
   signOut: () => void;
   carModes: CarMode[];
   themeMode: ThemeMode;
@@ -685,6 +686,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [applyAuthed, applyError],
   );
 
+  const resendConfirmation = useCallback(
+    async (email: string) => {
+      if (!supabaseConfigured) return false;
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.resendConfirmation(email);
+        setAuthBusy(false);
+        return true;
+      } catch (e) {
+        setAuthBusy(false);
+        return applyError(
+          e instanceof Error
+            ? e.message
+            : "Failed to resend the confirmation email.",
+        );
+      }
+    },
+    [applyError],
+  );
+
   const signInWithGoogle = useCallback(async () => {
     if (!supabaseConfigured) {
       setAuthError("Sign-in is not configured yet.");
@@ -779,6 +801,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signUp,
       signInWithGoogle,
       resetPassword,
+      resendConfirmation,
       signOut,
       carModes,
       themeMode,
@@ -806,6 +829,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signUp,
       signInWithGoogle,
       resetPassword,
+      resendConfirmation,
       signOut,
       carModes,
       themeMode,
