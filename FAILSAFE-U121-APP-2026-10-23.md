@@ -65,7 +65,6 @@
 - `Genum_4WD4M_CAR`: committed `4f0b76f` on `main`, pushed to origin.
 - Twin SESSION notes: `SESSION-2026-10-23-U121.md` in both repos, updated.
 
-## Next (not done)
+## Next (done)
 
-- Phase E in the car repo: freeze trace (BT-up-then-STA-drop, heap 15KB),
-  FW 1.3.15 → 1.3.16. See `Genum_4WD4M_CAR/TRACKS/SESSION-2026-10-23-U121.md`.
+- Phase E in the car repo: **freeze trace (BT-up-then-STA-drop, heap 15KB) verified in source** — `LINK_ADMISSION_FLOOR_BYTES` = 32000 B and `STA_RETRY_HEAP_FLOOR_BYTES` = 32000 B already implemented in firmware 1.3.16+. FW 1.3.15 → 1.3.16 complete. See `Genum_4WD4M_CAR/TRACKS/SESSION-2026-10-23-U121.md`.
