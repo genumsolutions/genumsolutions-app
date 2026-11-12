@@ -6,7 +6,7 @@
 // mode, the primary action, then "or Continue with Google" (sign-in and
 // sign-up), then text links to switch modes (never lingering tabs). The
 // sheet is capped to the viewport and the body scrolls inside that cap, so
-// the Create account / Google buttons can't be pushed off the bottom of a
+// the Register / Google buttons can't be pushed off the bottom of a
 // small screen with the keyboard open.
 // =====================================================================
 import { Feather } from "@expo/vector-icons";
@@ -49,6 +49,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     signUp,
     signInWithGoogle,
     resetPassword,
+    resendConfirmation,
   } = useApp();
 
   const [mode, setMode] = useState<Mode>("signin");
@@ -57,6 +58,8 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Address waiting on a confirmation email, so the notice can offer a resend.
+  const [pendingEmail, setPendingEmail] = useState("");
   const bodyRef = useRef<ScrollView>(null);
 
   const closeDisabled = authBusy;
@@ -67,6 +70,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     setPassword("");
     setShowPassword(false);
     setNotice(null);
+    setPendingEmail("");
     setMode("signin");
     clearAuthError();
   };
@@ -122,12 +126,12 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
       const result = await signUp(name, email, password);
       if (result === "ok") resetForm();
       else if (result === "confirm") {
-        // Nothing else to do on the create-account form: send them back to
-        // Sign in with the confirmation notice, same as the website.
+        // Nothing else to do on the register form: send them back to Sign in
+        // with the confirmation notice, same as the website.
+        const pending = email.trim().toLowerCase();
         switchMode("signin");
-        setNotice(
-          "Account created. Check your email to confirm it, then sign in.",
-        );
+        setPendingEmail(pending);
+        setNotice("Registered. Check your email to confirm it, then sign in.");
       }
     } else {
       const ok = await resetPassword(email);
@@ -139,18 +143,32 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     }
   };
 
+  // A confirmation email that never arrives leaves the account unusable, so the
+  // notice carries a resend - same behaviour as the website's AuthPanel.
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    const ok = await resendConfirmation(pendingEmail);
+    if (!ok) return;
+    const sentTo = pendingEmail;
+    switchMode("signin");
+    setPendingEmail(sentTo);
+    setNotice(
+      `Confirmation email sent to ${sentTo}. Check spam if it is not there in a minute.`,
+    );
+  };
+
   const title =
     mode === "signin"
       ? "Welcome back"
       : mode === "signup"
-        ? "Create account"
+        ? "Register"
         : "Reset password";
 
   const subtitle =
     mode === "signin"
       ? "Sign in to sync your build list and orders."
       : mode === "signup"
-        ? "One account for orders, saved builds, and support."
+        ? "Register once for orders, saved builds, and support."
         : "We’ll email you a link to reset your password.";
 
   return (
@@ -222,6 +240,18 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                 <Text className="text-xs font-medium text-emerald-700">
                   {notice}
                 </Text>
+                {pendingEmail ? (
+                  <Pressable
+                    onPress={() => void handleResend()}
+                    disabled={authBusy}
+                    accessibilityRole="button"
+                    className="mt-1.5 self-start active:opacity-60"
+                  >
+                    <Text className="text-xs font-bold uppercase tracking-widest text-emerald-700 underline">
+                      Resend confirmation email
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : null}
 
@@ -335,7 +365,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   {mode === "signin"
                     ? "Sign in"
                     : mode === "signup"
-                      ? "Create account"
+                      ? "Register"
                       : "Send reset link"}
                 </Text>
               )}
@@ -360,7 +390,9 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                     <GoogleLogo size={20} />
                   </View>
                   <Text className="ml-2.5 text-sm font-bold text-ink">
-                    Continue with Google
+                    {mode === "signup"
+                      ? "Register with Google"
+                      : "Continue with Google"}
                   </Text>
                 </Pressable>
               </>
@@ -375,7 +407,7 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
                   className="py-1.5 active:opacity-60"
                 >
                   <Text className="text-sm font-semibold text-navy">
-                    New here? Create a customer account
+                    New here? Register
                   </Text>
                 </Pressable>
               ) : null}

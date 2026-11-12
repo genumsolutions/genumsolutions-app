@@ -90,11 +90,14 @@ export function mapAuthError(message: string): string {
   if (/not configured/i.test(m)) {
     return "Sign-in is not set up yet. Please try email & password.";
   }
-  // A new Google account is refused by the database (block_new_google_account)
-  // so signing in can never silently create an account. GoTrue wraps the
-  // trigger message as "Database error saving new user", so map it here.
-  if (/database error saving new user|signups not allowed/i.test(m)) {
-    return "No account found for that Google address. Create an account first, then sign in with Google.";
+  // GoTrue wraps any failure while creating the row as "Database error saving
+  // new user". Google registers accounts now, so there is no "no account"
+  // hint left to give - just say the attempt failed.
+  if (/database error saving new user/i.test(m)) {
+    return "Could not finish with Google. Please try again.";
+  }
+  if (/signups not allowed/i.test(m)) {
+    return "Registration is closed right now. Please try again later.";
   }
   return m;
 }
@@ -124,6 +127,16 @@ export async function signInWithPassword(
   return session;
 }
 
+/**
+ * Confirmation links open on the website: the native app holds no PKCE
+ * verifier for a link opened in a mail browser, so the web callback verifies
+ * the address (and signs that browser in), and the customer then signs in
+ * here with the same email and password. Same link the website sends, so a
+ * registration started on either surface behaves identically.
+ */
+const CONFIRMATION_REDIRECT =
+  "https://genumsolutions-website.vercel.app/auth/callback?next=%2Faccount%3Fwelcome%3D1";
+
 export async function signUp(
   name: string,
   email: string,
@@ -133,13 +146,27 @@ export async function signUp(
   const { data, error } = await supabase.auth.signUp({
     email: email.trim().toLowerCase(),
     password,
-    options: { data: { name: name.trim() } },
+    options: {
+      data: { name: name.trim() },
+      emailRedirectTo: CONFIRMATION_REDIRECT,
+    },
   });
   if (error) throw new Error(error.message);
   // If confirmation is required the returned session may be null; the user
   // must confirm their email before signing in.
   if (data.session) await persistSession(data.session);
   return data.session;
+}
+
+/** Re-send the registration confirmation email for an unconfirmed address. */
+export async function resendConfirmation(email: string): Promise<void> {
+  if (!supabaseConfigured) throw new Error("not configured");
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: email.trim().toLowerCase(),
+    options: { emailRedirectTo: CONFIRMATION_REDIRECT },
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function resetPassword(email: string): Promise<void> {
