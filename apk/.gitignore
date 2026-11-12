@@ -1,2 +1,5 @@
 # Local agent scratch artifacts under apk/ — never commit.
 release.json
+
+# Debug APKs (large build artifacts; keep release APKs tracked)
+*-debug*.apk
