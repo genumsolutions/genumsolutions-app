@@ -67,7 +67,7 @@ describe("sign-in sheet never strands a signed-in user on create account", () =>
     const signupBlock = sheet.slice(signupStart, signupStart + 700);
     expect(signupBlock).toContain('setMode("verify")');
     expect(signupBlock).toContain("setPendingEmail(pending)");
-    expect(signupBlock).toContain("one-time code");
+    expect(signupBlock).toContain("confirmation link");
   });
 
   it("clears a stale auth error when switching forms", () => {

@@ -784,7 +784,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return "ok";
         }
         // confirmation email required
-        applyAuthed();
+        setAuthBusy(false);
+        setAuthError(null);
+        notifyAuth("Registered. Check your email to confirm your account.");
         return "confirm";
       } catch (e) {
         applyError(e instanceof Error ? e.message : "Sign-up failed.");
