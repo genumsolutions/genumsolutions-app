@@ -137,6 +137,17 @@ export async function signInWithPassword(
 const WEBSITE_URL = "https://genumsolutions-website.vercel.app";
 const CONFIRMATION_REDIRECT = `${WEBSITE_URL}/auth/callback?next=%2Faccount%3Fwelcome%3D1`;
 
+// Sessions for brand-new Google accounts created from the sign-in form must not
+// flash the app into a logged-in state while we verify and undo them. AppContext
+// skips applying any session whose user id is in this set.
+const rejectingGoogleUserIds = new Set<string>();
+
+export function isRejectingGoogleSignIn(
+  userId: string | undefined | null,
+): boolean {
+  return Boolean(userId && rejectingGoogleUserIds.has(userId));
+}
+
 export async function signUp(
   name: string,
   email: string,
@@ -299,17 +310,31 @@ export async function signInWithGoogle(
         };
       }
       if (data.session) {
-        if (
-          intent === "signin" &&
-          (await discardUnregisteredGoogleAccount(data.session))
-        ) {
-          await supabase.auth.signOut();
-          await clearStoredSession();
-          return {
-            status: "error",
-            message:
-              "No account found for that Google address. Register first, then use Google to sign in.",
-          };
+        if (intent === "signin") {
+          const created = new Date(
+            data.session.user?.created_at || 0,
+          ).getTime();
+          const maybeFresh =
+            Number.isFinite(created) && Date.now() - created <= 5 * 60_000;
+          if (maybeFresh) {
+            rejectingGoogleUserIds.add(data.session.user.id);
+            try {
+              const rejected = await discardUnregisteredGoogleAccount(
+                data.session,
+              );
+              if (rejected) {
+                await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+                await clearStoredSession();
+                return {
+                  status: "error",
+                  message:
+                    "No account found for that Google address. Register first, then use Google to sign in.",
+                };
+              }
+            } finally {
+              rejectingGoogleUserIds.delete(data.session.user.id);
+            }
+          }
         }
         await persistSession(data.session);
       }
