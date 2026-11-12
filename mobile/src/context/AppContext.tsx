@@ -1,8 +1,7 @@
 // =====================================================================
 // AppContext - native-side global state: auth (Supabase), the cart badge,
 // and app-wide toggles. No WebView is involved - the app reads/writes the
-// shared Supabase database directly.
-// =====================================================================
+// shared Supabase database directly.// =====================================================================
 import {
   createContext,
   useCallback,
@@ -14,7 +13,13 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Appearance, AppState, Platform } from "react-native";
+import {
+  Alert,
+  Appearance,
+  AppState,
+  Platform,
+  ToastAndroid,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { supabase, supabaseConfigured } from "../config/supabase";
@@ -77,9 +82,15 @@ type AppContextValue = {
     email: string,
     password: string,
   ) => Promise<"ok" | "confirm" | "error">;
-  signInWithGoogle: () => Promise<boolean>;
+  signInWithGoogle: (intent?: "signin" | "register") => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   resendConfirmation: (email: string) => Promise<boolean>;
+  requestEmailCode: (email: string) => Promise<boolean>;
+  verifyEmailCode: (
+    purpose: "signup" | "signin",
+    email: string,
+    code: string,
+  ) => Promise<boolean>;
   signOut: () => void;
   carModes: CarMode[];
   themeMode: ThemeMode;
@@ -217,6 +228,14 @@ async function genumUserFromSession(
     role: isOwnerEmail(session.user?.email) ? "owner" : effectiveRole,
     tier,
   };
+}
+
+function notifyAuth(message: string) {
+  if (Platform.OS === "android") {
+    ToastAndroid.show(message, ToastAndroid.SHORT);
+  } else {
+    Alert.alert("", message);
+  }
 }
 
 /**
@@ -652,12 +671,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await auth.signInWithPassword(email, password);
         setAuthSheetOpen(false);
         applyAuthed();
+        notifyAuth("Signed in successfully.");
         return true;
       } catch (e) {
         return applyError(e instanceof Error ? e.message : "Sign-in failed.");
       }
     },
     [applyAuthed, applyError],
+  );
+
+  const verifyEmailCode = useCallback(
+    async (purpose: "signup" | "signin", email: string, code: string) => {
+      if (!supabaseConfigured) {
+        setAuthError("Sign-in is not configured yet.");
+        return false;
+      }
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.verifyEmailCode(purpose, email, code);
+        setAuthSheetOpen(false);
+        applyAuthed();
+        notifyAuth(
+          purpose === "signup"
+            ? "Email confirmed. You're signed in."
+            : "Signed in successfully.",
+        );
+        return true;
+      } catch (e) {
+        return applyError(
+          e instanceof Error ? e.message : "That code didn't work. Try again.",
+        );
+      }
+    },
+    [applyAuthed, applyError],
+  );
+
+  const requestEmailCode = useCallback(
+    async (email: string) => {
+      if (!supabaseConfigured) return false;
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        await auth.requestEmailCode(email);
+        setAuthBusy(false);
+        return true;
+      } catch (e) {
+        setAuthBusy(false);
+        return applyError(
+          e instanceof Error ? e.message : "Could not send the code right now.",
+        );
+      }
+    },
+    [applyError],
   );
 
   const signUp = useCallback(
@@ -673,6 +739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
           setAuthSheetOpen(false);
           applyAuthed();
+          notifyAuth("Registered and signed in.");
           return "ok";
         }
         // confirmation email required
@@ -707,23 +774,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [applyError],
   );
 
-  const signInWithGoogle = useCallback(async () => {
-    if (!supabaseConfigured) {
-      setAuthError("Sign-in is not configured yet.");
+  const signInWithGoogle = useCallback(
+    async (intent: "signin" | "register" = "signin") => {
+      if (!supabaseConfigured) {
+        setAuthError("Sign-in is not configured yet.");
+        return false;
+      }
+      setAuthBusy(true);
+      setAuthError(null);
+      const result = await auth.signInWithGoogle(intent);
+      if (result.status === "ok") {
+        setAuthSheetOpen(false);
+        applyAuthed();
+        notifyAuth(
+          intent === "register"
+            ? "Registered and signed in."
+            : "Signed in successfully.",
+        );
+        return true;
+      }
+      if (result.status === "error") setAuthError(result.message);
+      setAuthBusy(false);
       return false;
-    }
-    setAuthBusy(true);
-    setAuthError(null);
-    const result = await auth.signInWithGoogle();
-    if (result.status === "ok") {
-      setAuthSheetOpen(false);
-      applyAuthed();
-      return true;
-    }
-    if (result.status === "error") setAuthError(result.message);
-    setAuthBusy(false);
-    return false;
-  }, [applyAuthed]);
+    },
+    [applyAuthed],
+  );
 
   const resetPassword = useCallback(
     async (email: string) => {
@@ -771,6 +846,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // next sign-in. This removes the "6 items while logged out" phantom. The
     // cart badge clears immediately without waiting for the storage write.
     void cart.clearCart().then(() => setCartCount(0));
+    notifyAuth("Signed out.");
   }, []);
 
   const value = useMemo<AppContextValue>(
@@ -802,6 +878,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signInWithGoogle,
       resetPassword,
       resendConfirmation,
+      requestEmailCode,
+      verifyEmailCode,
       signOut,
       carModes,
       themeMode,
@@ -830,6 +908,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signInWithGoogle,
       resetPassword,
       resendConfirmation,
+      requestEmailCode,
+      verifyEmailCode,
       signOut,
       carModes,
       themeMode,
