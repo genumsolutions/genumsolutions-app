@@ -275,7 +275,7 @@ async function discardUnregisteredGoogleAccount(
 }
 
 export async function signInWithGoogle(
-  intent: "signin" | "register" = "signin",
+  intent: "signin" | "signup" = "signin",
 ): Promise<GoogleAuthResult> {
   if (!supabaseConfigured) {
     return { status: "error", message: mapAuthError("not configured") };
@@ -328,7 +328,7 @@ export async function signInWithGoogle(
                 return {
                   status: "error",
                   message:
-                    "No account found for that Google address. Register first, then use Google to sign in.",
+                    "No account found for that Google address. Sign up first, then use Google to sign in.",
                 };
               }
             } finally {
