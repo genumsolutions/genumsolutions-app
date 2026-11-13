@@ -110,6 +110,7 @@ export type AdminMessage = {
 
 export type DashboardStats = {
   totalUsers: number;
+  newUsersToday: number;
   totalCartItems: number;
   activeCarts: number;
   totalOrders: number;
@@ -987,6 +988,10 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     (o: any) => o.status === "cancelled",
   ).length;
   const totalUsers = users?.length ?? 0;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const newUsersToday = (users ?? []).filter((u: any) =>
+    String(u.created_at ?? "").startsWith(todayIso),
+  ).length;
   const totalProducts = products?.length ?? 0;
   const lowStockProducts = (products ?? []).filter(
     (p: any) => p.stock !== null && p.stock < 5,
@@ -1014,6 +1019,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
 
   return {
     totalUsers,
+    newUsersToday,
     totalOrders,
     pendingOrders,
     paidOrders,

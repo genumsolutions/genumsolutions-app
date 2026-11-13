@@ -77,7 +77,7 @@ function computeLiveStats(
     [String(electronic), "electronic components in store"],
     [String(models), "3D models printed on demand"],
     [String(projectPackages), "project packages & builds"],
-    [String(projectCategoryCount || 3), "project categories supported"],
+    [String(projectCategoryCount), "project categories supported"],
   ];
 }
 
@@ -113,12 +113,14 @@ describe("AboutScreen computeLiveStats — parity with website /about liveCounts
     ]);
   });
 
-  it("falls back to 3 categories on an empty catalog, like the website", () => {
+  it("shows the real category count instead of inventing 3", () => {
+    // The `|| 3` fallback was dropped on both surfaces (2026-11-13): the
+    // website shows the real length and a refresh note when every count is 0.
     expect(computeLiveStats([], 0)).toEqual([
       ["0", "electronic components in store"],
       ["0", "3D models printed on demand"],
       ["0", "project packages & builds"],
-      ["3", "project categories supported"],
+      ["0", "project categories supported"],
     ]);
   });
 

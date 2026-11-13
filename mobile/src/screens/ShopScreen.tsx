@@ -65,6 +65,23 @@ export function ShopScreen() {
   );
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
+  // 2026-11-13: the empty state clears every filter the shopper can set — it
+  // used to leave the category and the search term applied, so "Clear filters"
+  // could leave the list empty.
+  const hasActiveFilters =
+    category !== "All" ||
+    query.trim() !== "" ||
+    sort !== "featured" ||
+    maxPrice > 0 ||
+    inStock;
+
+  function clearAllFilters() {
+    setCategory("All");
+    setQuery("");
+    setSort("featured");
+    setMaxPrice(0);
+    setInStock(false);
+  }
 
   const load = async (asRefresh = false) => {
     if (asRefresh) setRefreshing(true);
@@ -201,21 +218,28 @@ export function ShopScreen() {
         onRefresh={() => load(true)}
         ListHeaderComponent={null}
         ListEmptyComponent={
-          <View className="items-center py-16">
-            <Feather name="inbox" size={40} color="#cbd5e1" />
-            <Text className="mt-3 text-sm text-muted">No products found.</Text>
-            {(maxPrice > 0 || inStock || sort !== "featured") && (
+          // An empty catalog and an over-filtered one are different problems;
+          // "No products found." blamed the shopper's filters for both.
+          <View className="mx-4 items-center rounded-2xl border border-line bg-card px-5 py-10">
+            <Feather name="inbox" size={32} color="#94a3b8" />
+            <Text className="mt-3 text-base font-bold text-ink">
+              {electronic.length === 0
+                ? "The catalog is being restocked"
+                : "No products found"}
+            </Text>
+            <Text className="mt-2 text-center text-sm leading-6 text-muted">
+              {electronic.length === 0
+                ? "Nothing is listed for sale right now. Tell us what you need and we will check stock or source it."
+                : "No listing matches the current search, category or price filter."}
+            </Text>
+            {electronic.length > 0 && hasActiveFilters && (
               <Pressable
-                onPress={() => {
-                  setMaxPrice(0);
-                  setInStock(false);
-                  setSort("featured");
-                }}
-                className="mt-4 rounded-full border border-navy px-5 py-2"
-                accessibilityLabel="Clear price and stock filters"
+                onPress={clearAllFilters}
+                className="mt-4 rounded-full border border-navy px-5 py-2 active:opacity-70"
+                accessibilityLabel="Clear all product filters"
               >
                 <Text className="text-xs font-black text-navy">
-                  Clear filters
+                  Clear all filters
                 </Text>
               </Pressable>
             )}

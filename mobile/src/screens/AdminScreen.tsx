@@ -1295,7 +1295,11 @@ function AdminConsole() {
       case "Dashboard":
         return (
           <Sub>
-            <DashboardTab stats={stats} analytics={analytics} />
+            <DashboardTab
+              stats={stats}
+              analytics={analytics}
+              onOpenOrders={() => goToTab("Orders")}
+            />
             <ActivityTab
               activities={activities}
               page={activityPage}
@@ -1508,6 +1512,22 @@ function AdminConsole() {
               onDeleteUser={handleDeleteUser}
               currentUserId={currentUser?.id ?? ""}
             />
+            {/* 2026-11-13 (batch 4): customer messages + newsletter
+                subscribers are about people, not company settings — moved
+                here from Settings (mirrors the website AdminPanel). */}
+            <MessagesTab
+              messages={messages}
+              total={messagesTotal}
+              page={messagesPage}
+              totalPages={messagesTotalPages}
+              onPage={(p) => void loadMessages(p)}
+              status={messageStatus}
+              onStatusFilter={(s) => {
+                setMessageStatus(s);
+                void loadMessages(1);
+              }}
+              onMarkReplied={handleMarkReplied}
+            />
             <LogsTab
               crashes={crashReports}
               crashPage={crashReportPage}
@@ -1551,19 +1571,7 @@ function AdminConsole() {
               }}
               onEditingChange={setSettingsEditing}
             />
-            <MessagesTab
-              messages={messages}
-              total={messagesTotal}
-              page={messagesPage}
-              totalPages={messagesTotalPages}
-              onPage={(p) => void loadMessages(p)}
-              status={messageStatus}
-              onStatusFilter={(s) => {
-                setMessageStatus(s);
-                void loadMessages(1);
-              }}
-              onMarkReplied={handleMarkReplied}
-            />
+            {/* Customer messages live under Users now (see that case). */}
           </Sub>
         );
     }
@@ -1854,12 +1862,18 @@ function blankProjectProduct(): AdminProduct {
   };
 }
 
+// 2026-11-13 (batch 4): Dashboard used to publish Revenue / Revenue today /
+// Transactions / Conversion alongside FinanceTab in the same admin, so the two
+// could disagree while their fetches were in flight. Money has one home now
+// (Orders → Finance) and the Dashboard points there.
 function DashboardTab({
   stats,
   analytics,
+  onOpenOrders,
 }: {
   stats: DashboardStats | null;
   analytics: AdminAnalytics | null;
+  onOpenOrders: () => void;
 }) {
   if (!stats) {
     return (
@@ -1868,11 +1882,6 @@ function DashboardTab({
       </View>
     );
   }
-
-  const conversionRate =
-    stats.totalOrders > 0 && stats.totalUsers > 0
-      ? `${((stats.succeededTransactions / Math.max(1, stats.totalUsers)) * 100).toFixed(1)}%`
-      : "—";
 
   return (
     <ScrollView
@@ -1884,15 +1893,14 @@ function DashboardTab({
       </Text>
       <View className="mt-3 flex-row flex-wrap gap-3">
         <StatCard
-          label="Revenue"
-          value={formatNPR(stats.revenue)}
-          sub={`Today: ${formatNPR(stats.revenueToday)}`}
-        />
-        <StatCard label="Users" value={String(stats.totalUsers)} />
-        <StatCard
           label="Orders"
           value={String(stats.totalOrders)}
           sub={`${stats.pendingOrders} pending`}
+        />
+        <StatCard
+          label="Users"
+          value={String(stats.totalUsers)}
+          sub={`${stats.newUsersToday} new today`}
         />
         <StatCard
           label="Cart items"
@@ -1914,20 +1922,26 @@ function DashboardTab({
           sub={`${stats.unreadMessages} unread`}
         />
         <StatCard
-          label="Transactions"
-          value={String(stats.totalTransactions)}
-          sub={`${stats.succeededTransactions} succeeded`}
-        />
-        <StatCard
           label="Page Views (30d)"
           value={analytics ? String(analytics.totalViews) : "—"}
           sub={`Today: ${analytics?.todayViews ?? "—"}`}
         />
-        <StatCard
-          label="Conversion Rate"
-          value={conversionRate}
-          sub="Paid orders / users"
-        />
+      </View>
+
+      <View className="mt-3 rounded-xl border border-line bg-card p-4">
+        <Text className="text-[11px] font-black uppercase tracking-[0.14em] text-muted">
+          Money
+        </Text>
+        <Text className="mt-1 text-sm leading-6 text-muted">
+          Revenue, transactions and the order status split live in Orders, then
+          Finance.
+        </Text>
+        <Pressable
+          onPress={onOpenOrders}
+          className="mt-3 self-start rounded-full border border-navy px-4 py-2 active:opacity-70"
+        >
+          <Text className="text-xs font-black text-navy">Open Orders</Text>
+        </Pressable>
       </View>
 
       {analytics && analytics.topPaths.length > 0 && (
@@ -4690,6 +4704,12 @@ function FinanceTab({ stats }: { stats: DashboardStats | null }) {
   const paid = stats.paidOrders;
   const fulfilled = stats.fulfilledOrders;
   const cancelled = stats.cancelledOrders;
+  // 2026-11-13 (batch 4): conversion moved here with the rest of the money
+  // numbers, so only this tab publishes them.
+  const conversionRate =
+    stats.totalOrders > 0 && stats.totalUsers > 0
+      ? `${((stats.succeededTransactions / Math.max(1, stats.totalUsers)) * 100).toFixed(1)}%`
+      : "—";
 
   return (
     <ScrollView
@@ -4705,9 +4725,31 @@ function FinanceTab({ stats }: { stats: DashboardStats | null }) {
           value={`${stats.succeededTransactions}`}
           sub={`${stats.totalTransactions} total (${stats.totalTransactions - stats.succeededTransactions} pending/failed)`}
         />
+        <StatCard
+          label="Conversion"
+          value={conversionRate}
+          sub="Paid orders / users"
+        />
       </View>
 
+      {stats.totalTransactions === 0 && (
+        <View className="mb-4 rounded-xl border border-dashed border-line bg-card px-4 py-5">
+          <Text className="text-center text-sm leading-6 text-muted">
+            No payments recorded yet. Cash-on-delivery and gateway orders appear
+            here as soon as the first one is placed.
+          </Text>
+        </View>
+      )}
+
       {/* Order status breakdown */}
+      {stats.totalOrders === 0 && (
+        <View className="rounded-xl border border-dashed border-line bg-card px-4 py-5">
+          <Text className="text-center text-sm leading-6 text-muted">
+            No orders yet — the pending / paid / fulfilled split appears with
+            the first order.
+          </Text>
+        </View>
+      )}
       {stats.totalOrders > 0 && (
         <View className="rounded-xl border border-line bg-card p-4">
           <Text className="text-sm font-bold text-ink">

@@ -16,6 +16,7 @@ import {
 import { HOME_CARD_GAP, homeCardWidth, useViewport } from "../lib/viewport";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { pilotTotalLabel } from "../lib/pilotCostTotal";
 import { applyComponentsScope, getProducts } from "../services/productService";
 import { getServices } from "../services/serviceService";
 import { fetchSiteContent } from "../services/orderService";
@@ -27,7 +28,6 @@ import {
 } from "../config/programs";
 import { type Product, type Service } from "../types";
 import { ProductCard } from "../components/ProductCard";
-import { getProductMedia } from "../lib/productMedia";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
@@ -51,9 +51,10 @@ export function HomeScreen() {
   const [services, setServices] = useState<Service[]>([]);
   const [featured, setFeatured] = useState<Product[]>([]);
   // U-41 (2026-09-26): home 3D-printing band — mirrors the website's home
-  // section (offers + "Models we print" strip from the same `3D Models`
-  // catalog rows the /3d-printing page shows).
-  const [printModels, setPrintModels] = useState<Product[]>([]);
+  // section. 2026-11-13: the "Models we print" strip was removed here too.
+  // It republished the same four catalogue cards the 3D Products tab already
+  // shows (the website dropped its copy in the same pass), so the band is now
+  // the offers text plus the two CTAs.
   const [heroTitle, setHeroTitle] = useState(
     "Technology you can touch, test, and trust.",
   );
@@ -74,6 +75,8 @@ export function HomeScreen() {
   const [programsReady, setProgramsReady] = useState(false);
   // U-48: pull-to-refresh — re-run every home read, then repaint the bands.
   const [refreshing, setRefreshing] = useState(false);
+  // 2026-11-13: the total used to be typed beside admin-editable rows.
+  const pilotTotal = pilotTotalLabel(pilotCosts);
 
   const load = useCallback(async () => {
     await Promise.allSettled([
@@ -94,16 +97,6 @@ export function HomeScreen() {
             applyComponentsScope(prods)
               .filter((p) => p.stock > 0)
               .slice(0, 6),
-          );
-          // U-41: same `3D Models` rows the /3d-printing page renders.
-          setPrintModels(
-            prods
-              .filter(
-                (p) =>
-                  p.active !== false &&
-                  p.category?.trim().toLowerCase() === "3d models",
-              )
-              .slice(0, 4),
           );
           setFeaturedReady(true);
         })
@@ -222,7 +215,7 @@ export function HomeScreen() {
           )}
 
           {/* 3D printing band (U-41 parity with the website home) */}
-          {featuredReady && printModels.length > 0 && (
+          {featuredReady && (
             <View className="px-5 pt-6">
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
@@ -238,43 +231,24 @@ export function HomeScreen() {
                 Print-to-order fabrication — start with a file, a reference
                 object, or a rough idea.
               </Text>
-              <Text className="mt-4 text-xs font-black uppercase tracking-[0.24em] text-navy">
-                Models we print
-              </Text>
-              <FlatList
-                horizontal
-                data={printModels}
-                keyExtractor={(model) => model.id}
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={homeCardW + HOME_CARD_GAP}
-                decelerationRate="fast"
-                contentContainerStyle={{
-                  paddingTop: 12,
-                  paddingBottom: 4,
-                  paddingHorizontal: 20,
-                  gap: HOME_CARD_GAP,
-                }}
-                renderItem={({ item: model }) => (
-                  <View style={{ width: homeCardW }}>
-                    {/* U-47v4b (card parity): themed category fallback like
-                        the website — no more gray box icons. */}
-                    <ProductCard product={model} />
-                  </View>
-                )}
-                ListEmptyComponent={
-                  <Text className="py-4 text-sm text-muted">
-                    No models listed yet.
+              <View className="mt-4 flex-row flex-wrap gap-3">
+                <Pressable
+                  onPress={() => navigation.push("Contact")}
+                  className="rounded-full bg-navy px-5 py-3 active:opacity-70"
+                >
+                  <Text className="text-sm font-black text-white">
+                    Send a file for a print review
                   </Text>
-                }
-              />
-              <Pressable
-                onPress={() => navigation.push("Contact")}
-                className="rounded-full bg-navy px-5 py-3"
-              >
-                <Text className="text-center text-sm font-black text-white">
-                  Send a file for a print review
-                </Text>
-              </Pressable>
+                </Pressable>
+                <Pressable
+                  onPress={() => navigation.push("Printing")}
+                  className="rounded-full border border-line bg-card px-5 py-3 active:opacity-70"
+                >
+                  <Text className="text-sm font-black text-ink">
+                    Browse 3D prints
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
@@ -368,10 +342,13 @@ export function HomeScreen() {
                   Illustrative pilot costing
                 </Text>
                 <Text className="mt-2 font-display text-2xl font-bold text-navy">
-                  NPR 8,40,000{" "}
-                  <Text className="font-sans text-sm font-normal text-muted">
-                    illustrative total
-                  </Text>
+                  {pilotTotal ? `NPR ${pilotTotal}` : "Priced per proposal"}
+                  {pilotTotal ? (
+                    <Text className="font-sans text-sm font-normal text-muted">
+                      {" "}
+                      illustrative total
+                    </Text>
+                  ) : null}
                 </Text>
                 <View className="mt-4">
                   {pilotCosts.map(([item, cost, note]) => (

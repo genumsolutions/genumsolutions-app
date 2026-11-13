@@ -88,9 +88,10 @@ function computeLiveStats(
     [String(electronic), "electronic components in store"],
     [String(models), "3D models printed on demand"],
     [String(projectPackages), "project packages & builds"],
-    // The website falls back to 3 when the categories read is empty; match it
-    // so the two pages never disagree on this row.
-    [String(projectCategoryCount || 3), "project categories supported"],
+    // 2026-11-13: this used to read `projectCategoryCount || 3`, mirroring an
+    // old website fallback that invented a count. The website shows the real
+    // length now (and a refresh note when every count is zero), so match it.
+    [String(projectCategoryCount), "project categories supported"],
   ];
 }
 
@@ -98,6 +99,7 @@ export function AboutScreen() {
   const navigation = useNavigation<Nav>();
   const [liveStats, setLiveStats] = useState<LiveStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
+  const hasLiveStats = liveStats.some(([value]) => Number(value) > 0);
 
   useEffect(() => {
     let active = true;
@@ -138,7 +140,13 @@ export function AboutScreen() {
       </Text>
 
       {/* Stats row — mirrors website /about stat cards */}
-      <View className="mt-5 space-y-3">
+      {/* 2026-11-13: the two four-up number rows sat unlabelled on top of each
+          other (static "25+ projects completed" above a live package count),
+          so they read as a contradiction. Each row is named now. */}
+      <Text className="mt-6 text-xs font-black uppercase tracking-[0.24em] text-navy">
+        Track record
+      </Text>
+      <View className="mt-3 space-y-3">
         <View className="flex-row flex-wrap gap-3">
           {STATIC_STATS.map((s) => (
             <View key={s.label} className="flex-1">
@@ -159,26 +167,41 @@ export function AboutScreen() {
           {Array.from({ length: 4 }).map((_, i) => (
             <View
               key={i}
-              className="h-16 animate-pulse rounded-2xl border border-line bg-card"
+              className="mb-2 h-16 animate-pulse rounded-2xl border border-line bg-card"
             />
           ))}
         </View>
-      ) : liveStats.length > 0 ? (
-        <View className="mt-5">
-          <View className="flex-row flex-wrap gap-3">
-            {liveStats.map(([value, label]) => (
-              <View key={label} className="flex-1">
-                <View className="border-t-2 border-ink pt-3">
+      ) : (
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <View className="flex-row flex-wrap items-baseline justify-between gap-2">
+            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+              In the store today
+            </Text>
+            <Text className="text-xs font-medium text-muted">
+              Same catalog the storefront reads
+            </Text>
+          </View>
+          {hasLiveStats ? (
+            <View className="mt-4 flex-row flex-wrap gap-3">
+              {liveStats.map(([value, label]) => (
+                <View key={label} className="min-w-[40%] flex-1">
                   <Text className="font-display text-2xl font-bold text-navy">
                     {value}
                   </Text>
-                  <Text className="mt-1 text-xs text-muted">{label}</Text>
+                  <Text className="mt-1 text-xs leading-5 text-muted">
+                    {label}
+                  </Text>
                 </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          ) : (
+            <Text className="mt-3 text-sm leading-6 text-muted">
+              Catalog figures are refreshing — open the Shop or 3D Products tab
+              to see what is listed right now.
+            </Text>
+          )}
         </View>
-      ) : null}
+      )}
 
       {/* Cross-link CTAs — mirrors website /about shop-links row */}
       <View className="mt-5">
@@ -321,8 +344,10 @@ export function AboutScreen() {
         <Text className="mt-2 font-display text-xl font-bold text-ink">
           Capabilities we bring to every project.
         </Text>
+        {/* Same rounded panel as the what-we-do cards above; this grid used to
+            be the only place on /about drawing square, gold-ruled cards. */}
         <View className="mt-3 space-y-3">
-          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+          <View className="rounded-2xl border border-line bg-card p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-ink">
                 Microcontrollers
@@ -332,7 +357,7 @@ export function AboutScreen() {
               </Text>
             </View>
           </View>
-          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+          <View className="rounded-2xl border border-line bg-card p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-ink">
                 Cloud platforms
@@ -342,7 +367,7 @@ export function AboutScreen() {
               </Text>
             </View>
           </View>
-          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+          <View className="rounded-2xl border border-line bg-card p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-ink">IoT networks</Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
@@ -350,7 +375,7 @@ export function AboutScreen() {
               </Text>
             </View>
           </View>
-          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+          <View className="rounded-2xl border border-line bg-card p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-ink">
                 Embedded systems
@@ -360,7 +385,7 @@ export function AboutScreen() {
               </Text>
             </View>
           </View>
-          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+          <View className="rounded-2xl border border-line bg-card p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-ink">Programming</Text>
               <Text className="mt-1 text-sm leading-5 text-muted">
@@ -368,7 +393,7 @@ export function AboutScreen() {
               </Text>
             </View>
           </View>
-          <View className="flex-row items-start rounded-2xl border-l-2 border-gold bg-card pl-4">
+          <View className="rounded-2xl border border-line bg-card p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-ink">
                 STEAM education

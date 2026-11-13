@@ -6,8 +6,18 @@
 // and curriculum highlights (same DB tables, same DB-first + fallback).
 // =====================================================================
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../navigation/types";
+import { pilotTotalLabel } from "../lib/pilotCostTotal";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
 import { getServices } from "../services/serviceService";
@@ -31,7 +41,10 @@ const LEARNING_STREAMS = [
   "Aerial drones",
 ];
 
+type Nav = NativeStackNavigationProp<RootStackParamList, "Services">;
+
 export function ServicesScreen() {
+  const navigation = useNavigation<Nav>();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("All");
@@ -95,6 +108,7 @@ export function ServicesScreen() {
 
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
+  const pilotTotal = pilotTotalLabel(pilotCosts);
 
   if (loading) {
     return (
@@ -169,11 +183,32 @@ export function ServicesScreen() {
           ))}
         </View>
       ) : (
-        <View className="items-center py-16">
-          <Feather name="inbox" size={40} color="#cbd5e1" />
-          <Text className="mt-3 text-sm text-muted">
-            No services in this category. Contact us for details.
+        // 2026-11-13: an emptied service list and an empty category are
+        // different problems — the old copy blamed the filter for both.
+        <View className="mt-4 rounded-2xl border border-line bg-card p-5">
+          <Feather name="inbox" size={24} color="#94a3b8" />
+          <Text className="mt-3 text-sm leading-6 text-muted">
+            {services.length === 0
+              ? "The service list is being updated. Tell us what you need and we will price it directly."
+              : `No services in ${category} yet.`}
           </Text>
+          {services.length === 0 ? (
+            <Pressable
+              onPress={() => navigation.push("Contact")}
+              className="mt-3 self-start rounded-full border border-navy px-4 py-2 active:opacity-70"
+            >
+              <Text className="text-xs font-black text-navy">Message us</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => setCategory("All")}
+              className="mt-3 self-start rounded-full border border-navy px-4 py-2 active:opacity-70"
+            >
+              <Text className="text-xs font-black text-navy">
+                Show all {services.length} services
+              </Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -191,8 +226,9 @@ export function ServicesScreen() {
           Learning streams
         </Text>
         <Text className="mt-1 text-sm leading-6 text-muted">
-          Seven lab tracks, each backed by a real kit, a project in the
-          workshop, and a Control Panel window learners can drive.
+          {LEARNING_STREAMS.length} lab tracks, each backed by a real kit, a
+          project in the workshop, and a Control Panel window learners can
+          drive.
         </Text>
         <View className="mt-4 flex-row flex-wrap gap-2">
           {LEARNING_STREAMS.map((stream) => (
@@ -255,12 +291,18 @@ export function ServicesScreen() {
           <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
             Illustrative pilot costing
           </Text>
-          <Text className="mt-2 font-display text-2xl font-bold text-navy">
-            NPR 8,40,000
+          <Text className="mt-1 text-sm leading-6 text-muted">
+            Three classrooms, 30 kits, delivery and a teacher workshop —
+            confirmed after scope, taxes and local procurement review.
           </Text>
-          <Text className="mt-1 text-xs font-normal text-muted">
-            illustrative total
+          <Text className="mt-3 font-display text-2xl font-bold text-navy">
+            {pilotTotal ? `NPR ${pilotTotal}` : "Priced per proposal"}
           </Text>
+          {pilotTotal ? (
+            <Text className="mt-1 text-xs font-normal text-muted">
+              illustrative total
+            </Text>
+          ) : null}
           <View className="mt-4">
             {pilotCosts.map(([item, cost, note]) => (
               <View
