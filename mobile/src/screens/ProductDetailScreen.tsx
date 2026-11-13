@@ -35,6 +35,15 @@ import {
   type ProjectComponentLink,
 } from "../services/adminService";
 import { useApp } from "../context/AppContext";
+import {
+  defaultProjectPricing,
+  estimateProject,
+  formatNPR,
+  projectPricingAvailable,
+  resolveLine,
+  type ProjectPricing,
+} from "../lib/project-pricing";
+import { getPublishedProjectPricing } from "../services/projectPricingService";
 import { trackHabit } from "../services/collectionService";
 import { galleryImages, type Product } from "../types";
 import { getProductMedia } from "../lib/productMedia";
@@ -69,6 +78,15 @@ export function ProductDetailScreen() {
     [],
   );
   const [usedInRows, setUsedInRows] = useState<{ projectId: string }[]>([]);
+  // 2026-11-13: published project pricing (approved rows only). Draft or
+  // missing => the page keeps "rate on request" and hides the calculator.
+  const [projectPricing, setProjectPricing] = useState<ProjectPricing>(
+    defaultProjectPricing,
+  );
+  // Buyer-adjusted component quantities for the live calculator.
+  const [quantityOverrides, setQuantityOverrides] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     let active = true;
@@ -94,6 +112,11 @@ export function ProductDetailScreen() {
               void listProjectComponents(product.id)
                 .then((rows) => {
                   if (active) setComponentRows(rows);
+                })
+                .catch(() => undefined);
+              void getPublishedProjectPricing(product.id)
+                .then((pricing) => {
+                  if (active && pricing) setProjectPricing(pricing);
                 })
                 .catch(() => undefined);
             } else {
@@ -128,6 +151,9 @@ export function ProductDetailScreen() {
     const timer = setTimeout(() => setAdded(false), 2000);
     return () => clearTimeout(timer);
   }, [added]);
+
+  // New product => reset the calculator quantities.
+  useEffect(() => setQuantityOverrides({}), [route.params.productId]);
 
   if (loading || !product) {
     return (
@@ -188,6 +214,40 @@ export function ProductDetailScreen() {
       catalogAll.find((p) => p.id === row.projectId && p.active !== false),
     )
     .filter((p): p is Product => Boolean(p));
+
+  // 2026-11-13: project price lines + estimate. Same maths as the website
+  // detail page (src/lib/project-pricing.ts is a direct port).
+  const projectLines = componentProducts.map((entry) => {
+    const quantity = Math.max(
+      1,
+      quantityOverrides[entry.product.id] ?? entry.qty,
+    );
+    return {
+      ...resolveLine(
+        { productId: entry.product.id, quantity },
+        entry.product.price,
+        projectPricing.componentMarkupPercent,
+      ),
+      name: entry.product.name,
+    };
+  });
+  const projectEstimate = estimateProject({
+    pricing: projectPricing,
+    links: projectLines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+    })),
+    catalogPrices: new Map(
+      projectLines.map((line) => [line.productId, line.catalogPrice]),
+    ),
+  });
+  // Publish only when approved AND a real amount comes out of it.
+  const pricingPublished =
+    isQuote &&
+    product.productType === "Project package" &&
+    projectEstimate.available &&
+    projectPricingAvailable(projectPricing) &&
+    projectEstimate.total > 0;
 
   const colorLabel =
     product.color && !/from-\[.*?\]\s*to-\[.*?\]/.test(product.color)
@@ -343,14 +403,149 @@ export function ProductDetailScreen() {
 
           <View className="mt-6 flex-row flex-wrap items-baseline gap-x-2">
             <Text className="font-display text-3xl font-bold tracking-tight text-ink">
-              {product.priceLabel}
+              {pricingPublished
+                ? formatNPR(projectEstimate.total)
+                : product.priceLabel}
             </Text>
             <Text className="text-sm text-muted">
               {product.productType === "Project package"
-                ? "indicative package"
+                ? pricingPublished
+                  ? "indicative package estimate"
+                  : "rate on request"
                 : "per unit"}
             </Text>
           </View>
+
+          {/* 2026-11-13: live project calculator — only once the owner has
+              approved the rates. Mirrors the website's detail-page calculator. */}
+          {pricingPublished ? (
+            <View className="mt-4 rounded-xl border border-line bg-card p-4">
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="min-w-0 flex-1 text-sm font-bold text-ink">
+                  Quote calculator ({projectLines.length})
+                </Text>
+                <Text className="text-sm font-bold text-navy">
+                  {formatNPR(projectEstimate.total)}
+                </Text>
+              </View>
+              <Text className="mt-1 text-xs leading-5 text-muted">
+                Adjust the component quantities to see how the indicative price
+                changes. The final package price is confirmed after you request
+                a quote.
+              </Text>
+
+              {projectLines.length > 0 ? (
+                <View className="mt-3 gap-2">
+                  {projectLines.map((line) => (
+                    <View
+                      key={line.productId}
+                      className="rounded-lg border border-line bg-surface p-3"
+                    >
+                      <Text
+                        className="text-sm font-bold text-ink"
+                        numberOfLines={1}
+                      >
+                        {line.name}
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-muted">
+                        {formatNPR(line.catalogPrice)}/unit
+                        {projectPricing.componentMarkupPercent > 0
+                          ? ` + ${projectPricing.componentMarkupPercent}% = ${formatNPR(line.unitPrice)}`
+                          : ""}
+                      </Text>
+                      <View className="mt-2 flex-row items-center justify-between">
+                        <View className="flex-row items-center rounded-full border border-line">
+                          <Pressable
+                            onPress={() =>
+                              setQuantityOverrides((prev) => ({
+                                ...prev,
+                                [line.productId]: Math.max(
+                                  1,
+                                  line.quantity - 1,
+                                ),
+                              }))
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`Decrease ${line.name} quantity`}
+                            className="h-9 w-9 items-center justify-center rounded-full"
+                          >
+                            <Feather name="minus" size={14} color="#1e3a8a" />
+                          </Pressable>
+                          <Text className="min-w-8 text-center text-xs font-bold text-ink">
+                            {line.quantity}
+                          </Text>
+                          <Pressable
+                            onPress={() =>
+                              setQuantityOverrides((prev) => ({
+                                ...prev,
+                                [line.productId]: Math.min(
+                                  99,
+                                  line.quantity + 1,
+                                ),
+                              }))
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`Increase ${line.name} quantity`}
+                            className="h-9 w-9 items-center justify-center rounded-full"
+                          >
+                            <Feather name="plus" size={14} color="#1e3a8a" />
+                          </Pressable>
+                        </View>
+                        <Text className="text-sm font-bold text-ink">
+                          {formatNPR(line.lineTotal)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text className="mt-2 text-xs text-muted">
+                  No catalog components are linked to this package yet.
+                </Text>
+              )}
+
+              <View className="mt-3 border-t border-line pt-2">
+                <SummaryRow
+                  label="Package base charge"
+                  value={formatNPR(projectEstimate.packageBaseCharge)}
+                />
+                <SummaryRow
+                  label="Components"
+                  value={formatNPR(projectEstimate.componentsTotal)}
+                />
+                {projectEstimate.extrasTotal > 0 ? (
+                  <SummaryRow
+                    label="Extras"
+                    value={formatNPR(projectEstimate.extrasTotal)}
+                  />
+                ) : null}
+                <SummaryRow
+                  label="Subtotal"
+                  value={formatNPR(projectEstimate.subtotal)}
+                />
+                {projectEstimate.discountPercent > 0 ? (
+                  <SummaryRow
+                    label={`Bulk discount (${projectEstimate.discountPercent}%)`}
+                    value={`−${formatNPR(projectEstimate.discountAmount)}`}
+                  />
+                ) : null}
+                {projectEstimate.minimumApplied ? (
+                  <SummaryRow
+                    label={`Minimum order ${formatNPR(projectEstimate.minimumOrder)}`}
+                    value={formatNPR(projectEstimate.beforeMinimum)}
+                  />
+                ) : null}
+                <View className="mt-2 flex-row items-center justify-between border-t border-line pt-2">
+                  <Text className="text-sm font-bold text-ink">
+                    Indicative price
+                  </Text>
+                  <Text className="font-display text-lg font-bold text-navy">
+                    {formatNPR(projectEstimate.total)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
 
           <View className="mt-4 flex-row flex-wrap gap-x-5 gap-y-2 border-t border-b border-line py-3">
             <Info label="Price" value={product.priceLabel} />
@@ -655,7 +850,11 @@ export function ProductDetailScreen() {
             accessibilityRole="button"
             accessibilityState={{ busy: adding, disabled: adding }}
             accessibilityLabel={
-              isQuote ? "Request a scoped quote" : "Add to build list"
+              isQuote
+                ? pricingPublished
+                  ? "Request this package"
+                  : "Request a scoped quote"
+                : "Add to build list"
             }
             className={`flex-1 flex-row items-center justify-center gap-2 rounded-full py-3.5 active:opacity-80 disabled:opacity-50 ${
               added && !isQuote ? "bg-emerald-600" : "bg-navy"
@@ -663,7 +862,9 @@ export function ProductDetailScreen() {
           >
             <Text className="font-bold text-white">
               {isQuote
-                ? "Request a scoped quote"
+                ? pricingPublished
+                  ? "Request this package"
+                  : "Request a scoped quote"
                 : adding
                   ? "Adding…"
                   : added
@@ -680,6 +881,15 @@ export function ProductDetailScreen() {
           </Pressable>
         </View>
       </View>
+    </View>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="mt-1 flex-row items-center justify-between">
+      <Text className="min-w-0 flex-1 pr-2 text-xs text-muted">{label}</Text>
+      <Text className="text-xs font-bold text-ink">{value}</Text>
     </View>
   );
 }

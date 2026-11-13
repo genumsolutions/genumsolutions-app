@@ -10,6 +10,11 @@
 // =====================================================================
 import { supabase } from "../config/supabase";
 import { clampGallery } from "../lib/imageLimits";
+import {
+  defaultProjectPricing,
+  type ProjectPricing,
+} from "../lib/project-pricing";
+import { mapProjectPricingRow } from "./projectPricingService";
 
 export type AdminOrder = {
   id: string;
@@ -685,6 +690,117 @@ export async function saveProjectComponents(
     throw new Error(message);
   }
   return Number(data ?? 0);
+}
+
+// --- Project pricing (2026-11-13) -------------------------------------
+// The website's /api/admin/project-pricing gate reads the WEBSITE session
+// cookie, so an app JWT cannot authorize on it. Like the print studio, the
+// app writes the row directly with the anon key + the signed-in user's JWT:
+// the table's staff+ read/write policies enforce the role server-side (RLS).
+// Approve/withdraw is restricted to admins in the UI, mirroring the website
+// route's admin check. Defaults stay draft until an admin approves.
+
+/** snake_case row for the DB (clamped exactly like the website store). */
+function toProjectPricingRow(pricing: ProjectPricing) {
+  return {
+    id: pricing.id,
+    package_base_charge: Math.max(
+      0,
+      Math.round(Number(pricing.packageBaseCharge) || 0),
+    ),
+    component_markup_percent: Math.max(
+      0,
+      Math.min(500, Math.round(Number(pricing.componentMarkupPercent) || 0)),
+    ),
+    extras: pricing.extras
+      .filter((extra) => extra && typeof extra.name === "string")
+      .map((extra) => ({
+        id: extra.id || extra.name,
+        name: extra.name.slice(0, 60),
+        amount: Math.max(0, Math.round(Number(extra.amount) || 0)),
+      }))
+      .slice(0, 20),
+    bulk_tiers: pricing.bulkTiers
+      .filter((tier) => tier.minQty > 0)
+      .map((tier) => ({
+        minQty: Math.max(1, Math.round(Number(tier.minQty) || 1)),
+        discountPercent: Math.min(
+          90,
+          Math.max(0, Math.round(Number(tier.discountPercent) || 0)),
+        ),
+      }))
+      .slice(0, 10),
+    minimum_order: Math.max(0, Math.round(Number(pricing.minimumOrder) || 0)),
+    price_status: pricing.priceStatus === "approved" ? "approved" : "draft",
+    price_approved_at: pricing.priceApprovedAt,
+    price_approved_by: pricing.priceApprovedBy,
+    note: pricing.note.slice(0, 300),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/** Read one project's pricing (staff+ sees drafts too). */
+export async function getAdminProjectPricing(
+  projectId: string,
+): Promise<ProjectPricing> {
+  const { data, error } = await supabase
+    .from("project_pricing")
+    .select("*")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) throw error;
+  return (
+    mapProjectPricingRow((data as Record<string, unknown> | null) ?? null) ?? {
+      ...defaultProjectPricing,
+      id: projectId,
+    }
+  );
+}
+
+/** Save the pricing rules (staff+). Keeps the approval state the row loaded. */
+export async function saveAdminProjectPricing(
+  pricing: ProjectPricing,
+): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  const { error } = await supabase
+    .from("project_pricing")
+    .upsert(toProjectPricingRow(pricing));
+  if (error) {
+    throw new Error(
+      (error as unknown as { message?: string })?.message ||
+        "Could not save the project pricing.",
+    );
+  }
+}
+
+/** Approve or withdraw a project's rates (admins only in the UI). */
+export async function setAdminProjectPricingApproval(
+  projectId: string,
+  approved: boolean,
+  approvedBy: string,
+): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  const { error } = await supabase
+    .from("project_pricing")
+    .update({
+      price_status: approved ? "approved" : "draft",
+      price_approved_at: approved ? new Date().toISOString() : null,
+      price_approved_by: approved ? approvedBy : "",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", projectId);
+  if (error) {
+    throw new Error(
+      (error as unknown as { message?: string })?.message ||
+        "Could not update the pricing status.",
+    );
+  }
 }
 
 // --- Users ---
