@@ -40,12 +40,16 @@ export type AdminTab = (typeof ADMIN_TABS)[number];
 // console explains itself with the same words on either surface. Keep values
 // free of double quotes — the tests parse them out of the source text.
 export const ADMIN_TAB_HINTS: Record<AdminTab, string> = {
-  Dashboard: "Revenue, orders and traffic at a glance.",
-  Orders: "Every order, its payment state and the pilot finance lines.",
+  // 2026-11-13 (batch 4): money moved into Orders → Finance only, and customer
+  // messages moved out of Settings into Users. Must match the website's
+  // TAB_HINTS exactly (both parity tests compare these maps).
+  Dashboard: "Orders, stock, accounts and traffic at a glance.",
+  Orders: "Every order, its payment state and the finance lines.",
   "Electronic Products": "The /products catalog — pricing, stock and photos.",
   "3D Products": "The /3d-printing catalog.",
   Projects: "Bundles sold on /projects, including pre-packaged kits.",
   Content: "Services, journal posts and the home page copy.",
-  Users: "Accounts, roles, orders, project profiles, activity and diagnostics.",
-  Settings: "Company details, customer messages and newsletter subscribers.",
+  Users:
+    "Accounts, roles, messages, project profiles, activity and diagnostics.",
+  Settings: "Company details, socials and contact channels.",
 };

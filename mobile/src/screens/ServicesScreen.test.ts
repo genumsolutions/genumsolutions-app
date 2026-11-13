@@ -18,6 +18,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { pilotCosts as fallbackPilotCosts } from "../config/programs";
+import { pilotTotalLabel } from "../lib/pilotCostTotal";
 
 function raw(rel: string): string {
   return readFileSync(fileURLToPath(new NodeURL(rel, import.meta.url)), "utf8");
@@ -132,17 +134,32 @@ describe("ServicesScreen — program sections read the SAME data the website doe
     }
   });
 
-  it("quotes the same illustrative pilot total as the website", () => {
-    expect(src).toContain("NPR 8,40,000");
+  it("computes the illustrative pilot total from the rows, like the website", () => {
+    // The total used to be typed into the screen beside admin-editable rows,
+    // so an edit could not move it (the website had the same bug).
+    expect(src).not.toContain("NPR 8,40,000");
+    expect(src).toContain("pilotTotalLabel(pilotCosts)");
+  });
+
+  it("still quotes NPR 8,40,000 for the bundled fallback rows", () => {
+    expect(pilotTotalLabel(fallbackPilotCosts)).toBe("8,40,000");
+  });
+
+  it('says "Priced per proposal" when a row is not a plain NPR amount', () => {
+    expect(pilotTotalLabel([["Kits", "NPR 1,00,000 + tax", "x"]])).toBeNull();
+    expect(pilotTotalLabel([])).toBeNull();
+    expect(src).toContain("Priced per proposal");
   });
 });
 
 describe("ServicesScreen — the existing services behaviour is untouched", () => {
-  it("keeps the category filter and the website's exact empty state", () => {
+  it("keeps the category filter and separates the two empty states", () => {
     expect(src).toContain("<CategoryDropdown");
-    expect(src).toContain(
-      "No services in this category. Contact us for details.",
-    );
+    // 2026-11-13: an emptied list and an empty category are different problems
+    // (mirrors the website ServicesGrid copy).
+    expect(src).toContain("The service list is being updated");
+    expect(src).toContain("No services in ${");
+    expect(src).toContain('navigation.push("Contact")');
   });
 
   it("has no text search — the website's /services filter is category-only", () => {
