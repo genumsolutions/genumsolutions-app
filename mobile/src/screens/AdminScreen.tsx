@@ -864,9 +864,7 @@ function AdminConsole() {
           seedingProjects ? "Project package" : "Retail kit",
           seedCategory,
         ),
-        ...(seedingProjects
-          ? { projectCategory: "Robo Car" as string | null }
-          : {}),
+        ...(seedingProjects ? { projectCategory: null } : {}),
         name: preview?.title || "",
         description: preview?.description || "",
         specs: preview?.specs ?? [],
@@ -1826,7 +1824,7 @@ function blankProjectProduct(): AdminProduct {
     id: "",
     name: "",
     category: "Project Packages",
-    projectCategory: "Robo Car",
+    projectCategory: "",
     price: 0,
     priceLabel: "Request quote",
     sku: "",
@@ -2415,6 +2413,12 @@ function ProductsTab({
     </View>
   );
 }
+
+// ── Project editor ──
+// Share the website admin's project-category picker (6 categories, excluding
+// Remote Controller) so staff filing a new project on the app picks from the
+// same buckets the public /projects page filters on (wheeled / smart / drone).
+import { PROJECT_CATEGORIES } from "../config/project-catalog";
 
 function ProjectTab({
   title,
@@ -3153,6 +3157,23 @@ function ProductEditor({
             <Text className="mb-2 font-display text-base font-bold text-ink">
               Project information
             </Text>
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Project category
+            </Text>
+            <View className="mb-3">
+              <CategoryDropdown
+                value={product.projectCategory || ""}
+                options={PROJECT_CATEGORIES.filter(
+                  (c) => c.slug !== "remote-controller",
+                ).map((c) => c.name)}
+                onChange={(projectCategory) =>
+                  patch({ projectCategory: projectCategory || null })
+                }
+                placeholder="Select a project category"
+                title="Project category"
+                allowCustom={false}
+              />
+            </View>
             <Text className="mb-1 text-xs font-bold text-muted">
               Project overview
             </Text>
