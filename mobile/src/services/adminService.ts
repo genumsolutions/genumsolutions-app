@@ -786,15 +786,16 @@ export async function setAdminProjectPricingApproval(
   if (!sessionData.session) {
     throw new Error("Your session expired — sign in again, then retry.");
   }
-  const { error } = await supabase
-    .from("project_pricing")
-    .update({
-      price_status: approved ? "approved" : "draft",
-      price_approved_at: approved ? new Date().toISOString() : null,
-      price_approved_by: approved ? approvedBy : "",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", projectId);
+  // Upsert, not update: a package created after the seed has no pricing row
+  // yet, and approving it must not silently affect zero rows. Every other
+  // column has a DB default, so the insert carries only the approval fields.
+  const { error } = await supabase.from("project_pricing").upsert({
+    id: projectId,
+    price_status: approved ? "approved" : "draft",
+    price_approved_at: approved ? new Date().toISOString() : null,
+    price_approved_by: approved ? approvedBy : "",
+    updated_at: new Date().toISOString(),
+  });
   if (error) {
     throw new Error(
       (error as unknown as { message?: string })?.message ||
