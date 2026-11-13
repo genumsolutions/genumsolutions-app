@@ -36,6 +36,12 @@ import {
   type SortOption,
 } from "../services/productService";
 import { OfflineBadge } from "../components/OfflineBadge";
+import { supabase } from "../config/supabase";
+import {
+  getPrintContent,
+  submitPrintQuote,
+  type PrintContent,
+} from "../services/printService";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { ProductCard } from "../components/ProductCard";
 import { PagePager } from "../components/PagePager";
@@ -126,6 +132,26 @@ export function PrintingScreen() {
   const [page, setPage] = useState(1);
   // U-48: pull-to-refresh — re-run the catalog read; spinner tracks it.
   const [refreshing, setRefreshing] = useState(false);
+
+  // 2026-11-13: live print service content (materials, rates, promotion) and
+  // the text-only quote request. The website owns the data and the pipeline;
+  // this screen only submits. Attachments stay web-only for now.
+  const [printContent, setPrintContent] = useState<PrintContent | null>(null);
+  const [quote, setQuote] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    material: "",
+    quantity: "1",
+    dimensions: "",
+    timeline: "",
+    description: "",
+  });
+  const [sendingQuote, setSendingQuote] = useState(false);
+  const [quoteStatus, setQuoteStatus] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
   const load = useCallback(async () => {
     try {
       const { products, source } = await getProductsWithSource();
@@ -147,6 +173,53 @@ export function PrintingScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    void getPrintContent().then(({ content }) => {
+      if (active) setPrintContent(content);
+    });
+    // Prefill the signed-in customer's email; guests can still submit.
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        const email = data.user?.email;
+        if (active && email) setQuote((current) => ({ ...current, email }));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function sendQuote() {
+    setQuoteStatus(null);
+    setSendingQuote(true);
+    try {
+      const result = await submitPrintQuote({
+        ...quote,
+        quantity: Number(quote.quantity),
+      });
+      if (!result.ok) {
+        setQuoteStatus({ text: result.error, isError: true });
+        return;
+      }
+      setQuoteStatus({
+        text: "Thanks — your request is in. We will review it and send a quote.",
+        isError: false,
+      });
+      setQuote((current) => ({
+        ...current,
+        material: "",
+        quantity: "1",
+        dimensions: "",
+        timeline: "",
+        description: "",
+      }));
+    } finally {
+      setSendingQuote(false);
+    }
+  }
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -195,6 +268,47 @@ export function PrintingScreen() {
           Printed in-house, on request.
         </Text>
       </View>
+
+      {/* Live promotion — only rendered when the website has one published. */}
+      {printContent?.promotion && (
+        <View className="mx-5 mt-4 rounded-2xl border border-gold/40 bg-gold/10 p-4">
+          {printContent.promotion.discountType !== "none" &&
+            printContent.promotion.discountValue > 0 && (
+              <Text className="text-[10px] font-black uppercase tracking-[0.24em] text-gold-dark">
+                {printContent.promotion.discountType === "percent"
+                  ? `${printContent.promotion.discountValue}% off`
+                  : `NPR ${printContent.promotion.discountValue} off`}
+              </Text>
+            )}
+          <Text className="mt-1 font-display text-lg font-bold text-ink">
+            {printContent.promotion.title}
+          </Text>
+          {printContent.promotion.body ? (
+            <Text className="mt-1 text-sm leading-6 text-muted">
+              {printContent.promotion.body}
+            </Text>
+          ) : null}
+          {printContent.promotion.ctaLabel ? (
+            <Pressable
+              onPress={() => {
+                const href = printContent.promotion?.ctaHref ?? "";
+                const url = href.startsWith("http")
+                  ? href
+                  : `https://genumsolutions-website.vercel.app/3d-printing${
+                      href.startsWith("#") ? href : ""
+                    }`;
+                void Linking.openURL(url);
+              }}
+              accessibilityRole="link"
+              className="mt-3 self-start rounded-full bg-ink px-4 py-2"
+            >
+              <Text className="text-xs font-black text-white">
+                {printContent.promotion.ctaLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      )}
 
       {/* Search — same control as the Electronic Products tab */}
       <View className="px-5 pt-4">
@@ -335,6 +449,28 @@ export function PrintingScreen() {
           product teams, and classrooms. Start with a file, a reference object,
           or a rough idea.
         </Text>
+        {printContent && printContent.materials.length > 0 && (
+          <View
+            className="mt-4 flex-row flex-wrap"
+            style={{ marginHorizontal: -4 }}
+          >
+            {printContent.materials.map((material) => (
+              <View
+                key={material.id}
+                className="m-1 rounded-full border border-line bg-card px-3 py-1.5"
+              >
+                <Text className="text-xs font-bold text-ink">
+                  {material.name}
+                  <Text className="font-medium text-muted">
+                    {material.ratePerGram > 0
+                      ? ` · NPR ${material.ratePerGram}/g`
+                      : " · rate on request"}
+                  </Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       <View className="px-5 py-8">
@@ -365,6 +501,171 @@ export function PrintingScreen() {
             </View>
           ))}
         </View>
+      </View>
+
+      {/* Text-only quote request — the website route validates, stores and
+          emails it; attachments stay on the website for now. */}
+      <View className="mx-5 mb-8 rounded-2xl bg-ink p-5">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">
+          Send a request
+        </Text>
+        <Text className="mt-2 font-display text-2xl font-bold text-white">
+          Tell us what you need printed.
+        </Text>
+        <Text className="mt-2 text-sm leading-6 text-white/70">
+          We review the part, material and finish, then send a firm quote. For
+          STL or STEP files, attach them on the website.
+        </Text>
+
+        <View
+          className="mt-4 flex-row flex-wrap"
+          style={{ marginHorizontal: -4 }}
+        >
+          {[
+            {
+              key: "name",
+              label: "Name",
+              value: quote.name,
+              placeholder: "Your name",
+              autoCapitalize: "words" as const,
+            },
+            {
+              key: "email",
+              label: "Email",
+              value: quote.email,
+              placeholder: "you@example.com",
+              keyboardType: "email-address" as const,
+            },
+            {
+              key: "phone",
+              label: "Phone (optional)",
+              value: quote.phone,
+              placeholder: "98XXXXXXXX",
+              keyboardType: "phone-pad" as const,
+            },
+            {
+              key: "quantity",
+              label: "Quantity",
+              value: quote.quantity,
+              placeholder: "1",
+              keyboardType: "number-pad" as const,
+            },
+            {
+              key: "dimensions",
+              label: "Size (optional)",
+              value: quote.dimensions,
+              placeholder: "12 × 8 × 10 cm",
+            },
+            {
+              key: "timeline",
+              label: "Needed by (optional)",
+              value: quote.timeline,
+              placeholder: "within 2 weeks",
+            },
+          ].map((field) => (
+            <View key={field.key} style={{ width: "50%", padding: 4 }}>
+              <Text className="text-xs font-bold text-white/80">
+                {field.label}
+              </Text>
+              <TextInput
+                value={field.value}
+                onChangeText={(text) =>
+                  setQuote((current) => ({ ...current, [field.key]: text }))
+                }
+                placeholder={field.placeholder}
+                placeholderTextColor="#94a3b8"
+                keyboardType={field.keyboardType}
+                autoCapitalize={field.autoCapitalize ?? "none"}
+                accessibilityLabel={field.label}
+                className="mt-1 rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white"
+              />
+            </View>
+          ))}
+          <View style={{ width: "100%", padding: 4 }}>
+            <Text className="text-xs font-bold text-white/80">Material</Text>
+            <View className="mt-1 flex-row flex-wrap">
+              {[
+                { id: "", name: "Not sure" },
+                ...(printContent?.materials ?? []).map((m) => ({
+                  id: m.name,
+                  name: m.name,
+                })),
+              ].map((option) => {
+                const selected = quote.material === option.id;
+                return (
+                  <Pressable
+                    key={option.id || "any"}
+                    onPress={() =>
+                      setQuote((current) => ({
+                        ...current,
+                        material: option.id,
+                      }))
+                    }
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    className={`mr-2 mt-1 rounded-full border px-3 py-1.5 ${
+                      selected
+                        ? "border-gold bg-gold"
+                        : "border-white/25 bg-white/5"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        selected ? "text-ink" : "text-white/80"
+                      }`}
+                    >
+                      {option.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <View style={{ width: "100%", padding: 4 }}>
+            <Text className="text-xs font-bold text-white/80">
+              Describe the part
+            </Text>
+            <TextInput
+              value={quote.description}
+              onChangeText={(text) =>
+                setQuote((current) => ({ ...current, description: text }))
+              }
+              placeholder="What is it for, and does it need to fit or hold anything?"
+              placeholderTextColor="#94a3b8"
+              multiline
+              numberOfLines={4}
+              accessibilityLabel="Describe the part"
+              className="mt-1 min-h-[96px] rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white"
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        {quoteStatus && (
+          <Text
+            accessibilityRole="alert"
+            className={`mt-3 rounded-lg px-3 py-2 text-sm font-bold ${
+              quoteStatus.isError
+                ? "bg-red-500/15 text-red-300"
+                : "bg-emerald-500/15 text-emerald-300"
+            }`}
+          >
+            {quoteStatus.text}
+          </Text>
+        )}
+
+        <Pressable
+          onPress={() => void sendQuote()}
+          disabled={sendingQuote}
+          accessibilityState={{ disabled: sendingQuote }}
+          className="mt-4 h-12 flex-row items-center justify-center rounded-full bg-gold px-5"
+        >
+          {sendingQuote ? (
+            <ActivityIndicator color="#0f172a" />
+          ) : (
+            <Text className="text-sm font-black text-ink">Request a quote</Text>
+          )}
+        </Pressable>
       </View>
 
       {/* U-47v5: the store grid now lives at the TOP of the tab with the
