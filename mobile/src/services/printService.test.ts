@@ -5,11 +5,20 @@ import {
   submitPrintQuote,
   validatePrintQuote,
 } from "./printService";
+import type { QuoteAttachment } from "../lib/printAttachments";
 
 // The app reads print content and posts quote requests through the website's
 // public routes. These tests pin the mapping (live -> screen shape), the
 // fallback path (offline never blanks the section) and the client-side
 // validation that mirrors the route.
+
+function file(
+  name: string,
+  size = 1024,
+  type = "application/octet-stream",
+): QuoteAttachment {
+  return { uri: `file:///cache/${name}`, name, size, mimeType: type };
+}
 
 const fetchMock = vi.fn();
 
@@ -151,6 +160,48 @@ describe("submitPrintQuote", () => {
       quantity: 2,
       material: "PLA",
     });
+  });
+
+  it("posts attached files as multipart", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, id: "q2" }));
+    const result = await submitPrintQuote({
+      name: "Asha",
+      email: "asha@example.com",
+      description: "A replacement knob for a pressure cooker lid.",
+      quantity: 1,
+      files: [file("bracket.stl", 2 * 1024 * 1024, "model/stl")],
+    });
+    expect(result).toEqual({ ok: true });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe("POST");
+    expect(String(init.body)).toBe("[object FormData]");
+    expect(init.headers).toMatchObject({ accept: "application/json" });
+  });
+
+  it("keeps the request JSON when files are empty", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, id: "q3" }));
+    await submitPrintQuote({
+      name: "Asha",
+      email: "asha@example.com",
+      description: "A replacement knob for a pressure cooker lid.",
+      quantity: 1,
+      files: [],
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ quantity: 1 });
+  });
+
+  it("falls back to text-only validation error when attached files are rejected", async () => {
+    const result = await submitPrintQuote({
+      name: "Asha",
+      email: "asha@example.com",
+      description: "A replacement knob for a pressure cooker lid.",
+      quantity: 1,
+      files: [file("model.exe")],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/STL/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("surfaces the server message", async () => {
