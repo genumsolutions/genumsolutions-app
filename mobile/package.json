@@ -74,7 +74,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "expo export --platform web && playwright test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release:ready": "npx tsx scripts/release-ready-check.mjs"
   },
   "private": true,
   "expo": {
