@@ -24,6 +24,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { getProductsWithSource } from "../services/productService";
 import { resolveCart, setQuantity } from "../services/cartService";
+import { LINE_ISSUE_LABELS, lineIssue } from "../lib/cartAvailability";
 import { useApp } from "../context/AppContext";
 import { trackHabit } from "../services/collectionService";
 import type { Product } from "../types";
@@ -205,6 +206,12 @@ export function CartScreen() {
     (sum, { line, product }) => sum + product.price * line.quantity,
     0,
   );
+  // Same purchasability rules as the website's checkout: hidden, quote-only,
+  // unpriced or out-of-stock lines block checkout until they are removed.
+  const unavailable = lines.filter(
+    ({ product }) => lineIssue(product) !== null,
+  );
+  const hasUnavailable = unavailable.length > 0;
 
   return (
     <View className="flex-1 bg-surface">
@@ -213,81 +220,94 @@ export function CartScreen() {
         data={lines}
         keyExtractor={({ line }) => line.productId}
         contentContainerStyle={{ padding: 16 }}
-        renderItem={({ item }) => (
-          // U-47v4 (owner: cart "shitty and poorly displayed"): web-parity
-          // row — photo, name, per-unit price, line total, bordered qty
-          // stepper, and a Remove action. Nothing overflows: the info column
-          // is min-w-0 flex-1 and the stepper is fixed-width.
-          <View className="mb-3 rounded-2xl border border-line bg-card p-3">
-            <View className="flex-row">
-              <View className="h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-mist">
-                {item.product.image ? (
-                  <Image
-                    source={{ uri: item.product.image }}
-                    className="h-full w-full"
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Feather name="box" size={22} color="#94a3b8" />
-                )}
-              </View>
-              <View className="ml-3 min-w-0 flex-1">
-                <Text
-                  numberOfLines={2}
-                  className="text-sm font-bold leading-tight text-ink"
-                >
-                  {item.product.name}
-                </Text>
-                <Text className="mt-0.5 text-xs text-muted">
-                  {formatNPR(item.product.price)} each
-                </Text>
-                <View className="mt-2 flex-row items-center justify-between">
-                  <View className="flex-row items-center">
-                    <Pressable
-                      onPress={() =>
-                        updateQty(item.line.productId, item.line.quantity - 1)
-                      }
-                      className="h-8 w-8 items-center justify-center rounded-lg border border-line"
-                      accessibilityLabel={`Reduce ${item.product.name} quantity`}
-                    >
-                      <Feather name="minus" size={13} color="#1e3a8a" />
-                    </Pressable>
-                    <Text
-                      accessibilityLiveRegion="polite"
-                      className="mx-2.5 min-w-5 text-center text-sm font-bold text-ink"
-                    >
-                      {item.line.quantity}
-                    </Text>
-                    <Pressable
-                      onPress={() =>
-                        updateQty(item.line.productId, item.line.quantity + 1)
-                      }
-                      className="h-8 w-8 items-center justify-center rounded-lg border border-line"
-                      accessibilityLabel={`Add another ${item.product.name}`}
-                    >
-                      <Feather name="plus" size={13} color="#1e3a8a" />
-                    </Pressable>
-                  </View>
+        renderItem={({ item }) => {
+          const issue = lineIssue(item.product);
+          const maxed = item.line.quantity >= Math.max(1, item.product.stock);
+          return (
+            // U-47v4 (owner: cart "shitty and poorly displayed"): web-parity
+            // row — photo, name, per-unit price, line total, bordered qty
+            // stepper, and a Remove action. Nothing overflows: the info column
+            // is min-w-0 flex-1 and the stepper is fixed-width.
+            <View className="mb-3 rounded-2xl border border-line bg-card p-3">
+              <View className="flex-row">
+                <View className="h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-mist">
+                  {item.product.image ? (
+                    <Image
+                      source={{ uri: item.product.image }}
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Feather name="box" size={22} color="#94a3b8" />
+                  )}
+                </View>
+                <View className="ml-3 min-w-0 flex-1">
                   <Text
-                    numberOfLines={1}
-                    className="ml-2 shrink text-sm font-black text-ink"
+                    numberOfLines={2}
+                    className="text-sm font-bold leading-tight text-ink"
                   >
-                    {formatNPR(item.product.price * item.line.quantity)}
+                    {item.product.name}
                   </Text>
+                  <Text className="mt-0.5 text-xs text-muted">
+                    {formatNPR(item.product.price)} each
+                  </Text>
+                  {issue ? (
+                    <Text className="mt-0.5 text-xs font-bold text-red-600">
+                      {LINE_ISSUE_LABELS[issue]} — remove to check out
+                    </Text>
+                  ) : null}
+                  <View className="mt-2 flex-row items-center justify-between">
+                    <View className="flex-row items-center">
+                      <Pressable
+                        onPress={() =>
+                          updateQty(item.line.productId, item.line.quantity - 1)
+                        }
+                        className="h-8 w-8 items-center justify-center rounded-lg border border-line"
+                        accessibilityLabel={`Reduce ${item.product.name} quantity`}
+                      >
+                        <Feather name="minus" size={13} color="#1e3a8a" />
+                      </Pressable>
+                      <Text
+                        accessibilityLiveRegion="polite"
+                        className="mx-2.5 min-w-5 text-center text-sm font-bold text-ink"
+                      >
+                        {item.line.quantity}
+                      </Text>
+                      <Pressable
+                        onPress={() =>
+                          updateQty(item.line.productId, item.line.quantity + 1)
+                        }
+                        disabled={maxed || issue !== null}
+                        className="h-8 w-8 items-center justify-center rounded-lg border border-line disabled:opacity-40"
+                        accessibilityLabel={`Add another ${item.product.name}`}
+                        accessibilityState={{
+                          disabled: maxed || issue !== null,
+                        }}
+                      >
+                        <Feather name="plus" size={13} color="#1e3a8a" />
+                      </Pressable>
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      className="ml-2 shrink text-sm font-black text-ink"
+                    >
+                      {formatNPR(item.product.price * item.line.quantity)}
+                    </Text>
+                  </View>
                 </View>
               </View>
+              <Pressable
+                onPress={() => updateQty(item.line.productId, 0)}
+                className="mt-2 self-start"
+                accessibilityLabel={`Remove ${item.product.name} from cart`}
+              >
+                <Text className="text-xs font-bold text-red-500 underline">
+                  Remove
+                </Text>
+              </Pressable>
             </View>
-            <Pressable
-              onPress={() => updateQty(item.line.productId, 0)}
-              className="mt-2 self-start"
-              accessibilityLabel={`Remove ${item.product.name} from cart`}
-            >
-              <Text className="text-xs font-bold text-red-500 underline">
-                Remove
-              </Text>
-            </Pressable>
-          </View>
-        )}
+          );
+        }}
       />
 
       <View
@@ -306,14 +326,24 @@ export function CartScreen() {
             {formatNPR(total)}
           </Text>
         </View>
-        <Text className="mt-1.5 text-[11px] text-muted">
-          Delivery is calculated at checkout. Changes save instantly.
-        </Text>
+        {hasUnavailable ? (
+          <Text className="mt-2 text-[11px] font-bold leading-4 text-red-600">
+            {unavailable.length === 1
+              ? `${unavailable[0].product.name} is not available for checkout. Remove it to continue.`
+              : `${unavailable.length} items in your build list are not available for checkout. Remove them to continue.`}
+          </Text>
+        ) : (
+          <Text className="mt-1.5 text-[11px] text-muted">
+            Delivery is calculated at checkout. Changes save instantly.
+          </Text>
+        )}
         <Pressable
           onPress={() => navigation.push("Checkout")}
-          className="mt-3 items-center rounded-full bg-navy py-3.5"
+          disabled={hasUnavailable}
+          className="mt-3 items-center rounded-full bg-navy py-3.5 disabled:opacity-50"
           accessibilityRole="button"
           accessibilityLabel="Proceed to checkout"
+          accessibilityState={{ disabled: hasUnavailable }}
         >
           <Text className="text-sm font-black text-white">
             Checkout · {formatNPR(total)}

@@ -27,6 +27,11 @@ import {
 } from "../services/orderService";
 import { useApp } from "../context/AppContext";
 import type { CheckoutInput } from "../types";
+import {
+  LINE_ISSUE_LABELS,
+  clampToStock,
+  lineIssue,
+} from "../lib/cartAvailability";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Checkout">;
@@ -45,8 +50,14 @@ export function CheckoutScreen() {
   const route = useRoute<Route>();
   const { user, isSignedIn, setAuthSheetOpen, setCart } = useApp();
   const [items, setItems] = useState<
-    { productId: string; name: string; priceNpr: number; quantity: number }[]
+    { productId: string; name: string; price: number; quantity: number }[]
   >([]);
+  const [unavailable, setUnavailable] = useState<
+    { productId: string; name: string; reason: string }[]
+  >([]);
+  // Without this, the first paint (before the cart resolves) showed
+  // "Nothing to check out" even when the cart had items.
+  const [loading, setLoading] = useState(true);
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState("");
@@ -58,20 +69,57 @@ export function CheckoutScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      const products = await getProducts();
-      const resolved = await resolveCart(products);
-      setItems(
-        resolved.map(({ line, product }) => ({
+  // Resolve the cart against the live catalog and apply the website's
+  // checkout rules: hidden, quote-only, unpriced and out-of-stock lines are
+  // pulled out as unavailable, and quantities are clamped to stock. Runs on
+  // mount and again right before submission so a stock change mid-checkout
+  // cannot be ordered.
+  const loadLines = useCallback(async () => {
+    const products = await getProducts();
+    const resolved = await resolveCart(products);
+    const purchasable: {
+      productId: string;
+      name: string;
+      price: number;
+      quantity: number;
+    }[] = [];
+    const blocked: { productId: string; name: string; reason: string }[] = [];
+    for (const { line, product } of resolved) {
+      const issue = lineIssue(product);
+      if (issue) {
+        blocked.push({
           productId: product.id,
           name: product.name,
-          priceNpr: product.price,
-          quantity: line.quantity,
-        })),
-      );
-    })();
+          reason: LINE_ISSUE_LABELS[issue],
+        });
+        continue;
+      }
+      purchasable.push({
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: clampToStock(line.quantity, product.stock),
+      });
+    }
+    return { purchasable, blocked };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void loadLines()
+      .then(({ purchasable, blocked }) => {
+        if (!active) return;
+        setItems(purchasable);
+        setUnavailable(blocked);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadLines]);
 
   useEffect(() => {
     if (user) {
@@ -98,13 +146,14 @@ export function CheckoutScreen() {
     }
   }, [route.params]);
 
-  const total = items.reduce((sum, i) => sum + i.priceNpr * i.quantity, 0);
+  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const canSubmit =
     name.trim().length > 0 &&
     email.trim().length > 0 &&
     phone.trim().length > 0 &&
     address.trim().length > 0 &&
     items.length > 0 &&
+    unavailable.length === 0 &&
     !submitting;
 
   const handleOrder = useCallback(async () => {
@@ -116,9 +165,30 @@ export function CheckoutScreen() {
     setError(null);
     setNotice(null);
     try {
+      // Re-resolve right before writing: the catalog may have changed while
+      // the form was open (same guard the website enforces server-side).
+      const { purchasable, blocked } = await loadLines();
+      setItems(purchasable);
+      setUnavailable(blocked);
+      if (blocked.length) {
+        setError(
+          "Remove unavailable items from your build list before placing the order.",
+        );
+        setSubmitting(false);
+        return;
+      }
+      if (!purchasable.length) {
+        setError("Your build list has no purchasable items.");
+        setSubmitting(false);
+        return;
+      }
+      const orderTotal = purchasable.reduce(
+        (sum, i) => sum + i.price * i.quantity,
+        0,
+      );
       const order = await createOrder({
-        items,
-        totalNpr: total,
+        items: purchasable,
+        totalNpr: orderTotal,
         customerName: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -177,8 +247,7 @@ export function CheckoutScreen() {
       setSubmitting(false);
     }
   }, [
-    items,
-    total,
+    loadLines,
     name,
     email,
     phone,
@@ -190,7 +259,15 @@ export function CheckoutScreen() {
     navigation,
   ]);
 
-  if (items.length === 0 && !submitting) {
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-surface">
+        <ActivityIndicator size="large" color="#1e3a8a" />
+      </View>
+    );
+  }
+
+  if (items.length === 0 && unavailable.length === 0 && !submitting) {
     return (
       <View className="flex-1 items-center justify-center bg-surface px-8">
         <Text className="text-base font-bold text-ink">
@@ -219,7 +296,7 @@ export function CheckoutScreen() {
               {i.quantity} × {i.name}
             </Text>
             <Text className="text-sm font-bold text-ink">
-              NPR {(i.priceNpr * i.quantity).toLocaleString("en-IN")}
+              NPR {(i.price * i.quantity).toLocaleString("en-IN")}
             </Text>
           </View>
         ))}
@@ -230,6 +307,25 @@ export function CheckoutScreen() {
           </Text>
         </View>
       </View>
+
+      {unavailable.length > 0 ? (
+        <View className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+          <Text className="text-xs font-black uppercase tracking-wide text-red-700">
+            Not available for checkout
+          </Text>
+          {unavailable.map((entry) => (
+            <Text
+              key={entry.productId}
+              className="mt-1 text-xs leading-5 text-red-700"
+            >
+              {entry.name} — {entry.reason}
+            </Text>
+          ))}
+          <Text className="mt-2 text-[11px] leading-4 text-red-700">
+            Remove these from your build list in the cart, then come back.
+          </Text>
+        </View>
+      ) : null}
 
       <SectionTitle>Delivery details</SectionTitle>
       <Field

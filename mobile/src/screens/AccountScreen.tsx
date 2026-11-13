@@ -542,7 +542,9 @@ export function AccountScreen() {
                         numberOfLines={1}
                       >
                         {item.quantity} × {item.name} ·{" "}
-                        {formatNPR(item.priceNpr * item.quantity)}
+                        {formatNPR(
+                          (item.price ?? item.priceNpr ?? 0) * item.quantity,
+                        )}
                       </Text>
                     ))}
                   </View>

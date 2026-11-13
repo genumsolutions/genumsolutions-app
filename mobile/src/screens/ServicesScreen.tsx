@@ -19,6 +19,18 @@ import {
 } from "../config/programs";
 import type { Service } from "../types";
 
+// The academy's seven lab tracks — the same list the website's /services
+// #academy section shows (it used to be a separate /academy page there).
+const LEARNING_STREAMS = [
+  "Robotics & robot cars",
+  "Electronics & soldering",
+  "IoT & automation",
+  "Smart home",
+  "Smart farm",
+  "Smart city & waste",
+  "Aerial drones",
+];
+
 export function ServicesScreen() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,6 +180,30 @@ export function ServicesScreen() {
       {/* Pagination — mirrors website numbered page buttons */}
       <View className="mt-4">
         <PagePager page={page} totalPages={totalPages} onPage={setPage} />
+      </View>
+
+      {/* Learning streams — mirrors website /services #academy section */}
+      <View className="mt-10 border-t border-line pt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Robotic Academy · Kathmandu
+        </Text>
+        <Text className="mt-2 font-display text-xl font-bold text-ink">
+          Learning streams
+        </Text>
+        <Text className="mt-1 text-sm leading-6 text-muted">
+          Seven lab tracks, each backed by a real kit, a project in the
+          workshop, and a Control Panel window learners can drive.
+        </Text>
+        <View className="mt-4 flex-row flex-wrap gap-2">
+          {LEARNING_STREAMS.map((stream) => (
+            <Text
+              key={stream}
+              className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-navy"
+            >
+              {stream}
+            </Text>
+          ))}
+        </View>
       </View>
 
       {/* Training programs — mirrors website /services training section */}

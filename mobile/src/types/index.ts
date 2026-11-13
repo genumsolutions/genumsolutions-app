@@ -113,7 +113,13 @@ export interface CartLine {
 export interface CheckoutLine {
   productId: string;
   name: string;
-  priceNpr: number;
+  // The shared orders.items JSON uses `price` (website lib/customer.ts
+  // OrderItem). Do not reintroduce `priceNpr` here: the website's account
+  // page and admin order panel render `item.price`, so a different field name
+  // shows those orders as "NPR NaN".
+  price: number;
+  // Legacy rows written by the app before this fix (read-side fallback only).
+  priceNpr?: number;
   quantity: number;
 }
 
