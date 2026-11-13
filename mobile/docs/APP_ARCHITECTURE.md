@@ -41,7 +41,7 @@ mobile/
 │   │   ├── RootNavigator.tsx
 │   │   └── types.ts
 │   ├── screens/             # Screen components
-│   │   ├── AdminScreen.tsx  # Admin dashboard (10 tabs)
+│   │   ├── AdminScreen.tsx  # Admin dashboard (8 tabs)
 │   │   ├── UserPreferencesScreen.tsx
 │   │   ├── HomeScreen.tsx
 │   │   ├── ShopScreen.tsx
@@ -77,7 +77,7 @@ mobile/
 │   └── lib/                 # Utility functions
 │       ├── project-components.ts
 │       ├── imageLimits.ts
-│       └── supabase.ts
+│       └── cartAvailability.ts
 └── android/                 # Android native layer
 ```
 
@@ -141,7 +141,7 @@ For GENUM robo-car fleet control:
 
 See `docs/APP_ADMIN_COMPLETE.md` for complete admin UI documentation.
 
-**10 tabs** in `AdminScreen.tsx`:
+**8 tabs** in `AdminScreen.tsx` (canonical list: `src/config/adminTabs.ts`, pinned by both repos' parity tests):
 
 1. Dashboard
 2. Orders
@@ -149,10 +149,8 @@ See `docs/APP_ADMIN_COMPLETE.md` for complete admin UI documentation.
 4. 3D Products
 5. Projects
 6. Content
-7. Users (3 sections: User Directory, Car Profiles, Robot Profiles)
-8. Logs (3 sections: User Activity, User Profiles, Fleet Diagnostics)
-9. Settings (Company info + training programs + pilot costs)
-10. Profile (User profile entries)
+7. Users (sections: User Directory, Car Profiles, Robot Profiles, plus User Activity / User Profiles / Fleet Diagnostics)
+8. Settings (company details, customer messages, newsletter subscribers, training programs and pilot costs)
 
 ### 7. User Preferences / My Devices
 
