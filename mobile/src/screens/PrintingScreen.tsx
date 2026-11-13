@@ -19,6 +19,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
@@ -42,6 +43,14 @@ import {
   submitPrintQuote,
   type PrintContent,
 } from "../services/printService";
+import { estimatePrint } from "../lib/printEstimate";
+import {
+  attachmentSummary,
+  checkQuoteAttachments,
+  MAX_QUOTE_FILES,
+  QUOTE_FILES_ERROR,
+  type QuoteAttachment,
+} from "../lib/printAttachments";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { ProductCard } from "../components/ProductCard";
 import { PagePager } from "../components/PagePager";
@@ -148,10 +157,19 @@ export function PrintingScreen() {
     description: "",
   });
   const [sendingQuote, setSendingQuote] = useState(false);
+  const [quoteFiles, setQuoteFiles] = useState<QuoteAttachment[]>([]);
   const [quoteStatus, setQuoteStatus] = useState<{
     text: string;
     isError: boolean;
   } | null>(null);
+  // Estimator — same rules the website calculator uses, fed by /api/print.
+  const [estimateInput, setEstimateInput] = useState({
+    materialId: "",
+    weight: "100",
+    quantity: "1",
+    design: false,
+    finishing: [] as string[],
+  });
   const load = useCallback(async () => {
     try {
       const { products, source } = await getProductsWithSource();
@@ -192,6 +210,36 @@ export function PrintingScreen() {
     };
   }, []);
 
+  async function pickQuoteFiles() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        copyToCacheDirectory: true,
+        type: ["application/*", "image/*"],
+      });
+      if (result.canceled) return;
+      const picked: QuoteAttachment[] = result.assets.map((asset) => ({
+        uri: asset.uri,
+        name: asset.name ?? "attachment",
+        size: asset.size ?? 0,
+        mimeType: asset.mimeType ?? "",
+      }));
+      const next = [...quoteFiles, ...picked];
+      const check = checkQuoteAttachments(next);
+      if (!check.ok) {
+        setQuoteStatus({ text: check.error, isError: true });
+        return;
+      }
+      setQuoteStatus(null);
+      setQuoteFiles(next);
+    } catch {
+      setQuoteStatus({
+        text: "Could not open the file picker. Try again, or email us the file.",
+        isError: true,
+      });
+    }
+  }
+
   async function sendQuote() {
     setQuoteStatus(null);
     setSendingQuote(true);
@@ -199,6 +247,7 @@ export function PrintingScreen() {
       const result = await submitPrintQuote({
         ...quote,
         quantity: Number(quote.quantity),
+        files: quoteFiles,
       });
       if (!result.ok) {
         setQuoteStatus({ text: result.error, isError: true });
@@ -216,6 +265,7 @@ export function PrintingScreen() {
         timeline: "",
         description: "",
       }));
+      setQuoteFiles([]);
     } finally {
       setSendingQuote(false);
     }
@@ -249,6 +299,38 @@ export function PrintingScreen() {
     () => visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
     [visible, safePage],
   );
+
+  // Estimator inputs (2026-11-13): same rules as the website calculator, and
+  // only shown when the owner has approved pricing and switched it on —
+  // /api/print already zeroes draft rates, so a draft state cannot price.
+  const pricedMaterials = useMemo(
+    () => (printContent?.materials ?? []).filter((m) => m.ratePerGram > 0),
+    [printContent],
+  );
+  const estimateMaterial =
+    pricedMaterials.find((m) => m.id === estimateInput.materialId) ??
+    pricedMaterials[0];
+  const estimate = useMemo(
+    () =>
+      printContent && estimateMaterial
+        ? estimatePrint({
+            weightGrams: Number(estimateInput.weight) || 0,
+            quantity: Number(estimateInput.quantity) || 1,
+            materialRatePerGram: estimateMaterial.ratePerGram,
+            designRequested: estimateInput.design,
+            finishingIds: estimateInput.finishing,
+            rules: {
+              minimumOrder: printContent.minimumOrder,
+              designBaseCharge: printContent.designBaseCharge,
+              finishingCharges: printContent.finishingCharges,
+              bulkTiers: printContent.bulkTiers,
+            },
+          })
+        : null,
+    [printContent, estimateMaterial, estimateInput],
+  );
+  const showEstimator =
+    printContent?.calculatorEnabled === true && pricedMaterials.length > 0;
 
   return (
     <ScrollView
@@ -473,6 +555,186 @@ export function PrintingScreen() {
         )}
       </View>
 
+      {/* Estimator — the website's calculator rules, rendered only when the
+          owner approved the rates. Anything unavailable says "quote" instead
+          of inventing a number. */}
+      {showEstimator && estimate && (
+        <View className="mx-5 mb-8 rounded-2xl border border-line bg-card p-5">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Print calculator
+          </Text>
+          <Text className="mt-2 font-display text-2xl font-bold text-ink">
+            Estimate before you commit.
+          </Text>
+          <Text className="mt-1 text-sm leading-6 text-muted">
+            Your slicer shows the printed weight — enter it and choose options.
+          </Text>
+          <View
+            className="mt-4 flex-row flex-wrap"
+            style={{ marginHorizontal: -4 }}
+          >
+            {pricedMaterials.map((material) => {
+              const selected = estimateMaterial?.id === material.id;
+              return (
+                <Pressable
+                  key={material.id}
+                  onPress={() =>
+                    setEstimateInput((current) => ({
+                      ...current,
+                      materialId: material.id,
+                    }))
+                  }
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  className={`m-1 rounded-full border px-3 py-1.5 ${
+                    selected ? "border-navy bg-navy" : "border-line bg-white"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      selected ? "text-white" : "text-ink"
+                    }`}
+                  >
+                    {material.name} · NPR {material.ratePerGram}/g
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View className="mt-3 flex-row" style={{ marginHorizontal: -4 }}>
+            <View style={{ width: "50%", padding: 4 }}>
+              <Text className="text-xs font-bold text-muted">
+                Weight (grams)
+              </Text>
+              <TextInput
+                value={estimateInput.weight}
+                onChangeText={(weight) =>
+                  setEstimateInput((current) => ({ ...current, weight }))
+                }
+                keyboardType="number-pad"
+                accessibilityLabel="Printed weight in grams"
+                className="mt-1 rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink"
+              />
+            </View>
+            <View style={{ width: "50%", padding: 4 }}>
+              <Text className="text-xs font-bold text-muted">Quantity</Text>
+              <TextInput
+                value={estimateInput.quantity}
+                onChangeText={(quantity) =>
+                  setEstimateInput((current) => ({ ...current, quantity }))
+                }
+                keyboardType="number-pad"
+                accessibilityLabel="Quantity"
+                className="mt-1 rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink"
+              />
+            </View>
+          </View>
+          <Pressable
+            onPress={() =>
+              setEstimateInput((current) => ({
+                ...current,
+                design: !current.design,
+              }))
+            }
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: estimateInput.design }}
+            className="mt-2 flex-row items-center self-start"
+          >
+            <Feather
+              name={estimateInput.design ? "check-square" : "square"}
+              size={16}
+              color={estimateInput.design ? "#1e3a8a" : "#94a3b8"}
+            />
+            <Text className="ml-2 text-sm text-ink">I need design help</Text>
+          </Pressable>
+          {(printContent?.finishingCharges.length ?? 0) > 0 && (
+            <View className="mt-3 flex-row flex-wrap">
+              {printContent?.finishingCharges.map((charge) => {
+                const selected = estimateInput.finishing.includes(charge.id);
+                return (
+                  <Pressable
+                    key={charge.id}
+                    onPress={() =>
+                      setEstimateInput((current) => ({
+                        ...current,
+                        finishing: selected
+                          ? current.finishing.filter((id) => id !== charge.id)
+                          : [...current.finishing, charge.id],
+                      }))
+                    }
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                    className={`mr-2 mt-1 rounded-full border px-3 py-1.5 ${
+                      selected ? "border-navy bg-navy" : "border-line bg-white"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        selected ? "text-white" : "text-ink"
+                      }`}
+                    >
+                      {charge.name} · NPR {charge.amount}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          <View className="mt-4 rounded-xl bg-mist p-4">
+            {estimate.available ? (
+              <>
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Estimated
+                </Text>
+                <Text className="mt-1 font-display text-3xl font-bold text-ink">
+                  NPR {estimate.total.toLocaleString("en-IN")}
+                </Text>
+                <Text className="mt-1 text-xs text-muted">
+                  Material · {estimate.totalGrams} g
+                  {estimate.designCost > 0
+                    ? ` · design NPR ${estimate.designCost.toLocaleString("en-IN")}`
+                    : ""}
+                  {estimate.discountAmount > 0
+                    ? ` · −NPR ${estimate.discountAmount.toLocaleString("en-IN")} (${estimate.discountPercent}%)`
+                    : ""}
+                  {estimate.minimumApplied ? " · minimum applied" : ""}
+                </Text>
+                <Text className="mt-3 text-xs leading-5 text-muted">
+                  {printContent?.disclaimer}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setQuote((current) => ({
+                      ...current,
+                      material: estimateMaterial?.name ?? "",
+                      quantity: String(estimate.quantity),
+                    }));
+                    setQuoteStatus({
+                      text: "Estimate copied into the request below — send it for a firm quote.",
+                      isError: false,
+                    });
+                  }}
+                  className="mt-3 h-11 items-center justify-center rounded-full bg-gold px-5"
+                >
+                  <Text className="text-sm font-black text-ink">
+                    Send this for a firm quote
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Price on review
+                </Text>
+                <Text className="mt-2 text-sm leading-6 text-muted">
+                  {estimate.reason}
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      )}
+
       <View className="px-5 py-8">
         <View className="gap-4">
           {offers.map((offer) => (
@@ -513,8 +775,8 @@ export function PrintingScreen() {
           Tell us what you need printed.
         </Text>
         <Text className="mt-2 text-sm leading-6 text-white/70">
-          We review the part, material and finish, then send a firm quote. For
-          STL or STEP files, attach them on the website.
+          We review the part, material and finish, then send a firm quote.
+          Attach STL, STEP or photos below — up to {MAX_QUOTE_FILES} files.
         </Text>
 
         <View
@@ -638,6 +900,48 @@ export function PrintingScreen() {
               className="mt-1 min-h-[96px] rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white"
               textAlignVertical="top"
             />
+          </View>
+          <View style={{ width: "100%", padding: 4 }}>
+            <Text className="text-xs font-bold text-white/80">
+              Files (optional)
+            </Text>
+            <Pressable
+              onPress={() => void pickQuoteFiles()}
+              accessibilityRole="button"
+              accessibilityLabel="Attach 3D files or photos"
+              className="mt-1 flex-row items-center justify-between rounded-lg border border-white/20 bg-white/5 px-3 py-3"
+            >
+              <Text className="text-sm text-white/80">
+                {attachmentSummary(quoteFiles)}
+              </Text>
+              <Feather name="paperclip" size={16} color="#cbd5e1" />
+            </Pressable>
+            <Text className="mt-1 text-[11px] leading-4 text-white/50">
+              {QUOTE_FILES_ERROR}
+            </Text>
+            {quoteFiles.map((file, index) => (
+              <View
+                key={`${file.uri}-${index}`}
+                className="mt-2 flex-row items-center justify-between rounded-lg bg-white/5 px-3 py-2"
+              >
+                <Text
+                  className="mr-3 flex-1 text-xs text-white/80"
+                  numberOfLines={1}
+                >
+                  {file.name}
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    setQuoteFiles((current) =>
+                      current.filter((_, i) => i !== index),
+                    )
+                  }
+                  accessibilityLabel={`Remove ${file.name}`}
+                >
+                  <Feather name="x" size={16} color="#cbd5e1" />
+                </Pressable>
+              </View>
+            ))}
           </View>
         </View>
 

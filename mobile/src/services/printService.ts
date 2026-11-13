@@ -14,6 +14,11 @@
 // Every network failure degrades to the bundled fallback content — the screen
 // still renders the service copy, just without live rates or a promotion.
 // =====================================================================
+import {
+  attachmentFormPart,
+  checkQuoteAttachments,
+  type QuoteAttachment,
+} from "../lib/printAttachments";
 import { logger } from "./logger";
 
 const WEBSITE_URL = "https://genumsolutions-website.vercel.app";
@@ -38,12 +43,21 @@ export type PrintPromotion = {
   discountValue: number;
 };
 
+export type PrintFinishing = { id: string; name: string; amount: number };
+export type PrintBulkTier = { minQty: number; discountPercent: number };
+
 export type PrintContent = {
   materials: PrintMaterial[];
   promotion: PrintPromotion | null;
   minimumOrder: number;
   designBaseCharge: number;
   calculatorEnabled: boolean;
+  /** Calculator rules — the estimator is only shown when these arrive live. */
+  finishingCharges: PrintFinishing[];
+  bulkTiers: PrintBulkTier[];
+  disclaimer: string;
+  /** "approved" means the owner published the rates the API returned. */
+  pricingStatus: "draft" | "approved";
 };
 
 /** Mirrors lib/print.ts on the website: no rates, no promotion, calc off. */
@@ -70,6 +84,11 @@ export const fallbackPrintContent: PrintContent = {
   minimumOrder: 300,
   designBaseCharge: 2500,
   calculatorEnabled: false,
+  finishingCharges: [],
+  bulkTiers: [],
+  disclaimer:
+    "Estimates are indicative only. Final price depends on the reviewed model, supports, infill, orientation and finish.",
+  pricingStatus: "draft",
 };
 
 type ApiResponse = {
@@ -77,6 +96,10 @@ type ApiResponse = {
     calculatorEnabled?: boolean;
     minimumOrder?: number;
     designBaseCharge?: number;
+    finishingCharges?: PrintFinishing[];
+    bulkTiers?: PrintBulkTier[];
+    disclaimer?: string;
+    pricingStatus?: "draft" | "approved";
   };
   materials?: PrintMaterial[];
   promotions?: PrintPromotion[];
@@ -115,6 +138,21 @@ export async function getPrintContent(): Promise<{
             ? data.settings.designBaseCharge
             : fallbackPrintContent.designBaseCharge,
         calculatorEnabled: data.settings?.calculatorEnabled === true,
+        finishingCharges: Array.isArray(data.settings?.finishingCharges)
+          ? data.settings.finishingCharges.filter(
+              (charge) => charge && typeof charge.id === "string",
+            )
+          : [],
+        bulkTiers: Array.isArray(data.settings?.bulkTiers)
+          ? data.settings.bulkTiers.filter((tier) => tier && tier.minQty > 0)
+          : [],
+        disclaimer:
+          typeof data.settings?.disclaimer === "string" &&
+          data.settings.disclaimer.trim()
+            ? data.settings.disclaimer
+            : fallbackPrintContent.disclaimer,
+        pricingStatus:
+          data.settings?.pricingStatus === "approved" ? "approved" : "draft",
       },
     };
   } catch (error) {
@@ -134,6 +172,8 @@ export type PrintQuoteInput = {
   dimensions?: string;
   timeline?: string;
   description: string;
+  /** Up to 3 CAD/photo files; the website route stores them privately. */
+  files?: QuoteAttachment[];
 };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -189,24 +229,46 @@ export function validatePrintQuote(
 
 export type PrintQuoteResult = { ok: true } | { ok: false; error: string };
 
-/** Submit a text-only print request (attachments stay web-only for now). */
+/**
+ * Submit a print request. Text-only requests go as JSON; when files are
+ * attached the same route accepts multipart/form-data and stores them in the
+ * private bucket (the app never touches storage directly).
+ */
 export async function submitPrintQuote(
   input: PrintQuoteInput,
 ): Promise<PrintQuoteResult> {
   const checked = validatePrintQuote(input);
   if (!checked.ok) return { ok: false, error: checked.error };
+  const files = input.files ?? [];
+  const attachments = checkQuoteAttachments(files);
+  if (!attachments.ok) return { ok: false, error: attachments.error };
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // Uploads need room: three 10 MB files over a mobile connection is not an
+  // 8-second round trip.
+  const timeout = files.length > 0 ? 90_000 : REQUEST_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
+    let body: BodyInit;
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (files.length > 0) {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(checked.value)) {
+        if (value === undefined || value === null) continue;
+        form.append(key, String(value));
+      }
+      for (const file of files)
+        form.append("files", attachmentFormPart(file) as never);
+      body = form;
+    } else {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(checked.value);
+    }
     const response = await fetch(`${WEBSITE_URL}/api/print/quote`, {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify(checked.value),
+      headers,
+      body,
     });
     const data = (await response.json().catch(() => ({}))) as {
       ok?: boolean;
