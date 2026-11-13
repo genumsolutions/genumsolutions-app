@@ -51,6 +51,11 @@ import { galleryImages } from "../types";
 import { logger } from "../services/logger";
 import { IMAGE_BUDGET_HINT } from "../lib/imageLimits";
 import {
+  defaultProjectPricing,
+  estimateProject,
+  type ProjectPricing,
+} from "../lib/project-pricing";
+import {
   loadBiometricsPref,
   authenticate as biometricAuthenticate,
   biometricsSupport,
@@ -108,6 +113,9 @@ import {
   listAdminCurriculumHighlights,
   upsertAdminCurriculumHighlight,
   deleteAdminCurriculumHighlight,
+  getAdminProjectPricing,
+  saveAdminProjectPricing,
+  setAdminProjectPricingApproval,
   type AdminOrder,
   type AdminProduct,
   type AdminService,
@@ -2452,6 +2460,8 @@ function ProjectTab({
   const isNew = editing ? !products.some((p) => p.id === editing.id) : false;
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
+  // 2026-11-13: the pricing approval stamp records who approved it.
+  const { user: currentUser } = useApp();
   // U-48: this tab saves through onSaveProduct directly (not the guarded
   // parent handler), so it owns its saving flag for the Save button.
   const [saving, setSaving] = useState(false);
@@ -2585,6 +2595,95 @@ function ProjectTab({
     }
   }
 
+  // ── 2026-11-13: project pricing (mirror of the website's Pricing panel) ──
+  // Per-project-package rates live in public.project_pricing and are DRAFT
+  // until an admin approves them — the public page and the app then show
+  // "rate on request". Approval is admin-only (website parity); the estimate
+  // below uses the same estimateProject maths as the customer calculator.
+  const pricingProjectId =
+    editing?.productType === "Project package" &&
+    products.some((p) => p.id === editing.id)
+      ? editing.id
+      : null;
+  const [projectPricing, setProjectPricing] = useState<ProjectPricing>(
+    defaultProjectPricing,
+  );
+  const [pricingBusy, setPricingBusy] = useState(false);
+
+  React.useEffect(() => {
+    if (!pricingProjectId) {
+      setProjectPricing(defaultProjectPricing);
+      return;
+    }
+    let active = true;
+    setPricingBusy(true);
+    void getAdminProjectPricing(pricingProjectId)
+      .then((pricing) => {
+        if (active) setProjectPricing(pricing);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setPricingBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [pricingProjectId]);
+
+  async function saveProjectPricing_() {
+    if (!pricingProjectId) return;
+    setPricingBusy(true);
+    try {
+      await saveAdminProjectPricing({
+        ...projectPricing,
+        id: pricingProjectId,
+      });
+      Alert.alert("Saved", "Project pricing saved.");
+    } catch (e) {
+      Alert.alert(
+        "Save failed",
+        e instanceof Error ? e.message : "Could not save the project pricing.",
+      );
+    } finally {
+      setPricingBusy(false);
+    }
+  }
+
+  async function toggleProjectPricingApproval_() {
+    if (!pricingProjectId) return;
+    const approved = projectPricing.priceStatus !== "approved";
+    setPricingBusy(true);
+    try {
+      const approvedBy = currentUser?.email ?? "admin";
+      await setAdminProjectPricingApproval(
+        pricingProjectId,
+        approved,
+        approvedBy,
+      );
+      setProjectPricing((prev) => ({
+        ...prev,
+        priceStatus: approved ? "approved" : "draft",
+        priceApprovedAt: approved ? new Date().toISOString() : null,
+        priceApprovedBy: approved ? approvedBy : "",
+      }));
+    } catch (e) {
+      Alert.alert(
+        "Update failed",
+        e instanceof Error ? e.message : "Could not update the pricing status.",
+      );
+    } finally {
+      setPricingBusy(false);
+    }
+  }
+
+  // Admin preview ignores the approval gate on purpose: the owner should see
+  // the number these rules produce BEFORE deciding to publish them.
+  const pricingEstimate = estimateProject({
+    pricing: { ...projectPricing, priceStatus: "approved" },
+    links: linkerLinks,
+    catalogPrices: new Map(catalogProducts.map((p) => [p.id, p.price])),
+  });
+
   if (editing) {
     return (
       <View className="flex-1">
@@ -2604,6 +2703,20 @@ function ProjectTab({
           onCancel={() => onChange(null)}
           isNew={isNew}
           categoryOptions={categories.filter((c) => c !== "All")}
+          pricingCard={
+            pricingProjectId ? (
+              <ProjectPricingCard
+                pricing={projectPricing}
+                estimate={pricingEstimate}
+                busy={pricingBusy}
+                canApprove={canDelete}
+                componentCount={linkerLinks.length}
+                onChange={setProjectPricing}
+                onSave={() => void saveProjectPricing_()}
+                onToggleApproval={() => void toggleProjectPricingApproval_()}
+              />
+            ) : null
+          }
         />
         {/* U-45 Phase 2: the linker card — only meaningful for a SAVED
             project row (links hang off its id). Mirrors the website's
@@ -2901,6 +3014,335 @@ function ComponentLinkerCard({
   );
 }
 
+// ─── 2026-11-13: project pricing card ──────────────────────
+// Mirrors the website's Admin → Projects → Pricing panel: package base
+// charge, component markup, optional extras, bulk tiers, minimum order,
+// approve/withdraw and a live estimate built from the project's linked
+// components. Draft by default — nothing is shown to customers until an
+// admin approves.
+function ProjectPricingCard({
+  pricing,
+  estimate,
+  busy,
+  canApprove,
+  componentCount,
+  onChange,
+  onSave,
+  onToggleApproval,
+}: {
+  pricing: ProjectPricing;
+  estimate: ReturnType<typeof estimateProject>;
+  busy: boolean;
+  canApprove: boolean;
+  componentCount: number;
+  onChange: (next: ProjectPricing) => void;
+  onSave: () => void;
+  onToggleApproval: () => void;
+}) {
+  const inputClass =
+    "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
+  const patch = (part: Partial<ProjectPricing>) =>
+    onChange({ ...pricing, ...part });
+  const approved = pricing.priceStatus === "approved";
+
+  return (
+    <View className="mt-4 rounded-xl border-2 border-gold bg-card p-3">
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className="flex-1 font-display text-base font-bold text-ink">
+          Pricing
+        </Text>
+        <Pressable
+          onPress={onSave}
+          disabled={busy}
+          className="rounded-full bg-navy px-4 py-2 disabled:opacity-60"
+          accessibilityRole="button"
+          accessibilityLabel="Save project pricing"
+        >
+          <Text className="text-xs font-black text-white">
+            {busy ? "Saving…" : "Save pricing"}
+          </Text>
+        </Pressable>
+      </View>
+      <Text className="mt-1 text-xs leading-5 text-muted">
+        Base charge + the catalog components linked below (with markup) +
+        extras, bulk tiers and a minimum order. Customers see "rate on request"
+        until you approve.
+      </Text>
+
+      <View className="mt-3 flex-row items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
+        <Text className="min-w-0 flex-1 text-xs leading-4 text-muted">
+          {approved
+            ? `Published${pricing.priceApprovedBy ? ` by ${pricing.priceApprovedBy}` : ""}${pricing.priceApprovedAt ? ` on ${new Date(pricing.priceApprovedAt).toLocaleDateString()}` : ""}`
+            : "Draft — customers see rate on request"}
+        </Text>
+        {canApprove ? (
+          <Pressable
+            onPress={onToggleApproval}
+            disabled={busy}
+            className={`rounded-full px-3 py-2 disabled:opacity-60 ${approved ? "border border-line bg-card" : "bg-gold"}`}
+            accessibilityRole="button"
+            accessibilityLabel={
+              approved ? "Withdraw rates" : "Approve and publish rates"
+            }
+          >
+            <Text className="text-xs font-black text-ink">
+              {approved ? "Withdraw" : "Approve"}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text className="text-[10px] font-black uppercase text-muted">
+            Admin only
+          </Text>
+        )}
+      </View>
+
+      <View className="mt-3 flex-row gap-2">
+        <View className="flex-1">
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Base charge (NPR)
+          </Text>
+          <TextInput
+            value={String(pricing.packageBaseCharge)}
+            onChangeText={(raw) =>
+              patch({
+                packageBaseCharge: Math.max(0, Math.round(Number(raw) || 0)),
+              })
+            }
+            keyboardType="number-pad"
+            className={inputClass}
+            accessibilityLabel="Package base charge"
+          />
+        </View>
+        <View className="flex-1">
+          <Text className="mb-1 text-xs font-bold text-muted">Markup (%)</Text>
+          <TextInput
+            value={String(pricing.componentMarkupPercent)}
+            onChangeText={(raw) =>
+              patch({
+                componentMarkupPercent: Math.max(
+                  0,
+                  Math.min(500, Math.round(Number(raw) || 0)),
+                ),
+              })
+            }
+            keyboardType="number-pad"
+            className={inputClass}
+            accessibilityLabel="Component markup percent"
+          />
+        </View>
+        <View className="flex-1">
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Minimum (NPR)
+          </Text>
+          <TextInput
+            value={String(pricing.minimumOrder)}
+            onChangeText={(raw) =>
+              patch({ minimumOrder: Math.max(0, Math.round(Number(raw) || 0)) })
+            }
+            keyboardType="number-pad"
+            className={inputClass}
+            accessibilityLabel="Minimum order"
+          />
+        </View>
+      </View>
+
+      <Text className="mb-1 mt-3 text-xs font-bold text-muted">
+        Internal note (not shown to customers)
+      </Text>
+      <TextInput
+        value={pricing.note}
+        onChangeText={(note) => patch({ note: note.slice(0, 300) })}
+        className={inputClass}
+        placeholder="Why these rates…"
+        accessibilityLabel="Pricing note"
+      />
+
+      {/* extras */}
+      <View className="mt-4 border-t border-line pt-3">
+        <Text className="text-xs font-bold text-ink">
+          Optional extras (flat NPR add-ons)
+        </Text>
+        {pricing.extras.map((extra, index) => (
+          <View
+            key={`${extra.id}-${index}`}
+            className="mt-2 flex-row items-center gap-2"
+          >
+            <TextInput
+              value={extra.name}
+              onChangeText={(name) =>
+                patch({
+                  extras: pricing.extras.map((x, i) =>
+                    i === index ? { ...x, name: name.slice(0, 60) } : x,
+                  ),
+                })
+              }
+              className={`min-w-0 flex-1 ${inputClass}`}
+              placeholder="e.g. On-site training"
+              accessibilityLabel={`Extra ${index + 1} name`}
+            />
+            <TextInput
+              value={String(extra.amount)}
+              onChangeText={(raw) =>
+                patch({
+                  extras: pricing.extras.map((x, i) =>
+                    i === index
+                      ? {
+                          ...x,
+                          amount: Math.max(0, Math.round(Number(raw) || 0)),
+                        }
+                      : x,
+                  ),
+                })
+              }
+              keyboardType="number-pad"
+              className="w-24 rounded-lg border border-line bg-surface px-3 py-2 text-right text-sm text-ink"
+              accessibilityLabel={`Extra ${index + 1} amount`}
+            />
+            <Pressable
+              onPress={() =>
+                patch({ extras: pricing.extras.filter((_, i) => i !== index) })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`Remove extra ${index + 1}`}
+            >
+              <Text className="text-xs font-bold text-red-500">Remove</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Pressable
+          onPress={() =>
+            patch({
+              extras: [
+                ...pricing.extras,
+                {
+                  id: `extra-${pricing.extras.length + 1}`,
+                  name: "",
+                  amount: 0,
+                },
+              ],
+            })
+          }
+          className="mt-2 self-start rounded-full border border-line px-3 py-1.5"
+          accessibilityRole="button"
+          accessibilityLabel="Add extra"
+        >
+          <Text className="text-xs font-black text-ink">+ Add extra</Text>
+        </Pressable>
+      </View>
+
+      {/* bulk tiers */}
+      <View className="mt-4 border-t border-line pt-3">
+        <Text className="text-xs font-bold text-ink">
+          Bulk tiers (total component qty → % off)
+        </Text>
+        {pricing.bulkTiers.map((tier, index) => (
+          <View
+            key={`tier-${index}`}
+            className="mt-2 flex-row items-center gap-2"
+          >
+            <Text className="text-xs font-bold text-muted">Min qty</Text>
+            <TextInput
+              value={String(tier.minQty)}
+              onChangeText={(raw) =>
+                patch({
+                  bulkTiers: pricing.bulkTiers.map((t, i) =>
+                    i === index
+                      ? {
+                          ...t,
+                          minQty: Math.max(1, Math.round(Number(raw) || 1)),
+                        }
+                      : t,
+                  ),
+                })
+              }
+              keyboardType="number-pad"
+              className="w-16 rounded-lg border border-line bg-surface px-2 py-2 text-right text-sm text-ink"
+              accessibilityLabel={`Tier ${index + 1} minimum quantity`}
+            />
+            <Text className="text-xs font-bold text-muted">Discount %</Text>
+            <TextInput
+              value={String(tier.discountPercent)}
+              onChangeText={(raw) =>
+                patch({
+                  bulkTiers: pricing.bulkTiers.map((t, i) =>
+                    i === index
+                      ? {
+                          ...t,
+                          discountPercent: Math.min(
+                            90,
+                            Math.max(0, Math.round(Number(raw) || 0)),
+                          ),
+                        }
+                      : t,
+                  ),
+                })
+              }
+              keyboardType="number-pad"
+              className="w-16 rounded-lg border border-line bg-surface px-2 py-2 text-right text-sm text-ink"
+              accessibilityLabel={`Tier ${index + 1} discount percent`}
+            />
+            <Pressable
+              onPress={() =>
+                patch({
+                  bulkTiers: pricing.bulkTiers.filter((_, i) => i !== index),
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`Remove tier ${index + 1}`}
+            >
+              <Text className="text-xs font-bold text-red-500">Remove</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Pressable
+          onPress={() =>
+            patch({
+              bulkTiers: [
+                ...pricing.bulkTiers,
+                { minQty: 10, discountPercent: 5 },
+              ],
+            })
+          }
+          className="mt-2 self-start rounded-full border border-line px-3 py-1.5"
+          accessibilityRole="button"
+          accessibilityLabel="Add bulk tier"
+        >
+          <Text className="text-xs font-black text-ink">+ Add tier</Text>
+        </Pressable>
+      </View>
+
+      {/* live estimate (computed as if published) */}
+      <View className="mt-4 rounded-lg border border-line bg-surface p-3">
+        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+          Estimate preview
+        </Text>
+        <Text className="mt-1 font-display text-2xl font-bold text-ink">
+          {formatNPR(estimate.total)}
+        </Text>
+        <Text className="mt-1 text-xs leading-4 text-muted">
+          {componentCount} linked component{componentCount === 1 ? "" : "s"} ·
+          base {formatNPR(estimate.packageBaseCharge)} · components{" "}
+          {formatNPR(estimate.componentsTotal)}
+          {estimate.extrasTotal > 0
+            ? ` · extras ${formatNPR(estimate.extrasTotal)}`
+            : ""}
+          {estimate.discountPercent > 0
+            ? ` · −${formatNPR(estimate.discountAmount)} (${estimate.discountPercent}%)`
+            : ""}
+          {estimate.minimumApplied
+            ? ` · minimum ${formatNPR(estimate.minimumOrder)}`
+            : ""}
+        </Text>
+        {!approved ? (
+          <Text className="mt-1 text-[10px] font-bold text-gold">
+            Draft preview — approve above to publish this price.
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function ProductEditor({
   product,
   onChange,
@@ -2910,6 +3352,7 @@ function ProductEditor({
   categoryOptions,
   fromLink,
   saving,
+  pricingCard,
 }: {
   product: AdminProduct;
   onChange: (next: AdminProduct) => void;
@@ -2919,6 +3362,8 @@ function ProductEditor({
   categoryOptions: string[];
   fromLink?: boolean;
   saving?: boolean;
+  /** 2026-11-13: project pricing panel (rendered inside the project block). */
+  pricingCard?: React.ReactNode;
 }) {
   function patch(patchPart: Partial<AdminProduct>) {
     onChange({ ...product, ...patchPart });
@@ -3343,6 +3788,10 @@ function ProductEditor({
               className={`mb-1 ${inputClass}`}
               placeholder="30 days for manufacturing defects"
             />
+            {/* 2026-11-13: project pricing — the same panel shape as the
+                website's Admin → Projects → Pricing (base charge, markup,
+                extras, bulk tiers, minimum, approval, live estimate). */}
+            {pricingCard}
           </View>
         ) : null}
 
