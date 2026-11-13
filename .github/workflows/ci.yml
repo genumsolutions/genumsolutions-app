@@ -196,3 +196,32 @@ jobs:
           path: mobile/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+  # Order items contract — the app and the website write the SAME Supabase
+  # orders.items JSON. They drifted once: the app wrote `priceNpr` while the
+  # website read `price`, so app orders rendered as "NPR NaN". Unit tests can
+  # only see their own repo's copy, so each repo ships a verbatim contract
+  # file and this job fails when the two copies differ.
+  order-items-contract:
+    name: Order items contract matches website
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v5
+
+      # Public repo, so the job's default token can clone it.
+      - name: Checkout website
+        uses: actions/checkout@v5
+        with:
+          repository: genumsolutions/genumsolutions-website
+          path: website
+
+      - name: Fail when the copies differ
+        run: |
+          if ! diff -u mobile/src/config/order-items.contract.json website/supabase/order-items.contract.json; then
+            echo "::error::The orders.items contract copies differ. Copy website/supabase/order-items.contract.json verbatim to mobile/src/config/order-items.contract.json, and update both repos' writers/tests in the same change."
+            exit 1
+          fi
+          echo "orders.items contract matches the website"

@@ -261,7 +261,7 @@ Used in: SettingsTab (company), ProfileEntriesTab, UsersTab (car profiles, robot
 - **Form Handling:** Controlled components via state setters
 - **API Calls:** Supabase SDK calls (`supabase.from("company_info").select("*...`).single()`)
 - **Logging:** `appendLog({scope: "link/wifi", ...})` in `useControlHub.ts` for link diagnostics
-- **Tests:** 1004 vitest tests across 72 files — all passing
+- **Tests:** the full vitest suite (`npm test`) — all passing
 - **TypeCheck:** `tsc --noEmit` passes 0 errors
 
 ### Website (Next.js + React + TypeScript)
@@ -273,7 +273,7 @@ Used in: SettingsTab (company), ProfileEntriesTab, UsersTab (car profiles, robot
 - **Form Handling:** HTML forms with `onSubmit`, input `onChange` handlers
 - **API Calls:** `fetch("/api/admin/settings")`, `fetch("/api/admin/users")` for admin operations
 - **Logging:** `AdminLogs.tsx` component views `app_logs` and `device_crash_reports` tables
-- **Tests:** 327 vitest tests across 30 files — all passing
+- **Tests:** the full vitest suite (`npm test`) — all passing
 - **TypeCheck:** `tsc --noEmit` passes 0 errors
 
 ---
@@ -386,7 +386,7 @@ Both projects share the same architectural patterns:
 | **WhatsApp helpers**                 | `src/config/socials.ts` (normalize + isValid + link)                                                   | `lib/socials.ts` (same 3 helpers)                                                       | ✅ Yes — mirrored Nov 2026              |
 | **Version sync**                     | `app.json` + `src/config/site.ts`                                                                      | N/A (website version in package.json)                                                   | ⚠️ Different pattern                    |
 | **Release**                          | APK upload + OTA hot-patches                                                                           | Vercel deployment                                                                       | ✅ Both use git-pushed CI               |
-| **Testing**                          | 1004 vitest tests                                                                                      | 327 vitest tests                                                                        | ✅ Both use vitest                      |
+| **Testing**                          | vitest suite                                                                                           | vitest suite                                                                            | ✅ Both use vitest                      |
 | **Contact form**                     | Edge function call to `contact` → `customer_messages` table, Resend email                              | `/api/contact` route → same edge function + table, Resend email                         | ✅ Same edge function + table           |
 | **Newsletter**                       | `newsletter-subscribe` edge function → `newsletter_subscribers` table                                  | `/api/newsletter` route → `lib/newsletter.ts` → same table                              | ✅ Same table, different transport      |     | **Services empty state** | "No services in this category. Contact us for details." (category only) | "No services in this category. Contact us for details." (category only) | ✅ Yes — aligned Nov 2026      |
 | **Services filter scope**            | Category-only (search removed Nov 2026)                                                                | Category-only                                                                           | ✅ Yes — aligned Nov 2026               |
@@ -586,7 +586,7 @@ Both use the same DB-first + bundled fallback pattern. The app shows these on th
 
 ## 15. Test Status
 
-- **App:** 1004 vitest tests across 72 files, plus 3 Playwright layout tests, 2 opt-in app-vs-website parity tests and 2 offline-catalog tests — all passing
+- **App:** the full vitest suite, plus 3 Playwright layout tests, 2 opt-in app-vs-website parity tests and 2 offline-catalog tests — all passing
 - **Website:** 306 vitest tests across 25 files — all passing
 - **Both repos:** `tsc --noEmit` passes 0 errors
 - **Parity tests:** enforce identical tab structure on both repos
@@ -595,7 +595,7 @@ Both use the same DB-first + bundled fallback pattern. The app shows these on th
 
 _Report generated: 2026-11-09_
 _Comparison between: genumsolutions-app/mobile and genumsolutions-website_
-_Both repos: TypeScript 0 errors, green CI on all tests (1004 mobile + 327 website)_
+_Both repos: TypeScript 0 errors, green CI on all tests (`npm test` in each repo)_
 _Users tab: 3-section structure mirrored (User Directory, Car Profiles, Robot Profiles)_
 _Logs tab: 3-section structure mirrored (User Activity, User Profiles, Fleet Diagnostics)_
 _Company info: 17 fields mirrored with url field_
