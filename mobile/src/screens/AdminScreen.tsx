@@ -37,6 +37,15 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { ADMIN_TAB_HINTS } from "../config/adminTabs";
+import type {
+  OrdersSubTab,
+  ContentSubTab,
+  UsersSubTab,
+  FinanceSubTab,
+  ServicesSubTab,
+  SettingsSubTab,
+  JournalSubTab,
+} from "../config/app_admin_subtabs";
 import PrintAdminPanel, {
   PrintSectionTabs,
   type PrintAdminSection,
@@ -413,6 +422,15 @@ function AdminConsole() {
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(
     null,
   );
+  const [ordersSubTab, setOrdersSubTab] = useState<OrdersSubTab>("All");
+  const [contentSubTab, setContentSubTab] = useState<ContentSubTab>("Services");
+  const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("Users");
+  const [financeSubTab, setFinanceSubTab] = useState<FinanceSubTab>("Overview");
+  const [servicesSubTab, setServicesSubTab] =
+    useState<ServicesSubTab>("General");
+  const [settingsSubTab, setSettingsSubTab] =
+    useState<SettingsSubTab>("Details");
+  const [journalSubTab, setJournalSubTab] = useState<JournalSubTab>("Posts");
   const [editingService, setEditingService] = useState<AdminService | null>(
     null,
   );
