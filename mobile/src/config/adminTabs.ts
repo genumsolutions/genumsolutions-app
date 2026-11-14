@@ -20,7 +20,7 @@
 // U-R5 (2026-11-09): those two and "System Logs" merged into ONE "Logs" tab
 // with three sections, because all three answered the same question (what
 // happened?) and each cost its own click. Both clients now expose the
-// identical 9-tab inventory.
+// identical 8-tab inventory.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",
