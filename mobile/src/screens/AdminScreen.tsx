@@ -3404,6 +3404,54 @@ function ProductEditor({
     product.category === "Robot Cars" ||
     product.category === "Pre-packaged Kits";
 
+  // 2026-11-14 (owner: "Group the product editor's twenty fields into
+  // collapsible sections"): the form had ~20 fields in one column, which was
+  // hard to scan on a phone. Collapsible groups keep every field and binding
+  // identical while letting staff open just the part they are editing.
+  function EditorSection({
+    title,
+    subtitle,
+    defaultOpen = false,
+    children,
+  }: {
+    title: string;
+    subtitle?: string;
+    defaultOpen?: boolean;
+    children: React.ReactNode;
+  }) {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+      <View className="mb-3 overflow-hidden rounded-xl border border-line bg-surface">
+        <Pressable
+          onPress={() => setOpen((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={`${open ? "Collapse" : "Expand"} ${title}`}
+          accessibilityState={{ expanded: open }}
+          className="min-h-11 flex-row items-center justify-between px-4 py-3"
+        >
+          <View className="min-w-0 flex-1 pr-3">
+            <Text className="text-sm font-bold text-ink">{title}</Text>
+            {subtitle ? (
+              <Text numberOfLines={1} className="mt-0.5 text-[11px] text-muted">
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          <Feather
+            name={open ? "chevron-up" : "chevron-down"}
+            size={18}
+            color="#475569"
+          />
+        </Pressable>
+        {open ? (
+          <View className="border-t border-line bg-card px-4 pb-4 pt-3">
+            {children}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1">
       <ScrollView
@@ -3415,258 +3463,278 @@ function ProductEditor({
           <Text className="mb-1 font-display text-lg font-bold text-ink">
             {isNew ? "Add a new product" : `Edit ${product.id}`}
           </Text>
-          <Text className="mb-3 text-xs text-muted">
-            Type: {product.productType || "Retail kit"}
+          <Text className="mb-4 text-xs text-muted">
+            Type: {product.productType || "Retail kit"}. Open a section to edit
+            its fields.
           </Text>
 
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Id (slug, e.g. arduino-uno)
-          </Text>
-          <TextInput
-            value={product.id}
-            onChangeText={(id) =>
-              patch({ id: id.trim().toLowerCase().replace(/\s+/g, "-") })
-            }
-            className={`mb-3 ${inputClass}`}
-            placeholder="arduino-uno"
-            autoCapitalize="none"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
-          <TextInput
-            value={product.name}
-            onChangeText={(name) => patch({ name })}
-            className={`mb-3 ${inputClass}`}
-            placeholder="Product name"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
-          <View className="mb-3">
-            <CategoryDropdown
-              value={product.category || ""}
-              options={categoryOptions}
-              onChange={(category) => patch({ category })}
-              placeholder="Select a category"
-              title="Category"
-              allowCustom
+          <EditorSection
+            title="Basics"
+            subtitle="Id, name, category and type"
+            defaultOpen
+          >
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Id (slug, e.g. arduino-uno)
+            </Text>
+            <TextInput
+              value={product.id}
+              onChangeText={(id) =>
+                patch({ id: id.trim().toLowerCase().replace(/\s+/g, "-") })
+              }
+              className={`mb-3 ${inputClass}`}
+              placeholder="arduino-uno"
+              autoCapitalize="none"
             />
-          </View>
+            <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
+            <TextInput
+              value={product.name}
+              onChangeText={(name) => patch({ name })}
+              className={`mb-3 ${inputClass}`}
+              placeholder="Product name"
+            />
+            <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
+            <View className="mb-3">
+              <CategoryDropdown
+                value={product.category || ""}
+                options={categoryOptions}
+                onChange={(category) => patch({ category })}
+                placeholder="Select a category"
+                title="Category"
+                allowCustom
+              />
+            </View>
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Product type
+            </Text>
+            <View className="mb-1">
+              <CategoryDropdown
+                value={product.productType || "Retail kit"}
+                options={[
+                  "Retail kit",
+                  "Project package",
+                  "Robot Cars",
+                  "Material",
+                  "Service package",
+                ]}
+                onChange={(productType) => patch({ productType })}
+                placeholder="Select a product type"
+                title="Product type"
+                allowCustom
+              />
+            </View>
+          </EditorSection>
 
-          <View className="mb-3 flex-row gap-3">
-            <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">
-                Price (NPR)
-              </Text>
-              <TextInput
-                value={String(product.price)}
-                onChangeText={(price) =>
-                  patch({ price: Math.max(0, Number(price) || 0) })
-                }
-                keyboardType="numeric"
-                className={inputClass}
-                placeholder="0"
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">Stock</Text>
-              <TextInput
-                value={String(product.stock)}
-                onChangeText={(stock) =>
-                  patch({ stock: Math.max(0, Math.round(Number(stock) || 0)) })
-                }
-                keyboardType="numeric"
-                className={inputClass}
-                placeholder="0"
-              />
-            </View>
-          </View>
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Price label (e.g. NPR 1,450)
-          </Text>
-          <TextInput
-            value={product.priceLabel}
-            onChangeText={(priceLabel) => patch({ priceLabel })}
-            className={`mb-3 ${inputClass}`}
-            placeholder="NPR 1,450"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">SKU</Text>
-          <TextInput
-            value={product.sku}
-            onChangeText={(sku) => patch({ sku })}
-            className={`mb-3 ${inputClass}`}
-            placeholder="GEN-…"
-            autoCapitalize="characters"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Short summary (note)
-          </Text>
-          <TextInput
-            value={product.note}
-            onChangeText={(note) => patch({ note })}
-            multiline
-            numberOfLines={2}
-            className={`mb-3 ${inputClass}`}
-            placeholder="Short summary"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
-          <TextInput
-            value={product.description}
-            onChangeText={(description) => patch({ description })}
-            multiline
-            style={{ textAlignVertical: "top" }}
-            className={`mb-3 min-h-20 ${inputClass}`}
-            placeholder="Full description"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Specs (one per line)
-          </Text>
-          <TextInput
-            value={product.specs.join("\n")}
-            onChangeText={(specs) => patch({ specs: specs.split("\n") })}
-            multiline
-            style={{ textAlignVertical: "top" }}
-            className={`mb-3 min-h-20 ${inputClass}`}
-            placeholder={"1.3-inch OLED\nI2C interface"}
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
-          {product.image ? (
-            // 2026-11-14 (owner): the imported photo previews full size on tap
-            // and the remove control is a real 32px target with its own label —
-            // the old 28px cross on a 64px tile was a coin-flip to hit.
-            <View className="mb-2 flex-row items-start gap-3">
-              <View className="relative h-20 w-20">
-                <Pressable
-                  onPress={() =>
-                    setImagePreview({
-                      uri: product.image,
-                      label: product.name
-                        ? `${product.name} cover`
-                        : "Product cover",
+          <EditorSection
+            title="Pricing & stock"
+            subtitle="Price, label, stock and SKU"
+          >
+            <View className="mb-3 flex-row gap-3">
+              <View className="flex-1">
+                <Text className="mb-1 text-xs font-bold text-muted">
+                  Price (NPR)
+                </Text>
+                <TextInput
+                  value={String(product.price)}
+                  onChangeText={(price) =>
+                    patch({ price: Math.max(0, Number(price) || 0) })
+                  }
+                  keyboardType="numeric"
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="mb-1 text-xs font-bold text-muted">Stock</Text>
+                <TextInput
+                  value={String(product.stock)}
+                  onChangeText={(stock) =>
+                    patch({
+                      stock: Math.max(0, Math.round(Number(stock) || 0)),
                     })
                   }
-                  accessibilityRole="button"
-                  accessibilityLabel="View product image full size"
-                  className="h-20 w-20 overflow-hidden rounded-lg border border-line bg-mist"
-                >
-                  <Image
-                    source={{ uri: product.image }}
-                    className="h-20 w-20"
-                    resizeMode="cover"
-                    accessibilityLabel="Extracted product image"
-                  />
-                </Pressable>
-                <Pressable
-                  onPress={() => patch({ image: "" })}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove product image"
-                  hitSlop={10}
-                  className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
-                >
-                  <Feather name="x" size={14} color="#0f172a" />
-                </Pressable>
+                  keyboardType="numeric"
+                  className={inputClass}
+                  placeholder="0"
+                />
               </View>
-              <Text className="min-w-0 flex-1 text-[11px] leading-4 text-muted">
-                Tap the photo to check the imported picture at full size. The ×
-                removes it from the product.
-              </Text>
             </View>
-          ) : null}
-          <TextInput
-            value={product.image}
-            onChangeText={(image) => patch({ image })}
-            className={`mb-3 ${inputClass}`}
-            placeholder="https://…"
-            autoCapitalize="none"
-          />
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Gallery (one URL per line, max 8)
-          </Text>
-          {Array.isArray(product.gallery) && product.gallery.length > 0 && (
-            <View className="mb-2 flex-row flex-wrap gap-2">
-              {product.gallery.slice(0, 8).map((uri, i) => (
-                // U-39b (2026-09-26): per-image remove cross so staff can drop
-                // unwanted extraction photos before saving.
-                <View key={`${uri}-${i}`} className="h-16 w-16">
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Price label (e.g. NPR 1,450)
+            </Text>
+            <TextInput
+              value={product.priceLabel}
+              onChangeText={(priceLabel) => patch({ priceLabel })}
+              className={`mb-3 ${inputClass}`}
+              placeholder="NPR 1,450"
+            />
+            <Text className="mb-1 text-xs font-bold text-muted">SKU</Text>
+            <TextInput
+              value={product.sku}
+              onChangeText={(sku) => patch({ sku })}
+              className={inputClass}
+              placeholder="GEN-…"
+              autoCapitalize="characters"
+            />
+          </EditorSection>
+
+          <EditorSection
+            title="Content & specs"
+            subtitle="Summary, description and spec lines"
+          >
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Short summary (note)
+            </Text>
+            <TextInput
+              value={product.note}
+              onChangeText={(note) => patch({ note })}
+              multiline
+              numberOfLines={2}
+              className={`mb-3 ${inputClass}`}
+              placeholder="Short summary"
+            />
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Description
+            </Text>
+            <TextInput
+              value={product.description}
+              onChangeText={(description) => patch({ description })}
+              multiline
+              style={{ textAlignVertical: "top" }}
+              className={`mb-3 min-h-20 ${inputClass}`}
+              placeholder="Full description"
+            />
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Specs (one per line)
+            </Text>
+            <TextInput
+              value={product.specs.join("\n")}
+              onChangeText={(specs) => patch({ specs: specs.split("\n") })}
+              multiline
+              style={{ textAlignVertical: "top" }}
+              className={`min-h-20 ${inputClass}`}
+              placeholder={"1.3-inch OLED\nI2C interface"}
+            />
+          </EditorSection>
+
+          <EditorSection title="Images" subtitle="Cover photo and gallery">
+            <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
+            {product.image ? (
+              <View className="mb-2 flex-row items-start gap-3">
+                <View className="relative h-20 w-20">
                   <Pressable
                     onPress={() =>
                       setImagePreview({
-                        uri,
-                        label: `${product.name || "Product"} gallery ${i + 1}`,
+                        uri: product.image,
+                        label: product.name
+                          ? `${product.name} cover`
+                          : "Product cover",
                       })
                     }
                     accessibilityRole="button"
-                    accessibilityLabel={`View gallery image ${i + 1} full size`}
-                    className="h-16 w-16 overflow-hidden rounded-lg border border-line bg-mist"
+                    accessibilityLabel="View product image full size"
+                    className="h-20 w-20 overflow-hidden rounded-lg border border-line bg-mist"
                   >
                     <Image
-                      source={{ uri }}
-                      className="h-16 w-16"
+                      source={{ uri: product.image }}
+                      className="h-20 w-20"
                       resizeMode="cover"
-                      accessibilityLabel={`Gallery ${i + 1}`}
+                      accessibilityLabel="Extracted product image"
                     />
                   </Pressable>
                   <Pressable
-                    onPress={() =>
-                      patch({
-                        gallery: (product.gallery as string[]).filter(
-                          (_, j) => j !== i,
-                        ),
-                      })
-                    }
+                    onPress={() => patch({ image: "" })}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove gallery image ${i + 1}`}
+                    accessibilityLabel="Remove product image"
                     hitSlop={10}
                     className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
                   >
                     <Feather name="x" size={14} color="#0f172a" />
                   </Pressable>
                 </View>
-              ))}
-            </View>
-          )}
-          <TextInput
-            value={
-              Array.isArray(product.gallery) ? product.gallery.join("\n") : ""
-            }
-            onChangeText={(gallery) =>
-              patch({
-                gallery: gallery
-                  .split("\n")
-                  .map((line) => line.trim())
-                  .filter(Boolean)
-                  .slice(0, 8),
-              })
-            }
-            multiline
-            style={{ textAlignVertical: "top" }}
-            className={`mb-3 min-h-20 ${inputClass}`}
-            placeholder={"https://…\nhttps://…"}
-            autoCapitalize="none"
-          />
-
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Product type
-          </Text>
-          <View className="mb-3">
-            <CategoryDropdown
-              value={product.productType || "Retail kit"}
-              options={[
-                "Retail kit",
-                "Project package",
-                "Robot Cars",
-                "Material",
-                "Service package",
-              ]}
-              onChange={(productType) => patch({ productType })}
-              placeholder="Select a product type"
-              title="Product type"
-              allowCustom
+                <Text className="min-w-0 flex-1 text-[11px] leading-4 text-muted">
+                  Tap the photo to check the imported picture at full size. The
+                  × removes it from the product.
+                </Text>
+              </View>
+            ) : null}
+            <TextInput
+              value={product.image}
+              onChangeText={(image) => patch({ image })}
+              className={`mb-3 ${inputClass}`}
+              placeholder="https://…"
+              autoCapitalize="none"
             />
-          </View>
+            <Text className="mb-1 text-xs font-bold text-muted">
+              Gallery (one URL per line, max 8)
+            </Text>
+            {Array.isArray(product.gallery) && product.gallery.length > 0 && (
+              <View className="mb-2 flex-row flex-wrap gap-2">
+                {product.gallery.slice(0, 8).map((uri, i) => (
+                  <View key={`${uri}-${i}`} className="h-16 w-16">
+                    <Pressable
+                      onPress={() =>
+                        setImagePreview({
+                          uri,
+                          label: `${product.name || "Product"} gallery ${i + 1}`,
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`View gallery image ${i + 1} full size`}
+                      className="h-16 w-16 overflow-hidden rounded-lg border border-line bg-mist"
+                    >
+                      <Image
+                        source={{ uri }}
+                        className="h-16 w-16"
+                        resizeMode="cover"
+                        accessibilityLabel={`Gallery ${i + 1}`}
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() =>
+                        patch({
+                          gallery: (product.gallery as string[]).filter(
+                            (_, j) => j !== i,
+                          ),
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove gallery image ${i + 1}`}
+                      hitSlop={10}
+                      className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
+                    >
+                      <Feather name="x" size={14} color="#0f172a" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            <TextInput
+              value={
+                Array.isArray(product.gallery) ? product.gallery.join("\n") : ""
+              }
+              onChangeText={(gallery) =>
+                patch({
+                  gallery: gallery
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .slice(0, 8),
+                })
+              }
+              multiline
+              style={{ textAlignVertical: "top" }}
+              className={`min-h-20 ${inputClass}`}
+              placeholder={"https://…\nhttps://…"}
+              autoCapitalize="none"
+            />
+          </EditorSection>
 
           {isProject ? (
-            <View className="mb-3 rounded-xl border border-line bg-surface p-3">
-              <Text className="mb-2 font-display text-base font-bold text-ink">
-                Project information
-              </Text>
+            <EditorSection
+              title="Project details"
+              subtitle="Overview, build, audience, links and pricing"
+              defaultOpen
+            >
               <Text className="mb-1 text-xs font-bold text-muted">
                 Project category
               </Text>
@@ -3865,14 +3933,11 @@ function ProductEditor({
                 className={`mb-1 ${inputClass}`}
                 placeholder="30 days for manufacturing defects"
               />
-              {/* 2026-11-13: project pricing — the same panel shape as the
-                website's Admin → Projects → Pricing (base charge, markup,
-                extras, bulk tiers, minimum, approval, live estimate). */}
               {pricingCard}
-            </View>
+            </EditorSection>
           ) : null}
 
-          <View className="mb-3 flex-row items-center gap-3">
+          <View className="mb-4 mt-1 flex-row items-center gap-3">
             <Text className="text-sm font-semibold text-ink">
               Visible to customers
             </Text>
