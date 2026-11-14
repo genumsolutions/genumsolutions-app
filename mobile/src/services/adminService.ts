@@ -1078,20 +1078,27 @@ export async function markMessageReplied(id: string) {
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const [
-    { data: orders },
-    { data: users },
-    { data: products },
-    { data: cartStats },
+    { data: orders, error: ordersError },
+    { data: users, error: usersError },
+    { data: products, error: productsError },
+    { data: cartStats, error: cartStatsError },
+    { data: messages, error: messagesError },
   ] = await Promise.all([
     supabase.from("orders").select("*", { count: "exact" }),
     // Profiles: owner can read their own; admin sees all via RLS
     supabase.from("profiles").select("*", { count: "exact" }),
     supabase.from("products").select("*", { count: "exact" }),
     supabase.rpc("get_admin_cart_stats"),
-  ]);
-  const [{ data: messages }] = await Promise.all([
     supabase.from("customer_messages").select("*", { count: "exact" }),
   ]);
+  const queryError = [
+    ordersError,
+    usersError,
+    productsError,
+    cartStatsError,
+    messagesError,
+  ].find((error) => error !== null);
+  if (queryError) throw queryError;
   const totalOrders = orders?.length ?? 0;
   const allOrders = (orders ?? []) as any[];
   const pendingOrders = allOrders.filter(
@@ -1486,6 +1493,9 @@ export async function fetchAdminAnalytics(days = 30): Promise<AdminAnalytics> {
       .select("*", { count: "exact", head: true })
       .gte("created_at", todayISO),
   ]);
+
+  if (allResult.error) throw allResult.error;
+  if (todayResult.error) throw todayResult.error;
 
   const todayViews = todayResult.count ?? 0;
   const rows = (allResult.data ?? []) as {

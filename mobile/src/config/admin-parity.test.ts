@@ -109,3 +109,32 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
     expect(webHints).toEqual({ ...ADMIN_TAB_HINTS });
   });
 });
+
+describe("admin data tab wiring", () => {
+  const screenPath = resolve(__dirname, "../screens/AdminScreen.tsx");
+  const source = readFileSync(screenPath, "utf8");
+
+  it("loads Dashboard activity and Content records from their own tab", () => {
+    const loadTab = source.match(
+      /async function loadTab\(\) \{([\s\S]*?)\n  \}\n\n  async function loadOrders/,
+    )?.[1];
+    expect(loadTab).toBeTruthy();
+    expect(loadTab).toContain("loadActivity(1)");
+
+    const contentBranch = loadTab?.match(
+      /else if \(tab === "Content"\) \{([\s\S]*?)\n      \} else if \(tab === "Users"\)/,
+    )?.[1];
+    expect(contentBranch).toContain("listAdminTrainingPrograms()");
+    expect(contentBranch).toContain("listAdminPilotCostLines()");
+    expect(contentBranch).toContain("listAdminCurriculumHighlights()");
+  });
+
+  it("renders the system, user-activity, and profile sections in Logs", () => {
+    const logsTab = source.match(
+      /function LogsTab\([\s\S]*?\n\}\n\nfunction SystemLogsTab/,
+    )?.[0];
+    expect(logsTab).toContain("<SystemLogsTab");
+    expect(logsTab).toContain("<UserLogsTab");
+    expect(logsTab).toContain("<ProfileEntriesTab");
+  });
+});

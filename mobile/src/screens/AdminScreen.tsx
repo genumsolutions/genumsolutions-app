@@ -325,6 +325,7 @@ function AdminConsole() {
     Dashboard: true,
   });
   const [loading, setLoading] = useState(false);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   // U-UI1: stamped after each successful tab load, shown in the console bar.
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const tabOffsets = useRef<number[]>([]);
@@ -620,54 +621,117 @@ function AdminConsole() {
     void loadTab();
   }, [tab]);
 
+  async function runAdminLoad(
+    label: string,
+    action: () => Promise<unknown>,
+  ): Promise<boolean> {
+    try {
+      await action();
+      setLoadErrors((current) => {
+        if (!(label in current)) return current;
+        const next = { ...current };
+        delete next[label];
+        return next;
+      });
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error || "Unknown error");
+      logger.error("admin", `${label} load error:`, error);
+      setLoadErrors((current) => ({ ...current, [label]: message }));
+      return false;
+    }
+  }
+
   async function loadTab() {
     setLoading(true);
+    setLoadErrors({});
+    let loaded = true;
     try {
       if (tab === "Dashboard") {
-        setStats(await fetchDashboardStats());
-        // Analytics is best-effort: a page_views query failure (e.g. RLS)
-        // shouldn't break the rest of the dashboard.
-        try {
-          setAnalytics(await fetchAdminAnalytics(30));
-        } catch (e) {
-          logger.error("admin", "Admin analytics load error:", e);
-          setAnalytics(null);
-        }
+        const results = await Promise.all([
+          runAdminLoad("Dashboard stats", async () =>
+            setStats(await fetchDashboardStats()),
+          ),
+          runAdminLoad("Dashboard analytics", async () =>
+            setAnalytics(await fetchAdminAnalytics(30)),
+          ),
+          loadActivity(1),
+        ]);
+        loaded = results.every(Boolean);
       } else if (tab === "Orders") {
-        void loadOrders(1);
-        if (!stats) setStats(await fetchDashboardStats());
+        const results = await Promise.all([
+          loadOrders(1),
+          stats
+            ? Promise.resolve(true)
+            : runAdminLoad("Dashboard stats", async () =>
+                setStats(await fetchDashboardStats()),
+              ),
+        ]);
+        loaded = results.every(Boolean);
       } else if (tab === "Electronic Products" || tab === "3D Products") {
-        setProducts(await listAdminProducts());
+        loaded = await runAdminLoad("Products", async () =>
+          setProducts(await listAdminProducts()),
+        );
       } else if (tab === "Projects") {
-        setProducts(await listAdminProducts());
+        loaded = await runAdminLoad("Projects", async () =>
+          setProducts(await listAdminProducts()),
+        );
       } else if (tab === "Content") {
-        setServices(await listAdminServices());
-        setJournals(await listAdminJournalPosts());
-        const result = await fetchSiteContent();
-        const content = result?.content;
-        if (content) {
-          setSiteContent(content);
-          setContentTitle(content.home_title || "");
-          setContentBody(content.home_body || "");
-        }
+        const results = await Promise.all([
+          runAdminLoad("Services", async () =>
+            setServices(await listAdminServices()),
+          ),
+          runAdminLoad("Journal", async () =>
+            setJournals(await listAdminJournalPosts()),
+          ),
+          runAdminLoad("Home page content", async () => {
+            const result = await fetchSiteContent();
+            const content = result?.content;
+            if (content) {
+              setSiteContent(content);
+              setContentTitle(content.home_title || "");
+              setContentBody(content.home_body || "");
+            }
+          }),
+          runAdminLoad("Training programs", async () =>
+            setTrainingPrograms(await listAdminTrainingPrograms()),
+          ),
+          runAdminLoad("Pilot costs", async () =>
+            setPilotCostLines(await listAdminPilotCostLines()),
+          ),
+          runAdminLoad("Curriculum highlights", async () =>
+            setCurriculumHighlights(await listAdminCurriculumHighlights()),
+          ),
+        ]);
+        loaded = results.every(Boolean);
       } else if (tab === "Users") {
-        void loadUsers(1);
-        void loadMessages(1);
-        // Merged Users tab: also load activity, profiles and diagnostics.
-        void loadCrashReports(1);
-        void loadAppLogs(1);
-        void loadUserLogs(1);
-        void loadProfileEntries(1);
-        setProfileEntryTypes(await listProfileEntryTypes());
+        const results = await Promise.all([
+          loadUsers(1),
+          loadMessages(1),
+          loadCrashReports(1),
+          loadAppLogs(1),
+          loadUserLogs(1),
+          loadProfileEntries(1),
+          runAdminLoad("Profile entry types", async () =>
+            setProfileEntryTypes(await listProfileEntryTypes()),
+          ),
+        ]);
+        loaded = results.every(Boolean);
       } else if (tab === "Settings") {
-        setCompanyInfo(await getCompanyInfo());
-        setTrainingPrograms(await listAdminTrainingPrograms());
-        setPilotCostLines(await listAdminPilotCostLines());
-        setCurriculumHighlights(await listAdminCurriculumHighlights());
+        loaded = await runAdminLoad("Company settings", async () =>
+          setCompanyInfo(await getCompanyInfo()),
+        );
       }
-      setRefreshedAt(new Date());
+      setRefreshedAt(loaded ? new Date() : null);
     } catch (e) {
       logger.error("admin", "Admin load error:", e);
+      setLoadErrors({
+        [tab]: e instanceof Error ? e.message : String(e || "Unknown error"),
+      });
+      setRefreshedAt(null);
     } finally {
       setLoading(false);
       setVisited((v) => ({ ...v, [tab]: true }));
@@ -677,42 +741,97 @@ function AdminConsole() {
   async function loadOrders(
     page: number,
     subTab: OrdersSubTab = ordersSubTab,
-  ) {
+  ): Promise<boolean> {
     const status = subTab === "All" ? undefined : subTab.toLowerCase();
-    const result = await listAdminOrders(
-      page,
-      20,
-      status,
-      orderQuery.trim() || undefined,
-    );
-    setOrders(result.orders);
-    setOrdersTotal(result.total);
-    setOrdersPage(result.page);
-    setOrdersTotalPages(result.totalPages);
+    return runAdminLoad("Orders", async () => {
+      const result = await listAdminOrders(
+        page,
+        20,
+        status,
+        orderQuery.trim() || undefined,
+      );
+      setOrders(result.orders);
+      setOrdersTotal(result.total);
+      setOrdersPage(result.page);
+      setOrdersTotalPages(result.totalPages);
+    });
   }
 
-  async function loadMessages(page: number, status = messageStatus) {
-    const result = await listAdminMessages(
-      page,
-      20,
-      status || undefined,
-    );
-    setMessages(result.messages);
-    setMessagesPage(result.page);
-    setMessagesTotal(result.total);
-    setMessagesTotalPages(result.totalPages);
+  async function loadMessages(
+    page: number,
+    status = messageStatus,
+  ): Promise<boolean> {
+    return runAdminLoad("Messages", async () => {
+      const result = await listAdminMessages(page, 20, status || undefined);
+      setMessages(result.messages);
+      setMessagesPage(result.page);
+      setMessagesTotal(result.total);
+      setMessagesTotalPages(result.totalPages);
+    });
   }
 
-  async function loadUsers(page: number) {
-    const result = await listAdminUsers(
-      page,
-      10,
-      userQuery.trim() || undefined,
-    );
-    setUsers(result.users);
-    setUsersPage(result.page);
-    setUsersTotal(result.total);
-    setUsersTotalPages(result.totalPages);
+  async function loadUsers(page: number): Promise<boolean> {
+    return runAdminLoad("Users", async () => {
+      const result = await listAdminUsers(
+        page,
+        10,
+        userQuery.trim() || undefined,
+      );
+      setUsers(result.users);
+      setUsersPage(result.page);
+      setUsersTotal(result.total);
+      setUsersTotalPages(result.totalPages);
+    });
+  }
+
+  async function loadActivity(page: number): Promise<boolean> {
+    return runAdminLoad("Activity", async () => {
+      const result = await listAdminActivity(page, 20);
+      setActivities(result.entries);
+      setActivityPage(result.page);
+      setActivityTotal(result.total);
+      setActivityTotalPages(result.totalPages);
+    });
+  }
+
+  async function loadCrashReports(page: number): Promise<boolean> {
+    return runAdminLoad("Crash reports", async () => {
+      const result = await listDeviceCrashReports(page, 20);
+      setCrashReports(result.entries);
+      setCrashReportPage(result.page);
+      setCrashReportTotal(result.total);
+      setCrashReportTotalPages(result.totalPages);
+    });
+  }
+
+  async function loadAppLogs(page: number): Promise<boolean> {
+    return runAdminLoad("App logs", async () => {
+      const result = await listAppLogs(page, 20);
+      setAppLogs(result.entries);
+      setAppLogPage(result.page);
+      setAppLogTotal(result.total);
+      setAppLogTotalPages(result.totalPages);
+    });
+  }
+
+  async function loadUserLogs(page: number): Promise<boolean> {
+    return runAdminLoad("User logs", async () => {
+      const result = await listUserActivityLogs(page, 20);
+      setUserLogs(result.entries);
+      setUserLogPage(result.page);
+      setUserLogTotal(result.total);
+      setUserLogTotalPages(result.totalPages);
+    });
+  }
+
+  async function loadProfileEntries(page: number): Promise<boolean> {
+    return runAdminLoad("Profile entries", async () => {
+      const result = await listUserProfileEntries(page, 20);
+      setProfileEntries(result.entries);
+      setProfileEntryPage(result.page);
+      setProfileEntryTotal(result.total);
+      setProfileEntryTotalPages(result.totalPages);
+    });
   }
 
   async function handleUpdateOrderStatus(orderId: string, status: string) {
@@ -1189,48 +1308,6 @@ function AdminConsole() {
         { text: "Cancel", style: "cancel" as const },
       ],
     );
-  }
-
-  async function loadActivity(page: number) {
-    const result = await listAdminActivity(page, 20);
-    setActivities(result.entries);
-    setActivityPage(result.page);
-    setActivityTotal(result.total);
-    setActivityTotalPages(result.totalPages);
-  }
-
-  // System Logs pagination (U-R3): newest-first crash reports + app log lines.
-  async function loadCrashReports(page: number) {
-    const result = await listDeviceCrashReports(page, 20);
-    setCrashReports(result.entries);
-    setCrashReportPage(result.page);
-    setCrashReportTotal(result.total);
-    setCrashReportTotalPages(result.totalPages);
-  }
-
-  async function loadAppLogs(page: number) {
-    const result = await listAppLogs(page, 20);
-    setAppLogs(result.entries);
-    setAppLogPage(result.page);
-    setAppLogTotal(result.total);
-    setAppLogTotalPages(result.totalPages);
-  }
-
-  // User Logs + Profile Entries (U-R4): newest-first, 20 rows per page.
-  async function loadUserLogs(page: number) {
-    const result = await listUserActivityLogs(page, 20);
-    setUserLogs(result.entries);
-    setUserLogPage(result.page);
-    setUserLogTotal(result.total);
-    setUserLogTotalPages(result.totalPages);
-  }
-
-  async function loadProfileEntries(page: number) {
-    const result = await listUserProfileEntries(page, 20);
-    setProfileEntries(result.entries);
-    setProfileEntryPage(result.page);
-    setProfileEntryTotal(result.total);
-    setProfileEntryTotalPages(result.totalPages);
   }
 
   function handleDeleteCrashReport(row: AdminCrashReport) {
@@ -1914,6 +1991,19 @@ function AdminConsole() {
           {ADMIN_TAB_HINTS[tab]}
         </Text>
       </View>
+      {Object.keys(loadErrors).length > 0 ? (
+        <View className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2">
+          <Text className="text-xs font-bold text-red-700">
+            Some {tab.toLowerCase()} data could not be loaded. Use refresh to
+            retry.
+          </Text>
+          {Object.entries(loadErrors).map(([label, message]) => (
+            <Text key={label} className="mt-1 text-[11px] text-red-700">
+              {label}: {message}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
       {/* One tab at a time, full width — the website's mobile view.
 
@@ -4489,14 +4579,24 @@ function UserRobotSettingsManager({
   const [values, setValues] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  const load = useCallback(() => {
-    void listUserRobotSettings(userId)
-      .then(setRows)
-      .catch(() => setRows([]));
+  const load = useCallback(async () => {
+    setLoadError("");
+    try {
+      setRows(await listUserRobotSettings(userId));
+    } catch (error) {
+      logger.error("admin", "Robot settings load error:", error);
+      setRows(null);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Could not load robot settings.",
+      );
+    }
   }, [userId]);
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   // values: one "key=value" per line (scalars) — kept deliberately simple.
@@ -4561,7 +4661,16 @@ function UserRobotSettingsManager({
 
   if (rows === null)
     return (
-      <Text className="py-2 text-xs text-muted">Loading robot settings…</Text>
+      <View className="py-2">
+        <Text className="text-xs text-muted">
+          {loadError || "Loading robot settings…"}
+        </Text>
+        {loadError ? (
+          <Pressable onPress={() => void load()} className="mt-1 self-start">
+            <Text className="text-xs font-bold text-navy">Retry</Text>
+          </Pressable>
+        ) : null}
+      </View>
     );
   return (
     <View className="mt-3 rounded-lg border border-line bg-surface p-3">
@@ -4678,14 +4787,24 @@ function UserProjectProfileManager({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  const load = useCallback(() => {
-    void listUserCarProfiles(userId)
-      .then(setRows)
-      .catch(() => setRows([]));
+  const load = useCallback(async () => {
+    setLoadError("");
+    try {
+      setRows(await listUserCarProfiles(userId));
+    } catch (error) {
+      logger.error("admin", "Project profile load error:", error);
+      setRows(null);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Could not load project profiles.",
+      );
+    }
   }, [userId]);
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   function resetDraft() {
@@ -4750,7 +4869,16 @@ function UserProjectProfileManager({
 
   if (rows === null)
     return (
-      <Text className="py-2 text-xs text-muted">Loading project profiles…</Text>
+      <View className="py-2">
+        <Text className="text-xs text-muted">
+          {loadError || "Loading project profiles…"}
+        </Text>
+        {loadError ? (
+          <Pressable onPress={() => void load()} className="mt-1 self-start">
+            <Text className="text-xs font-bold text-navy">Retry</Text>
+          </Pressable>
+        ) : null}
+      </View>
     );
 
   return (
@@ -4936,32 +5064,20 @@ function UsersSection({
   onDeleteUser: (u: AdminUser) => void;
   currentUserId: string;
 }) {
-  // Section state
-  const [showUserDir, setShowUserDir] = useState(true);
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>(
     {},
   );
-  const [userDirSearch, setUserDirSearch] = useState("");
-
-  // Filter users into categories
-  const filteredUsers = users.filter((user) => {
-    const matchesQuery =
-      !userDirSearch ||
-      user.name.toLowerCase().includes(userDirSearch.toLowerCase()) ||
-      user.email.toLowerCase().includes(userDirSearch.toLowerCase());
-    return matchesQuery;
-  });
 
   // Render user directory section header
   const renderUserDirHeader = () => (
     <View className="mb-3">
       <Text className="font-display text-sm font-bold text-muted uppercase tracking-wide">
-        User Directory ({filteredUsers.length})
+        User Directory ({total})
       </Text>
       <View className="mt-2 flex-row gap-2">
         <TextInput
-          value={userDirSearch}
-          onChangeText={setUserDirSearch}
+          value={query}
+          onChangeText={onQueryChange}
           onSubmitEditing={onApply}
           returnKeyType="search"
           placeholder="Search users..."
@@ -4977,18 +5093,11 @@ function UsersSection({
   return (
     <View className="flex-1">
       <FlatList
-        data={filteredUsers}
+        data={users}
         keyExtractor={(u) => u.id}
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-        ListHeaderComponent={
-          <View className="mb-3">
-            <Text className="font-display text-xl font-bold text-ink">
-              Users ({total})
-            </Text>
-            <View className="mb-3 flex-row gap-2">{renderUserDirHeader()}</View>
-          </View>
-        }
+        ListHeaderComponent={renderUserDirHeader}
         ListEmptyComponent={
           <Text className="py-8 text-center text-sm text-muted">
             No users found.
@@ -5116,7 +5225,6 @@ function UsersSection({
           </View>
         )}
       />
-      {showUserDir && <View className="mt-3">{renderUserDirHeader()}</View>}
     </View>
   );
 }
@@ -5676,14 +5784,12 @@ function ActivityTab({
 // ring buffer of logger + appLogService). A restart fault now surfaces here no
 // matter which transport linked the car, and any device error is a row, not a
 // console nobody was watching.
-// U-R5 (2026-11-09): reorganized into two tabs: Logs and Profile.
-// — Logs: System Logs + App Logs (includes link/wifi diagnostics)
-// — Profile: User profiles + project entries
-// Each tab uses edit-button pattern: content is read-only by default;
-// tap "Edit" to make fields editable, tap again or "Done" to lock.
+// The Logs screen separates system diagnostics, user activity, and saved
+// profiles so each list has its own full-height scroll area.
 const LOG_SECTIONS = [
-  { id: "logs", label: "Logs" },
-  { id: "profile", label: "Profile" },
+  { id: "system", label: "System" },
+  { id: "activity", label: "User activity" },
+  { id: "profiles", label: "Profiles" },
 ] as const;
 
 type LogSection = (typeof LOG_SECTIONS)[number]["id"];
@@ -5743,7 +5849,7 @@ function LogsTab({
   onDeleteProfileEntry: (row: AdminProfileEntry) => void;
   canDelete: boolean;
 }) {
-  const [section, setSection] = useState<LogSection>("logs");
+  const [section, setSection] = useState<LogSection>("system");
   return (
     <View className="flex-1">
       <View className="flex-row flex-wrap gap-2 px-4 pb-1 pt-3">
@@ -5769,7 +5875,7 @@ function LogsTab({
           </Pressable>
         ))}
       </View>
-      {section === "logs" && (
+      {section === "system" ? (
         <SystemLogsTab
           crashes={crashes}
           crashPage={crashPage}
@@ -5784,6 +5890,27 @@ function LogsTab({
           onLoadLogs={onLoadLogs}
           onDeleteLog={onDeleteLog}
           canDelete={canDelete}
+        />
+      ) : section === "activity" ? (
+        <UserLogsTab
+          logs={userLogs}
+          page={userLogPage}
+          total={userLogTotal}
+          totalPages={userLogTotalPages}
+          onPage={onLoadUserLogs}
+          canDelete={canDelete}
+          onDelete={onDeleteUserLog}
+        />
+      ) : (
+        <ProfileEntriesTab
+          entries={profileEntries}
+          types={profileEntryTypes}
+          page={profileEntryPage}
+          total={profileEntryTotal}
+          totalPages={profileEntryTotalPages}
+          onPage={onLoadProfileEntries}
+          canDelete={canDelete}
+          onDelete={onDeleteProfileEntry}
         />
       )}
     </View>
@@ -6095,11 +6222,6 @@ function ProfileEntriesTab({
   canDelete: boolean;
   onDelete: (row: AdminProfileEntry) => void;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [newTitle, setNewTitle] = useState<string>("");
-  const [newTypeName, setNewTypeName] = useState<string>("");
-  const [newBody, setNewBody] = useState<Record<string, unknown>>({});
-
   return (
     <ScrollView
       className="flex-1"
@@ -6139,8 +6261,8 @@ function ProfileEntriesTab({
               key={row.id}
               className="mb-2 rounded-xl border border-line bg-card px-4 py-3"
             >
-              <View className="flex-row items-center gap-2">
-                <Text className="text-sm font-bold text-ink">
+              <View className="flex-row flex-wrap items-center gap-2">
+                <Text className="min-w-0 flex-1 text-sm font-bold text-ink">
                   {row.title || "(untitled)"}
                 </Text>
                 {row.typeName ? (
@@ -6164,15 +6286,15 @@ function ProfileEntriesTab({
                   {JSON.stringify(row.body)}
                 </Text>
               )}
-              <Pressable
-                onPress={() => setIsEditing(true)}
-                className="mt-1 text-xs text-navy underline"
-                accessibilityLabel="Edit profile entry"
-              >
-                <Text className="text-[10px] font-bold uppercase tracking-[0.1em] text-navy">
-                  Edit
-                </Text>
-              </Pressable>
+              {canDelete ? (
+                <View className="mt-2 flex-row flex-wrap gap-2">
+                  <AdminAction
+                    onPress={() => onDelete(row)}
+                    label="Delete"
+                    tone="red"
+                  />
+                </View>
+              ) : null}
             </View>
           ))}
           <PagePager
