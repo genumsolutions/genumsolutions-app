@@ -36,7 +36,7 @@ function readHints(
 }
 
 describe("admin tab inventory (website <-> app mirror, B-6)", () => {
-  it("exposes the 9 canonical tabs in the canonical order", () => {
+  it("exposes the 8 canonical tabs in the canonical order", () => {
     // U-44 (2026-09-26, owner): Catalog split into three catalog tabs that
     // mirror the customer storefront (Electronic Products / 3D Products /
     // Projects). U-R3 (2026-10-12): "System Logs" added (fleet diagnostics).
