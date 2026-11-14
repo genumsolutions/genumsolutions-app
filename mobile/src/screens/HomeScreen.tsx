@@ -28,6 +28,8 @@ import {
 } from "../config/programs";
 import { type Product, type Service } from "../types";
 import { ProductCard } from "../components/ProductCard";
+import { PrintPromoSticker } from "../components/PrintPromoSticker";
+import { getPrintContent, type PrintPromotion } from "../services/printService";
 import type { RootStackParamList } from "../navigation/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
@@ -65,6 +67,10 @@ export function HomeScreen() {
   const [pilotCosts, setPilotCosts] = useState(fallbackPilotCosts);
   const [stemProjectHighlights, setStemProjectHighlights] =
     useState(fallbackHighlights);
+  // 2026-11-14 (owner): the landing-page 3D-printing offer sticker. Comes from
+  // the website's active promotion row (Admin → 3D Products → Promotions), so
+  // the wording — including "first year only" — is owned there, not here.
+  const [printPromo, setPrintPromo] = useState<PrintPromotion | null>(null);
   // PERF (2026-09-25): the old render gated EVERY band behind a full-screen
   // spinner until the SLOWEST of four fetches settled (services + catalog +
   // site content + programs). The hero now paints instantly on the bundled
@@ -113,6 +119,11 @@ export function HomeScreen() {
         .catch(() => {
           /* hero keeps the bundled copy */
         }),
+      getPrintContent()
+        .then(({ content }) => setPrintPromo(content.promotion))
+        .catch(() => {
+          /* no offer — nothing to show */
+        }),
       getProgramsContent()
         .then((programContent) => {
           setTrainingPrograms(programContent.trainingPrograms);
@@ -157,6 +168,14 @@ export function HomeScreen() {
         </Text>
         <Text className="mt-3 text-sm leading-6 text-white/80">{heroBody}</Text>
       </View>
+
+      {/* 2026-11-14: the offer sticker sits directly under the hero, above
+          every band, so it is the first thing after the headline — and it can
+          be dismissed for good on this device. */}
+      <PrintPromoSticker
+        promo={printPromo}
+        onPress={() => navigation.push("Printing")}
+      />
 
       {/* PERF: no full-screen gate — the hero paints instantly and each band
           appears as its own read resolves. One small spinner covers the first
