@@ -247,12 +247,7 @@ export function PrintSectionTabs({
     ...PRINT_ADMIN_SECTIONS,
   ];
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      className="mb-3 mt-1"
-      contentContainerStyle={{ gap: 8 }}
-    >
+    <View className="flex items-center gap-2 overflow-x-auto pb-2">
       {items.map((item) => {
         const active = item === value;
         return (
@@ -261,7 +256,7 @@ export function PrintSectionTabs({
             onPress={() => onChange(item)}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
-            className={`rounded-full px-3 py-1.5 ${active ? "bg-navy" : "border border-line bg-card"}`}
+            className={`rounded-full px-3 py-1.5 ${active ? "bg-navy" : "border border-line bg-card"} ${active ? "min-w-48" : ""}`}
           >
             <Text
               className={`text-[11px] font-black ${active ? "text-white" : "text-ink"}`}
@@ -271,7 +266,7 @@ export function PrintSectionTabs({
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 

@@ -1286,13 +1286,23 @@ function AdminConsole() {
     // Every tab below returns its own vertically scrolling list/ScrollView
     // with the shared 16px page padding, so this wrapper must NOT scroll too:
     // a second same-axis ScrollView swallowed the inner one on Android.
-    const Sub = ({ children }: { children: React.ReactNode }) => (
-      <View className="flex-1">{children}</View>
+    const Sub = ({
+      children,
+      style,
+      className,
+    }: {
+      children: React.ReactNode;
+      style?: any;
+      className?: string;
+    }) => (
+      <View className={"flex-1 " + (className || "")} style={style}>
+        {children}
+      </View>
     );
     switch (t) {
       case "Dashboard":
         return (
-          <Sub>
+          <Sub style={{ overflow: "hidden" }}>
             <DashboardTab
               stats={stats}
               analytics={analytics}
@@ -1359,7 +1369,7 @@ function AdminConsole() {
               )
             : applyComponentsScope(products);
         return (
-          <Sub>
+          <Sub style={{ overflow: "hidden" }}>
             {tab === "3D Products" ? (
               <PrintSectionTabs
                 value={printSection}
@@ -1396,7 +1406,7 @@ function AdminConsole() {
       }
       case "Projects":
         return (
-          <Sub>
+          <Sub style={{ overflow: "hidden" }}>
             <ProjectTab
               title="Projects"
               products={products.filter(isProjectPackage)}
@@ -1735,12 +1745,15 @@ function AdminConsole() {
           Tabs mount lazily on first visit so the console does not fire all
           eight loads at once, then stay mounted (display:"none" when
           inactive) so per-tab state and scroll position survive switching. */}
-      <View className="min-h-0 flex-1 bg-mist">
+      <View className="min-h-0 flex-1 bg-mist overflow-hidden">
         {TABS.map((t) => (
           <View
             key={t}
             className="flex-1 bg-mist"
-            style={tab === t ? undefined : { display: "none" }}
+            style={{
+              ...(tab === t ? undefined : { display: "none" }),
+              overflow: "hidden",
+            }}
             accessibilityElementsHidden={tab !== t}
             importantForAccessibility={
               tab === t ? "auto" : "no-hide-descendants"
@@ -4995,7 +5008,7 @@ function ContentTab({
     "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
   return (
     <ScrollView
-      className="flex-1"
+      className="flex-1 overflow-hidden"
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
     >
       <Text className="text-base font-bold text-ink">Home page content</Text>
