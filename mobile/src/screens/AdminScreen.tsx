@@ -2280,6 +2280,7 @@ function OrdersTab({
   onQueryChange: (q: string) => void;
   onApply: () => void;
 }) {
+  const STATUSES = ["pending", "paid", "fulfilled", "cancelled"] as const;
   return (
     <ScrollView
       className="flex-1"
