@@ -552,6 +552,40 @@ export async function savePrintService(item: PrintServiceItem): Promise<void> {
   if (error) throw failure(error, "Could not save the print service.");
 }
 
+/** Same public bucket the website's admin upload route writes to. */
+export const PRINT_IMAGE_BUCKET = "product-images";
+
+/**
+ * Upload one already-validated image and return its public URL.
+ * Bytes, not a uri: reading the picked file needs a platform API, which lives
+ * in the screen so this module stays usable outside React Native.
+ */
+export async function uploadPrintImage(
+  bytes: Uint8Array,
+  options: { extension: string; contentType: string },
+): Promise<string> {
+  await requireSession();
+  if (!bytes || bytes.byteLength === 0)
+    throw new Error("That image could not be read.");
+  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${options.extension}`;
+  const { error } = await supabase.storage
+    .from(PRINT_IMAGE_BUCKET)
+    .upload(safeName, bytes, {
+      contentType: options.contentType,
+      cacheControl: "31536000",
+      upsert: false,
+    });
+  if (error)
+    throw failure(
+      error,
+      "Upload failed. Check the product-images bucket exists.",
+    );
+  const { data } = supabase.storage
+    .from(PRINT_IMAGE_BUCKET)
+    .getPublicUrl(safeName);
+  return data.publicUrl;
+}
+
 const DELETE_TABLES = {
   category: "print_categories",
   material: "print_materials",
