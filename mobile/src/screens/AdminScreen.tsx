@@ -41,11 +41,12 @@ import PrintAdminPanel, {
   PrintSectionTabs,
   type PrintAdminSection,
 } from "./PrintAdminPanel";
-import { PlatformPager } from "../components/PlatformPager";
-import type {
-  PagerViewOnPageSelectedEvent,
-  PlatformPagerRef,
-} from "../components/PlatformPager";
+// 2026-11-14 (owner: "i dont like the split screen of the admin dashboards
+// tabs contents"): the tab pager is gone. Tabs are no longer pages in a
+// swipeable filmstrip — one tab renders at a time, full width, in normal
+// layout flow, exactly like the website's mobile view. Inactive tabs stay
+// mounted (their state and in-flight loads survive) but are display:"none",
+// so they contribute no width, no height and no a11y nodes.
 import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
@@ -218,7 +219,6 @@ function AdminConsole() {
   const [printSection, setPrintSection] = useState<
     PrintAdminSection | "Catalog"
   >("Catalog");
-  const pagerRef = useRef<PlatformPagerRef>(null);
   const tabScrollRef = useRef<ScrollView>(null);
   const currentPageRef = useRef<number>(0);
   const [visited, setVisited] = useState<Record<string, boolean>>({
@@ -1266,22 +1266,6 @@ function AdminConsole() {
     void loadMessages(messagesPage);
   }
 
-  const onPageSelected = useCallback((event: PagerViewOnPageSelectedEvent) => {
-    const index = event.nativeEvent.position;
-    const key = TABS[index];
-    if (!key) return;
-    // Capture the page we're leaving so we only clear editors when actually
-    // switching tabs (not on a no-op swipe that doesn't change the page).
-    const previousKey = TABS[currentPageRef.current];
-    currentPageRef.current = index;
-    setTab(key);
-    if (key !== previousKey) {
-      setEditingProduct(null);
-      setEditingService(null);
-      setJournalOpen(false);
-    }
-  }, []);
-
   const goToTab = useCallback((key: Tab) => {
     const index = TABS.indexOf(key);
     if (index < 0 || index === currentPageRef.current) return;
@@ -1296,7 +1280,6 @@ function AdminConsole() {
       setEditingService(null);
       setJournalOpen(false);
     }
-    pagerRef.current?.setPage(index);
   }, []);
 
   function renderTabContent(t: Tab) {
@@ -1741,25 +1724,32 @@ function AdminConsole() {
         </Text>
       </View>
 
-      {/* Swipeable tab content — each of the 8 tabs is a pager
-           page synced with the tab strip above (swipe -> onPageSelected
-           -> setTab; tab tap -> goToTab -> setPage). Pages mount lazily
-           on first visit so the admin doesn't fire all 6 data loads at
-           once, then stay mounted so per-tab state survives swiping away. */}
-      <PlatformPager
-        ref={pagerRef}
-        style={{ flex: 1 }}
-        initialPage={0}
-        onPageSelected={onPageSelected}
-        offscreenPageLimit={1}
-        scrollEnabled={!editorOnCurrentTab}
-      >
+      {/* One tab at a time, full width — the website's mobile view.
+
+          2026-11-14 (owner): this used to be a PagerView filmstrip, which had
+          the same three problems as the website's translateX track: both
+          panels visible mid-swipe ("split screen"), a page that could be sized
+          narrower than the screen, and — on tablets/web — two tabs genuinely
+          side by side. A single pane cannot do any of that.
+
+          Tabs mount lazily on first visit so the console does not fire all
+          eight loads at once, then stay mounted (display:"none" when
+          inactive) so per-tab state and scroll position survive switching. */}
+      <View className="min-h-0 flex-1 bg-mist">
         {TABS.map((t) => (
-          <View key={t} className="flex-1 bg-mist">
-            {visited[t] ? renderTabContent(t) : <View className="flex-1" />}
+          <View
+            key={t}
+            className="flex-1 bg-mist"
+            style={tab === t ? undefined : { display: "none" }}
+            accessibilityElementsHidden={tab !== t}
+            importantForAccessibility={
+              tab === t ? "auto" : "no-hide-descendants"
+            }
+          >
+            {visited[t] ? renderTabContent(t) : null}
           </View>
         ))}
-      </PlatformPager>
+      </View>
 
       {/* U-24 (2026-09-24): cross-platform import-by-link dialog. Alert.prompt
           is iOS-only, so Android never even got to the lookup — this modal is
@@ -3396,6 +3386,13 @@ function ProductEditor({
   /** 2026-11-13: project pricing panel (rendered inside the project block). */
   pricingCard?: React.ReactNode;
 }) {
+  // 2026-11-14: full-size preview of an imported photo. Imported images are
+  // 64–80px thumbnails; staff could not tell a correct model from a wrong one.
+  const [imagePreview, setImagePreview] = useState<{
+    uri: string;
+    label: string;
+  } | null>(null);
+
   function patch(patchPart: Partial<AdminProduct>) {
     onChange({ ...product, ...patchPart });
   }
@@ -3408,460 +3405,517 @@ function ProductEditor({
     product.category === "Pre-packaged Kits";
 
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View className="rounded-xl border border-line bg-card p-4">
-        <Text className="mb-1 font-display text-lg font-bold text-ink">
-          {isNew ? "Add a new product" : `Edit ${product.id}`}
-        </Text>
-        <Text className="mb-3 text-xs text-muted">
-          Type: {product.productType || "Retail kit"}
-        </Text>
+    <View className="flex-1">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View className="rounded-xl border border-line bg-card p-4">
+          <Text className="mb-1 font-display text-lg font-bold text-ink">
+            {isNew ? "Add a new product" : `Edit ${product.id}`}
+          </Text>
+          <Text className="mb-3 text-xs text-muted">
+            Type: {product.productType || "Retail kit"}
+          </Text>
 
-        <Text className="mb-1 text-xs font-bold text-muted">
-          Id (slug, e.g. arduino-uno)
-        </Text>
-        <TextInput
-          value={product.id}
-          onChangeText={(id) =>
-            patch({ id: id.trim().toLowerCase().replace(/\s+/g, "-") })
-          }
-          className={`mb-3 ${inputClass}`}
-          placeholder="arduino-uno"
-          autoCapitalize="none"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
-        <TextInput
-          value={product.name}
-          onChangeText={(name) => patch({ name })}
-          className={`mb-3 ${inputClass}`}
-          placeholder="Product name"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
-        <View className="mb-3">
-          <CategoryDropdown
-            value={product.category || ""}
-            options={categoryOptions}
-            onChange={(category) => patch({ category })}
-            placeholder="Select a category"
-            title="Category"
-            allowCustom
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Id (slug, e.g. arduino-uno)
+          </Text>
+          <TextInput
+            value={product.id}
+            onChangeText={(id) =>
+              patch({ id: id.trim().toLowerCase().replace(/\s+/g, "-") })
+            }
+            className={`mb-3 ${inputClass}`}
+            placeholder="arduino-uno"
+            autoCapitalize="none"
           />
-        </View>
+          <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
+          <TextInput
+            value={product.name}
+            onChangeText={(name) => patch({ name })}
+            className={`mb-3 ${inputClass}`}
+            placeholder="Product name"
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
+          <View className="mb-3">
+            <CategoryDropdown
+              value={product.category || ""}
+              options={categoryOptions}
+              onChange={(category) => patch({ category })}
+              placeholder="Select a category"
+              title="Category"
+              allowCustom
+            />
+          </View>
 
-        <View className="mb-3 flex-row gap-3">
-          <View className="flex-1">
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Price (NPR)
-            </Text>
-            <TextInput
-              value={String(product.price)}
-              onChangeText={(price) =>
-                patch({ price: Math.max(0, Number(price) || 0) })
-              }
-              keyboardType="numeric"
-              className={inputClass}
-              placeholder="0"
-            />
+          <View className="mb-3 flex-row gap-3">
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Price (NPR)
+              </Text>
+              <TextInput
+                value={String(product.price)}
+                onChangeText={(price) =>
+                  patch({ price: Math.max(0, Number(price) || 0) })
+                }
+                keyboardType="numeric"
+                className={inputClass}
+                placeholder="0"
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-bold text-muted">Stock</Text>
+              <TextInput
+                value={String(product.stock)}
+                onChangeText={(stock) =>
+                  patch({ stock: Math.max(0, Math.round(Number(stock) || 0)) })
+                }
+                keyboardType="numeric"
+                className={inputClass}
+                placeholder="0"
+              />
+            </View>
           </View>
-          <View className="flex-1">
-            <Text className="mb-1 text-xs font-bold text-muted">Stock</Text>
-            <TextInput
-              value={String(product.stock)}
-              onChangeText={(stock) =>
-                patch({ stock: Math.max(0, Math.round(Number(stock) || 0)) })
-              }
-              keyboardType="numeric"
-              className={inputClass}
-              placeholder="0"
-            />
-          </View>
-        </View>
-        <Text className="mb-1 text-xs font-bold text-muted">
-          Price label (e.g. NPR 1,450)
-        </Text>
-        <TextInput
-          value={product.priceLabel}
-          onChangeText={(priceLabel) => patch({ priceLabel })}
-          className={`mb-3 ${inputClass}`}
-          placeholder="NPR 1,450"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">SKU</Text>
-        <TextInput
-          value={product.sku}
-          onChangeText={(sku) => patch({ sku })}
-          className={`mb-3 ${inputClass}`}
-          placeholder="GEN-…"
-          autoCapitalize="characters"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">
-          Short summary (note)
-        </Text>
-        <TextInput
-          value={product.note}
-          onChangeText={(note) => patch({ note })}
-          multiline
-          numberOfLines={2}
-          className={`mb-3 ${inputClass}`}
-          placeholder="Short summary"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
-        <TextInput
-          value={product.description}
-          onChangeText={(description) => patch({ description })}
-          multiline
-          style={{ textAlignVertical: "top" }}
-          className={`mb-3 min-h-20 ${inputClass}`}
-          placeholder="Full description"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">
-          Specs (one per line)
-        </Text>
-        <TextInput
-          value={product.specs.join("\n")}
-          onChangeText={(specs) => patch({ specs: specs.split("\n") })}
-          multiline
-          style={{ textAlignVertical: "top" }}
-          className={`mb-3 min-h-20 ${inputClass}`}
-          placeholder={"1.3-inch OLED\nI2C interface"}
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
-        {product.image ? (
-          // U-39b: remove-cross on the cover thumbnail.
-          <View className="mb-2 h-16 w-16">
-            <Image
-              source={{ uri: product.image }}
-              className="h-16 w-16 rounded-lg bg-mist"
-              resizeMode="cover"
-              accessibilityLabel="Extracted product image"
-            />
-            <Pressable
-              onPress={() => patch({ image: "" })}
-              accessibilityRole="button"
-              accessibilityLabel="Remove product image"
-              hitSlop={8}
-              className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full border border-line bg-card"
-            >
-              <Text className="text-xs font-black text-ink">×</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        <TextInput
-          value={product.image}
-          onChangeText={(image) => patch({ image })}
-          className={`mb-3 ${inputClass}`}
-          placeholder="https://…"
-          autoCapitalize="none"
-        />
-        <Text className="mb-1 text-xs font-bold text-muted">
-          Gallery (one URL per line, max 8)
-        </Text>
-        {Array.isArray(product.gallery) && product.gallery.length > 0 && (
-          <View className="mb-2 flex-row flex-wrap gap-2">
-            {product.gallery.slice(0, 8).map((uri, i) => (
-              // U-39b (2026-09-26): per-image remove cross so staff can drop
-              // unwanted extraction photos before saving.
-              <View key={`${uri}-${i}`} className="h-14 w-14">
-                <Image
-                  source={{ uri }}
-                  className="h-14 w-14 rounded-lg bg-mist"
-                  resizeMode="cover"
-                  accessibilityLabel={`Gallery ${i + 1}`}
-                />
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Price label (e.g. NPR 1,450)
+          </Text>
+          <TextInput
+            value={product.priceLabel}
+            onChangeText={(priceLabel) => patch({ priceLabel })}
+            className={`mb-3 ${inputClass}`}
+            placeholder="NPR 1,450"
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">SKU</Text>
+          <TextInput
+            value={product.sku}
+            onChangeText={(sku) => patch({ sku })}
+            className={`mb-3 ${inputClass}`}
+            placeholder="GEN-…"
+            autoCapitalize="characters"
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Short summary (note)
+          </Text>
+          <TextInput
+            value={product.note}
+            onChangeText={(note) => patch({ note })}
+            multiline
+            numberOfLines={2}
+            className={`mb-3 ${inputClass}`}
+            placeholder="Short summary"
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
+          <TextInput
+            value={product.description}
+            onChangeText={(description) => patch({ description })}
+            multiline
+            style={{ textAlignVertical: "top" }}
+            className={`mb-3 min-h-20 ${inputClass}`}
+            placeholder="Full description"
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Specs (one per line)
+          </Text>
+          <TextInput
+            value={product.specs.join("\n")}
+            onChangeText={(specs) => patch({ specs: specs.split("\n") })}
+            multiline
+            style={{ textAlignVertical: "top" }}
+            className={`mb-3 min-h-20 ${inputClass}`}
+            placeholder={"1.3-inch OLED\nI2C interface"}
+          />
+          <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
+          {product.image ? (
+            // 2026-11-14 (owner): the imported photo previews full size on tap
+            // and the remove control is a real 32px target with its own label —
+            // the old 28px cross on a 64px tile was a coin-flip to hit.
+            <View className="mb-2 flex-row items-start gap-3">
+              <View className="relative h-20 w-20">
                 <Pressable
                   onPress={() =>
-                    patch({
-                      gallery: (product.gallery as string[]).filter(
-                        (_, j) => j !== i,
-                      ),
+                    setImagePreview({
+                      uri: product.image,
+                      label: product.name
+                        ? `${product.name} cover`
+                        : "Product cover",
                     })
                   }
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove gallery image ${i + 1}`}
-                  hitSlop={8}
-                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full border border-line bg-card"
+                  accessibilityLabel="View product image full size"
+                  className="h-20 w-20 overflow-hidden rounded-lg border border-line bg-mist"
                 >
-                  <Text className="text-xs font-black text-ink">×</Text>
+                  <Image
+                    source={{ uri: product.image }}
+                    className="h-20 w-20"
+                    resizeMode="cover"
+                    accessibilityLabel="Extracted product image"
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => patch({ image: "" })}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove product image"
+                  hitSlop={10}
+                  className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
+                >
+                  <Feather name="x" size={14} color="#0f172a" />
                 </Pressable>
               </View>
-            ))}
-          </View>
-        )}
-        <TextInput
-          value={
-            Array.isArray(product.gallery) ? product.gallery.join("\n") : ""
-          }
-          onChangeText={(gallery) =>
-            patch({
-              gallery: gallery
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean)
-                .slice(0, 8),
-            })
-          }
-          multiline
-          style={{ textAlignVertical: "top" }}
-          className={`mb-3 min-h-20 ${inputClass}`}
-          placeholder={"https://…\nhttps://…"}
-          autoCapitalize="none"
-        />
-
-        <Text className="mb-1 text-xs font-bold text-muted">Product type</Text>
-        <View className="mb-3">
-          <CategoryDropdown
-            value={product.productType || "Retail kit"}
-            options={[
-              "Retail kit",
-              "Project package",
-              "Robot Cars",
-              "Material",
-              "Service package",
-            ]}
-            onChange={(productType) => patch({ productType })}
-            placeholder="Select a product type"
-            title="Product type"
-            allowCustom
+              <Text className="min-w-0 flex-1 text-[11px] leading-4 text-muted">
+                Tap the photo to check the imported picture at full size. The ×
+                removes it from the product.
+              </Text>
+            </View>
+          ) : null}
+          <TextInput
+            value={product.image}
+            onChangeText={(image) => patch({ image })}
+            className={`mb-3 ${inputClass}`}
+            placeholder="https://…"
+            autoCapitalize="none"
           />
-        </View>
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Gallery (one URL per line, max 8)
+          </Text>
+          {Array.isArray(product.gallery) && product.gallery.length > 0 && (
+            <View className="mb-2 flex-row flex-wrap gap-2">
+              {product.gallery.slice(0, 8).map((uri, i) => (
+                // U-39b (2026-09-26): per-image remove cross so staff can drop
+                // unwanted extraction photos before saving.
+                <View key={`${uri}-${i}`} className="h-16 w-16">
+                  <Pressable
+                    onPress={() =>
+                      setImagePreview({
+                        uri,
+                        label: `${product.name || "Product"} gallery ${i + 1}`,
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`View gallery image ${i + 1} full size`}
+                    className="h-16 w-16 overflow-hidden rounded-lg border border-line bg-mist"
+                  >
+                    <Image
+                      source={{ uri }}
+                      className="h-16 w-16"
+                      resizeMode="cover"
+                      accessibilityLabel={`Gallery ${i + 1}`}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      patch({
+                        gallery: (product.gallery as string[]).filter(
+                          (_, j) => j !== i,
+                        ),
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove gallery image ${i + 1}`}
+                    hitSlop={10}
+                    className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
+                  >
+                    <Feather name="x" size={14} color="#0f172a" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+          <TextInput
+            value={
+              Array.isArray(product.gallery) ? product.gallery.join("\n") : ""
+            }
+            onChangeText={(gallery) =>
+              patch({
+                gallery: gallery
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .slice(0, 8),
+              })
+            }
+            multiline
+            style={{ textAlignVertical: "top" }}
+            className={`mb-3 min-h-20 ${inputClass}`}
+            placeholder={"https://…\nhttps://…"}
+            autoCapitalize="none"
+          />
 
-        {isProject ? (
-          <View className="mb-3 rounded-xl border border-line bg-surface p-3">
-            <Text className="mb-2 font-display text-base font-bold text-ink">
-              Project information
-            </Text>
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Project category
-            </Text>
-            <View className="mb-3">
-              <CategoryDropdown
-                value={product.projectCategory || ""}
-                options={PROJECT_CATEGORIES.filter(
-                  (c) => c.slug !== "remote-controller",
-                ).map((c) => c.name)}
-                onChange={(projectCategory) =>
-                  patch({ projectCategory: projectCategory || null })
+          <Text className="mb-1 text-xs font-bold text-muted">
+            Product type
+          </Text>
+          <View className="mb-3">
+            <CategoryDropdown
+              value={product.productType || "Retail kit"}
+              options={[
+                "Retail kit",
+                "Project package",
+                "Robot Cars",
+                "Material",
+                "Service package",
+              ]}
+              onChange={(productType) => patch({ productType })}
+              placeholder="Select a product type"
+              title="Product type"
+              allowCustom
+            />
+          </View>
+
+          {isProject ? (
+            <View className="mb-3 rounded-xl border border-line bg-surface p-3">
+              <Text className="mb-2 font-display text-base font-bold text-ink">
+                Project information
+              </Text>
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Project category
+              </Text>
+              <View className="mb-3">
+                <CategoryDropdown
+                  value={product.projectCategory || ""}
+                  options={PROJECT_CATEGORIES.filter(
+                    (c) => c.slug !== "remote-controller",
+                  ).map((c) => c.name)}
+                  onChange={(projectCategory) =>
+                    patch({ projectCategory: projectCategory || null })
+                  }
+                  placeholder="Select a project category"
+                  title="Project category"
+                  allowCustom={false}
+                />
+              </View>
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Project overview
+              </Text>
+              <TextInput
+                value={product.projectOverview}
+                onChangeText={(projectOverview) => patch({ projectOverview })}
+                multiline
+                style={{ textAlignVertical: "top" }}
+                className={`mb-3 min-h-20 ${inputClass}`}
+                placeholder="Fully-built demo car with instructions…"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Objectives (one per line)
+              </Text>
+              <TextInput
+                value={product.objectives.join("\n")}
+                onChangeText={(v) =>
+                  patch({ objectives: toStringArrayLines(v) })
                 }
-                placeholder="Select a project category"
-                title="Project category"
-                allowCustom={false}
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Control motors and servo via ESP32…"
               />
-            </View>
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Project overview
-            </Text>
-            <TextInput
-              value={product.projectOverview}
-              onChangeText={(projectOverview) => patch({ projectOverview })}
-              multiline
-              style={{ textAlignVertical: "top" }}
-              className={`mb-3 min-h-20 ${inputClass}`}
-              placeholder="Fully-built demo car with instructions…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Objectives (one per line)
-            </Text>
-            <TextInput
-              value={product.objectives.join("\n")}
-              onChangeText={(v) => patch({ objectives: toStringArrayLines(v) })}
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Control motors and servo via ESP32…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Materials required (one per line)
-            </Text>
-            <TextInput
-              value={product.materialsRequired.join("\n")}
-              onChangeText={(v) =>
-                patch({ materialsRequired: toStringArrayLines(v) })
-              }
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="ESP32 dev board…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Learning outcomes (one per line)
-            </Text>
-            <TextInput
-              value={product.learningOutcomes.join("\n")}
-              onChangeText={(v) =>
-                patch({ learningOutcomes: toStringArrayLines(v) })
-              }
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Understand PWM signal control…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Build steps (one per line)
-            </Text>
-            <TextInput
-              value={product.buildSteps.join("\n")}
-              onChangeText={(v) => patch({ buildSteps: toStringArrayLines(v) })}
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Mount the motors on the chassis…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Control methods (one per line)
-            </Text>
-            <TextInput
-              value={product.controlMethods.join("\n")}
-              onChangeText={(v) =>
-                patch({ controlMethods: toStringArrayLines(v) })
-              }
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Bluetooth remote (GENUM app)…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Prerequisites (one per line)
-            </Text>
-            <TextInput
-              value={product.prerequisites.join("\n")}
-              onChangeText={(v) =>
-                patch({ prerequisites: toStringArrayLines(v) })
-              }
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Basic wiring knowledge…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Deliverables (one per line)
-            </Text>
-            <TextInput
-              value={product.deliverables.join("\n")}
-              onChangeText={(v) =>
-                patch({ deliverables: toStringArrayLines(v) })
-              }
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Fully assembled robot car…"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Estimated duration
-            </Text>
-            <TextInput
-              value={product.estimatedDuration}
-              onChangeText={(estimatedDuration) => patch({ estimatedDuration })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="2-3 hours"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Source folder
-            </Text>
-            <TextInput
-              value={product.sourceFolder}
-              onChangeText={(sourceFolder) => patch({ sourceFolder })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="Genum_SMART_DUSTBIN_V1.0.0"
-              autoCapitalize="none"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Documentation URL
-            </Text>
-            <TextInput
-              value={product.documentationUrl}
-              onChangeText={(documentationUrl) => patch({ documentationUrl })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="https://…"
-              autoCapitalize="none"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">Video URL</Text>
-            <TextInput
-              value={product.videoUrl}
-              onChangeText={(videoUrl) => patch({ videoUrl })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="https://…"
-              autoCapitalize="none"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Maintenance notes
-            </Text>
-            <TextInput
-              value={product.maintenanceNotes}
-              onChangeText={(maintenanceNotes) => patch({ maintenanceNotes })}
-              multiline
-              className={`mb-3 ${inputClass}`}
-              placeholder="Safety / maintenance notes"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">Audience</Text>
-            <TextInput
-              value={product.audience}
-              onChangeText={(audience) => patch({ audience })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="Students, Makers, Hobbyists"
-            />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Difficulty
-            </Text>
-            <View className="mb-3">
-              <CategoryDropdown
-                value={product.difficulty || "Beginner"}
-                options={[
-                  "Beginner",
-                  "Intermediate",
-                  "Advanced",
-                  "Professional",
-                ]}
-                onChange={(difficulty) => patch({ difficulty })}
-                placeholder="Difficulty"
-                title="Difficulty"
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Materials required (one per line)
+              </Text>
+              <TextInput
+                value={product.materialsRequired.join("\n")}
+                onChangeText={(v) =>
+                  patch({ materialsRequired: toStringArrayLines(v) })
+                }
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="ESP32 dev board…"
               />
-            </View>
-            <Text className="mb-1 text-xs font-bold text-muted">Warranty</Text>
-            <TextInput
-              value={product.warranty}
-              onChangeText={(warranty) => patch({ warranty })}
-              className={`mb-1 ${inputClass}`}
-              placeholder="30 days for manufacturing defects"
-            />
-            {/* 2026-11-13: project pricing — the same panel shape as the
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Learning outcomes (one per line)
+              </Text>
+              <TextInput
+                value={product.learningOutcomes.join("\n")}
+                onChangeText={(v) =>
+                  patch({ learningOutcomes: toStringArrayLines(v) })
+                }
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Understand PWM signal control…"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Build steps (one per line)
+              </Text>
+              <TextInput
+                value={product.buildSteps.join("\n")}
+                onChangeText={(v) =>
+                  patch({ buildSteps: toStringArrayLines(v) })
+                }
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Mount the motors on the chassis…"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Control methods (one per line)
+              </Text>
+              <TextInput
+                value={product.controlMethods.join("\n")}
+                onChangeText={(v) =>
+                  patch({ controlMethods: toStringArrayLines(v) })
+                }
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Bluetooth remote (GENUM app)…"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Prerequisites (one per line)
+              </Text>
+              <TextInput
+                value={product.prerequisites.join("\n")}
+                onChangeText={(v) =>
+                  patch({ prerequisites: toStringArrayLines(v) })
+                }
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Basic wiring knowledge…"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Deliverables (one per line)
+              </Text>
+              <TextInput
+                value={product.deliverables.join("\n")}
+                onChangeText={(v) =>
+                  patch({ deliverables: toStringArrayLines(v) })
+                }
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Fully assembled robot car…"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Estimated duration
+              </Text>
+              <TextInput
+                value={product.estimatedDuration}
+                onChangeText={(estimatedDuration) =>
+                  patch({ estimatedDuration })
+                }
+                className={`mb-3 ${inputClass}`}
+                placeholder="2-3 hours"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Source folder
+              </Text>
+              <TextInput
+                value={product.sourceFolder}
+                onChangeText={(sourceFolder) => patch({ sourceFolder })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="Genum_SMART_DUSTBIN_V1.0.0"
+                autoCapitalize="none"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Documentation URL
+              </Text>
+              <TextInput
+                value={product.documentationUrl}
+                onChangeText={(documentationUrl) => patch({ documentationUrl })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="https://…"
+                autoCapitalize="none"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Video URL
+              </Text>
+              <TextInput
+                value={product.videoUrl}
+                onChangeText={(videoUrl) => patch({ videoUrl })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="https://…"
+                autoCapitalize="none"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Maintenance notes
+              </Text>
+              <TextInput
+                value={product.maintenanceNotes}
+                onChangeText={(maintenanceNotes) => patch({ maintenanceNotes })}
+                multiline
+                className={`mb-3 ${inputClass}`}
+                placeholder="Safety / maintenance notes"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Audience
+              </Text>
+              <TextInput
+                value={product.audience}
+                onChangeText={(audience) => patch({ audience })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="Students, Makers, Hobbyists"
+              />
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Difficulty
+              </Text>
+              <View className="mb-3">
+                <CategoryDropdown
+                  value={product.difficulty || "Beginner"}
+                  options={[
+                    "Beginner",
+                    "Intermediate",
+                    "Advanced",
+                    "Professional",
+                  ]}
+                  onChange={(difficulty) => patch({ difficulty })}
+                  placeholder="Difficulty"
+                  title="Difficulty"
+                />
+              </View>
+              <Text className="mb-1 text-xs font-bold text-muted">
+                Warranty
+              </Text>
+              <TextInput
+                value={product.warranty}
+                onChangeText={(warranty) => patch({ warranty })}
+                className={`mb-1 ${inputClass}`}
+                placeholder="30 days for manufacturing defects"
+              />
+              {/* 2026-11-13: project pricing — the same panel shape as the
                 website's Admin → Projects → Pricing (base charge, markup,
                 extras, bulk tiers, minimum, approval, live estimate). */}
-            {pricingCard}
-          </View>
-        ) : null}
+              {pricingCard}
+            </View>
+          ) : null}
 
-        <View className="mb-3 flex-row items-center gap-3">
-          <Text className="text-sm font-semibold text-ink">
-            Visible to customers
-          </Text>
-          <Switch
-            value={product.active}
-            onValueChange={(active) => patch({ active })}
-            trackColor={{ true: "#1e3a8a", false: "#e2e8f0" }}
-          />
-        </View>
-
-        <View className="flex-row gap-3">
-          <Pressable
-            onPress={onSave}
-            disabled={saving}
-            className={`rounded-full bg-gold px-5 py-2 ${saving ? "opacity-60" : ""}`}
-          >
-            <Text className="text-xs font-black text-ink">
-              {saving
-                ? "Saving…"
-                : fromLink
-                  ? "Save imported product"
-                  : isNew
-                    ? "Create product"
-                    : "Save"}
+          <View className="mb-3 flex-row items-center gap-3">
+            <Text className="text-sm font-semibold text-ink">
+              Visible to customers
             </Text>
-          </Pressable>
-          <Pressable
-            onPress={onCancel}
-            className="rounded-full border border-line px-5 py-2"
-          >
-            <Text className="text-xs font-black text-ink">Cancel</Text>
-          </Pressable>
+            <Switch
+              value={product.active}
+              onValueChange={(active) => patch({ active })}
+              trackColor={{ true: "#1e3a8a", false: "#e2e8f0" }}
+            />
+          </View>
+
+          <View className="flex-row gap-3">
+            <Pressable
+              onPress={onSave}
+              disabled={saving}
+              className={`rounded-full bg-gold px-5 py-2 ${saving ? "opacity-60" : ""}`}
+            >
+              <Text className="text-xs font-black text-ink">
+                {saving
+                  ? "Saving…"
+                  : fromLink
+                    ? "Save imported product"
+                    : isNew
+                      ? "Create product"
+                      : "Save"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onCancel}
+              className="rounded-full border border-line px-5 py-2"
+            >
+              <Text className="text-xs font-black text-ink">Cancel</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+      {imagePreview && (
+        <ImagePreviewModal
+          uri={imagePreview.uri}
+          label={imagePreview.label}
+          onClose={() => setImagePreview(null)}
+        />
+      )}
+    </View>
   );
 }
 
@@ -4707,10 +4761,17 @@ function UsersSection({
         }
         renderItem={({ item }) => (
           <View className="mb-3 rounded-xl border border-line bg-card p-4">
-            <Text className="font-display text-sm font-bold text-ink">
+            <Text
+              numberOfLines={2}
+              className="font-display text-sm font-bold text-ink"
+            >
               {item.name || "—"}
             </Text>
-            <Text className="font-normal text-muted">· {item.email}</Text>
+            {/* 2026-11-14: emails have no spaces to wrap at, so a long address
+                used to run out past the card edge instead of truncating. */}
+            <Text numberOfLines={1} className="font-normal text-muted">
+              · {item.email}
+            </Text>
             {item.phone ? (
               <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text>
             ) : null}
@@ -6011,7 +6072,9 @@ function MessagesTab({
               <Text className="mt-2 font-display text-xl font-bold text-ink">
                 {preview.name}
               </Text>
-              <Text className="mt-0.5 text-sm text-muted">{preview.email}</Text>
+              <Text numberOfLines={1} className="mt-0.5 text-sm text-muted">
+                {preview.email}
+              </Text>
               <Text className="mt-3 text-xs text-muted">
                 {new Date(preview.createdAt).toLocaleString()}
               </Text>
@@ -7059,17 +7122,86 @@ function AdminAction({
   label: string;
   tone: "navy" | "plain" | "red";
 }) {
+  // 2026-11-14 (owner: buttons looked "stretched and uncanny"): a row's
+  // default `alignItems: stretch` made these pills grow to the height of the
+  // tallest sibling, and with no height floor a one-word label rendered as a
+  // squashed lozenge. Now: 36px floor, centred single-line label, its own
+  // alignment (self-start) so a card never stretches it, a 6px hit slop and an
+  // explicit button role for screen readers.
   return (
     <Pressable
       onPress={onPress}
-      className={`rounded-full px-3 py-1 ${tone === "navy" ? "bg-navy" : tone === "red" ? "border border-red-200" : "border border-line"}`}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+      className={`min-h-9 shrink-0 self-start items-center justify-center rounded-full px-3.5 ${
+        tone === "navy"
+          ? "bg-navy"
+          : tone === "red"
+            ? "border border-red-200 bg-card"
+            : "border border-line bg-card"
+      }`}
     >
       <Text
-        className={`text-xs font-bold ${tone === "navy" ? "text-white" : tone === "red" ? "text-red-600" : "text-ink"}`}
+        numberOfLines={1}
+        className={`text-xs font-black ${tone === "navy" ? "text-white" : tone === "red" ? "text-red-600" : "text-ink"}`}
       >
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** Full-size look at an imported picture. 2026-11-14 (owner: "add the imported
+ * picture preview") — admin thumbnails are 64–80px, too small to tell one
+ * model's photo from another's. Tap the image, see it whole, close. */
+function ImagePreviewModal({
+  uri,
+  label,
+  onClose,
+}: {
+  uri: string;
+  label: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+        }}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close image preview"
+      >
+        <Pressable onPress={() => {}} className="w-full items-center gap-3">
+          <Image
+            source={{ uri }}
+            style={{ width: "100%", height: 380 }}
+            resizeMode="contain"
+            accessibilityLabel={label}
+          />
+          <Text
+            numberOfLines={2}
+            className="text-center text-xs font-bold text-white"
+          >
+            {label}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close image preview"
+            className="min-h-11 items-center justify-center rounded-full bg-card px-6"
+          >
+            <Text className="text-xs font-black text-ink">Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

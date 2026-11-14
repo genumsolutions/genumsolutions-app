@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { checkPrintImage } from "../lib/printImageUpload";
@@ -130,7 +132,7 @@ const emptyService: PrintServiceItem = {
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <View className="mb-3 rounded-xl border border-line bg-card p-3">
+    <View className="mb-3 rounded-xl border border-line bg-card p-4">
       {children}
     </View>
   );
@@ -215,9 +217,15 @@ function Button({
       disabled={busy || disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      className={`rounded-full px-4 py-2 ${base} ${busy || disabled ? "opacity-60" : ""}`}
+      hitSlop={6}
+      // 2026-11-14: same button floor as AdminAction — 36px, centred, single
+      // line, self-start so a flex row cannot stretch it to its tallest
+      // sibling. Before this, "Delete" next to "Save item" grew into a tall
+      // lozenge on narrow screens.
+      className={`min-h-9 shrink-0 self-start items-center justify-center rounded-full px-4 ${base} ${busy || disabled ? "opacity-60" : ""}`}
     >
       <Text
+        numberOfLines={1}
         className={`text-xs font-black ${tone === "primary" ? "text-white" : tone === "danger" ? "text-red-600" : "text-ink"}`}
       >
         {busy ? "Saving…" : label}
@@ -289,6 +297,13 @@ export default function PrintAdminPanel({
   const [category, setCategory] = useState<PrintCategory | null>(null);
   const [promotion, setPromotion] = useState<PrintPromotion | null>(null);
   const [galleryItem, setGalleryItem] = useState<PrintGalleryItem | null>(null);
+  // 2026-11-14 (owner: "add the imported picture preview"): full-size look at an
+  // uploaded gallery photo. The editor thumbnail is h-32, the list rows had no
+  // thumbnail at all — neither is enough to check the right file went up.
+  const [imagePreview, setImagePreview] = useState<{
+    uri: string;
+    label: string;
+  } | null>(null);
   const [service, setService] = useState<PrintServiceItem | null>(null);
   const [quote, setQuote] = useState<PrintQuote | null>(null);
 
@@ -1209,12 +1224,27 @@ export default function PrintAdminPanel({
             </Text>
           </View>
           {editor.imageUrl ? (
-            <Image
-              source={{ uri: editor.imageUrl }}
-              className="mb-2 h-32 w-full rounded-lg bg-surface"
-              resizeMode="cover"
-              accessibilityLabel="Gallery image preview"
-            />
+            <Pressable
+              onPress={() =>
+                setImagePreview({
+                  uri: editor.imageUrl,
+                  label: editor.caption || "Gallery image",
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="View gallery image full size"
+              className="mb-2 overflow-hidden rounded-lg border border-line bg-surface"
+            >
+              <Image
+                source={{ uri: editor.imageUrl }}
+                className="h-32 w-full"
+                resizeMode="cover"
+                accessibilityLabel="Gallery image preview"
+              />
+              <Text className="px-2 py-1 text-[10px] font-bold text-muted">
+                Tap to view full size
+              </Text>
+            </Pressable>
           ) : null}
           <Field
             label="Caption"
@@ -1267,24 +1297,64 @@ export default function PrintAdminPanel({
         </Card>
         {data.gallery.map((item) => (
           <Card key={item.id}>
-            <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-3">
+              {/* 2026-11-14: the row had no picture at all, so two gallery
+                  entries read as two identical captions. Thumbnail + full-size
+                  preview now. */}
+              <Pressable
+                onPress={() =>
+                  setImagePreview({
+                    uri: item.imageUrl,
+                    label: item.caption || "Gallery image",
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`View ${item.caption || "gallery image"} full size`}
+                className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface"
+              >
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  className="h-12 w-12"
+                  resizeMode="cover"
+                  accessibilityLabel="Gallery thumbnail"
+                />
+              </Pressable>
               <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-ink">
-                  {item.caption || item.imageUrl}
+                <Text numberOfLines={1} className="text-sm font-bold text-ink">
+                  {item.caption || "Untitled image"}
                 </Text>
-                <Text className="text-xs text-muted">
-                  {item.category || "uncategorised"}{" "}
-                  {item.active ? "" : "· hidden"}
+                <Text numberOfLines={1} className="text-xs text-muted">
+                  {item.category || "uncategorised"}
+                  {item.active ? "" : " · hidden"}
                 </Text>
               </View>
-              <Button
-                label="Edit"
-                tone="ghost"
-                onPress={() => setGalleryItem(item)}
-              />
+              <View className="shrink-0 flex-row gap-1.5">
+                <Button
+                  label="Preview"
+                  tone="ghost"
+                  onPress={() =>
+                    setImagePreview({
+                      uri: item.imageUrl,
+                      label: item.caption || "Gallery image",
+                    })
+                  }
+                />
+                <Button
+                  label="Edit"
+                  tone="ghost"
+                  onPress={() => setGalleryItem(item)}
+                />
+              </View>
             </View>
           </Card>
         ))}
+        {imagePreview ? (
+          <ImagePreviewModal
+            uri={imagePreview.uri}
+            label={imagePreview.label}
+            onClose={() => setImagePreview(null)}
+          />
+        ) : null}
       </View>
     );
   }
@@ -1471,5 +1541,61 @@ export default function PrintAdminPanel({
         </Card>
       ))}
     </View>
+  );
+}
+
+/**
+ * Full-size view of an uploaded gallery photo.
+ * 2026-11-14 (owner: "add the imported picture preview and accessible delete
+ * button there in the admin dashboard"). The close control is a 44px target
+ * with its own label, and tapping the dark backdrop closes it too.
+ */
+function ImagePreviewModal({
+  uri,
+  label,
+  onClose,
+}: {
+  uri: string;
+  label: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.94)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+        }}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close image preview"
+      >
+        <Pressable onPress={() => {}} className="w-full items-center gap-3">
+          <Image
+            source={{ uri }}
+            style={{ width: "100%", height: 380 }}
+            resizeMode="contain"
+            accessibilityLabel={label}
+          />
+          <Text
+            numberOfLines={2}
+            className="text-center text-xs font-bold text-white"
+          >
+            {label}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close image preview"
+            className="min-h-11 items-center justify-center rounded-full bg-card px-6"
+          >
+            <Text className="text-xs font-black text-ink">Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
