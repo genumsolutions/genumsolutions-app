@@ -242,30 +242,31 @@ export function PrintSectionTabs({
   value: PrintAdminSection | "Catalog";
   onChange: (next: PrintAdminSection | "Catalog") => void;
 }) {
-  const items: (PrintAdminSection | "Catalog")[] = [
-    "Catalog",
-    ...PRINT_ADMIN_SECTIONS,
-  ];
+  const activeSection = value;
   return (
-    <View className="flex items-center gap-2 overflow-x-auto pb-2">
-      {items.map((item) => {
-        const active = item === value;
-        return (
-          <Pressable
-            key={item}
-            onPress={() => onChange(item)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            className={`rounded-full px-3 py-1.5 ${active ? "bg-navy" : "border border-line bg-card"} ${active ? "min-w-48" : ""}`}
-          >
-            <Text
-              className={`text-[11px] font-black ${active ? "text-white" : "text-ink"}`}
+    <View className="sticky top-0 z-20 border-b border-line bg-white/95 px-3 backdrop-blur shadow-sm">
+      <View
+        role="tablist"
+        aria-label="Print admin sections"
+        className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {PRINT_ADMIN_SECTIONS.map((section) => {
+          const active = section === activeSection;
+          return (
+            <Pressable
+              key={section}
+              onPress={() => onChange(section)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              tabIndex={active ? 0 : -1}
+              className={`${active ? "text-[10px] text-[10px] font-black uppercase tracked-widest text-navy" : "text-[10px] text-slate-500"}`}
             >
-              {item}
-            </Text>
-          </Pressable>
-        );
-      })}
+              {section}
+            </Pressable>
+          );
+        })}
+        )
+      </View>
     </View>
   );
 }
