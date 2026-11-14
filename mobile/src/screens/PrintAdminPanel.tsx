@@ -13,6 +13,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -20,6 +22,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
+import { checkPrintImage } from "../lib/printImageUpload";
 import {
   PRINT_QUOTE_STATUSES,
   PRINT_QUOTE_STATUS_LABELS,
@@ -36,6 +41,7 @@ import {
   savePrintSettings,
   setPrintApproval,
   updatePrintQuote,
+  uploadPrintImage,
   type PrintAdminData,
   type PrintCategory,
   type PrintGalleryItem,
@@ -311,6 +317,44 @@ export default function PrintAdminPanel({
       await action();
       setNotice(done);
       await reload();
+    } catch (error) {
+      setNotice(String((error as Error)?.message || error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Pick, validate, upload one gallery image to the public bucket. */
+  async function pickGalleryImage() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        copyToCacheDirectory: true,
+        type: ["image/*"],
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      const check = checkPrintImage({
+        name: asset.name,
+        size: asset.size,
+        mimeType: asset.mimeType,
+      });
+      if (!check.ok) {
+        setNotice(check.error);
+        return;
+      }
+      setBusy(true);
+      // Web can fetch a blob URI directly; native reads the cached file.
+      const bytes =
+        Platform.OS === "web"
+          ? new Uint8Array(await (await fetch(asset.uri)).arrayBuffer())
+          : await new File(asset.uri).bytes();
+      const url = await uploadPrintImage(bytes, {
+        extension: check.extension,
+        contentType: check.contentType,
+      });
+      setGalleryItem({ ...(galleryItem ?? emptyGallery), imageUrl: url });
+      setNotice("Image uploaded — press Save item to publish it.");
     } catch (error) {
       setNotice(String((error as Error)?.message || error));
     } finally {
@@ -1134,9 +1178,10 @@ export default function PrintAdminPanel({
       <View>
         {noticeBar}
         <View className="mb-3 flex-row items-center justify-between gap-2">
+          {" "}
           <Text className="flex-1 text-xs text-muted">
             {data.gallery.length} item{data.gallery.length === 1 ? "" : "s"} —
-            paste an image URL (uploads stay website-only).
+            upload a photo or paste an image URL.
           </Text>
           <Button
             label="New"
@@ -1147,12 +1192,30 @@ export default function PrintAdminPanel({
         <Card>
           <Text className="mb-2 font-display text-base font-bold text-ink">
             {editor.id ? "Edit gallery item" : "New gallery item"}
-          </Text>
+          </Text>{" "}
           <Field
             label="Image URL"
             value={editor.imageUrl}
             onChange={(imageUrl) => patch({ imageUrl })}
           />
+          <View className="mb-2 flex-row items-center gap-2">
+            <Button
+              label="Upload image"
+              busy={busy}
+              onPress={() => void pickGalleryImage()}
+            />
+            <Text className="min-w-0 flex-1 text-[10px] leading-4 text-muted">
+              JPG, PNG, WebP, AVIF or GIF up to 8 MB.
+            </Text>
+          </View>
+          {editor.imageUrl ? (
+            <Image
+              source={{ uri: editor.imageUrl }}
+              className="mb-2 h-32 w-full rounded-lg bg-surface"
+              resizeMode="cover"
+              accessibilityLabel="Gallery image preview"
+            />
+          ) : null}
           <Field
             label="Caption"
             value={editor.caption}
