@@ -38,13 +38,16 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { ADMIN_TAB_HINTS } from "../config/adminTabs";
 import type {
+  OrderPanel,
   OrdersSubTab,
   ContentSubTab,
   UsersSubTab,
-  FinanceSubTab,
-  ServicesSubTab,
-  SettingsSubTab,
-  JournalSubTab,
+} from "../config/app_admin_subtabs";
+import {
+  CONTENT_SUBTABS,
+  ORDER_PANELS,
+  ORDERS_SUBTABS,
+  USERS_SUBTABS,
 } from "../config/app_admin_subtabs";
 import PrintAdminPanel, {
   PrintSectionTabs,
@@ -170,6 +173,88 @@ type Tab =
   | "Content"
   | "Users"
   | "Settings";
+
+function AdminSubTabs<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly T[];
+  value: T;
+  onChange: (next: T) => void;
+}) {
+  return (
+    <View
+      role="tablist"
+      aria-label={label}
+      className="shrink-0 border-b border-line bg-card"
+    >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ flexDirection: "row" }}
+      >
+        {options.map((option) => {
+          const selected = value === option;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => onChange(option)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              accessibilityLabel={option}
+              tabIndex={selected ? 0 : -1}
+              className={`shrink-0 justify-center border-b-2 px-4 ${
+                selected ? "border-navy" : "border-transparent"
+              }`}
+              style={{ minHeight: 44 }}
+            >
+              <Text
+                numberOfLines={1}
+                className={`text-[11px] font-black uppercase tracking-[0.08em] ${
+                  selected ? "text-navy" : "text-muted"
+                }`}
+              >
+                {option}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function AdminSectionPanels({
+  active,
+  panels,
+}: {
+  active: string;
+  panels: readonly { key: string; content: React.ReactNode }[];
+}) {
+  return (
+    <View className="min-h-0 flex-1 overflow-hidden bg-mist">
+      {panels.map(({ key, content }) => (
+        <View
+          key={key}
+          className="flex-1 bg-mist"
+          style={{
+            ...(active === key ? undefined : { display: "none" as const }),
+            overflow: "hidden",
+          }}
+          accessibilityElementsHidden={active !== key}
+          importantForAccessibility={
+            active === key ? "auto" : "no-hide-descendants"
+          }
+        >
+          {content}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 // U-44 (2026-09-26, owner): the Catalog tab becomes THREE tabs mirroring the
 // customer storefront — Electronic Products (/products), 3D Products
@@ -329,7 +414,6 @@ function AdminConsole() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersTotalPages, setOrdersTotalPages] = useState(1);
   const [orderQuery, setOrderQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
 
   // Products
   const [products, setProducts] = useState<AdminProduct[]>([]);
@@ -422,15 +506,10 @@ function AdminConsole() {
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(
     null,
   );
+  const [ordersPanel, setOrdersPanel] = useState<OrderPanel>("Orders");
   const [ordersSubTab, setOrdersSubTab] = useState<OrdersSubTab>("All");
   const [contentSubTab, setContentSubTab] = useState<ContentSubTab>("Services");
   const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("Users");
-  const [financeSubTab, setFinanceSubTab] = useState<FinanceSubTab>("Overview");
-  const [servicesSubTab, setServicesSubTab] =
-    useState<ServicesSubTab>("General");
-  const [settingsSubTab, setSettingsSubTab] =
-    useState<SettingsSubTab>("Details");
-  const [journalSubTab, setJournalSubTab] = useState<JournalSubTab>("Posts");
   const [editingService, setEditingService] = useState<AdminService | null>(
     null,
   );
@@ -567,6 +646,7 @@ function AdminConsole() {
         }
       } else if (tab === "Users") {
         void loadUsers(1);
+        void loadMessages(1);
         // Merged Users tab: also load activity, profiles and diagnostics.
         void loadCrashReports(1);
         void loadAppLogs(1);
@@ -578,7 +658,6 @@ function AdminConsole() {
         setTrainingPrograms(await listAdminTrainingPrograms());
         setPilotCostLines(await listAdminPilotCostLines());
         setCurriculumHighlights(await listAdminCurriculumHighlights());
-        void loadMessages(1);
       }
       setRefreshedAt(new Date());
     } catch (e) {
@@ -589,11 +668,15 @@ function AdminConsole() {
     }
   }
 
-  async function loadOrders(page: number) {
+  async function loadOrders(
+    page: number,
+    subTab: OrdersSubTab = ordersSubTab,
+  ) {
+    const status = subTab === "All" ? undefined : subTab.toLowerCase();
     const result = await listAdminOrders(
       page,
       20,
-      statusFilter || undefined,
+      status,
       orderQuery.trim() || undefined,
     );
     setOrders(result.orders);
@@ -602,11 +685,11 @@ function AdminConsole() {
     setOrdersTotalPages(result.totalPages);
   }
 
-  async function loadMessages(page: number) {
+  async function loadMessages(page: number, status = messageStatus) {
     const result = await listAdminMessages(
       page,
       20,
-      messageStatus || undefined,
+      status || undefined,
     );
     setMessages(result.messages);
     setMessagesPage(result.page);
@@ -1338,23 +1421,48 @@ function AdminConsole() {
       case "Orders":
         return (
           <Sub>
-            <OrdersTab
-              orders={orders}
-              total={ordersTotal}
-              page={ordersPage}
-              totalPages={ordersTotalPages}
-              onPage={(p) => void loadOrders(p)}
-              onStatusChange={handleUpdateOrderStatus}
-              query={orderQuery}
-              onQueryChange={setOrderQuery}
-              status={statusFilter}
-              onStatusFilter={(s) => {
-                setStatusFilter(s);
-                void loadOrders(1);
-              }}
-              onApply={() => void loadOrders(1)}
+            <AdminSubTabs
+              label="Order sections"
+              options={ORDER_PANELS}
+              value={ordersPanel}
+              onChange={setOrdersPanel}
             />
-            <FinanceTab stats={stats} />
+            {ordersPanel === "Orders" ? (
+              <AdminSubTabs
+                label="Order status filters"
+                options={ORDERS_SUBTABS}
+                value={ordersSubTab}
+                onChange={(next) => {
+                  setOrdersSubTab(next);
+                  void loadOrders(1, next);
+                }}
+              />
+            ) : null}
+            <AdminSectionPanels
+              active={ordersPanel}
+              panels={[
+                {
+                  key: "Orders",
+                  content: (
+                    <OrdersTab
+                      orders={orders}
+                      total={ordersTotal}
+                      page={ordersPage}
+                      totalPages={ordersTotalPages}
+                      onPage={(p) => void loadOrders(p)}
+                      onStatusChange={handleUpdateOrderStatus}
+                      query={orderQuery}
+                      onQueryChange={setOrderQuery}
+                      onApply={() => void loadOrders(1)}
+                    />
+                  ),
+                },
+                {
+                  key: "Finance",
+                  content: <FinanceTab stats={stats} />,
+                },
+              ]}
+            />
           </Sub>
         );
       case "Electronic Products":
@@ -1444,165 +1552,214 @@ function AdminConsole() {
       case "Content":
         return (
           <Sub>
-            <ServicesTab
-              services={services}
-              editing={editingService}
-              onChange={setEditingService}
-              onEdit={setEditingService}
-              onNew={handleNewService}
-              onSave={handleSaveService}
-              saveSaving={saveSaving}
-              canDelete={canDelete}
-              onDelete={handleDeleteService}
-              onToggleActive={(s) => void handleToggleServiceActive(s)}
+            <AdminSubTabs
+              label="Content sections"
+              options={CONTENT_SUBTABS}
+              value={contentSubTab}
+              onChange={setContentSubTab}
             />
-            <JournalTab
-              journals={journals}
-              editorOpen={journalOpen}
-              editId={journalEditId}
-              tag={journalTag}
-              title={journalTitle}
-              text={journalText}
-              sort={journalSort}
-              active={journalActive}
-              onNew={() => startEditJournal(null)}
-              onEdit={(post) => startEditJournal(post)}
-              onTogglePublish={(post) =>
-                void handleToggleJournalPublished(post)
-              }
-              canDelete={canDelete}
-              onDelete={handleDeleteJournal}
-              onEditIdChange={setJournalEditId}
-              onTagChange={setJournalTag}
-              onTitleChange={setJournalTitle}
-              onTextChange={setJournalText}
-              onSortChange={setJournalSort}
-              onActiveChange={setJournalActive}
-              onSave={() => void handleSaveJournal()}
-              saving={saveSaving}
-              onCancel={() => setJournalOpen(false)}
-            />
-            <ContentTab
-              siteContent={siteContent}
-              contentTitle={contentTitle}
-              contentBody={contentBody}
-              onTitleChange={setContentTitle}
-              onBodyChange={setContentBody}
-              onSave={async () => {
-                if (!siteContent || contentSaving) return;
-                setContentSaving(true);
-                setContentSaved(false);
-                try {
-                  await upsertSiteContent({
-                    id: siteContent.id,
-                    home_title: contentTitle,
-                    home_body: contentBody,
-                  });
-                  setContentSaved(true);
-                } catch (e) {
-                  logger.error("admin", "Site content save error:", e);
-                  Alert.alert(
-                    "Save failed",
-                    e instanceof Error
-                      ? e.message
-                      : "Could not save the content.",
-                  );
-                } finally {
-                  setContentSaving(false);
-                }
-              }}
-              saved={contentSaved}
-              saving={contentSaving}
-              trainingPrograms={trainingPrograms}
-              setTrainingPrograms={setTrainingPrograms}
-              onSaveProgram={async (program, isNew) => {
-                await upsertAdminTrainingProgram(program);
-              }}
-              onDeleteProgram={async (id) => {
-                await deleteAdminTrainingProgram(id);
-              }}
-              pilotCostLines={pilotCostLines}
-              setPilotCostLines={setPilotCostLines}
-              onSavePilotLine={async (line, isNew) => {
-                await upsertAdminPilotCostLine(line);
-              }}
-              onDeletePilotLine={async (id) => {
-                await deleteAdminPilotCostLine(id);
-              }}
-              curriculumHighlights={curriculumHighlights}
-              setCurriculumHighlights={setCurriculumHighlights}
-              onSaveCurriculum={async (highlight, isNew) => {
-                await upsertAdminCurriculumHighlight(highlight);
-              }}
-              onDeleteCurriculum={async (id) => {
-                await deleteAdminCurriculumHighlight(id);
-              }}
-              canDelete={canDelete}
+            <AdminSectionPanels
+              active={contentSubTab}
+              panels={[
+                {
+                  key: "Services",
+                  content: (
+                    <ServicesTab
+                      services={services}
+                      editing={editingService}
+                      onChange={setEditingService}
+                      onEdit={setEditingService}
+                      onNew={handleNewService}
+                      onSave={handleSaveService}
+                      saveSaving={saveSaving}
+                      canDelete={canDelete}
+                      onDelete={handleDeleteService}
+                      onToggleActive={(s) => void handleToggleServiceActive(s)}
+                    />
+                  ),
+                },
+                {
+                  key: "Journal",
+                  content: (
+                    <JournalTab
+                      journals={journals}
+                      editorOpen={journalOpen}
+                      editId={journalEditId}
+                      tag={journalTag}
+                      title={journalTitle}
+                      text={journalText}
+                      sort={journalSort}
+                      active={journalActive}
+                      onNew={() => startEditJournal(null)}
+                      onEdit={(post) => startEditJournal(post)}
+                      onTogglePublish={(post) =>
+                        void handleToggleJournalPublished(post)
+                      }
+                      canDelete={canDelete}
+                      onDelete={handleDeleteJournal}
+                      onEditIdChange={setJournalEditId}
+                      onTagChange={setJournalTag}
+                      onTitleChange={setJournalTitle}
+                      onTextChange={setJournalText}
+                      onSortChange={setJournalSort}
+                      onActiveChange={setJournalActive}
+                      onSave={() => void handleSaveJournal()}
+                      saving={saveSaving}
+                      onCancel={() => setJournalOpen(false)}
+                    />
+                  ),
+                },
+                {
+                  key: "Content",
+                  content: (
+                    <ContentTab
+                      siteContent={siteContent}
+                      contentTitle={contentTitle}
+                      contentBody={contentBody}
+                      onTitleChange={setContentTitle}
+                      onBodyChange={setContentBody}
+                      onSave={async () => {
+                        if (!siteContent || contentSaving) return;
+                        setContentSaving(true);
+                        setContentSaved(false);
+                        try {
+                          await upsertSiteContent({
+                            id: siteContent.id,
+                            home_title: contentTitle,
+                            home_body: contentBody,
+                          });
+                          setContentSaved(true);
+                        } catch (e) {
+                          logger.error("admin", "Site content save error:", e);
+                          Alert.alert(
+                            "Save failed",
+                            e instanceof Error
+                              ? e.message
+                              : "Could not save the content.",
+                          );
+                        } finally {
+                          setContentSaving(false);
+                        }
+                      }}
+                      saved={contentSaved}
+                      saving={contentSaving}
+                      trainingPrograms={trainingPrograms}
+                      setTrainingPrograms={setTrainingPrograms}
+                      onSaveProgram={async (program, isNew) => {
+                        await upsertAdminTrainingProgram(program);
+                      }}
+                      onDeleteProgram={async (id) => {
+                        await deleteAdminTrainingProgram(id);
+                      }}
+                      pilotCostLines={pilotCostLines}
+                      setPilotCostLines={setPilotCostLines}
+                      onSavePilotLine={async (line, isNew) => {
+                        await upsertAdminPilotCostLine(line);
+                      }}
+                      onDeletePilotLine={async (id) => {
+                        await deleteAdminPilotCostLine(id);
+                      }}
+                      curriculumHighlights={curriculumHighlights}
+                      setCurriculumHighlights={setCurriculumHighlights}
+                      onSaveCurriculum={async (highlight, isNew) => {
+                        await upsertAdminCurriculumHighlight(highlight);
+                      }}
+                      onDeleteCurriculum={async (id) => {
+                        await deleteAdminCurriculumHighlight(id);
+                      }}
+                      canDelete={canDelete}
+                    />
+                  ),
+                },
+              ]}
             />
           </Sub>
         );
       case "Users":
         return (
           <Sub>
-            <UsersSection
-              users={users}
-              total={usersTotal}
-              page={usersPage}
-              totalPages={usersTotalPages}
-              query={userQuery}
-              onQueryChange={setUserQuery}
-              onApply={() => void loadUsers(1)}
-              onPage={(p) => void loadUsers(p)}
-              canDelete={canDelete}
-              isOwner={isOwner}
-              onToggleRole={handleToggleUserRole}
-              onToggleTier={handleToggleUserTier}
-              onDeleteUser={handleDeleteUser}
-              currentUserId={currentUser?.id ?? ""}
+            <AdminSubTabs
+              label="User administration sections"
+              options={USERS_SUBTABS}
+              value={usersSubTab}
+              onChange={setUsersSubTab}
             />
-            {/* 2026-11-13 (batch 4): customer messages + newsletter
-                subscribers are about people, not company settings — moved
-                here from Settings (mirrors the website AdminPanel). */}
-            <MessagesTab
-              messages={messages}
-              total={messagesTotal}
-              page={messagesPage}
-              totalPages={messagesTotalPages}
-              onPage={(p) => void loadMessages(p)}
-              status={messageStatus}
-              onStatusFilter={(s) => {
-                setMessageStatus(s);
-                void loadMessages(1);
-              }}
-              onMarkReplied={handleMarkReplied}
-            />
-            <LogsTab
-              crashes={crashReports}
-              crashPage={crashReportPage}
-              crashTotal={crashReportTotal}
-              crashTotalPages={crashReportTotalPages}
-              onLoadCrashes={(p) => void loadCrashReports(p)}
-              onDeleteCrash={handleDeleteCrashReport}
-              appLogs={appLogs}
-              logPage={appLogPage}
-              logTotal={appLogTotal}
-              logTotalPages={appLogTotalPages}
-              onLoadLogs={(p) => void loadAppLogs(p)}
-              onDeleteLog={handleDeleteAppLog}
-              userLogs={userLogs}
-              userLogPage={userLogPage}
-              userLogTotal={userLogTotal}
-              userLogTotalPages={userLogTotalPages}
-              onLoadUserLogs={(p) => void loadUserLogs(p)}
-              onDeleteUserLog={handleDeleteUserLog}
-              profileEntries={profileEntries}
-              profileEntryTypes={profileEntryTypes}
-              profileEntryPage={profileEntryPage}
-              profileEntryTotal={profileEntryTotal}
-              profileEntryTotalPages={profileEntryTotalPages}
-              onLoadProfileEntries={(p) => void loadProfileEntries(p)}
-              onDeleteProfileEntry={handleDeleteProfileEntry}
-              canDelete={canDelete}
+            <AdminSectionPanels
+              active={usersSubTab}
+              panels={[
+                {
+                  key: "Users",
+                  content: (
+                    <UsersSection
+                      users={users}
+                      total={usersTotal}
+                      page={usersPage}
+                      totalPages={usersTotalPages}
+                      query={userQuery}
+                      onQueryChange={setUserQuery}
+                      onApply={() => void loadUsers(1)}
+                      onPage={(p) => void loadUsers(p)}
+                      canDelete={canDelete}
+                      isOwner={isOwner}
+                      onToggleRole={handleToggleUserRole}
+                      onToggleTier={handleToggleUserTier}
+                      onDeleteUser={handleDeleteUser}
+                      currentUserId={currentUser?.id ?? ""}
+                    />
+                  ),
+                },
+                {
+                  key: "Messages",
+                  content: (
+                    <MessagesTab
+                      messages={messages}
+                      total={messagesTotal}
+                      page={messagesPage}
+                      totalPages={messagesTotalPages}
+                      onPage={(p) => void loadMessages(p)}
+                      status={messageStatus}
+                      onStatusFilter={(s) => {
+                        setMessageStatus(s);
+                        void loadMessages(1, s);
+                      }}
+                      onMarkReplied={handleMarkReplied}
+                    />
+                  ),
+                },
+                {
+                  key: "Logs",
+                  content: (
+                    <LogsTab
+                      crashes={crashReports}
+                      crashPage={crashReportPage}
+                      crashTotal={crashReportTotal}
+                      crashTotalPages={crashReportTotalPages}
+                      onLoadCrashes={(p) => void loadCrashReports(p)}
+                      onDeleteCrash={handleDeleteCrashReport}
+                      appLogs={appLogs}
+                      logPage={appLogPage}
+                      logTotal={appLogTotal}
+                      logTotalPages={appLogTotalPages}
+                      onLoadLogs={(p) => void loadAppLogs(p)}
+                      onDeleteLog={handleDeleteAppLog}
+                      userLogs={userLogs}
+                      userLogPage={userLogPage}
+                      userLogTotal={userLogTotal}
+                      userLogTotalPages={userLogTotalPages}
+                      onLoadUserLogs={(p) => void loadUserLogs(p)}
+                      onDeleteUserLog={handleDeleteUserLog}
+                      profileEntries={profileEntries}
+                      profileEntryTypes={profileEntryTypes}
+                      profileEntryPage={profileEntryPage}
+                      profileEntryTotal={profileEntryTotal}
+                      profileEntryTotalPages={profileEntryTotalPages}
+                      onLoadProfileEntries={(p) => void loadProfileEntries(p)}
+                      onDeleteProfileEntry={handleDeleteProfileEntry}
+                      canDelete={canDelete}
+                    />
+                  ),
+                },
+              ]}
             />
           </Sub>
         );
@@ -2111,8 +2268,6 @@ function OrdersTab({
   onStatusChange,
   query,
   onQueryChange,
-  status,
-  onStatusFilter,
   onApply,
 }: {
   orders: AdminOrder[];
@@ -2123,11 +2278,8 @@ function OrdersTab({
   onStatusChange: (id: string, s: string) => void;
   query: string;
   onQueryChange: (q: string) => void;
-  status: string;
-  onStatusFilter: (s: string) => void;
   onApply: () => void;
 }) {
-  const STATUSES = ["pending", "paid", "fulfilled", "cancelled"] as const;
   return (
     <ScrollView
       className="flex-1"
@@ -2152,21 +2304,6 @@ function OrdersTab({
           <Pressable onPress={onApply} className="rounded-lg bg-navy px-4 py-2">
             <Text className="text-xs font-black text-white">Apply</Text>
           </Pressable>
-        </View>
-        <View className="mt-2 flex-row flex-wrap gap-2">
-          {(["", ...STATUSES] as const).map((s) => (
-            <Pressable
-              key={s || "all"}
-              onPress={() => onStatusFilter(s)}
-              className={`rounded-full px-3 py-1.5 ${status === s ? "bg-navy" : "border border-line bg-card"}`}
-            >
-              <Text
-                className={`text-xs font-bold capitalize ${status === s ? "text-white" : "text-muted"}`}
-              >
-                {s || "All"}
-              </Text>
-            </Pressable>
-          ))}
         </View>
       </View>
 
