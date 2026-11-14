@@ -1,7 +1,7 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs (9): Dashboard · Orders · Electronic Products · 3D Products · Projects
-// · Content · Users · Logs · Settings.
+// Tabs (8): Dashboard · Orders · Electronic Products · 3D Products · Projects
+// · Content · Users · Settings. (Logs lives inside Users, mirroring the web.)
 // U-R3: "System Logs" added (fleet crash reports + app logs).
 // U-R4: "User Logs" + "Profile Entries" added (per-user audit log and
 // per-user car/project profiles from the shared Supabase tables).
@@ -37,6 +37,10 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { ADMIN_TAB_HINTS } from "../config/adminTabs";
+import PrintAdminPanel, {
+  PrintSectionTabs,
+  type PrintAdminSection,
+} from "./PrintAdminPanel";
 import { PlatformPager } from "../components/PlatformPager";
 import type {
   PagerViewOnPageSelectedEvent,
@@ -209,6 +213,11 @@ function AdminConsole() {
   // (see the Users tab).
   const canDelete = isAdmin;
   const [tab, setTab] = useState<Tab>("Dashboard");
+  // 2026-11-14: the 3D Products tab gained the website's print-studio sections
+  // (Categories → Reports). "Catalog" keeps the existing product list.
+  const [printSection, setPrintSection] = useState<
+    PrintAdminSection | "Catalog"
+  >("Catalog");
   const pagerRef = useRef<PlatformPagerRef>(null);
   const tabScrollRef = useRef<ScrollView>(null);
   const currentPageRef = useRef<number>(0);
@@ -1340,6 +1349,22 @@ function AdminConsole() {
       case "Electronic Products":
       case "3D Products": {
         const kind = tab === "3D Products" ? "models" : "electronic";
+        if (tab === "3D Products" && printSection !== "Catalog") {
+          return (
+            <Sub>
+              <PrintSectionTabs
+                value={printSection}
+                onChange={setPrintSection}
+              />
+              <PrintAdminPanel
+                section={printSection}
+                canApprove={isAdmin}
+                canDelete={canDelete}
+                approverEmail={currentUser?.email ?? ""}
+              />
+            </Sub>
+          );
+        }
         // U-47v2 fix: the old string-split exclusion tokenized "3D Models"
         // into "3d" + "models", so the whole category leaked into the
         // Electronic tab. Use the shared components scope (same contract as
@@ -1352,6 +1377,12 @@ function AdminConsole() {
             : applyComponentsScope(products);
         return (
           <Sub>
+            {tab === "3D Products" ? (
+              <PrintSectionTabs
+                value={printSection}
+                onChange={setPrintSection}
+              />
+            ) : null}
             <ProductsTab
               kind={kind}
               products={catalog}
