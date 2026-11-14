@@ -555,6 +555,95 @@ export function PrintingScreen() {
         )}
       </View>
 
+      {/* Categories — the owner's "what we print" buckets, same rows the
+          website's /3d-printing page renders. */}
+      {printContent && printContent.categories.length > 0 && (
+        <View className="mx-5 mb-8 rounded-2xl border border-line bg-card p-5">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            What we print
+          </Text>
+          {printContent.categories.map((category) => (
+            <View key={category.id} className="mt-3 border-t border-line pt-3">
+              <Text className="text-sm font-bold text-ink">
+                {category.name}
+              </Text>
+              {category.description ? (
+                <Text className="mt-1 text-xs leading-5 text-muted">
+                  {category.description}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Custom services — editable rows (print_services), not hardcoded copy. */}
+      {printContent && printContent.services.length > 0 && (
+        <View className="mx-5 mb-8 rounded-2xl border border-line bg-card p-5">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Custom print services
+          </Text>
+          {printContent.services.map((service) => (
+            <View key={service.id} className="mt-3 border-t border-line pt-3">
+              <View className="flex-row items-start justify-between gap-2">
+                <Text className="min-w-0 flex-1 text-sm font-bold text-ink">
+                  {service.title}
+                </Text>
+                {service.priceNote ? (
+                  <Text className="text-[11px] font-black text-navy">
+                    {service.priceNote}
+                  </Text>
+                ) : null}
+              </View>
+              {service.description ? (
+                <Text className="mt-1 text-xs leading-5 text-muted">
+                  {service.description}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Gallery — published print_gallery rows. */}
+      {printContent && printContent.gallery.length > 0 && (
+        <View className="mb-8">
+          <View className="px-5">
+            <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+              Recent prints
+            </Text>
+            <Text className="mt-1 text-sm leading-6 text-muted">
+              Work that came off the machines, uploaded by the workshop.
+            </Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-3"
+            contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
+          >
+            {printContent.gallery.map((item) => (
+              <View key={item.id} className="w-40">
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  className="h-40 w-40 rounded-xl bg-surface"
+                  resizeMode="cover"
+                  accessibilityLabel={item.caption || "3D printed part"}
+                />
+                {item.caption ? (
+                  <Text
+                    className="mt-1 text-[11px] leading-4 text-muted"
+                    numberOfLines={2}
+                  >
+                    {item.caption}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Estimator — the website's calculator rules, rendered only when the
           owner approved the rates. Anything unavailable says "quote" instead
           of inventing a number. */}

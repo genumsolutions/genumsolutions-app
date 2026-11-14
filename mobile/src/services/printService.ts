@@ -43,11 +43,39 @@ export type PrintPromotion = {
   discountValue: number;
 };
 
+export type PrintCategory = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+};
+
+/** The editable custom-services strip (public.print_services). */
+export type PrintService = {
+  id: string;
+  title: string;
+  description: string;
+  priceNote: string;
+};
+
+/** Published gallery rows — the website renders the same ones. */
+export type PrintGalleryImage = {
+  id: string;
+  imageUrl: string;
+  caption: string;
+  category: string;
+  featured: boolean;
+};
+
 export type PrintFinishing = { id: string; name: string; amount: number };
 export type PrintBulkTier = { minQty: number; discountPercent: number };
 
 export type PrintContent = {
   materials: PrintMaterial[];
+  /** The "what we print" buckets, in the owner's sort order. */
+  categories: PrintCategory[];
+  services: PrintService[];
+  gallery: PrintGalleryImage[];
   promotion: PrintPromotion | null;
   minimumOrder: number;
   designBaseCharge: number;
@@ -62,6 +90,9 @@ export type PrintContent = {
 
 /** Mirrors lib/print.ts on the website: no rates, no promotion, calc off. */
 export const fallbackPrintContent: PrintContent = {
+  categories: [],
+  services: [],
+  gallery: [],
   materials: [
     {
       id: "pla",
@@ -102,6 +133,9 @@ type ApiResponse = {
     pricingStatus?: "draft" | "approved";
   };
   materials?: PrintMaterial[];
+  categories?: PrintCategory[];
+  services?: PrintService[];
+  gallery?: PrintGalleryImage[];
   promotions?: PrintPromotion[];
 };
 
@@ -128,6 +162,18 @@ export async function getPrintContent(): Promise<{
       content: {
         materials:
           materials.length > 0 ? materials : fallbackPrintContent.materials,
+        categories: (data.categories ?? []).filter(
+          (item) => item && typeof item.id === "string" && item.id.length > 0,
+        ),
+        services: (data.services ?? []).filter(
+          (item) => item && typeof item.id === "string" && item.title,
+        ),
+        gallery: (data.gallery ?? []).filter(
+          (item) =>
+            item &&
+            typeof item.imageUrl === "string" &&
+            item.imageUrl.length > 0,
+        ),
         promotion: promo,
         minimumOrder:
           typeof data.settings?.minimumOrder === "number"
