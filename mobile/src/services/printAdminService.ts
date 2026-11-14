@@ -592,6 +592,7 @@ const DELETE_TABLES = {
   promotion: "print_promotions",
   gallery: "print_gallery",
   service: "print_services",
+  quote: "print_quote_requests",
 } as const;
 
 /** Hard delete (admins only in the UI; the RLS policy is admin-only too). */

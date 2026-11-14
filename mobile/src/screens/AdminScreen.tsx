@@ -62,6 +62,7 @@ import PrintAdminPanel, {
 import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
+import { ProductCard } from "../components/ProductCard";
 import { isProjectPackage } from "../services/projectService";
 import { applyComponentsScope } from "../services/productService";
 import { galleryImages } from "../types";
@@ -194,7 +195,13 @@ function AdminSubTabs<T extends string>({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ flexDirection: "row" }}
+        contentContainerStyle={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        }}
       >
         {options.map((option) => {
           const selected = value === option;
@@ -206,15 +213,14 @@ function AdminSubTabs<T extends string>({
               accessibilityState={{ selected }}
               accessibilityLabel={option}
               tabIndex={selected ? 0 : -1}
-              className={`shrink-0 justify-center border-b-2 px-4 ${
-                selected ? "border-navy" : "border-transparent"
+              className={`min-h-10 shrink-0 items-center justify-center rounded-full border px-4 ${
+                selected ? "border-navy bg-navy" : "border-line bg-surface"
               }`}
-              style={{ minHeight: 44 }}
             >
               <Text
                 numberOfLines={1}
                 className={`text-[11px] font-black uppercase tracking-[0.08em] ${
-                  selected ? "text-navy" : "text-muted"
+                  selected ? "text-white" : "text-muted"
                 }`}
               >
                 {option}
@@ -7447,17 +7453,73 @@ function ProductPreviewModal({
   onClose: () => void;
 }) {
   return (
-    <CatalogPreviewModal
-      typeLabel={product.badge || product.productType}
-      title={product.name}
-      body={product.note || product.description}
-      priceLabel={
-        product.priceLabel || `NPR ${product.price.toLocaleString("en-IN")}`
-      }
-      image={product.image}
-      active={product.active}
-      onClose={onClose}
-    />
+    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.7)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 12,
+        }}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close storefront preview"
+      >
+        <Pressable
+          onPress={() => {}}
+          className="w-full max-w-sm overflow-hidden rounded-2xl border border-line bg-card"
+        >
+          <View className="flex-row items-center justify-between gap-2 p-4">
+            <View className="min-w-0 flex-1">
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                Mobile storefront preview
+              </Text>
+              <Text className="mt-1 text-[10px] text-muted">
+                Two-column product card
+              </Text>
+            </View>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close storefront preview"
+              className="h-10 w-10 items-center justify-center rounded-full border border-line"
+            >
+              <Feather name="x" size={18} color="#1e293b" />
+            </Pressable>
+          </View>
+          <View className="border-y border-line bg-surface py-2">
+            <View className="flex-row items-center justify-between px-4">
+              <Text
+                className="min-w-0 flex-1 text-xs font-black uppercase tracking-widest text-navy"
+                numberOfLines={1}
+              >
+                {product.category}
+              </Text>
+              <Text
+                className={`ml-2 shrink-0 text-[10px] font-black uppercase ${product.active ? "text-emerald-600" : "text-red-500"}`}
+              >
+                {product.active ? "Published" : "Hidden"}
+              </Text>
+            </View>
+            <View
+              className="mx-auto mt-2 w-full max-w-[343px] flex-row gap-3"
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <View className="min-w-0 flex-1">
+                <ProductCard product={product} />
+              </View>
+              <View className="min-w-0 flex-1" accessibilityElementsHidden />
+            </View>
+          </View>
+          <Text className="p-4 pt-3 text-[10px] leading-4 text-muted">
+            Customer card for {product.name}: {product.priceLabel}.
+          </Text>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

@@ -19,6 +19,10 @@ import type { RootStackParamList } from "../navigation/types";
 import { useCollection } from "../context/CollectionContext";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
+type ProductCardProduct = Pick<
+  Product,
+  "id" | "name" | "category" | "priceLabel" | "stock" | "image" | "gallery"
+>;
 
 function ProductCardBase({
   product,
@@ -26,7 +30,7 @@ function ProductCardBase({
   /** Deprecated (U-47): chips removed from the minimal card. */
   chips = false,
 }: {
-  product: Product;
+  product: ProductCardProduct;
   /** Kept for call-site compatibility; all cards are minimal now. */
   compact?: boolean;
   chips?: boolean;

@@ -72,6 +72,7 @@ export const PRINT_ADMIN_SECTIONS = [
 ] as const;
 
 export type PrintAdminSection = (typeof PRINT_ADMIN_SECTIONS)[number];
+const PRINT_ADMIN_TABS = ["Catalog", ...PRINT_ADMIN_SECTIONS] as const;
 
 const inputClass =
   "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
@@ -244,28 +245,45 @@ export function PrintSectionTabs({
 }) {
   const activeSection = value;
   return (
-    <View className="sticky top-0 z-20 border-b border-line bg-white/95 px-3 backdrop-blur shadow-sm">
-      <View
-        role="tablist"
-        aria-label="Print admin sections"
-        className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {PRINT_ADMIN_SECTIONS.map((section) => {
-          const active = section === activeSection;
-          return (
-            <Pressable
-              key={section}
-              onPress={() => onChange(section)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              tabIndex={active ? 0 : -1}
-              className={`${active ? "text-[10px] text-[10px] font-black uppercase tracked-widest text-navy" : "text-[10px] text-slate-500"}`}
-            >
-              {section}
-            </Pressable>
-          );
-        })}
-        )
+    <View className="shrink-0 border-b border-line bg-card">
+      <View role="tablist" aria-label="Print admin sections">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            alignItems: "center",
+            flexDirection: "row",
+            gap: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+          }}
+        >
+          {PRINT_ADMIN_TABS.map((section) => {
+            const active = section === activeSection;
+            return (
+              <Pressable
+                key={section}
+                onPress={() => onChange(section)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={section}
+                tabIndex={active ? 0 : -1}
+                className={`min-h-10 shrink-0 items-center justify-center rounded-full border px-4 ${
+                  active ? "border-navy bg-navy" : "border-line bg-surface"
+                }`}
+              >
+                <Text
+                  numberOfLines={1}
+                  className={`text-[10px] font-black uppercase tracking-widest ${
+                    active ? "text-white" : "text-slate-500"
+                  }`}
+                >
+                  {section}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
     </View>
   );
@@ -374,9 +392,11 @@ export default function PrintAdminPanel({
   }
 
   function confirmDelete(
-    kind: "category" | "material" | "promotion" | "gallery" | "service",
+    kind:
+      "category" | "material" | "promotion" | "gallery" | "service" | "quote",
     id: string,
   ) {
+    if (!canDelete || !id.trim()) return;
     Alert.alert("Delete this row?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -389,6 +409,7 @@ export default function PrintAdminPanel({
             setPromotion(null);
             setGalleryItem(null);
             setService(null);
+            setQuote(null);
           }, "Deleted."),
       },
     ]);
@@ -509,11 +530,20 @@ export default function PrintAdminPanel({
                   {item.active ? "" : "· hidden"}
                 </Text>
               </View>
-              <Button
-                label="Edit"
-                tone="ghost"
-                onPress={() => setCategory(item)}
-              />
+              <View className="shrink-0 flex-row gap-1">
+                <Button
+                  label="Edit"
+                  tone="ghost"
+                  onPress={() => setCategory(item)}
+                />
+                {canDelete ? (
+                  <Button
+                    label="Delete"
+                    tone="danger"
+                    onPress={() => confirmDelete("category", item.id)}
+                  />
+                ) : null}
+              </View>
             </View>
           </Card>
         ))}
@@ -610,6 +640,13 @@ export default function PrintAdminPanel({
                   setMaterials(next);
                 }}
               />
+              {canDelete ? (
+                <Button
+                  label="Delete material"
+                  tone="danger"
+                  onPress={() => confirmDelete("material", material.id)}
+                />
+              ) : null}
             </View>
           ))}
           <Button
@@ -1077,11 +1114,20 @@ export default function PrintAdminPanel({
                   {item.active ? " · active" : " · hidden"}
                 </Text>
               </View>
-              <Button
-                label="Edit"
-                tone="ghost"
-                onPress={() => setPromotion(item)}
-              />
+              <View className="shrink-0 flex-row gap-1">
+                <Button
+                  label="Edit"
+                  tone="ghost"
+                  onPress={() => setPromotion(item)}
+                />
+                {canDelete ? (
+                  <Button
+                    label="Delete"
+                    tone="danger"
+                    onPress={() => confirmDelete("promotion", item.id)}
+                  />
+                ) : null}
+              </View>
             </View>
           </Card>
         ))}
@@ -1168,11 +1214,20 @@ export default function PrintAdminPanel({
                   {item.active ? "" : "· hidden"}
                 </Text>
               </View>
-              <Button
-                label="Edit"
-                tone="ghost"
-                onPress={() => setService(item)}
-              />
+              <View className="shrink-0 flex-row gap-1">
+                <Button
+                  label="Edit"
+                  tone="ghost"
+                  onPress={() => setService(item)}
+                />
+                {canDelete ? (
+                  <Button
+                    label="Delete"
+                    tone="danger"
+                    onPress={() => confirmDelete("service", item.id)}
+                  />
+                ) : null}
+              </View>
             </View>
           </Card>
         ))}
@@ -1324,7 +1379,7 @@ export default function PrintAdminPanel({
                   {item.active ? "" : " · hidden"}
                 </Text>
               </View>
-              <View className="shrink-0 flex-row gap-1.5">
+              <View className="shrink-0 flex-row flex-wrap justify-end gap-1.5">
                 <Button
                   label="Preview"
                   tone="ghost"
@@ -1340,6 +1395,13 @@ export default function PrintAdminPanel({
                   tone="ghost"
                   onPress={() => setGalleryItem(item)}
                 />
+                {canDelete ? (
+                  <Button
+                    label="Delete"
+                    tone="danger"
+                    onPress={() => confirmDelete("gallery", item.id)}
+                  />
+                ) : null}
               </View>
             </View>
           </Card>
@@ -1496,11 +1558,20 @@ export default function PrintAdminPanel({
                   · {new Date(item.createdAt).toLocaleDateString()}
                 </Text>
               </View>
-              <Button
-                label="Open"
-                tone="ghost"
-                onPress={() => setQuote(item)}
-              />
+              <View className="shrink-0 flex-row gap-1">
+                <Button
+                  label="Open"
+                  tone="ghost"
+                  onPress={() => setQuote(item)}
+                />
+                {canDelete ? (
+                  <Button
+                    label="Delete"
+                    tone="danger"
+                    onPress={() => confirmDelete("quote", item.id)}
+                  />
+                ) : null}
+              </View>
             </View>
           </Card>
         ))}
