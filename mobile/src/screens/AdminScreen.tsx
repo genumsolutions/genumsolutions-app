@@ -2783,7 +2783,9 @@ function ProjectTab({
     ProjectComponentSuggestion[]
   >([]);
   const [linkerBusy, setLinkerBusy] = useState(false);
+  const [linkerLoadError, setLinkerLoadError] = useState<string | null>(null);
   const [linkerLoadedId, setLinkerLoadedId] = useState<string | null>(null);
+  const [linkerReload, setLinkerReload] = useState(0);
   const linkerProjectId =
     editing?.productType === "Project package" ? editing.id : null;
 
@@ -2795,21 +2797,32 @@ function ProjectTab({
     if (!linkerProjectId) {
       setLinkerLinks([]);
       setLinkerSuggestions([]);
+      setLinkerLoadError(null);
+      setLinkerLoadedId(null);
       return;
     }
     let active = true;
     setLinkerBusy(true);
+    setLinkerLoadError(null);
+    setLinkerLinks([]);
+    setLinkerLoadedId(null);
     void listProjectComponents(linkerProjectId)
       .then((saved) => {
         if (!active) return;
-        if (saved.length > 0) {
-          setLinkerLinks(saved);
-        }
+        setLinkerLinks(saved);
         // With no saved links the prefill effect (below) fills from the
         // matcher's confident suggestions once they exist.
         setLinkerLoadedId(linkerProjectId);
       })
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        if (active) {
+          setLinkerLoadError(
+            error instanceof Error
+              ? error.message
+              : "Could not load project component links.",
+          );
+        }
+      })
       .finally(() => {
         if (active) setLinkerBusy(false);
       });
@@ -2817,7 +2830,7 @@ function ProjectTab({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkerProjectId]);
+  }, [linkerProjectId, linkerReload]);
 
   // Suggestions: match the project's materials_required against the
   // Electronic Products catalog. ProjectTab's own list is project-scoped,
@@ -2895,26 +2908,39 @@ function ProjectTab({
     defaultProjectPricing,
   );
   const [pricingBusy, setPricingBusy] = useState(false);
+  const [pricingLoadError, setPricingLoadError] = useState<string | null>(null);
+  const [pricingReload, setPricingReload] = useState(0);
 
   React.useEffect(() => {
     if (!pricingProjectId) {
       setProjectPricing(defaultProjectPricing);
+      setPricingLoadError(null);
       return;
     }
     let active = true;
     setPricingBusy(true);
+    setPricingLoadError(null);
+    setProjectPricing(defaultProjectPricing);
     void getAdminProjectPricing(pricingProjectId)
       .then((pricing) => {
         if (active) setProjectPricing(pricing);
       })
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        if (active) {
+          setPricingLoadError(
+            error instanceof Error
+              ? error.message
+              : "Could not load project pricing.",
+          );
+        }
+      })
       .finally(() => {
         if (active) setPricingBusy(false);
       });
     return () => {
       active = false;
     };
-  }, [pricingProjectId]);
+  }, [pricingProjectId, pricingReload]);
 
   async function saveProjectPricing_() {
     if (!pricingProjectId) return;
@@ -2995,6 +3021,8 @@ function ProjectTab({
                 pricing={projectPricing}
                 estimate={pricingEstimate}
                 busy={pricingBusy}
+                loadError={pricingLoadError}
+                onRetry={() => setPricingReload((version) => version + 1)}
                 canApprove={canDelete}
                 componentCount={linkerLinks.length}
                 onChange={setProjectPricing}
@@ -3013,6 +3041,8 @@ function ProjectTab({
             links={linkerLinks}
             suggestions={linkerSuggestions}
             busy={linkerBusy}
+            loadError={linkerLoadError}
+            onRetry={() => setLinkerReload((version) => version + 1)}
             products={catalogProducts}
             onLinksChange={setLinkerLinks}
             onSave={() => void saveComponentLinks()}
@@ -3152,6 +3182,8 @@ function ComponentLinkerCard({
   links,
   suggestions,
   busy,
+  loadError,
+  onRetry,
   products,
   onLinksChange,
   onSave,
@@ -3159,10 +3191,30 @@ function ComponentLinkerCard({
   links: ProjectComponentLink[];
   suggestions: ProjectComponentSuggestion[];
   busy: boolean;
+  loadError: string | null;
+  onRetry: () => void;
   products: AdminProduct[];
   onLinksChange: (next: ProjectComponentLink[]) => void;
   onSave: () => void;
 }) {
+  if (loadError) {
+    return (
+      <View className="mx-4 mb-6 mt-3 rounded-xl border border-red-300 bg-card p-4">
+        <Text className="text-sm font-bold text-red-600">
+          Could not load project component links: {loadError}
+        </Text>
+        <Pressable
+          onPress={onRetry}
+          className="mt-3 self-start rounded-full border border-line px-4 py-2"
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading component links"
+        >
+          <Text className="text-xs font-bold text-ink">Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View className="mx-4 mb-6 mt-3 rounded-xl border border-line bg-card p-4">
       <View className="flex-row items-center justify-between gap-2">
@@ -3310,6 +3362,8 @@ function ProjectPricingCard({
   pricing,
   estimate,
   busy,
+  loadError,
+  onRetry,
   canApprove,
   componentCount,
   onChange,
@@ -3319,6 +3373,8 @@ function ProjectPricingCard({
   pricing: ProjectPricing;
   estimate: ReturnType<typeof estimateProject>;
   busy: boolean;
+  loadError: string | null;
+  onRetry: () => void;
   canApprove: boolean;
   componentCount: number;
   onChange: (next: ProjectPricing) => void;
@@ -3330,6 +3386,24 @@ function ProjectPricingCard({
   const patch = (part: Partial<ProjectPricing>) =>
     onChange({ ...pricing, ...part });
   const approved = pricing.priceStatus === "approved";
+
+  if (loadError) {
+    return (
+      <View className="mt-4 rounded-xl border border-red-300 bg-card p-3">
+        <Text className="text-sm font-bold text-red-600">
+          Could not load project pricing: {loadError}
+        </Text>
+        <Pressable
+          onPress={onRetry}
+          className="mt-3 self-start rounded-full border border-line px-4 py-2"
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading project pricing"
+        >
+          <Text className="text-xs font-bold text-ink">Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View className="mt-4 rounded-xl border-2 border-gold bg-card p-3">

@@ -137,4 +137,20 @@ describe("admin data tab wiring", () => {
     expect(logsTab).toContain("<UserLogsTab");
     expect(logsTab).toContain("<ProfileEntriesTab");
   });
+
+  it("surfaces project component and pricing load failures with retry actions", () => {
+    const componentLoad = source.match(
+      /void listProjectComponents\([\s\S]*?\.finally\(\(\) => \{[\s\S]*?\n      \}\);/,
+    )?.[0];
+    expect(componentLoad).toContain("setLinkerLoadError");
+    expect(componentLoad).not.toContain(".catch(() => undefined)");
+
+    const pricingLoad = source.match(
+      /void getAdminProjectPricing\([\s\S]*?\.finally\(\(\) => \{[\s\S]*?\n      \}\);/,
+    )?.[0];
+    expect(pricingLoad).toContain("setPricingLoadError");
+    expect(pricingLoad).not.toContain(".catch(() => undefined)");
+    expect(source).toContain("Retry loading component links");
+    expect(source).toContain("Retry loading project pricing");
+  });
 });
