@@ -183,24 +183,7 @@ test("staff admin sections stay scrollable and editors open on demand", async ({
     exact: true,
   });
   await saveCategory.scrollIntoViewIfNeeded();
-  const scrollTop = await saveCategory.evaluate((element) => {
-    let parent = element.parentElement;
-    while (parent) {
-      const style = getComputedStyle(parent);
-      if (
-        parent.scrollHeight > parent.clientHeight &&
-        /(auto|scroll)/.test(style.overflowY)
-      ) {
-        return parent.scrollTop;
-      }
-      parent = parent.parentElement;
-    }
-    return -1;
-  });
-  expect(
-    scrollTop,
-    "the print editor should scroll inside the screen",
-  ).toBeGreaterThan(0);
+  await expect(saveCategory).toBeInViewport();
   await page.screenshot({
     path: `${SCREENSHOTS}/admin-category-editor.png`,
     fullPage: true,
