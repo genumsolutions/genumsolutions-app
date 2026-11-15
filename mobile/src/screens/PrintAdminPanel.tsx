@@ -300,6 +300,9 @@ export default function PrintAdminPanel({
   } | null>(null);
   const [service, setService] = useState<PrintServiceItem | null>(null);
   // Storefront preview for the sections that publish a card on /3d-printing.
+  // Rates + calculator stay read-only until Edit is pressed, matching every
+  // other editor in the console.
+  const [editingPricing, setEditingPricing] = useState(false);
   const [preview, setPreview] = useState<{
     eyebrow: string;
     title: string;
@@ -602,6 +605,107 @@ export default function PrintAdminPanel({
     const approved = settings.pricingStatus === "approved";
     const patchSettings = (part: Partial<PrintSettings>) =>
       setSettings({ ...settings, ...part });
+    if (!editingPricing) {
+      const summary: [string, string][] = [
+        ["Calculator", settings.calculatorEnabled ? "Enabled" : "Hidden"],
+        ["Minimum order", `${settings.minimumOrder} NPR`],
+        ["Design base charge", `${settings.designBaseCharge} NPR`],
+        [
+          "Bulk tiers",
+          settings.bulkTiers.length
+            ? settings.bulkTiers
+                .map((tier) => `${tier.minQty}+ ${tier.discountPercent}%`)
+                .join(" · ")
+            : "None",
+        ],
+        [
+          "Finishing charges",
+          settings.finishingCharges.length
+            ? settings.finishingCharges
+                .map((charge) => `${charge.name} ${charge.amount} NPR`)
+                .join(" · ")
+            : "None",
+        ],
+        ["Materials intro", settings.materialsIntro],
+        ["Disclaimer", settings.disclaimer],
+      ];
+      return (
+        <View>
+          {noticeBar}
+          {previewHost}
+          <Card>
+            <View className="flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 font-display text-base font-bold text-ink">
+                Material rates
+              </Text>
+              <Button
+                label="Edit"
+                tone="ghost"
+                onPress={() => setEditingPricing(true)}
+              />
+            </View>
+            <Text className="mt-0.5 text-xs leading-5 text-muted">
+              NPR per gram · zero shows as "rate on request".
+            </Text>
+            <View className="mt-2">
+              {materials.length === 0 ? (
+                <Text className="text-xs text-muted">No materials yet.</Text>
+              ) : (
+                materials.map((material, index) => (
+                  <View
+                    key={material.id || index}
+                    className="border-b border-line py-2"
+                  >
+                    <View className="flex-row items-center justify-between gap-2">
+                      <Text
+                        numberOfLines={1}
+                        className="min-w-0 flex-1 text-sm font-bold text-ink"
+                      >
+                        {material.name || "Material"}
+                      </Text>
+                      <Text className="text-xs text-muted">
+                        {material.ratePerGram > 0
+                          ? `${material.ratePerGram} NPR/g`
+                          : "rate on request"}
+                      </Text>
+                    </View>
+                    <Text numberOfLines={1} className="text-xs text-muted">
+                      {material.active
+                        ? material.note || "Active"
+                        : `Hidden${material.note ? ` · ${material.note}` : ""}`}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          </Card>
+          <Card>
+            <View className="flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 font-display text-base font-bold text-ink">
+                Calculator
+              </Text>
+              <Button
+                label="Edit"
+                tone="ghost"
+                onPress={() => setEditingPricing(true)}
+              />
+            </View>
+            <View className="mt-2">
+              {summary.map(([label, value]) => (
+                <View key={label} className="border-b border-line py-2">
+                  <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                    {label}
+                  </Text>
+                  <Text className="mt-0.5 text-sm leading-5 text-ink">
+                    {value || "—"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        </View>
+      );
+    }
     return (
       <View>
         {noticeBar}
@@ -878,6 +982,11 @@ export default function PrintAdminPanel({
               onPress={() =>
                 void run(() => savePrintSettings(settings), "Settings saved.")
               }
+            />
+            <Button
+              label="Done"
+              tone="ghost"
+              onPress={() => setEditingPricing(false)}
             />
           </View>
         </Card>

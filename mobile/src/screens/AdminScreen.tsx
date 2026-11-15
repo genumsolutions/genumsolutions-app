@@ -6848,9 +6848,11 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <View className="mt-5 rounded-xl border border-line bg-card p-4">
+    <View className="mt-4 rounded-xl border border-line bg-card p-4">
       <Text className="font-display text-base font-bold text-ink">{title}</Text>
-      {hint ? <Text className="mt-0.5 text-xs text-muted">{hint}</Text> : null}
+      {hint ? (
+        <Text className="mt-0.5 text-xs leading-5 text-muted">{hint}</Text>
+      ) : null}
       <View className="mt-3">{children}</View>
     </View>
   );
