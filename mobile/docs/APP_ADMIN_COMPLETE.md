@@ -213,16 +213,26 @@ A workspace driven by `PrintAdminPanel`:
 
 ## 5. Shared building blocks
 
-| Component             | Role                                                                            |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `AdminSubTabs`        | Horizontal pill section strip (`role="tablist"`, single row, scrolls)           |
-| `AdminSectionPanels`  | Renders section panels, hiding inactive ones from a11y and keeping them mounted |
-| `AdminPager`          | Prev/next + page indicator for paginated lists                                  |
-| `AdminAction`         | Standard row action button                                                      |
-| `SectionCard`         | Titled card with hint used across editors                                       |
-| `ProductPreviewModal` | Storefront `ProductCard` preview (two-column mobile grid)                       |
-| `CatalogPreviewModal` | Portrait storefront presentation for admin-managed content cards                |
-| `ImagePreviewModal`   | Full-size image preview for media fields                                        |
+| Component             | Role                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `AdminSubTabs`        | Horizontal pill section strip (`role="tablist"`, single row, scrolls)               |
+| `AdminEditorSheet`    | Modal wrapper for every add/edit form — nothing is editable until Add/Edit opens it |
+| `AdminSectionPanels`  | Renders section panels, hiding inactive ones from a11y and keeping them mounted     |
+| `AdminPager`          | Prev/next + page indicator for paginated lists                                      |
+| `AdminAction`         | Standard row action button                                                          |
+| `SectionCard`         | Titled card with hint used across editors                                           |
+| `ProductPreviewModal` | Storefront `ProductCard` preview (two-column mobile grid)                           |
+| `CatalogPreviewModal` | Portrait storefront presentation for admin-managed content cards                    |
+| `ImagePreviewModal`   | Full-size image preview for media fields                                            |
+
+**Editing rule (2026-11-15):** every admin add/edit form is closed by default and
+opens in `AdminEditorSheet` — a bottom sheet for the compact record editors, a
+full-screen sheet for the product/service editors that own their header and
+Save/Cancel row. Covered: products (both kinds), project packages, services,
+journal posts, training programs, pilot cost lines, curriculum highlights,
+company settings, and the print studio's categories, materials, calculator,
+promotions, services, gallery and quote requests. Print → Costs stays live by
+design: it is an internal costing worksheet, not published content.
 
 ## 6. Data layer
 
@@ -292,14 +302,15 @@ The two consoles intentionally share the tab inventory, section structure and
 design language but are separate implementations. Verified differences at the
 time of this writing:
 
-| Area                                          | App                                                    | Website                                                                    |
-| --------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
-| Settings                                      | One flat list of 17 fields                             | Three sections: Company details / Contact / Social & messaging             |
-| Users → Logs                                  | `System` · `User activity` · `Profiles` (system first) | `User activity` · `User profiles` · `Fleet diagnostics` (diagnostics last) |
-| Dashboard                                     | `Overview` / `Activity` pills                          | `AdminDashboard` + `AdminActivity` stacked                                 |
-| Orders status filter                          | Pill strip (`ORDERS_SUBTABS`)                          | Select control                                                             |
-| Users → Messages                              | Contact messages only                                  | Contact messages **plus** newsletter opt-ins                               |
-| Orders/Content/Users/3D Products section sets | same lists                                             | same lists                                                                 |
+| Area                                          | App                                                     | Website                                              |
+| --------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| Settings                                      | Three sections, read-only rows until Edit               | Three sections, read-only rows until Edit (matching) |
+| Users → Logs                                  | `User activity` · `User profiles` · `Fleet diagnostics` | Same order (matching)                                |
+| Dashboard                                     | `Overview` / `Activity` pills                           | `AdminDashboard` + `AdminActivity` stacked           |
+| Orders status filter                          | Pill strip (`ORDERS_SUBTABS`)                           | Select control                                       |
+| Editor presentation                           | `AdminEditorSheet` (native `Modal`)                     | `AdminEditorSheet` (portal dialog)                   |
+| Users → Messages                              | Contact messages only                                   | Contact messages **plus** newsletter opt-ins         |
+| Orders/Content/Users/3D Products section sets | same lists                                              | same lists                                           |
 
 The newsletter-opt-in list is the one **functional** asymmetry: the app captures
 opt-ins from Account → Newsletter but the app console cannot read them back.
