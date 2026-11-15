@@ -108,6 +108,7 @@ import {
   deleteAdminCarProfile,
   listAdminMessages,
   markMessageReplied,
+  deleteAdminMessage,
   fetchDashboardStats,
   fetchAdminAnalytics,
   listAdminActivity,
@@ -1416,6 +1417,37 @@ function AdminConsole() {
     }
   }
 
+  function handleDeleteMessage(message: AdminMessage) {
+    Alert.alert(
+      "Delete message",
+      `Delete the message from ${message.name || message.email}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAdminMessage(message.id);
+              // Step back a page when the deleted row was the last on it.
+              const page =
+                messages.length === 1 && messagesPage > 1
+                  ? messagesPage - 1
+                  : messagesPage;
+              void loadMessages(page);
+            } catch (e) {
+              logger.error("admin", "Message delete error:", e);
+              Alert.alert(
+                "Could not delete the message",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const goToTab = useCallback((key: Tab) => {
     const index = TABS.indexOf(key);
     if (index < 0 || index === currentPageRef.current) return;
@@ -1802,6 +1834,8 @@ function AdminConsole() {
                         void loadMessages(1, s);
                       }}
                       onMarkReplied={handleMarkReplied}
+                      canDelete={canDelete}
+                      onDelete={handleDeleteMessage}
                     />
                   ),
                 },
@@ -5902,10 +5936,13 @@ function ActivityTab({
 // console nobody was watching.
 // The Logs screen separates system diagnostics, user activity, and saved
 // profiles so each list has its own full-height scroll area.
+// Same three sections, labels and order as the website's AdminLogsHub
+// SECTIONS, so an admin reading one console can read the other. The ids stay
+// local; only the visible labels/order are the contract.
 const LOG_SECTIONS = [
-  { id: "system", label: "System" },
   { id: "activity", label: "User activity" },
-  { id: "profiles", label: "Profiles" },
+  { id: "profiles", label: "User profiles" },
+  { id: "diagnostics", label: "Fleet diagnostics" },
 ] as const;
 
 type LogSection = (typeof LOG_SECTIONS)[number]["id"];
@@ -5965,7 +6002,7 @@ function LogsTab({
   onDeleteProfileEntry: (row: AdminProfileEntry) => void;
   canDelete: boolean;
 }) {
-  const [section, setSection] = useState<LogSection>("system");
+  const [section, setSection] = useState<LogSection>("activity");
   return (
     <View className="flex-1">
       <View className="flex-row flex-wrap gap-2 px-4 pb-1 pt-3">
@@ -5991,7 +6028,28 @@ function LogsTab({
           </Pressable>
         ))}
       </View>
-      {section === "system" ? (
+      {section === "activity" ? (
+        <UserLogsTab
+          logs={userLogs}
+          page={userLogPage}
+          total={userLogTotal}
+          totalPages={userLogTotalPages}
+          onPage={onLoadUserLogs}
+          canDelete={canDelete}
+          onDelete={onDeleteUserLog}
+        />
+      ) : section === "profiles" ? (
+        <ProfileEntriesTab
+          entries={profileEntries}
+          types={profileEntryTypes}
+          page={profileEntryPage}
+          total={profileEntryTotal}
+          totalPages={profileEntryTotalPages}
+          onPage={onLoadProfileEntries}
+          canDelete={canDelete}
+          onDelete={onDeleteProfileEntry}
+        />
+      ) : (
         <SystemLogsTab
           crashes={crashes}
           crashPage={crashPage}
@@ -6006,27 +6064,6 @@ function LogsTab({
           onLoadLogs={onLoadLogs}
           onDeleteLog={onDeleteLog}
           canDelete={canDelete}
-        />
-      ) : section === "activity" ? (
-        <UserLogsTab
-          logs={userLogs}
-          page={userLogPage}
-          total={userLogTotal}
-          totalPages={userLogTotalPages}
-          onPage={onLoadUserLogs}
-          canDelete={canDelete}
-          onDelete={onDeleteUserLog}
-        />
-      ) : (
-        <ProfileEntriesTab
-          entries={profileEntries}
-          types={profileEntryTypes}
-          page={profileEntryPage}
-          total={profileEntryTotal}
-          totalPages={profileEntryTotalPages}
-          onPage={onLoadProfileEntries}
-          canDelete={canDelete}
-          onDelete={onDeleteProfileEntry}
         />
       )}
     </View>
@@ -6449,6 +6486,8 @@ function MessagesTab({
   status,
   onStatusFilter,
   onMarkReplied,
+  canDelete,
+  onDelete,
 }: {
   messages: AdminMessage[];
   total: number;
@@ -6458,6 +6497,8 @@ function MessagesTab({
   status: string;
   onStatusFilter: (s: string) => void;
   onMarkReplied: (id: string) => void;
+  canDelete: boolean;
+  onDelete: (message: AdminMessage) => void;
 }) {
   const [preview, setPreview] = useState<AdminMessage | null>(null);
   return (
@@ -6530,6 +6571,13 @@ function MessagesTab({
                       Replied
                     </Text>
                   )}
+                  {canDelete ? (
+                    <AdminAction
+                      onPress={() => onDelete(m)}
+                      label="Delete"
+                      tone="red"
+                    />
+                  ) : null}
                 </View>
               </View>
               <Text className="mt-1 text-xs text-muted">
@@ -6602,10 +6650,33 @@ function MessagesTab({
 
 // ─── Settings (company info + programs) ─────────────────────────────
 
+// Mirrors the website's AdminSettings SECTIONS exactly (labels + hints), so the
+// two consoles group company fields the same way instead of the app showing one
+// 17-field wall.
+const SETTINGS_SECTIONS = [
+  {
+    id: "details",
+    label: "Company details",
+    hint: "Name, address and tax details.",
+  },
+  {
+    id: "contact",
+    label: "Contact",
+    hint: "Email, phone and public description.",
+  },
+  {
+    id: "social",
+    label: "Social & messaging",
+    hint: "WhatsApp and social profile links.",
+  },
+] as const;
+
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
+
 function SettingsTab({
   company,
   setCompany,
-  canDelete,
+  canDelete: _canDelete,
   onCompanySaved,
   onEditingChange,
 }: {
@@ -6617,6 +6688,7 @@ function SettingsTab({
 }) {
   const inputClass =
     "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
+  const [section, setSection] = useState<SettingsSection>("details");
   const activeEditorsRef = useRef<Record<string, boolean>>({});
   const [anyEditing, setAnyEditing] = useState(false);
   const report = useCallback(
@@ -6644,12 +6716,41 @@ function SettingsTab({
       <Text className="mt-1 text-xs text-muted">
         Company details — all DB-first (shared with the website).
       </Text>
+      <View className="mt-3 flex-row flex-wrap gap-2">
+        {SETTINGS_SECTIONS.map((item) => {
+          const selected = section === item.id;
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => setSection(item.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={item.label}
+              className={`h-8 items-center justify-center rounded-full border px-3 ${
+                selected ? "border-navy bg-navy" : "border-line bg-card"
+              }`}
+            >
+              <Text
+                className={`text-xs font-bold ${
+                  selected ? "text-white" : "text-muted"
+                }`}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text className="mt-2 text-xs text-muted">
+        {SETTINGS_SECTIONS.find((item) => item.id === section)?.hint}
+      </Text>
       <CompanyInfoEditor
         company={company}
         setCompany={setCompany}
         onSaved={onCompanySaved}
-        inputClass={inputClass}
         onEditingChange={report("company")}
+        inputClass={inputClass}
+        section={section}
       />
     </ScrollView>
   );
@@ -6679,12 +6780,14 @@ function CompanyInfoEditor({
   onSaved,
   inputClass,
   onEditingChange,
+  section,
 }: {
   company: AdminCompanyInfo | null;
   setCompany: (c: AdminCompanyInfo | null) => void;
   onSaved: (next: AdminCompanyInfo) => void;
   inputClass: string;
   onEditingChange: (v: boolean) => void;
+  section: SettingsSection;
 }) {
   const [saved, setSaved] = useState(false);
   function patch(part: Partial<AdminCompanyInfo>) {
@@ -6711,177 +6814,210 @@ function CompanyInfoEditor({
         <Text className="text-sm text-muted">Loading company info…</Text>
       ) : (
         <>
-          <View className="mb-3 flex-row gap-3">
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
+          {section === "details" && (
+            <>
+              <View className="mb-3 flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
+                  <TextInput
+                    value={company.name}
+                    onChangeText={(name) => patch({ name })}
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    Short name
+                  </Text>
+                  <TextInput
+                    value={company.shortName}
+                    onChangeText={(shortName) => patch({ shortName })}
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+              </View>
+              <Text className="mb-1 text-sm font-bold text-ink">Address</Text>
               <TextInput
-                value={company.name}
-                onChangeText={(name) => patch({ name })}
+                value={company.address}
+                onChangeText={(address) => patch({ address })}
+                multiline
                 {...field}
-                className={inputClass}
+                className={`mb-3 ${inputClass}`}
               />
-            </View>
-            <View className="flex-1">
+              <View className="mb-3 flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">City</Text>
+                  <TextInput
+                    value={company.city}
+                    onChangeText={(city) => patch({ city })}
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    Country
+                  </Text>
+                  <TextInput
+                    value={company.country}
+                    onChangeText={(country) => patch({ country })}
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+              </View>
+              {/* Mirrors the website's Settings groups: Company details →
+              Contact → Social & messaging, same fields in the same order. */}
+              <View className="mb-3 flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">PAN</Text>
+                  <TextInput
+                    value={company.pan}
+                    onChangeText={(pan) => patch({ pan })}
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    VAT label
+                  </Text>
+                  <TextInput
+                    value={company.vatLabel}
+                    onChangeText={(vatLabel) => patch({ vatLabel })}
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+              </View>
+            </>
+          )}
+          {section === "contact" && (
+            <>
+              <View className="mb-3 flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">Email</Text>
+                  <TextInput
+                    value={company.email}
+                    onChangeText={(email) => patch({ email })}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">Phone</Text>
+                  <TextInput
+                    value={company.phone}
+                    onChangeText={(phone) => patch({ phone })}
+                    keyboardType="phone-pad"
+                    {...field}
+                    className={inputClass}
+                  />
+                </View>
+              </View>
               <Text className="mb-1 text-sm font-bold text-ink">
-                Short name
+                Description
               </Text>
               <TextInput
-                value={company.shortName}
-                onChangeText={(shortName) => patch({ shortName })}
+                value={company.description}
+                onChangeText={(description) => patch({ description })}
+                multiline
+                style={{ textAlignVertical: "top" }}
                 {...field}
-                className={inputClass}
+                className={`mb-3 min-h-20 ${inputClass}`}
               />
-            </View>
-          </View>
-          <Text className="mb-1 text-sm font-bold text-ink">Address</Text>
-          <TextInput
-            value={company.address}
-            onChangeText={(address) => patch({ address })}
-            multiline
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <View className="mb-3 flex-row gap-3">
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">City</Text>
-              <TextInput
-                value={company.city}
-                onChangeText={(city) => patch({ city })}
-                {...field}
-                className={inputClass}
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">Country</Text>
-              <TextInput
-                value={company.country}
-                onChangeText={(country) => patch({ country })}
-                {...field}
-                className={inputClass}
-              />
-            </View>
-          </View>
-          <View className="mb-3 flex-row gap-3">
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">Email</Text>
-              <TextInput
-                value={company.email}
-                onChangeText={(email) => patch({ email })}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                {...field}
-                className={inputClass}
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">Phone</Text>
-              <TextInput
-                value={company.phone}
-                onChangeText={(phone) => patch({ phone })}
-                keyboardType="phone-pad"
-                {...field}
-                className={inputClass}
-              />
-            </View>
-          </View>
-          <View className="mb-3 flex-row gap-3">
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">PAN</Text>
-              <TextInput
-                value={company.pan}
-                onChangeText={(pan) => patch({ pan })}
-                {...field}
-                className={inputClass}
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="mb-1 text-sm font-bold text-ink">VAT label</Text>
-              <TextInput
-                value={company.vatLabel}
-                onChangeText={(vatLabel) => patch({ vatLabel })}
-                {...field}
-                className={inputClass}
-              />
-            </View>
-          </View>
-          <Text className="mb-1 text-sm font-bold text-ink">Description</Text>
-          <TextInput
-            value={company.description}
-            onChangeText={(description) => patch({ description })}
-            multiline
-            style={{ textAlignVertical: "top" }}
-            {...field}
-            className={`mb-3 min-h-20 ${inputClass}`}
-          />
-          {/* C5 (2026-09-23): socials + WhatsApp — shared with the website.
+            </>
+          )}
+          {section === "social" && (
+            <>
+              {/* C5 (2026-09-23): socials + WhatsApp — shared with the website.
               Empty = that surface is hidden. WhatsApp is stored digits-only
               (country code + number, no '+'). */}
-          <Text className="mb-1 text-sm font-bold text-ink">
-            WhatsApp number
-          </Text>
-          <TextInput
-            value={company.whatsappNumber}
-            onChangeText={(whatsappNumber) => patch({ whatsappNumber })}
-            keyboardType="phone-pad"
-            placeholder="97798XXXXXXXX"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <Text className="mb-1 text-sm font-bold text-ink">Facebook URL</Text>
-          <TextInput
-            value={company.facebookUrl}
-            onChangeText={(facebookUrl) => patch({ facebookUrl })}
-            autoCapitalize="none"
-            placeholder="https://facebook.com/…"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <Text className="mb-1 text-sm font-bold text-ink">Instagram URL</Text>
-          <TextInput
-            value={company.instagramUrl}
-            onChangeText={(instagramUrl) => patch({ instagramUrl })}
-            autoCapitalize="none"
-            placeholder="https://instagram.com/…"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <Text className="mb-1 text-sm font-bold text-ink">TikTok URL</Text>
-          <TextInput
-            value={company.tiktokUrl}
-            onChangeText={(tiktokUrl) => patch({ tiktokUrl })}
-            autoCapitalize="none"
-            placeholder="https://tiktok.com/@…"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <Text className="mb-1 text-sm font-bold text-ink">LinkedIn URL</Text>
-          <TextInput
-            value={company.linkedinUrl}
-            onChangeText={(linkedinUrl) => patch({ linkedinUrl })}
-            autoCapitalize="none"
-            placeholder="https://linkedin.com/company/…"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <Text className="mb-1 text-sm font-bold text-ink">Website URL</Text>
-          <TextInput
-            value={company.url}
-            onChangeText={(url) => patch({ url })}
-            autoCapitalize="none"
-            placeholder="https://example.com"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <Text className="mb-1 text-sm font-bold text-ink">YouTube URL</Text>
-          <TextInput
-            value={company.youtubeUrl}
-            onChangeText={(youtubeUrl) => patch({ youtubeUrl })}
-            autoCapitalize="none"
-            placeholder="https://youtube.com/@…"
-            {...field}
-            className={`mb-3 ${inputClass}`}
-          />
-          <View className="flex-row items-center gap-3">
+              <Text className="mb-1 text-sm font-bold text-ink">
+                WhatsApp number
+              </Text>
+              <TextInput
+                value={company.whatsappNumber}
+                onChangeText={(whatsappNumber) => patch({ whatsappNumber })}
+                keyboardType="phone-pad"
+                placeholder="97798XXXXXXXX"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Facebook URL
+              </Text>
+              <TextInput
+                value={company.facebookUrl}
+                onChangeText={(facebookUrl) => patch({ facebookUrl })}
+                autoCapitalize="none"
+                placeholder="https://facebook.com/…"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Instagram URL
+              </Text>
+              <TextInput
+                value={company.instagramUrl}
+                onChangeText={(instagramUrl) => patch({ instagramUrl })}
+                autoCapitalize="none"
+                placeholder="https://instagram.com/…"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                TikTok URL
+              </Text>
+              <TextInput
+                value={company.tiktokUrl}
+                onChangeText={(tiktokUrl) => patch({ tiktokUrl })}
+                autoCapitalize="none"
+                placeholder="https://tiktok.com/@…"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                LinkedIn URL
+              </Text>
+              <TextInput
+                value={company.linkedinUrl}
+                onChangeText={(linkedinUrl) => patch({ linkedinUrl })}
+                autoCapitalize="none"
+                placeholder="https://linkedin.com/company/…"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Website URL
+              </Text>
+              <TextInput
+                value={company.url}
+                onChangeText={(url) => patch({ url })}
+                autoCapitalize="none"
+                placeholder="https://example.com"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                YouTube URL
+              </Text>
+              <TextInput
+                value={company.youtubeUrl}
+                onChangeText={(youtubeUrl) => patch({ youtubeUrl })}
+                autoCapitalize="none"
+                placeholder="https://youtube.com/@…"
+                {...field}
+                className={`mb-3 ${inputClass}`}
+              />
+            </>
+          )}
+          {/* Save is shared by all three groups: one write to company_info. */}
+          <View className="mt-1 flex-row items-center gap-3 border-t border-line pt-3">
             <Pressable
               onPress={() => {
                 onSaved(company);

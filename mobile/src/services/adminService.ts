@@ -1074,6 +1074,23 @@ export async function markMessageReplied(id: string) {
   return data[0];
 }
 
+/**
+ * Delete one customer message (admin/owner only).
+ *
+ * The website deletes through `/api/admin/messages` with the service role; the
+ * app has no server route, so this rides the signed-in admin session and is
+ * therefore enforced by the `customer_messages` RLS policy. If the policy does
+ * not grant staff delete, the call rejects and the console surfaces the error
+ * instead of pretending the row went away.
+ */
+export async function deleteAdminMessage(id: string) {
+  const { error } = await supabase
+    .from("customer_messages")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // --- Dashboard stats ---
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
