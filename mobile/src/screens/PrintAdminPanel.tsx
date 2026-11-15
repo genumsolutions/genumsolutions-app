@@ -26,6 +26,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
+import { AdminSubTabs } from "../components/admin/AdminSubTabs";
 import { checkPrintImage } from "../lib/printImageUpload";
 import {
   PRINT_QUOTE_STATUSES,
@@ -258,49 +259,13 @@ export function PrintSectionTabs({
   value: PrintAdminSection | "Catalog";
   onChange: (next: PrintAdminSection | "Catalog") => void;
 }) {
-  const activeSection = value;
   return (
-    <View className="shrink-0 border-b border-line bg-card">
-      <View role="tablist" aria-label="Print admin sections">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            alignItems: "center",
-            flexDirection: "row",
-            gap: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-          }}
-        >
-          {PRINT_ADMIN_TABS.map((section) => {
-            const active = section === activeSection;
-            return (
-              <Pressable
-                key={section}
-                onPress={() => onChange(section)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={section}
-                tabIndex={active ? 0 : -1}
-                className={`min-h-10 shrink-0 items-center justify-center rounded-full border px-4 ${
-                  active ? "border-navy bg-navy" : "border-line bg-surface"
-                }`}
-              >
-                <Text
-                  numberOfLines={1}
-                  className={`text-[11px] font-black uppercase tracking-[0.08em] ${
-                    active ? "text-white" : "text-muted"
-                  }`}
-                >
-                  {section}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-    </View>
+    <AdminSubTabs
+      label="3D Products sections"
+      options={PRINT_ADMIN_TABS}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 

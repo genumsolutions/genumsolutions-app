@@ -55,6 +55,7 @@ import PrintAdminPanel, {
   PrintSectionTabs,
   type PrintAdminSection,
 } from "./PrintAdminPanel";
+import { AdminSubTabs } from "../components/admin/AdminSubTabs";
 // 2026-11-14 (owner: "i dont like the split screen of the admin dashboards
 // tabs contents"): the tab pager is gone. Tabs are no longer pages in a
 // swipeable filmstrip — one tab renders at a time, full width, in normal
@@ -176,64 +177,6 @@ type Tab =
   | "Content"
   | "Users"
   | "Settings";
-
-function AdminSubTabs<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly T[];
-  value: T;
-  onChange: (next: T) => void;
-}) {
-  return (
-    <View
-      role="tablist"
-      aria-label={label}
-      className="shrink-0 border-b border-line bg-card"
-    >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-        }}
-      >
-        {options.map((option) => {
-          const selected = value === option;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => onChange(option)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              accessibilityLabel={option}
-              tabIndex={selected ? 0 : -1}
-              className={`min-h-10 shrink-0 items-center justify-center rounded-full border px-4 ${
-                selected ? "border-navy bg-navy" : "border-line bg-surface"
-              }`}
-            >
-              <Text
-                numberOfLines={1}
-                className={`text-[11px] font-black uppercase tracking-[0.08em] ${
-                  selected ? "text-white" : "text-muted"
-                }`}
-              >
-                {option}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
 
 function AdminSectionPanels({
   active,
@@ -1941,7 +1884,7 @@ function AdminConsole() {
             className={`rounded-full px-2.5 py-1 ${canDelete ? "bg-navy" : "border border-line"}`}
           >
             <Text
-              className={`text-[9px] font-black uppercase tracking-[0.14em] ${canDelete ? "text-white" : "text-navy"}`}
+              className={`text-[10px] font-black uppercase tracking-widest ${canDelete ? "text-white" : "text-navy"}`}
             >
               {isOwner ? "Owner" : canDelete ? "Admin" : "Staff"}
             </Text>
@@ -2008,7 +1951,7 @@ function AdminConsole() {
               >
                 <Text
                   numberOfLines={1}
-                  className={`text-[11px] font-black uppercase tracking-[0.08em] ${tab === t ? "text-navy" : "text-muted"}`}
+                  className={`text-[11px] font-black uppercase tracking-[0.14em] ${tab === t ? "text-navy" : "text-muted"}`}
                 >
                   {t}
                 </Text>
@@ -2020,8 +1963,8 @@ function AdminConsole() {
 
       {/* What this tab is for — the website renders the identical sentence
           from its TAB_HINTS map, so the two consoles explain themselves alike. */}
-      <View className="shrink-0 border-b border-line bg-mist px-4 py-1.5">
-        <Text className="text-[11px] leading-4 text-muted">
+      <View className="shrink-0 border-b border-line bg-mist px-5 py-2">
+        <Text className="text-xs leading-5 text-muted">
           {ADMIN_TAB_HINTS[tab]}
         </Text>
       </View>
@@ -2231,9 +2174,13 @@ function DashboardTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="font-display text-2xl font-bold tracking-tight text-ink">
+      <Text className="font-display text-xl font-bold tracking-tight text-ink">
         Dashboard
       </Text>
       <View className="mt-3 flex-row flex-wrap gap-3">
@@ -2414,7 +2361,11 @@ function OrdersTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
       {/* Heading + filters */}
       <View className="mb-3">
@@ -2603,7 +2554,11 @@ function ProductsTab({
         data={shown}
         keyExtractor={(p) => p.id}
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
         ListHeaderComponent={
           <View className="mb-3">
             {/* U-47v5 (owner: toolbar overflowed the right edge): the title
@@ -2682,7 +2637,7 @@ function ProductsTab({
               <View className="min-w-0 flex-1">
                 <View className="flex-row items-center justify-between gap-2">
                   <Text
-                    className="shrink-1 text-sm font-bold text-ink"
+                    className="min-w-0 flex-1 text-sm font-bold text-ink"
                     numberOfLines={1}
                   >
                     {item.name}
@@ -3092,10 +3047,14 @@ function ProjectTab({
         data={shown}
         keyExtractor={(p) => p.id}
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
         ListHeaderComponent={
           <View className="mb-3">
-            <Text className="font-display text-2xl font-bold tracking-tight text-ink">
+            <Text className="font-display text-xl font-bold tracking-tight text-ink">
               {title}{" "}
               <Text className="text-base font-bold text-muted">
                 ({filtered.length})
@@ -3708,7 +3667,7 @@ function ProjectPricingCard({
         <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
           Estimate preview
         </Text>
-        <Text className="mt-1 font-display text-2xl font-bold text-ink">
+        <Text className="mt-1 font-display text-xl font-bold text-ink">
           {formatNPR(estimate.total)}
         </Text>
         <Text className="mt-1 text-xs leading-4 text-muted">
@@ -3827,7 +3786,11 @@ function ProductEditor({
     <View className="flex-1">
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
         keyboardShouldPersistTaps="handled"
       >
         <View className="rounded-xl border border-line bg-card p-4">
@@ -4416,7 +4379,11 @@ function ServicesTab({
         data={shown}
         keyExtractor={(s) => s.id}
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
         ListHeaderComponent={
           <View className="mb-3">
             <View className="flex-row items-center justify-between">
@@ -4557,7 +4524,11 @@ function ServiceEditor({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
       keyboardShouldPersistTaps="handled"
     >
       <View className="rounded-xl border border-line bg-card p-4">
@@ -5169,8 +5140,11 @@ function UsersSection({
   // Render user directory section header
   const renderUserDirHeader = () => (
     <View className="mb-3">
-      <Text className="font-display text-sm font-bold text-muted uppercase tracking-wide">
-        User Directory ({total})
+      <Text className="font-display text-xl font-bold tracking-tight text-ink">
+        User directory
+      </Text>
+      <Text className="mt-1 text-xs text-muted">
+        {total} accounts · search runs on the server
       </Text>
       <View className="mt-2 flex-row gap-2">
         <TextInput
@@ -5194,7 +5168,11 @@ function UsersSection({
         data={users}
         keyExtractor={(u) => u.id}
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
         ListHeaderComponent={renderUserDirHeader}
         ListEmptyComponent={
           <Text className="py-8 text-center text-sm text-muted">
@@ -5377,9 +5355,15 @@ function ContentTab({
   return (
     <ScrollView
       className="flex-1 overflow-hidden"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="text-base font-bold text-ink">Home page content</Text>
+      <Text className="font-display text-base font-bold text-ink">
+        Home page content
+      </Text>
       <Text className="mt-1 text-xs leading-5 text-muted">
         Edit the hero title and body shown on the app home screen and the
         website homepage.
@@ -5532,11 +5516,15 @@ function JournalTab({
       <ScrollView
         ref={scrollRef}
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
       >
         <View className="mb-4 flex-row items-center justify-between">
           <View>
-            <Text className="text-base font-bold text-ink">
+            <Text className="font-display text-xl font-bold tracking-tight text-ink">
               Journal posts ({journals.length})
             </Text>
             <Text className="mt-0.5 text-xs text-muted">
@@ -5722,7 +5710,11 @@ function FinanceTab({ stats }: { stats: DashboardStats | null }) {
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
       {/* Revenue cards */}
       <View className="mb-4 flex-row flex-wrap gap-3">
@@ -5813,9 +5805,13 @@ function ActivityTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="mb-4 font-display text-2xl font-bold tracking-tight text-ink">
+      <Text className="mb-4 font-display text-xl font-bold tracking-tight text-ink">
         Activity
       </Text>
       {activities.length === 0 ? (
@@ -5853,7 +5849,7 @@ function ActivityTab({
                     </Text>
                   </Text>
                   {Object.keys(entry.details).length > 0 && (
-                    <Text className="mt-0.5 text-xs text-muted">
+                    <Text className="mt-0.5 break-words text-xs text-muted">
                       {JSON.stringify(entry.details)}
                     </Text>
                   )}
@@ -6050,9 +6046,13 @@ function SystemLogsTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="mb-1 text-base font-black text-ink">
+      <Text className="mb-1 font-display text-lg font-bold tracking-tight text-ink">
         Car crash / restart reports
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6138,7 +6138,9 @@ function SystemLogsTab({
         </>
       )}
 
-      <Text className="mb-1 mt-5 text-base font-black text-ink">App logs</Text>
+      <Text className="mb-1 mt-5 font-display text-lg font-bold tracking-tight text-ink">
+        App logs
+      </Text>
       <Text className="mb-3 text-xs text-muted">
         Warn/error lines flushed from phones&apos; ring buffer, newest first.
       </Text>
@@ -6234,9 +6236,13 @@ function UserLogsTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="mb-1 text-base font-black text-ink">
+      <Text className="mb-1 font-display text-lg font-bold tracking-tight text-ink">
         User activity log
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6326,9 +6332,13 @@ function ProfileEntriesTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="mb-1 text-base font-black text-ink">
+      <Text className="mb-1 font-display text-lg font-bold tracking-tight text-ink">
         Profile entries
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6434,7 +6444,11 @@ function MessagesTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
       <View className="mb-3">
         <Text className="font-display text-xl font-bold text-ink">
@@ -6599,9 +6613,13 @@ function SettingsTab({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
     >
-      <Text className="font-display text-2xl font-bold tracking-tight text-ink">
+      <Text className="font-display text-xl font-bold tracking-tight text-ink">
         Settings
       </Text>
       <Text className="mt-1 text-xs text-muted">
@@ -7784,7 +7802,7 @@ function CatalogPreviewModal({
           <View className="p-5">
             <View className="flex-row items-center justify-between">
               <Text
-                className="shrink-1 text-xs font-black uppercase tracking-widest text-navy"
+                className="shrink-0 text-xs font-black uppercase tracking-widest text-navy"
                 numberOfLines={1}
               >
                 {typeLabel}

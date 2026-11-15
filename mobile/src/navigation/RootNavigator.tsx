@@ -257,7 +257,9 @@ export function RootNavigator() {
           component={AdminScreenSafe}
           options={{
             headerShown: true,
-            title: "Admin",
+            // Hierarchy: this is the top of the admin surface, above the eight
+            // tabs. "Admin" alone read like a button label.
+            title: "Admin dashboard",
             headerTintColor: "#1e3a8a",
             headerBackTitle: "Back",
           }}
