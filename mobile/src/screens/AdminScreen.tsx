@@ -2411,6 +2411,8 @@ function OrdersTab({
   onApply: () => void;
 }) {
   const STATUSES = ["pending", "paid", "fulfilled", "cancelled"] as const;
+  // Customer-facing order card, so staff can see the receipt the buyer sees.
+  const [preview, setPreview] = useState<AdminOrder | null>(null);
   return (
     <ScrollView
       className="flex-1"
@@ -2475,9 +2477,17 @@ function OrdersTab({
                     {new Date(o.createdAt).toLocaleString()}
                   </Text>
                 </View>
-                <Text className="shrink-0 text-xs font-bold uppercase text-navy">
-                  {o.status}
-                </Text>
+                <View className="shrink-0 items-end gap-1">
+                  <Text className="text-xs font-bold uppercase text-navy">
+                    {o.status}
+                  </Text>
+                  <Pressable
+                    onPress={() => setPreview(o)}
+                    className="rounded-lg border border-line px-3 py-1"
+                  >
+                    <Text className="text-xs font-bold text-ink">Preview</Text>
+                  </Pressable>
+                </View>
               </View>
               {o.items.length > 0 && (
                 <View className="mt-2 border-t border-line pt-2">
@@ -2516,6 +2526,85 @@ function OrdersTab({
           </Text>
         </>
       )}
+      {preview ? (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPreview(null)}
+        >
+          <View className="flex-1 justify-center bg-ink/40 px-4">
+            <View className="max-h-full w-full max-w-sm self-center overflow-hidden rounded-2xl border border-line bg-card">
+              <ScrollView contentContainerStyle={{ padding: 20 }}>
+                <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                  Order receipt
+                </Text>
+                <Text className="mt-1 font-display text-xl font-bold tracking-tight text-ink">
+                  #{preview.id.slice(0, 8).toUpperCase()}
+                </Text>
+                <Text className="mt-0.5 text-xs text-muted">
+                  {new Date(preview.createdAt).toLocaleString()}
+                  {preview.provider ? ` · ${preview.provider}` : ""}
+                </Text>
+                <Text className="mt-3 rounded-lg bg-mist px-3 py-1.5 text-xs font-bold uppercase text-navy">
+                  {preview.status}
+                </Text>
+                <View className="mt-3 border-t border-line pt-2">
+                  {preview.items.map((item, index) => (
+                    <View
+                      key={`preview-${preview.id}-${index}`}
+                      className="flex-row items-start justify-between gap-2 border-b border-line py-2"
+                    >
+                      <View className="min-w-0 flex-1">
+                        <Text
+                          className="text-sm font-bold text-ink"
+                          numberOfLines={2}
+                        >
+                          {item.name}
+                        </Text>
+                        <Text className="mt-0.5 text-xs text-muted">
+                          {item.quantity} × NPR{" "}
+                          {item.price.toLocaleString("en-IN")}
+                        </Text>
+                      </View>
+                      <Text className="shrink-0 text-sm font-bold text-ink">
+                        NPR{" "}
+                        {(item.price * item.quantity).toLocaleString("en-IN")}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <View className="mt-3 flex-row items-center justify-between">
+                  <Text className="text-sm font-bold text-ink">Total</Text>
+                  <Text className="font-display text-base font-bold text-ink">
+                    NPR {preview.totalNpr.toLocaleString("en-IN")}
+                  </Text>
+                </View>
+                <Text className="mt-4 text-[10px] font-black uppercase tracking-widest text-muted">
+                  Buyer"s copy
+                </Text>
+                <Text className="mt-1 text-sm font-bold text-ink">
+                  {preview.customerName}
+                </Text>
+                <Text className="text-xs text-muted">{preview.email}</Text>
+                {preview.address ? (
+                  <Text className="mt-1 text-xs leading-5 text-muted">
+                    {preview.address}
+                  </Text>
+                ) : null}
+                <Pressable
+                  onPress={() => setPreview(null)}
+                  className="mt-4 rounded-lg border border-line px-4 py-2"
+                >
+                  <Text className="text-center text-xs font-bold text-ink">
+                    Close preview
+                  </Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </ScrollView>
   );
 }
