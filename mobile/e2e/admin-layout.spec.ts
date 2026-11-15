@@ -130,10 +130,7 @@ test("staff admin sections stay scrollable and editors open on demand", async ({
     );
   }
 
-  await page
-    .getByLabel("Email", { exact: true })
-    .last()
-    .fill(STAFF_EMAIL);
+  await page.getByLabel("Email", { exact: true }).last().fill(STAFF_EMAIL);
   await page
     .getByLabel("Password", { exact: true })
     .last()
@@ -165,7 +162,7 @@ test("staff admin sections stay scrollable and editors open on demand", async ({
 
   await page.getByRole("tab", { name: "Activity", exact: true }).click();
   await expect(
-    page.getByText("Activity", { exact: true }).filter({ visible: true }),
+    page.getByText("Activity", { exact: true }).last(),
   ).toBeVisible();
 
   await page.getByRole("tab", { name: "3D Products", exact: true }).click();
