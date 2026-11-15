@@ -130,8 +130,14 @@ test("staff admin sections stay scrollable and editors open on demand", async ({
     );
   }
 
-  await page.getByLabel("Email", { exact: true }).fill(STAFF_EMAIL);
-  await page.getByLabel("Password", { exact: true }).fill("local-preview-only");
+  await page
+    .getByLabel("Email", { exact: true })
+    .last()
+    .fill(STAFF_EMAIL);
+  await page
+    .getByLabel("Password", { exact: true })
+    .last()
+    .fill("local-preview-only");
   await page
     .getByRole("button", { name: "Sign in", exact: true })
     .last()
