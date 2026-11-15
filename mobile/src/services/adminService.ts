@@ -1084,11 +1084,21 @@ export async function markMessageReplied(id: string) {
  * instead of pretending the row went away.
  */
 export async function deleteAdminMessage(id: string) {
-  const { error } = await supabase
+  // `.select()` is required here, not cosmetic: PostgREST reports success with
+  // an empty row set when RLS filters the row out, so a delete blocked by the
+  // policy would otherwise look like it worked and the row would simply
+  // reappear on reload. Zero rows back means "not deleted".
+  const { data, error } = await supabase
     .from("customer_messages")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      "The message was not deleted — this account does not have delete permission on customer messages.",
+    );
+  }
 }
 
 // --- Dashboard stats ---
@@ -1650,6 +1660,8 @@ export async function getCompanyInfo(): Promise<AdminCompanyInfo | null> {
     tiktokUrl: String(data.tiktok_url ?? ""),
     linkedinUrl: String(data.linkedin_url ?? ""),
     youtubeUrl: String(data.youtube_url ?? ""),
+    // The input existed before the column did; read it now that it persists.
+    url: String(data.url ?? ""),
   };
 }
 
@@ -1674,6 +1686,7 @@ export async function saveCompanyInfo(info: AdminCompanyInfo) {
       instagram_url: info.instagramUrl,
       tiktok_url: info.tiktokUrl,
       linkedin_url: info.linkedinUrl,
+      url: info.url ?? "",
       youtube_url: info.youtubeUrl,
       updated_at: new Date().toISOString(),
     })
