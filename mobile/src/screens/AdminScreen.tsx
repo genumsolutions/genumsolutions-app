@@ -56,6 +56,7 @@ import PrintAdminPanel, {
   type PrintAdminSection,
 } from "./PrintAdminPanel";
 import { AdminSubTabs } from "../components/admin/AdminSubTabs";
+import { AdminEditorSheet } from "../components/admin/AdminEditorSheet";
 // 2026-11-14 (owner: "i dont like the split screen of the admin dashboards
 // tabs contents"): the tab pager is gone. Tabs are no longer pages in a
 // swipeable filmstrip — one tab renders at a time, full width, in normal
@@ -2672,7 +2673,15 @@ function ProductsTab({
 
   if (editing) {
     return (
-      <View className="flex-1">
+      <AdminEditorSheet
+        full
+        visible
+        title="Product"
+        onClose={() => {
+          onEdit(null);
+          onImportCancel();
+        }}
+      >
         <ProductEditor
           product={editing}
           onChange={onChange}
@@ -2686,7 +2695,7 @@ function ProductsTab({
           fromLink={fromLink}
           saving={saveSaving}
         />
-      </View>
+      </AdminEditorSheet>
     );
   }
 
@@ -3129,7 +3138,12 @@ function ProjectTab({
 
   if (editing) {
     return (
-      <View className="flex-1">
+      <AdminEditorSheet
+        full
+        visible
+        title="Project package"
+        onClose={() => onChange(null)}
+      >
         <ProductEditor
           product={editing}
           onChange={onChange}
@@ -3179,7 +3193,7 @@ function ProjectTab({
             onSave={() => void saveComponentLinks()}
           />
         ) : null}
-      </View>
+      </AdminEditorSheet>
     );
   }
 
@@ -4501,7 +4515,12 @@ function ServicesTab({
 
   if (editing) {
     return (
-      <View className="flex-1">
+      <AdminEditorSheet
+        full
+        visible
+        title="Service"
+        onClose={() => onEdit(null)}
+      >
         <ServiceEditor
           service={editing}
           onChange={onChange}
@@ -4511,7 +4530,7 @@ function ServicesTab({
           categoryOptions={categories.filter((c) => c !== "All")}
           saving={saveSaving}
         />
-      </View>
+      </AdminEditorSheet>
     );
   }
 
@@ -5681,11 +5700,13 @@ function JournalTab({
           )}
         </View>
 
-        {editorOpen && (
-          <View className="mb-4 rounded-xl border border-line bg-card p-4">
-            <Text className="mb-3 text-sm font-bold text-ink">
-              {editId ? `Edit ${editId}` : "Add a new journal post"}
-            </Text>
+        {editorOpen ? (
+          <AdminEditorSheet
+            visible
+            title={editId ? `Edit ${editId}` : "Add a new journal post"}
+            hint="Publishes to the app Journal and the website /journal page."
+            onClose={onCancel}
+          >
             <Text className="mb-1 text-sm font-bold text-ink">
               Id (slug, auto-generated from title if blank)
             </Text>
@@ -5756,8 +5777,8 @@ function JournalTab({
                 <Text className="text-xs font-black text-ink">Cancel</Text>
               </Pressable>
             </View>
-          </View>
-        )}
+          </AdminEditorSheet>
+        ) : null}
 
         {journals.length === 0 ? (
           <Text className="py-8 text-center text-sm text-muted">
@@ -6885,17 +6906,27 @@ function SettingsTab({
         {SETTINGS_SECTIONS.find((item) => item.id === section)?.hint}
       </Text>
       {editing ? (
-        <CompanyInfoEditor
-          company={company}
-          setCompany={setCompany}
-          onSaved={(next) => {
-            onCompanySaved(next);
-            setEditing(false);
-          }}
-          onEditingChange={report("company")}
-          inputClass={inputClass}
-          section={section}
-        />
+        <AdminEditorSheet
+          visible
+          title={
+            SETTINGS_SECTIONS.find((item) => item.id === section)?.label ??
+            "Company information"
+          }
+          hint="Saves to the shared company record used by the app and website."
+          onClose={() => setEditing(false)}
+        >
+          <CompanyInfoEditor
+            company={company}
+            setCompany={setCompany}
+            onSaved={(next) => {
+              onCompanySaved(next);
+              setEditing(false);
+            }}
+            onEditingChange={report("company")}
+            inputClass={inputClass}
+            section={section}
+          />
+        </AdminEditorSheet>
       ) : (
         <SectionCard
           title={
@@ -7274,11 +7305,12 @@ function TrainingProgramsManager({
       >
         <Text className="text-xs font-black text-white">+ New program</Text>
       </Pressable>
-      {editing && (
-        <View className="mb-3 rounded-lg border border-line bg-surface p-3">
-          <Text className="mb-2 text-sm font-bold text-ink">
-            {isNew ? "Add a training program" : `Edit ${editing.id}`}
-          </Text>
+      {editing ? (
+        <AdminEditorSheet
+          visible
+          title={isNew ? "Add a training program" : `Edit ${editing.id}`}
+          onClose={() => setEditing(null)}
+        >
           <Text className="mb-1 text-sm font-bold text-ink">Title</Text>
           <TextInput
             value={editing.title}
@@ -7353,8 +7385,8 @@ function TrainingProgramsManager({
               <Text className="text-xs font-black text-ink">Cancel</Text>
             </Pressable>
           </View>
-        </View>
-      )}
+        </AdminEditorSheet>
+      ) : null}
       {programs.length === 0 ? (
         <Text className="text-sm text-muted">No training programs yet.</Text>
       ) : (
@@ -7508,11 +7540,12 @@ function PilotCostManager({
       >
         <Text className="text-xs font-black text-white">+ New cost line</Text>
       </Pressable>
-      {editing && (
-        <View className="mb-3 rounded-lg border border-line bg-surface p-3">
-          <Text className="mb-2 text-sm font-bold text-ink">
-            {isNew ? "Add a cost line" : `Edit ${editing.id}`}
-          </Text>
+      {editing ? (
+        <AdminEditorSheet
+          visible
+          title={isNew ? "Add a cost line" : `Edit ${editing.id}`}
+          onClose={() => setEditing(null)}
+        >
           <Text className="mb-1 text-sm font-bold text-ink">Item</Text>
           <TextInput
             value={editing.item}
@@ -7573,8 +7606,8 @@ function PilotCostManager({
               <Text className="text-xs font-black text-ink">Cancel</Text>
             </Pressable>
           </View>
-        </View>
-      )}
+        </AdminEditorSheet>
+      ) : null}
       {lines.length === 0 ? (
         <Text className="text-sm text-muted">No pilot cost lines yet.</Text>
       ) : (
@@ -7723,11 +7756,12 @@ function CurriculumManager({
       >
         <Text className="text-xs font-black text-white">+ New highlight</Text>
       </Pressable>
-      {editing && (
-        <View className="mb-3 rounded-lg border border-line bg-surface p-3">
-          <Text className="mb-2 text-sm font-bold text-ink">
-            {isNew ? "Add a curriculum highlight" : `Edit ${editing.id}`}
-          </Text>
+      {editing ? (
+        <AdminEditorSheet
+          visible
+          title={isNew ? "Add a curriculum highlight" : `Edit ${editing.id}`}
+          onClose={() => setEditing(null)}
+        >
           <Text className="mb-1 text-sm font-bold text-ink">Age band</Text>
           <TextInput
             value={editing.ageBand}
@@ -7785,8 +7819,8 @@ function CurriculumManager({
               <Text className="text-xs font-black text-ink">Cancel</Text>
             </Pressable>
           </View>
-        </View>
-      )}
+        </AdminEditorSheet>
+      ) : null}
       {highlights.length === 0 ? (
         <Text className="text-sm text-muted">
           No curriculum highlights yet.

@@ -10,6 +10,7 @@
 // staff writes, and approval stays admin-only in the UI (RLS is looser).
 // =====================================================================
 import React, { useCallback, useEffect, useState } from "react";
+import { AdminEditorSheet } from "../components/admin/AdminEditorSheet";
 import {
   ActivityIndicator,
   Alert,
@@ -467,11 +468,11 @@ export default function PrintAdminPanel({
         {noticeBar}
         {previewHost}
         {category ? (
-          <>
-            <EditorHeading
-              title={category.id ? "Edit category" : "New category"}
-              onCancel={() => setCategory(null)}
-            />
+          <AdminEditorSheet
+            visible
+            title={category.id ? "Edit category" : "New category"}
+            onClose={() => setCategory(null)}
+          >
             <Card>
               <Field
                 label="Slug / id"
@@ -530,7 +531,7 @@ export default function PrintAdminPanel({
                 ) : null}
               </View>
             </Card>
-          </>
+          </AdminEditorSheet>
         ) : (
           <>
             <View className="mb-3 flex-row items-center justify-between gap-2">
@@ -707,290 +708,302 @@ export default function PrintAdminPanel({
       );
     }
     return (
-      <View>
-        {noticeBar}
-        {previewHost}
-        <Card>
-          <Text className="font-display text-base font-bold text-ink">
-            Rates published?
-          </Text>
-          <Text className="mt-1 text-xs leading-5 text-muted">
-            {approved
-              ? `Published${settings.pricingApprovedBy ? ` by ${settings.pricingApprovedBy}` : ""}${
-                  settings.pricingApprovedAt
-                    ? ` on ${new Date(settings.pricingApprovedAt).toLocaleDateString()}`
-                    : ""
-                }`
-              : 'Draft — customers see "rate on request" and no calculator.'}
-          </Text>
-          <View className="mt-3">
-            {canApprove ? (
-              <Button
-                label={approved ? "Withdraw rates" : "Approve & publish rates"}
-                busy={busy}
-                onPress={() =>
-                  void run(
-                    () => setPrintApproval(!approved, approverEmail),
-                    approved ? "Rates withdrawn." : "Rates published.",
-                  )
-                }
-              />
-            ) : (
-              <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
-                Admin only
-              </Text>
-            )}
-          </View>
-        </Card>
-
-        <Card>
-          <Text className="mb-2 font-display text-base font-bold text-ink">
-            Material rates
-          </Text>
-          <Text className="mb-3 text-xs text-muted">
-            NPR per gram. Zero stays hidden from customers as "rate on request".
-          </Text>
-          {materials.map((material, index) => (
-            <View
-              key={material.id || index}
-              className="mb-3 rounded-lg border border-line p-2"
-            >
-              <Text className="mb-1 text-sm font-bold text-ink">
-                {material.name || "Material"}
-              </Text>
-              <View className="flex-row gap-2">
-                <Field
-                  label="NPR / g"
-                  value={String(material.ratePerGram)}
-                  numeric
-                  onChange={(raw) => {
-                    const next = [...materials];
-                    next[index] = {
-                      ...material,
-                      ratePerGram: Math.max(0, Math.round(Number(raw) || 0)),
-                    };
-                    setMaterials(next);
-                  }}
-                />
-                <Field
-                  label="Note"
-                  value={material.note}
-                  onChange={(note) => {
-                    const next = [...materials];
-                    next[index] = { ...material, note };
-                    setMaterials(next);
-                  }}
-                />
-              </View>
-              <Toggle
-                label="Active"
-                value={material.active}
-                onChange={(active) => {
-                  const next = [...materials];
-                  next[index] = { ...material, active };
-                  setMaterials(next);
-                }}
-              />
-              {canDelete ? (
+      <AdminEditorSheet
+        full
+        visible
+        title="Rates and calculator"
+        onClose={() => setEditingPricing(false)}
+      >
+        <View>
+          {noticeBar}
+          {previewHost}
+          <Card>
+            <Text className="font-display text-base font-bold text-ink">
+              Rates published?
+            </Text>
+            <Text className="mt-1 text-xs leading-5 text-muted">
+              {approved
+                ? `Published${settings.pricingApprovedBy ? ` by ${settings.pricingApprovedBy}` : ""}${
+                    settings.pricingApprovedAt
+                      ? ` on ${new Date(settings.pricingApprovedAt).toLocaleDateString()}`
+                      : ""
+                  }`
+                : 'Draft — customers see "rate on request" and no calculator.'}
+            </Text>
+            <View className="mt-3">
+              {canApprove ? (
                 <Button
-                  label="Delete material"
-                  tone="danger"
-                  onPress={() => confirmDelete("material", material.id)}
+                  label={
+                    approved ? "Withdraw rates" : "Approve & publish rates"
+                  }
+                  busy={busy}
+                  onPress={() =>
+                    void run(
+                      () => setPrintApproval(!approved, approverEmail),
+                      approved ? "Rates withdrawn." : "Rates published.",
+                    )
+                  }
                 />
-              ) : null}
+              ) : (
+                <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+                  Admin only
+                </Text>
+              )}
             </View>
-          ))}
-          <Button
-            label="Save rates"
-            busy={busy}
-            onPress={() =>
-              void run(async () => {
-                for (const material of materials)
-                  await savePrintMaterial(material);
-              }, "Rates saved.")
-            }
-          />
-        </Card>
+          </Card>
 
-        <Card>
-          <Text className="mb-2 font-display text-base font-bold text-ink">
-            Calculator
-          </Text>
-          <Toggle
-            label="Calculator enabled"
-            value={settings.calculatorEnabled}
-            onChange={(calculatorEnabled) =>
-              patchSettings({ calculatorEnabled })
-            }
-          />
-          <View className="flex-row gap-2">
-            <Field
-              label="Minimum order (NPR)"
-              value={String(settings.minimumOrder)}
-              numeric
-              onChange={(raw) =>
-                patchSettings({
-                  minimumOrder: Math.max(0, Math.round(Number(raw) || 0)),
-                })
-              }
-            />
-            <Field
-              label="Design base charge (NPR)"
-              value={String(settings.designBaseCharge)}
-              numeric
-              onChange={(raw) =>
-                patchSettings({
-                  designBaseCharge: Math.max(0, Math.round(Number(raw) || 0)),
-                })
-              }
-            />
-          </View>
-          <Field
-            label="Materials intro"
-            value={settings.materialsIntro}
-            onChange={(materialsIntro) => patchSettings({ materialsIntro })}
-            multiline
-          />
-          <Field
-            label="Disclaimer"
-            value={settings.disclaimer}
-            onChange={(disclaimer) => patchSettings({ disclaimer })}
-            multiline
-          />
-
-          <Text className="mb-1 mt-2 text-xs font-bold text-muted">
-            Bulk tiers
-          </Text>
-          {settings.bulkTiers.map((tier, index) => (
-            <View
-              key={`tier-${index}`}
-              className="mb-2 flex-row items-end gap-2"
-            >
-              <Field
-                label="Min qty"
-                value={String(tier.minQty)}
-                numeric
-                onChange={(raw) => {
-                  const next = [...settings.bulkTiers];
-                  next[index] = {
-                    ...tier,
-                    minQty: Math.max(1, Math.round(Number(raw) || 1)),
-                  };
-                  patchSettings({ bulkTiers: next });
-                }}
-              />
-              <Field
-                label="Discount %"
-                value={String(tier.discountPercent)}
-                numeric
-                onChange={(raw) => {
-                  const next = [...settings.bulkTiers];
-                  next[index] = {
-                    ...tier,
-                    discountPercent: Math.min(
-                      90,
-                      Math.max(0, Math.round(Number(raw) || 0)),
-                    ),
-                  };
-                  patchSettings({ bulkTiers: next });
-                }}
-              />
-              <Button
-                label="Remove"
-                tone="danger"
-                onPress={() =>
-                  patchSettings({
-                    bulkTiers: settings.bulkTiers.filter((_, i) => i !== index),
-                  })
-                }
-              />
-            </View>
-          ))}
-          <Button
-            label="Add tier"
-            tone="ghost"
-            onPress={() =>
-              patchSettings({
-                bulkTiers: [
-                  ...settings.bulkTiers,
-                  { minQty: 10, discountPercent: 5 },
-                ],
-              })
-            }
-          />
-
-          <Text className="mb-1 mt-3 text-xs font-bold text-muted">
-            Finishing charges
-          </Text>
-          {settings.finishingCharges.map((charge, index) => (
-            <View
-              key={`charge-${index}`}
-              className="mb-2 flex-row items-end gap-2"
-            >
-              <Field
-                label="Name"
-                value={charge.name}
-                onChange={(name) => {
-                  const next = [...settings.finishingCharges];
-                  next[index] = { ...charge, name, id: charge.id || name };
-                  patchSettings({ finishingCharges: next });
-                }}
-              />
-              <Field
-                label="NPR"
-                value={String(charge.amount)}
-                numeric
-                onChange={(raw) => {
-                  const next = [...settings.finishingCharges];
-                  next[index] = {
-                    ...charge,
-                    amount: Math.max(0, Math.round(Number(raw) || 0)),
-                  };
-                  patchSettings({ finishingCharges: next });
-                }}
-              />
-              <Button
-                label="Remove"
-                tone="danger"
-                onPress={() =>
-                  patchSettings({
-                    finishingCharges: settings.finishingCharges.filter(
-                      (_, i) => i !== index,
-                    ),
-                  })
-                }
-              />
-            </View>
-          ))}
-          <Button
-            label="Add charge"
-            tone="ghost"
-            onPress={() =>
-              patchSettings({
-                finishingCharges: [
-                  ...settings.finishingCharges,
-                  { id: "", name: "", amount: 0 },
-                ],
-              })
-            }
-          />
-
-          <View className="mt-3">
+          <Card>
+            <Text className="mb-2 font-display text-base font-bold text-ink">
+              Material rates
+            </Text>
+            <Text className="mb-3 text-xs text-muted">
+              NPR per gram. Zero stays hidden from customers as "rate on
+              request".
+            </Text>
+            {materials.map((material, index) => (
+              <View
+                key={material.id || index}
+                className="mb-3 rounded-lg border border-line p-2"
+              >
+                <Text className="mb-1 text-sm font-bold text-ink">
+                  {material.name || "Material"}
+                </Text>
+                <View className="flex-row gap-2">
+                  <Field
+                    label="NPR / g"
+                    value={String(material.ratePerGram)}
+                    numeric
+                    onChange={(raw) => {
+                      const next = [...materials];
+                      next[index] = {
+                        ...material,
+                        ratePerGram: Math.max(0, Math.round(Number(raw) || 0)),
+                      };
+                      setMaterials(next);
+                    }}
+                  />
+                  <Field
+                    label="Note"
+                    value={material.note}
+                    onChange={(note) => {
+                      const next = [...materials];
+                      next[index] = { ...material, note };
+                      setMaterials(next);
+                    }}
+                  />
+                </View>
+                <Toggle
+                  label="Active"
+                  value={material.active}
+                  onChange={(active) => {
+                    const next = [...materials];
+                    next[index] = { ...material, active };
+                    setMaterials(next);
+                  }}
+                />
+                {canDelete ? (
+                  <Button
+                    label="Delete material"
+                    tone="danger"
+                    onPress={() => confirmDelete("material", material.id)}
+                  />
+                ) : null}
+              </View>
+            ))}
             <Button
-              label="Save settings"
+              label="Save rates"
               busy={busy}
               onPress={() =>
-                void run(() => savePrintSettings(settings), "Settings saved.")
+                void run(async () => {
+                  for (const material of materials)
+                    await savePrintMaterial(material);
+                }, "Rates saved.")
               }
             />
-            <Button
-              label="Done"
-              tone="ghost"
-              onPress={() => setEditingPricing(false)}
+          </Card>
+
+          <Card>
+            <Text className="mb-2 font-display text-base font-bold text-ink">
+              Calculator
+            </Text>
+            <Toggle
+              label="Calculator enabled"
+              value={settings.calculatorEnabled}
+              onChange={(calculatorEnabled) =>
+                patchSettings({ calculatorEnabled })
+              }
             />
-          </View>
-        </Card>
-      </View>
+            <View className="flex-row gap-2">
+              <Field
+                label="Minimum order (NPR)"
+                value={String(settings.minimumOrder)}
+                numeric
+                onChange={(raw) =>
+                  patchSettings({
+                    minimumOrder: Math.max(0, Math.round(Number(raw) || 0)),
+                  })
+                }
+              />
+              <Field
+                label="Design base charge (NPR)"
+                value={String(settings.designBaseCharge)}
+                numeric
+                onChange={(raw) =>
+                  patchSettings({
+                    designBaseCharge: Math.max(0, Math.round(Number(raw) || 0)),
+                  })
+                }
+              />
+            </View>
+            <Field
+              label="Materials intro"
+              value={settings.materialsIntro}
+              onChange={(materialsIntro) => patchSettings({ materialsIntro })}
+              multiline
+            />
+            <Field
+              label="Disclaimer"
+              value={settings.disclaimer}
+              onChange={(disclaimer) => patchSettings({ disclaimer })}
+              multiline
+            />
+
+            <Text className="mb-1 mt-2 text-xs font-bold text-muted">
+              Bulk tiers
+            </Text>
+            {settings.bulkTiers.map((tier, index) => (
+              <View
+                key={`tier-${index}`}
+                className="mb-2 flex-row items-end gap-2"
+              >
+                <Field
+                  label="Min qty"
+                  value={String(tier.minQty)}
+                  numeric
+                  onChange={(raw) => {
+                    const next = [...settings.bulkTiers];
+                    next[index] = {
+                      ...tier,
+                      minQty: Math.max(1, Math.round(Number(raw) || 1)),
+                    };
+                    patchSettings({ bulkTiers: next });
+                  }}
+                />
+                <Field
+                  label="Discount %"
+                  value={String(tier.discountPercent)}
+                  numeric
+                  onChange={(raw) => {
+                    const next = [...settings.bulkTiers];
+                    next[index] = {
+                      ...tier,
+                      discountPercent: Math.min(
+                        90,
+                        Math.max(0, Math.round(Number(raw) || 0)),
+                      ),
+                    };
+                    patchSettings({ bulkTiers: next });
+                  }}
+                />
+                <Button
+                  label="Remove"
+                  tone="danger"
+                  onPress={() =>
+                    patchSettings({
+                      bulkTiers: settings.bulkTiers.filter(
+                        (_, i) => i !== index,
+                      ),
+                    })
+                  }
+                />
+              </View>
+            ))}
+            <Button
+              label="Add tier"
+              tone="ghost"
+              onPress={() =>
+                patchSettings({
+                  bulkTiers: [
+                    ...settings.bulkTiers,
+                    { minQty: 10, discountPercent: 5 },
+                  ],
+                })
+              }
+            />
+
+            <Text className="mb-1 mt-3 text-xs font-bold text-muted">
+              Finishing charges
+            </Text>
+            {settings.finishingCharges.map((charge, index) => (
+              <View
+                key={`charge-${index}`}
+                className="mb-2 flex-row items-end gap-2"
+              >
+                <Field
+                  label="Name"
+                  value={charge.name}
+                  onChange={(name) => {
+                    const next = [...settings.finishingCharges];
+                    next[index] = { ...charge, name, id: charge.id || name };
+                    patchSettings({ finishingCharges: next });
+                  }}
+                />
+                <Field
+                  label="NPR"
+                  value={String(charge.amount)}
+                  numeric
+                  onChange={(raw) => {
+                    const next = [...settings.finishingCharges];
+                    next[index] = {
+                      ...charge,
+                      amount: Math.max(0, Math.round(Number(raw) || 0)),
+                    };
+                    patchSettings({ finishingCharges: next });
+                  }}
+                />
+                <Button
+                  label="Remove"
+                  tone="danger"
+                  onPress={() =>
+                    patchSettings({
+                      finishingCharges: settings.finishingCharges.filter(
+                        (_, i) => i !== index,
+                      ),
+                    })
+                  }
+                />
+              </View>
+            ))}
+            <Button
+              label="Add charge"
+              tone="ghost"
+              onPress={() =>
+                patchSettings({
+                  finishingCharges: [
+                    ...settings.finishingCharges,
+                    { id: "", name: "", amount: 0 },
+                  ],
+                })
+              }
+            />
+
+            <View className="mt-3">
+              <Button
+                label="Save settings"
+                busy={busy}
+                onPress={() =>
+                  void run(() => savePrintSettings(settings), "Settings saved.")
+                }
+              />
+              <Button
+                label="Done"
+                tone="ghost"
+                onPress={() => setEditingPricing(false)}
+              />
+            </View>
+          </Card>
+        </View>
+      </AdminEditorSheet>
     );
   }
 
@@ -1165,11 +1178,11 @@ export default function PrintAdminPanel({
         {noticeBar}
         {previewHost}
         {promotion ? (
-          <>
-            <EditorHeading
-              title={promotion.id ? "Edit promotion" : "New promotion"}
-              onCancel={() => setPromotion(null)}
-            />
+          <AdminEditorSheet
+            visible
+            title={promotion.id ? "Edit promotion" : "New promotion"}
+            onClose={() => setPromotion(null)}
+          >
             <Card>
               <Field
                 label="Title"
@@ -1257,7 +1270,7 @@ export default function PrintAdminPanel({
                 ) : null}
               </View>
             </Card>
-          </>
+          </AdminEditorSheet>
         ) : (
           <>
             <View className="mb-3 flex-row items-center justify-between gap-2">
@@ -1342,11 +1355,11 @@ export default function PrintAdminPanel({
         {noticeBar}
         {previewHost}
         {service ? (
-          <>
-            <EditorHeading
-              title={service.id ? "Edit service" : "New service"}
-              onCancel={() => setService(null)}
-            />
+          <AdminEditorSheet
+            visible
+            title={service.id ? "Edit service" : "New service"}
+            onClose={() => setService(null)}
+          >
             <Card>
               <Field
                 label="Title"
@@ -1399,7 +1412,7 @@ export default function PrintAdminPanel({
                 ) : null}
               </View>
             </Card>
-          </>
+          </AdminEditorSheet>
         ) : (
           <>
             <View className="mb-3 flex-row items-center justify-between gap-2">
@@ -1479,11 +1492,11 @@ export default function PrintAdminPanel({
         {noticeBar}
         {previewHost}
         {galleryItem ? (
-          <>
-            <EditorHeading
-              title={galleryItem.id ? "Edit gallery item" : "New gallery item"}
-              onCancel={() => setGalleryItem(null)}
-            />
+          <AdminEditorSheet
+            visible
+            title={galleryItem.id ? "Edit gallery item" : "New gallery item"}
+            onClose={() => setGalleryItem(null)}
+          >
             <Card>
               <Field
                 label="Image URL"
@@ -1573,7 +1586,7 @@ export default function PrintAdminPanel({
                 ) : null}
               </View>
             </Card>
-          </>
+          </AdminEditorSheet>
         ) : (
           <>
             <View className="mb-3 flex-row items-center justify-between gap-2">
@@ -1680,11 +1693,11 @@ export default function PrintAdminPanel({
           quote them, then move the status along.
         </Text>
         {editor ? (
-          <>
-            <EditorHeading
-              title="Request details"
-              onCancel={() => setQuote(null)}
-            />
+          <AdminEditorSheet
+            visible
+            title="Request details"
+            onClose={() => setQuote(null)}
+          >
             <Card>
               <Text className="font-display text-base font-bold text-ink">
                 {editor.name}
@@ -1798,7 +1811,7 @@ export default function PrintAdminPanel({
                 />
               </View>
             </Card>
-          </>
+          </AdminEditorSheet>
         ) : (
           data.quotes.map((item) => (
             <Card key={item.id}>
