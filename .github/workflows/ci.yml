@@ -80,6 +80,10 @@ jobs:
       # every read fails fast and the screens paint their bundled content. That
       # is why the assertions only target strings true with or without a DB.
       - name: Export web bundle
+        # Dummy values enable the test-only mock staff flow; Playwright intercepts backend requests.
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://admin-layout.invalid
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: local-preview-anon-key
         run: npx expo export --platform web
 
       - name: Layout smoke test
