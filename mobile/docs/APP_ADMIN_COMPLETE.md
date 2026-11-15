@@ -1,466 +1,318 @@
-# App (genumsolutions-app/mobile) — Complete Admin UI Documentation
-
-## 1. AdminScreen (`src/screens/AdminScreen.tsx`)
-
-### 1.1 Top-Level Tab Navigation
-
-The admin screen has a tab bar at the top with the following tabs (in order):
-
-| Tab Index | Label                 | Key Prop | Description                                                                                                                                             |
-| --------- | --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0         | `Dashboard`           | —        | Main dashboard overview                                                                                                                                 |
-| 1         | `Orders`              | —        | Orders management                                                                                                                                       |
-| 2         | `Electronic Products` | —        | Product catalog (electronic)                                                                                                                            |
-| 3         | `3D Products`         | —        | Product catalog (3D)                                                                                                                                    |
-| 4         | `Projects`            | —        | Project management                                                                                                                                      |
-| 5         | `Content`             | —        | Content management                                                                                                                                      |
-| 6         | `Users`               | —        | User management                                                                                                                                         |
-| 7         | `Logs`                | —        | **U-R5 (2026-11-09):** System Logs + App logs (includes `link/wifi` diagnostics). Initial section state: `"logs"`.                                      |
-| 8         | `Profile`             | —        | **U-R5 (2026-11-09):** User profiles + project entries. Uses edit-button pattern: read-only by default, tap "Edit" reveals form, "Save"/"Cancel" locks. |
-| 9         | `Settings`            | —        | Company + programs editing. Integrates with `SettingsTab` component.                                                                                    |
-
-**LOG_SECTIONS constant** (lines ~4780-4795, reorganized U-R5):
-
-```typescript
-const LOG_SECTIONS = [
-  { id: "logs", label: "Logs" } as const,
-  { id: "profile", label: "Profile" } as const,
-] as const;
-```
-
-**LogSection type**: `(typeof LOG_SECTIONS)[number]["id"]` — only `"logs"` or `"profile"`.
-
-**LogsTab** component:
-
-- `const [section, setSection] = useState<LogSection>("logs")`
-- Active section = `"logs"` shows `SystemLogsTab` (crashes/faults from car)
-- Active section = `"profile"` shows `ProfileEntriesTab`
-
-### 1.2 ProfileEntriesTab Component
-
-**Location**: Within `AdminScreen.tsx`, rendered when `section === "profile"`
-
-**State variables** (for edit mode):
-
-- `isEditing: boolean` — `false` by default (read-only mode)
-- `newTitle: string` — pre-filled title when editing
-- `newTypeName: string` — pre-filled type name when editing
-- `newBody: Record<string, unknown>` — pre-filled body data when editing
-
-**Read-Only Mode (isEditing = false)**:
-
-- Each profile entry displays as a read-only `View`
-- Layout: `View` with `flexRow items-center gap-2`
-- Left: `Text` showing `{row.title || "(untitled)"}` (class: `text-sm font-bold text-ink`)
-- Middle: `Text` showing JSON preview of `row.body`
-- Right: "Edit" `Pressable` (class: `text-xs text-navy uppercase tracking-[0.1em]`, accessibilityLabel: `"Edit profile entry"`)
-
-**Editing Mode (isEditing = true)**:
-
-- Form reveals with three fields:
-  - `newTitle` input (pre-filled with entry title)
-  - `newTypeName` input (pre-filled with entry type)
-  - `newBody` input (pre-filled with entry body data)
-- "Save" button persists changes and sets `isEditing = false`
-- "Cancel" button closes form without saving, sets `isEditing = false`
-
-**Entry Row Structure** (line ~5243):
-
-```typescript
-<View className="flex-row items-center gap-2">
-  <Text className="text-sm font-bold text-ink">{row.title || "(untitled)"}</Text>
-  <Text>{JSON.stringify(row.body)}</Text>
-  {/* When not editing: */}
-  <Pressable onPress={() => setIsEditing(true)} className="mt-1 text-xs text-navy underline">
-    <Text className="text-[10px] font-bold uppercase tracking-[0.1em] text-navy">Edit</Text>
-  </Pressable>
-  {/* When editing: Save/Cancel inputs (omitted for brevity) */}
-</View>
-```
-
-**Note**: Delete button was removed in U-R5 reorganization. Entries now only have the Edit pattern.
-
-### 1.3 Settings Tab / SettingsTab Component
-
-**Location**: Line ~1524-1532, rendered when top-tab label = `"Settings"`
-
-**Props passed from AdminScreen**:
-
-- `company` — `AdminCompanyInfo | null` state
-- `setCompany` — setter for company state
-- `canDelete` — boolean for delete capability
-- `onCompanySaved` — async callback `(next) => { await saveCompanyInfo(next); setCompanyInfo(next); }`
-- `onEditingChange` — `setSettingsEditing` (from useState at line ~410)
-
-**SettingsTab component** (line ~5451-5540):
-
-- Displays company info via `CompanyInfoEditor` sub-component
-- Uses `anyEditing` ref to track if any company field is being edited
-- When `anyEditing` is true, the admin pager disables swiping to another tab
-- Shows "Settings" header with subtitle: `"Company details — all DB-first (shared with the website)."`
-- Contains `CompanyInfoEditor` with all company fields
-
-**CompanyInfoEditor** (line ~5532):
-
-- Takes: `company`, `setCompany`, `onSaved`, `inputClass`, `onEditingChange`
-- Renders `SectionCard` with title `"Company information"`
-- Shows hint: `"Shown in the app Contact/Legal screens and the website footer/contact pages."`
-- Renders each company field as a `View` with label + `TextInput`
-- Fields (in order):
-  1. Name
-  2. Short name
-  3. Address
-  4. City
-  5. Country
-  6. Email
-  7. Phone
-  8. PAN
-  9. VAT label
-  10. Description
-  11. WhatsApp number
-  12. Facebook URL
-  13. Instagram URL
-  14. TikTok URL
-  15. LinkedIn URL
-  16. YouTube URL
-- "Save company" Pressable at bottom commits changes and sets `saved = true`
-- Shows "Saved." text momentarily after save
-
-### 1.4 AdminScreen Persistent Elements
-
-- **Bottom biometric lock overlay** (C7): While locked, the console is blurred
-- **Editor state guarding**: `editorOnCurrentTab` variable prevents tab swiping while any editor is open
-- **Save saving guard**: `saveSaving` state disables Save button during async writes
-- **Import saving guard**: `contentSaving` state disables Content tab Save button
-
-### 1.5 Key Types Defined in AdminScreen Context
-
-- `AdminCompanyInfo` — defined in `src/services/adminService.ts:1445`
-  - name, shortName, address, city, country, email, phone, pan, vatLabel, description, url? (added U-I6), whatsappNumber, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, youtubeUrl
-- `AdminProduct`, `AdminService`, `AdminTrainingProgram`, `AdminPilotCostLine`, `AdminCurriculumHighlight`
-- `LogSection` type (derived from LOG_SECTIONS)
-
-### 1.6 Events & Callbacks
-
-- `onCompanySaved` — async, saves company info to DB via `adminService.saveCompanyInfo`
-- `onEditingChange` — boolean, propagates to admin pager to disable swiping while editing
-- `onSaved` (in CompanyInfoEditor) — triggers save + shows "Saved." transient text
-- Tab section state change: `setSection("logs"` or `setSection("profile")`
-
----
-
-## 1.7 Users Tab (UsersSection)
-
-**Location**: `UsersSection` function (line ~4044), rendered when top-tab label = `"Users"`
-
-**Props** (from AdminScreen, line ~1459):
-
-- `users: AdminUser[]` — array of admin users
-- `total: number` — total user count
-- `page: number` — current page
-- `totalPages: number` — total pages
-- `query: string` — search query
-- `onQueryChange: (q: string) => void` — query change handler
-- `onApply: () => void` — apply/search handler
-- `onPage: (p: number) => void` — page change handler
-- `canDelete: boolean` — delete capability
-- `isOwner: boolean` — owner status
-- `onToggleRole: (u: AdminUser) => void` — role toggle
-- `onToggleTier: (u: AdminUser) => void` — tier toggle
-- `onDeleteUser: (u: AdminUser) => void` — delete user
-- `currentUserId: string` — current user ID
-
-**State variables**:
-
-- `showUserDir: boolean` — show user directory section (default: true)
-- `showCarProfiles: boolean` — show legacy flat car profiles section (default: false)
-- `showRobotProfiles: boolean` — show legacy flat robot profiles section (default: false)
-- `userDirSearch: string` — user directory search text
-- `carSearch: string` — car profile search text
-- `robotSearch: string` — robot profile search text
-- `editCar: { profile_key: string; car_name: string; settings: any } | null` — car being edited
-- `carEditing: boolean` — car edit mode active
-- `editRobot: { robot_code: string; telemetry_channel: string; parameters: any; profile_key: string } | null` — robot being edited
-- `robotEditing: boolean` — robot edit mode active
-
-**Filter logic**:
-
-- `filteredUsers` filters users by `userDirSearch` (name or email match)
-
-### 1.7.1 User Directory Section
-
-**Header** (renderUserDirHeader, line ~4096):
-
-- Title: `"User Directory ({filteredUsers.length})"`
-- Search input: `TextInput` with `userDirSearch` value, `onApply` on submit
-- Apply button: `Pressable` with `onApply` handler
-
-**User Cards** (renderItem, line ~4260):
-
-Each user card is a `View` with:
-
-- Name (bold, font-display)
-- Email (muted)
-- Phone (if present)
-- Address (if present, max 1 line)
-- Created at / last seen date (if present)
-- Role badge (pill style, color-coded: owner=ink, admin=amber, staff=navy, other=sky)
-- Tier badge (pill style, color-coded: pro=emerald, other=mist)
-
-**Car Profiles Section Header** (line ~4330):
-
-- Title: `"Car Profiles ({filteredUsers.length})"`
-
-**Car Profile Card** (renderItem, line ~4343):
-
-Each car profile card is a `View` with:
-
-- Car name (bold, font-display) or "Unnamed Car"
-- Edit button (pill, navy text)
-- Distinguished fields:
-  - `profile_key` (font-mono)
-  - `unique_id` (font-mono)
-- Delete button (if `canDelete`, red border, red text)
-
-**Edit Car Form** (line ~4399):
-
-- Title: `"Edit Car Profile"`
-- Car name input (TextInput)
-- Settings JSON input (multiline TextInput)
-- Save button (emerald bg, disabled during edit)
-- Cancel button (border, navy text)
-
-**Save handler** (saveCarProfile, line ~4160):
-
-- Calls `upsertAdminCarProfile(currentUserId, profileKey, carName, settings)`
-- On success: closes edit mode, calls `onApply()`
-- On error: shows Alert with error message
-
-**Delete handler** (line ~4375):
-
-- Calls `deleteAdminCarProfile(currentUserId, profileKey)`
-- On success: calls `onApply()`
-- On error: shows Alert with error message
-
-### 1.7.2 Robot Profiles Section
-
-**Section Header** (line ~4490):
-
-- Title: `"Robot Profiles ({filteredUsers.length})"`
-
-**Robot Profile Card** (renderItem, line ~4503):
-
-Each robot profile card is a `View` with:
-
-- Robot label (bold, font-display): `"Robot {robot_code}"`
-- Edit button (pill, navy text)
-- Fields:
-  - `robot_code` (font-mono)
-  - `telemetry_channel` (font-mono)
-- Delete button (if `canDelete`, red border, red text)
-
-**Edit Robot Form** (line ~4518):
-
-- Title: `"Edit Robot Profile"`
-- Robot code input (TextInput)
-- Telemetry channel input (TextInput)
-- Parameters JSON input (multiline TextInput)
-- Save button (emerald bg, disabled during edit)
-- Cancel button (border, navy text)
-
-**Save handler** (saveRobotProfile, line ~4225):
-
-- Calls `upsertUserRobotSettings(currentUserId, robotCode, telemetryChannel, parameters)`
-- On success: closes edit mode, calls `onApply()`
-- On error: shows Alert with error message
-
-**Delete handler** (line ~4495):
-
-- Calls `deleteUserRobotSetting(currentUserId, robotCode)`
-- On success: calls `onApply()`
-- On error: shows Alert with error message
-
-### 1.7.3 Edit-Button Pattern (Users Tab)
-
-Each car/robot profile follows the edit-button pattern:
-
-1. **Read-only by default**: Card shows profile data with Edit button
-2. **Edit reveals form**: Tap Edit → edit state set, form appears below
-3. **Save persists**: Tap Save → async save, on success close edit mode
-4. **Cancel discards**: Tap Cancel → close edit mode without saving
-
-### 1.7.4 Data Model
-
-**AdminUser** type (extended, line ~80 in adminService.ts):
-
-```typescript
-type AdminUser = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string;
-  address: string;
-  role: string;
-  tier: "free" | "pro";
-  lastSeenAt: string | null;
-  createdAt: string | null;
-  car_profiles?: Array<{
-    profile_key: string;
-    car_name: string;
-    unique_id: string;
-    settings: Record<string, unknown>;
-  }>;
-  robot_user_settings?: Array<{
-    robot_code: string;
-    telemetry_channel: string;
-    parameters: Record<string, unknown>;
-    profile_key: string;
-  }>;
-};
-```
-
-**Car profile distinguished fields**:
-
-- `profile_key`: Stable identity (`fw:<boardId>` or BT MAC)
-- `car_name`: Human-readable name
-- `unique_id`: Unique identifier
-- `settings`: JSON settings object (firmware, last_seen, etc.)
-
-**Robot profile fields**:
-
-- `robot_code`: Robot identifier
-- `telemetry_channel`: Telemetry channel name
-- `parameters`: JSON parameters object
-- `profile_key`: Profile key reference
-
----
-
-## 2. Supporting Files
-
-### 2.1 `src/config/adminTabs.ts`
-
-- Contains admin tab parity test configuration
-- Ensures app admin tabs match website's admin-parity tests
-
-### 2.2 `src/config/company.ts`
-
-- Contains `AdminCompanyInfo` type definition (see section 1.5)
-- Also contains socials/config data used across admin UI
-
-### 2.3 `src/services/adminService.ts`
-
-- **AdminCompanyInfo type** (line 1445): All 17 company fields (see list above)
-- **CRUD functions**: `getCompanyInfo`, `saveCompanyInfo`, various admin API calls
-- Uses Supabase to query `company_info` table (id=1)
-
-### 2.4 `src/services/appLogService.ts`
-
-- Handles `appendLog` calls for admin logs
-- Writes `link/wifi` scope entries with close diagnostics (see LINK_RESILIENCE.md)
-- `useControlHub.ts` calls: `appendLog({scope: "link/wifi", level: "warn", message: "Wi-Fi link dropped", detail: wifiService.lastClose})`
-
-### 2.5 `src/config/admin-parity.test.ts`
-
-- Test file ensuring app admin tabs match website's expected ADMIN_TABS
-- Used for admin-parity testing between app and website
-
-### 2.6 `src/navigation/RootNavigator.tsx`
-
-- Root navigator that manages tab switching
-- Respects `editorOnCurrentTab` state to prevent tab changes while editors are open
-
----
-
-## 3. Edit-Button Pattern (App-Wide Reusable)
-
-Used in multiple places across the admin UI:
-
-### 3.1 ProfileEntriesTab (primary usage)
-
-- Read-only by default
-- "Edit" reveals form
-- "Save" persists, "Cancel" discards
-
-### 3.2 SettingsTab / CompanyInfoEditor
-
-- Read-only by default (company info text displays, inputs hidden)
-- "Edit" (implicit — focus on any field triggers editing state)
-- "Save company" button at bottom-right
-- "Saved." transient text after successful save
-
-### 3.3 Pattern Consistency
-
-Both sub-patterns share the same philosophy:
-
-1. Content displays **read-only** by default
-2. User triggers edit mode (explicit "Edit" button or implicit field focus)
-3. User taps **"Save"** → changes persisted, content locks
-4. User taps **"Cancel"** → form closes, content returns to read-only
-
-### 3.4 Stave Guards
-
-- `saveSaving` — disables Save during async write
-- `contentSaving` — disables Content tab Save
-- `anyEditing` / `editorOnCurrentTab` — prevents tab swiping while editing
-
----
-
-## 4. Diagnostic Wire (link/wifi)
-
-- **Location**: `useControlHub.ts` → `appendLog({scope: "link/wifi", level: "warn", message: "Wi-Fi link dropped", detail: wifiService.lastClose})`
-- **What it writes** per socket teardown (once, guarded by `loggedWifiClose` ref):
-  ```json
-  {
-    "code": 1006,
-    "reason": "abnormal",
-    "wasClean": false,
-    "uptimeMs": 4210,
-    "frames": 2
-  }
-  ```
-- **Read in admin**: App logs section (`Logs` tab), under `link/wifi` scope
-- **Interpretation** (from LINK_RESILIENCE.md):
-  - `uptimeMs < 2s, frames 0` — handshake failed (wrong IP, car not on network)
-  - `uptimeMs seconds–minutes, frames > 0, code 1006` — link was real, then died (power, range, reboot)
-  - `code 1000 / wasClean: true` — car closed purposefully (mode/transport switch)
-
-### 4.1 LINK_RESILIENCE.md (`docs/LINK_RESILIENCE.md`)
-
-- Documents churn fix (CONNECTING dedupe in `wifiService.connect()`)
-- Explains how to read drops from admin logs
-- Three close-interpretation scenarios
-
-### 4.2 Double-Log Guard
-
-- `loggedWifiClose` ref in `useControlHub.ts` prevents double-logging when both hubs see same close
-- `appendLog` only writes once per socket teardown
-
----
-
-## 5. Test Coverage
-
-- **955 vitest tests** pass across 65 test files
-- **admin-parity.test.ts** ensures app admin tabs match website expectations
-- **wifiService.test.ts** — 16/16 tests pass including CONNECTING dedupe, close metadata, re-dial edge cases
-- **All typecheck**: `tsc --noEmit` passes with 0 errors
-
----
-
-## 6. Summary — App Admin UI Architecture
-
-The app's admin dashboard is a unified screen (`AdminScreen.tsx`) with 10 top tabs, but the **core admin workflow** uses only 2 main sections:
-
-- `"Logs"` → System logs + app diagnostics (`link/wifi` close details)
-- `"Profile"` → User/profile entries with edit-button pattern
-
-The `"Settings"` tab integrates with `SettingsTab` → `CompanyInfoEditor` for company info editing.
-
-**All content is read-only by default.** Users tap "Edit" (or focus fields) to make changes, then "Save" to persist and lock, or "Cancel" to discard.
-
-**No duplicate content**: The 3-old-sections (`activity`, `profiles`, `diagnostics`) were merged into 2 tabs (U-R5, 2026-11-09). Each panel (SystemLogsTab, ProfileEntriesTab, CompanyInfoEditor) lives in one place and is referenced from the tabs.
-
----
-
-_Documentation generated: 2026-11-09_
-_Total lines documented: ~2,500+ across all admin UI elements_
-_Both repos: TypeScript 0 errors, 955/955 + 301/301 tests green_
+# App admin console — complete reference
+
+**Last verified:** 2026-11-15 against `genumsolutions-app` `main` @ `d90dc16`.
+**Scope:** the admin surface of the Expo/React Native app only. The website's
+admin console is a separate implementation in `genumsolutions-website`.
+
+> **Reading rule:** this file describes behavior, not line numbers. Earlier
+> revisions of this document cited exact line ranges, and every one of them
+> rotted after the next refactor. When this file and the source disagree, the
+> source is authoritative — then fix this file.
+
+## 1. Entry point and access control
+
+| Item                 | Value                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Screen               | `src/screens/AdminScreen.tsx`                                                                                                          |
+| Exported component   | `AdminScreen` (gate) → `AdminConsole` (the console itself)                                                                             |
+| Staff gate           | `useApp().isStaff`. Non-staff, including a customer with a deep link or a stale screen after a role change, sees a "Staff only" panel. |
+| Delete rights        | `canDelete = isAdmin` (admin **or** owner)                                                                                             |
+| User-deletion rights | `isOwner` only, and never against another `owner` row                                                                                  |
+| Enforcement          | Supabase RLS and the deployed Edge Functions. Every UI gate here is a convenience, not the security boundary.                          |
+
+### Biometric lock (C7)
+
+- Opt-in preference, set from **Menu → Security**, stored on the device.
+- While locked the console is covered by an inert overlay and the OS biometric
+  prompt is raised automatically; tapping the overlay retries the prompt.
+- The lock re-arms when the app returns to the foreground, but only when the
+  preference is on **and** the device can actually prompt.
+- If biometrics became unavailable after the preference was enabled (OTA onto an
+  older APK, sensor removed), the console auto-unlocks and clears the stale
+  preference instead of staying blurred forever.
+- This is a shoulder-surfing convenience lock, separate from staff sign-in.
+
+## 2. Console chrome
+
+Everything in this section is rendered once, above the tab content, and applies
+to every tab:
+
+- **Console bar** — role chip (`Owner` / `Admin` / `Staff`), the signed-in
+  email, `Updated HH:MM` once the current tab has loaded, and a single refresh
+  control for the current tab (spinner lives inside the button, so nothing
+  shifts when a load starts).
+- **Main tab strip** — one horizontally scrolling row of tabs
+  (`accessibilityRole="tab"`, `minWidth: TAB_MIN_WIDTH = 96`, `minHeight: 44`).
+  The active tab is scrolled into view using **measured** offsets, so long
+  labels (`Electronic Products`) do not throw the centering off.
+- **Tab hint line** — one sentence per tab from `ADMIN_TAB_HINTS`, identical to
+  the website's `TAB_HINTS`.
+- **Load-error banner** — if any read for the current tab fails, the tab says so
+  (`"Some <tab> data could not be loaded. Use refresh to retry."`) and lists
+  each failing load with its message. Failures are never rendered as an empty
+  successful list.
+- **Lazy mounting** — a tab's content mounts on first visit (`visited` map) and
+  then stays mounted with `display: "none"` while inactive, so per-tab state and
+  scroll position survive switching without firing all eight loads at once.
+- **Editor guards** — while an inline editor is open on the current tab, the
+  pager cannot be swiped and Android back closes the editor instead of leaving
+  the console. Covered: product editor (both catalog tabs), project editor,
+  service editor, journal editor, Settings fields (back dismisses the keyboard).
+
+## 3. Tab inventory
+
+Eight top-level tabs. The list is canonical in **two** places that are
+deliberately kept identical, and both repositories' parity tests enforce it:
+
+- App: `src/config/adminTabs.ts` → `ADMIN_TABS`, `ADMIN_TAB_HINTS`
+- Website: `components/admin/admin-types.ts` → `TABS`, `TAB_HINTS`
+- Guard: `src/config/admin-parity.test.ts` (app) and the website's
+  `tests/admin-parity.test.ts`. Change both lists, both hint maps, and both
+  tests in the same change.
+
+| #   | Tab                   | Sections                           | Purpose                                                               |
+| --- | --------------------- | ---------------------------------- | --------------------------------------------------------------------- |
+| 1   | `Dashboard`           | `Overview` · `Activity`            | Orders, stock, accounts and traffic at a glance                       |
+| 2   | `Orders`              | `Orders` · `Finance`               | Every order, its payment state and the finance lines                  |
+| 3   | `Electronic Products` | —                                  | The `/products` catalog — pricing, stock and photos                   |
+| 4   | `3D Products`         | `Catalog` + 8 print sections       | The `/3d-printing` catalog and print studio                           |
+| 5   | `Projects`            | —                                  | Bundles sold on `/projects`, including pre-packaged kits              |
+| 6   | `Content`             | `Services` · `Journal` · `Content` | Services, journal posts and the home page copy                        |
+| 7   | `Users`               | `Users` · `Messages` · `Logs`      | Accounts, roles, messages, project profiles, activity and diagnostics |
+| 8   | `Settings`            | —                                  | Company details, socials and contact channels                         |
+
+Section constants live in `src/config/app_admin_subtabs.ts`
+(`DASHBOARD_SUBTABS`, `ORDER_PANELS`, `ORDERS_SUBTABS`, `CONTENT_SUBTABS`,
+`USERS_SUBTABS`) and in `src/screens/AdminScreen.tsx` (`LOG_SECTIONS`).
+
+**History that shaped this list:** `Logs` and `Profile` are **not** top-level
+tabs. `System Logs`, `User Logs` and `Profile Entries` were three separate tabs
+until U-R5 (2026-11-09) merged them into one `Logs` section under `Users`,
+because all three answered "what happened?". Any document still describing 9 or
+10 top-level tabs, or a top-level `Logs`/`Profile` tab, is stale.
+
+## 4. Tab reference
+
+### 4.1 Dashboard
+
+- `Overview` (`DASHBOARD_SUBTABS`): six stat cards — Orders (pending), Users (new
+  today), Cart items (active carts), Products (low stock), Messages (unread),
+  Page views 30d (today) — then a "Money" card that routes to **Orders** (money
+  lives only in Orders → Finance), then top pages (30 days, up to 10) and a
+  daily-traffic bar strip.
+- `Activity`: paginated activity feed (`listAdminActivity`).
+- Data: `fetchDashboardStats`, `fetchAdminAnalytics(30)`. The feed loads with
+  the tab, not only after visiting another tab first.
+
+### 4.2 Orders
+
+- `Orders` panel: search by buyer name/email (server-side), paginated list, and
+  a status filter strip — `All` · `Pending` · `Paid` · `Fulfilled` ·
+  `Cancelled` (`ORDERS_SUBTABS`). Selecting a status re-queries from page 1.
+  Each order's status can be changed inline (`updateOrderStatus`).
+- `Finance` panel: revenue and order-status figures read from the same
+  dashboard stats object as the Dashboard (`FinanceTab`); it does not duplicate
+  the order list.
+
+### 4.3 Electronic Products
+
+- `ProductsTab kind="electronic"`, scoped with `applyComponentsScope` so the
+  category rows the storefront groups do not leak across tabs.
+- Search, category chips, client-side pagination (8 per page), active/inactive
+  toggle, delete (`canDelete` only), and an editor (`ProductEditor`) covering
+  identity, pricing/markup, stock, media and SEO-ish fields.
+- **Import by link**: `previewLinkImport` → editable import → `createLinkImport`
+  keeps photos and copy from a product URL. A stale pending import is cleared
+  when the admin switches to a normal row edit, so saving cannot re-import an
+  old URL.
+- **Preview** renders the real storefront `ProductCard` in a mobile two-column
+  layout (`ProductPreviewModal`), not an approximation.
+
+### 4.4 3D Products
+
+A workspace driven by `PrintAdminPanel`:
+`Catalog` + `Categories` · `Pricing` · `Costs` · `Promotions` · `Services` ·
+`Gallery` · `Requests` · `Reports` (`PRINT_ADMIN_SECTIONS`).
+
+- `Catalog` filters the shared product list to `category === "3d models"` and
+  otherwise behaves like Electronic Products (search, paging, editor, import,
+  preview, delete).
+- `Pricing` holds materials, the price calculator and the approval stamp;
+  approval is **admin-and-above only** (`canApprove={isAdmin}`).
+- `Costs` is the internal cost/margin sheet (`lib/print-costing.ts`).
+- `Requests` manages print quote requests and their statuses
+  (`PRINT_QUOTE_STATUSES`).
+- `Reports` derives revenue, average order value, grams, margin and conversion
+  from quote records (`derivePrintReports`) rather than a second data source.
+- Categories, materials, promotions, gallery items and quote requests all expose
+  direct delete actions for authorized admins; quote deletion is additionally
+  covered by the existing admin-only RLS policy.
+- Every read/write goes through `services/printAdminService.ts`. Approval is
+  gated in the UI even though the `print_*` RLS policies are looser, because a
+  staff member approving their own quote is the failure the gate exists to stop.
+
+### 4.5 Projects
+
+- `ProjectTab` over `products.filter(isProjectPackage)`, with the full catalog
+  passed separately so the component linker can suggest and resolve names.
+- `ComponentLinkerCard`: attach catalog products to a project, with usage
+  warnings. **Failed component-link or pricing reads surface with a retry
+  action** and the links are cleared when switching records, so a stale project
+  cannot save another project's components.
+- `ProjectPricingCard`: markup, minimum price and an approval stamp that records
+  who approved it.
+- Delete and active toggle follow the same `canDelete` rule as the catalogs.
+
+### 4.6 Content
+
+- `Services` — service rows with editor, active toggle, delete.
+- `Journal` — posts with tag, title, body, sort order, active/published toggle,
+  delete, and an inline editor guarded against tab swipes.
+- `Content` — home-page copy (`upsertSiteContent`) plus the three content
+  managers that used to be reachable only through Settings:
+  `TrainingProgramsManager`, `PilotCostManager`, `CurriculumManager`. All three
+  load when the tab opens, save through their own admin service calls, and
+  delete is `canDelete`-gated.
+
+### 4.7 Users
+
+- `Users` — the directory. **Search is server-side** (`listAdminUsers` with the
+  query) and page 1 is re-fetched on apply; the search box appears once, as the
+  list header. Each card shows name, email, phone, address, joined/last-seen,
+  role and tier badges, and these actions:
+  - `Change role` (`canDelete`, never against an `owner`): customer / staff /
+    admin via the `admin-set-role` Edge Function.
+  - `Make pro` / `Make free`: the same Edge Function.
+  - `Delete account` (`isOwner`, never against an `owner`): `deleteAdminUser`.
+  - `Show projects` / `Hide projects` expands `UserProjectProfileManager`
+    (car/project profiles keyed by `profile_key`, settings edited as JSON) and
+    `UserRobotSettingsManager` (robot settings, one `key=value` per line). Both
+    show a per-user load error with a retry control instead of an empty list.
+- `Messages` — contact messages with `All` · `New` · `Replied` filters (server
+  side), pagination, a detail preview, and `markMessageReplied`.
+- `Logs` — three inner sections (`LOG_SECTIONS`):
+  - `System`: car crash/restart reports plus app log lines, including the
+    `link/wifi` teardown diagnostics, each with delete (`canDelete`).
+  - `User activity`: the per-user audit trail (`listUserActivityLogs`), deletable.
+  - `Profiles`: per-user profile entries (`listUserProfileEntries`) with type
+    chips, pagination and **delete**. There is no edit affordance — the old
+    Edit button was removed because the write it implied never existed.
+
+### 4.8 Settings
+
+- Single panel: `SettingsTab` → `CompanyInfoEditor`, subtitle "Company details —
+  all DB-first (shared with the website)."
+- 17 fields: Name, Short name, Address, City, Country, Email, Phone, PAN, VAT
+  label, Description, WhatsApp number, Facebook URL, Instagram URL, TikTok URL,
+  LinkedIn URL, Website URL, YouTube URL.
+- `Save company` calls `saveCompanyInfo` and shows a transient `Saved.`
+- While any field is focused (`focusCount`/`onEditingChange`) the admin pager
+  cannot swipe; empty social fields simply hide that surface elsewhere in the
+  app, and WhatsApp is stored digits-only.
+- Customer messages are **not** here — they live in Users → Messages.
+
+## 5. Shared building blocks
+
+| Component             | Role                                                                            |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `AdminSubTabs`        | Horizontal pill section strip (`role="tablist"`, single row, scrolls)           |
+| `AdminSectionPanels`  | Renders section panels, hiding inactive ones from a11y and keeping them mounted |
+| `AdminPager`          | Prev/next + page indicator for paginated lists                                  |
+| `AdminAction`         | Standard row action button                                                      |
+| `SectionCard`         | Titled card with hint used across editors                                       |
+| `ProductPreviewModal` | Storefront `ProductCard` preview (two-column mobile grid)                       |
+| `CatalogPreviewModal` | Portrait storefront presentation for admin-managed content cards                |
+| `ImagePreviewModal`   | Full-size image preview for media fields                                        |
+
+## 6. Data layer
+
+- `src/services/adminService.ts` — everything non-print. Row mappers
+  (`mapProductRow`, `mapOrderRow`, `mapUserRow`, `mapProfileEntryRow`, …) and the
+  queries/actions used by the console: `listAdminOrders`, `updateOrderStatus`,
+  `listAdminProducts`, `upsertAdminProduct`, `deleteAdminProduct`,
+  `previewLinkImport`, `createLinkImport`, `listAdminServices`,
+  `listProjectComponents`, `listProjectUsage`, `saveProjectComponents`,
+  `getAdminProjectPricing`, `saveAdminProjectPricing`,
+  `setAdminProjectPricingApproval`, `listAdminUsers`, `toggleAdminRole`,
+  `setUserTier`, `deleteAdminUser`, `listUserRobotSettings`,
+  `upsertUserRobotSettings`, `deleteUserRobotSetting`, `listUserCarProfiles`,
+  `upsertAdminCarProfile`, `deleteAdminCarProfile`, `listAdminMessages`,
+  `markMessageReplied`, `fetchDashboardStats`, `fetchAdminAnalytics`,
+  `listAdminActivity`, `listDeviceCrashReports`, `listAppLogs`,
+  `listUserActivityLogs`, `listUserProfileEntries`, `listProfileEntryTypes`,
+  delete helpers for each log type, `listAdminJournalPosts`,
+  `getCompanyInfo`, `saveCompanyInfo`, and the training-program, pilot-cost and
+  curriculum CRUD.
+- `src/services/printAdminService.ts` — the print studio: `loadPrintAdminData`,
+  `savePrintSettings`, `setPrintApproval`, `savePrintCategory`,
+  `savePrintMaterial`, `savePrintPromotion`, `savePrintGalleryItem`,
+  `savePrintService`, `savePrintCosting`, `uploadPrintImage`,
+  `deletePrintRecord`, `updatePrintQuote`, `derivePrintReports`.
+- `src/services/appLogService.ts` + `src/components/tools/useControlHub.ts` —
+  produce the `link/wifi` diagnostics rows rendered under Users → Logs →
+  System. Each socket teardown is logged once (guarded ref), so both control
+  hubs cannot double-write the same close.
+- **Shared contract:** the website owns the canonical Supabase schema and the
+  deployed Edge Functions; the app carries reference copies plus parity checks.
+  Any change to a shared table, RLS policy, stored field or function contract
+  must be evaluated on both sides.
+
+## 7. Authorization matrix
+
+| Action                                                                              | Staff | Admin | Owner                    |
+| ----------------------------------------------------------------------------------- | ----- | ----- | ------------------------ |
+| View console, all tabs                                                              | ✅    | ✅    | ✅                       |
+| Create / edit catalog, services, journal, content, print studio                     | ✅    | ✅    | ✅                       |
+| Approve print pricing                                                               | —     | ✅    | ✅                       |
+| Delete products, services, journal posts, print records, log rows, project profiles | —     | ✅    | ✅                       |
+| Change a user's role or tier                                                        | —     | ✅    | ✅                       |
+| Delete a user account                                                               | —     | —     | ✅ (never another owner) |
+
+Row-level enforcement still happens in Supabase; the app never assumes its own
+gates are sufficient.
+
+## 8. Validation
+
+Verified on 2026-11-15 against `main` @ `d90dc16`, from `genumsolutions-app/mobile`:
+
+- `node node_modules/vitest/vitest.mjs run` → **79 files / 1,067 tests passing**.
+- `node node_modules/typescript/bin/tsc --noEmit` → clean.
+- `src/config/admin-parity.test.ts` guards the 8-tab inventory, the hint map and
+  the dashboard sections, and reads the sibling website's
+  `components/admin/admin-types.ts` when that repo is checked out next to the
+  app.
+- CI additionally runs the admin layout smoke check (390 × 844 web render) and
+  the app/website Playwright parity job.
+- None of this replaces an authenticated walkthrough on a real device against a
+  live Supabase environment, which remains a manual step.
+
+## 9. Known differences from the website mirror
+
+The two consoles intentionally share the tab inventory, section structure and
+design language but are separate implementations. Verified differences at the
+time of this writing:
+
+| Area                                          | App                                                    | Website                                                                    |
+| --------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Settings                                      | One flat list of 17 fields                             | Three sections: Company details / Contact / Social & messaging             |
+| Users → Logs                                  | `System` · `User activity` · `Profiles` (system first) | `User activity` · `User profiles` · `Fleet diagnostics` (diagnostics last) |
+| Dashboard                                     | `Overview` / `Activity` pills                          | `AdminDashboard` + `AdminActivity` stacked                                 |
+| Orders status filter                          | Pill strip (`ORDERS_SUBTABS`)                          | Select control                                                             |
+| Users → Messages                              | Contact messages only                                  | Contact messages **plus** newsletter opt-ins                               |
+| Orders/Content/Users/3D Products section sets | same lists                                             | same lists                                                                 |
+
+The newsletter-opt-in list is the one **functional** asymmetry: the app captures
+opt-ins from Account → Newsletter but the app console cannot read them back.
+
+## 10. Documentation status
+
+- This file now matches the 8-tab console.
+- `docs/ADMIN_REDESIGN_PLAN.md` describes the 8-tab layout correctly, but still
+  lists "customer messages" and "newsletter subscribers" under Settings — both
+  are wrong now (messages moved to Users; no subscriber screen exists in the app).
+- `docs/ADMIN_UI_BLUEPRINT.md` is **stale**: it claims nine tabs with a
+  top-level `Logs` tab, two inner `LOG_SECTIONS`, an editable
+  `ProfileEntriesTab`, and Settings holding training programs and pilot costs.
+  None of that is true of the current code.
+- `docs/APP_WEBSITE_UI_COMPARISON.md` must stay byte-identical in both
+  repositories when the admin comparison changes.
