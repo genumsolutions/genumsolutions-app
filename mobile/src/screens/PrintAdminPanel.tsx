@@ -1672,17 +1672,25 @@ export default function PrintAdminPanel({
         Derived from quote requests — estimates only, never profit. Add a
         quote's amount and slicer grams to include it.
       </Text>
-      {stats.map((stat) => (
-        <Card key={stat.label}>
-          <Text className="text-[10px] font-black uppercase text-muted">
-            {stat.label}
-          </Text>
-          <Text className="font-display text-xl font-bold text-ink">
-            {stat.value}
-          </Text>
-          <Text className="text-xs text-muted">{stat.note}</Text>
-        </Card>
-      ))}
+      {/* Two KPI tiles per row. These used to be one full-width card each,
+          which stacked six tall cards and wasted half of every row; the
+          tiles now share the row like the dashboard stat cards do. */}
+      <View className="flex-row flex-wrap gap-2">
+        {stats.map((stat) => (
+          <View
+            key={stat.label}
+            className="min-w-[45%] flex-1 rounded-xl border border-line bg-card p-4"
+          >
+            <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+              {stat.label}
+            </Text>
+            <Text className="mt-1 font-display text-xl font-bold text-ink">
+              {stat.value}
+            </Text>
+            <Text className="mt-0.5 text-xs text-muted">{stat.note}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }

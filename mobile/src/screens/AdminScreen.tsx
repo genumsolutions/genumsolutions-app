@@ -782,8 +782,19 @@ function AdminConsole() {
   }
 
   async function handleUpdateOrderStatus(orderId: string, status: string) {
-    await updateOrderStatus(orderId, status);
-    void loadOrders(ordersPage);
+    // A rejected write used to disappear as an unhandled rejection, leaving the
+    // row looking unchanged with no explanation. Surface it like every other
+    // admin write does.
+    try {
+      await updateOrderStatus(orderId, status);
+      void loadOrders(ordersPage);
+    } catch (e) {
+      logger.error("admin", "Order status update error:", e);
+      Alert.alert(
+        "Could not update the order",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    }
   }
 
   /** Validate + persist a product, then refresh the current tab's rows. */
@@ -1393,8 +1404,16 @@ function AdminConsole() {
   }
 
   async function handleMarkReplied(id: string) {
-    await markMessageReplied(id);
-    void loadMessages(messagesPage);
+    try {
+      await markMessageReplied(id);
+      void loadMessages(messagesPage);
+    } catch (e) {
+      logger.error("admin", "Message update error:", e);
+      Alert.alert(
+        "Could not update the message",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    }
   }
 
   const goToTab = useCallback((key: Tab) => {
@@ -5770,9 +5789,9 @@ function FinanceTab({ stats }: { stats: DashboardStats | null }) {
             ).map((s) => (
               <View
                 key={s.label}
-                className="min-w-[45%] rounded-lg border border-line p-3"
+                className="min-w-[45%] flex-1 rounded-lg border border-line p-3"
               >
-                <Text className="text-xs font-black uppercase tracking-widest text-muted">
+                <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                   {s.label}
                 </Text>
                 <Text
