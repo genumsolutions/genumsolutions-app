@@ -76,7 +76,7 @@ const PRINT_ADMIN_TABS = ["Catalog", ...PRINT_ADMIN_SECTIONS] as const;
 
 const inputClass =
   "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
-const labelClass = "mb-1 text-xs font-bold text-muted";
+const labelClass = "mb-1 text-sm font-bold text-ink";
 
 const emptyCategory: PrintCategory = {
   id: "",
@@ -185,9 +185,7 @@ function Toggle({
 }) {
   return (
     <View className="mb-2 flex-row items-center justify-between gap-3">
-      <Text className="min-w-0 flex-1 text-xs font-bold text-muted">
-        {label}
-      </Text>
+      <Text className="min-w-0 flex-1 text-sm font-bold text-ink">{label}</Text>
       <Switch value={value} onValueChange={onChange} />
     </View>
   );
@@ -227,11 +225,28 @@ function Button({
     >
       <Text
         numberOfLines={1}
-        className={`text-xs font-black ${tone === "primary" ? "text-white" : tone === "danger" ? "text-red-600" : "text-ink"}`}
+        className={`text-sm font-black ${tone === "primary" ? "text-white" : tone === "danger" ? "text-red-600" : "text-ink"}`}
       >
         {busy ? "Saving…" : label}
       </Text>
     </Pressable>
+  );
+}
+
+function EditorHeading({
+  title,
+  onCancel,
+}: {
+  title: string;
+  onCancel: () => void;
+}) {
+  return (
+    <View className="mb-3 flex-row items-center justify-between gap-3">
+      <Text className="min-w-0 flex-1 font-display text-lg font-bold text-ink">
+        {title}
+      </Text>
+      <Button label="Cancel" onPress={onCancel} tone="ghost" />
+    </View>
   );
 }
 
@@ -274,8 +289,8 @@ export function PrintSectionTabs({
               >
                 <Text
                   numberOfLines={1}
-                  className={`text-[10px] font-black uppercase tracking-widest ${
-                    active ? "text-white" : "text-slate-500"
+                  className={`text-[11px] font-black uppercase tracking-[0.08em] ${
+                    active ? "text-white" : "text-muted"
                   }`}
                 >
                   {section}
@@ -329,8 +344,10 @@ export default function PrintAdminPanel({
       setMaterials(next.materials);
       setCosting(next.costing);
       setNotice("");
+      return true;
     } catch (error) {
       setNotice(String((error as Error)?.message || error));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -340,12 +357,17 @@ export default function PrintAdminPanel({
     void reload();
   }, [reload]);
 
-  async function run(action: () => Promise<void>, done: string) {
+  async function run(
+    action: () => Promise<void>,
+    done: string,
+    onSuccess?: () => void,
+  ) {
     setBusy(true);
     try {
       await action();
-      setNotice(done);
-      await reload();
+      const refreshed = await reload();
+      onSuccess?.();
+      if (refreshed) setNotice(done);
     } catch (error) {
       setNotice(String((error as Error)?.message || error));
     } finally {
@@ -453,100 +475,122 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
-        <View className="mb-3 flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-xs text-muted">
-            The buckets shown on /3d-printing and the app's 3D screen.
-          </Text>
-          <Button
-            label="New"
-            onPress={() => setCategory({ ...emptyCategory })}
-            tone="ghost"
-          />
-        </View>
-        <Card>
-          <Text className="mb-2 font-display text-base font-bold text-ink">
-            {category && category.id ? "Edit category" : "New category"}
-          </Text>
-          <Field
-            label="Slug / id"
-            value={editor.id}
-            onChange={(id) => patch({ id })}
-            placeholder="gifts"
-          />
-          <Field
-            label="Name"
-            value={editor.name}
-            onChange={(name) => patch({ name })}
-          />
-          <Field
-            label="Description"
-            value={editor.description}
-            onChange={(description) => patch({ description })}
-            multiline
-          />
-          <Field
-            label="Image URL"
-            value={editor.imageUrl}
-            onChange={(imageUrl) => patch({ imageUrl })}
-          />
-          <Field
-            label="Sort order"
-            value={String(editor.sortOrder)}
-            onChange={(raw) =>
-              patch({ sortOrder: Math.round(Number(raw) || 0) })
-            }
-            numeric
-          />
-          <Toggle
-            label="Active"
-            value={editor.active}
-            onChange={(active) => patch({ active })}
-          />
-          <View className="mt-2 flex-row gap-2">
-            <Button
-              label="Save category"
-              busy={busy}
-              disabled={!editor.id.trim() || !editor.name.trim()}
-              onPress={() =>
-                void run(() => savePrintCategory(editor), "Category saved.")
-              }
+        {category ? (
+          <>
+            <EditorHeading
+              title={category.id ? "Edit category" : "New category"}
+              onCancel={() => setCategory(null)}
             />
-            {category && category.id && canDelete ? (
-              <Button
-                label="Delete"
-                tone="danger"
-                onPress={() => confirmDelete("category", editor.id)}
+            <Card>
+              <Field
+                label="Slug / id"
+                value={editor.id}
+                onChange={(id) => patch({ id })}
+                placeholder="gifts"
               />
-            ) : null}
-          </View>
-        </Card>
-        {data.categories.map((item) => (
-          <Card key={item.id}>
-            <View className="flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-ink">{item.name}</Text>
-                <Text className="text-xs text-muted">
-                  {item.id} · sort {item.sortOrder}{" "}
-                  {item.active ? "" : "· hidden"}
-                </Text>
-              </View>
-              <View className="shrink-0 flex-row gap-1">
+              <Field
+                label="Name"
+                value={editor.name}
+                onChange={(name) => patch({ name })}
+              />
+              <Field
+                label="Description"
+                value={editor.description}
+                onChange={(description) => patch({ description })}
+                multiline
+              />
+              <Field
+                label="Image URL"
+                value={editor.imageUrl}
+                onChange={(imageUrl) => patch({ imageUrl })}
+              />
+              <Field
+                label="Sort order"
+                value={String(editor.sortOrder)}
+                onChange={(raw) =>
+                  patch({ sortOrder: Math.round(Number(raw) || 0) })
+                }
+                numeric
+              />
+              <Toggle
+                label="Active"
+                value={editor.active}
+                onChange={(active) => patch({ active })}
+              />
+              <View className="mt-2 flex-row gap-2">
                 <Button
-                  label="Edit"
-                  tone="ghost"
-                  onPress={() => setCategory(item)}
+                  label="Save category"
+                  busy={busy}
+                  disabled={!editor.id.trim() || !editor.name.trim()}
+                  onPress={() =>
+                    void run(
+                      () => savePrintCategory(editor),
+                      "Category saved.",
+                      () => setCategory(null),
+                    )
+                  }
                 />
-                {canDelete ? (
+                {category.id && canDelete ? (
                   <Button
                     label="Delete"
                     tone="danger"
-                    onPress={() => confirmDelete("category", item.id)}
+                    onPress={() => confirmDelete("category", editor.id)}
                   />
                 ) : null}
               </View>
+            </Card>
+          </>
+        ) : (
+          <>
+            <View className="mb-3 flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 text-sm text-muted">
+                The buckets shown on /3d-printing and the app's 3D screen.
+              </Text>
+              <Button
+                label="New"
+                onPress={() => setCategory({ ...emptyCategory })}
+                tone="ghost"
+              />
             </View>
-          </Card>
-        ))}
+            {data.categories.length === 0 ? (
+              <Card>
+                <Text className="text-sm text-muted">
+                  No categories yet. Select New to add the first one.
+                </Text>
+              </Card>
+            ) : (
+              data.categories.map((item) => (
+                <Card key={item.id}>
+                  <View className="flex-row items-center justify-between gap-2">
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-display text-base font-bold text-ink">
+                        {item.name}
+                      </Text>
+                      <Text className="text-xs text-muted">
+                        {item.id} · sort {item.sortOrder}{" "}
+                        {item.active ? "" : "· hidden"}
+                      </Text>
+                    </View>
+                    <View className="shrink-0 flex-row gap-1">
+                      <Button
+                        label="Edit"
+                        tone="ghost"
+                        onPress={() => setCategory(item)}
+                      />
+                      {canDelete ? (
+                        <Button
+                          label="Delete"
+                          tone="danger"
+                          onPress={() => confirmDelete("category", item.id)}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+                </Card>
+              ))
+            )}
+          </>
+        )}
       </View>
     );
   }
@@ -1006,131 +1050,153 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
-        <View className="mb-3 flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-xs text-muted">
-            Only one active, in-date promotion is shown to customers.
-          </Text>
-          <Button
-            label="New"
-            tone="ghost"
-            onPress={() => setPromotion({ ...emptyPromotion })}
-          />
-        </View>
-        <Card>
-          <Text className="mb-2 font-display text-base font-bold text-ink">
-            {editor.id ? "Edit promotion" : "New promotion"}
-          </Text>
-          <Field
-            label="Title"
-            value={editor.title}
-            onChange={(title) => patch({ title })}
-          />
-          <Field
-            label="Body"
-            value={editor.body}
-            onChange={(body) => patch({ body })}
-            multiline
-          />
-          <Field
-            label="Image URL"
-            value={editor.imageUrl}
-            onChange={(imageUrl) => patch({ imageUrl })}
-          />
-          <View className="flex-row gap-2">
-            <Field
-              label="CTA label"
-              value={editor.ctaLabel}
-              onChange={(ctaLabel) => patch({ ctaLabel })}
+        {promotion ? (
+          <>
+            <EditorHeading
+              title={promotion.id ? "Edit promotion" : "New promotion"}
+              onCancel={() => setPromotion(null)}
             />
-            <Field
-              label="CTA href"
-              value={editor.ctaHref}
-              onChange={(ctaHref) => patch({ ctaHref })}
-            />
-          </View>
-          <View className="mb-2 flex-row gap-2">
-            {(["none", "percent", "flat"] as const).map((type) => (
-              <Pressable
-                key={type}
-                onPress={() => patch({ discountType: type })}
-                className={`rounded-full px-3 py-1.5 ${
-                  editor.discountType === type
-                    ? "bg-navy"
-                    : "border border-line bg-surface"
-                }`}
-              >
-                <Text
-                  className={`text-[11px] font-black ${
-                    editor.discountType === type ? "text-white" : "text-ink"
-                  }`}
-                >
-                  {type}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Field
-            label="Discount value"
-            value={String(editor.discountValue)}
-            numeric
-            onChange={(raw) =>
-              patch({
-                discountValue: Math.max(0, Math.round(Number(raw) || 0)),
-              })
-            }
-          />
-          <Toggle
-            label="Active"
-            value={editor.active}
-            onChange={(active) => patch({ active })}
-          />
-          <View className="mt-2 flex-row gap-2">
-            <Button
-              label="Save promotion"
-              busy={busy}
-              disabled={!editor.title.trim()}
-              onPress={() =>
-                void run(() => savePrintPromotion(editor), "Promotion saved.")
-              }
-            />
-            {editor.id && canDelete ? (
-              <Button
-                label="Delete"
-                tone="danger"
-                onPress={() => confirmDelete("promotion", editor.id)}
+            <Card>
+              <Field
+                label="Title"
+                value={editor.title}
+                onChange={(title) => patch({ title })}
               />
-            ) : null}
-          </View>
-        </Card>
-        {data.promotions.map((item) => (
-          <Card key={item.id}>
-            <View className="flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-ink">{item.title}</Text>
-                <Text className="text-xs text-muted">
-                  {item.discountType === "none"
-                    ? "no discount"
-                    : `${item.discountValue} ${item.discountType}`}
-                  {item.active ? " · active" : " · hidden"}
-                </Text>
-              </View>
-              <View className="shrink-0 flex-row gap-1">
-                <Button
-                  label="Edit"
-                  tone="ghost"
-                  onPress={() => setPromotion(item)}
+              <Field
+                label="Body"
+                value={editor.body}
+                onChange={(body) => patch({ body })}
+                multiline
+              />
+              <Field
+                label="Image URL"
+                value={editor.imageUrl}
+                onChange={(imageUrl) => patch({ imageUrl })}
+              />
+              <View className="flex-row gap-2">
+                <Field
+                  label="CTA label"
+                  value={editor.ctaLabel}
+                  onChange={(ctaLabel) => patch({ ctaLabel })}
                 />
-                {canDelete ? (
+                <Field
+                  label="CTA href"
+                  value={editor.ctaHref}
+                  onChange={(ctaHref) => patch({ ctaHref })}
+                />
+              </View>
+              <View className="mb-2 flex-row gap-2">
+                {(["none", "percent", "flat"] as const).map((type) => (
+                  <Pressable
+                    key={type}
+                    onPress={() => patch({ discountType: type })}
+                    className={`rounded-full px-3 py-1.5 ${
+                      editor.discountType === type
+                        ? "bg-navy"
+                        : "border border-line bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-[11px] font-black ${
+                        editor.discountType === type ? "text-white" : "text-ink"
+                      }`}
+                    >
+                      {type}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Field
+                label="Discount value"
+                value={String(editor.discountValue)}
+                numeric
+                onChange={(raw) =>
+                  patch({
+                    discountValue: Math.max(0, Math.round(Number(raw) || 0)),
+                  })
+                }
+              />
+              <Toggle
+                label="Active"
+                value={editor.active}
+                onChange={(active) => patch({ active })}
+              />
+              <View className="mt-2 flex-row gap-2">
+                <Button
+                  label="Save promotion"
+                  busy={busy}
+                  disabled={!editor.title.trim()}
+                  onPress={() =>
+                    void run(
+                      () => savePrintPromotion(editor),
+                      "Promotion saved.",
+                      () => setPromotion(null),
+                    )
+                  }
+                />
+                {promotion.id && canDelete ? (
                   <Button
                     label="Delete"
                     tone="danger"
-                    onPress={() => confirmDelete("promotion", item.id)}
+                    onPress={() => confirmDelete("promotion", editor.id)}
                   />
                 ) : null}
               </View>
+            </Card>
+          </>
+        ) : (
+          <>
+            <View className="mb-3 flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 text-sm text-muted">
+                Only one active, in-date promotion is shown to customers.
+              </Text>
+              <Button
+                label="New"
+                tone="ghost"
+                onPress={() => setPromotion({ ...emptyPromotion })}
+              />
             </View>
-          </Card>
-        ))}
+            {data.promotions.length === 0 ? (
+              <Card>
+                <Text className="text-sm text-muted">
+                  No promotions yet. Select New to create one.
+                </Text>
+              </Card>
+            ) : (
+              data.promotions.map((item) => (
+                <Card key={item.id}>
+                  <View className="flex-row items-center justify-between gap-2">
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-display text-base font-bold text-ink">
+                        {item.title}
+                      </Text>
+                      <Text className="text-xs text-muted">
+                        {item.discountType === "none"
+                          ? "no discount"
+                          : `${item.discountValue} ${item.discountType}`}
+                        {item.active ? " · active" : " · hidden"}
+                      </Text>
+                    </View>
+                    <View className="shrink-0 flex-row gap-1">
+                      <Button
+                        label="Edit"
+                        tone="ghost"
+                        onPress={() => setPromotion(item)}
+                      />
+                      {canDelete ? (
+                        <Button
+                          label="Delete"
+                          tone="danger"
+                          onPress={() => confirmDelete("promotion", item.id)}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+                </Card>
+              ))
+            )}
+          </>
+        )}
       </View>
     );
   }
@@ -1143,94 +1209,117 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
-        <View className="mb-3 flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-xs text-muted">
-            The custom-services strip on the website and the app's 3D screen.
-          </Text>
-          <Button
-            label="New"
-            tone="ghost"
-            onPress={() => setService({ ...emptyService })}
-          />
-        </View>
-        <Card>
-          <Text className="mb-2 font-display text-base font-bold text-ink">
-            {editor.id ? "Edit service" : "New service"}
-          </Text>
-          <Field
-            label="Title"
-            value={editor.title}
-            onChange={(title) => patch({ title })}
-          />
-          <Field
-            label="Description"
-            value={editor.description}
-            onChange={(description) => patch({ description })}
-            multiline
-          />
-          <Field
-            label="Price note"
-            value={editor.priceNote}
-            onChange={(priceNote) => patch({ priceNote })}
-          />
-          <Field
-            label="Sort order"
-            value={String(editor.sortOrder)}
-            numeric
-            onChange={(raw) =>
-              patch({ sortOrder: Math.round(Number(raw) || 0) })
-            }
-          />
-          <Toggle
-            label="Active"
-            value={editor.active}
-            onChange={(active) => patch({ active })}
-          />
-          <View className="mt-2 flex-row gap-2">
-            <Button
-              label="Save service"
-              busy={busy}
-              disabled={!editor.title.trim()}
-              onPress={() =>
-                void run(() => savePrintService(editor), "Service saved.")
-              }
+        {service ? (
+          <>
+            <EditorHeading
+              title={service.id ? "Edit service" : "New service"}
+              onCancel={() => setService(null)}
             />
-            {editor.id && canDelete ? (
-              <Button
-                label="Delete"
-                tone="danger"
-                onPress={() => confirmDelete("service", editor.id)}
+            <Card>
+              <Field
+                label="Title"
+                value={editor.title}
+                onChange={(title) => patch({ title })}
               />
-            ) : null}
-          </View>
-        </Card>
-        {data.services.map((item) => (
-          <Card key={item.id}>
-            <View className="flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-ink">{item.title}</Text>
-                <Text className="text-xs text-muted">
-                  {item.priceNote || "no price note"}{" "}
-                  {item.active ? "" : "· hidden"}
-                </Text>
-              </View>
-              <View className="shrink-0 flex-row gap-1">
+              <Field
+                label="Description"
+                value={editor.description}
+                onChange={(description) => patch({ description })}
+                multiline
+              />
+              <Field
+                label="Price note"
+                value={editor.priceNote}
+                onChange={(priceNote) => patch({ priceNote })}
+              />
+              <Field
+                label="Sort order"
+                value={String(editor.sortOrder)}
+                numeric
+                onChange={(raw) =>
+                  patch({ sortOrder: Math.round(Number(raw) || 0) })
+                }
+              />
+              <Toggle
+                label="Active"
+                value={editor.active}
+                onChange={(active) => patch({ active })}
+              />
+              <View className="mt-2 flex-row gap-2">
                 <Button
-                  label="Edit"
-                  tone="ghost"
-                  onPress={() => setService(item)}
+                  label="Save service"
+                  busy={busy}
+                  disabled={!editor.title.trim()}
+                  onPress={() =>
+                    void run(
+                      () => savePrintService(editor),
+                      "Service saved.",
+                      () => setService(null),
+                    )
+                  }
                 />
-                {canDelete ? (
+                {service.id && canDelete ? (
                   <Button
                     label="Delete"
                     tone="danger"
-                    onPress={() => confirmDelete("service", item.id)}
+                    onPress={() => confirmDelete("service", editor.id)}
                   />
                 ) : null}
               </View>
+            </Card>
+          </>
+        ) : (
+          <>
+            <View className="mb-3 flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 text-sm text-muted">
+                The custom-services strip on the website and the app's 3D
+                screen.
+              </Text>
+              <Button
+                label="New"
+                tone="ghost"
+                onPress={() => setService({ ...emptyService })}
+              />
             </View>
-          </Card>
-        ))}
+            {data.services.length === 0 ? (
+              <Card>
+                <Text className="text-sm text-muted">
+                  No services yet. Select New to add one.
+                </Text>
+              </Card>
+            ) : (
+              data.services.map((item) => (
+                <Card key={item.id}>
+                  <View className="flex-row items-center justify-between gap-2">
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-display text-base font-bold text-ink">
+                        {item.title}
+                      </Text>
+                      <Text className="text-xs text-muted">
+                        {item.priceNote || "no price note"}{" "}
+                        {item.active ? "" : "· hidden"}
+                      </Text>
+                    </View>
+                    <View className="shrink-0 flex-row gap-1">
+                      <Button
+                        label="Edit"
+                        tone="ghost"
+                        onPress={() => setService(item)}
+                      />
+                      {canDelete ? (
+                        <Button
+                          label="Delete"
+                          tone="danger"
+                          onPress={() => confirmDelete("service", item.id)}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+                </Card>
+              ))
+            )}
+          </>
+        )}
       </View>
     );
   }
@@ -1243,169 +1332,185 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
-        <View className="mb-3 flex-row items-center justify-between gap-2">
-          {" "}
-          <Text className="flex-1 text-xs text-muted">
-            {data.gallery.length} item{data.gallery.length === 1 ? "" : "s"} —
-            upload a photo or paste an image URL.
-          </Text>
-          <Button
-            label="New"
-            tone="ghost"
-            onPress={() => setGalleryItem({ ...emptyGallery })}
-          />
-        </View>
-        <Card>
-          <Text className="mb-2 font-display text-base font-bold text-ink">
-            {editor.id ? "Edit gallery item" : "New gallery item"}
-          </Text>{" "}
-          <Field
-            label="Image URL"
-            value={editor.imageUrl}
-            onChange={(imageUrl) => patch({ imageUrl })}
-          />
-          <View className="mb-2 flex-row items-center gap-2">
-            <Button
-              label="Upload image"
-              busy={busy}
-              onPress={() => void pickGalleryImage()}
+        {galleryItem ? (
+          <>
+            <EditorHeading
+              title={galleryItem.id ? "Edit gallery item" : "New gallery item"}
+              onCancel={() => setGalleryItem(null)}
             />
-            <Text className="min-w-0 flex-1 text-[10px] leading-4 text-muted">
-              JPG, PNG, WebP, AVIF or GIF up to 8 MB.
-            </Text>
-          </View>
-          {editor.imageUrl ? (
-            <Pressable
-              onPress={() =>
-                setImagePreview({
-                  uri: editor.imageUrl,
-                  label: editor.caption || "Gallery image",
-                })
-              }
-              accessibilityRole="button"
-              accessibilityLabel="View gallery image full size"
-              className="mb-2 overflow-hidden rounded-lg border border-line bg-surface"
-            >
-              <Image
-                source={{ uri: editor.imageUrl }}
-                className="h-32 w-full"
-                resizeMode="cover"
-                accessibilityLabel="Gallery image preview"
+            <Card>
+              <Field
+                label="Image URL"
+                value={editor.imageUrl}
+                onChange={(imageUrl) => patch({ imageUrl })}
               />
-              <Text className="px-2 py-1 text-[10px] font-bold text-muted">
-                Tap to view full size
-              </Text>
-            </Pressable>
-          ) : null}
-          <Field
-            label="Caption"
-            value={editor.caption}
-            onChange={(caption) => patch({ caption })}
-          />
-          <Field
-            label="Category"
-            value={editor.category}
-            onChange={(category) => patch({ category })}
-          />
-          <Field
-            label="Sort order"
-            value={String(editor.sortOrder)}
-            numeric
-            onChange={(raw) =>
-              patch({ sortOrder: Math.round(Number(raw) || 0) })
-            }
-          />
-          <Toggle
-            label="Featured"
-            value={editor.featured}
-            onChange={(featured) => patch({ featured })}
-          />
-          <Toggle
-            label="Active"
-            value={editor.active}
-            onChange={(active) => patch({ active })}
-          />
-          <View className="mt-2 flex-row gap-2">
-            <Button
-              label="Save item"
-              busy={busy}
-              disabled={!editor.imageUrl.trim()}
-              onPress={() =>
-                void run(
-                  () => savePrintGalleryItem(editor),
-                  "Gallery item saved.",
-                )
-              }
-            />
-            {editor.id && canDelete ? (
-              <Button
-                label="Delete"
-                tone="danger"
-                onPress={() => confirmDelete("gallery", editor.id)}
-              />
-            ) : null}
-          </View>
-        </Card>
-        {data.gallery.map((item) => (
-          <Card key={item.id}>
-            <View className="flex-row items-center gap-3">
-              {/* 2026-11-14: the row had no picture at all, so two gallery
-                  entries read as two identical captions. Thumbnail + full-size
-                  preview now. */}
-              <Pressable
-                onPress={() =>
-                  setImagePreview({
-                    uri: item.imageUrl,
-                    label: item.caption || "Gallery image",
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`View ${item.caption || "gallery image"} full size`}
-                className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface"
-              >
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  className="h-12 w-12"
-                  resizeMode="cover"
-                  accessibilityLabel="Gallery thumbnail"
+              <View className="mb-2 flex-row items-center gap-2">
+                <Button
+                  label="Upload image"
+                  busy={busy}
+                  onPress={() => void pickGalleryImage()}
                 />
-              </Pressable>
-              <View className="min-w-0 flex-1">
-                <Text numberOfLines={1} className="text-sm font-bold text-ink">
-                  {item.caption || "Untitled image"}
-                </Text>
-                <Text numberOfLines={1} className="text-xs text-muted">
-                  {item.category || "uncategorised"}
-                  {item.active ? "" : " · hidden"}
+                <Text className="min-w-0 flex-1 text-[10px] leading-4 text-muted">
+                  JPG, PNG, WebP, AVIF or GIF up to 8 MB.
                 </Text>
               </View>
-              <View className="shrink-0 flex-row flex-wrap justify-end gap-1.5">
-                <Button
-                  label="Preview"
-                  tone="ghost"
+              {editor.imageUrl ? (
+                <Pressable
                   onPress={() =>
                     setImagePreview({
-                      uri: item.imageUrl,
-                      label: item.caption || "Gallery image",
+                      uri: editor.imageUrl,
+                      label: editor.caption || "Gallery image",
                     })
                   }
-                />
+                  accessibilityRole="button"
+                  accessibilityLabel="View gallery image full size"
+                  className="mb-2 overflow-hidden rounded-lg border border-line bg-surface"
+                >
+                  <Image
+                    source={{ uri: editor.imageUrl }}
+                    className="h-32 w-full"
+                    resizeMode="cover"
+                    accessibilityLabel="Gallery image preview"
+                  />
+                  <Text className="px-2 py-1 text-[10px] font-bold text-muted">
+                    Tap to view full size
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Field
+                label="Caption"
+                value={editor.caption}
+                onChange={(caption) => patch({ caption })}
+              />
+              <Field
+                label="Category"
+                value={editor.category}
+                onChange={(category) => patch({ category })}
+              />
+              <Field
+                label="Sort order"
+                value={String(editor.sortOrder)}
+                numeric
+                onChange={(raw) =>
+                  patch({ sortOrder: Math.round(Number(raw) || 0) })
+                }
+              />
+              <Toggle
+                label="Featured"
+                value={editor.featured}
+                onChange={(featured) => patch({ featured })}
+              />
+              <Toggle
+                label="Active"
+                value={editor.active}
+                onChange={(active) => patch({ active })}
+              />
+              <View className="mt-2 flex-row gap-2">
                 <Button
-                  label="Edit"
-                  tone="ghost"
-                  onPress={() => setGalleryItem(item)}
+                  label="Save item"
+                  busy={busy}
+                  disabled={!editor.imageUrl.trim()}
+                  onPress={() =>
+                    void run(
+                      () => savePrintGalleryItem(editor),
+                      "Gallery item saved.",
+                      () => setGalleryItem(null),
+                    )
+                  }
                 />
-                {canDelete ? (
+                {galleryItem.id && canDelete ? (
                   <Button
                     label="Delete"
                     tone="danger"
-                    onPress={() => confirmDelete("gallery", item.id)}
+                    onPress={() => confirmDelete("gallery", editor.id)}
                   />
                 ) : null}
               </View>
+            </Card>
+          </>
+        ) : (
+          <>
+            <View className="mb-3 flex-row items-center justify-between gap-2">
+              <Text className="min-w-0 flex-1 text-sm text-muted">
+                {data.gallery.length} item{data.gallery.length === 1 ? "" : "s"}{" "}
+                — upload a photo or paste an image URL.
+              </Text>
+              <Button
+                label="New"
+                tone="ghost"
+                onPress={() => setGalleryItem({ ...emptyGallery })}
+              />
             </View>
-          </Card>
-        ))}
+            {data.gallery.length === 0 ? (
+              <Card>
+                <Text className="text-sm text-muted">
+                  No gallery images yet. Select New to add one.
+                </Text>
+              </Card>
+            ) : (
+              data.gallery.map((item) => (
+                <Card key={item.id}>
+                  <View className="flex-row items-center gap-3">
+                    <Pressable
+                      onPress={() =>
+                        setImagePreview({
+                          uri: item.imageUrl,
+                          label: item.caption || "Gallery image",
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${item.caption || "gallery image"} full size`}
+                      className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface"
+                    >
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        className="h-12 w-12"
+                        resizeMode="cover"
+                        accessibilityLabel="Gallery thumbnail"
+                      />
+                    </Pressable>
+                    <View className="min-w-0 flex-1">
+                      <Text
+                        numberOfLines={1}
+                        className="font-display text-base font-bold text-ink"
+                      >
+                        {item.caption || "Untitled image"}
+                      </Text>
+                      <Text numberOfLines={1} className="text-xs text-muted">
+                        {item.category || "uncategorised"}
+                        {item.active ? "" : " · hidden"}
+                      </Text>
+                    </View>
+                    <View className="shrink-0 flex-row flex-wrap justify-end gap-1.5">
+                      <Button
+                        label="Preview"
+                        tone="ghost"
+                        onPress={() =>
+                          setImagePreview({
+                            uri: item.imageUrl,
+                            label: item.caption || "Gallery image",
+                          })
+                        }
+                      />
+                      <Button
+                        label="Edit"
+                        tone="ghost"
+                        onPress={() => setGalleryItem(item)}
+                      />
+                      {canDelete ? (
+                        <Button
+                          label="Delete"
+                          tone="danger"
+                          onPress={() => confirmDelete("gallery", item.id)}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+                </Card>
+              ))
+            )}
+          </>
+        )}
         {imagePreview ? (
           <ImagePreviewModal
             uri={imagePreview.uri}
@@ -1428,154 +1533,160 @@ export default function PrintAdminPanel({
           quote them, then move the status along.
         </Text>
         {editor ? (
-          <Card>
-            <Text className="font-display text-base font-bold text-ink">
-              {editor.name}
-            </Text>
-            <Text className="mb-2 text-xs text-muted">
-              {editor.email}
-              {editor.phone ? ` · ${editor.phone}` : ""} · qty {editor.quantity}
-            </Text>
-            <Text className="mb-2 text-xs leading-5 text-ink">
-              {editor.description}
-            </Text>
-            <Text className="mb-2 text-xs text-muted">
-              {[editor.material, editor.dimensions, editor.timeline]
-                .filter(Boolean)
-                .join(" · ") || "no material/dimensions/timeline"}
-            </Text>
-            <Text className="mb-1 text-xs font-bold text-muted">Status</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
-            >
-              {PRINT_QUOTE_STATUSES.map((status) => (
-                <Pressable
-                  key={status}
-                  onPress={() => setQuote({ ...editor, status })}
-                  className={`rounded-full px-3 py-1.5 ${
-                    editor.status === status
-                      ? "bg-navy"
-                      : "border border-line bg-surface"
-                  }`}
-                >
-                  <Text
-                    className={`text-[11px] font-black ${
-                      editor.status === status ? "text-white" : "text-ink"
+          <>
+            <EditorHeading
+              title="Request details"
+              onCancel={() => setQuote(null)}
+            />
+            <Card>
+              <Text className="font-display text-base font-bold text-ink">
+                {editor.name}
+              </Text>
+              <Text className="mb-2 text-xs text-muted">
+                {editor.email}
+                {editor.phone ? ` · ${editor.phone}` : ""} · qty{" "}
+                {editor.quantity}
+              </Text>
+              <Text className="mb-2 text-sm leading-5 text-ink">
+                {editor.description}
+              </Text>
+              <Text className="mb-2 text-xs text-muted">
+                {[editor.material, editor.dimensions, editor.timeline]
+                  .filter(Boolean)
+                  .join(" · ") || "no material/dimensions/timeline"}
+              </Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Status</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {PRINT_QUOTE_STATUSES.map((status) => (
+                  <Pressable
+                    key={status}
+                    onPress={() => setQuote({ ...editor, status })}
+                    className={`rounded-full px-3 py-1.5 ${
+                      editor.status === status
+                        ? "bg-navy"
+                        : "border border-line bg-surface"
                     }`}
                   >
-                    {PRINT_QUOTE_STATUS_LABELS[status]}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-            <View className="mt-2 flex-row gap-2">
-              <Field
-                label="Quoted (NPR)"
-                value={String(editor.quotedAmount)}
-                numeric
-                onChange={(raw) =>
-                  setQuote({
-                    ...editor,
-                    quotedAmount: Math.max(0, Math.round(Number(raw) || 0)),
-                  })
-                }
-              />
-              <Field
-                label="Grams"
-                value={String(editor.estimatedGrams)}
-                numeric
-                onChange={(raw) =>
-                  setQuote({
-                    ...editor,
-                    estimatedGrams: Math.max(0, Math.round(Number(raw) || 0)),
-                  })
-                }
-              />
-            </View>
-            <View className="flex-row gap-2">
-              <Field
-                label="Print hours"
-                value={String(editor.printHours)}
-                decimal
-                onChange={(raw) =>
-                  setQuote({
-                    ...editor,
-                    printHours: Math.max(0, Number(raw) || 0),
-                  })
-                }
-              />
-              <Field
-                label="Admin notes"
-                value={editor.adminNotes}
-                onChange={(adminNotes) => setQuote({ ...editor, adminNotes })}
-                multiline
-              />
-            </View>
-            <Toggle
-              label="Reprint"
-              value={editor.reprint}
-              onChange={(reprint) => setQuote({ ...editor, reprint })}
-            />
-            <View className="mt-2 flex-row gap-2">
-              <Button
-                label="Save request"
-                busy={busy}
-                onPress={() =>
-                  void run(
-                    () =>
-                      updatePrintQuote(editor.id, {
-                        status: editor.status as PrintQuoteStatus,
-                        adminNotes: editor.adminNotes,
-                        quotedAmount: editor.quotedAmount,
-                        estimatedGrams: editor.estimatedGrams,
-                        printHours: editor.printHours,
-                        reprint: editor.reprint,
-                      }),
-                    "Request updated.",
-                  )
-                }
-              />
-              <Button
-                label="Close"
-                tone="ghost"
-                onPress={() => setQuote(null)}
-              />
-            </View>
-          </Card>
-        ) : null}
-        {data.quotes.map((item) => (
-          <Card key={item.id}>
-            <View className="flex-row items-center justify-between gap-2">
-              <View className="min-w-0 flex-1">
-                <Text className="text-sm font-bold text-ink">{item.name}</Text>
-                <Text className="text-xs text-muted">
-                  {PRINT_QUOTE_STATUS_LABELS[item.status]} ·{" "}
-                  {item.quotedAmount > 0
-                    ? `NPR ${item.quotedAmount.toLocaleString("en-IN")}`
-                    : "unquoted"}{" "}
-                  · {new Date(item.createdAt).toLocaleDateString()}
-                </Text>
-              </View>
-              <View className="shrink-0 flex-row gap-1">
-                <Button
-                  label="Open"
-                  tone="ghost"
-                  onPress={() => setQuote(item)}
+                    <Text
+                      className={`text-[11px] font-black ${
+                        editor.status === status ? "text-white" : "text-ink"
+                      }`}
+                    >
+                      {PRINT_QUOTE_STATUS_LABELS[status]}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View className="mt-2 flex-row gap-2">
+                <Field
+                  label="Quoted (NPR)"
+                  value={String(editor.quotedAmount)}
+                  numeric
+                  onChange={(raw) =>
+                    setQuote({
+                      ...editor,
+                      quotedAmount: Math.max(0, Math.round(Number(raw) || 0)),
+                    })
+                  }
                 />
-                {canDelete ? (
-                  <Button
-                    label="Delete"
-                    tone="danger"
-                    onPress={() => confirmDelete("quote", item.id)}
-                  />
-                ) : null}
+                <Field
+                  label="Grams"
+                  value={String(editor.estimatedGrams)}
+                  numeric
+                  onChange={(raw) =>
+                    setQuote({
+                      ...editor,
+                      estimatedGrams: Math.max(0, Math.round(Number(raw) || 0)),
+                    })
+                  }
+                />
               </View>
-            </View>
-          </Card>
-        ))}
-        {data.quotes.length === 0 ? (
+              <View className="flex-row gap-2">
+                <Field
+                  label="Print hours"
+                  value={String(editor.printHours)}
+                  decimal
+                  onChange={(raw) =>
+                    setQuote({
+                      ...editor,
+                      printHours: Math.max(0, Number(raw) || 0),
+                    })
+                  }
+                />
+                <Field
+                  label="Admin notes"
+                  value={editor.adminNotes}
+                  onChange={(adminNotes) => setQuote({ ...editor, adminNotes })}
+                  multiline
+                />
+              </View>
+              <Toggle
+                label="Reprint"
+                value={editor.reprint}
+                onChange={(reprint) => setQuote({ ...editor, reprint })}
+              />
+              <View className="mt-2">
+                <Button
+                  label="Save request"
+                  busy={busy}
+                  onPress={() =>
+                    void run(
+                      () =>
+                        updatePrintQuote(editor.id, {
+                          status: editor.status as PrintQuoteStatus,
+                          adminNotes: editor.adminNotes,
+                          quotedAmount: editor.quotedAmount,
+                          estimatedGrams: editor.estimatedGrams,
+                          printHours: editor.printHours,
+                          reprint: editor.reprint,
+                        }),
+                      "Request updated.",
+                      () => setQuote(null),
+                    )
+                  }
+                />
+              </View>
+            </Card>
+          </>
+        ) : (
+          data.quotes.map((item) => (
+            <Card key={item.id}>
+              <View className="flex-row items-center justify-between gap-2">
+                <View className="min-w-0 flex-1">
+                  <Text className="font-display text-base font-bold text-ink">
+                    {item.name}
+                  </Text>
+                  <Text className="text-xs text-muted">
+                    {PRINT_QUOTE_STATUS_LABELS[item.status]} ·{" "}
+                    {item.quotedAmount > 0
+                      ? `NPR ${item.quotedAmount.toLocaleString("en-IN")}`
+                      : "unquoted"}{" "}
+                    · {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <View className="shrink-0 flex-row gap-1">
+                  <Button
+                    label="Open"
+                    tone="ghost"
+                    onPress={() => setQuote(item)}
+                  />
+                  {canDelete ? (
+                    <Button
+                      label="Delete"
+                      tone="danger"
+                      onPress={() => confirmDelete("quote", item.id)}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </Card>
+          ))
+        )}
+        {!editor && data.quotes.length === 0 ? (
           <Card>
             <Text className="text-xs text-muted">
               No requests yet. The website quote form and the app's 3D screen

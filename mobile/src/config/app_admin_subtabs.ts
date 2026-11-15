@@ -1,5 +1,8 @@
 // App-side admin section tabs.
 
+export const DASHBOARD_SUBTABS = ["Overview", "Activity"] as const;
+type DashboardSubTab = (typeof DASHBOARD_SUBTABS)[number];
+
 export const ORDER_PANELS = ["Orders", "Finance"] as const;
 type OrderPanel = (typeof ORDER_PANELS)[number];
 
@@ -19,6 +22,7 @@ export const USERS_SUBTABS = ["Users", "Messages", "Logs"] as const;
 type UsersSubTab = (typeof USERS_SUBTABS)[number];
 
 export type {
+  DashboardSubTab,
   OrderPanel,
   OrdersSubTab,
   ContentSubTab,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ADMIN_TAB_HINTS, ADMIN_TABS } from "./adminTabs";
+import { DASHBOARD_SUBTABS } from "./app_admin_subtabs";
 
 // =====================================================================
 // Admin-surface parity guard (was "ARCHITECTURE.md B-6"; that spec is NOT in
@@ -152,5 +153,48 @@ describe("admin data tab wiring", () => {
     expect(pricingLoad).not.toContain(".catch(() => undefined)");
     expect(source).toContain("Retry loading component links");
     expect(source).toContain("Retry loading project pricing");
+  });
+
+  it("keeps Dashboard Overview and Activity in separate subtabs", () => {
+    const dashboard = source.match(
+      /case "Dashboard":([\s\S]*?)\n      case "Orders":/,
+    )?.[1];
+
+    expect(DASHBOARD_SUBTABS).toEqual(["Overview", "Activity"]);
+    expect(dashboard).toContain('label="Dashboard sections"');
+    expect(dashboard).toContain("<AdminSectionPanels");
+    expect(dashboard).toContain("<DashboardTab");
+    expect(dashboard).toContain("<ActivityTab");
+  });
+
+  it("keeps print studio lists scrollable and editors opt-in", () => {
+    const printPath = resolve(__dirname, "../screens/PrintAdminPanel.tsx");
+    const printSource = readFileSync(printPath, "utf8");
+    const printScreen = source.match(
+      /if \(tab === "3D Products" && printSection !== "Catalog"\) \{([\s\S]*?)\n        \}/,
+    )?.[1];
+
+    expect(printScreen).toContain("<ScrollView");
+    expect(printScreen).toContain("contentContainerStyle");
+
+    for (const [section, state, nextSection] of [
+      ["Categories", "category", "Pricing"],
+      ["Promotions", "promotion", "Services"],
+      ["Services", "service", "Gallery"],
+      ["Gallery", "galleryItem", "Requests"],
+    ] as const) {
+      const start = printSource.indexOf(`if (section === "${section}") {`);
+      const end = printSource.indexOf(
+        `if (section === "${nextSection}") {`,
+        start,
+      );
+      const block =
+        start >= 0 && end > start ? printSource.slice(start, end) : "";
+
+      expect(block, `${section} section was not found`).not.toBe("");
+      expect(block, `${section} editor should be opt-in`).toContain(
+        `{${state} ? (`,
+      );
+    }
   });
 });

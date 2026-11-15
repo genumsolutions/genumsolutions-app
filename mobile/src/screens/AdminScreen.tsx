@@ -38,6 +38,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { ADMIN_TAB_HINTS } from "../config/adminTabs";
 import type {
+  DashboardSubTab,
   OrderPanel,
   OrdersSubTab,
   ContentSubTab,
@@ -45,6 +46,7 @@ import type {
 } from "../config/app_admin_subtabs";
 import {
   CONTENT_SUBTABS,
+  DASHBOARD_SUBTABS,
   ORDER_PANELS,
   ORDERS_SUBTABS,
   USERS_SUBTABS,
@@ -314,6 +316,8 @@ function AdminConsole() {
   // (see the Users tab).
   const canDelete = isAdmin;
   const [tab, setTab] = useState<Tab>("Dashboard");
+  const [dashboardSubTab, setDashboardSubTab] =
+    useState<DashboardSubTab>("Overview");
   // 2026-11-14: the 3D Products tab gained the website's print-studio sections
   // (Categories → Reports). "Catalog" keeps the existing product list.
   const [printSection, setPrintSection] = useState<
@@ -1467,9 +1471,8 @@ function AdminConsole() {
   }, []);
 
   function renderTabContent(t: Tab) {
-    // Every tab below returns its own vertically scrolling list/ScrollView
-    // with the shared 16px page padding, so this wrapper must NOT scroll too:
-    // a second same-axis ScrollView swallowed the inner one on Android.
+    // Each content panel owns its vertical scroll area. Print studio sections
+    // are wrapped here because their forms and lists return plain Views.
     const Sub = ({
       children,
       style,
@@ -1486,18 +1489,39 @@ function AdminConsole() {
     switch (t) {
       case "Dashboard":
         return (
-          <Sub style={{ overflow: "hidden" }}>
-            <DashboardTab
-              stats={stats}
-              analytics={analytics}
-              onOpenOrders={() => goToTab("Orders")}
+          <Sub>
+            <AdminSubTabs
+              label="Dashboard sections"
+              options={DASHBOARD_SUBTABS}
+              value={dashboardSubTab}
+              onChange={setDashboardSubTab}
             />
-            <ActivityTab
-              activities={activities}
-              page={activityPage}
-              totalPages={activityTotalPages}
-              total={activityTotal}
-              onLoadMore={(p) => loadActivity(p)}
+            <AdminSectionPanels
+              active={dashboardSubTab}
+              panels={[
+                {
+                  key: "Overview",
+                  content: (
+                    <DashboardTab
+                      stats={stats}
+                      analytics={analytics}
+                      onOpenOrders={() => goToTab("Orders")}
+                    />
+                  ),
+                },
+                {
+                  key: "Activity",
+                  content: (
+                    <ActivityTab
+                      activities={activities}
+                      page={activityPage}
+                      totalPages={activityTotalPages}
+                      total={activityTotal}
+                      onLoadMore={(p) => loadActivity(p)}
+                    />
+                  ),
+                },
+              ]}
             />
           </Sub>
         );
@@ -1558,12 +1582,22 @@ function AdminConsole() {
                 value={printSection}
                 onChange={setPrintSection}
               />
-              <PrintAdminPanel
-                section={printSection}
-                canApprove={isAdmin}
-                canDelete={canDelete}
-                approverEmail={currentUser?.email ?? ""}
-              />
+              <ScrollView
+                className="min-h-0 flex-1"
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  paddingTop: 16,
+                  paddingBottom: 40,
+                }}
+                keyboardShouldPersistTaps="handled"
+              >
+                <PrintAdminPanel
+                  section={printSection}
+                  canApprove={isAdmin}
+                  canDelete={canDelete}
+                  approverEmail={currentUser?.email ?? ""}
+                />
+              </ScrollView>
             </Sub>
           );
         }
@@ -3458,7 +3492,7 @@ function ProjectPricingCard({
 
       <View className="mt-3 flex-row gap-2">
         <View className="flex-1">
-          <Text className="mb-1 text-xs font-bold text-muted">
+          <Text className="mb-1 text-sm font-bold text-ink">
             Base charge (NPR)
           </Text>
           <TextInput
@@ -3474,7 +3508,7 @@ function ProjectPricingCard({
           />
         </View>
         <View className="flex-1">
-          <Text className="mb-1 text-xs font-bold text-muted">Markup (%)</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Markup (%)</Text>
           <TextInput
             value={String(pricing.componentMarkupPercent)}
             onChangeText={(raw) =>
@@ -3491,9 +3525,7 @@ function ProjectPricingCard({
           />
         </View>
         <View className="flex-1">
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Minimum (NPR)
-          </Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Minimum (NPR)</Text>
           <TextInput
             value={String(pricing.minimumOrder)}
             onChangeText={(raw) =>
@@ -3506,7 +3538,7 @@ function ProjectPricingCard({
         </View>
       </View>
 
-      <Text className="mb-1 mt-3 text-xs font-bold text-muted">
+      <Text className="mb-1 mt-3 text-sm font-bold text-ink">
         Internal note (not shown to customers)
       </Text>
       <TextInput
@@ -3600,7 +3632,7 @@ function ProjectPricingCard({
             key={`tier-${index}`}
             className="mt-2 flex-row items-center gap-2"
           >
-            <Text className="text-xs font-bold text-muted">Min qty</Text>
+            <Text className="text-sm font-bold text-ink">Min qty</Text>
             <TextInput
               value={String(tier.minQty)}
               onChangeText={(raw) =>
@@ -3619,7 +3651,7 @@ function ProjectPricingCard({
               className="w-16 rounded-lg border border-line bg-surface px-2 py-2 text-right text-sm text-ink"
               accessibilityLabel={`Tier ${index + 1} minimum quantity`}
             />
-            <Text className="text-xs font-bold text-muted">Discount %</Text>
+            <Text className="text-sm font-bold text-ink">Discount %</Text>
             <TextInput
               value={String(tier.discountPercent)}
               onChangeText={(raw) =>
@@ -3812,7 +3844,7 @@ function ProductEditor({
             subtitle="Id, name, category and type"
             defaultOpen
           >
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Id (slug, e.g. arduino-uno)
             </Text>
             <TextInput
@@ -3824,14 +3856,14 @@ function ProductEditor({
               placeholder="arduino-uno"
               autoCapitalize="none"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
+            <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
             <TextInput
               value={product.name}
               onChangeText={(name) => patch({ name })}
               className={`mb-3 ${inputClass}`}
               placeholder="Product name"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
+            <Text className="mb-1 text-sm font-bold text-ink">Category</Text>
             <View className="mb-3">
               <CategoryDropdown
                 value={product.category || ""}
@@ -3842,7 +3874,7 @@ function ProductEditor({
                 allowCustom
               />
             </View>
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Product type
             </Text>
             <View className="mb-1">
@@ -3869,7 +3901,7 @@ function ProductEditor({
           >
             <View className="mb-3 flex-row gap-3">
               <View className="flex-1">
-                <Text className="mb-1 text-xs font-bold text-muted">
+                <Text className="mb-1 text-sm font-bold text-ink">
                   Price (NPR)
                 </Text>
                 <TextInput
@@ -3883,7 +3915,7 @@ function ProductEditor({
                 />
               </View>
               <View className="flex-1">
-                <Text className="mb-1 text-xs font-bold text-muted">Stock</Text>
+                <Text className="mb-1 text-sm font-bold text-ink">Stock</Text>
                 <TextInput
                   value={String(product.stock)}
                   onChangeText={(stock) =>
@@ -3897,7 +3929,7 @@ function ProductEditor({
                 />
               </View>
             </View>
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Price label (e.g. NPR 1,450)
             </Text>
             <TextInput
@@ -3906,7 +3938,7 @@ function ProductEditor({
               className={`mb-3 ${inputClass}`}
               placeholder="NPR 1,450"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">SKU</Text>
+            <Text className="mb-1 text-sm font-bold text-ink">SKU</Text>
             <TextInput
               value={product.sku}
               onChangeText={(sku) => patch({ sku })}
@@ -3920,7 +3952,7 @@ function ProductEditor({
             title="Content & specs"
             subtitle="Summary, description and spec lines"
           >
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Short summary (note)
             </Text>
             <TextInput
@@ -3931,9 +3963,7 @@ function ProductEditor({
               className={`mb-3 ${inputClass}`}
               placeholder="Short summary"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">
-              Description
-            </Text>
+            <Text className="mb-1 text-sm font-bold text-ink">Description</Text>
             <TextInput
               value={product.description}
               onChangeText={(description) => patch({ description })}
@@ -3942,7 +3972,7 @@ function ProductEditor({
               className={`mb-3 min-h-20 ${inputClass}`}
               placeholder="Full description"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Specs (one per line)
             </Text>
             <TextInput
@@ -3956,7 +3986,7 @@ function ProductEditor({
           </EditorSection>
 
           <EditorSection title="Images" subtitle="Cover photo and gallery">
-            <Text className="mb-1 text-xs font-bold text-muted">Image URL</Text>
+            <Text className="mb-1 text-sm font-bold text-ink">Image URL</Text>
             {product.image ? (
               <View className="mb-2 flex-row items-start gap-3">
                 <View className="relative h-20 w-20">
@@ -4003,7 +4033,7 @@ function ProductEditor({
               placeholder="https://…"
               autoCapitalize="none"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Gallery (one URL per line, max 8)
             </Text>
             {Array.isArray(product.gallery) && product.gallery.length > 0 && (
@@ -4074,7 +4104,7 @@ function ProductEditor({
               subtitle="Overview, build, audience, links and pricing"
               defaultOpen
             >
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Project category
               </Text>
               <View className="mb-3">
@@ -4091,7 +4121,7 @@ function ProductEditor({
                   allowCustom={false}
                 />
               </View>
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Project overview
               </Text>
               <TextInput
@@ -4102,7 +4132,7 @@ function ProductEditor({
                 className={`mb-3 min-h-20 ${inputClass}`}
                 placeholder="Fully-built demo car with instructions…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Objectives (one per line)
               </Text>
               <TextInput
@@ -4114,7 +4144,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Control motors and servo via ESP32…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Materials required (one per line)
               </Text>
               <TextInput
@@ -4126,7 +4156,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="ESP32 dev board…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Learning outcomes (one per line)
               </Text>
               <TextInput
@@ -4138,7 +4168,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Understand PWM signal control…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Build steps (one per line)
               </Text>
               <TextInput
@@ -4150,7 +4180,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Mount the motors on the chassis…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Control methods (one per line)
               </Text>
               <TextInput
@@ -4162,7 +4192,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Bluetooth remote (GENUM app)…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Prerequisites (one per line)
               </Text>
               <TextInput
@@ -4174,7 +4204,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Basic wiring knowledge…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Deliverables (one per line)
               </Text>
               <TextInput
@@ -4186,7 +4216,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Fully assembled robot car…"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Estimated duration
               </Text>
               <TextInput
@@ -4197,7 +4227,7 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="2-3 hours"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Source folder
               </Text>
               <TextInput
@@ -4207,7 +4237,7 @@ function ProductEditor({
                 placeholder="Genum_SMART_DUSTBIN_V1.0.0"
                 autoCapitalize="none"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Documentation URL
               </Text>
               <TextInput
@@ -4217,9 +4247,7 @@ function ProductEditor({
                 placeholder="https://…"
                 autoCapitalize="none"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
-                Video URL
-              </Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Video URL</Text>
               <TextInput
                 value={product.videoUrl}
                 onChangeText={(videoUrl) => patch({ videoUrl })}
@@ -4227,7 +4255,7 @@ function ProductEditor({
                 placeholder="https://…"
                 autoCapitalize="none"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Maintenance notes
               </Text>
               <TextInput
@@ -4237,16 +4265,14 @@ function ProductEditor({
                 className={`mb-3 ${inputClass}`}
                 placeholder="Safety / maintenance notes"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
-                Audience
-              </Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Audience</Text>
               <TextInput
                 value={product.audience}
                 onChangeText={(audience) => patch({ audience })}
                 className={`mb-3 ${inputClass}`}
                 placeholder="Students, Makers, Hobbyists"
               />
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Difficulty
               </Text>
               <View className="mb-3">
@@ -4263,9 +4289,7 @@ function ProductEditor({
                   title="Difficulty"
                 />
               </View>
-              <Text className="mb-1 text-xs font-bold text-muted">
-                Warranty
-              </Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Warranty</Text>
               <TextInput
                 value={product.warranty}
                 onChangeText={(warranty) => patch({ warranty })}
@@ -4540,7 +4564,7 @@ function ServiceEditor({
         <Text className="mb-3 font-display text-lg font-bold text-ink">
           {isNew ? "Add a new service" : `Edit ${service.id}`}
         </Text>
-        <Text className="mb-1 text-xs font-bold text-muted">Id (slug)</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Id (slug)</Text>
         <TextInput
           value={service.id}
           onChangeText={(id) =>
@@ -4550,14 +4574,14 @@ function ServiceEditor({
           placeholder="e.g. website-design"
           autoCapitalize="none"
         />
-        <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
         <TextInput
           value={service.name}
           onChangeText={(name) => patch({ name })}
           className={`mb-3 ${inputClass}`}
           placeholder="Service name"
         />
-        <Text className="mb-1 text-xs font-bold text-muted">Category</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Category</Text>
         <View className="mb-3">
           <CategoryDropdown
             value={service.category || ""}
@@ -4568,21 +4592,21 @@ function ServiceEditor({
             allowCustom
           />
         </View>
-        <Text className="mb-1 text-xs font-bold text-muted">Price label</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Price label</Text>
         <TextInput
           value={service.priceLabel}
           onChangeText={(priceLabel) => patch({ priceLabel })}
           className={`mb-3 ${inputClass}`}
           placeholder="from NPR 35,000"
         />
-        <Text className="mb-1 text-xs font-bold text-muted">Tag / badge</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Tag / badge</Text>
         <TextInput
           value={service.tag}
           onChangeText={(tag) => patch({ tag })}
           className={`mb-3 ${inputClass}`}
           placeholder="Website, Fabrication, …"
         />
-        <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Sort order</Text>
         <TextInput
           value={String(service.sortOrder)}
           onChangeText={(sortOrder) =>
@@ -4594,7 +4618,7 @@ function ServiceEditor({
           className={`mb-3 ${inputClass}`}
           placeholder="1000"
         />
-        <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
+        <Text className="mb-1 text-sm font-bold text-ink">Description</Text>
         <TextInput
           value={service.description}
           onChangeText={(description) => patch({ description })}
@@ -5534,7 +5558,7 @@ function JournalTab({
             <Text className="mb-3 text-sm font-bold text-ink">
               {editId ? `Edit ${editId}` : "Add a new journal post"}
             </Text>
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Id (slug, auto-generated from title if blank)
             </Text>
             <TextInput
@@ -5543,7 +5567,7 @@ function JournalTab({
               className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
               placeholder="e.g. esp32-beginner-project"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Tag / category
             </Text>
             <TextInput
@@ -5552,14 +5576,14 @@ function JournalTab({
               className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
               placeholder="Tutorial · Robotics"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">Title</Text>
+            <Text className="mb-1 text-sm font-bold text-ink">Title</Text>
             <TextInput
               value={title}
               onChangeText={onTitleChange}
               className="mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
               placeholder="Post title"
             />
-            <Text className="mb-1 text-xs font-bold text-muted">
+            <Text className="mb-1 text-sm font-bold text-ink">
               Excerpt / summary
             </Text>
             <TextInput
@@ -5791,6 +5815,9 @@ function ActivityTab({
       className="flex-1"
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
     >
+      <Text className="mb-4 font-display text-2xl font-bold tracking-tight text-ink">
+        Activity
+      </Text>
       {activities.length === 0 ? (
         // U-42: compact empty state — py-8, no tall dead space inside the pager page.
         <View className="items-center py-8">
@@ -6649,7 +6676,7 @@ function CompanyInfoEditor({
         <>
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">Name</Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
               <TextInput
                 value={company.name}
                 onChangeText={(name) => patch({ name })}
@@ -6658,7 +6685,7 @@ function CompanyInfoEditor({
               />
             </View>
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">
+              <Text className="mb-1 text-sm font-bold text-ink">
                 Short name
               </Text>
               <TextInput
@@ -6669,7 +6696,7 @@ function CompanyInfoEditor({
               />
             </View>
           </View>
-          <Text className="mb-1 text-xs font-bold text-muted">Address</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Address</Text>
           <TextInput
             value={company.address}
             onChangeText={(address) => patch({ address })}
@@ -6679,7 +6706,7 @@ function CompanyInfoEditor({
           />
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">City</Text>
+              <Text className="mb-1 text-sm font-bold text-ink">City</Text>
               <TextInput
                 value={company.city}
                 onChangeText={(city) => patch({ city })}
@@ -6688,7 +6715,7 @@ function CompanyInfoEditor({
               />
             </View>
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">Country</Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Country</Text>
               <TextInput
                 value={company.country}
                 onChangeText={(country) => patch({ country })}
@@ -6699,7 +6726,7 @@ function CompanyInfoEditor({
           </View>
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">Email</Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Email</Text>
               <TextInput
                 value={company.email}
                 onChangeText={(email) => patch({ email })}
@@ -6710,7 +6737,7 @@ function CompanyInfoEditor({
               />
             </View>
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">Phone</Text>
+              <Text className="mb-1 text-sm font-bold text-ink">Phone</Text>
               <TextInput
                 value={company.phone}
                 onChangeText={(phone) => patch({ phone })}
@@ -6722,7 +6749,7 @@ function CompanyInfoEditor({
           </View>
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">PAN</Text>
+              <Text className="mb-1 text-sm font-bold text-ink">PAN</Text>
               <TextInput
                 value={company.pan}
                 onChangeText={(pan) => patch({ pan })}
@@ -6731,9 +6758,7 @@ function CompanyInfoEditor({
               />
             </View>
             <View className="flex-1">
-              <Text className="mb-1 text-xs font-bold text-muted">
-                VAT label
-              </Text>
+              <Text className="mb-1 text-sm font-bold text-ink">VAT label</Text>
               <TextInput
                 value={company.vatLabel}
                 onChangeText={(vatLabel) => patch({ vatLabel })}
@@ -6742,7 +6767,7 @@ function CompanyInfoEditor({
               />
             </View>
           </View>
-          <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Description</Text>
           <TextInput
             value={company.description}
             onChangeText={(description) => patch({ description })}
@@ -6754,7 +6779,7 @@ function CompanyInfoEditor({
           {/* C5 (2026-09-23): socials + WhatsApp — shared with the website.
               Empty = that surface is hidden. WhatsApp is stored digits-only
               (country code + number, no '+'). */}
-          <Text className="mb-1 text-xs font-bold text-muted">
+          <Text className="mb-1 text-sm font-bold text-ink">
             WhatsApp number
           </Text>
           <TextInput
@@ -6765,9 +6790,7 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Facebook URL
-          </Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Facebook URL</Text>
           <TextInput
             value={company.facebookUrl}
             onChangeText={(facebookUrl) => patch({ facebookUrl })}
@@ -6776,9 +6799,7 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">
-            Instagram URL
-          </Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Instagram URL</Text>
           <TextInput
             value={company.instagramUrl}
             onChangeText={(instagramUrl) => patch({ instagramUrl })}
@@ -6787,7 +6808,7 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">TikTok URL</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">TikTok URL</Text>
           <TextInput
             value={company.tiktokUrl}
             onChangeText={(tiktokUrl) => patch({ tiktokUrl })}
@@ -6796,9 +6817,7 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">
-            LinkedIn URL
-          </Text>
+          <Text className="mb-1 text-sm font-bold text-ink">LinkedIn URL</Text>
           <TextInput
             value={company.linkedinUrl}
             onChangeText={(linkedinUrl) => patch({ linkedinUrl })}
@@ -6807,7 +6826,7 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Website URL</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Website URL</Text>
           <TextInput
             value={company.url}
             onChangeText={(url) => patch({ url })}
@@ -6816,7 +6835,7 @@ function CompanyInfoEditor({
             {...field}
             className={`mb-3 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">YouTube URL</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">YouTube URL</Text>
           <TextInput
             value={company.youtubeUrl}
             onChangeText={(youtubeUrl) => patch({ youtubeUrl })}
@@ -6914,41 +6933,41 @@ function TrainingProgramsManager({
           <Text className="mb-2 text-sm font-bold text-ink">
             {isNew ? "Add a training program" : `Edit ${editing.id}`}
           </Text>
-          <Text className="mb-1 text-xs font-bold text-muted">Title</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Title</Text>
           <TextInput
             value={editing.title}
             onChangeText={(title) => patch({ title })}
             className={`mb-2 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Audience</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Audience</Text>
           <TextInput
             value={editing.audience}
             onChangeText={(audience) => patch({ audience })}
             className={`mb-2 ${inputClass}`}
             placeholder="Students / Teachers / Makers"
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Duration</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Duration</Text>
           <TextInput
             value={editing.duration}
             onChangeText={(duration) => patch({ duration })}
             className={`mb-2 ${inputClass}`}
             placeholder="2 hours / 4 sessions"
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Description</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Description</Text>
           <TextInput
             value={editing.description}
             onChangeText={(description) => patch({ description })}
             multiline
             className={`mb-2 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Outcome</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Outcome</Text>
           <TextInput
             value={editing.outcome}
             onChangeText={(outcome) => patch({ outcome })}
             multiline
             className={`mb-2 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Sort order</Text>
           <TextInput
             value={String(editing.sortOrder)}
             onChangeText={(sortOrder) =>
@@ -7148,27 +7167,27 @@ function PilotCostManager({
           <Text className="mb-2 text-sm font-bold text-ink">
             {isNew ? "Add a cost line" : `Edit ${editing.id}`}
           </Text>
-          <Text className="mb-1 text-xs font-bold text-muted">Item</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Item</Text>
           <TextInput
             value={editing.item}
             onChangeText={(item) => patch({ item })}
             className={`mb-2 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Cost</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Cost</Text>
           <TextInput
             value={editing.cost}
             onChangeText={(cost) => patch({ cost })}
             className={`mb-2 ${inputClass}`}
             placeholder="NPR 25,000 / month"
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Note</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Note</Text>
           <TextInput
             value={editing.note}
             onChangeText={(note) => patch({ note })}
             multiline
             className={`mb-2 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Sort order</Text>
           <TextInput
             value={String(editing.sortOrder)}
             onChangeText={(sortOrder) =>
@@ -7363,14 +7382,14 @@ function CurriculumManager({
           <Text className="mb-2 text-sm font-bold text-ink">
             {isNew ? "Add a curriculum highlight" : `Edit ${editing.id}`}
           </Text>
-          <Text className="mb-1 text-xs font-bold text-muted">Age band</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Age band</Text>
           <TextInput
             value={editing.ageBand}
             onChangeText={(ageBand) => patch({ ageBand })}
             className={`mb-2 ${inputClass}`}
             placeholder="Ages 8-11"
           />
-          <Text className="mb-1 text-xs font-bold text-muted">
+          <Text className="mb-1 text-sm font-bold text-ink">
             Skills / items (one per line)
           </Text>
           <TextInput
@@ -7380,7 +7399,7 @@ function CurriculumManager({
             style={{ textAlignVertical: "top" }}
             className={`mb-2 min-h-20 ${inputClass}`}
           />
-          <Text className="mb-1 text-xs font-bold text-muted">Sort order</Text>
+          <Text className="mb-1 text-sm font-bold text-ink">Sort order</Text>
           <TextInput
             value={String(editing.sortOrder)}
             onChangeText={(sortOrder) =>
@@ -7580,7 +7599,7 @@ function AdminAction({
     >
       <Text
         numberOfLines={1}
-        className={`text-xs font-black ${tone === "navy" ? "text-white" : tone === "red" ? "text-red-600" : "text-ink"}`}
+        className={`text-sm font-black ${tone === "navy" ? "text-white" : tone === "red" ? "text-red-600" : "text-ink"}`}
       >
         {label}
       </Text>
