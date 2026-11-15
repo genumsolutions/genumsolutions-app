@@ -243,7 +243,7 @@ function EditorHeading({
 }) {
   return (
     <View className="mb-3 flex-row items-center justify-between gap-3">
-      <Text className="min-w-0 flex-1 font-display text-lg font-bold text-ink">
+      <Text className="min-w-0 flex-1 font-display text-base font-bold text-ink">
         {title}
       </Text>
       <Button label="Cancel" onPress={onCancel} tone="ghost" />
@@ -299,6 +299,15 @@ export default function PrintAdminPanel({
     label: string;
   } | null>(null);
   const [service, setService] = useState<PrintServiceItem | null>(null);
+  // Storefront preview for the sections that publish a card on /3d-printing.
+  const [preview, setPreview] = useState<{
+    eyebrow: string;
+    title: string;
+    body: string;
+    note?: string;
+    imageUrl?: string;
+    active: boolean;
+  } | null>(null);
   const [quote, setQuote] = useState<PrintQuote | null>(null);
 
   const reload = useCallback(async () => {
@@ -431,6 +440,19 @@ export default function PrintAdminPanel({
       {notice}
     </Text>
   ) : null;
+  // Rendered with the notice bar, which every section header already includes,
+  // so each list can preview without restructuring its own return tree.
+  const previewHost = preview ? (
+    <StorefrontPreviewModal
+      eyebrow={preview.eyebrow}
+      title={preview.title}
+      body={preview.body}
+      note={preview.note}
+      imageUrl={preview.imageUrl}
+      active={preview.active}
+      onClose={() => setPreview(null)}
+    />
+  ) : null;
 
   // ── Categories ─────────────────────────────────────────────────────
   if (section === "Categories") {
@@ -440,6 +462,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         {category ? (
           <>
             <EditorHeading
@@ -538,6 +561,20 @@ export default function PrintAdminPanel({
                     </View>
                     <View className="shrink-0 flex-row gap-1">
                       <Button
+                        label="Preview"
+                        tone="ghost"
+                        onPress={() =>
+                          setPreview({
+                            eyebrow: "3D printing category",
+                            title: item.name,
+                            body: item.description,
+                            note: `Sort ${item.sortOrder}`,
+                            imageUrl: item.imageUrl,
+                            active: item.active,
+                          })
+                        }
+                      />
+                      <Button
                         label="Edit"
                         tone="ghost"
                         onPress={() => setCategory(item)}
@@ -568,6 +605,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         <Card>
           <Text className="font-display text-base font-bold text-ink">
             Rates published?
@@ -594,7 +632,7 @@ export default function PrintAdminPanel({
                 }
               />
             ) : (
-              <Text className="text-[10px] font-black uppercase text-muted">
+              <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
                 Admin only
               </Text>
             )}
@@ -855,6 +893,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         <Card>
           <Text className="font-display text-base font-bold text-ink">
             Costing sheet
@@ -1015,6 +1054,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         {promotion ? (
           <>
             <EditorHeading
@@ -1144,6 +1184,23 @@ export default function PrintAdminPanel({
                     </View>
                     <View className="shrink-0 flex-row gap-1">
                       <Button
+                        label="Preview"
+                        tone="ghost"
+                        onPress={() =>
+                          setPreview({
+                            eyebrow: "Promotion",
+                            title: item.title,
+                            body: item.body,
+                            note:
+                              item.discountType === "none"
+                                ? "No discount"
+                                : `${item.discountValue} ${item.discountType}`,
+                            imageUrl: item.imageUrl,
+                            active: item.active,
+                          })
+                        }
+                      />
+                      <Button
                         label="Edit"
                         tone="ghost"
                         onPress={() => setPromotion(item)}
@@ -1174,6 +1231,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         {service ? (
           <>
             <EditorHeading
@@ -1267,6 +1325,19 @@ export default function PrintAdminPanel({
                     </View>
                     <View className="shrink-0 flex-row gap-1">
                       <Button
+                        label="Preview"
+                        tone="ghost"
+                        onPress={() =>
+                          setPreview({
+                            eyebrow: "Print service",
+                            title: item.title,
+                            body: item.description,
+                            note: item.priceNote,
+                            active: item.active,
+                          })
+                        }
+                      />
+                      <Button
                         label="Edit"
                         tone="ghost"
                         onPress={() => setService(item)}
@@ -1297,6 +1368,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         {galleryItem ? (
           <>
             <EditorHeading
@@ -1493,6 +1565,7 @@ export default function PrintAdminPanel({
     return (
       <View>
         {noticeBar}
+        {previewHost}
         <Text className="mb-3 text-xs text-muted">
           {data.quotes.length} request{data.quotes.length === 1 ? "" : "s"} —
           quote them, then move the status along.
@@ -1692,6 +1765,91 @@ export default function PrintAdminPanel({
         ))}
       </View>
     </View>
+  );
+}
+
+/**
+ * Storefront preview: the card an admin-managed print record publishes on the
+ * 3D printing page and the app's 3D screen. Deliberately plain (image, eyebrow,
+ * title, body, note) so it reads like the customer surface rather than the
+ * console; a hidden record is called out instead of pretending to be live.
+ */
+function StorefrontPreviewModal({
+  eyebrow,
+  title,
+  body,
+  note,
+  imageUrl,
+  active,
+  onClose,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+  note?: string;
+  imageUrl?: string;
+  active: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.72)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 20,
+        }}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close preview"
+      >
+        <Pressable onPress={() => {}} className="w-full max-w-sm">
+          <View className="overflow-hidden rounded-2xl border border-line bg-card">
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                className="h-40 w-full bg-mist"
+                resizeMode="cover"
+                accessibilityLabel={`${title} preview image`}
+              />
+            ) : null}
+            <View className="p-4">
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-widest text-navy">
+                  {eyebrow}
+                </Text>
+                {!active ? (
+                  <Text className="shrink-0 rounded bg-mist px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-red-600">
+                    Hidden
+                  </Text>
+                ) : null}
+              </View>
+              <Text className="mt-1 font-display text-base font-bold leading-snug text-ink">
+                {title || "(untitled)"}
+              </Text>
+              {body ? (
+                <Text className="mt-1 break-words text-sm leading-5 text-muted">
+                  {body}
+                </Text>
+              ) : null}
+              {note ? (
+                <Text className="mt-2 text-xs font-bold text-navy">{note}</Text>
+              ) : null}
+            </View>
+          </View>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close preview"
+            className="mt-3 min-h-11 items-center justify-center rounded-full bg-card px-6"
+          >
+            <Text className="text-xs font-black text-ink">Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

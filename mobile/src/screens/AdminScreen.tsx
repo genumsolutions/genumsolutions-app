@@ -2291,7 +2291,7 @@ function DashboardTab({
 
       {analytics && analytics.topPaths.length > 0 && (
         <View className="mt-3 rounded-xl border border-line bg-card p-4">
-          <Text className="font-display text-lg font-bold text-ink">
+          <Text className="font-display text-base font-bold text-ink">
             Top Pages (30 days)
           </Text>
           {analytics.topPaths.slice(0, 10).map((pv) => (
@@ -2315,7 +2315,7 @@ function DashboardTab({
 
       {analytics && analytics.viewsByDay.length > 0 && (
         <View className="mt-3 rounded-xl border border-line bg-card p-4">
-          <Text className="font-display text-lg font-bold text-ink">
+          <Text className="font-display text-base font-bold text-ink">
             Daily Traffic (30 days)
           </Text>
           <View className="mt-3 flex-row items-end" style={{ height: 120 }}>
@@ -2422,7 +2422,7 @@ function OrdersTab({
     >
       {/* Heading + filters */}
       <View className="mb-3">
-        <Text className="font-display text-xl font-bold text-ink">
+        <Text className="font-display text-xl font-bold tracking-tight text-ink">
           Customer orders ({total})
         </Text>
         <View className="mt-3 flex-row gap-2">
@@ -3496,7 +3496,7 @@ function ProjectPricingCard({
             </Text>
           </Pressable>
         ) : (
-          <Text className="text-[10px] font-black uppercase text-muted">
+          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
             Admin only
           </Text>
         )}
@@ -3847,7 +3847,7 @@ function ProductEditor({
         keyboardShouldPersistTaps="handled"
       >
         <View className="rounded-xl border border-line bg-card p-4">
-          <Text className="mb-1 font-display text-lg font-bold text-ink">
+          <Text className="mb-1 font-display text-base font-bold text-ink">
             {isNew ? "Add a new product" : `Edit ${product.id}`}
           </Text>
           <Text className="mb-4 text-xs text-muted">
@@ -4440,7 +4440,7 @@ function ServicesTab({
         ListHeaderComponent={
           <View className="mb-3">
             <View className="flex-row items-center justify-between">
-              <Text className="font-display text-xl font-bold text-ink">
+              <Text className="font-display text-xl font-bold tracking-tight text-ink">
                 Services ({services.length})
               </Text>
               <Pressable
@@ -4585,7 +4585,7 @@ function ServiceEditor({
       keyboardShouldPersistTaps="handled"
     >
       <View className="rounded-xl border border-line bg-card p-4">
-        <Text className="mb-3 font-display text-lg font-bold text-ink">
+        <Text className="mb-3 font-display text-base font-bold text-ink">
           {isNew ? "Add a new service" : `Edit ${service.id}`}
         </Text>
         <Text className="mb-1 text-sm font-bold text-ink">Id (slug)</Text>
@@ -5238,38 +5238,19 @@ function UsersSection({
           ) : null
         }
         renderItem={({ item }) => (
-          <View className="mb-3 rounded-xl border border-line bg-card p-4">
-            <Text
-              numberOfLines={2}
-              className="font-display text-sm font-bold text-ink"
-            >
-              {item.name || "—"}
-            </Text>
-            {/* 2026-11-14: emails have no spaces to wrap at, so a long address
-                used to run out past the card edge instead of truncating. */}
-            <Text numberOfLines={1} className="font-normal text-muted">
-              · {item.email}
-            </Text>
-            {item.phone ? (
-              <Text className="mt-0.5 text-xs text-muted">{item.phone}</Text>
-            ) : null}
-            {item.address ? (
-              <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
-                {item.address}
-              </Text>
-            ) : null}
-            {item.createdAt ? (
-              <Text className="mt-0.5 text-xs text-muted">
-                Joined {new Date(item.createdAt).toLocaleDateString()}
-                {item.lastSeenAt
-                  ? " · Last seen " +
-                    new Date(item.lastSeenAt).toLocaleDateString()
-                  : ""}
-              </Text>
-            ) : null}
-            <View className="mt-1 flex-row gap-1">
+          // 2026-11-15 (owner: "100s of users should fit"): one dense row per
+          // account instead of a tall card. Identity on line 1, every secondary
+          // field folded into a single truncating meta line, actions on line 3.
+          <View className="mb-2 rounded-lg border border-line bg-card px-3 py-2">
+            <View className="flex-row items-center gap-2">
               <Text
-                className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${
+                numberOfLines={1}
+                className="min-w-0 flex-1 text-sm font-bold leading-snug text-ink"
+              >
+                {item.name || "—"}
+              </Text>
+              <Text
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest ${
                   item.role === "owner"
                     ? "bg-ink text-white"
                     : item.role === "admin"
@@ -5282,7 +5263,7 @@ function UsersSection({
                 {item.role}
               </Text>
               <Text
-                className={`rounded px-2 py-0.5 text-[10px] font-black uppercase ${
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest ${
                   item.tier === "pro"
                     ? "bg-emerald-100 text-emerald-700"
                     : "bg-mist text-muted"
@@ -5291,12 +5272,28 @@ function UsersSection({
                 {item.tier}
               </Text>
             </View>
-            <View className="mt-2 flex-row flex-wrap gap-2">
+            {/* Emails have no spaces to wrap at, so this line truncates rather
+                than running past the card edge. */}
+            <Text numberOfLines={1} className="mt-0.5 text-xs text-muted">
+              {[item.email, item.phone, item.address]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+            {item.createdAt ? (
+              <Text numberOfLines={1} className="text-xs text-muted">
+                Joined {new Date(item.createdAt).toLocaleDateString()}
+                {item.lastSeenAt
+                  ? " · last seen " +
+                    new Date(item.lastSeenAt).toLocaleDateString()
+                  : ""}
+              </Text>
+            ) : null}
+            <View className="mt-1.5 flex-row flex-wrap items-center gap-1.5">
               {canDelete && item.role !== "owner" ? (
                 <Pressable
                   onPress={() => onToggleRole(item)}
                   accessibilityRole="button"
-                  className="rounded-full border border-line px-3 py-1"
+                  className="rounded-full border border-line px-2.5 py-0.5"
                 >
                   <Text className="text-[11px] font-bold text-navy">
                     Change role
@@ -5306,17 +5303,31 @@ function UsersSection({
               <Pressable
                 onPress={() => onToggleTier(item)}
                 accessibilityRole="button"
-                className="rounded-full border border-line px-3 py-1"
+                className="rounded-full border border-line px-2.5 py-0.5"
               >
                 <Text className="text-[11px] font-bold text-navy">
                   {item.tier === "pro" ? "Make free" : "Make pro"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  setExpandedUsers((prev) => ({
+                    ...prev,
+                    [item.id]: !prev[item.id],
+                  }))
+                }
+                accessibilityRole="button"
+                className="rounded-full border border-line px-2.5 py-0.5"
+              >
+                <Text className="text-[11px] font-bold text-navy">
+                  {expandedUsers[item.id] ? "Hide projects" : "Show projects"}
                 </Text>
               </Pressable>
               {isOwner && item.role !== "owner" ? (
                 <Pressable
                   onPress={() => onDeleteUser(item)}
                   accessibilityRole="button"
-                  className="rounded-full border border-red-200 px-3 py-1"
+                  className="rounded-full border border-red-200 px-2.5 py-0.5"
                 >
                   <Text className="text-[11px] font-bold text-red-600">
                     Delete account
@@ -5324,19 +5335,6 @@ function UsersSection({
                 </Pressable>
               ) : null}
             </View>
-            <Pressable
-              onPress={() =>
-                setExpandedUsers((prev) => ({
-                  ...prev,
-                  [item.id]: !prev[item.id],
-                }))
-              }
-              className="mt-2 self-start rounded-full border border-line px-3 py-1"
-            >
-              <Text className="text-[11px] font-bold text-navy">
-                {expandedUsers[item.id] ? "Hide projects" : "Show projects"}
-              </Text>
-            </Pressable>
             {expandedUsers[item.id] && (
               <View className="mt-3">
                 <UserProjectProfileManager
@@ -6108,7 +6106,7 @@ function SystemLogsTab({
         paddingBottom: 40,
       }}
     >
-      <Text className="mb-1 font-display text-lg font-bold tracking-tight text-ink">
+      <Text className="mb-1 font-display text-base font-bold tracking-tight text-ink">
         Car crash / restart reports
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6194,7 +6192,7 @@ function SystemLogsTab({
         </>
       )}
 
-      <Text className="mb-1 mt-5 font-display text-lg font-bold tracking-tight text-ink">
+      <Text className="mb-1 mt-5 font-display text-base font-bold tracking-tight text-ink">
         App logs
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6298,7 +6296,7 @@ function UserLogsTab({
         paddingBottom: 40,
       }}
     >
-      <Text className="mb-1 font-display text-lg font-bold tracking-tight text-ink">
+      <Text className="mb-1 font-display text-base font-bold tracking-tight text-ink">
         User activity log
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6394,7 +6392,7 @@ function ProfileEntriesTab({
         paddingBottom: 40,
       }}
     >
-      <Text className="mb-1 font-display text-lg font-bold tracking-tight text-ink">
+      <Text className="mb-1 font-display text-base font-bold tracking-tight text-ink">
         Profile entries
       </Text>
       <Text className="mb-3 text-xs text-muted">
@@ -6511,7 +6509,7 @@ function MessagesTab({
       }}
     >
       <View className="mb-3">
-        <Text className="font-display text-xl font-bold text-ink">
+        <Text className="font-display text-xl font-bold tracking-tight text-ink">
           Messages ({total})
         </Text>
         <View className="mt-2 flex-row flex-wrap gap-2">
@@ -6689,6 +6687,9 @@ function SettingsTab({
   const inputClass =
     "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
   const [section, setSection] = useState<SettingsSection>("details");
+  // 2026-11-15: the company form is read-only until Edit is pressed, like every
+  // other admin editor. Previously all 17 inputs were live on arrival.
+  const [editing, setEditing] = useState(false);
   const activeEditorsRef = useRef<Record<string, boolean>>({});
   const [anyEditing, setAnyEditing] = useState(false);
   const report = useCallback(
@@ -6699,8 +6700,39 @@ function SettingsTab({
     [],
   );
   useEffect(() => {
-    onEditingChange(anyEditing);
-  }, [anyEditing, onEditingChange]);
+    onEditingChange(editing || anyEditing);
+  }, [editing, anyEditing, onEditingChange]);
+
+  const rowsFor = (
+    which: SettingsSection,
+  ): { label: string; value: string }[] => {
+    if (!company) return [];
+    if (which === "details")
+      return [
+        { label: "Name", value: company.name },
+        { label: "Short name", value: company.shortName },
+        { label: "Address", value: company.address },
+        { label: "City", value: company.city },
+        { label: "Country", value: company.country },
+        { label: "PAN", value: company.pan },
+        { label: "VAT label", value: company.vatLabel },
+      ];
+    if (which === "contact")
+      return [
+        { label: "Email", value: company.email },
+        { label: "Phone", value: company.phone },
+        { label: "Description", value: company.description },
+      ];
+    return [
+      { label: "WhatsApp", value: company.whatsappNumber },
+      { label: "Website", value: company.url ?? "" },
+      { label: "Facebook", value: company.facebookUrl },
+      { label: "Instagram", value: company.instagramUrl },
+      { label: "TikTok", value: company.tiktokUrl },
+      { label: "LinkedIn", value: company.linkedinUrl },
+      { label: "YouTube", value: company.youtubeUrl },
+    ];
+  };
   return (
     <ScrollView
       className="flex-1"
@@ -6716,6 +6748,25 @@ function SettingsTab({
       <Text className="mt-1 text-xs text-muted">
         Company details — all DB-first (shared with the website).
       </Text>
+      <View className="mt-3 flex-row items-center justify-between gap-3">
+        <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+          {editing ? "Editing" : "Read-only"}
+        </Text>
+        <Pressable
+          onPress={() => setEditing((value) => !value)}
+          accessibilityRole="button"
+          accessibilityLabel={
+            editing ? "Cancel editing company" : "Edit company details"
+          }
+          className={`h-8 items-center justify-center rounded-full px-4 ${editing ? "border border-line bg-card" : "bg-navy"}`}
+        >
+          <Text
+            className={`text-xs font-bold ${editing ? "text-navy" : "text-white"}`}
+          >
+            {editing ? "Cancel" : "Edit"}
+          </Text>
+        </Pressable>
+      </View>
       <View className="mt-3 flex-row flex-wrap gap-2">
         {SETTINGS_SECTIONS.map((item) => {
           const selected = section === item.id;
@@ -6744,14 +6795,45 @@ function SettingsTab({
       <Text className="mt-2 text-xs text-muted">
         {SETTINGS_SECTIONS.find((item) => item.id === section)?.hint}
       </Text>
-      <CompanyInfoEditor
-        company={company}
-        setCompany={setCompany}
-        onSaved={onCompanySaved}
-        onEditingChange={report("company")}
-        inputClass={inputClass}
-        section={section}
-      />
+      {editing ? (
+        <CompanyInfoEditor
+          company={company}
+          setCompany={setCompany}
+          onSaved={(next) => {
+            onCompanySaved(next);
+            setEditing(false);
+          }}
+          onEditingChange={report("company")}
+          inputClass={inputClass}
+          section={section}
+        />
+      ) : (
+        <SectionCard
+          title={
+            SETTINGS_SECTIONS.find((item) => item.id === section)?.label ??
+            "Company information"
+          }
+          hint="Shown in the app Contact/Legal screens and the website footer/contact pages."
+        >
+          {!company ? (
+            <Text className="text-sm text-muted">Loading company info…</Text>
+          ) : (
+            rowsFor(section).map((row) => (
+              <View
+                key={row.label}
+                className="flex-row items-start gap-3 border-b border-line py-2 last:border-b-0"
+              >
+                <Text className="w-28 shrink-0 text-xs text-muted">
+                  {row.label}
+                </Text>
+                <Text className="min-w-0 flex-1 break-words text-right text-sm text-ink">
+                  {row.value || "—"}
+                </Text>
+              </View>
+            ))
+          )}
+        </SectionCard>
+      )}
     </ScrollView>
   );
 }
@@ -6767,7 +6849,7 @@ function SectionCard({
 }) {
   return (
     <View className="mt-5 rounded-xl border border-line bg-card p-4">
-      <Text className="font-display text-lg font-bold text-ink">{title}</Text>
+      <Text className="font-display text-base font-bold text-ink">{title}</Text>
       {hint ? <Text className="mt-0.5 text-xs text-muted">{hint}</Text> : null}
       <View className="mt-3">{children}</View>
     </View>
@@ -7253,7 +7335,7 @@ function TrainingProgramsManager({
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
                 Training program
               </Text>
-              <Text className="mt-2 font-display text-lg font-bold text-ink">
+              <Text className="mt-2 font-display text-base font-bold text-ink">
                 {preview.title}
               </Text>
               <Text className="mt-1 text-xs text-muted">
@@ -7473,7 +7555,7 @@ function PilotCostManager({
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
                 Pilot cost line
               </Text>
-              <Text className="mt-2 font-display text-lg font-bold text-ink">
+              <Text className="mt-2 font-display text-base font-bold text-ink">
                 {preview.item}
               </Text>
               <Text className="mt-1 text-sm font-bold text-navy">
@@ -7687,7 +7769,7 @@ function CurriculumManager({
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
                 Curriculum highlight
               </Text>
-              <Text className="mt-2 font-display text-lg font-bold text-ink">
+              <Text className="mt-2 font-display text-base font-bold text-ink">
                 {preview.ageBand}
               </Text>
               {preview.items.length > 0 ? (
@@ -7986,7 +8068,7 @@ function CatalogPreviewModal({
               {priceLabel ? (
                 <Text
                   numberOfLines={1}
-                  className="min-w-0 flex-1 font-display text-lg font-bold text-ink"
+                  className="min-w-0 flex-1 font-display text-base font-bold text-ink"
                 >
                   {priceLabel}
                 </Text>
