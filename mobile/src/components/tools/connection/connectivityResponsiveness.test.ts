@@ -25,9 +25,9 @@
 // rule was proven both ways (mutate → red, restore → green) when written.
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../../test-utils/readSource";
 import { CAR_MDNS_HOST, buildDiscoveryPlan } from "./discoveryPlan";
 
 // --- the ORDER: the user's answer wins, the sweep never leads ------------
@@ -105,9 +105,8 @@ function plan2SweepIsLast(
 
 // --- the wiring, read from source ----------------------------------------
 
-const RAW_HUB = readFileSync(
+const RAW_HUB = readSource(
   fileURLToPath(new NodeURL("../useControlHub.ts", import.meta.url)),
-  "utf8",
 );
 
 const hubCode = RAW_HUB.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -195,9 +194,8 @@ describe("P8 — the hint persists through the guarded writer (F-91)", () => {
 
 // --- the panel: the control exists and says what it does -----------------
 
-const RAW_SECTION = readFileSync(
+const RAW_SECTION = readSource(
   fileURLToPath(new NodeURL("./ConnectionSection.tsx", import.meta.url)),
-  "utf8",
 );
 
 const section = RAW_SECTION.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -259,9 +257,8 @@ describe('P8 — ConnectionSection offers the "Car network" control', () => {
   it("the SSID answer is a per-car PREF — written, restored and carried by every patch", () => {
     // deviceMemory.write REPLACES the stored record, so a pref missing from
     // the persist base is not kept — it is erased by the next unrelated save.
-    const hubRaw = readFileSync(
+    const hubRaw = readSource(
       fileURLToPath(new NodeURL("../useControlHub.ts", import.meta.url)),
-      "utf8",
     );
     const hub = hubRaw
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -356,9 +353,8 @@ describe("U-124 ⑩ — the right pane is ONE 'Car network' section", () => {
   });
 
   it("WifiPanel refuses every car-bound touch while unreachable", () => {
-    const panel = readFileSync(
+    const panel = readSource(
       fileURLToPath(new NodeURL("./WifiPanel.tsx", import.meta.url)),
-      "utf8",
     )
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .split("\n")

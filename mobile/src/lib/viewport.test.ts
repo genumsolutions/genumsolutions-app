@@ -3,9 +3,9 @@
 // own landscape compare) and HomeScreen froze its card width at module load —
 // see viewport.ts. These tests pin the shared semantics so no future screen
 // reintroduces a private threshold or a frozen read.
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import { readSource } from "../../test-utils/readSource";
 
 // viewport.ts imports the hook from react-native; the mock replaces the Flow
 // module (which rolldown cannot parse) for this pure-logic test file. The
@@ -80,9 +80,8 @@ describe("U-90 - the module itself never freezes a viewport read", () => {
   // everything from the reactive useWindowDimensions, so a source-level ban
   // on the static read in THIS file keeps the idiom honest.
   it("contains no static Dimensions.get", () => {
-    const src = readFileSync(
+    const src = readSource(
       fileURLToPath(new NodeURL("./viewport.ts", import.meta.url)),
-      "utf8",
     );
     // Strip comments first: the rule bans the frozen READ, not talking about it.
     const code = src

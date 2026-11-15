@@ -9,10 +9,10 @@
 //   4. the Raw ssid never leaks — only the formatted label, ever (issue 4)
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../../test-utils/readSource";
 
 import { formatPhoneNetwork } from "./phoneNetwork";
 
@@ -20,7 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function raw(rel: string): string {
   // Resolve relative to this test file's directory.
-  return readFileSync(join(__dirname, rel), "utf8");
+  return readSource(join(__dirname, rel));
 }
 
 /** Comments stripped; `//` preceded by `:` (URL literals) survives. */
@@ -51,7 +51,7 @@ function chromeRaw(): string {
     "screens",
     "RemoteControlScreen.tsx",
   );
-  return readFileSync(base, "utf8");
+  return readSource(base);
 }
 const RAW_CHROME = chromeRaw();
 const chrome = strip(RAW_CHROME);

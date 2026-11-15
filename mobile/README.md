@@ -40,7 +40,7 @@ website share ONLY the Supabase database (`products`, `services`, `carts`, `orde
 
 ## Admin Dashboard (Nov 2026)
 
-The admin dashboard (`AdminScreen.tsx`) has a 10-tab layout:
+The admin dashboard (`AdminScreen.tsx`) has 8 top-level tabs, matching the website:
 
 | Tab                 | Description                                                  |
 | ------------------- | ------------------------------------------------------------ |
@@ -50,12 +50,12 @@ The admin dashboard (`AdminScreen.tsx`) has a 10-tab layout:
 | 3D Products         | 3D printing catalog                                          |
 | Projects            | Project packages                                             |
 | Content             | Services, journal, home copy                                 |
-| Users               | User directory + car profiles + robot profiles (3 sections)  |
-| Logs                | System logs + user activity + fleet diagnostics (3 sections) |
+| Users               | User directory, messages, profiles, and the Logs subtab       |
 | Settings            | Company info (17 fields) + training programs + pilot costs   |
-| Profile             | User profile entries (edit-button pattern)                   |
 
-### Users Tab — 3 Sections
+The Users tab has three subtabs: **Users**, **Messages**, and **Logs**.
+
+### Users Subtab — 3 Sections
 
 The **Users** tab (`UsersSection`) has 3 sections:
 
@@ -74,11 +74,11 @@ The **Users** tab (`UsersSection`) has 3 sections:
 - Tap "Save" → persists and locks
 - Tap "Cancel" → discards and returns to read-only
 
-### Logs Tab — 3 Sections
+### Users → Logs Subtab — 3 Sections
 
-1. **User Activity** — `user_activity_log` rows
-2. **User Profiles** — `user_profile_entries` rows with edit per row
-3. **Fleet Diagnostics** — Crash reports + app logs with scope filter
+1. **System** — device crash/restart reports and app logs
+2. **User activity** — user activity log rows
+3. **Profiles** — saved user profile entries
 
 ---
 

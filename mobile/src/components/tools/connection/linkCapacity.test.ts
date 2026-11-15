@@ -22,9 +22,9 @@
 // directions (mutate → red, restore → green) when it was written.
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../../test-utils/readSource";
 import { parseTelemetryLine } from "../../../services/carProtocol";
 import { targetUnavailableReason } from "./methods";
 
@@ -149,9 +149,8 @@ describe("P5 — targetUnavailableReason refuses only SECOND-link raises", () =>
 // --- part C: the panel wiring — the gate exists, is strict, and hits both
 //     connect actions -------------------------------------------------------
 
-const RAW_SECTION = readFileSync(
+const RAW_SECTION = readSource(
   fileURLToPath(new NodeURL("./ConnectionSection.tsx", import.meta.url)),
-  "utf8",
 );
 
 const section = RAW_SECTION.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -218,9 +217,8 @@ describe("P5 — ConnectionSection gates the second-link raise on the car's verd
 
 // --- part D: the hub wiring — adopt on live truth, expose, never persist ---
 
-const RAW_HUB = readFileSync(
+const RAW_HUB = readSource(
   fileURLToPath(new NodeURL("../useControlHub.ts", import.meta.url)),
-  "utf8",
 );
 
 const hub = RAW_HUB.replace(/\/\*[\s\S]*?\*\//g, "")

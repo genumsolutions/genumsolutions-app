@@ -15,12 +15,12 @@
 //      outbound marker so a SECOND connect cannot read a stale "connecting".
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../test-utils/readSource";
 
 function raw(rel: string): string {
-  return readFileSync(fileURLToPath(new NodeURL(rel, import.meta.url)), "utf8");
+  return readSource(fileURLToPath(new NodeURL(rel, import.meta.url)));
 }
 
 function strip(s: string): string {

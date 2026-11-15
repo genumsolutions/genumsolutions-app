@@ -22,6 +22,9 @@ on:
     paths:
       - "mobile/src/**"
       - "mobile/assets/**"
+      # Test-only changes run CI but do not require a published OTA bundle.
+      - "!mobile/src/**/*.test.*"
+      - "!mobile/src/**/*.spec.*"
   workflow_dispatch:
 
 concurrency:

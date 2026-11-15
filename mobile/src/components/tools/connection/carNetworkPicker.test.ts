@@ -21,15 +21,15 @@
 //   4. the panel is never handed the phone's raw SSID (single copy).
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../../test-utils/readSource";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function raw(rel: string): string {
-  return readFileSync(join(__dirname, rel), "utf8");
+  return readSource(join(__dirname, rel));
 }
 
 /** Comments stripped; `//` preceded by `:` (URL literals) survives. */

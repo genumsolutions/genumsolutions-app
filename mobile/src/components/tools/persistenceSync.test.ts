@@ -29,13 +29,12 @@
 // when it was written.
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../test-utils/readSource";
 
-const RAW = readFileSync(
+const RAW = readSource(
   fileURLToPath(new NodeURL("./useControlHub.ts", import.meta.url)),
-  "utf8",
 );
 
 /** Comments stripped, string literals KEPT. The line-comment regex spares a

@@ -29,9 +29,9 @@
 // comments stripped, string literals KEPT.
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../test-utils/readSource";
 import { parseTelemetryLine } from "../../services/carProtocol";
 
 // --- part A: the parse — both surfaces, "don't know" on every bad path ---
@@ -72,7 +72,7 @@ describe("U-117 — parseTelemetryLine reads the car's page-server state", () =>
 // --- part B: the wiring — hub + panel, read from source (F-83) ---
 
 const load = (name: string) =>
-  readFileSync(fileURLToPath(new NodeURL(name, import.meta.url)), "utf8");
+  readSource(fileURLToPath(new NodeURL(name, import.meta.url)));
 
 const strip = (raw: string) =>
   raw

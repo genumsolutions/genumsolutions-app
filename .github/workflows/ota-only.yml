@@ -26,6 +26,9 @@ on:
     paths:
       - "mobile/src/**"
       - "mobile/assets/**"
+      # Tests run in CI but are not part of the exported app bundle.
+      - "!mobile/src/**/*.test.*"
+      - "!mobile/src/**/*.spec.*"
   workflow_dispatch:
 
 concurrency:

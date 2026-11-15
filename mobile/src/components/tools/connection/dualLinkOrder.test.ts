@@ -22,9 +22,9 @@
 // rule was proven both ways (mutate → red, restore → green) when written.
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../../../test-utils/readSource";
 import { describeSecondLink, type SecondLinkFacts } from "./linkOrder";
 
 // --- part A: the pure decision, in every link shape ----------------------
@@ -157,9 +157,8 @@ describe("P3 — describeSecondLink names the in-flight raise", () => {
 
 // --- part B: the ordering invariant, read from the hub source ------------
 
-const RAW_HUB = readFileSync(
+const RAW_HUB = readSource(
   fileURLToPath(new NodeURL("../useControlHub.ts", import.meta.url)),
-  "utf8",
 );
 
 const hubCode = RAW_HUB.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -201,9 +200,8 @@ describe("P3 — the app never claims a link before it is confirmed", () => {
 
 // --- part C: the panel renders the one line ------------------------------
 
-const RAW_SECTION = readFileSync(
+const RAW_SECTION = readSource(
   fileURLToPath(new NodeURL("./ConnectionSection.tsx", import.meta.url)),
-  "utf8",
 );
 
 const section = RAW_SECTION.replace(/\/\*[\s\S]*?\*\//g, "")

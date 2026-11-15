@@ -15,14 +15,14 @@
 // rules prove WHICH data and sections the compiled screen contains.
 // =====================================================================
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readSource } from "../../test-utils/readSource";
 import { pilotCosts as fallbackPilotCosts } from "../config/programs";
 import { pilotTotalLabel } from "../lib/pilotCostTotal";
 
 function raw(rel: string): string {
-  return readFileSync(fileURLToPath(new NodeURL(rel, import.meta.url)), "utf8");
+  return readSource(fileURLToPath(new NodeURL(rel, import.meta.url)));
 }
 
 /** Comments stripped — the assertions match JSX text/section names and
