@@ -35,7 +35,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 import { ADMIN_TAB_HINTS } from "../config/adminTabs";
 import type {
   DashboardSubTab,
@@ -2515,6 +2515,7 @@ function OrdersTab({
   const STATUSES = ["pending", "paid", "fulfilled", "cancelled"] as const;
   // Customer-facing order card, so staff can see the receipt the buyer sees.
   const [preview, setPreview] = useState<AdminOrder | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   return (
     <ScrollView
       className="flex-1"
@@ -2584,7 +2585,15 @@ function OrdersTab({
                     {o.status}
                   </Text>
                   <Pressable
-                    onPress={() => setPreview(o)}
+                    onPress={() => {
+                      setPreview(o);
+                      // Keep the centered, real-size order preview in app; open the
+                      // actual order page in a centered new browser window at the
+                      // real display size and location.
+                      WebBrowser.openBrowserAsync(`/orders/${o.id}`,
+                        undefined
+                      ).catch(() => undefined);
+                    }}
                     className="rounded-lg border border-line px-3 py-1"
                   >
                     <Text className="text-xs font-bold text-ink">Preview</Text>
@@ -2750,6 +2759,7 @@ function ProductsTab({
   saveSaving: boolean;
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState("All");
   const PAGE_SIZE = 8;
@@ -2922,12 +2932,19 @@ function ProductsTab({
                 onPress={() => onEdit(item)}
                 label="Edit"
                 tone="navy"
-              />
-              <AdminAction
-                onPress={() => setPreview(item)}
-                label="Preview"
-                tone="plain"
-              />
+              />                      <AdminAction
+                        onPress={() => {
+                          setPreview(item);
+                          // In-app preview keeps the centered, full-size storefront
+                          // preview; also open the real public product page in a
+                          // centered new browser window at its real display size.
+                          WebBrowser.openBrowserAsync(`/products/${item.id}`,
+                            undefined
+                          ).catch(() => undefined);
+                        }}
+                        label="Preview"
+                        tone="plain"
+                      />
               <AdminAction
                 onPress={() => onToggleActive(item)}
                 label={item.active ? "Hide" : "Show"}
@@ -3408,12 +3425,19 @@ function ProjectTab({
                   onPress={() => onEdit(item)}
                   label="Edit"
                   tone="navy"
-                />
-                <AdminAction
-                  onPress={() => setPreview(item)}
-                  label="Preview"
-                  tone="plain"
-                />
+                />                        <AdminAction
+                          onPress={() => {
+                            setPreview(item);
+                            // Keep the centered, real-size storefront preview in
+                            // app; also open the real public product page in a
+                            // centered new browser window at actual display size.
+                            WebBrowser.openBrowserAsync(`/products/${item.id}`,
+                              undefined
+                            ).catch(() => undefined);
+                          }}
+                          label="Preview"
+                          tone="plain"
+                        />
                 <AdminAction
                   onPress={() => onToggleActive(item)}
                   label={item.active ? "Hide" : "Show"}
@@ -4698,12 +4722,19 @@ function ServicesTab({
                 onPress={() => onEdit(item)}
                 label="Edit"
                 tone="navy"
-              />
-              <AdminAction
-                onPress={() => setPreview(item)}
-                label="Preview"
-                tone="plain"
-              />
+              />                      <AdminAction
+                        onPress={() => {
+                          setPreview(item);
+                          // In-app preview keeps the centered, full-size storefront
+                          // preview; also open the real public product page in a
+                          // centered new browser window at its real display size.
+                          WebBrowser.openBrowserAsync(`/products/${item.id}`,
+                            undefined
+                          ).catch(() => undefined);
+                        }}
+                        label="Preview"
+                        tone="plain"
+                      />
               <AdminAction
                 onPress={() => onToggleActive(item)}
                 label={item.active ? "Hide" : "Show"}
@@ -5891,12 +5922,19 @@ function JournalTab({
                   onPress={() => onEdit(item)}
                   label="Edit"
                   tone="navy"
-                />
-                <AdminAction
-                  onPress={() => setPreview(item)}
-                  label="Preview"
-                  tone="plain"
-                />
+                />                        <AdminAction
+                          onPress={() => {
+                            setPreview(item);
+                            // Keep the centered, real-size storefront preview in
+                            // app; also open the real public product page in a
+                            // centered new browser window at actual display size.
+                            WebBrowser.openBrowserAsync(`/products/${item.id}`,
+                              undefined
+                            ).catch(() => undefined);
+                          }}
+                          label="Preview"
+                          tone="plain"
+                        />
                 <AdminAction
                   onPress={() => onTogglePublish(item)}
                   label={item.active ? "Unpublish" : "Publish"}
@@ -6756,7 +6794,15 @@ function MessagesTab({
                 </View>
                 <View className="shrink-0 flex-row flex-wrap gap-2">
                   <AdminAction
-                    onPress={() => setPreview(m)}
+                    onPress={() => {
+                      setPreview(m);
+                      // Keep the centered, real-size message preview in app;
+                      // open the actual message thread in a centered new browser
+                      // window.
+                      WebBrowser.openBrowserAsync(`/messages/${m.id}`,
+                        undefined
+                      ).catch(() => undefined);
+                    }}
                     label="Preview"
                     tone="plain"
                   />
@@ -7573,7 +7619,14 @@ function TrainingProgramsManager({
                 tone="navy"
               />
               <AdminAction
-                onPress={() => setPreview(program)}
+                onPress={() => {
+                  setPreview(program);
+                  // Keep the centered, real-size training program preview in app;
+                  // open the actual program page (services) in a centered new
+                  // browser window at actual display size.
+                  WebBrowser.openBrowserAsync(`/services`, undefined)
+                    .catch(() => undefined);
+                }}
                 label="Preview"
                 tone="plain"
               />
@@ -7795,7 +7848,14 @@ function PilotCostManager({
                 tone="navy"
               />
               <AdminAction
-                onPress={() => setPreview(line)}
+                onPress={() => {
+                  setPreview(line);
+                  // Keep the centered, real-size pilot cost line preview in app;
+                  // open the actual program page (services) in a centered new
+                  // browser window at actual display size.
+                  WebBrowser.openBrowserAsync(`/services`, undefined)
+                    .catch(() => undefined);
+                }}
                 label="Preview"
                 tone="plain"
               />
@@ -8011,7 +8071,14 @@ function CurriculumManager({
                 tone="navy"
               />
               <AdminAction
-                onPress={() => setPreview(highlight)}
+                onPress={() => {
+                  setPreview(highlight);
+                  // Keep the centered, real-size curriculum highlight preview in
+                  // app; open the actual home page in a centered new browser
+                  // window at actual display size.
+                  WebBrowser.openBrowserAsync(`/`, undefined)
+                    .catch(() => undefined);
+                }}
                 label="Preview"
                 tone="plain"
               />
@@ -8372,3 +8439,4 @@ function CatalogPreviewModal({
     </Modal>
   );
 }
+import { Feather } from "@expo/vector-icons";
