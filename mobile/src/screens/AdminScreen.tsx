@@ -258,7 +258,7 @@ export function AdminScreen() {
 }
 
 function AdminConsole() {
-  const { isAdmin, isOwner, signOut, user: currentUser } = useApp();
+  const { isAdmin, isOwner, user: currentUser } = useApp();
   // Staff can operate every admin panel except deletions; isAdmin means
   // admin+owner (deletion rights). Only the sole owner may delete users
   // (see the Users tab).
@@ -1704,7 +1704,6 @@ function AdminConsole() {
               onEdit={setEditingProject}
               onNew={() => setEditingProject(blankProjectProduct())}
               onSaveProduct={saveProduct}
-              saveSaving={saveSaving}
               canDelete={canDelete}
               onDelete={handleDeleteProduct}
               onToggleActive={(p) => void handleToggleProductActive(p)}
@@ -1807,7 +1806,7 @@ function AdminConsole() {
                       saving={contentSaving}
                       trainingPrograms={trainingPrograms}
                       setTrainingPrograms={setTrainingPrograms}
-                      onSaveProgram={async (program, isNew) => {
+                      onSaveProgram={async (program, _isNew) => {
                         await upsertAdminTrainingProgram(program);
                       }}
                       onDeleteProgram={async (id) => {
@@ -1815,7 +1814,7 @@ function AdminConsole() {
                       }}
                       pilotCostLines={pilotCostLines}
                       setPilotCostLines={setPilotCostLines}
-                      onSavePilotLine={async (line, isNew) => {
+                      onSavePilotLine={async (line, _isNew) => {
                         await upsertAdminPilotCostLine(line);
                       }}
                       onDeletePilotLine={async (id) => {
@@ -1823,7 +1822,7 @@ function AdminConsole() {
                       }}
                       curriculumHighlights={curriculumHighlights}
                       setCurriculumHighlights={setCurriculumHighlights}
-                      onSaveCurriculum={async (highlight, isNew) => {
+                      onSaveCurriculum={async (highlight, _isNew) => {
                         await upsertAdminCurriculumHighlight(highlight);
                       }}
                       onDeleteCurriculum={async (id) => {
@@ -1866,7 +1865,6 @@ function AdminConsole() {
                       onToggleRole={handleToggleUserRole}
                       onToggleTier={handleToggleUserTier}
                       onDeleteUser={handleDeleteUser}
-                      currentUserId={currentUser?.id ?? ""}
                     />
                   ),
                 },
@@ -2922,7 +2920,6 @@ function ProjectTab({
   canDelete,
   onDelete,
   onToggleActive,
-  saveSaving,
 }: {
   title: string;
   products: AdminProduct[];
@@ -2934,7 +2931,6 @@ function ProjectTab({
   onEdit: (p: AdminProduct) => void;
   onNew: () => void;
   onSaveProduct: (p: AdminProduct) => Promise<boolean>;
-  saveSaving: boolean;
   canDelete: boolean;
   onDelete: (id: string) => void;
   onToggleActive: (p: AdminProduct) => void;
@@ -5333,7 +5329,6 @@ function UsersSection({
   onToggleRole,
   onToggleTier,
   onDeleteUser,
-  currentUserId,
 }: {
   users: AdminUser[];
   total: number;
@@ -5348,7 +5343,6 @@ function UsersSection({
   onToggleRole: (u: AdminUser) => void;
   onToggleTier: (u: AdminUser) => void;
   onDeleteUser: (u: AdminUser) => void;
-  currentUserId: string;
 }) {
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>(
     {},
@@ -5661,14 +5655,6 @@ function ContentTab({
   );
 }
 
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
 function formatNPR(amount: number): string {
   return `NPR ${amount.toLocaleString("en-IN")}`;
 }
@@ -5737,8 +5723,8 @@ function JournalTab({
           paddingBottom: 40,
         }}
       >
-        <View className="mb-4 flex-row items-center justify-between">
-          <View>
+        <View className="mb-4 flex-row items-center justify-between gap-2">
+          <View className="min-w-0 flex-1">
             <Text className="font-display text-xl font-bold tracking-tight text-ink">
               Journal posts ({journals.length})
             </Text>
@@ -5749,7 +5735,7 @@ function JournalTab({
           {!editorOpen && (
             <Pressable
               onPress={onNew}
-              className="rounded-full bg-navy px-4 py-2"
+              className="shrink-0 rounded-full bg-navy px-4 py-2"
             >
               <Text className="text-xs font-black text-white">+ New post</Text>
             </Pressable>
@@ -5852,7 +5838,10 @@ function JournalTab({
                     {item.title}
                   </Text>
                   <Text className="mt-0.5 text-xs text-muted" numberOfLines={2}>
-                    {item.tag} · {item.text}
+                    {/* The separator only makes sense when there is a tag to
+                        separate from; an empty tag used to wrap a lone "·"
+                        onto its own line. */}
+                    {item.tag ? `${item.tag} · ${item.text}` : item.text}
                   </Text>
                 </View>
                 <Text
@@ -6855,7 +6844,7 @@ function MessagesTab({
               >
                 <View className="min-w-0 flex-1">
                   <Text
-                    numberOfLines={1}
+                    numberOfLines={2}
                     className="text-sm font-bold text-ink"
                   >
                     {sub.email}
