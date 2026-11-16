@@ -38,7 +38,7 @@
 // Everything shown here is something the car actually reported. Unknown values
 // are not invented (F-62).
 // =====================================================================
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,

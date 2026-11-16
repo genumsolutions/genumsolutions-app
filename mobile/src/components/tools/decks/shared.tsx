@@ -9,7 +9,7 @@
 // disabled — it never claims to work. No fake success (F-series rule).
 // =====================================================================
 import React from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { Switch, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type {
   DeckGaugeTile,

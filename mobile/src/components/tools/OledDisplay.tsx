@@ -33,28 +33,18 @@ import type { OledDisplayProps } from "./types";
 export function OledDisplay({
   connected,
   wifiConnected,
-  deviceName,
   activeMode,
   speed,
-  servo,
   driveStatus,
-  targetAltitude,
-  gimbalPan,
-  gimbalTilt,
-  sensorData,
   telemetry,
-  isDrone,
-  isNonRobocar,
   linkKind,
   compact = false,
   topField = "none",
   previewMode = null,
   previewComingSoon = false,
   previewModeAvail,
-  steerLimit,
   trim,
 }: OledDisplayProps) {
-  const isAuto = activeMode.token === "AUTO";
   // A-49 (round-11): the compact 160x80 mirror uses ONE mono scale ΓÇö 10px
   // labels, 11px values/rows, 15px hero direction ΓÇö so the AUTO rows never
   // clip and every readout stays pixel-faithful to the physical OLED.
@@ -63,7 +53,6 @@ export function OledDisplay({
   // The mode the top bar + body currently SHOW: preview wins over active
   // (previewModeIndex on the physical remote).
   const shown = previewMode ?? activeMode;
-  const shownIs2wd1m = shown.controls.includes("drive-2wd1m");
   const shownIsAuto = shown.token === "AUTO";
   const shownName = MODE_NAMES[shown.token] ?? shown.name.split("┬╖")[0].trim();
 

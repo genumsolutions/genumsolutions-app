@@ -127,7 +127,6 @@ function DualDpad({
   sendDir,
   onServo,
   limits,
-  compact,
   navActiveRef,
   onNavInput,
   telemetrySlot,
@@ -640,7 +639,7 @@ function DualJoystick({
           }
 
           // Any touch that disappeared between grant/move — clean up.
-          for (const [id, ent] of prev) {
+          for (const id of prev.keys()) {
             if (!nowActive.has(id)) touchesRef.current.delete(id);
           }
 
@@ -877,7 +876,6 @@ export function DriveControls({
   isDrone,
   activeMode,
   speed,
-  servo,
   pidKp,
   pidKi,
   pidKd,

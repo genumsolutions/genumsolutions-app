@@ -21,7 +21,6 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import { useApp } from "../context/AppContext";
 import { BrandHeader } from "../components/BrandHeader";
 import type { MainTabParamList, RootStackParamList } from "./types";
 
@@ -57,7 +56,6 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
   const navigation = useNavigation<Nav>();
   const route = useRoute<MainRoute>();
   const insets = useSafeAreaInsets();
-  const { cartCount } = useApp();
   const [page, setPage] = useState<TabKey>(() =>
     initialTab(route.params?.screen),
   );

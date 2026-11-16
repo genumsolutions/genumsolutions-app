@@ -234,7 +234,7 @@ const ERROR_REASONS: Readonly<Record<string, string>> = {
  */
 export function outcomeFor(
   answer: RouterAnswer,
-  request: RouterRequest,
+  _request: RouterRequest,
 ): RouterOutcome {
   switch (answer.kind) {
     case "error": {

@@ -16,8 +16,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { getProducts } from "../services/productService";
 import { getProjectCategories } from "../services/projectCategoryService";
@@ -25,14 +23,10 @@ import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
 import { ProductCard } from "../components/ProductCard";
 import { type Product } from "../types";
-import type { RootStackParamList } from "../navigation/types";
-
-type Nav = NativeStackNavigationProp<RootStackParamList, "Projects">;
 
 type CategoryEntry = { id: string; name: string };
 
 export function ProjectsScreen() {
-  const navigation = useNavigation<Nav>();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<CategoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,8 +67,12 @@ export function ProjectsScreen() {
     () =>
       products.filter((p) => {
         if (p.active === false) return false;
-        const type = String(p.productType ?? "").trim().toLowerCase();
-        const cat = String(p.category ?? "").trim().toLowerCase();
+        const type = String(p.productType ?? "")
+          .trim()
+          .toLowerCase();
+        const cat = String(p.category ?? "")
+          .trim()
+          .toLowerCase();
         return (
           type === "project package" ||
           cat === "pre-packaged kits" ||
@@ -89,7 +87,9 @@ export function ProjectsScreen() {
     return allProjects.filter((p) => {
       if (category !== "All") {
         const selected = category.trim().toLowerCase();
-        const pc = String(p.projectCategory ?? "").trim().toLowerCase();
+        const pc = String(p.projectCategory ?? "")
+          .trim()
+          .toLowerCase();
         if (pc !== selected) return false;
       }
       if (!needle) return true;

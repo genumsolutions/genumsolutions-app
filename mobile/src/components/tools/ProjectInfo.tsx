@@ -13,7 +13,6 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { CarMode } from "../../config/roboCarCatalog";
 import { isCarModeBuilt, LOCAL_CAR_MODES } from "../../config/roboCarCatalog";
-import type { ProjectCategory } from "../../config/project-catalog";
 import { getProjectCategory } from "../../config/project-catalog";
 import { company } from "../../config/company";
 

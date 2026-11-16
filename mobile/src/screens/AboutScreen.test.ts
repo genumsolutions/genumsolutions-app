@@ -40,19 +40,6 @@ function mk(patch: Partial<StatRow> = {}): Product {
   } as unknown as Product;
 }
 
-// Mirror of productService.applyComponentsScope so the test is
-// self-contained — changing the scope must land on BOTH the test AND
-// productService.ts.
-function isComponentsCatalogRow(
-  row: Pick<Product, "category" | "productType">,
-): boolean {
-  const cat = (row.category ?? "").trim().toLowerCase();
-  if (cat === "robot cars") return false;
-  if (cat === "pre-packaged kits") return false;
-  if (cat === "3d models") return false;
-  return (row.productType ?? "Retail kit") !== "Project package";
-}
-
 type LiveStat = [string, string];
 
 function computeLiveStats(

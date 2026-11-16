@@ -38,6 +38,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Dead code and unused props: tsc compiles them happily, ESLint does not
+      # (this is what caught the admin screens passing props nobody read).
+      - name: Lint
+        run: npm run lint
+
       - name: Unit tests
         run: npm test
 

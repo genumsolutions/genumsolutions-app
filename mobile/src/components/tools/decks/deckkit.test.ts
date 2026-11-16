@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 import {
   DECK_CATEGORIES,
   DECK_DECKED,
-  DECK_PENDING,
   DECK_TILES,
   RESERVED_TILE_LABELS,
   deckTileIds,

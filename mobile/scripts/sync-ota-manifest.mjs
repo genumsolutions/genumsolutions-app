@@ -22,11 +22,7 @@
 //   SUPABASE_URL              e.g. https://xxxx.supabase.co
 //   SUPABASE_SERVICE_ROLE_KEY Supabase -> Settings -> API (service_role)
 // =====================================================================
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { loadSupabaseEnv } from "./supabase-env.mjs";
-
-const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const BUCKET = "app-releases";
 const MANIFEST_FILE = "release.json";

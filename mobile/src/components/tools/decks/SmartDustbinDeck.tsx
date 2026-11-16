@@ -2,7 +2,6 @@
 // SmartDustbinDeck — per-category deck step ②.
 // =====================================================================
 import React from "react";
-import { View } from "react-native";
 import { DECK_TILES } from "./deckkit";
 import { DeckCard, DeckGrid } from "./shared";
 import type { SensorData } from "../types";

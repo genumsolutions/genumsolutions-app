@@ -27,8 +27,6 @@ type ProductCardProduct = Pick<
 function ProductCardBase({
   product,
   compact = false,
-  /** Deprecated (U-47): chips removed from the minimal card. */
-  chips = false,
 }: {
   product: ProductCardProduct;
   /** Kept for call-site compatibility; all cards are minimal now. */

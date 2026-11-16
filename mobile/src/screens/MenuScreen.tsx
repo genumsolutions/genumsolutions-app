@@ -14,7 +14,6 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { useApp } from "../context/AppContext";
-import type { RootStackParamList } from "../navigation/types";
 import {
   biometricsSupport,
   loadBiometricsPref,

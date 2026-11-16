@@ -95,7 +95,6 @@ import {
   planSwitch,
   resolveDial,
   targetUnavailableReason,
-  validateRouterInput,
   type ConnectionMethodId,
   type ConnectionTarget,
   type ConnectionTargetId,
@@ -246,8 +245,6 @@ export function ConnectionSection({
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
     linkCap,
-    linkVerified,
-    error: hubError,
     handleScan,
     handleConnect,
     handleWifiConnect,
@@ -691,7 +688,6 @@ export function ConnectionSection({
             sppStatus={sppStatus}
             secondLinkRefused={secondLinkRefused}
             onScanBluetooth={() => void scanBluetooth()}
-            onConnectBluetooth={connectBluetooth}
             onConnectWifi={connectWifi}
           />
         ) : null}
@@ -1232,7 +1228,6 @@ function MethodSetup({
   sppStatus,
   secondLinkRefused,
   onScanBluetooth,
-  onConnectBluetooth,
   onConnectWifi,
 }: {
   method: (typeof CONNECTION_METHODS)[number];
@@ -1244,11 +1239,6 @@ function MethodSetup({
   /** P5: the raise this card offers would be the car-refused SECOND link. */
   secondLinkRefused: boolean;
   onScanBluetooth: () => void;
-  onConnectBluetooth: (
-    address: string,
-    name?: string | null,
-    bonded?: boolean,
-  ) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
 }) {
   // U-84: the "Where is the car?" split is GONE, and 2026-10-12 the Bluetooth
@@ -1272,7 +1262,6 @@ function MethodSetup({
         sppStatus={sppStatus}
         secondLinkRefused={secondLinkRefused}
         onScanBluetooth={onScanBluetooth}
-        onConnectBluetooth={onConnectBluetooth}
         onConnectWifi={onConnectWifi}
       />
 
@@ -1299,7 +1288,6 @@ function TargetBody({
   sppStatus,
   secondLinkRefused,
   onScanBluetooth,
-  onConnectBluetooth,
   onConnectWifi,
 }: {
   target: ConnectionTarget;
@@ -1310,11 +1298,6 @@ function TargetBody({
   /** P5: the raise this card offers would be the car-refused SECOND link. */
   secondLinkRefused: boolean;
   onScanBluetooth: () => void;
-  onConnectBluetooth: (
-    address: string,
-    name?: string | null,
-    bonded?: boolean,
-  ) => Promise<void>;
   onConnectWifi: (t: ConnectionTargetId) => Promise<void>;
 }) {
   const unavailable = targetUnavailableReason(target.id, {

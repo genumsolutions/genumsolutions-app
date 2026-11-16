@@ -36,29 +36,6 @@ const STATIC_STATS = [
   { value: "500+", label: "students trained" },
 ];
 
-const points = [
-  {
-    icon: "cpu" as const,
-    title: "Robotics kits & components",
-    body: "Controllers, motors, sensors, and full robot-car platforms sourced and tested in Kathmandu.",
-  },
-  {
-    icon: "printer" as const,
-    title: "3D & 2D printing",
-    body: "Prototypes, spare parts, and signage printed to spec with materials advice included.",
-  },
-  {
-    icon: "book-open" as const,
-    title: "School STEM packages",
-    body: "Kits, curriculum, teacher training, and coaching bundled into a single pilot program.",
-  },
-  {
-    icon: "tool" as const,
-    title: "Custom projects & labs",
-    body: "IoT, AI prototypes, workshop setups, and lab consultation delivered end to end.",
-  },
-];
-
 // Compute live stats from the product catalog (same DB the storefront reads),
 // mirroring the website's /about liveCounts — all FOUR rows, in its order:
 // components, models, projects, then the project-category count. The app used

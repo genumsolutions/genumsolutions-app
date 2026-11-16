@@ -147,7 +147,7 @@ describe("LinkManager.sendEnvelope — byte parity with the pre-envelope path", 
         "WIFICFG;Home;p",
       ],
     ];
-    for (const [body, line] of cases) {
+    for (const [body] of cases) {
       const r = await m.sendEnvelope({ v: ENVELOPE_VERSION, ...body });
       expect(r.ok, JSON.stringify(body)).toBe(true);
     }

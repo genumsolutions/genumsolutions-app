@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 import {
   ENVELOPE_VERSION,
   decodeCommandEnvelope,
-  encodeCommandEnvelope,
   jsonToWireLine,
 } from "./commandEnvelope";
 

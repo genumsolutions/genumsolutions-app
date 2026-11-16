@@ -10,7 +10,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 
 type Tool = { group: string; name: string; description: string; href: string };
 

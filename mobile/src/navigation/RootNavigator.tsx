@@ -33,7 +33,6 @@ import { PrintingScreen } from "../screens/PrintingScreen";
 import { OpenToolsScreen } from "../screens/OpenToolsScreen";
 import { LegalScreen } from "../screens/LegalScreen";
 import { FloatingRemoteButton } from "../components/FloatingRemoteButton";
-import { useApp } from "../context/AppContext";
 import { withErrorBoundary } from "../components/withErrorBoundary";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { useNavigation } from "@react-navigation/native";

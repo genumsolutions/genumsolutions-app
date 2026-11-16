@@ -22,11 +22,6 @@ import {
 // keep working after the protocol moved to carProtocol.
 export type CarTelemetry = CarTelemetryShared;
 
-// ESP32 UART (HM-10 / Nordic UART) service & characteristic UUIDs
-const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const UART_TX_CHAR = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // device writes here
-const UART_RX_CHAR = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // device notifies here
-
 // Alternative UUID variants some ESP32 firmwares use
 const ALT_SERVICE_UUIDS = [
   "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
@@ -51,13 +46,6 @@ export type BleDevice = {
   rssi: number;
   adData?: { rssi: number };
 };
-
-type ConnectionState =
-  | { kind: "disconnected" }
-  | { kind: "scanning" }
-  | { kind: "connecting"; deviceName: string }
-  | { kind: "connected"; deviceId: string; deviceName: string }
-  | { kind: "error"; message: string };
 
 type TelemetryCallback = (t: CarTelemetry) => void;
 type StatusCallback = (

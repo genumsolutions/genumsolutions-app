@@ -3,14 +3,7 @@
 // `products` table. Supports category chips + search.
 // =====================================================================
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
   distinctCategories,

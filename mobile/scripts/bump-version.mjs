@@ -80,64 +80,53 @@ function editFile(p, fn) {
   return after !== before;
 }
 
-let changed = false;
-
 // 1) app.json (source of truth) - targeted replace to preserve file formatting
 const appJsonPath = resolve(rootDir, "app.json");
-changed =
-  editFile(appJsonPath, (src) =>
-    src
-      .replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`)
-      .replace(/"versionCode": \d+/, `"versionCode": ${VERSION_CODE}`),
-  ) || changed;
+editFile(appJsonPath, (src) =>
+  src
+    .replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`)
+    .replace(/"versionCode": \d+/, `"versionCode": ${VERSION_CODE}`),
+);
 console.log(`  app.json            -> ${VERSION} (${VERSION_CODE})`);
 if (!existsSync(appJsonPath)) throw new Error(`File not found: ${appJsonPath}`);
 
 // 1b) Keep the checked-in native Gradle project in sync for local APK builds.
-changed =
-  editFile(resolve(rootDir, "android/app/build.gradle"), (src) =>
-    src
-      .replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`)
-      .replace(/versionName\s+"[^"]+"/, `versionName "${VERSION}"`),
-  ) || changed;
+editFile(resolve(rootDir, "android/app/build.gradle"), (src) =>
+  src
+    .replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`)
+    .replace(/versionName\s+"[^"]+"/, `versionName "${VERSION}"`),
+);
 
 // 2) src/config/site.ts -> APP_VERSION
 // Quote-agnostic (2026-09-23 sweep): prettier (pre-commit) renders site.ts
 // strings with single OR double quotes; match either and preserve the file's
 // current style so the bump never silently no-ops after a prettier pass.
-changed =
-  editFile(resolve(rootDir, "src/config/site.ts"), (src) => {
-    const q =
-      /["']/.exec(src.match(/APP_VERSION\s*=\s*["']/)?.[0] ?? "'")?.[0] ?? "'";
-    const pattern = new RegExp(`export const APP_VERSION = ["'][^"']*["'];`);
-    if (!pattern.test(src)) return src;
-    return src.replace(
-      pattern,
-      `export const APP_VERSION = ${q}${VERSION}${q};`,
-    );
-  }) || changed;
+editFile(resolve(rootDir, "src/config/site.ts"), (src) => {
+  const q =
+    /["']/.exec(src.match(/APP_VERSION\s*=\s*["']/)?.[0] ?? "'")?.[0] ?? "'";
+  const pattern = new RegExp(`export const APP_VERSION = ["'][^"']*["'];`);
+  if (!pattern.test(src)) return src;
+  return src.replace(pattern, `export const APP_VERSION = ${q}${VERSION}${q};`);
+});
 
 // 3) package.json + package-lock.json version
-changed =
-  editFile(resolve(rootDir, "package.json"), (src) =>
-    src.replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`),
-  ) || changed;
+editFile(resolve(rootDir, "package.json"), (src) =>
+  src.replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`),
+);
 const lockPath = resolve(rootDir, "package-lock.json");
 const lock = readJson(lockPath);
 lock.version = VERSION;
 if (lock.packages?.[""]) lock.packages[""].version = VERSION;
 writeJson(lockPath, lock);
-changed = true;
 
 // 3b) Bump runtimeVersion in app.json (forces devices to check for new OTA bundle)
 if (flags.runtime) {
-  changed =
-    editFile(appJsonPath, (src) =>
-      src.replace(
-        /"runtimeVersion": "[^"]*"/,
-        `"runtimeVersion": "${flags.runtime}"`,
-      ),
-    ) || changed;
+  editFile(appJsonPath, (src) =>
+    src.replace(
+      /"runtimeVersion": "[^"]*"/,
+      `"runtimeVersion": "${flags.runtime}"`,
+    ),
+  );
   console.log(`  app.json runtimeVersion -> ${flags.runtime}`);
 }
 

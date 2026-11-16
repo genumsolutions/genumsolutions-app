@@ -53,6 +53,8 @@
     "@playwright/test": "^1.65.0",
     "@types/react": "~19.1.10",
     "autoprefixer": "^10.5.4",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "^58.0.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
     "postcss": "^8.5.33",
@@ -67,7 +69,7 @@
     "doctor": "npx expo-doctor",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "lint:check": "tsc --noEmit",
+    "lint:check": "tsc --noEmit && eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive",
@@ -75,7 +77,8 @@
     "test:watch": "vitest",
     "test:e2e": "expo export --platform web && playwright test",
     "prepare": "husky",
-    "release:ready": "npx tsx scripts/release-ready-check.mjs"
+    "release:ready": "npx tsx scripts/release-ready-check.mjs",
+    "lint": "eslint ."
   },
   "private": true,
   "overrides": {

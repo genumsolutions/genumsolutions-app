@@ -74,9 +74,8 @@ import {
   downloadAndInstall,
 } from "./updateService";
 
-const { File, Paths, __events, __instances } = FileSystem as unknown as {
+const { File, __events, __instances } = FileSystem as unknown as {
   File: any;
-  Paths: { cache: string };
   __events: string[];
   __instances: any[];
 };

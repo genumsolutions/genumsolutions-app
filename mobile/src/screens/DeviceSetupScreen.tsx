@@ -21,8 +21,6 @@ import { Feather } from "@expo/vector-icons";
 import type { RootStackParamList } from "../navigation/types";
 import { feedbackTap } from "../services/hapticsService";
 
-type Step = "device" | "type" | "done";
-
 // U-49 (2026-09-28): the connection wizard's first screen. Every link method
 // gets a row so the shape of the fleet is visible, and only the methods the
 // app can actually drive today are marked built.

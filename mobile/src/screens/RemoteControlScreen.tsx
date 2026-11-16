@@ -21,13 +21,7 @@
 // stop is S / SPD0 / disconnect. The layout diagram and the "E-stop FAB" line
 // are corrected here rather than left to describe a feature that does not exist.
 // =====================================================================
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Linking,
@@ -54,8 +48,7 @@ import { useApp } from "../context/AppContext";
 import { useControlHub } from "../components/tools/useControlHub";
 import { resolveLinkPrompt } from "../components/tools/linkPrompt";
 import { DriveControls } from "../components/tools/DriveControls";
-import { BalanceControls, PID_DEFS } from "../components/tools/BalanceControls";
-import type { PidKey } from "../components/tools/BalanceControls";
+import { BalanceControls } from "../components/tools/BalanceControls";
 import { ModeChooser } from "../components/tools/ModeChooser";
 import { OledDisplay } from "../components/tools/OledDisplay";
 import {
@@ -74,18 +67,13 @@ import {
   ConnectionSection,
   InlineMessage,
 } from "../components/tools/connection";
-import { DEFAULT_WS_URL } from "../services/carProtocol";
 import {
   carIsOnOwnHotspot,
   carWebPageIp,
   carWebPageUrl,
 } from "../components/tools/connection/dial";
 import { isCarPageReachable } from "../components/tools/CarPageServingState";
-import {
-  LOCAL_CAR_MODES,
-  type CarMode,
-  sortRemoteModes,
-} from "../config/roboCarCatalog";
+import { LOCAL_CAR_MODES, sortRemoteModes } from "../config/roboCarCatalog";
 import {
   SPEED_MIN,
   SPEED_MAX,
@@ -94,7 +82,6 @@ import {
   modeAvailStatus,
 } from "../services/carProtocol";
 import { feedbackTap } from "../services/hapticsService";
-import type { SafetyLimits } from "../components/tools/types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "RemoteControl">;
 type Route = RouteProp<RootStackParamList, "RemoteControl">;
@@ -118,14 +105,6 @@ const NAV_DEBOUNCE_MS = 120;
 // headroom for a system font scale above 1. Q2's rule is unchanged — telemetry
 // is still the first and only thing that drops.
 const MERGED_ROW_TELEMETRY_MIN_PX = 860;
-
-const DEFAULT_SAFETY_LIMITS: SafetyLimits = {
-  maxSpeed: 255,
-  maxSignedDrive: 255,
-  servoCenter: 90,
-  maxSteerDeviation: 90,
-  maxTrim: 90,
-};
 
 function clampStep(
   value: number,
@@ -272,7 +251,7 @@ export function RemoteControlScreen({ navigation }: Props) {
   const route = useRoute<Route>();
   const routeCategory = route.params?.category;
   const hub = useControlHub(routeCategory);
-  const { width, height, isLandscape } = useViewport();
+  const { width, height } = useViewport();
   const insets = useSafeAreaInsets(); // ── 2026-10-24 (owner: "omit the space of the phone on the top where the
   // camera is situated as the black color by default and only use the
   // remaining space" + "the phone's status bar is missing on the top, show
@@ -314,10 +293,8 @@ export function RemoteControlScreen({ navigation }: Props) {
   const {
     connected,
     wifiConnected,
-    sppStatus,
     deviceName,
     canControl,
-    wifiUrl,
     activeCategory,
     activeMode,
     carModes,
@@ -333,7 +310,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     driveDir,
     telemetry,
     carApName,
-    carSsid,
     tripAvg,
     maxSteer,
     handleDirection,
@@ -385,7 +361,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     // the BT chip used to call it and killed the Wi-Fi link too.)
     handleBtDisconnect,
     handleWifiDisconnect,
-    carNetworks,
     connMethod,
     setConnMethod,
   } = hub;
@@ -639,7 +614,6 @@ export function RemoteControlScreen({ navigation }: Props) {
   }, [linked]);
 
   // ── Derived values ──
-  const limits: SafetyLimits = hub.safetyLimits ?? DEFAULT_SAFETY_LIMITS;
   const navActiveBool = navActive && isRobocar;
   const shownMode = previewMode ?? activeMode;
   const isShown2wd1m = shownMode.controls.includes("drive-2wd1m");

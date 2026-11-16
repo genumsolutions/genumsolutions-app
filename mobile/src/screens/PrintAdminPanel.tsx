@@ -24,7 +24,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { AdminSubTabs } from "../components/admin/AdminSubTabs";
@@ -85,16 +84,6 @@ const emptyCategory: PrintCategory = {
   name: "",
   description: "",
   imageUrl: "",
-  sortOrder: 1000,
-  active: true,
-};
-
-const emptyMaterial: PrintMaterial = {
-  id: "",
-  name: "",
-  description: "",
-  ratePerGram: 0,
-  note: "",
   sortOrder: 1000,
   active: true,
 };

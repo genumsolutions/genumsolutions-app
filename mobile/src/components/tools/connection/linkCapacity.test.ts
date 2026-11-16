@@ -166,7 +166,10 @@ describe("P5 — ConnectionSection gates the second-link raise on the car's verd
   });
 
   it("the hub's linkCap is destructured — the panel reads the verdict at all", () => {
-    expect(section).toContain("linkCap,\n    linkVerified,");
+    // Only the verdict itself: the panel used to destructure `linkVerified`
+    // here as well, but never read it (ESLint's no-unused-vars found it).
+    expect(section).toContain("    linkCap,\n");
+    expect(section).not.toMatch(/linkVerified,\n\s+error:/);
   });
 
   it("the gate keys on a STRICT `false`, never a falsy read", () => {

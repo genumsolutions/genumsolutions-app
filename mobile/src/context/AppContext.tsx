@@ -274,7 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [carModes, setCarModes] = useState<CarMode[]>([]);
+  const [carModes] = useState<CarMode[]>([]);
   const [themeMode, setThemeModeState] = useState<ThemeMode>("light");
   const [updatePill, setUpdatePill] = useState<UpdatePill | null>(null);
   const [appUpdated, setAppUpdated] = useState(false);

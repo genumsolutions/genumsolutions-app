@@ -19,15 +19,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-interface ContactForm {
-  name: string;
-  email: string;
-  message: string;
-}
-
 serve(async (req) => {
-  const url = new URL(req.url);
-
   // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {

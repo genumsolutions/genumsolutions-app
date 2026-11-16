@@ -47,10 +47,7 @@ import {
   type ProjectCategory,
 } from "../config/project-catalog";
 import { getProjectCategories } from "../services/projectCategoryService";
-import {
-  DECK_OPEN_DEBOUNCE_MS,
-  queueDeckOpen,
-} from "../components/tools/toolsScreenFlow";
+import { queueDeckOpen } from "../components/tools/toolsScreenFlow";
 
 type Route = RouteProp<RootStackParamList, "Tools">;
 

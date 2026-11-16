@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- the import is load-bearing:
+   it makes this file a module, so the `declare module` below augments the
+   package's shipped types instead of replacing them. */
 import { BleManager } from "@sfourdrinier/react-native-ble-plx";
 
 declare module "@sfourdrinier/react-native-ble-plx" {

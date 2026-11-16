@@ -2,7 +2,7 @@
 import React from "react";
 import { Switch, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import type { SensorGridProps, SensorData } from "./types";
+import type { SensorGridProps } from "./types";
 
 /**
  * A reading the app cannot actually source must never be printed as a number.

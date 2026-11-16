@@ -28,7 +28,6 @@ export function BrandHeader() {
     accountSheetOpen,
     setAccountSheetOpen,
     updatePill,
-    setUpdatePill,
     appUpdated,
     setAppUpdated,
   } = useApp();
