@@ -113,6 +113,15 @@ export type AdminMessage = {
   createdAt: string;
 };
 
+/** One newsletter opt-in, as the website's Messages panel lists it. */
+export type AdminSubscriber = {
+  id: string;
+  email: string;
+  source: string;
+  status: string;
+  createdAt: string;
+};
+
 export type DashboardStats = {
   totalUsers: number;
   newUsersToday: number;
@@ -302,6 +311,16 @@ export function mapMessageRow(row: RawRow): AdminMessage {
     email: String(row.email ?? ""),
     message: String(row.message ?? ""),
     status: String(row.status ?? "new"),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export function mapSubscriberRow(row: RawRow): AdminSubscriber {
+  return {
+    id: String(row.id ?? ""),
+    email: String(row.email ?? ""),
+    source: String(row.source ?? ""),
+    status: String(row.status ?? "subscribed"),
     createdAt: String(row.created_at ?? ""),
   };
 }
@@ -1097,6 +1116,54 @@ export async function deleteAdminMessage(id: string) {
   if (!data || data.length === 0) {
     throw new Error(
       "The message was not deleted — this account does not have delete permission on customer messages.",
+    );
+  }
+}
+
+// --- Newsletter subscribers ---
+//
+// The same `newsletter_subscribers` table the website's /api/admin/newsletter
+// route reads with the service role. The app has no server route, so this rides
+// the signed-in session: the schema grants `is_staff()` select and `is_admin()`
+// delete on the table, and both calls surface a policy refusal as an error
+// instead of an empty list that looks like "no subscribers".
+
+export async function listAdminSubscribers(
+  page = 1,
+  limit = 20,
+): Promise<{
+  subscribers: AdminSubscriber[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("newsletter_subscribers")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    subscribers: (data ?? []).map(mapSubscriberRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+/** Remove one opt-in (admin only, per the `admin delete newsletter` policy). */
+export async function deleteAdminSubscriber(id: string) {
+  // `.select()` for the same reason as deleteAdminMessage: PostgREST reports
+  // success with no rows when RLS filtered the delete out.
+  const { data, error } = await supabase
+    .from("newsletter_subscribers")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      "The subscriber was not removed — this account does not have delete permission on newsletter subscribers.",
     );
   }
 }

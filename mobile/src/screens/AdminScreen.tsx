@@ -110,6 +110,8 @@ import {
   listAdminMessages,
   markMessageReplied,
   deleteAdminMessage,
+  listAdminSubscribers,
+  deleteAdminSubscriber,
   fetchDashboardStats,
   fetchAdminAnalytics,
   listAdminActivity,
@@ -144,6 +146,7 @@ import {
   type AdminService,
   type AdminUser,
   type AdminMessage,
+  type AdminSubscriber,
   type AdminJournalPost,
   type AdminCompanyInfo,
   type AdminTrainingProgram,
@@ -401,6 +404,12 @@ function AdminConsole() {
   const [messagesTotalPages, setMessagesTotalPages] = useState(1);
   const [messagesTotal, setMessagesTotal] = useState(0);
   const [messageStatus, setMessageStatus] = useState("");
+
+  // Newsletter opt-ins (same table the website's Messages panel lists)
+  const [subscribers, setSubscribers] = useState<AdminSubscriber[]>([]);
+  const [subscriberPage, setSubscriberPage] = useState(1);
+  const [subscriberTotal, setSubscriberTotal] = useState(0);
+  const [subscriberTotalPages, setSubscriberTotalPages] = useState(1);
 
   // Site content
   const [siteContent, setSiteContent] = useState<{
@@ -660,6 +669,7 @@ function AdminConsole() {
         const results = await Promise.all([
           loadUsers(1),
           loadMessages(1),
+          loadSubscribers(1),
           loadCrashReports(1),
           loadAppLogs(1),
           loadUserLogs(1),
@@ -716,6 +726,16 @@ function AdminConsole() {
       setMessagesPage(result.page);
       setMessagesTotal(result.total);
       setMessagesTotalPages(result.totalPages);
+    });
+  }
+
+  async function loadSubscribers(page: number): Promise<boolean> {
+    return runAdminLoad("Newsletter subscribers", async () => {
+      const result = await listAdminSubscribers(page, 20);
+      setSubscribers(result.subscribers);
+      setSubscriberPage(result.page);
+      setSubscriberTotal(result.total);
+      setSubscriberTotalPages(result.totalPages);
     });
   }
 
@@ -1449,6 +1469,36 @@ function AdminConsole() {
     );
   }
 
+  function handleDeleteSubscriber(subscriber: AdminSubscriber) {
+    Alert.alert(
+      "Remove subscriber",
+      `Remove ${subscriber.email} from the newsletter? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAdminSubscriber(subscriber.id);
+              const page =
+                subscribers.length === 1 && subscriberPage > 1
+                  ? subscriberPage - 1
+                  : subscriberPage;
+              void loadSubscribers(page);
+            } catch (e) {
+              logger.error("admin", "Subscriber delete error:", e);
+              Alert.alert(
+                "Could not remove the subscriber",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const goToTab = useCallback((key: Tab) => {
     const index = TABS.indexOf(key);
     if (index < 0 || index === currentPageRef.current) return;
@@ -1837,6 +1887,13 @@ function AdminConsole() {
                       onMarkReplied={handleMarkReplied}
                       canDelete={canDelete}
                       onDelete={handleDeleteMessage}
+                      subscribers={subscribers}
+                      subscriberTotal={subscriberTotal}
+                      subscriberPage={subscriberPage}
+                      subscriberTotalPages={subscriberTotalPages}
+                      onSubscriberPage={(p) => void loadSubscribers(p)}
+                      onReloadSubscribers={() => void loadSubscribers(1)}
+                      onDeleteSubscriber={handleDeleteSubscriber}
                     />
                   ),
                 },
@@ -1883,7 +1940,6 @@ function AdminConsole() {
             <SettingsTab
               company={companyInfo}
               setCompany={setCompanyInfo}
-              canDelete={canDelete}
               onCompanySaved={async (next) => {
                 await saveCompanyInfo(next);
                 setCompanyInfo(next);
@@ -6596,6 +6652,13 @@ function MessagesTab({
   onMarkReplied,
   canDelete,
   onDelete,
+  subscribers,
+  subscriberTotal,
+  subscriberPage,
+  subscriberTotalPages,
+  onSubscriberPage,
+  onReloadSubscribers,
+  onDeleteSubscriber,
 }: {
   messages: AdminMessage[];
   total: number;
@@ -6607,6 +6670,13 @@ function MessagesTab({
   onMarkReplied: (id: string) => void;
   canDelete: boolean;
   onDelete: (message: AdminMessage) => void;
+  subscribers: AdminSubscriber[];
+  subscriberTotal: number;
+  subscriberPage: number;
+  subscriberTotalPages: number;
+  onSubscriberPage: (p: number) => void;
+  onReloadSubscribers: () => void;
+  onDeleteSubscriber: (subscriber: AdminSubscriber) => void;
 }) {
   const [preview, setPreview] = useState<AdminMessage | null>(null);
   return (
@@ -6752,6 +6822,69 @@ function MessagesTab({
           </Pressable>
         </Modal>
       )}
+
+      {/* Newsletter opt-ins — the website's second Messages panel, staff read
+          and admin remove on the same table. */}
+      <View className="mt-6">
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="font-display text-base font-bold text-ink">
+            Newsletter subscribers ({subscriberTotal})
+          </Text>
+          <Pressable
+            onPress={onReloadSubscribers}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh subscribers"
+            className="rounded-full border border-line px-3 py-1"
+          >
+            <Text className="text-xs font-bold text-ink">Refresh</Text>
+          </Pressable>
+        </View>
+        <Text className="mt-1 text-xs leading-5 text-muted">
+          Opt-ins captured by the app and the website footer/checkout.
+        </Text>
+        {subscribers.length === 0 ? (
+          <Text className="py-8 text-center text-sm text-muted">
+            No subscribers yet.
+          </Text>
+        ) : (
+          <>
+            {subscribers.map((sub) => (
+              <View
+                key={sub.id}
+                className="mt-2 flex-row flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-card p-4"
+              >
+                <View className="min-w-0 flex-1">
+                  <Text
+                    numberOfLines={1}
+                    className="text-sm font-bold text-ink"
+                  >
+                    {sub.email}
+                  </Text>
+                  <Text className="mt-0.5 text-xs text-muted">
+                    {new Date(sub.createdAt).toLocaleString()}
+                    {sub.source ? ` · via ${sub.source}` : ""}
+                  </Text>
+                </View>
+                <Text className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                  {sub.status}
+                </Text>
+                {canDelete ? (
+                  <AdminAction
+                    onPress={() => onDeleteSubscriber(sub)}
+                    label="Remove"
+                    tone="red"
+                  />
+                ) : null}
+              </View>
+            ))}
+            <AdminPager
+              page={subscriberPage}
+              totalPages={subscriberTotalPages}
+              onPage={onSubscriberPage}
+            />
+          </>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -6784,13 +6917,11 @@ type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
 function SettingsTab({
   company,
   setCompany,
-  canDelete: _canDelete,
   onCompanySaved,
   onEditingChange,
 }: {
   company: AdminCompanyInfo | null;
   setCompany: (c: AdminCompanyInfo | null) => void;
-  canDelete: boolean;
   onCompanySaved: (next: AdminCompanyInfo) => void;
   onEditingChange: (v: boolean) => void;
 }) {

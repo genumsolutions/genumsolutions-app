@@ -237,16 +237,16 @@ Used in: SettingsTab (company), ProfileEntriesTab, UsersTab (car profiles, robot
 
 ## 6. Terminology & Labels
 
-| Term                        | App                                                                                                                                                                           | Website                | Mirrored? |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------- |
-| **Edit button label**       | "Edit"                                                                                                                                                                        | "Edit"                 | ✅ Yes    |
-| **Save button label**       | "Save"                                                                                                                                                                        | "Save"                 | ✅ Yes    |
-| **Cancel button label**     | "Cancel"                                                                                                                                                                      | "Cancel"               | ✅ Yes    |
-| **Delete button label**     | "Delete"                                                                                                                                                                      | "Delete"               | ✅ Yes    |
-| **Company section heading** | "Company information"                                                                                                                                                         | "Company information"  | ✅ Yes    |
-| **Tab labels**              | "Dashboard", "Orders", "Electronic Products", "3D Products", "Projects", "Content", "Users", "Settings" (8 — Logs merged into Users; Messages + newsletter moved to Settings) | Same (via parity test) | ✅ Yes    |
-| **Users section labels**    | "User Directory", "Car Profiles", "Robot Profiles"                                                                                                                            | Same                   | ✅ Yes    |
-| **Logs section labels**     | "User Activity", "User Profiles", "Fleet Diagnostics"                                                                                                                         | Same                   | ✅ Yes    |
+| Term                        | App                                                                                                                                                                                             | Website                | Mirrored? |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------- |
+| **Edit button label**       | "Edit"                                                                                                                                                                                          | "Edit"                 | ✅ Yes    |
+| **Save button label**       | "Save"                                                                                                                                                                                          | "Save"                 | ✅ Yes    |
+| **Cancel button label**     | "Cancel"                                                                                                                                                                                        | "Cancel"               | ✅ Yes    |
+| **Delete button label**     | "Delete"                                                                                                                                                                                        | "Delete"               | ✅ Yes    |
+| **Company section heading** | "Company information"                                                                                                                                                                           | "Company information"  | ✅ Yes    |
+| **Tab labels**              | "Dashboard", "Orders", "Electronic Products", "3D Products", "Projects", "Content", "Users", "Settings" (8 — Logs merged into Users; Messages + newsletter opt-ins live under Users → Messages) | Same (via parity test) | ✅ Yes    |
+| **Users section labels**    | "User Directory", "Car Profiles", "Robot Profiles"                                                                                                                                              | Same                   | ✅ Yes    |
+| **Logs section labels**     | "User Activity", "User Profiles", "Fleet Diagnostics"                                                                                                                                           | Same                   | ✅ Yes    |
 
 ---
 
@@ -357,7 +357,6 @@ The `profile_key` is the **stable identity** that persists across app reinstalls
 ### In `genumsolutions-app/mobile/docs/`:
 
 - `APP_ADMIN_COMPLETE.md` — Complete admin UI documentation (every element, every field, every pattern)
-- `ADMIN_UI_BLUEPRINT.md` — Admin UI blueprint (structure, patterns, types)
 - `APP_WEBSITE_UI_COMPARISON.md` — This comparison report (also in website repo)
 - `LINK_RESILIENCE.md` — Churn fix + close diagnostics guide
 
@@ -434,17 +433,17 @@ Both projects share the same architectural patterns:
 
 #### Newsletter
 
-| Element       | App                                                                             | Website                                                                   | Shared                              |
-| ------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------- |
-| Entry point   | `AccountScreen.tsx` newsletter section → `subscribeToNewsletter()`              | `AccountPanel.tsx` newsletter section → `POST /api/newsletter`            | Same consent checkbox pattern       |
-| Transport     | `newsletter-subscribe` Supabase edge function via `supabase.functions.invoke()` | Next.js API route `app/api/newsletter/route.ts` → `lib/newsletter.ts`     | Both write to same table            |
-| Edge function | `supabase/functions/newsletter-subscribe/index.ts` (in website repo)            | Same edge function (website API route calls `lib/newsletter.ts` directly) | Same `newsletter_subscribers` table |
-| Input         | `{email, source}` where source is `app-account` or `app-checkout`               | `{email, source?}` where source is `footer` or `checkout`                 | Same email + source pattern         |
-| Validation    | Email regex, lowercase + trim                                                   | Same + `isValidEmail()` in `lib/newsletter.ts`                            | Same email normalization            |
-| Rate limit    | Edge function rate-limits by token                                              | `checkRateLimit('newsletter:<ip>', 20, 60s)` by IP                        | Both rate-limited (different keys)  |
-| Persistence   | Upsert into `newsletter_subscribers` table                                      | Same — upsert into `newsletter_subscribers`                               | Same table, same idempotent pattern |
-| Response      | `{ok: boolean, error?: string}`                                                 | `{ok: boolean, error?: string}`                                           | Same response shape                 |
-| Read-back     | Not displayed in app (subscribe only)                                           | Admin list at `/api/admin/newsletter` → `AdminMessages.tsx`               | Same table                          |
+| Element       | App                                                                                  | Website                                                                   | Shared                              |
+| ------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------- |
+| Entry point   | `AccountScreen.tsx` newsletter section → `subscribeToNewsletter()`                   | `AccountPanel.tsx` newsletter section → `POST /api/newsletter`            | Same consent checkbox pattern       |
+| Transport     | `newsletter-subscribe` Supabase edge function via `supabase.functions.invoke()`      | Next.js API route `app/api/newsletter/route.ts` → `lib/newsletter.ts`     | Both write to same table            |
+| Edge function | `supabase/functions/newsletter-subscribe/index.ts` (in website repo)                 | Same edge function (website API route calls `lib/newsletter.ts` directly) | Same `newsletter_subscribers` table |
+| Input         | `{email, source}` where source is `app-account` or `app-checkout`                    | `{email, source?}` where source is `footer` or `checkout`                 | Same email + source pattern         |
+| Validation    | Email regex, lowercase + trim                                                        | Same + `isValidEmail()` in `lib/newsletter.ts`                            | Same email normalization            |
+| Rate limit    | Edge function rate-limits by token                                                   | `checkRateLimit('newsletter:<ip>', 20, 60s)` by IP                        | Both rate-limited (different keys)  |
+| Persistence   | Upsert into `newsletter_subscribers` table                                           | Same — upsert into `newsletter_subscribers`                               | Same table, same idempotent pattern |
+| Response      | `{ok: boolean, error?: string}`                                                      | `{ok: boolean, error?: string}`                                           | Same response shape                 |
+| Read-back     | Admin list in Users → Messages (`listAdminSubscribers`, staff select / admin delete) | Admin list at `/api/admin/newsletter` → `AdminMessages.tsx`               | Same table                          |
 
 **Key finding:** The app goes through the `newsletter-subscribe` edge function; the website's `/api/newsletter` route calls `lib/newsletter.ts` directly (which does the Supabase upsert). Both write to the same `newsletter_subscribers` table with the same idempotent upsert pattern. The source lives in `genumsolutions-website/supabase/functions/newsletter-subscribe/index.ts` (edge) and `genumsolutions-website/lib/newsletter.ts` (direct).
 

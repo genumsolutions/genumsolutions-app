@@ -8,7 +8,8 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
  *
  * `full` presents a whole-screen editor (product/service editors already own
  * their header and Save/Cancel row); the default is a bottom sheet for the
- * compact record editors.
+ * compact record editors, whose header carries the Cancel action every inline
+ * form used to have.
  */
 export function AdminEditorSheet({
   visible,
@@ -51,10 +52,10 @@ export function AdminEditorSheet({
               <Pressable
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel="Close editor"
+                accessibilityLabel="Cancel"
                 className="rounded-full border border-line px-3 py-1"
               >
-                <Text className="text-xs font-bold text-ink">Close</Text>
+                <Text className="text-xs font-bold text-ink">Cancel</Text>
               </Pressable>
             </View>
             <ScrollView

@@ -309,21 +309,24 @@ time of this writing:
 | Dashboard                                     | `Overview` / `Activity` pills                           | `AdminDashboard` + `AdminActivity` stacked           |
 | Orders status filter                          | Pill strip (`ORDERS_SUBTABS`)                           | Select control                                       |
 | Editor presentation                           | `AdminEditorSheet` (native `Modal`)                     | `AdminEditorSheet` (portal dialog)                   |
-| Users → Messages                              | Contact messages only                                   | Contact messages **plus** newsletter opt-ins         |
+| Users → Messages                              | Contact messages **plus** newsletter opt-ins            | Contact messages **plus** newsletter opt-ins         |
 | Orders/Content/Users/3D Products section sets | same lists                                              | same lists                                           |
 
-The newsletter-opt-in list is the one **functional** asymmetry: the app captures
-opt-ins from Account → Newsletter but the app console cannot read them back.
+Newsletter opt-ins are listed in both consoles now. The website reads them
+through `/api/admin/newsletter` with the service role; the app reads the same
+`newsletter_subscribers` table with the signed-in staff session, where the schema
+grants `is_staff()` select and `is_admin()` delete. Both show email, capture time,
+source (`app-account`/`app-checkout` vs `footer`/`checkout`), status and a
+paged Remove action.
 
 ## 10. Documentation status
 
 - This file now matches the 8-tab console.
-- `docs/ADMIN_REDESIGN_PLAN.md` describes the 8-tab layout correctly, but still
-  lists "customer messages" and "newsletter subscribers" under Settings — both
-  are wrong now (messages moved to Users; no subscriber screen exists in the app).
-- `docs/ADMIN_UI_BLUEPRINT.md` is **stale**: it claims nine tabs with a
-  top-level `Logs` tab, two inner `LOG_SECTIONS`, an editable
-  `ProfileEntriesTab`, and Settings holding training programs and pilot costs.
-  None of that is true of the current code.
+- `docs/ADMIN_UI_BLUEPRINT.md` and `docs/ADMIN_REDESIGN_PLAN.md` were removed:
+  both described a nine-tab console with a top-level `Logs` tab, two inner
+  `LOG_SECTIONS`, an editable `ProfileEntriesTab`, and Settings holding training
+  programs, pilot costs, customer messages and newsletter subscribers. None of
+  that is true of the current code, and this file plus
+  `APP_WEBSITE_UI_COMPARISON.md` cover the console that exists.
 - `docs/APP_WEBSITE_UI_COMPARISON.md` must stay byte-identical in both
   repositories when the admin comparison changes.

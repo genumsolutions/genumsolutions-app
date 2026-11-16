@@ -235,23 +235,6 @@ function Button({
   );
 }
 
-function EditorHeading({
-  title,
-  onCancel,
-}: {
-  title: string;
-  onCancel: () => void;
-}) {
-  return (
-    <View className="mb-3 flex-row items-center justify-between gap-3">
-      <Text className="min-w-0 flex-1 font-display text-base font-bold text-ink">
-        {title}
-      </Text>
-      <Button label="Cancel" onPress={onCancel} tone="ghost" />
-    </View>
-  );
-}
-
 /** The section chips shown above the 3D Products console. */
 export function PrintSectionTabs({
   value,

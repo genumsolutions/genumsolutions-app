@@ -388,7 +388,6 @@ When the website adds a field to a shared type:
 ## Documentation Deliverables
 
 - `docs/APP_ADMIN_COMPLETE.md` — Complete admin UI documentation
-- `docs/ADMIN_UI_BLUEPRINT.md` — Admin UI blueprint
 - `docs/APP_ARCHITECTURE.md` — This file (app architecture overview)
 - `docs/APP_WEBSITE_UI_COMPARISON.md` — App vs website comparison
 - `docs/LINK_RESILIENCE.md` — Wi-Fi link diagnostics guide
