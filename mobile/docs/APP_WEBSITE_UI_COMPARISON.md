@@ -33,16 +33,16 @@ The eight entries above are the whole bar — `TABS` in `AdminScreen.tsx` has ex
 
 The website is **one route** — `app/admin/page.tsx` mounts `components/AdminPanel.tsx`, and every tab is a panel inside it. There are no per-tab URLs.
 
-| Tab                 | Component (section)                                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------------------------- |
-| `Dashboard`         | `AdminDashboard` + `AdminActivity` stacked                                                            |
-| `Orders`            | sections: Orders (`AdminOrders`), Finance (`AdminFinance`)                                             |
+| Tab                   | Component (section)                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Dashboard`           | `AdminDashboard` + `AdminActivity` stacked                                                           |
+| `Orders`              | sections: Orders (`AdminOrders`), Finance (`AdminFinance`)                                           |
 | `Electronic Products` | `AdminProducts kind="electronic"`                                                                    |
-| `3D Products`       | `AdminPrint` — Catalog, Categories, Pricing, Costs, Promotions, Services, Gallery, Requests, Reports    |
-| `Projects`          | `AdminProjectPackages`                                                                                |
-| `Content`           | sections: Services, Journal, Content                                                                   |
-| `Users`             | sections: Users (`AdminUsers`), Messages (`AdminMessages`), Logs (`AdminLogsHub`)                      |
-| `Settings`          | `AdminSettings` — Company details, Contact, Social & messaging                                        |
+| `3D Products`         | `AdminPrint` — Catalog, Categories, Pricing, Costs, Promotions, Services, Gallery, Requests, Reports |
+| `Projects`            | `AdminProjectPackages`                                                                               |
+| `Content`             | sections: Services, Journal, Content                                                                 |
+| `Users`               | sections: Users (`AdminUsers`), Messages (`AdminMessages`), Logs (`AdminLogsHub`)                    |
+| `Settings`            | `AdminSettings` — Company details, Contact, Social & messaging                                       |
 
 ### Alignment
 
