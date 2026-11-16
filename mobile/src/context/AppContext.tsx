@@ -248,6 +248,12 @@ function notifyAuth(message: string) {
  *   never call it there. Instead we set `data-theme` on <html> and `global.css`
  *   has matching `html[data-theme='dark'|'light']` overrides (see global.css).
  */
+// PERF (2026-09-25): ONE update check per app launch, module-level. It has to
+// live outside the provider: a `let` inside the component is re-created on
+// every render, so an error-boundary remount (or a StrictMode double-invoke)
+// would fly the OTA + manifest requests again.
+let launchUpdateFlight: Promise<void> | null = null;
+
 function applyColorScheme(mode: ThemeMode) {
   try {
     if (
@@ -276,6 +282,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [carModes] = useState<CarMode[]>([]);
   const [themeMode, setThemeModeState] = useState<ThemeMode>("light");
+
+  // Apply + cache WITHOUT the DB write-back (used when adopting the cloud
+  // preference on sign-in — the value just came FROM the database).
+  const applyThemeOnly = useCallback((mode: ThemeMode) => {
+    setThemeModeState(mode);
+    applyColorScheme(mode);
+    void AsyncStorage.setItem("genum-theme-mode", mode);
+  }, []);
   const [updatePill, setUpdatePill] = useState<UpdatePill | null>(null);
   const [appUpdated, setAppUpdated] = useState(false);
   // True while a cached (offline) user is shown pending the real session; the
@@ -333,7 +347,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSessionReady(true);
     });
     return () => sub.data.subscription.unsubscribe();
-  }, []);
+  }, [applyThemeOnly]);
 
   // --- restore the native session on launch ---
   // Offline-tolerant: a transient network/refresh failure must NOT be treated
@@ -486,7 +500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [applyThemeOnly]);
 
   useEffect(() => {
     // Theme restore — 2-mode (owner decision 2026-09-22): only 'light' /
@@ -504,14 +518,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       applyColorScheme(mode);
       void AsyncStorage.setItem("genum-theme-mode", mode);
     });
-  }, []);
-
-  // Apply + cache WITHOUT the DB write-back (used when adopting the cloud
-  // preference on sign-in — the value just came FROM the database).
-  const applyThemeOnly = useCallback((mode: ThemeMode) => {
-    setThemeModeState(mode);
-    applyColorScheme(mode);
-    void AsyncStorage.setItem("genum-theme-mode", mode);
   }, []);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
@@ -532,7 +538,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // double-invoke in dev) and each run hits BOTH the OTA server and the
   // release manifest — a shared promise makes remounts await the same flight
   // and keeps the network cost at exactly one check per launch.
-  let launchUpdateFlight: Promise<void> | null = null;
   const runLaunchUpdateCheck = useCallback(async () => {
     if (launchUpdateFlight) return launchUpdateFlight;
     launchUpdateFlight = (async () => {
@@ -585,6 +590,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Async load: cartCount is written only after the storage read and the
+    // catalogue lookup resolve, so nothing is set synchronously here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void refreshCartCount();
   }, [refreshCartCount]);
 
@@ -610,6 +618,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) {
       cart.setCartSyncHandler(null);
+      // Async load (see above): the count lands in a promise callback.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
       void refreshCartCount();
       return;
     }

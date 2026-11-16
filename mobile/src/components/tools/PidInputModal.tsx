@@ -51,13 +51,27 @@ export function PidInputModal({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
-  useEffect(() => {
+  // Reset on open, as a render-time adjustment rather than an effect: the
+  // editor must open showing the CURRENT value, and an effect would paint it
+  // first with the previous run's text and then correct it.
+  const [openedFor, setOpenedFor] = useState({ visible, value, decimals });
+  if (
+    openedFor.visible !== visible ||
+    openedFor.value !== value ||
+    openedFor.decimals !== decimals
+  ) {
+    setOpenedFor({ visible, value, decimals });
     if (visible) {
       setText(value.toFixed(decimals));
       setError(null);
-      setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [visible, value, decimals]);
+  }
+
+  useEffect(() => {
+    if (!visible) return;
+    const id = setTimeout(() => inputRef.current?.focus(), 100);
+    return () => clearTimeout(id);
+  }, [visible]);
 
   const handleConfirm = () => {
     const num = parseFloat(text);

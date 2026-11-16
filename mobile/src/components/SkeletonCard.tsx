@@ -4,11 +4,14 @@
 // cards use (image block + two text lines) with a soft opacity pulse,
 // so the grid doesn't jump when data arrives.
 // =====================================================================
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Animated, View } from "react-native";
 
 export function SkeletonCard({ width }: { width?: number | `${number}%` }) {
-  const pulse = useRef(new Animated.Value(0.45)).current;
+  // useMemo, not useRef(...).current: the animation handle is created exactly
+  // once, but reading `.current` during render is what the refs rule (rightly)
+  // refuses — a ref may be replaced under a concurrent render.
+  const pulse = useMemo(() => new Animated.Value(0.45), []);
 
   useEffect(() => {
     const loop = Animated.loop(

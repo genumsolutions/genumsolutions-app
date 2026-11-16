@@ -33,11 +33,13 @@ export function PrintPromoSticker({
   // sticker never flashes back for a frame on every app start.
   const [state, setState] = useState<"unknown" | "shown" | "hidden">("unknown");
 
+  // No promotion means nothing to show — decided during render so the sticker
+  // is never mounted for a frame. The storage read (an external system) still
+  // lands in a promise callback below.
+  const effective = promo ? state : "hidden";
+
   useEffect(() => {
-    if (!promo) {
-      setState("hidden");
-      return;
-    }
+    if (!promo) return;
     let active = true;
     void AsyncStorage.getItem(storageKey(promo.id))
       .then((stored) => {
@@ -52,7 +54,7 @@ export function PrintPromoSticker({
     };
   }, [promo]);
 
-  if (!promo || state !== "shown") return null;
+  if (!promo || effective !== "shown") return null;
 
   function dismiss() {
     setState("hidden");

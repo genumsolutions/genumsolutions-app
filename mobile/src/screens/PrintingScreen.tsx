@@ -189,6 +189,9 @@ export function PrintingScreen() {
     }
   }, []);
   useEffect(() => {
+    // The loader flips its spinner flag first by design; the models and the
+    // offline verdict arrive in promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void load();
   }, [load]);
 
@@ -290,9 +293,14 @@ export function PrintingScreen() {
       ),
     [models, category, query, sort, maxPrice, inStock],
   );
-  useEffect(() => {
+  // Back to page 1 whenever the filter set changes — adjusted during render so
+  // the list never paints the old page number against the new results.
+  const filterSig = `${category}|${query}|${sort}|${maxPrice}|${inStock}`;
+  const [lastFilterSig, setLastFilterSig] = useState(filterSig);
+  if (lastFilterSig !== filterSig) {
+    setLastFilterSig(filterSig);
     setPage(1);
-  }, [category, query, sort, maxPrice, inStock]);
+  }
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageItems = useMemo(

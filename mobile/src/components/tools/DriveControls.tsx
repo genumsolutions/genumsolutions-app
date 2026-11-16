@@ -149,20 +149,37 @@ function DualDpad({
     Partial<Record<"L1" | "L2" | "R1" | "R2", PadZone>>
   >({});
 
+  // The gesture handlers are created ONCE (PanResponder holds them for the life
+  // of the pad), so everything they need arrives through refs. The refs are
+  // written in an effect rather than during render: a render-time write is
+  // invisible to React (no re-render, and a discarded concurrent render leaves
+  // the ref holding values that never reached the screen).
   const stRef = useRef({ canControl, speed, steerLimit, is2wd1m });
-  stRef.current = { canControl, speed, steerLimit, is2wd1m };
   const canControlRef = useRef(canControl);
-  canControlRef.current = canControl;
   const onSignedDriveRef = useRef(onSignedDrive);
-  onSignedDriveRef.current = onSignedDrive;
   const sendDirRef = useRef(sendDir);
-  sendDirRef.current = sendDir;
   const onServoRef = useRef(onServo);
-  onServoRef.current = onServo;
   const limitsRef = useRef(limits);
-  limitsRef.current = limits;
   const onNavInputRef = useRef(onNavInput);
-  onNavInputRef.current = onNavInput;
+  useEffect(() => {
+    stRef.current = { canControl, speed, steerLimit, is2wd1m };
+    canControlRef.current = canControl;
+    onSignedDriveRef.current = onSignedDrive;
+    sendDirRef.current = sendDir;
+    onServoRef.current = onServo;
+    limitsRef.current = limits;
+    onNavInputRef.current = onNavInput;
+  }, [
+    canControl,
+    speed,
+    steerLimit,
+    is2wd1m,
+    onSignedDrive,
+    sendDir,
+    onServo,
+    limits,
+    onNavInput,
+  ]);
 
   // Cache for hold-resend: preserve the other pad's last command.
   const lastDriveRef = useRef(0);
@@ -311,6 +328,7 @@ function DualDpad({
 
   const panResponder = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs -- PanResponder keeps these handlers; they run only from native touch events, never during render
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
@@ -400,6 +418,11 @@ function DualDpad({
   useEffect(() => {
     if (canControl) return;
     touchesRef.current.clear();
+    // Link loss is a transport event, not a derivation: the pad must go dark
+    // the moment the car is unreachable so a held-looking zone cannot invite
+    // another press. Clearing the touch map alone would leave the last
+    // published cells lit.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external link-loss event
     publishState();
   }, [canControl, publishState]);
 
@@ -534,31 +557,43 @@ function DualJoystick({
   const [knobL, setKnobL] = useState({ x: 0, y: 0 });
   const [knobR, setKnobR] = useState({ x: 0, y: 0 });
 
+  // Same contract as the D-pad above: stable gesture handlers, latest props
+  // mirrored into refs from an effect (never from render).
   const canControlRef = useRef(canControl);
-  canControlRef.current = canControl;
   const rightEnabledRef = useRef(rightEnabled);
-  rightEnabledRef.current = rightEnabled;
   const onLeftRef = useRef(onLeft);
-  onLeftRef.current = onLeft;
   const onRightRef = useRef(onRight);
-  onRightRef.current = onRight;
   const onNavInputRef = useRef(onNavInput);
-  onNavInputRef.current = onNavInput;
+  useEffect(() => {
+    canControlRef.current = canControl;
+    rightEnabledRef.current = rightEnabled;
+    onLeftRef.current = onLeft;
+    onRightRef.current = onRight;
+    onNavInputRef.current = onNavInput;
+  }, [canControl, rightEnabled, onLeft, onRight, onNavInput]);
 
   const radius = geo ? Math.min(geo.w * 0.18, geo.h * 0.3, 85) : 0;
-  const centerOf = (stick: "L" | "R") =>
-    geo
-      ? { cx: geo.w * (stick === "L" ? 0.25 : 0.75), cy: geo.h * 0.5 }
-      : { cx: 0, cy: 0 };
+  // Stable identities: the responder's useMemo depends on these, so a version
+  // redefined on every render rebuilt the PanResponder mid-gesture.
+  const centerOf = useCallback(
+    (stick: "L" | "R") =>
+      geo
+        ? { cx: geo.w * (stick === "L" ? 0.25 : 0.75), cy: geo.h * 0.5 }
+        : { cx: 0, cy: 0 },
+    [geo],
+  );
 
-  const resolveStick = (x: number, y: number): "L" | "R" => {
-    if (!geo) return "L";
-    const l = centerOf("L"),
-      r = centerOf("R");
-    return Math.hypot(x - l.cx, y - l.cy) <= Math.hypot(x - r.cx, y - r.cy)
-      ? "L"
-      : "R";
-  };
+  const resolveStick = useCallback(
+    (x: number, y: number): "L" | "R" => {
+      if (!geo) return "L";
+      const l = centerOf("L"),
+        r = centerOf("R");
+      return Math.hypot(x - l.cx, y - l.cy) <= Math.hypot(x - r.cx, y - r.cy)
+        ? "L"
+        : "R";
+    },
+    [geo, centerOf],
+  );
 
   const applyKnob = useCallback(
     (stick: "L" | "R", dx: number, dy: number, report = true) => {
@@ -603,6 +638,7 @@ function DualJoystick({
 
   const panResponder = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs -- PanResponder keeps these handlers; they run only from native touch events, never during render
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
@@ -692,7 +728,7 @@ function DualJoystick({
           }
         },
       }),
-    [geo, radius, applyKnob, resolveStick, centerOf],
+    [applyKnob, resolveStick, centerOf],
   );
 
   // Hold-resend at 30ms

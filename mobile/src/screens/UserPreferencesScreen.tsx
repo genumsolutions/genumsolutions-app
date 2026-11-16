@@ -103,7 +103,11 @@ export function UserPreferencesScreen() {
 
   useEffect(() => {
     if (isSignedIn) {
+      // Both loaders write their rows from promise callbacks; each only flips a
+      // "loaded" flag (their initial value) on the way out.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
       void load();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
       void loadDevices();
     }
   }, [isSignedIn, load, loadDevices]);

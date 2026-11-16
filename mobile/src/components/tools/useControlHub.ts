@@ -268,7 +268,13 @@ export function useControlHub(routeCategory?: string) {
   const [btLinked, setBtLinked] = useState(
     sppService.isConnected || bleService.isConnected,
   );
-  const [deviceName, setDeviceName] = useState(sppService.deviceName ?? "");
+  // F-34: read the LIVE singles at mount, not just sppService — a window
+  // opened while the Control Panel already holds a Wi-Fi/BLE link used to show
+  // "no device" (no status event ever replays), so the deck rendered dim even
+  // though traffic flowed.
+  const [deviceName, setDeviceName] = useState(
+    sppService.deviceName ?? bleService.deviceName ?? "",
+  );
   // The connection method this device chose, board-unique and surviving the
   // disconnect — the method a connect (BT or Wi-Fi) is raised through, which
   // is also the radio a command is dialled over when the active mode lists
@@ -288,7 +294,7 @@ export function useControlHub(routeCategory?: string) {
   );
   const [scanning, setScanning] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [linkVerified, setLinkVerified] = useState(false);
+  const [linkVerified, setLinkVerified] = useState(wifiService.linkVerified);
   const [connectingAddress, setConnectingAddress] = useState<string | null>(
     null,
   );
@@ -418,7 +424,13 @@ export function useControlHub(routeCategory?: string) {
 
   // ---- Active mode + state (mirrors ESP remote) ----
   // speed starts at the ESP remote's default speedValue = 170.
-  const [activeCategory, setActiveCategory] = useState("robocar");
+  const [activeCategory, setActiveCategory] = useState(
+    resolvedCategory &&
+      PROJECT_CATEGORIES.some((c) => c.slug === resolvedCategory)
+      ? resolvedCategory
+      : "robocar",
+  );
+
   const [activeMode, setActiveMode] = useState<CarMode>(LOCAL_CAR_MODES[0]);
   const [speed, setSpeed] = useState(170);
   const [servo, setServo] = useState(90);
@@ -1193,7 +1205,8 @@ export function useControlHub(routeCategory?: string) {
       joystickLayoutId,
       savedPrefs?.lastWifiSsid,
       savedPrefs?.wifiHistory,
-      carFwIdRef.current,
+      savedPrefs?.fullscreen,
+      savedPrefs?.lastRouterIp,
       savedPrefs?.btIds,
       autoJoinRouter,
       wifiEnabled,
@@ -1264,6 +1277,11 @@ export function useControlHub(routeCategory?: string) {
   // It can only be stale once the car is answering again — whether on the same
   // transport that was retrying or on another one.
   useEffect(() => {
+    // The link coming back is an event from the transports, not a render-time
+    // derivation: this clears the one "reconnect?" dialog that a drop raised.
+    // A derived value would have to keep the stale `true` in state and mask it
+    // at every read site, which is how the dialog leaked back in before.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external transport event
     if (connected || wifiConnected) setReconnectDue(false);
   }, [connected, wifiConnected]);
   useEffect(() => {
@@ -1395,15 +1413,26 @@ export function useControlHub(routeCategory?: string) {
   // R-4 NACK handler mirror (defined below; applyTelemetry has empty deps).
   const handleNackRef = useRef<((arg: string) => void) | null>(null);
 
-  // Set category from route params
-  useEffect(() => {
+  // Set category from route params. This is React's own "adjust state when a
+  // prop changes" shape rather than an effect: an effect would render once with
+  // the stale category, then again with the right one, and the intermediate
+  // frame is what the tools grid would flash.
+  const [lastResolvedCategory, setLastResolvedCategory] = useState<
+    string | null | undefined
+  >(
+    // Sentinel: the first render has no previous param to compare against, so
+    // the initialiser on `activeCategory` (line ~421) is what seeds it.
+    "__initial__",
+  );
+  if (resolvedCategory !== lastResolvedCategory) {
+    setLastResolvedCategory(resolvedCategory);
     if (
       resolvedCategory &&
       PROJECT_CATEGORIES.some((c) => c.slug === resolvedCategory)
     ) {
       setActiveCategory(resolvedCategory);
     }
-  }, [resolvedCategory]);
+  }
 
   // Show connection message for a few seconds, then clear
   const showConnectionMessage = useCallback(
@@ -1431,25 +1460,13 @@ export function useControlHub(routeCategory?: string) {
   // canControl=false -> the whole drive deck rendered dim/disabled ("as if
   // connection is not made") even though traffic still flowed (sendCommand
   // reads wifiService.isConnected live, which is also why the mode dropdown
-  // kept working over WiFi). Reconcile THIS instance with the LIVE singleton
-  // truth exactly once, at mount; after that the status subscriptions drive
-  // the state as before.
-  useEffect(() => {
-    if (wifiService.isConnected) {
-      setWifiConnected(true);
-      setConnected(true);
-    }
-    if (sppService.isConnected) {
-      setConnected(true);
-      setBtLinked(true);
-      setDeviceName(sppService.deviceName ?? "");
-    } else if (bleService.isConnected) {
-      setConnected(true);
-      setBtLinked(true);
-      setDeviceName(bleService.deviceName ?? "");
-    }
-    if (wifiService.linkVerified) setLinkVerified(true);
-  }, []);
+  // kept working over WiFi).
+  //
+  // That reconcile used to be an effect that set four pieces of state on
+  // mount. It is now the INITIALISER of each piece (see `connected`,
+  // `btLinked`, `deviceName`, `linkVerified`, `wifiConnected` above): same
+  // truth, but it lands on the first render instead of the second, so the
+  // deck never paints the dim frame at all.
 
   // Cleanup on unmount â€” do NOT disconnect the singleton services; the
   // BLE/SPP/WiFi connection must survive navigation between screens (and
@@ -2118,7 +2135,9 @@ export function useControlHub(routeCategory?: string) {
     // stable setState.  The old [activeMode] dependency tore down and
     // re-created the subscription on every mode change, which caused the
     // app to miss STATE;MODE=... frames from the car during the gap.
-  }, []);
+    // The two `…Once` writers are useCallback([], …) so they are stable and
+    // cannot re-subscribe anything; they are listed for honesty, not effect.
+  }, [setDriveDirOnce, setDriveStatusOnce]);
 
   // U-121 Phase D (owner 2026-10-23): "the car freezes and the app doesn't
   // know about that." A live transport says nothing about a live car — the
@@ -2133,6 +2152,10 @@ export function useControlHub(routeCategory?: string) {
     if (!connected && !wifiConnected) {
       lastCarFrameRef.current = null;
       linkUpAtRef.current = null;
+      // Resetting the verdict on a link change is the point of the effect: the
+      // alternative is exposing a masked value, which would leave the "car may
+      // have frozen" strip's state true between sessions.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets on link change
       setCarSilent(false);
       return;
     }
@@ -2606,7 +2629,7 @@ export function useControlHub(routeCategory?: string) {
         if (mountedRef.current) setConnecting(false);
       }
     },
-    [wifiUrl, showConnectionMessage, wirelessMethod],
+    [wifiUrl, showConnectionMessage, findCarForUser],
   ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
 
   // U-80b: AUTO-discover when the PHONE lands on a new network.
@@ -2670,7 +2693,7 @@ export function useControlHub(routeCategory?: string) {
       // observes the network change without re-dialing. The user must use
       // the Connect button to re-establish a link.
     });
-  }, []);
+  }, [publishPhoneNetState]);
 
   // U-124 ② (owner 2026-10-24): *"shows the wifi. name hidden, which is
   // meaningless and should show the wifi network the app is connected to, at
@@ -2833,7 +2856,7 @@ export function useControlHub(routeCategory?: string) {
       disconnectingRef.current = false;
       setDisconnectingLink(null);
     }
-  }, [showConnectionMessage]);
+  }, [showConnectionMessage, setDriveDirOnce, setDriveStatusOnce]);
 
   // ---- v1.4.0 WiFi provisioning (app → BT → car) ----
   // Sends WIFICFG;<ssid>;<password> over the Bluetooth link; the car stores
@@ -2876,7 +2899,7 @@ export function useControlHub(routeCategory?: string) {
     } finally {
       setWifiProvisioning(false);
     }
-  }, [wifiSsid, wifiPassword, connected, showConnectionMessage, persistPrefs]);
+  }, [wifiSsid, wifiPassword, connected, showConnectionMessage]);
 
   // REPLY=â€¦ lines from the car (WIFICFG;STORED;<ssid>) confirm provisioning
   // and pre-fill the WS URL for the deck.
@@ -3058,7 +3081,7 @@ export function useControlHub(routeCategory?: string) {
         }
       }
     },
-    [showConnectionMessage],
+    [showConnectionMessage, setDriveStatusOnce],
   );
   handleNackRef.current = handleNack;
 
@@ -3074,7 +3097,7 @@ export function useControlHub(routeCategory?: string) {
           setDriveDirOnce("S");
         }
       });
-    }, []),
+    }, [setDriveDirOnce]),
   );
 
   const handleDisconnect = useCallback(async () => {
@@ -3141,7 +3164,7 @@ export function useControlHub(routeCategory?: string) {
     setNavActive(false);
     setNavField("none");
     setPreviewMode(null);
-  }, [activeMode]);
+  }, [activeMode, setDriveDirOnce, setDriveStatusOnce, setNavActive]);
 
   // Send a command over the right transport(s) for the ACTIVE mode; no-ops
   // when nothing is linked.
@@ -3189,7 +3212,7 @@ export function useControlHub(routeCategory?: string) {
         void wifiService.sendLine(cmd).catch(() => {});
       }
     },
-    [connected, wifiConnected, activeMode, wirelessMethod],
+    [connected, activeMode, wirelessMethod],
   );
 
   // U-105 (1.3.5): the car's three transport toggles. Like the ROUTERS;… system
@@ -3328,7 +3351,7 @@ export function useControlHub(routeCategory?: string) {
       setDriveStatusOnce(`Switching WiFi to ${s}`);
       persistPrefsRef.current?.({ savedRouters: [...carNetworks] });
     },
-    [sendCommand, carNetworks],
+    [sendCommand, carNetworks, setDriveStatusOnce],
   );
 
   const routerAdd = useCallback(
@@ -3345,7 +3368,7 @@ export function useControlHub(routeCategory?: string) {
       });
       setDriveStatusOnce(`Saved router ${s}`);
     },
-    [sendCommand, carNetworks],
+    [sendCommand, carNetworks, setDriveStatusOnce],
   );
 
   // -------------------------------------------------------------------
@@ -3446,7 +3469,7 @@ export function useControlHub(routeCategory?: string) {
       settleRouter(outcomeFor(answer, pending.request));
       return true;
     },
-    [persistRouters, settleRouter],
+    [persistRouters, settleRouter, setRouterSwitchNotice],
   );
   consumeRouterAnswerRef.current = consumeRouterAnswer;
 
@@ -3521,7 +3544,7 @@ export function useControlHub(routeCategory?: string) {
     setCarNetworks([]);
     persistPrefsRef.current?.({ savedRouters: [] });
     setDriveStatusOnce("All routers cleared");
-  }, [sendCommand]);
+  }, [sendCommand, setDriveStatusOnce]);
 
   // Auto-dial: when the car announces its new router IP (STATE;IP=<ip>) after
   // a smart-link USE, pre-fill the WS URL toward the router so the user only
@@ -3585,7 +3608,7 @@ export function useControlHub(routeCategory?: string) {
       );
       sendCommand(d);
     },
-    [sendCommand],
+    [sendCommand, setDriveDirOnce, setDriveStatusOnce],
   );
 
   const sendThrottled = useCallback(
@@ -3629,7 +3652,7 @@ export function useControlHub(routeCategory?: string) {
       persistPrefsRef.current?.({ speed: s });
       return s;
     });
-  }, [sendThrottled]);
+  }, [sendThrottled, setDriveStatusOnce]);
 
   const handleServo = useCallback(
     (value: number) => {
@@ -3674,7 +3697,7 @@ export function useControlHub(routeCategory?: string) {
       const mag = quantizeSpeedToStep(speed);
       sendThrottled("spd", `SPD${signed > 0 ? mag : signed < 0 ? -mag : 0}`);
     },
-    [sendThrottled, speed],
+    [sendThrottled, speed, setDriveDirOnce, setDriveStatusOnce],
   );
 
   // R-20: steering travel LIMIT edits — clamp to the car's 10..90 range,
@@ -3719,7 +3742,7 @@ export function useControlHub(routeCategory?: string) {
     sendCommand("ESTOP");
     sendCommand("SPD0");
     sendCommand("SERVO90");
-  }, [sendCommand]);
+  }, [sendCommand, setDriveDirOnce, setDriveStatusOnce]);
 
   // Mode select = the ESP confirm path: clear the queue, send the token
   // immediately, mirror the mode, status "Mode:<name>", stop driving.
@@ -3745,7 +3768,7 @@ export function useControlHub(routeCategory?: string) {
       // Persist the selected mode so it restores on reconnect / next power cycle.
       persistPrefsRef.current?.({ modeId: m.id });
     },
-    [sendCommand],
+    [sendCommand, setDriveDirOnce, setDriveStatusOnce],
   );
 
   const cycleMode = useCallback(() => {
@@ -4038,7 +4061,7 @@ export function useControlHub(routeCategory?: string) {
   // Restore the per-car cached view when the profile changes (F-90: never
   // another car's history). Marked restored — the fetch stamps it fresh.
   useEffect(() => {
-    const key = carLogCacheKey(profileKeyRef.current);
+    const key = carLogCacheKey(addressForMemory);
     if (!key) return;
     let alive = true;
     void AsyncStorage.getItem(key)
@@ -4057,9 +4080,10 @@ export function useControlHub(routeCategory?: string) {
     return () => {
       alive = false;
     };
-    // profileKeyRef mirrors addressForMemory; the identity is what scopes the
-    // cache (F-90), so the profile change is the dependency.
-  }, [profileKeyRef.current]);
+    // The identity is what scopes the cache (F-90), so the profile itself is
+    // the dependency — a ref in a dep list never re-runs and read the value
+    // during render, which is exactly the staleness the rule warns about.
+  }, [addressForMemory]);
 
   // U-124 ⑨ (owner 2026-10-24): "by matching its own network and prompt to
   // change the phone's network if the two networks doesn match."

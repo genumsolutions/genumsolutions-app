@@ -9,7 +9,7 @@
 // between the brand header and the bottom tab bar like the other three.
 // The tab bar, param-sync and focus re-sync logic mirror MainTabPager.tsx.
 // =====================================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
   useFocusEffect,
@@ -60,16 +60,21 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
     initialTab(route.params?.screen),
   );
 
-  // Derive the page from the `screen` param so external tab switches land.
+  // Derive the page from the `screen` param so external tab switches land. The
+  // first render seeds `page` from the same param, so this is an adjustment to
+  // a CHANGED param, which React documents as a render-time job — an effect
+  // would paint the old tab and then jump.
   const syncToParam = useCallback(() => {
     const target = TAB_ORDER.indexOf(initialTab(route.params?.screen));
     if (target < 0) return;
     setPage(TAB_ORDER[target]);
   }, [route.params?.screen]);
 
-  useEffect(() => {
+  const [lastScreenParam, setLastScreenParam] = useState(route.params?.screen);
+  if (lastScreenParam !== route.params?.screen) {
+    setLastScreenParam(route.params?.screen);
     syncToParam();
-  }, [syncToParam]);
+  }
 
   // Re-sync whenever Main regains focus (mirrors the native pager behavior).
   useFocusEffect(

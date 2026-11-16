@@ -51,12 +51,18 @@ describe("sign-in sheet never strands a signed-in user on create account", () =>
     expect(sheet).toContain("if (!visible || !isSignedIn) return;");
     const effectStart = sheet.indexOf("if (!visible || !isSignedIn) return;");
     const closeEffect = sheet.slice(effectStart, effectStart + 400);
-    expect(closeEffect).toContain("resetForm();");
     expect(closeEffect).toContain("onRequestClose();");
+    // The form reset rides the visibility adjustment (render time), so the
+    // close effect itself touches no state.
+    const adjust = sheet.slice(sheet.indexOf("if (wasVisible !== visible)"));
+    expect(adjust.slice(0, 200)).toContain("resetForm();");
   });
 
   it("always reopens on Sign in", () => {
-    expect(sheet).toContain('if (visible) setMode("signin");');
+    // resetForm() puts the sheet back on the Sign in tab AND clears the
+    // previous attempt's fields, so a reopen is a clean form.
+    expect(sheet).toContain("if (visible) resetForm();");
+    expect(sheet).toContain('setMode("signin");');
     // The old three-tab bar (which could be left on "Sign up") is gone.
     expect(sheet).not.toContain('["signup", "Sign up"]');
     expect(sheet).not.toContain('["forgot", "Reset"]');

@@ -137,6 +137,9 @@ export function ToolsScreen() {
     }
   }, []);
   useEffect(() => {
+    // Loader writes its rows from a promise callback; the bundled fallback is
+    // already the initial state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void loadCategories();
   }, [loadCategories]);
   const onRefresh = useCallback(async () => {
@@ -173,17 +176,31 @@ export function ToolsScreen() {
     carSsid,
   } = hub;
 
-  // F-57 / round-close: when the transport disconnects, reset the selected category
-  // so the control panel returns to a clean default state rather than staying
-  // stuck on a connected-category view. The sections remain in the same order
-  // (U-53-4) — we only reset the active slice.
-  useEffect(() => {
-    // UX-3: only a transport loss resets the selection — never a mount, a
-    // pull-to-refresh, or the user's own earlier pill tap.
-    if (!connected && !userTouchedSelectionRef.current) {
+  // Category organizer. Declared before the transport-loss reset below so the
+  // reset can adjust it during render instead of in an effect.
+  const [selectedSlug, setSelectedSlug] = useState<string>(
+    routeCategory && categories.some((c) => c.slug === routeCategory)
+      ? routeCategory
+      : categories[0]!.slug,
+  );
+  // UX-3 (2026-10-02 audit): a pill tap is USER INTENT. The reset below is for
+  // TRANSPORT LOSS only — this flag lets it tell the difference, so a
+  // mount/refresh cycle can no longer snap a chosen category back to the first
+  // pill. State (not a ref) so the reset can read it during render.
+  const [userTouchedSelection, setUserTouchedSelection] = useState(false);
+
+  // F-57 / round-close: when the transport disconnects, reset the selected
+  // category so the control panel returns to a clean default state rather than
+  // staying stuck on a connected-category view. The sections remain in the same
+  // order (U-53-4) — we only reset the active slice. Adjusted during render: the
+  // effect version painted the stale category for one frame on every drop.
+  const [wasConnected, setWasConnected] = useState(connected);
+  if (wasConnected !== connected) {
+    setWasConnected(connected);
+    if (!connected && !userTouchedSelection) {
       setSelectedSlug(categories[0]!.slug);
     }
-  }, [connected, categories]);
+  }
 
   // UX-2: a queued deck-open must not fire after the screen is gone.
   useEffect(() => {
@@ -193,12 +210,6 @@ export function ToolsScreen() {
     };
   }, []);
 
-  // Category organizer
-  const [selectedSlug, setSelectedSlug] = useState<string>(
-    routeCategory && categories.some((c) => c.slug === routeCategory)
-      ? routeCategory
-      : categories[0]!.slug,
-  );
   // ①: the category detail card leads COMPACT (name · tagline · hardware);
   // the long description + capability checklist hide behind a Details toggle
   // and reset when the category changes (each category's card starts clean).
@@ -206,13 +217,8 @@ export function ToolsScreen() {
   // the card starts EXPANDED so the description and capability checklist are
   // visible; "Details" still folds it away.
   const [showCategoryDetails, setShowCategoryDetails] = useState(true);
-  // UX-3 (2026-10-02 audit): a pill tap is USER INTENT. The reset below is
-  // for TRANSPORT LOSS only — this flag lets it tell the difference, so a
-  // mount/refresh cycle can no longer snap a chosen category back to the
-  // first pill.
-  const userTouchedSelectionRef = useRef(false);
   const selectCategory = useCallback((slug: string) => {
-    userTouchedSelectionRef.current = true;
+    setUserTouchedSelection(true);
     setShowCategoryDetails(true);
     setSelectedSlug(slug);
   }, []);
@@ -434,6 +440,10 @@ export function ToolsScreen() {
               setSelectedSlug(categories[0]!.slug);
               // UX-2: replace any in-flight timer; the cancel handle is stored
               // (cleared on unmount below) — never consumed in this same tick.
+              // The debounce cancel handle lives in a ref so a double-tap can
+              // replace it; it is only ever written from this handler and
+              // cleared from the unmount effect.
+              // eslint-disable-next-line react-hooks/immutability -- timer handle
               deckOpenTimerRef.current = queueDeckOpen(
                 deckOpenTimerRef.current,
                 () => {

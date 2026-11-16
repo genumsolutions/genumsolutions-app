@@ -43,16 +43,18 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [guestAttempt, setGuestAttempt] = useState(false);
 
-  // Hydrate once per sign-in; clear on sign-out.
+  // Clear on the signed-out transition during render, so the collection never
+  // paints another account's saved items for a frame after a sign-out.
+  const [wasSignedIn, setWasSignedIn] = useState(isSignedIn);
+  if (wasSignedIn !== isSignedIn) {
+    setWasSignedIn(isSignedIn);
+    if (!isSignedIn) setItems([]);
+  }
+
+  // Hydrate once per sign-in.
   useEffect(() => {
-    if (!sessionReady) return;
+    if (!sessionReady || !isSignedIn) return;
     let active = true;
-    if (!isSignedIn) {
-      setItems([]);
-      return () => {
-        active = false;
-      };
-    }
     listCollection()
       .then((rows) => {
         if (active) setItems(rows);

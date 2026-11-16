@@ -47,17 +47,24 @@ module.exports = defineConfig([
           ignoreRestSiblings: true,
         },
       ],
-      // Scope note: this gate exists to catch dead code. The react-hooks v6
-      // advisories (set-state-in-effect, refs, immutability, static-components)
-      // and the import/style rules would fail ~150 pre-existing sites, mostly in
-      // the control hub — turning those into a refactor is a separate job, so
-      // they stay off rather than drowning the signal.
-      "react-hooks/set-state-in-effect": "off",
-      "react-hooks/refs": "off",
-      "react-hooks/immutability": "off",
-      "react-hooks/static-components": "off",
-      "react-hooks/preserve-manual-memoization": "off",
-      "react-hooks/exhaustive-deps": "off",
+      // The react-hooks v6+ advisories, on as errors. Upgraded the plugin to 7
+      // for these: 5.2.0 only shipped rules-of-hooks and exhaustive-deps, so the
+      // earlier "off" lines here named rules that did not exist yet.
+      //
+      // set-state-in-effect catches the cascade bug this repo keeps hitting —
+      // an effect that mirrors a prop or another state into state, which renders
+      // twice and can loop when the write feeds back. refs catches a ref read
+      // during render (the value is one render stale). immutability catches
+      // mutating props/state instead of replacing them. static-components
+      // catches a component declared inside a component, which remounts its
+      // subtree on every parent render. preserve-manual-memoization catches a
+      // useMemo/useCallback whose dependencies no longer cover what it reads.
+      "react-hooks/set-state-in-effect": "error",
+      "react-hooks/refs": "error",
+      "react-hooks/immutability": "error",
+      "react-hooks/static-components": "error",
+      "react-hooks/preserve-manual-memoization": "error",
+      "react-hooks/exhaustive-deps": "error",
       "react/no-unescaped-entities": "off",
       "import/first": "off",
       "import/no-duplicates": "off",

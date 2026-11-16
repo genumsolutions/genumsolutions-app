@@ -86,10 +86,13 @@ export function ServicesScreen() {
     };
   }, []);
 
-  // Reset pagination whenever the category changes.
-  useEffect(() => {
+  // Reset pagination whenever the category changes — during render, so the
+  // grid never shows a page that the new category does not have.
+  const [lastCategory, setLastCategory] = useState(category);
+  if (lastCategory !== category) {
+    setLastCategory(category);
     setPage(1);
-  }, [category]);
+  }
 
   const categories = useMemo(
     () => [

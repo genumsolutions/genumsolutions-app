@@ -87,7 +87,9 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
     initialTab(route.params?.screen),
   );
 
-  const initialIndex = useRef<number>(
+  // The pager's first page is fixed for the life of the mount, so it belongs in
+  // state (computed once) rather than a ref read during render.
+  const [initialIndex] = useState<number>(() =>
     TAB_ORDER.indexOf(initialTab(route.params?.screen)),
   );
 
@@ -171,7 +173,7 @@ export function MainTabPager({ screens }: MainTabPagerProps) {
       <PagerView
         ref={pagerRef}
         style={{ flex: 1 }}
-        initialPage={initialIndex.current}
+        initialPage={initialIndex}
         onPageSelected={onPageSelected}
         offscreenPageLimit={1}
       >

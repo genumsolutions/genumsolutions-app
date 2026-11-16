@@ -177,6 +177,10 @@ export function AccountScreen() {
   }, [isSignedIn]);
 
   useEffect(() => {
+    // reload() flips the two loading flags immediately by design (the blocks
+    // show spinners until the promises settle); the rows themselves land in
+    // promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void reload();
   }, [reload]);
 
@@ -188,13 +192,23 @@ export function AccountScreen() {
     }, [refreshProfile]),
   );
 
-  useEffect(() => {
+  // Seed the editable fields from the profile whenever the PROFILE ITSELF
+  // changes (fresh load, or a staff edit synced down). Keyed on the values, not
+  // the object identity, so a re-render with an equal user does not clobber an
+  // in-progress edit — and applied during render so the inputs never paint the
+  // previous account's details for a frame.
+  const userSig = user
+    ? `${user.id}\u0000${user.name ?? ""}\u0000${user.phone ?? ""}\u0000${user.address ?? ""}`
+    : "";
+  const [lastUserSig, setLastUserSig] = useState(userSig);
+  if (userSig !== lastUserSig) {
+    setLastUserSig(userSig);
     if (user) {
       setName(user.name || "");
       setPhone(user.phone || "");
       setAddress(user.address || "");
     }
-  }, [user]);
+  }
 
   const initials = (user?.name || "U")
     .split(/\s+/)

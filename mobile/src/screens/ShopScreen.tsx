@@ -93,15 +93,23 @@ export function ShopScreen() {
   };
 
   useEffect(() => {
+    // The loader sets its own loading flag first; products land in promise
+    // callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void load();
   }, []);
 
   // U-47 (owner): the Recently-viewed strip is REMOVED — replaced by the
   // per-user Collection (hearts). No focus-effect re-read remains.
 
-  useEffect(() => {
+  // Back to page 1 whenever the filter set changes — adjusted during render so
+  // the list never paints the old page against the new results.
+  const filterSig = `${category}|${query}|${sort}|${maxPrice}|${inStock}`;
+  const [lastFilterSig, setLastFilterSig] = useState(filterSig);
+  if (lastFilterSig !== filterSig) {
+    setLastFilterSig(filterSig);
     setPage(1);
-  }, [category, query, sort, maxPrice, inStock]);
+  }
 
   if (loading) {
     // C8 (2026-09-23): skeleton grid instead of a bare spinner — the card

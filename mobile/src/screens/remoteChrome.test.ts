@@ -186,11 +186,15 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
 describe("U-113 P2 — the hub's per-method link truth (btLinked + handleBtDisconnect)", () => {
   it("has the state and keeps it current on every BT edge", () => {
     expect(hub).toContain("const [btLinked, setBtLinked] = useState(");
-    // Set true on: mount reconcile (SPP + BLE branches), SPP connected, BLE
-    // connected, manual SPP connect — five edges; four is a safe floor.
+    // Seeded from the LIVE transports in the initialiser (F-34), so a window
+    // opened on an existing link starts true instead of mounting false and
+    // reconciling in an effect.
+    expect(hub).toContain("sppService.isConnected || bleService.isConnected,");
+    // Set true on: SPP connected, BLE connected, manual SPP connect — three
+    // real edges now that the mount reconcile is gone.
     expect(
       hub.match(/setBtLinked\(true\)/g)?.length ?? 0,
-    ).toBeGreaterThanOrEqual(4);
+    ).toBeGreaterThanOrEqual(3);
     // Cleared on: SPP down ×2 (disconnected/error, guarded by BLE), BLE
     // down ×2 (guarded by SPP), and the manual BT disconnect — three floor.
     expect(

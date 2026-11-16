@@ -172,7 +172,6 @@ import {
   type ProjectComponentSuggestion,
 } from "../lib/project-components";
 
-type BackHandlerRemove = () => void;
 type Tab =
   | "Dashboard"
   | "Orders"
@@ -236,6 +235,53 @@ const TAB_MIN_WIDTH = 96;
 // Staff-only console: the website redirects every non-staff visitor away from
 // /admin, so the app must not render it for a customer either (deep link, or a
 // screen left on the stack after a role change).
+// Section wrapper for the admin editor sheets. Module scope on purpose:
+// declaring it inside a screen made it a new component type on every render,
+// which remounted every open section (and collapsed it) on each keystroke.
+function EditorSection({
+  title,
+  subtitle,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View className="mb-3 overflow-hidden rounded-xl border border-line bg-surface">
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={`${open ? "Collapse" : "Expand"} ${title}`}
+        accessibilityState={{ expanded: open }}
+        className="min-h-11 flex-row items-center justify-between px-4 py-3"
+      >
+        <View className="min-w-0 flex-1 pr-3">
+          <Text className="text-sm font-bold text-ink">{title}</Text>
+          {subtitle ? (
+            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-muted">
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        <Feather
+          name={open ? "chevron-up" : "chevron-down"}
+          size={18}
+          color="#475569"
+        />
+      </Pressable>
+      {open ? (
+        <View className="border-t border-line bg-card px-4 pb-4 pt-3">
+          {children}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export function AdminScreen() {
   const { isStaff } = useApp();
   if (!isStaff) {
@@ -281,8 +327,6 @@ function AdminConsole() {
   // U-UI1: stamped after each successful tab load, shown in the console bar.
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const tabOffsets = useRef<number[]>([]);
-  const [backHandlerRef, setBackHandlerRef] =
-    useState<BackHandlerRemove | null>(null);
 
   // ── C7: biometric admin lock (local opt-in from Menu → Security) ──
   // When the user enabled the lock on this device, the console stays
@@ -528,14 +572,12 @@ function AdminConsole() {
     (tab === "Content" && (editingService != null || journalOpen)) ||
     (tab === "Settings" && settingsEditing);
 
+  const editingProductOpen = editingProduct != null;
+  const editingServiceOpen = editingService != null;
+  const editingProjectOpen = editingProject != null;
+
   useEffect(() => {
-    if (!editorOnCurrentTab) {
-      if (backHandlerRef) {
-        backHandlerRef();
-        setBackHandlerRef(null);
-      }
-      return;
-    }
+    if (!editorOnCurrentTab) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (
         (tab === "Electronic Products" || tab === "3D Products") &&
@@ -561,22 +603,27 @@ function AdminConsole() {
       }
       return false;
     });
-    setBackHandlerRef(() => sub.remove);
-    return () => {
-      sub.remove();
-      setBackHandlerRef(null);
-    };
+    // The previous effect's cleanup removes the old listener before this one
+    // runs, so there is nothing to store and no state write to make here.
+    return () => sub.remove();
   }, [
     tab,
-    editingProduct != null,
-    editingService != null,
-    editingProject != null,
+    editingProductOpen,
+    editingServiceOpen,
+    editingProjectOpen,
+    editingProduct,
+    editingProject,
+    editingService,
+    editorOnCurrentTab,
     settingsEditing,
     journalOpen,
   ]);
 
   useEffect(() => {
+    // The tab is the only meaningful trigger; loadTab closes over the whole
+    // admin data layer and would re-fire on every one of its identities.
     void loadTab();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tab-keyed load
   }, [tab]);
 
   async function runAdminLoad(
@@ -2721,9 +2768,14 @@ function ProductsTab({
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  React.useEffect(() => {
+  // Back to page 1 whenever the filter changes — during render, so the list
+  // never paints the old page against the new results.
+  const filterSig = `${query}|\u0000${category}`;
+  const [lastFilterSig, setLastFilterSig] = React.useState(filterSig);
+  if (lastFilterSig !== filterSig) {
+    setLastFilterSig(filterSig);
     setPage(1);
-  }, [query, category]);
+  }
 
   if (editing) {
     return (
@@ -2961,9 +3013,14 @@ function ProjectTab({
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  React.useEffect(() => {
+  // Back to page 1 whenever the filter changes — during render, so the list
+  // never paints the old page against the new results.
+  const filterSig2 = `${query}|\u0000${category}`;
+  const [lastFilterSig2, setLastFilterSig2] = React.useState(filterSig2);
+  if (lastFilterSig2 !== filterSig2) {
+    setLastFilterSig2(filterSig2);
     setPage(1);
-  }, [category, query]);
+  }
 
   // ── U-45 Phase 2 (2026-09-27): component linker for the OPEN project —
   // mirror of the website's AdminProjectPackages linker. Suggestions run the
@@ -2971,9 +3028,6 @@ function ProjectTab({
   // the Electronic Products catalog; links save through the staff-gated
   // save_project_components RPC (replace-all, same contract as the web PUT).
   const [linkerLinks, setLinkerLinks] = useState<ProjectComponentLink[]>([]);
-  const [linkerSuggestions, setLinkerSuggestions] = useState<
-    ProjectComponentSuggestion[]
-  >([]);
   const [linkerBusy, setLinkerBusy] = useState(false);
   const [linkerLoadError, setLinkerLoadError] = useState<string | null>(null);
   const [linkerLoadedId, setLinkerLoadedId] = useState<string | null>(null);
@@ -2987,8 +3041,11 @@ function ProjectTab({
   // wipe the in-progress link list.
   React.useEffect(() => {
     if (!linkerProjectId) {
+      // Clearing the editor's stored link draft on a project change is an
+      // event, not a derivation: the empty list is what the sheet must show
+      // while the saved rows are (re)loaded below.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- project changed
       setLinkerLinks([]);
-      setLinkerSuggestions([]);
       setLinkerLoadError(null);
       setLinkerLoadedId(null);
       return;
@@ -3034,16 +3091,20 @@ function ProjectTab({
         p.id !== editing?.id && p.active !== false && isComponentsCatalogRow(p),
     )
     .map((p) => ({ id: p.id, name: p.name, sku: p.sku }));
-  React.useEffect(() => {
-    if (!linkerProjectId || !editing) return;
-    setLinkerSuggestions(
-      dedupeSuggestions(
-        suggestComponents(editing.materialsRequired, linkerCatalog),
-      ),
+  // Derivable, not stored: same inputs, same suggestions — and storing them
+  // meant an effect wrote state on every keystroke of the materials list.
+  // The joined materials string is the value that actually changes when the
+  // team edits the list, so the memo can depend on it cheaply.
+  const materialsSig = editing?.materialsRequired.join("\n") ?? "";
+  const linkerSuggestions = React.useMemo<ProjectComponentSuggestion[]>(() => {
+    if (!linkerProjectId || !editing) return [];
+    return dedupeSuggestions(
+      suggestComponents(editing.materialsRequired, linkerCatalog),
     );
-    // Recompute when the project (its materials) or the catalog changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkerProjectId, editing?.materialsRequired.join("\n"), catalogProducts]);
+    // `editing` is covered by materialsSig: the matcher reads nothing else off
+    // the draft, so depending on the object would re-run on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- materials + catalog only
+  }, [linkerProjectId, materialsSig, linkerCatalog]);
 
   // Auto-prefill ONCE per project when nothing is saved yet: first confident
   // matcher suggestions become the editable starting list (web parity).
@@ -3054,6 +3115,10 @@ function ProjectTab({
       linkerLinks.length === 0 &&
       linkerSuggestions.some((s) => s.productId)
     ) {
+      // One-shot prefill: runs only while the "loaded once" marker matches
+      // and the saved list is empty; the marker is cleared in the same write,
+      // so this cannot re-fire.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot prefill
       setLinkerLinks(
         linkerSuggestions
           .filter((s) => s.productId)
@@ -3105,6 +3170,9 @@ function ProjectTab({
 
   React.useEffect(() => {
     if (!pricingProjectId) {
+      // The pricing draft is per project; with no project open the blank
+      // draft is the reset, and it has to land before the sheet renders.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- project changed
       setProjectPricing(defaultProjectPricing);
       setPricingLoadError(null);
       return;
@@ -3946,49 +4014,6 @@ function ProductEditor({
   // collapsible sections"): the form had ~20 fields in one column, which was
   // hard to scan on a phone. Collapsible groups keep every field and binding
   // identical while letting staff open just the part they are editing.
-  function EditorSection({
-    title,
-    subtitle,
-    defaultOpen = false,
-    children,
-  }: {
-    title: string;
-    subtitle?: string;
-    defaultOpen?: boolean;
-    children: React.ReactNode;
-  }) {
-    const [open, setOpen] = useState(defaultOpen);
-    return (
-      <View className="mb-3 overflow-hidden rounded-xl border border-line bg-surface">
-        <Pressable
-          onPress={() => setOpen((v) => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={`${open ? "Collapse" : "Expand"} ${title}`}
-          accessibilityState={{ expanded: open }}
-          className="min-h-11 flex-row items-center justify-between px-4 py-3"
-        >
-          <View className="min-w-0 flex-1 pr-3">
-            <Text className="text-sm font-bold text-ink">{title}</Text>
-            {subtitle ? (
-              <Text numberOfLines={1} className="mt-0.5 text-[11px] text-muted">
-                {subtitle}
-              </Text>
-            ) : null}
-          </View>
-          <Feather
-            name={open ? "chevron-up" : "chevron-down"}
-            size={18}
-            color="#475569"
-          />
-        </Pressable>
-        {open ? (
-          <View className="border-t border-line bg-card px-4 pb-4 pt-3">
-            {children}
-          </View>
-        ) : null}
-      </View>
-    );
-  }
 
   return (
     <View className="flex-1">
@@ -4561,9 +4586,14 @@ function ServicesTab({
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  React.useEffect(() => {
+  // Back to page 1 whenever the filter changes — during render, so the list
+  // never paints the old page against the new results.
+  const filterSig = `${query}|\u0000${category}`;
+  const [lastFilterSig, setLastFilterSig] = React.useState(filterSig);
+  if (lastFilterSig !== filterSig) {
+    setLastFilterSig(filterSig);
     setPage(1);
-  }, [query, category]);
+  }
 
   if (editing) {
     return (
@@ -4878,6 +4908,9 @@ function UserRobotSettingsManager({
     }
   }, [userId]);
   useEffect(() => {
+    // The loader raises its own busy flag before the request; rows land in
+    // promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void load();
   }, [load]);
 
@@ -5086,6 +5119,9 @@ function UserProjectProfileManager({
     }
   }, [userId]);
   useEffect(() => {
+    // The loader raises its own busy flag before the request; rows land in
+    // promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void load();
   }, [load]);
 
@@ -5355,7 +5391,7 @@ function UsersSection({
         User directory
       </Text>
       <Text className="mt-1 text-xs text-muted">
-        {total} accounts · search runs on the server
+        {total} account{total === 1 ? "" : "s"} · search runs on the server
       </Text>
       <View className="mt-2 flex-row gap-2">
         <TextInput
@@ -7384,9 +7420,10 @@ function TrainingProgramsManager({
 }) {
   const [editing, setEditing] = useState<AdminTrainingProgram | null>(null);
   const [preview, setPreview] = useState<AdminTrainingProgram | null>(null);
+  const editorOpen = editing != null;
   useEffect(() => {
-    onEditingChange(editing != null);
-  }, [editing != null]);
+    onEditingChange(editorOpen);
+  }, [editorOpen, onEditingChange]);
   function blank(): AdminTrainingProgram {
     return {
       id: "",
@@ -7634,9 +7671,10 @@ function PilotCostManager({
 }) {
   const [editing, setEditing] = useState<AdminPilotCostLine | null>(null);
   const [preview, setPreview] = useState<AdminPilotCostLine | null>(null);
+  const editorOpen = editing != null;
   useEffect(() => {
-    onEditingChange(editing != null);
-  }, [editing != null]);
+    onEditingChange(editorOpen);
+  }, [editorOpen, onEditingChange]);
   function blank(): AdminPilotCostLine {
     return { id: "", item: "", cost: "", note: "", active: true, sortOrder: 0 };
   }
@@ -7850,9 +7888,10 @@ function CurriculumManager({
 }) {
   const [editing, setEditing] = useState<AdminCurriculumHighlight | null>(null);
   const [preview, setPreview] = useState<AdminCurriculumHighlight | null>(null);
+  const editorOpen = editing != null;
   useEffect(() => {
-    onEditingChange(editing != null);
-  }, [editing != null]);
+    onEditingChange(editorOpen);
+  }, [editorOpen, onEditingChange]);
   function blank(): AdminCurriculumHighlight {
     return { id: "", ageBand: "", items: [], active: true, sortOrder: 0 };
   }

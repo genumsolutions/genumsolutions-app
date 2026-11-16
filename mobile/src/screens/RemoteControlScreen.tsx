@@ -429,13 +429,17 @@ export function RemoteControlScreen({ navigation }: Props) {
   // and queries it on link-up, so the chip stops the instant the page is turned
   // off, regardless of which transport is connected.
 
-  // Restore joystick layout choice per device.
+  // Restore joystick layout choice per device. Depends on the two values it
+  // actually reads (the layout preference and its setter) rather than the whole
+  // hub object, which is a fresh object every render.
+  const savedJoystickLayout = hub.savedPrefs?.joystickLayout;
+  const selectJoystickLayout = hub.selectJoystickLayout;
   useEffect(() => {
     if (!connected && !wifiConnected) return;
-    if (hub.savedPrefs?.joystickLayout) {
-      hub.selectJoystickLayout(hub.savedPrefs.joystickLayout);
+    if (savedJoystickLayout) {
+      selectJoystickLayout(savedJoystickLayout);
     }
-  }, [connected, wifiConnected]);
+  }, [connected, wifiConnected, savedJoystickLayout, selectJoystickLayout]);
 
   // ── NAV state machine ──
   const modeList = carModes.length > 0 ? carModes : LOCAL_CAR_MODES;

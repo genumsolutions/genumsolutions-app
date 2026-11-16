@@ -15,7 +15,13 @@
 //     every window-size change, so a portrait-dragged position cannot
 //     park the FAB off-screen in landscape.
 // =====================================================================
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Dimensions,
   PanResponder,
@@ -107,6 +113,7 @@ export function FloatingRemoteButton() {
   const [dismissed, setDismissed] = useState(false);
   const [inDropZone, setInDropZone] = useState(false);
   const slotRef = useRef<Slot | null>(null);
+  const dismissedRef = useRef(false);
   const dragStart = useRef<Slot | null>(null);
   const movedRef = useRef(false);
   const wasLinkedRef = useRef(anyLinked());
@@ -142,18 +149,28 @@ export function FloatingRemoteButton() {
     };
   }, []);
 
-  // Live mirror so the subscription above reads the freshest dismissed value
-  // without re-subscribing (the effect has empty deps on purpose).
-  const dismissedRef = useRef(false);
-  dismissedRef.current = dismissed;
+  // Live mirrors so the subscriptions and the gesture handlers above/below
+  // read the freshest values without re-subscribing (their deps are empty on
+  // purpose). They are written from an effect, never during render: a
+  // render-time write is lost if that render is discarded, which is how the
+  // FAB once came back dismissed after a re-mount raced a dismiss tap.
+  useEffect(() => {
+    dismissedRef.current = dismissed;
+  }, [dismissed]);
+  useEffect(() => {
+    slotRef.current = slot;
+  }, [slot]);
 
-  function isDropZone(s: Slot): boolean {
-    const { width, height } = dim;
-    const centerBottom =
-      s.y >= height - DROP_ZONE_BOTTOM &&
-      Math.abs(s.x + FAB_SIZE / 2 - width / 2) <= DROP_ZONE_CENTER_HALF;
-    return centerBottom;
-  }
+  const isDropZone = useCallback(
+    (s: Slot): boolean => {
+      const { width, height } = dim;
+      return (
+        s.y >= height - DROP_ZONE_BOTTOM &&
+        Math.abs(s.x + FAB_SIZE / 2 - width / 2) <= DROP_ZONE_CENTER_HALF
+      );
+    },
+    [dim],
+  );
 
   const dismissFab = useCallback(() => {
     setDismissed(true);
@@ -234,76 +251,82 @@ export function FloatingRemoteButton() {
       y: clamp(slot.y, EDGE, max.y),
     };
     if (next.x === slot.x && next.y === slot.y) return;
+    // Window size is an external event (rotation / split-screen), and the
+    // clamped slot is written back BOTH to state and to storage so the next
+    // launch does not reload an off-screen position. There is no render-time
+    // equivalent that can do the persist.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- window resize
     setSlot(next);
     void persistSlot(next);
   }, [dim.width, dim.height, slot]);
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        dragStart.current = slotRef.current;
-        movedRef.current = false;
-      },
-      onPanResponderMove: (_evt, gesture) => {
-        if (!dragStart.current) return;
-        if (
-          !movedRef.current &&
-          (Math.abs(gesture.dx) >= DRAG_THRESHOLD ||
-            Math.abs(gesture.dy) >= DRAG_THRESHOLD)
-        ) {
-          movedRef.current = true;
-        }
-        if (!movedRef.current) return;
-        const { width, height } = Dimensions.get("window");
-        const next = {
-          x: clamp(
-            dragStart.current.x + gesture.dx,
-            EDGE,
-            width - FAB_SIZE - EDGE,
-          ),
-          y: clamp(
-            dragStart.current.y + gesture.dy,
-            EDGE,
-            height - FAB_SIZE - EDGE,
-          ),
-        };
-        setSlot(next);
-        setInDropZone(isDropZone(next));
-      },
-      onPanResponderRelease: (_evt, gesture) => {
-        const wasDrag = movedRef.current;
-        const last = slotRef.current;
-        dragStart.current = null;
-        movedRef.current = false;
-        setInDropZone(false);
-        if (wasDrag) {
-          if (last && isDropZone(last)) {
-            // Dropped in the bottom-center zone → hide the FAB (dismiss).
-            feedbackTap();
-            dismissFab();
+  const pan = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs -- PanResponder handlers run only from native touch events, never during render
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          dragStart.current = slotRef.current;
+          movedRef.current = false;
+        },
+        onPanResponderMove: (_evt, gesture) => {
+          if (!dragStart.current) return;
+          if (
+            !movedRef.current &&
+            (Math.abs(gesture.dx) >= DRAG_THRESHOLD ||
+              Math.abs(gesture.dy) >= DRAG_THRESHOLD)
+          ) {
+            movedRef.current = true;
+          }
+          if (!movedRef.current) return;
+          const { width, height } = Dimensions.get("window");
+          const next = {
+            x: clamp(
+              dragStart.current.x + gesture.dx,
+              EDGE,
+              width - FAB_SIZE - EDGE,
+            ),
+            y: clamp(
+              dragStart.current.y + gesture.dy,
+              EDGE,
+              height - FAB_SIZE - EDGE,
+            ),
+          };
+          setSlot(next);
+          setInDropZone(isDropZone(next));
+        },
+        onPanResponderRelease: (_evt, gesture) => {
+          const wasDrag = movedRef.current;
+          const last = slotRef.current;
+          dragStart.current = null;
+          movedRef.current = false;
+          setInDropZone(false);
+          if (wasDrag) {
+            if (last && isDropZone(last)) {
+              // Dropped in the bottom-center zone → hide the FAB (dismiss).
+              feedbackTap();
+              dismissFab();
+              return;
+            }
+            if (last) void persistSlot(last);
             return;
           }
-          if (last) void persistSlot(last);
-          return;
-        }
-        if (
-          Math.abs(gesture.dx) < DRAG_THRESHOLD &&
-          Math.abs(gesture.dy) < DRAG_THRESHOLD
-        ) {
-          feedbackTap();
-          openRemote();
-        }
-      },
-      onPanResponderTerminate: () => {
-        dragStart.current = null;
-        movedRef.current = false;
-      },
-    }),
-  ).current;
-
-  slotRef.current = slot;
+          if (
+            Math.abs(gesture.dx) < DRAG_THRESHOLD &&
+            Math.abs(gesture.dy) < DRAG_THRESHOLD
+          ) {
+            feedbackTap();
+            openRemote();
+          }
+        },
+        onPanResponderTerminate: () => {
+          dragStart.current = null;
+          movedRef.current = false;
+        },
+      }),
+    [dismissFab, isDropZone, openRemote],
+  );
 
   if (dismissed || !linked || remoteInFront || !slot) return null;
 

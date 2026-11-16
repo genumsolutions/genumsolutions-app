@@ -152,8 +152,13 @@ export function ProductDetailScreen() {
     return () => clearTimeout(timer);
   }, [added]);
 
-  // New product => reset the calculator quantities.
-  useEffect(() => setQuantityOverrides({}), [route.params.productId]);
+  // New product => reset the calculator quantities. Adjusted during render so a
+  // product swap never shows the previous item's quantities for a frame.
+  const [lastProductId, setLastProductId] = useState(route.params.productId);
+  if (lastProductId !== route.params.productId) {
+    setLastProductId(route.params.productId);
+    setQuantityOverrides({});
+  }
 
   if (loading || !product) {
     return (

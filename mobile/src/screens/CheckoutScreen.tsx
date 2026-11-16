@@ -4,7 +4,7 @@
 // Cash on Delivery plus eSewa / Khalti (opened in the system browser via
 // expo-web-browser; the payer returns on the genumsolutions:// deep link).
 // =====================================================================
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -121,30 +121,43 @@ export function CheckoutScreen() {
     };
   }, [loadLines]);
 
-  useEffect(() => {
+  // Seed the contact fields from the profile when the PROFILE changes (render
+  // time, so the form never paints empty-then-filled), keyed on the values so
+  // an equal re-render cannot wipe what the user is typing.
+  const userSig = user
+    ? `${user.id}\u0000${user.name ?? ""}\u0000${user.email ?? ""}`
+    : "";
+  const [lastUserSig, setLastUserSig] = useState(userSig);
+  if (userSig !== lastUserSig) {
+    setLastUserSig(userSig);
     if (user) {
       setName(user.name || "");
       setEmail(user.email || "");
     }
-  }, [user]);
+  }
 
-  useEffect(() => {
-    if (route.params?.status) {
-      const labels: Record<string, string> = {
-        cancelled:
-          "Payment was cancelled. Your order is saved - you can try again below.",
-        "not-paid":
-          "Payment was not completed. Please try again or switch to cash on delivery.",
-        "no-order":
-          "We could not confirm that order. Please try checkout again.",
-        "amount-mismatch":
-          "There was a payment mismatch. Our team will contact you.",
-        "verify-pending":
-          "Payment is being verified - check your orders shortly.",
-      };
-      setNotice(labels[route.params.status] ?? null);
-    }
-  }, [route.params]);
+  // A payment gateway returning to this screen puts its state in the route
+  // params. Derived, not copied into state: the notice is a function of the
+  // params, and copying it left a stale "payment cancelled" line behind when
+  // the user retried.
+  const statusNotice = useMemo(() => {
+    const labels: Record<string, string> = {
+      cancelled:
+        "Payment was cancelled. Your order is saved - you can try again below.",
+      "not-paid":
+        "Payment was not completed. Please try again or switch to cash on delivery.",
+      "no-order": "We could not confirm that order. Please try checkout again.",
+      "amount-mismatch":
+        "There was a payment mismatch. Our team will contact you.",
+      "verify-pending":
+        "Payment is being verified - check your orders shortly.",
+    };
+    const status = route.params?.status;
+    return status ? (labels[status] ?? null) : null;
+  }, [route.params?.status]);
+
+  // Local notices (a submit-time message) win over the gateway's return state.
+  const shownNotice = notice ?? statusNotice;
 
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const canSubmit =
@@ -383,9 +396,9 @@ export function CheckoutScreen() {
         })}
       </View>
 
-      {notice ? (
+      {shownNotice ? (
         <Text className="mt-3 text-center text-xs font-medium leading-5 text-amber-700">
-          {notice}
+          {shownNotice}
         </Text>
       ) : null}
       {error ? (

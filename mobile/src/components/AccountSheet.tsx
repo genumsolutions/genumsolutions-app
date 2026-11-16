@@ -94,10 +94,14 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
   const { width, height } = useViewport();
   const { user, isSignedIn, isStaff, isAdmin, isOwner, signOut } = useApp();
   const nav = useNavigation<any>();
-  const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersError, setOrdersError] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  // Opening the sheet bumps `loadTick`; the spinner is DERIVED from "has the
+  // fetch for the current tick finished", so no effect has to write it.
+  const [loadTick, setLoadTick] = useState(0);
+  const [loadedTick, setLoadedTick] = useState(-1);
+  const loading = visible && loadedTick !== loadTick;
 
   const initials = (user?.name || "U")
     .split(/\s+/)
@@ -106,20 +110,38 @@ export function AccountSheet({ visible, onRequestClose }: Props) {
     .map((p) => p[0]?.toUpperCase())
     .join("");
 
+  // Reset the sign-out confirm when the sheet closes, and bump the load tick
+  // when it opens. Adjusting during render (not in an effect) means the sheet
+  // never paints the confirm button for one frame after a reopen.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    if (visible) setLoadTick((t) => t + 1);
+    else setShowSignOutConfirm(false);
+  }
+
   // Load the latest orders whenever the sheet opens (fresh data, no stale
-  // rows) and reset the sign-out confirm state.
+  // rows). Every state write lands in a promise callback, so the render that
+  // opens the sheet is not followed by a second one just to say "loading".
   useEffect(() => {
-    if (!visible) {
-      setShowSignOutConfirm(false);
-      return;
-    }
-    setLoading(true);
-    setOrdersError(false);
+    if (!visible) return;
+    let alive = true;
     getMyOrders()
-      .then((rows) => setOrders(rows))
-      .catch(() => setOrdersError(true))
-      .finally(() => setLoading(false));
-  }, [visible]);
+      .then((rows) => {
+        if (!alive) return;
+        setOrders(rows);
+        setOrdersError(false);
+      })
+      .catch(() => {
+        if (alive) setOrdersError(true);
+      })
+      .finally(() => {
+        if (alive) setLoadedTick(loadTick);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [visible, loadTick]);
 
   const confirmSignOut = useCallback(async () => {
     setShowSignOutConfirm(false);

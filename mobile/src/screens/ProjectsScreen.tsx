@@ -55,12 +55,20 @@ export function ProjectsScreen() {
   }, []);
 
   useEffect(() => {
+    // The loader flips its own spinner/refreshing flags first; rows land in
+    // promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void load();
   }, [load]);
 
-  useEffect(() => {
+  // Back to page 1 whenever the filter set changes — adjusted during render so
+  // the list never paints the old page against the new results.
+  const filterSig = `${category}|${query}`;
+  const [lastFilterSig, setLastFilterSig] = useState(filterSig);
+  if (lastFilterSig !== filterSig) {
+    setLastFilterSig(filterSig);
     setPage(1);
-  }, [category, query]);
+  }
 
   // ONE list: every active Project package (kit rows ride along per U-44).
   const allProjects = useMemo(

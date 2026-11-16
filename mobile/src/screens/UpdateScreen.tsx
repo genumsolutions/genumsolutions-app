@@ -46,8 +46,14 @@ export function UpdateScreen({ visible, onClose }: Props) {
 
   useEffect(() => {
     if (visible) {
+      // Shows the "checking" row immediately by design; the verdict lands in a
+      // promise callback.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async check
       void runCheck();
     } else {
+      // Resetting the badge when the panel closes is an external (visibility)
+      // event; there is no render-time equivalent that can clear hidden state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- panel closed
       setState({ status: "unknown" });
     }
   }, [visible, runCheck]);

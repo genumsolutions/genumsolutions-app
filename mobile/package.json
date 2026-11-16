@@ -55,6 +55,7 @@
     "autoprefixer": "^10.5.4",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~10.0.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
     "postcss": "^8.5.33",
@@ -86,7 +87,8 @@
     "postcss": "$postcss",
     "node-forge": "^1.4.3",
     "compression": "^1.8.2",
-    "undici": "^6.29.1"
+    "undici": "^6.29.1",
+    "eslint-plugin-react-hooks": "$eslint-plugin-react-hooks"
   },
   "expo": {
     "doctor": {

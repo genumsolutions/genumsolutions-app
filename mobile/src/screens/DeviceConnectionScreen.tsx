@@ -357,7 +357,7 @@ function SetupPanel({
   }
 }
 
-export function DeviceConnectionScreen({}: Props) {
+export function DeviceConnectionScreen(_props: Props) {
   const { kind, deviceName } = useRoute<Route>().params;
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();

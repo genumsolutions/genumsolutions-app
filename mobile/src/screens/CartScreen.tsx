@@ -42,19 +42,60 @@ type CartEntry = {
   product: Product;
 };
 
+// U-47v5 (owner: cart "doesn't contain the top bar and the heading and starts
+// the item directly over the camera position"): the Cart is a PUSHED stack
+// screen with no nav header, so it draws its own — back chevron, title,
+// subtitle, padded below the status/camera area via safe-area insets. Same
+// pattern as Checkout's screen header. Declared at module scope: a component
+// defined inside CartScreen was a NEW type on every render, so its subtree
+// remounted on each quantity edit.
+function CartHeader({
+  insetsTop,
+  onBack,
+}: {
+  insetsTop: number;
+  onBack: () => void;
+}) {
+  return (
+    <View
+      className="border-b border-line bg-card px-4 pb-3"
+      style={{ paddingTop: insetsTop + 8 }}
+    >
+      <View className="flex-row items-center justify-between gap-2">
+        <Pressable
+          onPress={onBack}
+          hitSlop={8}
+          className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card"
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Feather name="arrow-left" size={18} color="#1e3a8a" />
+        </Pressable>
+        <Text className="flex-1 text-right font-display text-lg font-bold text-ink">
+          Your build list
+        </Text>
+      </View>
+      <Text className="mt-1 text-xs text-muted">
+        Quantities sync to your account instantly.
+      </Text>
+    </View>
+  );
+}
+
 export function CartScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { setCart } = useApp();
   const [products, setProducts] = useState<Product[]>([]);
   const [lines, setLines] = useState<CartEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  // The spinner is DERIVED from "has the fetch for this refreshKey landed",
+  // so the effect below never has to write it synchronously.
+  const [loadedKey, setLoadedKey] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     getProductsWithSource()
       .then(({ products: prods, source }) => {
         if (!active) return;
@@ -68,12 +109,14 @@ export function CartScreen() {
         if (active) setOffline(true);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setLoadedKey(0);
       });
     return () => {
       active = false;
     };
   }, []);
+
+  const loading = loadedKey !== 0;
 
   // Re-resolve the cart whenever the products catalog changes, after a
   // quantity edit, or when the tab regains focus.
@@ -138,42 +181,14 @@ export function CartScreen() {
     );
   }
 
-  // U-47v5 (owner: cart "doesn't contain the top bar and the heading and
-  // starts the item directly over the camera position"): the Cart is a
-  // PUSHED stack screen with no nav header, so it draws its own — back
-  // chevron, title, subtitle, padded below the status/camera area via
-  // safe-area insets. Same pattern as Checkout's screen header.
-  function CartHeader() {
-    return (
-      <View
-        className="border-b border-line bg-card px-4 pb-3"
-        style={{ paddingTop: insets.top + 8 }}
-      >
-        <View className="flex-row items-center justify-between gap-2">
-          <Pressable
-            onPress={() => navigation.goBack()}
-            hitSlop={8}
-            className="h-10 w-10 items-center justify-center rounded-full border border-line bg-card"
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Feather name="arrow-left" size={18} color="#1e3a8a" />
-          </Pressable>
-          <Text className="flex-1 text-right font-display text-lg font-bold text-ink">
-            Your build list
-          </Text>
-        </View>
-        <Text className="mt-1 text-xs text-muted">
-          Quantities sync to your account instantly.
-        </Text>
-      </View>
-    );
-  }
+  const cartHeader = (
+    <CartHeader insetsTop={insets.top} onBack={() => navigation.goBack()} />
+  );
 
   if (lines.length === 0) {
     return (
       <View className="flex-1 bg-surface">
-        <CartHeader />
+        {cartHeader}
         <View className="flex-1 items-center justify-center px-8">
           {offline ? (
             <>
@@ -215,7 +230,7 @@ export function CartScreen() {
 
   return (
     <View className="flex-1 bg-surface">
-      <CartHeader />
+      {cartHeader}
       <FlatList
         data={lines}
         keyExtractor={({ line }) => line.productId}

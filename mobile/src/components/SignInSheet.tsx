@@ -89,20 +89,25 @@ export function SignInSheet({ visible, onRequestClose }: Props) {
     onRequestClose();
   };
 
+  // Always reopen on a clean Sign in tab. A previous visit could be left on
+  // Sign up or Reset, which then reads as "create an account" to a returning
+  // user. Done as a render-time adjustment, so the sheet never paints the old
+  // form for a frame before correcting itself.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    if (visible) resetForm();
+  }
+
   // A session can land while the sheet is open: Google sign-in returns from the
   // browser, or a token refresh completes. Close the sheet rather than leaving
-  // a sign-in / sign-up form sitting over an already signed-in app.
+  // a sign-in / sign-up form sitting over an already signed-in app. The form is
+  // reset by the adjustment above once the parent actually hides the sheet, so
+  // this effect touches no state of its own.
   useEffect(() => {
     if (!visible || !isSignedIn) return;
-    resetForm();
     onRequestClose();
   }, [visible, isSignedIn, onRequestClose]);
-
-  // Always reopen on the Sign in tab. A previous visit could be left on Sign up
-  // or Reset, which then reads as "create an account" to a returning user.
-  useEffect(() => {
-    if (visible) setMode("signin");
-  }, [visible]);
 
   const switchMode = (next: Mode) => {
     setMode(next);

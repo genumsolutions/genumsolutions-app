@@ -304,6 +304,9 @@ export default function PrintAdminPanel({
   }, []);
 
   useEffect(() => {
+    // reload() raises its own spinner flag before the request; the rows land in
+    // promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     void reload();
   }, [reload]);
 
@@ -1581,6 +1584,9 @@ export default function PrintAdminPanel({
             ) : (
               data.gallery.map((item) => (
                 <Card key={item.id}>
+                  {/* Thumbnail + name on top, actions on their own row: at
+                      390px the two buttons left ~90px for the caption, which
+                      cut a real name to a five-character stub. */}
                   <View className="flex-row items-center gap-3">
                     <Pressable
                       onPress={() =>
@@ -1602,8 +1608,8 @@ export default function PrintAdminPanel({
                     </Pressable>
                     <View className="min-w-0 flex-1">
                       <Text
-                        numberOfLines={1}
-                        className="font-display text-base font-bold text-ink"
+                        numberOfLines={2}
+                        className="font-display text-base font-bold leading-5 text-ink"
                       >
                         {item.caption || "Untitled image"}
                       </Text>
@@ -1612,30 +1618,30 @@ export default function PrintAdminPanel({
                         {item.active ? "" : " · hidden"}
                       </Text>
                     </View>
-                    <View className="shrink-0 flex-row flex-wrap justify-end gap-1.5">
+                  </View>
+                  <View className="mt-2 flex-row flex-wrap justify-end gap-1.5">
+                    <Button
+                      label="Preview"
+                      tone="ghost"
+                      onPress={() =>
+                        setImagePreview({
+                          uri: item.imageUrl,
+                          label: item.caption || "Gallery image",
+                        })
+                      }
+                    />
+                    <Button
+                      label="Edit"
+                      tone="ghost"
+                      onPress={() => setGalleryItem(item)}
+                    />
+                    {canDelete ? (
                       <Button
-                        label="Preview"
-                        tone="ghost"
-                        onPress={() =>
-                          setImagePreview({
-                            uri: item.imageUrl,
-                            label: item.caption || "Gallery image",
-                          })
-                        }
+                        label="Delete"
+                        tone="danger"
+                        onPress={() => confirmDelete("gallery", item.id)}
                       />
-                      <Button
-                        label="Edit"
-                        tone="ghost"
-                        onPress={() => setGalleryItem(item)}
-                      />
-                      {canDelete ? (
-                        <Button
-                          label="Delete"
-                          tone="danger"
-                          onPress={() => confirmDelete("gallery", item.id)}
-                        />
-                      ) : null}
-                    </View>
+                    ) : null}
                   </View>
                 </Card>
               ))

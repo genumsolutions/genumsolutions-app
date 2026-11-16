@@ -1,7 +1,7 @@
 // ModeChooser — car mode selector matching the ESP32 remote's mode UI.
 // Mode order, names, and available status match the remote firmware
 // (state.cpp MODE_CMDS[] / MODE_NAMES[], ui_core.cpp isModeAvailable()).
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -50,7 +50,9 @@ export function ModeChooser({
   // mode — matching the ESP32 remote's hardware UI this component mirrors.
   const { themeMode } = useApp();
   const catalogue = modes && modes.length > 0 ? modes : LOCAL_CAR_MODES;
-  const spin = useRef(new Animated.Value(0)).current;
+  // Created once per mount via useMemo so the value is never read out of a ref
+  // during render.
+  const spin = useMemo(() => new Animated.Value(0), []);
   const spinDeg = spin.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
@@ -58,9 +60,8 @@ export function ModeChooser({
   // A-37: while the dropdown is open we freeze the shown selection to the mode
   // captured at open time (previewMode still wins in NAV) — a stale car echo
   // arriving mid-open can't snap the highlight back to the old mode.
-  const openModeRef = useRef<CarMode | null>(null);
-  const shown =
-    previewMode ?? (open ? (openModeRef.current ?? activeMode) : activeMode);
+  const [openMode, setOpenMode] = useState<CarMode | null>(null);
+  const shown = previewMode ?? (open ? (openMode ?? activeMode) : activeMode);
   const shortName = MODE_NAMES[shown.token] ?? shown.name.split("·")[0].trim();
   const shortToken = shown.token;
 
@@ -77,7 +78,7 @@ export function ModeChooser({
       setOpen(false);
       return;
     }
-    openModeRef.current = activeMode;
+    setOpenMode(activeMode);
     triggerRef.current?.measureInWindow((x, y, w, h) => {
       setAnchor({ x, y, w: Math.max(w, 236), h });
       setOpen(true);
