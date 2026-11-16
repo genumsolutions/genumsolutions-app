@@ -25,31 +25,29 @@ The app uses a **8-tab horizontal bar** at the top of `AdminScreen.tsx`:
 | `projects`   | **Projects**            | `ProjectsTab`     | Bundles sold on `/projects` including pre-packaged kits                  |
 | `content`    | **Content**             | `ContentTab`      | Services, journal posts, home page copy                                  |
 | `users`      | **Users**               | `UsersTab`        | Accounts, roles, tiers, per-user directories/profile, robot/car profiles |
-| `settings`   | **Settings**            | `SettingsTab`     | Company info (all 17 fields), training programs, pilot costs             |
+| `settings`   | **Settings**            | `SettingsTab`     | Company info (17 fields) in three sections; read-only until Edit         |
 
-The eight entries above are the whole bar — `TABS` in `AdminScreen.tsx` has exactly these. **Profile is not a tenth tab:** `ProfileEntriesTab` is an inner section of the Logs tab, selected by the `LOG_SECTIONS` pills (`logs`, `profile`) inside `LogsTab`. The app then shows User Activity / User Profiles / Fleet Diagnostics under `logs`, and the profile-entry list under `profile`.
+The eight entries above are the whole bar — `TABS` in `AdminScreen.tsx` has exactly these. **Nothing is a ninth tab:** Users carries three sections (Users / Messages / Logs), Content carries three (Services / Journal / Content), Orders carries two (Orders / Finance), and 3D Products carries the print studio (Catalog, Categories, Pricing, Costs, Promotions, Services, Gallery, Requests, Reports). Messages lists customer messages plus newsletter opt-ins; Logs shows User activity / User profiles / Fleet diagnostics.
 
 ### Website — Multi-panel layout
 
-The website uses Next.js page routes with React components for each admin panel:
+The website is **one route** — `app/admin/page.tsx` mounts `components/AdminPanel.tsx`, and every tab is a panel inside it. There are no per-tab URLs.
 
-| Section/Path         | Component                            | Description                                                               |
-| -------------------- | ------------------------------------ | ------------------------------------------------------------------------- |
-| `/admin`             | `AdminDashboard.tsx`                 | Main dashboard overview — KPIs, recent activity                           |
-| `/admin/settings`    | `AdminSettings.tsx`                  | Company information editing (17 fields)                                   |
-| `/admin/logs`        | `AdminLogs.tsx` (via `AdminLogsHub`) | System logs, user activity, user profiles, fleet diagnostics (3 sections) |
-| `/admin/users`       | `AdminUsers.tsx`                     | User directory, car profiles, robot profiles (3 sections)                 |
-| `/admin/products`    | `AdminProducts.tsx`                  | Electronic products catalog                                               |
-| `/admin/3d-printing` | `Admin3DProducts.tsx`                | 3D printing products catalog                                              |
-| `/admin/projects`    | `AdminProjects.tsx`                  | Project packages, components                                              |
-| `/admin/content`     | `AdminContent.tsx`                   | Services, journal, home page copy                                         |
-| `/admin/activity`    | `AdminActivity.tsx`                  | Activity tracking                                                         |
-| `/admin/finance`     | `AdminFinance.tsx`                   | Financial data, orders, transactions                                      |
+| Tab                 | Component (section)                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Dashboard`         | `AdminDashboard` + `AdminActivity` stacked                                                            |
+| `Orders`            | sections: Orders (`AdminOrders`), Finance (`AdminFinance`)                                             |
+| `Electronic Products` | `AdminProducts kind="electronic"`                                                                    |
+| `3D Products`       | `AdminPrint` — Catalog, Categories, Pricing, Costs, Promotions, Services, Gallery, Requests, Reports    |
+| `Projects`          | `AdminProjectPackages`                                                                                |
+| `Content`           | sections: Services, Journal, Content                                                                   |
+| `Users`             | sections: Users (`AdminUsers`), Messages (`AdminMessages`), Logs (`AdminLogsHub`)                      |
+| `Settings`          | `AdminSettings` — Company details, Contact, Social & messaging                                        |
 
 ### Alignment
 
 - Tab order is **identical** on both clients (enforced by parity tests: `admin-parity.test.ts` on both repos).
-- The app uses a **single screen with horizontal tabs** at the top; the website uses **multi-panel navigation** with sidebar/links.
+- Both clients are **one screen with a horizontal tab strip**; the website's strip is sticky, the app's is fixed under the header. Neither uses per-tab routes.
 - Both expose the same admin operations: Dashboard, Orders, Products, Projects, Content, Users, Settings.
 - The Users tab on both now has **3 sections** (User Directory, Car Profiles, Robot Profiles) — mirrored.
 - The Logs tab on both now has **3 sections** (User Activity, User Profiles, Fleet Diagnostics) — mirrored.
@@ -150,10 +148,10 @@ The website uses Next.js page routes with React components for each admin panel:
 - **Location:** `components/admin/AdminSettings.tsx`
 - **Fields presented:** 17 fields (name, shortName, url, address, city, country, email, phone, pan, vatLabel, description, whatsappNumber, facebookUrl, instagramUrl, tiktokUrl, linkedinUrl, youtubeUrl)
 - **Edit pattern:**
-  - Read-only by default (spans, not inputs)
-  - Tap "Edit" (class: `text-sm text-navy hover:underline`) → form inputs appear, pre-filled
-  - Tap "Save" → submits to `/api/admin/settings?action=company`, on success: `setIsEditing(false)`, `setMessage("Company information saved.")`
-  - Tap "Cancel" → `setIsEditing(false)`, no changes
+  - Read-only by default (label/value rows in the section card)
+  - Tap "Edit" → the section's fields open in `AdminEditorSheet`, pre-filled
+  - Tap "Save" → submits to `/api/admin/settings?action=company`, on success: the sheet closes and `setMessage("Company information saved.")`
+  - Tap "Cancel" (the sheet header button) → the sheet closes, no changes
 
 ### Alignment Summary
 
