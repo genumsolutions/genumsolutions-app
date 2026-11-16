@@ -34,6 +34,8 @@ import { Feather } from "@expo/vector-icons";
 import {
   fetchUserDevices,
   pairingLabel,
+  removeUserDevice,
+  setDeviceFavourite,
   setDeviceName,
   type UserDevice,
 } from "../../services/deviceRegistryService";
@@ -46,27 +48,34 @@ export type DeviceGarageCardProps = {
 
 export default function DeviceGarageCard({ userId }: DeviceGarageCardProps) {
   const [devices, setDevices] = useState<UserDevice[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!userId);
+  // Bumped after a remove so the effect re-fetches; handlers never call the
+  // loader directly, which keeps every setState out of the effect's sync path.
+  const [reloadKey, setReloadKey] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!userId) {
-      setDevices([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      setDevices(await fetchUserDevices(userId));
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+  // U-95 Phase 4a: the in-flight row action, so a slow network cannot
+  // double-fire a delete or a favourite toggle.
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!userId) return;
+    let alive = true;
+    fetchUserDevices(userId)
+      .then((rows) => {
+        if (alive) setDevices(rows);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId, reloadKey]);
+
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   const save = useCallback(
     async (device: UserDevice) => {
@@ -94,6 +103,74 @@ export default function DeviceGarageCard({ userId }: DeviceGarageCardProps) {
       }
     },
     [userId, draft],
+  );
+
+  // FAVOURITE — the is_favourite column is read by fetchUserDevices and written
+  // here and nowhere else. The row updates optimistically through the same
+  // setDevices map the rename uses, and reverts through load() on failure so a
+  // star can never claim a state the database does not hold.
+  const toggleFavourite = useCallback(
+    async (device: UserDevice) => {
+      if (!userId || busyId) return;
+      const next = !device.isFavourite;
+      setBusyId(device.deviceId);
+      try {
+        const ok = await setDeviceFavourite(userId, device.deviceId, next);
+        if (!ok) {
+          Alert.alert(
+            "Could not update favourite",
+            "Check your connection and try again.",
+          );
+          reload();
+          return;
+        }
+        setDevices((prev) =>
+          prev.map((d) =>
+            d.deviceId === device.deviceId ? { ...d, isFavourite: next } : d,
+          ),
+        );
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [userId, busyId, reload],
+  );
+
+  // ROW-LEVEL DELETE — unlinks this ONE unit from this user's garage (the
+  // user_devices row). The fleet record and the car's saved settings are
+  // untouched, and driving the car again re-claims it — the confirm text says
+  // so, because a delete that reads as permanent is a delete users avoid.
+  const confirmRemove = useCallback(
+    (device: UserDevice) => {
+      if (!userId || busyId) return;
+      Alert.alert(
+        "Remove from garage?",
+        `${device.displayName} is unlinked from your account's garage. The car itself and its saved settings are not touched — drive it again and it comes back.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: () => {
+              setBusyId(device.deviceId);
+              void removeUserDevice(userId, device.deviceId).then((ok) => {
+                setBusyId(null);
+                if (!ok) {
+                  Alert.alert(
+                    "Could not remove",
+                    "Check your connection and try again.",
+                  );
+                  return;
+                }
+                setEditingId((cur) => (cur === device.deviceId ? null : cur));
+                reload();
+              });
+            },
+          },
+        ],
+      );
+    },
+    [userId, busyId, reload],
   );
 
   // Nothing to show when signed out, and an empty list must read as
@@ -199,19 +276,48 @@ export default function DeviceGarageCard({ userId }: DeviceGarageCardProps) {
                         </Text>
                       ) : null}
                       {!editing ? (
-                        <Pressable
-                          onPress={() => {
-                            setEditingId(d.deviceId);
-                            setDraft(d.displayName);
-                          }}
-                          accessibilityLabel={`Rename ${d.displayName}`}
-                          className="ml-auto flex-row items-center rounded-lg border border-line px-2 py-1"
-                        >
-                          <Feather name="edit-2" size={11} color="#64748b" />
-                          <Text className="ml-1 text-[10px] font-semibold text-muted">
-                            Rename
-                          </Text>
-                        </Pressable>
+                        <View className="ml-auto flex-row items-center gap-1">
+                          <Pressable
+                            onPress={() => void toggleFavourite(d)}
+                            disabled={busyId === d.deviceId}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: d.isFavourite }}
+                            accessibilityLabel={
+                              d.isFavourite
+                                ? `Remove ${d.displayName} from favourites`
+                                : `Favourite ${d.displayName}`
+                            }
+                            className={`rounded-lg border px-2 py-1 ${d.isFavourite ? "border-amber-300 bg-amber-50" : "border-line"}`}
+                          >
+                            <Feather
+                              name="star"
+                              size={11}
+                              color={d.isFavourite ? "#b45309" : "#64748b"}
+                            />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => {
+                              setEditingId(d.deviceId);
+                              setDraft(d.displayName);
+                            }}
+                            accessibilityLabel={`Rename ${d.displayName}`}
+                            className="flex-row items-center rounded-lg border border-line px-2 py-1"
+                          >
+                            <Feather name="edit-2" size={11} color="#64748b" />
+                            <Text className="ml-1 text-[10px] font-semibold text-muted">
+                              Rename
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => confirmRemove(d)}
+                            disabled={busyId === d.deviceId}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${d.displayName} from garage`}
+                            className="rounded-lg border border-red-200 px-2 py-1"
+                          >
+                            <Feather name="trash-2" size={11} color="#b91c1c" />
+                          </Pressable>
+                        </View>
                       ) : null}
                     </View>
                   </View>
