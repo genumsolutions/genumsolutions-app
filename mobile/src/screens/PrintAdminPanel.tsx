@@ -3,8 +3,10 @@
 // studio (components/admin/AdminPrint.tsx).
 //
 // Sections: Categories · Pricing (materials + calculator + approval) ·
-// Costs (internal) · Promotions · Services · Gallery · Requests · Reports.
+// Costs (internal) · Promotions · Services · Requests · Reports.
 // "Catalog" stays with the existing 3D product list in AdminScreen.
+// The Gallery section was removed: the 3D Products studio no longer tracks
+// per-image uploads, so its list, editor, and uploader were deleted.
 //
 // Every read/write goes through printAdminService; the print_* tables grant
 // staff writes, and approval stays admin-only in the UI (RLS is looser).
@@ -16,7 +18,6 @@ import {
   Alert,
   Image,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -24,10 +25,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
-import { File } from "expo-file-system";
 import { AdminSubTabs } from "../components/admin/AdminSubTabs";
-import { checkPrintImage } from "../lib/printImageUpload";
 import {
   PRINT_QUOTE_STATUSES,
   PRINT_QUOTE_STATUS_LABELS,
@@ -37,17 +35,14 @@ import {
   loadPrintAdminData,
   savePrintCategory,
   savePrintCosting,
-  savePrintGalleryItem,
   savePrintMaterial,
   savePrintPromotion,
   savePrintService,
   savePrintSettings,
   setPrintApproval,
   updatePrintQuote,
-  uploadPrintImage,
   type PrintAdminData,
   type PrintCategory,
-  type PrintGalleryItem,
   type PrintMaterial,
   type PrintPromotion,
   type PrintQuote,
@@ -55,11 +50,7 @@ import {
   type PrintServiceItem,
   type PrintSettings,
 } from "../services/printAdminService";
-import {
-  defaultPrintCosting,
-  costingStatus,
-  type PrintCosting,
-} from "../lib/print-costing";
+import { costingStatus, type PrintCosting } from "../lib/print-costing";
 
 export const PRINT_ADMIN_SECTIONS = [
   "Categories",
@@ -67,7 +58,6 @@ export const PRINT_ADMIN_SECTIONS = [
   "Costs",
   "Promotions",
   "Services",
-  "Gallery",
   "Requests",
   "Reports",
 ] as const;
@@ -100,16 +90,6 @@ const emptyPromotion: PrintPromotion = {
   startsAt: null,
   endsAt: null,
   active: false,
-  sortOrder: 1000,
-};
-
-const emptyGallery: PrintGalleryItem = {
-  id: "",
-  imageUrl: "",
-  caption: "",
-  category: "",
-  featured: false,
-  active: true,
   sortOrder: 1000,
 };
 
@@ -260,17 +240,28 @@ export default function PrintAdminPanel({
 
   const [settings, setSettings] = useState<PrintSettings>(defaultPrintSettings);
   const [materials, setMaterials] = useState<PrintMaterial[]>([]);
-  const [costing, setCosting] = useState<PrintCosting>(defaultPrintCosting);
+  const [costing, setCosting] = useState({
+    filamentCostPerGram: 0,
+    wastagePercent: 0,
+    electricityRatePerKwh: 0,
+    printerWatts: 0,
+    machineCost: 0,
+    machineLifeHours: 0,
+    maintenancePerHour: 0,
+    labourPerHour: 0,
+    packagingPerJob: 0,
+    paymentFeePercent: 0,
+    overheadPerMonth: 0,
+    monthlyOrderTarget: 0,
+    targetMarginPercent: 0,
+    notes: "",
+  });
   const [category, setCategory] = useState<PrintCategory | null>(null);
   const [promotion, setPromotion] = useState<PrintPromotion | null>(null);
-  const [galleryItem, setGalleryItem] = useState<PrintGalleryItem | null>(null);
+  // Gallery section removed: the 3D studio no longer tracks per-image
   // 2026-11-14 (owner: "add the imported picture preview"): full-size look at an
   // uploaded gallery photo. The editor thumbnail is h-32, the list rows had no
   // thumbnail at all — neither is enough to check the right file went up.
-  const [imagePreview, setImagePreview] = useState<{
-    uri: string;
-    label: string;
-  } | null>(null);
   const [service, setService] = useState<PrintServiceItem | null>(null);
   // Storefront preview for the sections that publish a card on /3d-printing.
   // Rates + calculator stay read-only until Edit is pressed, matching every
@@ -329,42 +320,7 @@ export default function PrintAdminPanel({
   }
 
   /** Pick, validate, upload one gallery image to the public bucket. */
-  async function pickGalleryImage() {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        multiple: false,
-        copyToCacheDirectory: true,
-        type: ["image/*"],
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      const check = checkPrintImage({
-        name: asset.name,
-        size: asset.size,
-        mimeType: asset.mimeType,
-      });
-      if (!check.ok) {
-        setNotice(check.error);
-        return;
-      }
-      setBusy(true);
-      // Web can fetch a blob URI directly; native reads the cached file.
-      const bytes =
-        Platform.OS === "web"
-          ? new Uint8Array(await (await fetch(asset.uri)).arrayBuffer())
-          : await new File(asset.uri).bytes();
-      const url = await uploadPrintImage(bytes, {
-        extension: check.extension,
-        contentType: check.contentType,
-      });
-      setGalleryItem({ ...(galleryItem ?? emptyGallery), imageUrl: url });
-      setNotice("Image uploaded — press Save item to publish it.");
-    } catch (error) {
-      setNotice(String((error as Error)?.message || error));
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Gallery section removed: the app's 3D Products studio no longer has a
 
   function confirmDelete(
     kind:
@@ -382,7 +338,6 @@ export default function PrintAdminPanel({
             await deletePrintRecord(kind, id);
             setCategory(null);
             setPromotion(null);
-            setGalleryItem(null);
             setService(null);
             setQuote(null);
           }, "Deleted."),
@@ -1457,211 +1412,8 @@ export default function PrintAdminPanel({
     );
   }
 
-  // ── Gallery ────────────────────────────────────────────────────────
-  if (section === "Gallery") {
-    const editor = galleryItem ?? emptyGallery;
-    const patch = (part: Partial<PrintGalleryItem>) =>
-      setGalleryItem({ ...editor, ...part });
-    return (
-      <View>
-        {noticeBar}
-        {previewHost}
-        {galleryItem ? (
-          <AdminEditorSheet
-            visible
-            title={galleryItem.id ? "Edit gallery item" : "New gallery item"}
-            onClose={() => setGalleryItem(null)}
-          >
-            <Card>
-              <Field
-                label="Image URL"
-                value={editor.imageUrl}
-                onChange={(imageUrl) => patch({ imageUrl })}
-              />
-              <View className="mb-2 flex-row items-center gap-2">
-                <Button
-                  label="Upload image"
-                  busy={busy}
-                  onPress={() => void pickGalleryImage()}
-                />
-                <Text className="min-w-0 flex-1 text-[10px] leading-4 text-muted">
-                  JPG, PNG, WebP, AVIF or GIF up to 8 MB.
-                </Text>
-              </View>
-              {editor.imageUrl ? (
-                <Pressable
-                  onPress={() =>
-                    setImagePreview({
-                      uri: editor.imageUrl,
-                      label: editor.caption || "Gallery image",
-                    })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel="View gallery image full size"
-                  className="mb-2 overflow-hidden rounded-lg border border-line bg-surface"
-                >
-                  <Image
-                    source={{ uri: editor.imageUrl }}
-                    className="h-32 w-full"
-                    resizeMode="cover"
-                    accessibilityLabel="Gallery image preview"
-                  />
-                  <Text className="px-2 py-1 text-[10px] font-bold text-muted">
-                    Tap to view full size
-                  </Text>
-                </Pressable>
-              ) : null}
-              <Field
-                label="Caption"
-                value={editor.caption}
-                onChange={(caption) => patch({ caption })}
-              />
-              <Field
-                label="Category"
-                value={editor.category}
-                onChange={(category) => patch({ category })}
-              />
-              <Field
-                label="Sort order"
-                value={String(editor.sortOrder)}
-                numeric
-                onChange={(raw) =>
-                  patch({ sortOrder: Math.round(Number(raw) || 0) })
-                }
-              />
-              <Toggle
-                label="Featured"
-                value={editor.featured}
-                onChange={(featured) => patch({ featured })}
-              />
-              <Toggle
-                label="Active"
-                value={editor.active}
-                onChange={(active) => patch({ active })}
-              />
-              <View className="mt-2 flex-row gap-2">
-                <Button
-                  label="Save item"
-                  busy={busy}
-                  disabled={!editor.imageUrl.trim()}
-                  onPress={() =>
-                    void run(
-                      () => savePrintGalleryItem(editor),
-                      "Gallery item saved.",
-                      () => setGalleryItem(null),
-                    )
-                  }
-                />
-                {galleryItem.id && canDelete ? (
-                  <Button
-                    label="Delete"
-                    tone="danger"
-                    onPress={() => confirmDelete("gallery", editor.id)}
-                  />
-                ) : null}
-              </View>
-            </Card>
-          </AdminEditorSheet>
-        ) : (
-          <>
-            <View className="mb-3 flex-row items-center justify-between gap-2">
-              <Text className="min-w-0 flex-1 text-sm text-muted">
-                {data.gallery.length} item{data.gallery.length === 1 ? "" : "s"}{" "}
-                — upload a photo or paste an image URL.
-              </Text>
-              <Button
-                label="New"
-                tone="ghost"
-                onPress={() => setGalleryItem({ ...emptyGallery })}
-              />
-            </View>
-            {data.gallery.length === 0 ? (
-              <Card>
-                <Text className="text-sm text-muted">
-                  No gallery images yet. Select New to add one.
-                </Text>
-              </Card>
-            ) : (
-              data.gallery.map((item) => (
-                <Card key={item.id}>
-                  {/* Thumbnail + name on top, actions on their own row: at
-                      390px the two buttons left ~90px for the caption, which
-                      cut a real name to a five-character stub. */}
-                  <View className="flex-row items-center gap-3">
-                    <Pressable
-                      onPress={() =>
-                        setImagePreview({
-                          uri: item.imageUrl,
-                          label: item.caption || "Gallery image",
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${item.caption || "gallery image"} full size`}
-                      className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface"
-                    >
-                      <Image
-                        source={{ uri: item.imageUrl }}
-                        className="h-12 w-12"
-                        resizeMode="cover"
-                        accessibilityLabel="Gallery thumbnail"
-                      />
-                    </Pressable>
-                    <View className="min-w-0 flex-1">
-                      <Text
-                        numberOfLines={2}
-                        className="font-display text-base font-bold leading-5 text-ink"
-                      >
-                        {item.caption || "Untitled image"}
-                      </Text>
-                      <Text numberOfLines={1} className="text-xs text-muted">
-                        {item.category || "uncategorised"}
-                        {item.active ? "" : " · hidden"}
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="mt-2 flex-row flex-wrap justify-end gap-1.5">
-                    <Button
-                      label="Preview"
-                      tone="ghost"
-                      onPress={() =>
-                        setImagePreview({
-                          uri: item.imageUrl,
-                          label: item.caption || "Gallery image",
-                        })
-                      }
-                    />
-                    <Button
-                      label="Edit"
-                      tone="ghost"
-                      onPress={() => setGalleryItem(item)}
-                    />
-                    {canDelete ? (
-                      <Button
-                        label="Delete"
-                        tone="danger"
-                        onPress={() => confirmDelete("gallery", item.id)}
-                      />
-                    ) : null}
-                  </View>
-                </Card>
-              ))
-            )}
-          </>
-        )}
-        {imagePreview ? (
-          <ImagePreviewModal
-            uri={imagePreview.uri}
-            label={imagePreview.label}
-            onClose={() => setImagePreview(null)}
-          />
-        ) : null}
-      </View>
-    );
-  }
-
   // ── Requests ───────────────────────────────────────────────────────
   if (section === "Requests") {
-    const editor = quote;
     return (
       <View>
         {noticeBar}
@@ -1670,7 +1422,7 @@ export default function PrintAdminPanel({
           {data.quotes.length} request{data.quotes.length === 1 ? "" : "s"} —
           quote them, then move the status along.
         </Text>
-        {editor ? (
+        {quote ? (
           <AdminEditorSheet
             visible
             title="Request details"
@@ -1678,18 +1430,17 @@ export default function PrintAdminPanel({
           >
             <Card>
               <Text className="font-display text-base font-bold text-ink">
-                {editor.name}
+                {quote.name}
               </Text>
               <Text className="mb-2 text-xs text-muted">
-                {editor.email}
-                {editor.phone ? ` · ${editor.phone}` : ""} · qty{" "}
-                {editor.quantity}
+                {quote.email}
+                {quote.phone ? ` · ${quote.phone}` : ""} · qty {quote.quantity}
               </Text>
               <Text className="mb-2 text-sm leading-5 text-ink">
-                {editor.description}
+                {quote.description}
               </Text>
               <Text className="mb-2 text-xs text-muted">
-                {[editor.material, editor.dimensions, editor.timeline]
+                {[quote.material, quote.dimensions, quote.timeline]
                   .filter(Boolean)
                   .join(" · ") || "no material/dimensions/timeline"}
               </Text>
@@ -1702,16 +1453,16 @@ export default function PrintAdminPanel({
                 {PRINT_QUOTE_STATUSES.map((status) => (
                   <Pressable
                     key={status}
-                    onPress={() => setQuote({ ...editor, status })}
+                    onPress={() => setQuote({ ...quote, status })}
                     className={`rounded-full px-3 py-1.5 ${
-                      editor.status === status
+                      quote.status === status
                         ? "bg-navy"
                         : "border border-line bg-surface"
                     }`}
                   >
                     <Text
                       className={`text-[11px] font-black ${
-                        editor.status === status ? "text-white" : "text-ink"
+                        quote.status === status ? "text-white" : "text-ink"
                       }`}
                     >
                       {PRINT_QUOTE_STATUS_LABELS[status]}
@@ -1722,22 +1473,22 @@ export default function PrintAdminPanel({
               <View className="mt-2 flex-row gap-2">
                 <Field
                   label="Quoted (NPR)"
-                  value={String(editor.quotedAmount)}
+                  value={String(quote.quotedAmount)}
                   numeric
                   onChange={(raw) =>
                     setQuote({
-                      ...editor,
+                      ...quote,
                       quotedAmount: Math.max(0, Math.round(Number(raw) || 0)),
                     })
                   }
                 />
                 <Field
                   label="Grams"
-                  value={String(editor.estimatedGrams)}
+                  value={String(quote.estimatedGrams)}
                   numeric
                   onChange={(raw) =>
                     setQuote({
-                      ...editor,
+                      ...quote,
                       estimatedGrams: Math.max(0, Math.round(Number(raw) || 0)),
                     })
                   }
@@ -1746,26 +1497,26 @@ export default function PrintAdminPanel({
               <View className="flex-row gap-2">
                 <Field
                   label="Print hours"
-                  value={String(editor.printHours)}
+                  value={String(quote.printHours)}
                   decimal
                   onChange={(raw) =>
                     setQuote({
-                      ...editor,
+                      ...quote,
                       printHours: Math.max(0, Number(raw) || 0),
                     })
                   }
                 />
                 <Field
                   label="Admin notes"
-                  value={editor.adminNotes}
-                  onChange={(adminNotes) => setQuote({ ...editor, adminNotes })}
+                  value={quote.adminNotes}
+                  onChange={(adminNotes) => setQuote({ ...quote, adminNotes })}
                   multiline
                 />
               </View>
               <Toggle
                 label="Reprint"
-                value={editor.reprint}
-                onChange={(reprint) => setQuote({ ...editor, reprint })}
+                value={quote.reprint}
+                onChange={(reprint) => setQuote({ ...quote, reprint })}
               />
               <View className="mt-2">
                 <Button
@@ -1774,13 +1525,13 @@ export default function PrintAdminPanel({
                   onPress={() =>
                     void run(
                       () =>
-                        updatePrintQuote(editor.id, {
-                          status: editor.status as PrintQuoteStatus,
-                          adminNotes: editor.adminNotes,
-                          quotedAmount: editor.quotedAmount,
-                          estimatedGrams: editor.estimatedGrams,
-                          printHours: editor.printHours,
-                          reprint: editor.reprint,
+                        updatePrintQuote(quote.id, {
+                          status: quote.status as PrintQuoteStatus,
+                          adminNotes: quote.adminNotes,
+                          quotedAmount: quote.quotedAmount,
+                          estimatedGrams: quote.estimatedGrams,
+                          printHours: quote.printHours,
+                          reprint: quote.reprint,
                         }),
                       "Request updated.",
                       () => setQuote(null),
@@ -1824,7 +1575,7 @@ export default function PrintAdminPanel({
             </Card>
           ))
         )}
-        {!editor && data.quotes.length === 0 ? (
+        {!quote && data.quotes.length === 0 ? (
           <Card>
             <Text className="text-xs text-muted">
               No requests yet. The website quote form and the app's 3D screen
@@ -1944,62 +1695,6 @@ function StorefrontPreviewModal({
             accessibilityRole="button"
             accessibilityLabel="Close preview"
             className="mt-3 min-h-11 items-center justify-center rounded-full bg-card px-6"
-          >
-            <Text className="text-xs font-black text-ink">Close</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-/**
- * Full-size view of an uploaded gallery photo.
- * 2026-11-14 (owner: "add the imported picture preview and accessible delete
- * button there in the admin dashboard"). The close control is a 44px target
- * with its own label, and tapping the dark backdrop closes it too.
- */
-function ImagePreviewModal({
-  uri,
-  label,
-  onClose,
-}: {
-  uri: string;
-  label: string;
-  onClose: () => void;
-}) {
-  return (
-    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(15, 23, 42, 0.94)",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 16,
-        }}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel="Close image preview"
-      >
-        <Pressable onPress={() => {}} className="w-full items-center gap-3">
-          <Image
-            source={{ uri }}
-            style={{ width: "100%", height: 380 }}
-            resizeMode="contain"
-            accessibilityLabel={label}
-          />
-          <Text
-            numberOfLines={2}
-            className="text-center text-xs font-bold text-white"
-          >
-            {label}
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close image preview"
-            className="min-h-11 items-center justify-center rounded-full bg-card px-6"
           >
             <Text className="text-xs font-black text-ink">Close</Text>
           </Pressable>
