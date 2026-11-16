@@ -2515,7 +2515,6 @@ function OrdersTab({
   const STATUSES = ["pending", "paid", "fulfilled", "cancelled"] as const;
   // Customer-facing order card, so staff can see the receipt the buyer sees.
   const [preview, setPreview] = useState<AdminOrder | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   return (
     <ScrollView
       className="flex-1"
@@ -2759,7 +2758,6 @@ function ProductsTab({
   saveSaving: boolean;
 }) {
   const [preview, setPreview] = useState<AdminProduct | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState("All");
   const PAGE_SIZE = 8;
