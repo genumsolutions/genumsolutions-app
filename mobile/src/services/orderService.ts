@@ -165,15 +165,19 @@ export async function sendContactInquiry(
 }
 
 /** Fetch current site content (home hero title/body) from Supabase via Edge Function. */
-export async function fetchSiteContent() {
-  const res = await fetch(edgeUrls.siteContent, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "get" }),
-  });
+export async function fetchSiteContent(): Promise<{ content: { id: number; home_title: string; home_body: string } } | null> {
+  try {
+    const res = await fetch(edgeUrls.siteContent, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get" }),
+    });
 
-  if (!res.ok) throw new Error("Failed to fetch site content");
-  return res.json();
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 /** Upsert site content (home hero title/body) - admin only.

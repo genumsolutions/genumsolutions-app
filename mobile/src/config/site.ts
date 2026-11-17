@@ -13,3 +13,10 @@ export const APP_VERSION = "3.4.3";
 
 /** Public storefront, used for previews/links opened outside the app. */
 export const SITE_URL = "https://genumsolutions-website.vercel.app";
+
+// Bundled fallback hero content shown when the live site-content endpoint is
+// unreachable (no network, edge function undeployed, etc.). Staff can still
+// edit and save the real content from the Content tab once the endpoint is back.
+export const BUNDLED_HERO_TITLE = "Technology you can touch, test, and trust.";
+export const BUNDLED_HERO_BODY =
+  "Robotics kits, project solutions, fabrication, open tools, and training — built in Nepal for hobbyists, students, and small manufacturers.";

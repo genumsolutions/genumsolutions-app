@@ -35,7 +35,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as WebBrowser from "expo-web-browser";
 import { ADMIN_TAB_HINTS } from "../config/adminTabs";
 import type {
   DashboardSubTab,
@@ -73,7 +72,7 @@ import { applyComponentsScope } from "../services/productService";
 import { galleryImages } from "../types";
 import { logger } from "../services/logger";
 import { IMAGE_BUDGET_HINT, clampGallery } from "../lib/imageLimits";
-import { SITE_URL } from "../config/site";
+import { BUNDLED_HERO_BODY, BUNDLED_HERO_TITLE } from "../config/site";
 import {
   defaultProjectPricing,
   estimateProject,
@@ -721,11 +720,21 @@ function AdminConsole() {
           ),
           runAdminLoad("Home page content", async () => {
             const result = await fetchSiteContent();
-            const content = result?.content;
-            if (content) {
+            if (result?.content) {
+              const content = result.content;
               setSiteContent(content);
               setContentTitle(content.home_title || "");
               setContentBody(content.home_body || "");
+            } else {
+              // Fall back to bundled content when the live endpoint is
+              // unreachable (no network, edge function undeployed, etc.).
+              setSiteContent({
+                id: 0,
+                home_title: BUNDLED_HERO_TITLE,
+                home_body: BUNDLED_HERO_BODY,
+              });
+              setContentTitle(BUNDLED_HERO_TITLE);
+              setContentBody(BUNDLED_HERO_BODY);
             }
           }),
           runAdminLoad("Training programs", async () =>
@@ -2603,16 +2612,7 @@ function OrdersTab({
                     {o.status}
                   </Text>
                   <Pressable
-                    onPress={() => {
-                      setPreview(o);
-                      // Keep the centered, real-size order preview in app; open the
-                      // actual order page in a centered new browser window at the
-                      // real display size and location.
-                      WebBrowser.openBrowserAsync(
-                        `${SITE_URL}/orders/${o.id}`,
-                        undefined,
-                      ).catch(() => undefined);
-                    }}
+                    onPress={() => setPreview(o)}
                     className="rounded-lg border border-line px-3 py-1"
                   >
                     <Text className="text-xs font-bold text-ink">Preview</Text>
@@ -2954,16 +2954,7 @@ function ProductsTab({
                 tone="navy"
               />{" "}
               <AdminAction
-                onPress={() => {
-                  setPreview(item);
-                  // In-app preview keeps the centered, full-size storefront
-                  // preview; also open the real public product page in a
-                  // centered new browser window at its real display size.
-                  WebBrowser.openBrowserAsync(
-                    `${SITE_URL}/products/${item.id}`,
-                    undefined,
-                  ).catch(() => undefined);
-                }}
+                onPress={() => setPreview(item)}
                 label="Preview"
                 tone="plain"
               />
@@ -3449,16 +3440,7 @@ function ProjectTab({
                   tone="navy"
                 />{" "}
                 <AdminAction
-                  onPress={() => {
-                    setPreview(item);
-                    // Keep the centered, real-size storefront preview in
-                    // app; also open the real public product page in a
-                    // centered new browser window at actual display size.
-                    WebBrowser.openBrowserAsync(
-                      `${SITE_URL}/products/${item.id}`,
-                      undefined,
-                    ).catch(() => undefined);
-                  }}
+                  onPress={() => setPreview(item)}
                   label="Preview"
                   tone="plain"
                 />
@@ -4750,16 +4732,7 @@ function ServicesTab({
                 tone="navy"
               />{" "}
               <AdminAction
-                onPress={() => {
-                  setPreview(item);
-                  // In-app preview keeps the centered, full-size storefront
-                  // preview; also open the real public product page in a
-                  // centered new browser window at its real display size.
-                  WebBrowser.openBrowserAsync(
-                    `${SITE_URL}/products/${item.id}`,
-                    undefined,
-                  ).catch(() => undefined);
-                }}
+                onPress={() => setPreview(item)}
                 label="Preview"
                 tone="plain"
               />
@@ -4790,7 +4763,7 @@ function ServicesTab({
           title={preview.name}
           body={preview.description}
           priceLabel={preview.priceLabel}
-          image=""
+          image={preview.image || ""}
           active={preview.active}
           onClose={() => setPreview(null)}
         />
@@ -5712,9 +5685,9 @@ function ContentTab({
           Saved.
         </Text>
       )}
-      {!siteContent && (
-        <Text className="mt-3 text-center text-sm text-muted">
-          Content not loaded.
+      {siteContent?.id === 0 && (
+        <Text className="mt-3 text-center text-xs text-amber-600">
+          Showing bundled content — the live content service is unreachable. Save to publish.
         </Text>
       )}
       <View className="mt-5">
@@ -5952,16 +5925,7 @@ function JournalTab({
                   tone="navy"
                 />{" "}
                 <AdminAction
-                  onPress={() => {
-                    setPreview(item);
-                    // Keep the centered, real-size storefront preview in
-                    // app; also open the real public product page in a
-                    // centered new browser window at actual display size.
-                    WebBrowser.openBrowserAsync(
-                      `${SITE_URL}/products/${item.id}`,
-                      undefined,
-                    ).catch(() => undefined);
-                  }}
+                  onPress={() => setPreview(item)}
                   label="Preview"
                   tone="plain"
                 />
@@ -6824,16 +6788,7 @@ function MessagesTab({
                 </View>
                 <View className="shrink-0 flex-row flex-wrap gap-2">
                   <AdminAction
-                    onPress={() => {
-                      setPreview(m);
-                      // Keep the centered, real-size message preview in app;
-                      // open the actual message thread in a centered new browser
-                      // window.
-                      WebBrowser.openBrowserAsync(
-                        `${SITE_URL}/messages/${m.id}`,
-                        undefined,
-                      ).catch(() => undefined);
-                    }}
+                    onPress={() => setPreview(m)}
                     label="Preview"
                     tone="plain"
                   />
@@ -7657,16 +7612,7 @@ function TrainingProgramsManager({
                 tone="navy"
               />
               <AdminAction
-                onPress={() => {
-                  setPreview(program);
-                  // Keep the centered, real-size training program preview in app;
-                  // open the actual program page (services) in a centered new
-                  // browser window at actual display size.
-                  WebBrowser.openBrowserAsync(
-                    `${SITE_URL}/services`,
-                    undefined,
-                  ).catch(() => undefined);
-                }}
+                onPress={() => setPreview(program)}
                 label="Preview"
                 tone="plain"
               />
@@ -7888,16 +7834,7 @@ function PilotCostManager({
                 tone="navy"
               />
               <AdminAction
-                onPress={() => {
-                  setPreview(line);
-                  // Keep the centered, real-size pilot cost line preview in app;
-                  // open the actual program page (services) in a centered new
-                  // browser window at actual display size.
-                  WebBrowser.openBrowserAsync(
-                    `${SITE_URL}/services`,
-                    undefined,
-                  ).catch(() => undefined);
-                }}
+                onPress={() => setPreview(line)}
                 label="Preview"
                 tone="plain"
               />
@@ -8113,15 +8050,7 @@ function CurriculumManager({
                 tone="navy"
               />
               <AdminAction
-                onPress={() => {
-                  setPreview(highlight);
-                  // Keep the centered, real-size curriculum highlight preview in
-                  // app; open the actual home page in a centered new browser
-                  // window at actual display size.
-                  WebBrowser.openBrowserAsync(`${SITE_URL}/`, undefined).catch(
-                    () => undefined,
-                  );
-                }}
+                onPress={() => setPreview(highlight)}
                 label="Preview"
                 tone="plain"
               />
