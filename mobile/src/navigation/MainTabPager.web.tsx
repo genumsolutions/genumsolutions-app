@@ -1,0 +1,148 @@
+// =====================================================================
+// MainTabPager (web) - browser variant of the swipeable pager.
+//
+// react-native-pager-view is native-only, so on web we render the same
+// tab pages (Home / Shop / Cart / Menu) with all screens kept MOUNTED
+// (inactive ones hidden with display:none) to preserve per-tab state
+// exactly like the native pager. Account lives in the top bar (website
+// parity). The Menu page is a normal tab - it renders in the same space
+// between the brand header and the bottom tab bar like the other three.
+// The tab bar, param-sync and focus re-sync logic mirror MainTabPager.tsx.
+// =====================================================================
+import React, { useCallback, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import type { RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
+import { BrandHeader } from "../components/BrandHeader";
+import type { MainTabParamList, RootStackParamList } from "./types";
+
+type TabKey = keyof MainTabParamList;
+
+// U-44 (2026-09-26, owner): 4-tab strip — Cart is not a tab (top-right bag
+// icon is the cart entry); "Printing" renders the 3D Products store.
+const TAB_ORDER: TabKey[] = ["Home", "Printing", "Shop", "Menu"];
+
+const TAB_LABELS: Record<TabKey, string> = {
+  Home: "Home",
+  Printing: "3D Products",
+  Shop: "Electronic Products",
+  Menu: "Menu",
+};
+
+type IconName = ComponentProps<typeof Feather>["name"];
+const TAB_ICONS: Record<TabKey, IconName> = {
+  Home: "home",
+  Printing: "printer",
+  Shop: "grid",
+  Menu: "menu",
+};
+
+type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
+type MainRoute = RouteProp<RootStackParamList, "Main">;
+
+type MainTabPagerProps = {
+  screens: { [K in TabKey]: React.ComponentType };
+};
+
+export function MainTabPager({ screens }: MainTabPagerProps) {
+  const navigation = useNavigation<Nav>();
+  const route = useRoute<MainRoute>();
+  const insets = useSafeAreaInsets();
+  const [page, setPage] = useState<TabKey>(() =>
+    initialTab(route.params?.screen),
+  );
+
+  // Derive the page from the `screen` param so external tab switches land. The
+  // first render seeds `page` from the same param, so this is an adjustment to
+  // a CHANGED param, which React documents as a render-time job — an effect
+  // would paint the old tab and then jump.
+  const syncToParam = useCallback(() => {
+    const target = TAB_ORDER.indexOf(initialTab(route.params?.screen));
+    if (target < 0) return;
+    setPage(TAB_ORDER[target]);
+  }, [route.params?.screen]);
+
+  const [lastScreenParam, setLastScreenParam] = useState(route.params?.screen);
+  if (lastScreenParam !== route.params?.screen) {
+    setLastScreenParam(route.params?.screen);
+    syncToParam();
+  }
+
+  // Re-sync whenever Main regains focus (mirrors the native pager behavior).
+  useFocusEffect(
+    useCallback(() => {
+      syncToParam();
+    }, [syncToParam]),
+  );
+
+  const goToTab = useCallback(
+    (key: TabKey) => {
+      setPage(key);
+      if (route.params?.screen !== key) {
+        (navigation.setParams as (p: { screen?: TabKey }) => void)({
+          screen: key,
+        });
+      }
+    },
+    [navigation, route.params?.screen],
+  );
+
+  return (
+    <View className="flex-1 bg-white">
+      <BrandHeader />
+      {TAB_ORDER.map((key) => {
+        const Screen = screens[key];
+        return (
+          <View
+            key={key}
+            className="flex-1 bg-white"
+            style={key === page ? undefined : { display: "none" }}
+          >
+            <Screen />
+          </View>
+        );
+      })}
+
+      <View
+        style={{ paddingBottom: insets.bottom }}
+        className="flex-row items-center border-t border-line bg-white"
+      >
+        {TAB_ORDER.map((key) => {
+          const active = key === page;
+          const color = active ? "#1e3a8a" : "#64748b";
+          return (
+            <Pressable
+              key={key}
+              onPress={() => goToTab(key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={TAB_LABELS[key]}
+              className="flex-1 items-center justify-center pb-2 pt-2.5"
+            >
+              <View className="relative">
+                <Feather name={TAB_ICONS[key]} size={22} color={color} />
+              </View>
+              <Text
+                className={`mt-1 text-[10px] font-bold ${active ? "text-navy" : "text-slate-500"}`}
+              >
+                {TAB_LABELS[key]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function initialTab(screen: TabKey | undefined): TabKey {
+  return screen && TAB_ORDER.includes(screen) ? screen : "Home";
+}

@@ -1,0 +1,206 @@
+// Pins for the ONE place a dial address is produced — the D4 fix.
+//
+// D4 (owner: "the method switching was not working"): selecting the
+// home-router method while disconnected blind-dialled ws://192.168.245.1:81
+// - the car's OWN AP - because the flow's default map carried the AP address
+// for the STA method. The phone dialled the hotspot it was supposed to have
+// left, "verified", and every tile below it starved.
+import { describe, expect, it } from "vitest";
+
+import {
+  CAR_AP_WS_URL,
+  carIsOnOwnHotspot,
+  carWebPageIp,
+  carWebPageUrl,
+  isCarApGateway,
+  resolveDial,
+} from "./dial";
+
+const AP = "4WD4MCar_WiFi";
+
+describe("the own-AP gateways are recognised, not guessed around", () => {
+  it("knows both fleet gateways and nothing else", () => {
+    expect(isCarApGateway("192.168.245.1")).toBe(true);
+    expect(isCarApGateway("192.168.244.1")).toBe(true);
+    expect(isCarApGateway("192.168.1.34")).toBe(false);
+    expect(isCarApGateway("")).toBe(false);
+    expect(isCarApGateway(null)).toBe(false);
+  });
+
+  it("recognises a gateway even when it arrives with a scheme or port", () => {
+    expect(isCarApGateway("ws://192.168.245.1:81")).toBe(true);
+  });
+});
+
+describe("car-wifi - one target, the car's own address (U-86)", () => {
+  it("falls back to the AP constant only when the car reported nothing", () => {
+    const d = resolveDial({
+      target: "car-wifi",
+      reportedIp: null,
+      reportedSsid: null,
+      ownApName: AP,
+    });
+    expect(d).not.toBeNull();
+    expect(d!.url).toBe(CAR_AP_WS_URL);
+    expect(d!.source).toBe("car-ap-constant");
+  });
+
+  it("prefers ANY address the car reports, including its own hotspot", () => {
+    // U-86: the old code REFUSED the AP gateway for the home-router target,
+    // which is what made "which target am I on" a question the user had to
+    // answer. There is one target now, and a reported address is the truth.
+    const d = resolveDial({
+      target: "car-wifi",
+      reportedIp: "192.168.245.1",
+      reportedSsid: AP,
+      ownApName: AP,
+    });
+    expect(d!.url).toBe("ws://192.168.245.1:81");
+    expect(d!.source).toBe("car-reported");
+  });
+
+  it("dials a router address the car reported", () => {
+    const d = resolveDial({
+      target: "car-wifi",
+      reportedIp: "192.168.1.34",
+      reportedSsid: "HomeNet",
+      ownApName: AP,
+    });
+    expect(d).toEqual({
+      url: "ws://192.168.1.34:81",
+      source: "car-reported",
+      reportedIp: "192.168.1.34",
+    });
+  });
+
+  it("treats a blank reported value as nothing reported", () => {
+    const d = resolveDial({
+      target: "car-wifi",
+      reportedIp: "   ",
+      reportedSsid: "HomeNet",
+      ownApName: AP,
+    });
+    expect(d!.source).toBe("car-ap-constant");
+  });
+
+  it("does not dial an invalid reported address or guess the AP", () => {
+    expect(
+      resolveDial({
+        target: "car-wifi",
+        reportedIp: "0.0.0.0",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
+
+  it("strips a scheme the car reported rather than double-prefixing it", () => {
+    const d = resolveDial({
+      target: "car-wifi",
+      reportedIp: "ws://192.168.1.34:81",
+      reportedSsid: "HomeNet",
+      ownApName: AP,
+    });
+    expect(d!.url).toBe("ws://192.168.1.34:81");
+  });
+});
+describe("Bluetooth has no URL - it dials a MAC, not an address", () => {
+  it("returns null so the URL path stays WiFi-only", () => {
+    expect(
+      resolveDial({
+        target: "bt-spp",
+        reportedIp: "192.168.1.34",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("own-hotspot detection reads the car's SSID first", () => {
+  it("matches the car-reported own-AP name", () => {
+    expect(carIsOnOwnHotspot({ reportedSsid: AP, ownApName: AP })).toBe(true);
+  });
+
+  it("matches case-insensitively", () => {
+    expect(
+      carIsOnOwnHotspot({
+        reportedSsid: "4wd 4mcar_wifi".replace(" ", ""),
+        ownApName: AP,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when the car names a real router", () => {
+    expect(carIsOnOwnHotspot({ reportedSsid: "HomeNet", ownApName: AP })).toBe(
+      false,
+    );
+  });
+
+  it("is false - not a guess - when the car has said nothing", () => {
+    expect(carIsOnOwnHotspot({ reportedSsid: null, ownApName: AP })).toBe(
+      false,
+    );
+  });
+
+  it("uses the reported AP gateway when the SSID is unavailable", () => {
+    expect(
+      carIsOnOwnHotspot({
+        reportedSsid: null,
+        ownApName: AP,
+        reportedIp: "192.168.245.1",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("the webpage address follows the car's current network", () => {
+  it("uses the car AP address when its AP is identified without an IP", () => {
+    expect(
+      carWebPageIp({
+        reportedIp: null,
+        reportedSsid: AP,
+        ownApName: AP,
+      }),
+    ).toBe("192.168.245.1");
+  });
+
+  it("uses a reported router address, never the AP fallback", () => {
+    expect(
+      carWebPageIp({
+        reportedIp: "192.168.1.34",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBe("192.168.1.34");
+    expect(
+      carWebPageIp({
+        reportedIp: null,
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects an unusable broadcast address", () => {
+    expect(
+      carWebPageIp({
+        reportedIp: "0.0.0.0",
+        reportedSsid: "HomeNet",
+        ownApName: AP,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("the car's web page is built from the same reported truth", () => {
+  it("uses the reported address", () => {
+    expect(carWebPageUrl("192.168.1.34")).toBe("http://192.168.1.34:80");
+  });
+
+  it("has no page when nothing was reported", () => {
+    expect(carWebPageUrl(null)).toBeNull();
+    expect(carWebPageUrl("  ")).toBeNull();
+    expect(carWebPageUrl("999.1.1.1")).toBeNull();
+  });
+});

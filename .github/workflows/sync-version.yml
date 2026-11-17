@@ -1,0 +1,57 @@
+# =====================================================================
+# Sync app version to Supabase release.json (MANUAL trigger only).
+#
+# This reads the version from app.json (single source of truth) and
+# uploads the manifest to the public Supabase bucket. The website
+# (AppBanner + /app page) and the native app both read this manifest.
+#
+# NOTE: On normal pushes to main, release.yml already uploads the APK
+# + manifest via upload-release.mjs, so an automatic push trigger here
+# would race with that workflow and fail (the APK wouldn't exist yet).
+# Use this workflow for manual / emergency manifest-only syncs.
+#
+# Requires secrets:
+#   SUPABASE_URL              e.g. https://xxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY Supabase -> Settings -> API (service_role)
+# =====================================================================
+name: Sync Version to Supabase
+
+on:
+  workflow_dispatch: # Manual trigger only — release.yml already syncs the manifest on push.
+    # The old push trigger raced with release.yml: sync-version.mjs would
+    # abort because the APK wasn't uploaded yet (release.yml was still building).
+
+jobs:
+  sync-manifest:
+    name: Upload release manifest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Check secrets
+        id: check-secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          if [ -n "$SUPABASE_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️  SUPABASE_URL not configured — skipping sync"
+          fi
+
+      - name: Sync version to Supabase
+        if: steps.check-secrets.outputs.configured == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sync-version.mjs

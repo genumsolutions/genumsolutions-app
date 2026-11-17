@@ -1,0 +1,528 @@
+// =====================================================================
+// ToolsScreen — the Control Panel.
+//
+// Holds the project catalog (kind headers, category pills, then a detail card
+// with a tagline, description, capability checklist and the deck CTA) plus two
+// quiet car-fact disclosures ("Diagnostics" restart record, "Saved settings")
+// and "About this project". Connection UI lives ONLY in the Remote screen's
+// Connectivity panel — this page starts links nowhere.
+//
+// History: U-81 (2026-10-03) led with the car's instrument panel + connections
+// (owner: car facts first). 2026-10-12 stripped the panel to the catalogue +
+// disclosures, then a follow-up restored the Car card and ConnectionSection
+// ("everything is collapsed, show all the data"). The owner's device pass then
+// showed both DUPLICATE the Remote surface (the drive telemetry and the
+// Connectivity panel are already there), so this round removes them again: the
+// catalogue LEADS and the two disclosures close the page.
+// =====================================================================
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import {
+  useRoute,
+  type RouteProp,
+  useNavigation,
+} from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
+import type { RootStackParamList } from "../navigation/types";
+import { useControlHub } from "../components/tools/useControlHub";
+import { ProjectInfo } from "../components/tools/ProjectInfo";
+import { CarProfileCard } from "../components/tools/CarProfileCard";
+import { TelemetryStrip } from "../components/tools/TelemetryStrip";
+import { buildResetField } from "../components/tools/telemetryFormat";
+import { carEventRow, type CarLogRow } from "../components/tools/carLogModel";
+import { feedbackTap } from "../services/hapticsService";
+import {
+  KIND_GROUPS,
+  PROJECT_CATEGORIES,
+  PRODUCT_CATEGORY_TO_SLUG,
+  type ProjectCategory,
+} from "../config/project-catalog";
+import { getProjectCategories } from "../services/projectCategoryService";
+import { queueDeckOpen } from "../components/tools/toolsScreenFlow";
+
+type Route = RouteProp<RootStackParamList, "Tools">;
+
+type FeatherIcon = ComponentProps<typeof Feather>["name"];
+
+/**
+ * ① (owner bench report 2026-10-02 evening: the Control Panel is "too
+ * confusing and shows unnecessary datas too much"): settings/about blocks
+ * fold away behind a section header row, so the page LEADS with control.
+ * Deliberately NOT a card — it sits on the page like the "Projects" section
+ * label (double-card nesting would add back the noise this removes).
+ *
+ * 2026-10-12 follow-up (owner: *"everything is collapsed, please expand those
+ * things and show all the data"*): sections now START OPEN — the data is
+ * visible; the header row still lets the user fold a section away.
+ */
+function SectionDisclosure({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <View className="mt-6">
+      <Pressable
+        onPress={() => {
+          feedbackTap();
+          setOpen((v) => !v);
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={title}
+        className="flex-row items-center gap-2 py-1"
+      >
+        <Text className="min-w-0 flex-1 text-xs font-black uppercase tracking-widest text-navy">
+          {title}
+        </Text>
+        <Feather
+          name={open ? "chevron-up" : "chevron-down"}
+          size={14}
+          color="#64748b"
+        />
+      </Pressable>
+      {open ? <View className="mt-3">{children}</View> : null}
+    </View>
+  );
+}
+
+const CATEGORY_ICONS: Record<string, FeatherIcon> = {
+  robocar: "cpu",
+  "home-automation": "home",
+  "smart-farm": "droplet",
+  "smart-city": "zap",
+  drones: "send",
+};
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  directional: "Directional drive",
+  servo: "Servo steering",
+  pid: "PID tuning",
+  "start-stop": "Run / Stop routines",
+  relay: "Relay outputs",
+  sensor: "Live sensors",
+  weblink: "Web dashboard link",
+  slider: "Sliders",
+  gimbal: "Gimbal pan/tilt",
+  altitude: "Altitude control",
+};
+
+export function ToolsScreen() {
+  const route = useRoute<Route>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  // DB-driven categories with hardcoded fallback
+  const [categories, setCategories] =
+    useState<ProjectCategory[]>(PROJECT_CATEGORIES);
+  // U-48: pull-to-refresh — re-read the admin-editable category list.
+  const [refreshing, setRefreshing] = useState(false);
+  const loadCategories = useCallback(async () => {
+    try {
+      setCategories(await getProjectCategories());
+    } catch {
+      // keep the bundled fallback
+    }
+  }, []);
+  useEffect(() => {
+    // Loader writes its rows from a promise callback; the bundled fallback is
+    // already the initial state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
+    void loadCategories();
+  }, [loadCategories]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadCategories();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCategories]);
+
+  const routeCategory = (() => {
+    const raw = route.params?.category;
+    if (!raw) return undefined;
+    if (PRODUCT_CATEGORY_TO_SLUG[raw]) return PRODUCT_CATEGORY_TO_SLUG[raw];
+    if (categories.some((c) => c.slug === raw)) return raw;
+    return undefined;
+  })();
+
+  // Shared hook — connection state + everything the Remote window handoff
+  // needs (the window runs its own hub instance on the same transports).
+  // Connection UI belongs to the Remote screen's Connectivity panel (Phase 2,
+  // owner 2026-10-12); this page keeps only the car facts the Saved-settings
+  // card and the Diagnostics disclosure read.
+  const hub = useControlHub(routeCategory);
+  const {
+    connected,
+    sppStatus,
+    deviceName,
+    wifiConnected,
+    activeMode,
+    telemetry,
+    carApName,
+    carSsid,
+  } = hub;
+
+  // Category organizer. Declared before the transport-loss reset below so the
+  // reset can adjust it during render instead of in an effect.
+  const [selectedSlug, setSelectedSlug] = useState<string>(
+    routeCategory && categories.some((c) => c.slug === routeCategory)
+      ? routeCategory
+      : categories[0]!.slug,
+  );
+  // UX-3 (2026-10-02 audit): a pill tap is USER INTENT. The reset below is for
+  // TRANSPORT LOSS only — this flag lets it tell the difference, so a
+  // mount/refresh cycle can no longer snap a chosen category back to the first
+  // pill. State (not a ref) so the reset can read it during render.
+  const [userTouchedSelection, setUserTouchedSelection] = useState(false);
+
+  // F-57 / round-close: when the transport disconnects, reset the selected
+  // category so the control panel returns to a clean default state rather than
+  // staying stuck on a connected-category view. The sections remain in the same
+  // order (U-53-4) — we only reset the active slice. Adjusted during render: the
+  // effect version painted the stale category for one frame on every drop.
+  const [wasConnected, setWasConnected] = useState(connected);
+  if (wasConnected !== connected) {
+    setWasConnected(connected);
+    if (!connected && !userTouchedSelection) {
+      setSelectedSlug(categories[0]!.slug);
+    }
+  }
+
+  // UX-2: a queued deck-open must not fire after the screen is gone.
+  useEffect(() => {
+    return () => {
+      deckOpenTimerRef.current?.();
+      deckOpenTimerRef.current = null;
+    };
+  }, []);
+
+  // ①: the category detail card leads COMPACT (name · tagline · hardware);
+  // the long description + capability checklist hide behind a Details toggle
+  // and reset when the category changes (each category's card starts clean).
+  // 2026-10-12 follow-up (owner: everything is collapsed — show all the data):
+  // the card starts EXPANDED so the description and capability checklist are
+  // visible; "Details" still folds it away.
+  const [showCategoryDetails, setShowCategoryDetails] = useState(true);
+  const selectCategory = useCallback((slug: string) => {
+    setUserTouchedSelection(true);
+    setShowCategoryDetails(true);
+    setSelectedSlug(slug);
+  }, []);
+  const category: ProjectCategory =
+    categories.find((c) => c.slug === selectedSlug) ?? categories[0]!;
+
+  const isRobocarCat = category.slug === "robocar";
+  const remoteLabel = isRobocarCat
+    ? "Drive deck"
+    : category.slug === "drones"
+      ? "Flight deck"
+      : "Relay & sensor deck";
+
+  // A1 (2026-09-24): DB capability_labels (admin-editable per category) win;
+  // unknown keys fall back to the static map, then the raw key.
+  const capabilityLabel = useCallback(
+    (cap: string) =>
+      category.capabilityLabels?.[cap] ?? CAPABILITY_LABELS[cap] ?? cap,
+    [category.capabilityLabels],
+  );
+
+  // UX-2 (2026-10-02 audit): the deck-open debounce's cancel handle lives in a
+  // ref — the tap handler must never create-and-cancel a timer in the same
+  // tick (the old inline cleanup made the button a dead end on the first
+  // press), and queueDeckOpen replaces an in-flight timer on a double-tap.
+  const deckOpenTimerRef = useRef<(() => void) | null>(null);
+
+  // Values the (untouched) Saved-settings card still reads. These describe the
+  // car, not the connection UI, so they stay here rather than in the section.
+  const carIdentityId = telemetry.id ?? null;
+  const staSsid =
+    telemetry.connected === true
+      ? telemetry.ssid?.trim() || carSsid || null
+      : null;
+  const apName = staSsid ? null : carApName?.trim() || "4WD4MCar_WiFi";
+
+  // P2/owner item C: the last reset, resolved once. The HEADLINE is the last
+  // reset itself (reason · phase); the count is secondary. Shown in the
+  // Diagnostics disclosure only when the car actually reported real values.
+  // P7/owner item D: “Clear on car” is a real, destructive, LIVE command
+  // (LOG;CLEAR wipes the car's bounded event ring), so it asks FIRST — the
+  // confirmed dialog here is the `confirmClearCarLog` contract the profile
+  // card honours. Cancel does nothing; Clear sends the command and the car's
+  // own fresh LOG;GET read-back answers with a real zero (F-61).
+  const handleClearCarLogConfirmed = useCallback(() => {
+    Alert.alert(
+      "Clear the car's event log?",
+      "This wipes the bug/reset/freeze history the car keeps on itself. It cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            feedbackTap();
+            hub.clearCarLog();
+          },
+        },
+      ],
+    );
+  }, [hub]);
+
+  const resetField = buildResetField({
+    connected,
+    resetReason: telemetry.resetReason,
+    bootCount: telemetry.bootCount,
+    crashCount: telemetry.crashCount,
+    lastCrashPhase: telemetry.lastCrashPhase,
+    lastCrashHeap: telemetry.lastCrashHeap,
+  });
+
+  return (
+    // F-47: a flex-1 SCREEN-WIDE root wrapping the ScrollView. The disconnect
+    // confirm used to live INSIDE the ScrollView, so its "absolute inset-0"
+    // mapped to the whole scrollable PAGE (taller than the screen) and the
+    // dialog centered on the page — far below the fold in portrait. Rendered
+    // as a SIBLING of the ScrollView under this root, "inset-0" is the
+    // visible screen and the dialog truly centers on the phone.
+    <View className="flex-1 bg-mist">
+      {/* ---- U-86: the page TITLE is now a fixed screen header, not the first
+          row inside the scroll view.
+
+          The owner reported the heading sitting too low and the dashboard too
+          high, which is what happens when the only title is inside the scroll
+          content: it scrolls away, so what you see depends on scroll position,
+          and it competes with the first card instead of labelling the screen.
+
+          This is the standard mobile shape — a pinned header, then scrolling
+          content — so the title is always in the same place, the dashboard
+          always starts directly beneath it, and neither moves. It sits OUTSIDE
+          the ScrollView for exactly that reason. */}
+      <View className="border-b border-line bg-card px-4 pb-3 pt-2">
+        <Text className="font-display text-xl font-bold text-ink">
+          Control Panel
+        </Text>
+      </View>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* ---- Projects: the catalog. ------------------------------
+            The Control Panel's ONE surface now that the car status and the
+            connections live in the Remote screen (Phase 2 + the 2026-10-12
+            device round): the category pills, the detail card and the deck CTA
+            ARE the page's main action, so the catalogue leads again. */}
+        <Text className="mt-6 text-[11px] font-bold uppercase tracking-[0.24em] text-navy">
+          Projects
+        </Text>
+
+        {/* Category selector — grouped by KIND (control-panel kinds plan §2): two slim
+            section headers above the same 7 pills in the SAME order as before.
+            Kinds are visual labels only — nothing merges, nothing moves. */}
+        {KIND_GROUPS.map((group) => {
+          const pills = categories.filter((c) => group.slugs.includes(c.slug));
+          if (pills.length === 0) return null;
+          return (
+            <View key={group.label} className="mt-3">
+              <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-muted">
+                {group.label}
+              </Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {pills.map((c) => {
+                  const active = c.slug === selectedSlug;
+                  return (
+                    <Pressable
+                      key={c.slug}
+                      onPress={() => selectCategory(c.slug)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select category ${c.name}`}
+                      accessibilityState={{ selected: active }}
+                      className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${active ? "bg-navy" : "border border-line bg-card"}`}
+                    >
+                      <Feather
+                        name={CATEGORY_ICONS[c.slug] ?? "box"}
+                        size={13}
+                        color={active ? "#fff" : "#1e3a8a"}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        className={`text-xs font-bold ${active ? "text-white" : "text-navy"}`}
+                      >
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Category detail card */}
+        <View
+          key={category.slug}
+          className="mt-4 rounded-2xl border border-line bg-card p-5"
+        >
+          <View className="flex-row items-start">
+            <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-light">
+              <Feather
+                name={CATEGORY_ICONS[category.slug] ?? "box"}
+                size={18}
+                color="#1e3a8a"
+              />
+            </View>
+            <View className="ml-3 min-w-0 flex-1">
+              {/* No clamp: the website's OpenTools headings are unclamped. */}
+              <Text className="font-display text-lg font-bold text-ink">
+                {category.name}
+              </Text>
+            </View>
+          </View>
+          {/* ①: description + capability checklist fold behind Details —
+              the card leads with what the page is FOR (the deck CTA). */}
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              setShowCategoryDetails((v) => !v);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showCategoryDetails }}
+            accessibilityLabel={`Details about ${category.name}`}
+            className="mt-3 flex-row items-center gap-1.5"
+          >
+            <Text className="text-xs font-bold text-sky-700 dark:text-sky-300">
+              {showCategoryDetails ? "Hide details" : "Details"}
+            </Text>
+            <Feather
+              name={showCategoryDetails ? "chevron-up" : "chevron-down"}
+              size={13}
+              color="#64748b"
+            />
+          </Pressable>
+          {showCategoryDetails ? (
+            <>
+              <Text className="mt-2 text-sm leading-5 text-muted">
+                {category.description}
+              </Text>
+              <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
+                {category.capabilities.map((cap) => (
+                  <View key={cap} className="flex-row items-center gap-1.5">
+                    <Feather name="check-circle" size={12} color="#059669" />
+                    <Text className="text-xs font-semibold text-ink">
+                      {capabilityLabel(cap)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          <Pressable
+            onPress={() => {
+              feedbackTap();
+              setSelectedSlug(categories[0]!.slug);
+              // UX-2: replace any in-flight timer; the cancel handle is stored
+              // (cleared on unmount below) — never consumed in this same tick.
+              // The debounce cancel handle lives in a ref so a double-tap can
+              // replace it; it is only ever written from this handler and
+              // cleared from the unmount effect.
+              // eslint-disable-next-line react-hooks/immutability -- timer handle
+              deckOpenTimerRef.current = queueDeckOpen(
+                deckOpenTimerRef.current,
+                () => {
+                  navigation.navigate("RemoteControl", {
+                    category: category.slug,
+                  });
+                },
+              );
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${category.name} remote window`}
+            className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-3"
+          >
+            <Feather name="target" size={15} color="#fff" />
+            <Text className="text-sm font-black text-white">
+              Open {remoteLabel} · {category.name}
+            </Text>
+            <Feather name="arrow-right" size={15} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Diagnostics — the LAST reset (P2/owner item C). A quiet fact, not a
+            headline reading: the row only appears when the car actually
+            reported real values — no row rather than a false "None". The
+            field's own label ("Last reset") heads it, so no separate title. */}
+        {resetField ? (
+          <SectionDisclosure title="Diagnostics">
+            <View className="rounded-2xl border border-line bg-card p-4">
+              <TelemetryStrip fields={[resetField]} />
+            </View>
+          </SectionDisclosure>
+        ) : null}
+
+        {/* ①: the saved-settings block folds away — control surfaces lead. */}
+        <SectionDisclosure title="Saved settings">
+          <CarProfileCard
+            profileKey={hub.profileKey}
+            savedPrefs={hub.savedPrefs}
+            profileSync={hub.profileSync}
+            modeName={
+              hub.savedPrefs?.modeId
+                ? (hub.carModes.find((m) => m.id === hub.savedPrefs?.modeId)
+                    ?.name ?? null)
+                : null
+            }
+            carLabel={
+              sppStatus === "connected"
+                ? deviceName || null
+                : wifiConnected
+                  ? apName
+                  : null
+            }
+            carId={carIdentityId}
+            staSsid={staSsid}
+            apName={apName}
+            carLog={
+              {
+                rows: hub.carLogEvents.map((e) => carEventRow(e)),
+                total: hub.carLogTotal,
+                fetchedAt: hub.carLogFetchedAt,
+              } as {
+                rows: CarLogRow[];
+                total: number;
+                fetchedAt: number | null;
+              }
+            }
+            onRefreshCarLog={hub.requestCarLog}
+            onClearCarLog={handleClearCarLogConfirmed}
+            confirmClearCarLog={true}
+          />
+        </SectionDisclosure>
+
+        {/* About this project — the page ENDS here (owner 2026-09-29: the
+          teaching card after it is gone). ①: folded behind a disclosure so
+          the page ends on CONTROL, not reading material. */}
+        <SectionDisclosure title="About this project">
+          <ProjectInfo mode={activeMode} categorySlug={category.slug} />
+        </SectionDisclosure>
+      </ScrollView>
+    </View>
+  );
+}

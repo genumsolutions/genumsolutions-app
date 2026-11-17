@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true
+  },
+  // scripts/ holds dev-only tools that reach outside the repo (the catalog
+  // generator imports the sibling website), so they are not part of the app's
+  // typecheck — CI has no website checkout.
+  "exclude": ["supabase/functions", "scripts"]
+}

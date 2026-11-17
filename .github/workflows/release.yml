@@ -1,0 +1,370 @@
+# =====================================================================
+# Release - build the signed Android release APK on CI (GitHub Actions)
+# and publish it + the release.json manifest straight to Supabase.
+#
+# Everything version-related is read dynamically from app.json (the single
+# source of truth) - nothing is hardcoded here. The versioned filename and
+# manifest are derived at runtime by scripts/upload-release.mjs.
+#
+# REQUIRED repo secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL               e.g. https://xxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY  Supabase -> Settings -> API (service_role)
+#   ANDROID_KEYSTORE_B64       base64 of mobile/keystores/genum-release.jks
+#   STORE_PASSWORD             keystore password
+#   KEY_ALIAS                  cert alias, e.g. genum-release
+#   KEY_PASSWORD               cert password
+#   EXPO_PUBLIC_SUPABASE_ANON_KEY        Supabase anon key (PUBLIC - shipped in every APK)
+#   EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID     Google Web OAuth client id (PUBLIC)
+#   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID Google Android OAuth client id (PUBLIC)
+#
+# NOTE: EXPO_PUBLIC_* values are inlined into the JS bundle by Metro at build
+# time. Local release builds read them from mobile/.env.local; CI has no .env
+# file, so they MUST come from these secrets - a bundle built without them gets
+# an empty Supabase config and crashes on open (createClient() throws at module
+# scope in src/config/supabase.ts). EXPO_PUBLIC_SUPABASE_URL is intentionally not
+# a separate secret: it reuses SUPABASE_URL (same value).
+#
+# NOTE: keystore.properties `storeFile` is FIXED to "../../keystores/genum-release.jks"
+# (resolved relative to android/app/ -> mobile/keystores/genum-release.jks, the file
+# decoded by ANDROID_KEYSTORE_B64 below). There is NO STORE_FILE secret to configure:
+# a hand-set STORE_FILE secret repeatedly broke this step with "storeFile ... does not
+# exist", so the workflow no longer reads that secret at all.
+#
+# If SUPABASE_URL is unset the upload step is skipped (the release APK is
+# still built); if the keystore secrets are unset the build falls back to
+# the debug key exactly like a local machine without the release keystore.
+# =====================================================================
+name: Release Android APK
+
+on:
+  push:
+    branches: [main]
+    # POSITIVE list of native-affecting paths only. A push runs this workflow
+    # only when a file under one of these paths changed (GitHub: "if ANY changed
+    # file matches paths"). JS/asset/script-only pushes are therefore skipped
+    # entirely (they ride ota-only.yml) - including src/config/site.ts, which a
+    # version bump always touches, so an app.json bump still triggers the build.
+    #
+    # Do NOT use paths + paths-ignore here: paths-ignore: ['mobile/src/**']
+    # also swallows site.ts during a version bump, so the whole workflow is
+    # excluded and the APK build silently never runs (a run is created then
+    # cancelled with 0 jobs). See https://docs.github.com/actions/using-workflows/workflow-syntax
+    # for the "workflow runs if ANY changed file matches paths" rule.
+    paths:
+      - "mobile/app.json"
+      - "mobile/package.json"
+      - "mobile/package-lock.json"
+      - "mobile/plugins/**"
+      - "mobile/keystores/**"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload the APK and release manifest to Supabase
+        required: false
+        default: true
+        type: boolean
+        # Set false for a device-test build that must not contact Supabase.
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    if: github.ref == 'refs/heads/main'
+    name: Build + upload signed APK
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # EXPO_PUBLIC_* are inlined into the JS bundle by Metro (see the header).
+      # Without them CI APKs ship with an empty Supabase config and crash on
+      # open. URL reuses the SUPABASE_URL secret; anon key + Google client IDs
+      # are the public values from mobile/.env.local.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The project targets compileSdk 36 / targetSdk 36. GitHub's ubuntu
+      # runner ships no Android SDK, so install the standalone command-line
+      # tools, accept the licenses, and pin the platform/build-tools/cmake
+      # we need.
+      - name: Set up Android SDK (download cmdline tools, accept licenses, pin 36)
+        run: |
+          # Install the standalone command-line tools via the actions toolkit.
+          python3 - <<'PY'
+          import os, zipfile, urllib.request
+          sdk_root = os.environ.get("ANDROID_HOME", "/usr/local/lib/android/sdk")
+          os.makedirs(sdk_root, exist_ok=True)
+          url = "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          zip_path = os.path.join(sdk_root, "cmd-tools.zip")
+          print("Downloading Android command-line tools...")
+          urllib.request.urlretrieve(url, zip_path)
+          with zipfile.ZipFile(zip_path) as z:
+              z.extractall(sdk_root)
+          os.remove(zip_path)
+          # Move extracted cmdline-tools into cmdline-tools/latest
+          import glob
+          extracted = os.path.join(sdk_root, "cmdline-tools")
+          for item in os.listdir(extracted):
+              if item.startswith("cmdline-tools"):
+                  src = os.path.join(extracted, item)
+                  dst = os.path.join(sdk_root, "cmdline-tools", "latest")
+                  os.makedirs(dst, exist_ok=True)
+                  for f in os.listdir(src):
+                      os.rename(os.path.join(src, f), os.path.join(dst, f))
+                  break
+          print("Android cmdline tools installed at " + sdk_root)
+          PY
+
+          export SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "${SDKMANAGER}" --licenses >/dev/null 2>&1 || true
+          "${SDKMANAGER}" "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" || true
+
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> "${GITHUB_ENV}"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # ---- Caching: Gradle + Expo prebuild ----
+      # Cache Gradle task outputs (~/.gradle/caches + wrapper) so unchanged
+      # modules skip recompilation on subsequent builds.
+      #
+      # IMPORTANT: the Gradle key MUST be version-independent. Every release
+      # bumps app.json version + versionCode, which regenerates the versioned
+      # bits of android/** - hashing android/** would therefore MISS the cache
+      # on every release and force a ~full recompile. Keying on package.json +
+      # plugins keeps the saved ~/.gradle caches restorable across version
+      # bumps; Gradle's own build cache (org.gradle.caching=true, stored under
+      # ~/.gradle/caches) re-verifies freshness by task-input hashes, so only
+      # the handful of version-touched tasks rebuild.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/package.json', 'mobile/plugins/**') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # Cache the Expo prebuild output (mobile/android/) so we skip the
+      # expensive prebuild step when app.json, package.json, and plugins
+      # haven't changed.
+      - name: Cache Expo prebuild (android/)
+        uses: actions/cache@v4
+        with:
+          path: mobile/android
+          key: prebuild-${{ runner.os }}-${{ hashFiles('mobile/app.json', 'mobile/package.json', 'mobile/plugins/**') }}
+          restore-keys: |
+            prebuild-${{ runner.os }}-
+
+      - name: Check Supabase config
+        id: check-supabase
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Supabase not configured::Skipping APK upload; SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set."
+          fi
+
+      # Fail BEFORE the expensive build when the secrets inlined by Metro point
+      # at a different Supabase project than the app's own release URLs. A stale
+      # secret still builds green and only breaks on a phone, so this is the
+      # only place it can be caught. See scripts/check-supabase-ref.mjs.
+      - name: Verify Supabase project (env vs release URLs)
+        if: steps.check-supabase.outputs.configured == 'true'
+        run: node scripts/check-supabase-ref.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Release preflight - expo-doctor validates that every dependency matches
+      # the installed Expo SDK (bundledNativeModules.json). Without this, a
+      # dependency skew (e.g. expo-linking@57 vs SDK 54) still Google-Play-builds
+      # but crashes on device; the APK would be silently published over a live
+      # release. Running doctor here fails BEFORE prebuild/gradle/upload, so a
+      # mismatched tree can never overwrite the bucket.
+      - name: Expo doctor (release preflight)
+        run: npm run doctor
+
+      # Fail in seconds, not after the Gradle build: a font path that does not
+      # exist only breaks `expo prebuild`, which runs after this step.
+      - name: app.json asset paths exist
+        run: node scripts/check-app-json-paths.mjs
+
+      # Reconstruct the release keystore BEFORE prebuild: the with-release-signing
+      # plugin reads keystores/keystore.properties at prebuild time to decide whether
+      # to wire the `release` signingConfig into the generated android/app/build.gradle.
+      #
+      # IMPORTANT: only write keystore.properties when a release keystore is actually
+      # present. If it is written with empty placeholders, the plugin wires the release
+      # signingConfig and gradle fails at `validateSigningRelease` ("Keystore file ...
+      # not found"). When the keystore secrets are absent we leave keystore.properties
+      # missing so the plugin falls back to the debug key, exactly like a local machine
+      # without the release keystore.
+      - name: Reconstruct release signing credentials
+        run: |
+          mkdir -p keystores
+          rm -f keystores/keystore.properties
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
+            if [ -z "${{ secrets.STORE_PASSWORD }}" ] || [ -z "${{ secrets.KEY_ALIAS }}" ] || [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+              echo "::error::ANDROID_KEYSTORE_B64 is set but STORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD are missing - configure all four keystore secrets."
+              exit 1
+            fi
+            echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 --decode > keystores/genum-release.jks
+            ls -l keystores/genum-release.jks
+            if [ ! -s keystores/genum-release.jks ]; then
+              echo "::error::ANDROID_KEYSTORE_B64 decoded to an empty keystore file - is the secret set correctly?"
+              exit 1
+            fi
+            # storeFile is resolved relative to android/app/ (where gradle runs AFTER
+            # expo prebuild), so ../../keystores/... -> mobile/keystores/genum-release.jks.
+            # At THIS step android/ does not exist yet (prebuild runs next), so validate
+            # the decoded keystore directly at mobile/keystores/ and let gradle resolve
+            # the relative storeFile later. Fixed value (see the header comment) - no
+            # STORE_FILE secret is read.
+            STORE_FILE="../../keystores/genum-release.jks"
+            printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$STORE_FILE" \
+              "${{ secrets.STORE_PASSWORD }}" \
+              "${{ secrets.KEY_ALIAS }}" \
+              "${{ secrets.KEY_PASSWORD }}" > keystores/keystore.properties
+            # Fail fast instead of letting gradle's validateSigningRelease die
+            # 10+ minutes into the build: check the decoded keystore + credentials.
+            keystore_file="$(pwd)/keystores/genum-release.jks"
+            if [ ! -f "$keystore_file" ]; then
+              echo "::error::Decoded release keystore missing at '$keystore_file'."
+              exit 1
+            fi
+            if ! keytool -list -keystore "$keystore_file" -storepass "${{ secrets.STORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" >/dev/null 2>&1; then
+              echo "::error::Release keystore validation failed for alias '${{ secrets.KEY_ALIAS }}' at $keystore_file - wrong STORE_PASSWORD or KEY_ALIAS?"
+              exit 1
+            fi
+            echo "::notice::Release signing configured and validated (storeFile=$STORE_FILE, alias=${{ secrets.KEY_ALIAS }})."
+          else
+            echo "::warning title=No release keystore::ANDROID_KEYSTORE_B64 not set; building with the debug key."
+          fi
+
+      # Regenerate android/ ONLY when the restored android/ cache does not
+      # match the CURRENT app.json versionCode. The prebuild cache key hashes
+      # app.json, so a version bump makes the primary key miss and the
+      # restore-keys fallback could return a stale android/ whose baked
+      # versionCode is OLDER than app.json - silently shipping versionName
+      # "2.0.4" inside a versionCode 46 APK (Android treats that as a downgrade
+      # and refuses the install). Comparing the cached build.gradle against the
+      # current versionCode catches that drift and forces a regeneration.
+      - name: Regenerate android/ (expo prebuild)
+        run: |
+          APP_CODE=$(node -p "require('./app.json').expo.android.versionCode")
+          if [ -f android/app/build.gradle ] && grep -q "versionCode $APP_CODE " android/app/build.gradle; then
+            echo "android/ restored from cache, versionCode matches ($APP_CODE) - skipping prebuild"
+          else
+            echo "android/ cache missing or stale (need versionCode $APP_CODE) - regenerating with expo prebuild"
+            npx expo prebuild -p android --no-install
+          fi
+
+      # Apply incremental build optimizations to gradle.properties.
+      # android/ is regenerated by prebuild, so these flags must be added
+      # after prebuild completes.
+      - name: Apply Gradle optimizations
+        run: |
+          if [ -f android/gradle.properties ]; then
+            if ! grep -q "org.gradle.caching=true" android/gradle.properties; then
+              echo "" >> android/gradle.properties
+              echo "# Incremental build optimization" >> android/gradle.properties
+              echo "org.gradle.caching=true" >> android/gradle.properties
+              echo "org.gradle.configureondemand=true" >> android/gradle.properties
+              echo "org.gradle.workers.max=4" >> android/gradle.properties
+            fi
+            # Increase JVM heap for faster compilation
+            sed -i 's/-Xmx2048m/-Xmx4096m/' android/gradle.properties
+            sed -i 's/-XX:MaxMetaspaceSize=512m/-XX:MaxMetaspaceSize=1024m/' android/gradle.properties
+            if ! grep -q "HeapDumpOnOutOfMemoryError" android/gradle.properties; then
+              sed -i 's/-XX:MaxMetaspaceSize=1024m/-XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError/' android/gradle.properties
+            fi
+            echo "Gradle optimizations applied."
+          fi
+
+      - name: Build signed release APK
+        id: build-apk
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --parallel
+          ls -l app/build/outputs/apk/release/
+
+      - name: Upload APK + release manifest
+        id: upload
+        if: >-
+          steps.check-supabase.outputs.configured == 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.publish)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          node scripts/upload-release.mjs --apk android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          UPLOAD_EXIT=$?
+          if [ $UPLOAD_EXIT -eq 0 ]; then
+            echo "uploaded=true" >> "$GITHUB_OUTPUT"
+            echo "APK + release manifest published."
+          else
+            echo "::error::APK or manifest upload failed (exit $UPLOAD_EXIT)."
+          fi
+          exit $UPLOAD_EXIT
+
+      - name: Retain release APK as a workflow artifact
+        if: always() && steps.build-apk.outcome == 'success'
+        uses: actions/upload-artifact@v5
+        with:
+          name: genum-solutions-apk-${{ github.run_number }}
+          path: mobile/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      # Sync the repo apk/ mirror with the newly published release
+      # release.yml owns NEW versions (version bumps in app.json). After a
+      # successful APK + manifest upload, this step refreshes the repo-root
+      # genumsolutions-app/apk/ folder so the repo itself carries every published
+      # versioned APK and the latest APK.
+      #
+      # The mirror is read-only against Supabase: it downloads the current
+      # release.json and the APK files it names, keeps genuine files, and never
+      # mutates the bucket. It is safe to run after every successful upload.
+      #
+      # NOTE: ../../root-apk-sync.mjs resolves from the step working-directory
+      # (mobile/), i.e. mobile/../../root-apk-sync.mjs -> repo_root/root-apk-sync.mjs.
+      # Uses the default checkout path (no custom `path:` on the checkout step)
+      # so this path is stable; if the checkout is ever moved, update this path
+      # too.
+      - name: Sync repo apk/ mirror with published release
+        working-directory: .
+        if: steps.upload.outputs.uploaded == 'true'
+        run: node root-apk-sync.mjs
+
+      # NOTE: the release build intentionally does NOT publish an OTA bundle.
+      # The APK + manifest version/versionCode ALWAYS bump on a release, and an
+      # OTA bundle carries the JS copy of APP_VERSION. Publishing it would let a
+      # device on the OLD native build self-report the NEW version, suppressing
+      # the "new APK available" pill until the NEXT bump. OTA (expo-updates) is
+      # the SAME-VERSION hot-patch channel only, handled by ota-only.yml; new
+      # versions are installed via a new APK.

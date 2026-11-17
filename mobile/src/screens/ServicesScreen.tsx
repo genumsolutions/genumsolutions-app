@@ -1,0 +1,341 @@
+// =====================================================================
+// ServicesScreen - reads the shared `services` Supabase table.
+// Customer-facing filter organization (Phase F): search + category chips,
+// result count, and pagination — all derived from the DB rows only.
+// Also mirrors website ServicesPage: training programs, pilot costs,
+// and curriculum highlights (same DB tables, same DB-first + fallback).
+// =====================================================================
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../navigation/types";
+import { pilotTotalLabel } from "../lib/pilotCostTotal";
+import { ServiceCard } from "../components/ServiceCard";
+import { CategoryDropdown } from "../components/CategoryDropdown";
+import { PagePager } from "../components/PagePager";
+import { getServices } from "../services/serviceService";
+import { getProgramsContent } from "../services/programsService";
+import {
+  pilotCosts as fallbackPilotCosts,
+  stemProjectHighlights as fallbackHighlights,
+  trainingPrograms as fallbackPrograms,
+} from "../config/programs";
+import type { Service } from "../types";
+
+// The academy's seven lab tracks — the same list the website's /services
+// #academy section shows (it used to be a separate /academy page there).
+const LEARNING_STREAMS = [
+  "Robotics & robot cars",
+  "Electronics & soldering",
+  "IoT & automation",
+  "Smart home",
+  "Smart farm",
+  "Smart city & waste",
+  "Aerial drones",
+];
+
+type Nav = NativeStackNavigationProp<RootStackParamList, "Services">;
+
+export function ServicesScreen() {
+  const navigation = useNavigation<Nav>();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState("All");
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
+  const [trainingPrograms, setTrainingPrograms] = useState(fallbackPrograms);
+  const [pilotCosts, setPilotCosts] = useState(fallbackPilotCosts);
+  const [stemProjectHighlights, setStemProjectHighlights] =
+    useState(fallbackHighlights);
+  const [programsReady, setProgramsReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      getServices()
+        .then((svcs) => {
+          if (active) setServices(svcs);
+        })
+        .catch(() => {
+          if (active) setServices([]);
+        }),
+      getProgramsContent()
+        .then((pc) => {
+          if (active) {
+            setTrainingPrograms(pc.trainingPrograms);
+            setPilotCosts(pc.pilotCosts);
+            setStemProjectHighlights(pc.stemProjectHighlights);
+            setProgramsReady(true);
+          }
+        })
+        .catch(() => {
+          if (active) setProgramsReady(true);
+        }),
+    ]).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Reset pagination whenever the category changes — during render, so the
+  // grid never shows a page that the new category does not have.
+  const [lastCategory, setLastCategory] = useState(category);
+  if (lastCategory !== category) {
+    setLastCategory(category);
+    setPage(1);
+  }
+
+  const categories = useMemo(
+    () => [
+      "All",
+      ...Array.from(new Set(services.map((s) => s.category).filter(Boolean))),
+    ],
+    [services],
+  );
+
+  const visible = useMemo(() => {
+    return services.filter((s) => {
+      const matchesCategory = category === "All" || s.category === category;
+      return matchesCategory && s.active !== false;
+    });
+  }, [services, category]);
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
+  const pilotTotal = pilotTotalLabel(pilotCosts);
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-surface">
+        <ActivityIndicator size="large" color="#1e3a8a" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+    >
+      <View className="mb-3">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Services
+        </Text>
+        <Text className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">
+          What GENUM does
+        </Text>
+
+        {/* Category filter (derived from the DB rows) */}
+        {categories.length > 1 && (
+          <View className="mt-2">
+            <CategoryDropdown
+              value={category}
+              options={categories}
+              onChange={setCategory}
+              placeholder="All categories"
+              title="Filter by category"
+            />
+          </View>
+        )}
+
+        {visible.length > 0 && (
+          <Text className="mt-3 text-xs font-bold uppercase tracking-wide text-muted">
+            {visible.length} service{visible.length === 1 ? "" : "s"}
+          </Text>
+        )}
+      </View>
+
+      {/* Services grid — mirrors website ServicesGrid /app/services */}
+      {visible.length > 0 ? (
+        <View className="mt-4">
+          {pageItems.map((item) => (
+            // One card implementation, shared with the admin's preview.
+            <ServiceCard key={item.id} service={item} />
+          ))}
+        </View>
+      ) : (
+        // 2026-11-13: an emptied service list and an empty category are
+        // different problems — the old copy blamed the filter for both.
+        <View className="mt-4 rounded-2xl border border-line bg-card p-5">
+          <Feather name="inbox" size={24} color="#94a3b8" />
+          <Text className="mt-3 text-sm leading-6 text-muted">
+            {services.length === 0
+              ? "The service list is being updated. Tell us what you need and we will price it directly."
+              : `No services in ${category} yet.`}
+          </Text>
+          {services.length === 0 ? (
+            <Pressable
+              onPress={() => navigation.push("Contact")}
+              className="mt-3 self-start rounded-full border border-navy px-4 py-2 active:opacity-70"
+            >
+              <Text className="text-xs font-black text-navy">Message us</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => setCategory("All")}
+              className="mt-3 self-start rounded-full border border-navy px-4 py-2 active:opacity-70"
+            >
+              <Text className="text-xs font-black text-navy">
+                Show all {services.length} services
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* Pagination — mirrors website numbered page buttons */}
+      <View className="mt-4">
+        <PagePager page={page} totalPages={totalPages} onPage={setPage} />
+      </View>
+
+      {/* Learning streams — mirrors website /services #academy section */}
+      <View className="mt-10 border-t border-line pt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Robotic Academy · Kathmandu
+        </Text>
+        <Text className="mt-2 font-display text-xl font-bold text-ink">
+          Learning streams
+        </Text>
+        <Text className="mt-1 text-sm leading-6 text-muted">
+          {LEARNING_STREAMS.length} lab tracks, each backed by a real kit, a
+          project in the workshop, and a Control Panel window learners can
+          drive.
+        </Text>
+        <View className="mt-4 flex-row flex-wrap gap-2">
+          {LEARNING_STREAMS.map((stream) => (
+            <Text
+              key={stream}
+              className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-navy"
+            >
+              {stream}
+            </Text>
+          ))}
+        </View>
+      </View>
+
+      {/* Training programs — mirrors website /services training section */}
+      {programsReady && trainingPrograms.length > 0 && (
+        <View className="mt-10 border-t border-line pt-6">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Training programs
+          </Text>
+          <View className="mt-4 space-y-3">
+            {trainingPrograms.map((prog) => (
+              <View
+                key={prog.title}
+                className="rounded-2xl border border-line bg-card p-4"
+              >
+                {/* The title owns its own full-width line. Side-by-side with
+                    the duration pill it was squeezed to "K–5 Ro…" on a 390 px
+                    phone — the pill can be long ("13-week pilot + months 4–12
+                    support") and left the name unreadable. */}
+                <Text
+                  numberOfLines={2}
+                  className="font-display text-lg font-bold leading-snug text-ink"
+                >
+                  {prog.title}
+                </Text>
+                <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                  <Text className="text-xs font-black uppercase tracking-wide text-gold">
+                    {prog.audience}
+                  </Text>
+                  <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">
+                    {prog.duration}
+                  </Text>
+                </View>
+                <Text className="mt-2 text-sm leading-6 text-muted">
+                  {prog.description}
+                </Text>
+                <Text className="mt-2 text-xs leading-5 text-muted">
+                  <Text className="font-bold text-ink">Outcome:</Text>{" "}
+                  {prog.outcome}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Illustrative pilot costing — mirrors website /services pilot section */}
+      {programsReady && pilotCosts.length > 0 && (
+        <View className="mt-10 border-t border-line pt-6">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            Illustrative pilot costing
+          </Text>
+          <Text className="mt-1 text-sm leading-6 text-muted">
+            Three classrooms, 30 kits, delivery and a teacher workshop —
+            confirmed after scope, taxes and local procurement review.
+          </Text>
+          <Text className="mt-3 font-display text-2xl font-bold text-navy">
+            {pilotTotal ? `NPR ${pilotTotal}` : "Priced per proposal"}
+          </Text>
+          {pilotTotal ? (
+            <Text className="mt-1 text-xs font-normal text-muted">
+              illustrative total
+            </Text>
+          ) : null}
+          <View className="mt-4">
+            {pilotCosts.map(([item, cost, note]) => (
+              <View
+                key={item}
+                className="flex-row items-center justify-between border-b border-line py-2"
+              >
+                <Text
+                  numberOfLines={1}
+                  className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink"
+                >
+                  {item}
+                  <Text className="text-xs font-normal text-muted">
+                    {" "}
+                    — {note}
+                  </Text>
+                </Text>
+                <Text className="shrink-0 font-display text-base font-bold text-navy">
+                  {cost}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Curriculum highlights — mirrors website /services curriculum section */}
+      {programsReady && Object.keys(stemProjectHighlights).length > 0 && (
+        <View className="mt-10 border-t border-line pt-6">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            100+ project curriculum
+          </Text>
+          <View className="mt-4 space-y-3">
+            {Object.entries(stemProjectHighlights).map(([ages, projects]) => (
+              <View
+                key={ages}
+                className="rounded-2xl border border-line bg-card p-4"
+              >
+                <Text className="text-xs font-black uppercase tracking-widest text-gold">
+                  {ages}
+                </Text>
+                <View className="mt-2 flex-row flex-wrap gap-x-4 gap-y-1">
+                  {projects.map((p) => (
+                    <Text key={p} className="text-sm leading-6 text-muted">
+                      • {p}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}

@@ -1,0 +1,151 @@
+{
+  "expo": {
+    "name": "GENUM Solutions",
+    "slug": "genum-solutions",
+    "scheme": "genumsolutions",
+    "version": "3.4.3",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.genumsolutions.app",
+      "versionCode": 67,
+      "permissions": [
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET",
+        "REQUEST_INSTALL_PACKAGES"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#FDFEFD",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Inter",
+                "fontDefinitions": [
+                  {
+                    "path": "node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+                    "weight": 500
+                  },
+                  {
+                    "path": "node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+                    "weight": 600
+                  },
+                  {
+                    "path": "node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+                    "weight": 700
+                  },
+                  {
+                    "path": "node_modules/@expo-google-fonts/inter/900Black/Inter_900Black.ttf",
+                    "weight": 900
+                  }
+                ]
+              },
+              {
+                "fontFamily": "Sora",
+                "fontDefinitions": [
+                  {
+                    "path": "node_modules/@expo-google-fonts/sora/400Regular/Sora_400Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "node_modules/@expo-google-fonts/sora/600SemiBold/Sora_600SemiBold.ttf",
+                    "weight": 600
+                  },
+                  {
+                    "path": "node_modules/@expo-google-fonts/sora/700Bold/Sora_700Bold.ttf",
+                    "weight": 700
+                  }
+                ]
+              }
+            ]
+          },
+          "ios": {
+            "fonts": [
+              "node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+              "node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+              "node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+              "node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+              "node_modules/@expo-google-fonts/inter/900Black/Inter_900Black.ttf",
+              "node_modules/@expo-google-fonts/sora/400Regular/Sora_400Regular.ttf",
+              "node_modules/@expo-google-fonts/sora/600SemiBold/Sora_600SemiBold.ttf",
+              "node_modules/@expo-google-fonts/sora/700Bold/Sora_700Bold.ttf"
+            ]
+          }
+        }
+      ],
+      "expo-web-browser",
+      "expo-secure-store",
+      "./plugins/with-secure-store-backup.js",
+      "./plugins/with-install-permission.js",
+      "./plugins/with-car-network.js",
+      "./plugins/with-release-signing.js",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1e3a8a",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "androidClientId": "689924722337-g0k2gigtu2vq1e340f5ms92v6vk1m2kt.apps.googleusercontent.com",
+          "iosUrlScheme": "com.googleusercontent.apps.689924722337-g0k2gigtu2vq1e340f5ms92v6vk1m2kt"
+        }
+      ],
+      [
+        "@sfourdrinier/react-native-ble-plx",
+        {
+          "bluetoothAlwaysPermission": "Allow GENUM Solutions to connect to your robot car over Bluetooth so you can drive it from the app."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f09b820e-9318-4267-9651-447ee6ffcd3d"
+      },
+      "supabase": {
+        "url": "https://jxgmbodzkmxanuwfaqxo.supabase.co",
+        "anon": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4Z21ib2R6a214YW51d2ZhcXhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQwNDAxNjEsImV4cCI6MjEwOTYxNjE2MX0.SiqX3TVTqsc0Nh4D-50f-y-jquLfdm1q7HdYYraweFY"
+      }
+    },
+    "owner": "genumsolutions",
+    "updates": {
+      "url": "https://u.expo.dev/f09b820e-9318-4267-9651-447ee6ffcd3d",
+      "fallbackToCacheTimeout": 300,
+      "checkAutomatically": "ON_LOAD",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

@@ -1,0 +1,1930 @@
+// =====================================================================
+// adminService - native admin operations via Supabase Edge Functions
+// and direct Supabase reads/writes (RLS: admin-only).
+//
+// NOTE (v1.5.8 Phase D/E): Supabase returns snake_case columns. Every
+// read here maps rows to the camelCase types below, and every write maps
+// back to snake_case so edited rows round-trip without losing fields
+// (previously products were used unmapped: `product.productType` was
+// always undefined, which emptied the ProjectPackages tab).
+// =====================================================================
+import { supabase } from "../config/supabase";
+import { clampGallery } from "../lib/imageLimits";
+import {
+  defaultProjectPricing,
+  type ProjectPricing,
+} from "../lib/project-pricing";
+import { mapProjectPricingRow } from "./projectPricingService";
+
+export type AdminOrder = {
+  id: string;
+  items: { name: string; quantity: number; price: number }[];
+  totalNpr: number;
+  status: string;
+  provider: string;
+  customerName: string;
+  email: string;
+  address: string;
+  createdAt: string;
+};
+
+export type AdminProduct = {
+  id: string;
+  name: string;
+  category: string;
+  /** U-44: the Projects-page grouping column (products.project_category). */
+  projectCategory: string | null;
+  price: number;
+  priceLabel: string;
+  sku: string;
+  productType: string;
+  inventoryType: string | null;
+  note: string;
+  description: string;
+  specs: string[];
+  stock: number;
+  delivery: string;
+  image: string;
+  badge: string | null;
+  active: boolean;
+  sortOrder: number;
+  // Project-package fields (only meaningful for project_type rows)
+  projectOverview: string;
+  objectives: string[];
+  materialsRequired: string[];
+  learningOutcomes: string[];
+  buildSteps: string[];
+  controlMethods: string[];
+  prerequisites: string[];
+  deliverables: string[];
+  estimatedDuration: string;
+  sourceFolder: string;
+  documentationUrl: string;
+  videoUrl: string;
+  maintenanceNotes: string;
+  audience: string;
+  difficulty: string;
+  warranty: string;
+  gallery: string[];
+  importMeta: Record<string, unknown>;
+};
+
+export type AdminService = {
+  id: string;
+  name: string;
+  category: string;
+  priceLabel: string;
+  description: string;
+  tag: string;
+  sortOrder: number;
+  active: boolean;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  address: string;
+  role: string;
+  tier: "free" | "pro";
+  lastSeenAt: string | null;
+  createdAt: string | null;
+  car_profiles?: Array<{
+    profile_key: string;
+    car_name: string;
+    unique_id: string;
+    settings: Record<string, unknown>;
+  }>;
+  robot_user_settings?: Array<{
+    robot_code: string;
+    telemetry_channel: string;
+    parameters: Record<string, unknown>;
+    profile_key: string;
+  }>;
+};
+
+export type AdminMessage = {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  status: string;
+  createdAt: string;
+};
+
+/** One newsletter opt-in, as the website's Messages panel lists it. */
+export type AdminSubscriber = {
+  id: string;
+  email: string;
+  source: string;
+  status: string;
+  createdAt: string;
+};
+
+export type DashboardStats = {
+  totalUsers: number;
+  newUsersToday: number;
+  totalCartItems: number;
+  activeCarts: number;
+  totalOrders: number;
+  pendingOrders: number;
+  paidOrders: number;
+  fulfilledOrders: number;
+  cancelledOrders: number;
+  revenue: number;
+  revenueToday: number;
+  totalProducts: number;
+  lowStockProducts: number;
+  totalMessages: number;
+  unreadMessages: number;
+  totalTransactions: number;
+  succeededTransactions: number;
+};
+
+export type ActivityEntry = {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+};
+
+// --- Row mappers (snake_case DB -> camelCase types) ------------------
+
+type RawRow = Record<string, unknown>;
+
+/** Normalize a jsonb/text array column value to a string[]. */
+export function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return (value as unknown[]).map(String);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      // ignore — fall through to the single-element fallback below
+    }
+    return [value];
+  }
+  return [];
+}
+
+export function mapProductRow(row: RawRow): AdminProduct {
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    category: String(row.category ?? ""),
+    price: Number(row.price ?? 0),
+    priceLabel: String(row.price_label ?? ""),
+    sku: String(row.sku ?? ""),
+    productType: String(row.product_type ?? "Retail kit"),
+    projectCategory:
+      row.project_category != null ? String(row.project_category) : null,
+    inventoryType:
+      row.inventory_type != null ? String(row.inventory_type) : null,
+    note: String(row.note ?? ""),
+    description: String(row.description ?? ""),
+    specs: toStringArray(row.specs),
+    stock: Number(row.stock ?? 0),
+    delivery: String(row.delivery ?? ""),
+    image: String(row.image_url ?? ""),
+    badge: row.badge != null ? String(row.badge) : null,
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+    projectOverview: String(row.project_overview ?? ""),
+    objectives: toStringArray(row.objectives),
+    materialsRequired: toStringArray(row.materials_required),
+    learningOutcomes: toStringArray(row.learning_outcomes),
+    buildSteps: toStringArray(row.build_steps),
+    controlMethods: toStringArray(row.control_methods),
+    prerequisites: toStringArray(row.prerequisites),
+    deliverables: toStringArray(row.deliverables),
+    estimatedDuration: String(row.estimated_duration ?? ""),
+    sourceFolder: String(row.source_folder ?? ""),
+    documentationUrl: String(row.documentation_url ?? ""),
+    videoUrl: String(row.video_url ?? ""),
+    maintenanceNotes: String(row.maintenance_notes ?? ""),
+    audience: String(row.audience ?? ""),
+    difficulty: String(row.difficulty ?? "Beginner"),
+    warranty: String(row.warranty ?? ""),
+    gallery: toStringArray(row.gallery),
+    importMeta:
+      row.import_meta && typeof row.import_meta === "object"
+        ? (row.import_meta as Record<string, unknown>)
+        : {},
+  };
+}
+
+/** camelCase product -> snake_case payload for the `products` table. */
+export function toProductRow(product: AdminProduct): RawRow {
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category,
+    price: product.price,
+    price_label: product.priceLabel,
+    sku: product.sku,
+    product_type: product.productType,
+    project_category: product.projectCategory ?? null,
+    inventory_type: product.inventoryType,
+    note: product.note,
+    description: product.description,
+    specs: product.specs,
+    stock: product.stock,
+    delivery: product.delivery,
+    image_url: product.image,
+    badge: product.badge,
+    active: product.active !== false,
+    sort_order: product.sortOrder,
+    project_overview: product.projectOverview,
+    objectives: product.objectives,
+    materials_required: product.materialsRequired,
+    learning_outcomes: product.learningOutcomes,
+    build_steps: product.buildSteps,
+    control_methods: product.controlMethods,
+    prerequisites: product.prerequisites,
+    deliverables: product.deliverables,
+    estimated_duration: product.estimatedDuration,
+    source_folder: product.sourceFolder,
+    documentation_url: product.documentationUrl,
+    video_url: product.videoUrl,
+    maintenance_notes: product.maintenanceNotes,
+    audience: product.audience,
+    difficulty: product.difficulty,
+    warranty: product.warranty,
+    // Same per-item budget as the website (src/lib/imageLimits.ts): the DB
+    // must never receive more pictures than the free-tier Storage budget
+    // expects, whatever the editor posted.
+    gallery: clampGallery(product.gallery),
+    import_meta: product.importMeta,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function mapServiceRow(row: RawRow): AdminService {
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    category: String(row.category ?? ""),
+    priceLabel: String(row.price_label ?? ""),
+    description: String(row.description ?? ""),
+    tag: String(row.tag ?? ""),
+    sortOrder: Number(row.sort_order ?? 0),
+    active: row.active !== false,
+  };
+}
+
+export function toServiceRow(service: AdminService): RawRow {
+  return {
+    id: service.id,
+    name: service.name,
+    category: service.category,
+    price_label: service.priceLabel,
+    description: service.description,
+    tag: service.tag,
+    sort_order: service.sortOrder,
+    active: service.active !== false,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function mapOrderRow(row: RawRow): AdminOrder {
+  return {
+    id: String(row.id ?? ""),
+    items: Array.isArray(row.items) ? (row.items as AdminOrder["items"]) : [],
+    totalNpr: Number(row.total_npr ?? 0),
+    status: String(row.status ?? "pending"),
+    provider: String(row.provider ?? ""),
+    customerName: String(row.customer_name ?? ""),
+    email: String(row.email ?? ""),
+    address: String(row.address ?? ""),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export function mapMessageRow(row: RawRow): AdminMessage {
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    email: String(row.email ?? ""),
+    message: String(row.message ?? ""),
+    status: String(row.status ?? "new"),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export function mapSubscriberRow(row: RawRow): AdminSubscriber {
+  return {
+    id: String(row.id ?? ""),
+    email: String(row.email ?? ""),
+    source: String(row.source ?? ""),
+    status: String(row.status ?? "subscribed"),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export function mapActivityRow(row: RawRow): ActivityEntry {
+  return {
+    id: String(row.id ?? ""),
+    userId: row.user_id != null ? String(row.user_id) : null,
+    action: String(row.action ?? ""),
+    entityType: String(row.entity_type ?? ""),
+    entityId: row.entity_id != null ? String(row.entity_id) : null,
+    details: (row.details as Record<string, unknown>) ?? {},
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export function mapUserRow(row: RawRow): AdminUser {
+  return {
+    id: String(row.id ?? ""),
+    email: String(row.email ?? ""),
+    name: String(row.name ?? ""),
+    phone: String(row.phone ?? ""),
+    address: String(row.address ?? ""),
+    role: String(row.role ?? "customer"),
+    tier: row.tier === "pro" ? "pro" : "free",
+    lastSeenAt: typeof row.last_seen_at === "string" ? row.last_seen_at : null,
+    createdAt: row.created_at != null ? String(row.created_at) : null,
+  };
+}
+
+// --- Orders ---
+
+export async function listAdminOrders(
+  page = 1,
+  limit = 20,
+  status?: string,
+  query?: string,
+): Promise<{
+  orders: AdminOrder[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  let q = supabase
+    .from("orders")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (status) q = q.eq("status", status);
+  if (query) q = q.or(`email.ilike.%${query}%,customer_name.ilike.%${query}%`);
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return {
+    orders: (data ?? []).map(mapOrderRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+// C1 (2026-09-23): transition-aware so stock follows the order lifecycle,
+// mirroring the website's PATCH /api/admin/orders (lib/orders.ts):
+//   pending -> paid/fulfilled   : atomic mark_order_paid (decrement, row-locked)
+//   paid/fulfilled -> cancelled : guarded restore_order_stock (no double restore)
+//   paid -> fulfilled           : no stock change (decremented at pay)
+//   cancelled -> paid/fulfilled : re-decrement (order reinstated)
+// The RPCs are SECURITY DEFINER and re-verify staff+ server-side; a stock
+// hiccup is logged and never blocks the status flip.
+export async function updateOrderStatus(orderId: string, status: string) {
+  const next = String(status || "");
+  const { data: existing } = await supabase
+    .from("orders")
+    .select("id, status")
+    .eq("id", orderId)
+    .maybeSingle();
+  const pre = typeof existing?.status === "string" ? existing.status : null;
+  if (pre && pre !== next) {
+    try {
+      if (pre === "pending" && (next === "paid" || next === "fulfilled")) {
+        await supabase.rpc("mark_order_paid", { order_id: orderId });
+      } else if (
+        (pre === "paid" || pre === "fulfilled") &&
+        next === "cancelled"
+      ) {
+        await supabase.rpc("restore_order_stock", {
+          order_id: orderId,
+          expect_status: pre,
+        });
+      } else if (
+        pre === "cancelled" &&
+        (next === "paid" || next === "fulfilled")
+      ) {
+        await supabase.rpc("mark_order_paid", { order_id: orderId });
+      }
+    } catch (stockError) {
+      console.error("stock RPC failed during order status change", stockError);
+    }
+  }
+  const { data, error } = await supabase
+    .from("orders")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// --- Products --------------------------------------------------------
+// Product writes MUST go through the `admin-products` edge function: the
+// function re-verifies the caller's role server-side (staff+; delete = admin+)
+// and writes with the service role, so inserts can't be silently rejected by
+// RLS the way the old raw-fetch + direct anon-key fallback was (that path
+// returned 404 because the function wasn't deployed and swallowed the error —
+// the "saved product never showed" bug). functions.invoke attaches the user's
+// JWT automatically and surfaces real errors to the UI.
+
+export async function listAdminProducts(): Promise<AdminProduct[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapProductRow);
+}
+
+export async function upsertAdminProduct(product: AdminProduct) {
+  const { data, error } = await supabase.functions.invoke("admin-products", {
+    body: { action: "create", product: toProductRow(product) },
+  });
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not save the product.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+export async function deleteAdminProduct(id: string) {
+  const { data, error } = await supabase.functions.invoke("admin-products", {
+    body: { action: "delete", id },
+  });
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not delete the product.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+// --- Import by link (shared `link-import` edge function) -------------
+// Both clients call the SAME edge function, so a pasted link imports the
+// same way on the website admin and this app (same extraction, image
+// upload to `product-images`, products upsert with documentation_url).
+
+export type LinkPreview = {
+  found: boolean;
+  provider: string;
+  sourceUrl: string;
+  title: string;
+  description: string;
+  tags: string[];
+  images: string[];
+  categoryHint: string;
+  specs?: string[];
+  priceLabel?: string;
+  extra?: Record<string, unknown>;
+};
+
+async function invokeLinkImport(body: {
+  action: string;
+  url: string;
+  product?: Record<string, unknown>;
+}) {
+  // U-39 (2026-09-26): pre-flight session check. With persistSession:false the
+  // in-memory access token can be stale after the app resumes in the
+  // background past the token TTL; getSession() makes the client validate and
+  // auto-refresh it before the JWT sails out to the edge fn (otherwise the
+  // import 401s as "Sign in to import products" while the admin UI looks
+  // perfectly signed-in).
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  const { data, error } = await supabase.functions.invoke("link-import", {
+    body,
+  });
+  if (error) {
+    // U-39: supabase-js v2 wraps non-2xx responses in FunctionsHttpError where
+    // `error.context` is the raw Response (NOT a {message} object). Read the
+    // body to surface the edge fn's real reason (e.g. "Only staff members can
+    // import products.") instead of a generic fallback.
+    let message = "";
+    const ctx = (error as unknown as { context?: unknown }).context;
+    if (ctx && typeof (ctx as Response).json === "function") {
+      try {
+        const bodyJson = (await (ctx as Response).json()) as Record<
+          string,
+          unknown
+        >;
+        message = String(bodyJson.error ?? bodyJson.message ?? "");
+      } catch {
+        /* body unreadable — fall through */
+      }
+    }
+    if (!message) message = error instanceof Error ? error.message : "";
+    throw new Error(message || "Could not import from that link.");
+  }
+  return data as Record<string, unknown>;
+}
+
+export async function previewLinkImport(url: string): Promise<LinkPreview> {
+  const data = await invokeLinkImport({ action: "preview", url });
+  return (
+    (data.preview as LinkPreview) ?? {
+      found: false,
+      provider: "generic",
+      sourceUrl: url,
+      title: "",
+      description: "",
+      tags: [],
+      images: [],
+      categoryHint: "",
+    }
+  );
+}
+
+export async function createLinkImport(
+  url: string,
+  product: Partial<AdminProduct>,
+): Promise<AdminProduct> {
+  const data = await invokeLinkImport({
+    action: "create",
+    url,
+    product: {
+      name: product.name ?? "",
+      category: product.category ?? "",
+      // U-44: destination fields — the edge persists product_type and
+      // project_category from these so a Projects-destined import creates a
+      // real 'Project package' row (never a stranded Retail kit).
+      productType: product.productType ?? "Retail kit",
+      projectCategory: product.projectCategory ?? null,
+      description: product.description ?? "",
+      price: Number(product.price) || 0,
+      priceLabel: product.priceLabel || "Request quote",
+      stock: Number(product.stock) || 0,
+      specs: Array.isArray(product.specs) ? product.specs : [],
+      // U-23 (2026-09-24): send the previewed gallery so the saved import
+      // keeps every extracted photo ("last link sticks").
+      image: product.image || "",
+      gallery: Array.isArray(product.gallery)
+        ? product.gallery.slice(0, 8)
+        : [],
+    },
+  });
+  return mapProductRow((data.product as RawRow) ?? {});
+}
+
+// --- Services ---
+// Service writes MUST go through the `admin-services` edge function, exactly
+// like products: the function re-verifies the caller's role server-side
+// (staff+ for write, admin+ for delete) and writes with the service role.
+// The previous raw-fetch + direct anon-key fallback hit an UNGATED function
+// (anyone could write services) and, before that, silently dropped failures
+// under RLS. functions.invoke attaches the user's JWT automatically and
+// surfaces real errors to the UI.
+
+export async function listAdminServices(): Promise<AdminService[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapServiceRow);
+}
+
+export async function upsertAdminService(service: AdminService) {
+  const { data, error } = await supabase.functions.invoke("admin-services", {
+    body: { action: "create", service: toServiceRow(service) },
+  });
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not save the service.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+export async function deleteAdminService(id: string) {
+  const { data, error } = await supabase.functions.invoke("admin-services", {
+    body: { action: "delete", id },
+  });
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not delete the service.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+// --- Project ↔ component links (U-45 Phase 2, 2026-09-27) -------------
+// The website's /api/admin/project-components gate reads the WEBSITE's
+// session cookie, so an app JWT cannot authorize on it. Reads go direct to
+// the join table (RLS is public-read); the write rides the staff-gated
+// SECURITY DEFINER RPC save_project_components — the app's established
+// pattern (mark_order_paid, admin_user_last_seen). The website PUT and this
+// RPC share the replace-all contract (validate + clamp 1..99, drop dupes).
+
+export type ProjectComponentLink = { productId: string; quantity: number };
+
+export async function listProjectComponents(
+  projectId: string,
+): Promise<ProjectComponentLink[]> {
+  const { data, error } = await supabase
+    .from("project_components")
+    .select("product_id, quantity, sort_order")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    productId: String(row.product_id ?? ""),
+    quantity: Number(row.quantity ?? 1),
+  }));
+}
+
+/** PUBLIC reverse lookup: which ACTIVE projects use this component. */
+export async function listProjectUsage(
+  productId: string,
+): Promise<{ projectId: string }[]> {
+  const { data, error } = await supabase
+    .from("project_components")
+    .select(
+      "project_id, products!project_components_project_id_fkey(product_type, active)",
+    )
+    .eq("product_id", productId);
+  if (error) throw error;
+  type UsageRow = {
+    project_id: string;
+    products: { product_type: string; active: boolean }[] | null;
+  };
+  return ((data ?? []) as unknown as UsageRow[])
+    .filter(
+      (row) =>
+        row.products?.[0]?.product_type === "Project package" &&
+        row.products?.[0]?.active !== false,
+    )
+    .map((row) => ({ projectId: row.project_id }));
+}
+
+/**
+ * Staff+ gated replace-all save (same contract as the website's PUT). Sends
+ * the FULL list; the RPC validates, clamps, drops dupes/unknown ids, and
+ * returns the saved count.
+ */
+export async function saveProjectComponents(
+  projectId: string,
+  components: ProjectComponentLink[],
+): Promise<number> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  const { data, error } = await supabase.rpc("save_project_components", {
+    p_project_id: projectId,
+    p_components: components.map((c) => ({
+      productId: c.productId,
+      quantity: Math.max(1, Math.min(99, Math.round(Number(c.quantity) || 1))),
+    })),
+  });
+  if (error) {
+    const message =
+      (error as unknown as { message?: string })?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not save component links.";
+    throw new Error(message);
+  }
+  return Number(data ?? 0);
+}
+
+// --- Project pricing (2026-11-13) -------------------------------------
+// The website's /api/admin/project-pricing gate reads the WEBSITE session
+// cookie, so an app JWT cannot authorize on it. Like the print studio, the
+// app writes the row directly with the anon key + the signed-in user's JWT:
+// the table's staff+ read/write policies enforce the role server-side (RLS).
+// Approve/withdraw is restricted to admins in the UI, mirroring the website
+// route's admin check. Defaults stay draft until an admin approves.
+
+/** snake_case row for the DB (clamped exactly like the website store). */
+function toProjectPricingRow(pricing: ProjectPricing) {
+  return {
+    id: pricing.id,
+    package_base_charge: Math.max(
+      0,
+      Math.round(Number(pricing.packageBaseCharge) || 0),
+    ),
+    component_markup_percent: Math.max(
+      0,
+      Math.min(500, Math.round(Number(pricing.componentMarkupPercent) || 0)),
+    ),
+    extras: pricing.extras
+      .filter((extra) => extra && typeof extra.name === "string")
+      .map((extra) => ({
+        id: extra.id || extra.name,
+        name: extra.name.slice(0, 60),
+        amount: Math.max(0, Math.round(Number(extra.amount) || 0)),
+      }))
+      .slice(0, 20),
+    bulk_tiers: pricing.bulkTiers
+      .filter((tier) => tier.minQty > 0)
+      .map((tier) => ({
+        minQty: Math.max(1, Math.round(Number(tier.minQty) || 1)),
+        discountPercent: Math.min(
+          90,
+          Math.max(0, Math.round(Number(tier.discountPercent) || 0)),
+        ),
+      }))
+      .slice(0, 10),
+    minimum_order: Math.max(0, Math.round(Number(pricing.minimumOrder) || 0)),
+    price_status: pricing.priceStatus === "approved" ? "approved" : "draft",
+    price_approved_at: pricing.priceApprovedAt,
+    price_approved_by: pricing.priceApprovedBy,
+    note: pricing.note.slice(0, 300),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/** Read one project's pricing (staff+ sees drafts too). */
+export async function getAdminProjectPricing(
+  projectId: string,
+): Promise<ProjectPricing> {
+  const { data, error } = await supabase
+    .from("project_pricing")
+    .select("*")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) throw error;
+  return (
+    mapProjectPricingRow((data as Record<string, unknown> | null) ?? null) ?? {
+      ...defaultProjectPricing,
+      id: projectId,
+    }
+  );
+}
+
+/** Save the pricing rules (staff+). Keeps the approval state the row loaded. */
+export async function saveAdminProjectPricing(
+  pricing: ProjectPricing,
+): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  const { error } = await supabase
+    .from("project_pricing")
+    .upsert(toProjectPricingRow(pricing));
+  if (error) {
+    throw new Error(
+      (error as unknown as { message?: string })?.message ||
+        "Could not save the project pricing.",
+    );
+  }
+}
+
+/** Approve or withdraw a project's rates (admins only in the UI). */
+export async function setAdminProjectPricingApproval(
+  projectId: string,
+  approved: boolean,
+  approvedBy: string,
+): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new Error("Your session expired — sign in again, then retry.");
+  }
+  // Upsert, not update: a package created after the seed has no pricing row
+  // yet, and approving it must not silently affect zero rows. Every other
+  // column has a DB default, so the insert carries only the approval fields.
+  const { error } = await supabase.from("project_pricing").upsert({
+    id: projectId,
+    price_status: approved ? "approved" : "draft",
+    price_approved_at: approved ? new Date().toISOString() : null,
+    price_approved_by: approved ? approvedBy : "",
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    throw new Error(
+      (error as unknown as { message?: string })?.message ||
+        "Could not update the pricing status.",
+    );
+  }
+}
+
+// --- Users ---
+
+export async function listAdminUsers(
+  page = 1,
+  limit = 20,
+  query?: string,
+): Promise<{
+  users: AdminUser[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  let q = supabase
+    .from("profiles")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (query) q = q.or(`email.ilike.%${query}%,name.ilike.%${query}%`);
+  const { data, error, count } = await q;
+  if (error) throw error;
+  const users = (data ?? []).map(mapUserRow);
+  // Website-parity "Last seen": auth.users is invisible to the anon key, so
+  // read it per-user through the admin-gated SECURITY DEFINER function.
+  await Promise.all(
+    users.map(async (user) => {
+      const { data: seen, error: fnError } = await supabase.rpc(
+        "admin_user_last_seen",
+        { target_user_id: user.id },
+      );
+      if (!fnError && typeof seen === "string") user.lastSeenAt = seen;
+    }),
+  );
+  return {
+    users,
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+// Role + tier changes MUST go through the admin-set-role edge function: the DB
+// triggers protect_role_column / protect_tier_column only let the service role
+// change profiles.role / profiles.tier, so a direct anon-key update is REJECTED
+// (the old direct call silently did nothing — revoke never applied). The edge
+// function verifies the caller is an admin, blocks self-demotion, and logs to
+// activity_log. Send whichever field changed; the function accepts either.
+export async function toggleAdminRole(
+  userId: string,
+  role: "customer" | "staff" | "admin",
+) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Sign in to change roles.");
+  const { data, error } = await supabase.functions.invoke("admin-set-role", {
+    body: { userId, role },
+  });
+  if (error) {
+    // functions.invoke surfaces non-2xx as FunctionsHttpError; the function's
+    // JSON error message is the useful part for the admin UI.
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not update the role.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+// Tier flips ride the SAME edge function (one deploy, one audit vocabulary).
+export async function setUserTier(userId: string, tier: "free" | "pro") {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Sign in to change tiers.");
+  const { data, error } = await supabase.functions.invoke("admin-set-role", {
+    body: { userId, tier },
+  });
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not update the tier.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+// --- Delete user (owner-only) ----------------------------------------------
+// auth.users is invisible to the anon key and deletes demand the service role,
+// so this mirrors the website's DELETE /api/admin/users through an edge
+// function. The function re-checks the caller is role 'owner' server-side.
+export async function deleteAdminUser(userId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Sign in to delete users.");
+  const { data, error } = await supabase.functions.invoke("admin-delete-user", {
+    body: { userId },
+  });
+  if (error) {
+    const message =
+      (error as unknown as { context?: { message?: string } })?.context
+        ?.message ||
+      (error instanceof Error ? error.message : "") ||
+      "Could not delete the user.";
+    throw new Error(message);
+  }
+  return data;
+}
+
+// --- Admin per-user robot settings (robot_user_settings) -------------------
+// RLS: staff and above (is_staff()) may read/write every user's robot rows;
+// deletes require admin or above (is_admin()). These run on the signed-in
+// user's own session — same contract as the website admin panel.
+
+export type AdminRobotSetting = {
+  robotId: string;
+  robotName: string;
+  settings: Record<string, string | number | boolean | string[]>;
+  updatedAt: string;
+};
+
+export async function listUserRobotSettings(
+  userId: string,
+): Promise<AdminRobotSetting[]> {
+  const { data, error } = await supabase
+    .from("robot_user_settings")
+    .select("robot_id, robot_name, settings, updated_at")
+    .eq("user_id", userId)
+    .order("robot_name", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    robotId: row.robot_id as string,
+    robotName: (row.robot_name as string) || "",
+    settings: (row.settings as AdminRobotSetting["settings"]) || {},
+    updatedAt: row.updated_at as string,
+  }));
+}
+
+export async function upsertUserRobotSettings(
+  userId: string,
+  robotId: string,
+  robotName: string,
+  settings: AdminRobotSetting["settings"],
+) {
+  const { error } = await supabase.from("robot_user_settings").upsert(
+    {
+      user_id: userId,
+      robot_id: robotId,
+      robot_name: robotName,
+      settings,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,robot_id" },
+  );
+  if (error) throw error;
+}
+
+export async function deleteUserRobotSetting(userId: string, robotId: string) {
+  const { error } = await supabase
+    .from("robot_user_settings")
+    .delete()
+    .eq("user_id", userId)
+    .eq("robot_id", robotId);
+  if (error) throw error;
+}
+
+// --- Project (car) profiles ------------------------------------------------
+// car_profiles rows: the per-car / per-project profiles the build screen
+// writes and the website's CarProfilesPanel also reads. Staff can read every
+// user's rows (RLS "staff read car profiles"); writes need admin+, matching
+// the website's /api/admin/users car-profile actions.
+
+export type AdminCarProfile = {
+  id: string;
+  profileKey: string;
+  carName: string;
+  uniqueId: string;
+  settings: Record<string, unknown>;
+  updatedAt: string;
+};
+
+export async function listUserCarProfiles(
+  userId: string,
+): Promise<AdminCarProfile[]> {
+  const { data, error } = await supabase
+    .from("car_profiles")
+    .select("id, profile_key, car_name, unique_id, settings, updated_at")
+    .eq("user_id", userId)
+    .order("car_name", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: String(row.id ?? ""),
+    profileKey: String(row.profile_key ?? ""),
+    carName: String(row.car_name ?? ""),
+    uniqueId: String(row.unique_id ?? ""),
+    settings: (row.settings as Record<string, unknown>) || {},
+    updatedAt: String(row.updated_at ?? ""),
+  }));
+}
+
+export async function upsertAdminCarProfile(
+  userId: string,
+  profileKey: string,
+  carName: string,
+  settings: Record<string, unknown>,
+) {
+  const { error } = await supabase.from("car_profiles").upsert(
+    {
+      user_id: userId,
+      profile_key: profileKey,
+      car_name: carName || profileKey,
+      settings,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,profile_key" },
+  );
+  if (error) throw error;
+}
+
+export async function deleteAdminCarProfile(
+  userId: string,
+  profileKey: string,
+) {
+  const { error } = await supabase
+    .from("car_profiles")
+    .delete()
+    .eq("user_id", userId)
+    .eq("profile_key", profileKey);
+  if (error) throw error;
+}
+
+// --- Messages ---
+
+export async function listAdminMessages(
+  page = 1,
+  limit = 20,
+  status?: string,
+): Promise<{
+  messages: AdminMessage[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  let q = supabase
+    .from("customer_messages")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (status) q = q.eq("status", status);
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return {
+    messages: (data ?? []).map(mapMessageRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function markMessageReplied(id: string) {
+  const { data, error } = await supabase
+    .from("customer_messages")
+    .update({ status: "replied" })
+    .eq("id", id)
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+/**
+ * Delete one customer message (admin/owner only).
+ *
+ * The website deletes through `/api/admin/messages` with the service role; the
+ * app has no server route, so this rides the signed-in admin session and is
+ * therefore enforced by the `customer_messages` RLS policy. If the policy does
+ * not grant staff delete, the call rejects and the console surfaces the error
+ * instead of pretending the row went away.
+ */
+export async function deleteAdminMessage(id: string) {
+  // `.select()` is required here, not cosmetic: PostgREST reports success with
+  // an empty row set when RLS filters the row out, so a delete blocked by the
+  // policy would otherwise look like it worked and the row would simply
+  // reappear on reload. Zero rows back means "not deleted".
+  const { data, error } = await supabase
+    .from("customer_messages")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      "The message was not deleted — this account does not have delete permission on customer messages.",
+    );
+  }
+}
+
+// --- Newsletter subscribers ---
+//
+// The same `newsletter_subscribers` table the website's /api/admin/newsletter
+// route reads with the service role. The app has no server route, so this rides
+// the signed-in session: the schema grants `is_staff()` select and `is_admin()`
+// delete on the table, and both calls surface a policy refusal as an error
+// instead of an empty list that looks like "no subscribers".
+
+export async function listAdminSubscribers(
+  page = 1,
+  limit = 20,
+): Promise<{
+  subscribers: AdminSubscriber[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("newsletter_subscribers")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    subscribers: (data ?? []).map(mapSubscriberRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+/** Remove one opt-in (admin only, per the `admin delete newsletter` policy). */
+export async function deleteAdminSubscriber(id: string) {
+  // `.select()` for the same reason as deleteAdminMessage: PostgREST reports
+  // success with no rows when RLS filtered the delete out.
+  const { data, error } = await supabase
+    .from("newsletter_subscribers")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(
+      "The subscriber was not removed — this account does not have delete permission on newsletter subscribers.",
+    );
+  }
+}
+
+// --- Dashboard stats ---
+
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  const [
+    { data: orders, error: ordersError },
+    { data: users, error: usersError },
+    { data: products, error: productsError },
+    { data: cartStats, error: cartStatsError },
+    { data: messages, error: messagesError },
+  ] = await Promise.all([
+    supabase.from("orders").select("*", { count: "exact" }),
+    // Profiles: owner can read their own; admin sees all via RLS
+    supabase.from("profiles").select("*", { count: "exact" }),
+    supabase.from("products").select("*", { count: "exact" }),
+    supabase.rpc("get_admin_cart_stats"),
+    supabase.from("customer_messages").select("*", { count: "exact" }),
+  ]);
+  const queryError = [
+    ordersError,
+    usersError,
+    productsError,
+    cartStatsError,
+    messagesError,
+  ].find((error) => error !== null);
+  if (queryError) throw queryError;
+  const totalOrders = orders?.length ?? 0;
+  const allOrders = (orders ?? []) as any[];
+  const pendingOrders = allOrders.filter(
+    (o: any) => o.status === "pending",
+  ).length;
+  const paidOrders = allOrders.filter((o: any) => o.status === "paid").length;
+  const fulfilledOrders = allOrders.filter(
+    (o: any) => o.status === "fulfilled",
+  ).length;
+  const cancelledOrders = allOrders.filter(
+    (o: any) => o.status === "cancelled",
+  ).length;
+  const totalUsers = users?.length ?? 0;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const newUsersToday = (users ?? []).filter((u: any) =>
+    String(u.created_at ?? "").startsWith(todayIso),
+  ).length;
+  const totalProducts = products?.length ?? 0;
+  const lowStockProducts = (products ?? []).filter(
+    (p: any) => p.stock !== null && p.stock < 5,
+  ).length;
+  const totalMessages = messages?.length ?? 0;
+  const unreadMessages = (messages ?? []).filter(
+    (m: any) => m.status === "new",
+  ).length;
+  const cartSummary = Array.isArray(cartStats) ? cartStats[0] : cartStats;
+  // Calculate revenue from orders (paid + fulfilled)
+  const revenue = allOrders
+    .filter((o: any) => o.status === "paid" || o.status === "fulfilled")
+    .reduce((sum: number, o: any) => sum + (Number(o.total_npr) || 0), 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const revenueToday = allOrders
+    .filter(
+      (o: any) =>
+        (o.status === "paid" || o.status === "fulfilled") &&
+        o.created_at?.startsWith(today),
+    )
+    .reduce((sum: number, o: any) => sum + (Number(o.total_npr) || 0), 0);
+  const succeededTransactions = allOrders.filter(
+    (o: any) => o.status === "paid" || o.status === "fulfilled",
+  ).length;
+
+  return {
+    totalUsers,
+    newUsersToday,
+    totalOrders,
+    pendingOrders,
+    paidOrders,
+    fulfilledOrders,
+    cancelledOrders,
+    revenue,
+    revenueToday,
+    totalProducts,
+    lowStockProducts,
+    totalMessages,
+    unreadMessages,
+    totalCartItems: Number(cartSummary?.total_cart_items ?? 0),
+    activeCarts: Number(cartSummary?.active_carts ?? 0),
+    totalTransactions: totalOrders,
+    succeededTransactions,
+  };
+}
+
+// --- Activity log ---
+
+export async function listAdminActivity(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: ActivityEntry[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("activity_log")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapActivityRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+// --- System Logs (U-R3 2026-10-12): fleet diagnostics behind the Admin
+// "System Logs" tab — one shared medium for what the cars and the phones did.
+// Read paths mirror the website's /api/admin/logs. RLS: staff/admin may read
+// device_crash_reports + app_logs; the app reads with the signed-in session.
+
+export type AdminCrashReport = {
+  id: string;
+  boardId: string;
+  deviceId: string | null;
+  modelId: string | null;
+  fwVersion: string;
+  appVersion: string;
+  platform: string;
+  connectionMethod: string;
+  ssid: string | null;
+  ip: string | null;
+  resetReason: string | null;
+  bootCount: number | null;
+  crashCount: number | null;
+  lastCrashPhase: string | null;
+  lastCrashHeap: number | null;
+  hasCrash: boolean;
+  reportedAt: string;
+};
+
+export function mapCrashReportRow(row: RawRow): AdminCrashReport {
+  return {
+    id: String(row.id ?? ""),
+    boardId: String(row.board_id ?? ""),
+    deviceId: row.device_id != null ? String(row.device_id) : null,
+    modelId: row.model_id != null ? String(row.model_id) : null,
+    fwVersion: String(row.fw_version ?? ""),
+    appVersion: String(row.app_version ?? ""),
+    platform: String(row.platform ?? ""),
+    connectionMethod: String(row.connection_method ?? ""),
+    ssid: row.ssid != null ? String(row.ssid) : null,
+    ip: row.ip != null ? String(row.ip) : null,
+    resetReason: row.reset_reason != null ? String(row.reset_reason) : null,
+    bootCount: typeof row.boot_count === "number" ? row.boot_count : null,
+    crashCount: typeof row.crash_count === "number" ? row.crash_count : null,
+    lastCrashPhase:
+      row.last_crash_phase != null ? String(row.last_crash_phase) : null,
+    lastCrashHeap:
+      typeof row.last_crash_heap === "number" ? row.last_crash_heap : null,
+    hasCrash: Boolean(row.has_crash),
+    reportedAt: String(row.reported_at ?? ""),
+  };
+}
+
+export type AdminAppLog = {
+  id: string;
+  userId: string | null;
+  appVersion: string;
+  platform: string;
+  scope: string;
+  level: "info" | "warn" | "error";
+  message: string;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export function mapAppLogRow(row: RawRow): AdminAppLog {
+  return {
+    id: String(row.id ?? ""),
+    userId: row.user_id != null ? String(row.user_id) : null,
+    appVersion: String(row.app_version ?? ""),
+    platform: String(row.platform ?? ""),
+    scope: String(row.scope ?? ""),
+    level: (["info", "warn", "error"] as const).includes(row.level as never)
+      ? (row.level as "info" | "warn" | "error")
+      : "error",
+    message: String(row.message ?? ""),
+    detail: (row.detail as Record<string, unknown> | null) ?? null,
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listDeviceCrashReports(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminCrashReport[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("device_crash_reports")
+    .select("*", { count: "exact" })
+    .order("reported_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapCrashReportRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function listAppLogs(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminAppLog[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("app_logs")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapAppLogRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+// --- User logs + per-user profile entries (U-R4 2026-11-09) ---
+// The shared tables behind the website's AdminUserLogs / AdminProfileEntries
+// panels: user_activity_log, user_profile_entries, profile_entry_types.
+// RLS (supabase/migrations/20261109_user_logs_staff_rls.sql): staff read all
+// rows, admins delete. The app reads with the signed-in session, so no
+// service-role key ever ships to a phone. Queries stay paginated (20/page) to
+// keep DB egress inside the free tier.
+
+export type AdminUserLog = {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+};
+
+export function mapUserLogRow(row: RawRow): AdminUserLog {
+  return {
+    id: String(row.id ?? ""),
+    userId: row.user_id != null ? String(row.user_id) : null,
+    action: String(row.action ?? ""),
+    entityType: String(row.entity_type ?? ""),
+    entityId: row.entity_id != null ? String(row.entity_id) : null,
+    details: (row.details as Record<string, unknown> | null) ?? {},
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listUserActivityLogs(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminUserLog[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("user_activity_log")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapUserLogRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function deleteUserActivityLog(id: string) {
+  const { error } = await supabase
+    .from("user_activity_log")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export type AdminProfileEntryType = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type AdminProfileEntry = {
+  id: string;
+  userId: string;
+  typeId: string;
+  typeName: string;
+  title: string;
+  body: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function mapProfileEntryRow(row: RawRow): AdminProfileEntry {
+  const type = row.profile_entry_types as { name?: string } | null | undefined;
+  return {
+    id: String(row.id ?? ""),
+    userId: String(row.user_id ?? ""),
+    typeId: String(row.type_id ?? ""),
+    typeName: String(type?.name ?? ""),
+    title: String(row.title ?? ""),
+    body: (row.body as Record<string, unknown> | null) ?? {},
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? ""),
+  };
+}
+
+export async function listUserProfileEntries(
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminProfileEntry[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("user_profile_entries")
+    // Embedded join, same shape the website's listUserProfileEntries uses.
+    .select("*, profile_entry_types(name)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapProfileEntryRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
+export async function listProfileEntryTypes(): Promise<
+  AdminProfileEntryType[]
+> {
+  const { data, error } = await supabase
+    .from("profile_entry_types")
+    .select("id, name, description")
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: RawRow) => ({
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
+  }));
+}
+
+export async function deleteUserProfileEntry(id: string) {
+  const { error } = await supabase
+    .from("user_profile_entries")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// --- Dashboard analytics (page_views) ---
+// Mirrors the website's getPageViewStats: total/today views, top paths, and
+// a per-day traffic series. RLS: admins may read page_views.
+
+// Admin delete for the fleet diagnostics. RLS:
+// supabase/migrations/20261109_admin_manage_rls.sql grants admins DELETE on
+// device_crash_reports and app_logs, so the app can manage them without a
+// service-role key (the website deletes through /api/admin/logs instead).
+export async function deleteDeviceCrashReport(id: string) {
+  const { error } = await supabase
+    .from("device_crash_reports")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteAppLog(id: string) {
+  const { error } = await supabase.from("app_logs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export type AdminAnalytics = {
+  totalViews: number;
+  todayViews: number;
+  topPaths: { path: string; count: number; uniqueUsers: number }[];
+  viewsByDay: { date: string; count: number }[];
+};
+
+export async function fetchAdminAnalytics(days = 30): Promise<AdminAnalytics> {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayISO = todayStart.toISOString();
+
+  const [allResult, todayResult] = await Promise.all([
+    supabase
+      .from("page_views")
+      .select("path, created_at, user_id")
+      .gte("created_at", since),
+    supabase
+      .from("page_views")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", todayISO),
+  ]);
+
+  if (allResult.error) throw allResult.error;
+  if (todayResult.error) throw todayResult.error;
+
+  const todayViews = todayResult.count ?? 0;
+  const rows = (allResult.data ?? []) as {
+    path: string;
+    created_at: string;
+    user_id: string | null;
+  }[];
+  const totalViews = rows.length;
+
+  // Top paths
+  const pathMap = new Map<string, { count: number; users: Set<string> }>();
+  for (const { path, user_id } of rows) {
+    const entry = pathMap.get(path) ?? { count: 0, users: new Set<string>() };
+    entry.count += 1;
+    if (user_id) entry.users.add(user_id);
+    pathMap.set(path, entry);
+  }
+  const topPaths = Array.from(pathMap.entries())
+    .map(([path, { count, users }]) => ({
+      path,
+      count,
+      uniqueUsers: users.size,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+
+  // Views per day
+  const dayMap = new Map<string, number>();
+  for (const { created_at } of rows) {
+    const day = created_at.slice(0, 10);
+    dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+  }
+  const viewsByDay = Array.from(dayMap.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { totalViews, todayViews, topPaths, viewsByDay };
+}
+
+// --- Journal posts (shared journal_posts table) ---
+
+export type AdminJournalPost = {
+  id: string;
+  tag: string;
+  title: string;
+  text: string;
+  active: boolean;
+  sortOrder: number;
+};
+
+export async function listAdminJournalPosts(): Promise<AdminJournalPost[]> {
+  const { data, error } = await supabase
+    .from("journal_posts")
+    .select("id, tag, title, text, active, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    tag: row.tag ? String(row.tag) : "",
+    title: String(row.title ?? ""),
+    text: row.text ? String(row.text) : "",
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }));
+}
+
+export async function upsertAdminJournalPost(post: AdminJournalPost) {
+  const { data, error } = await supabase
+    .from("journal_posts")
+    .upsert({
+      id: post.id,
+      tag: post.tag,
+      title: post.title,
+      text: post.text,
+      active: post.active !== false,
+      sort_order: Math.max(0, Math.round(Number(post.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+export async function deleteAdminJournalPost(id: string) {
+  const { error } = await supabase.from("journal_posts").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --- Company info (single-row company_info table) ---
+
+export type AdminCompanyInfo = {
+  name: string;
+  shortName: string;
+  address: string;
+  city: string;
+  country: string;
+  email: string;
+  phone: string;
+  pan: string;
+  vatLabel: string;
+  description: string;
+  // C5: socials + WhatsApp (admin-editable). Empty = unused.
+  url?: string;
+  whatsappNumber: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+  linkedinUrl: string;
+  youtubeUrl: string;
+};
+
+export async function getCompanyInfo(): Promise<AdminCompanyInfo | null> {
+  const { data, error } = await supabase
+    .from("company_info")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    name: String(data.name ?? ""),
+    shortName: String(data.short_name ?? ""),
+    address: String(data.address ?? ""),
+    city: String(data.city ?? ""),
+    country: String(data.country ?? ""),
+    email: String(data.email ?? ""),
+    phone: String(data.phone ?? ""),
+    pan: String(data.pan ?? ""),
+    vatLabel: String(data.vat_label ?? ""),
+    description: String(data.description ?? ""),
+    whatsappNumber: String(data.whatsapp_number ?? ""),
+    facebookUrl: String(data.facebook_url ?? ""),
+    instagramUrl: String(data.instagram_url ?? ""),
+    tiktokUrl: String(data.tiktok_url ?? ""),
+    linkedinUrl: String(data.linkedin_url ?? ""),
+    youtubeUrl: String(data.youtube_url ?? ""),
+    // The input existed before the column did; read it now that it persists.
+    url: String(data.url ?? ""),
+  };
+}
+
+export async function saveCompanyInfo(info: AdminCompanyInfo) {
+  const { data, error } = await supabase
+    .from("company_info")
+    .upsert({
+      id: 1,
+      name: info.name,
+      short_name: info.shortName,
+      address: info.address,
+      city: info.city,
+      country: info.country,
+      email: info.email,
+      phone: info.phone,
+      pan: info.pan,
+      vat_label: info.vatLabel,
+      description: info.description,
+      // C5: WhatsApp normalized to digits-only on save (canonical form).
+      whatsapp_number: info.whatsappNumber.replace(/[^\d]/g, ""),
+      facebook_url: info.facebookUrl,
+      instagram_url: info.instagramUrl,
+      tiktok_url: info.tiktokUrl,
+      linkedin_url: info.linkedinUrl,
+      url: info.url ?? "",
+      youtube_url: info.youtubeUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// --- Training programs ---
+
+export type AdminTrainingProgram = {
+  id: string;
+  title: string;
+  audience: string;
+  description: string;
+  duration: string;
+  outcome: string;
+  active: boolean;
+  sortOrder: number;
+};
+
+export async function listAdminTrainingPrograms(): Promise<
+  AdminTrainingProgram[]
+> {
+  const { data, error } = await supabase
+    .from("training_programs")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    title: String(row.title ?? ""),
+    audience: String(row.audience ?? ""),
+    description: String(row.description ?? ""),
+    duration: String(row.duration ?? ""),
+    outcome: String(row.outcome ?? ""),
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }));
+}
+
+export async function upsertAdminTrainingProgram(
+  program: AdminTrainingProgram,
+) {
+  const { data, error } = await supabase
+    .from("training_programs")
+    .upsert({
+      id: program.id,
+      title: program.title,
+      audience: program.audience,
+      description: program.description,
+      duration: program.duration,
+      outcome: program.outcome,
+      active: program.active !== false,
+      sort_order: Math.max(0, Math.round(Number(program.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select();
+  if (error) throw error;
+  return data?.[0];
+}
+
+export async function deleteAdminTrainingProgram(id: string) {
+  const { error } = await supabase
+    .from("training_programs")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// --- Pilot cost lines ---
+
+export type AdminPilotCostLine = {
+  id: string;
+  item: string;
+  cost: string;
+  note: string;
+  active: boolean;
+  sortOrder: number;
+};
+
+export async function listAdminPilotCostLines(): Promise<AdminPilotCostLine[]> {
+  const { data, error } = await supabase
+    .from("pilot_cost_lines")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    item: String(row.item ?? ""),
+    cost: String(row.cost ?? ""),
+    note: String(row.note ?? ""),
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }));
+}
+
+export async function upsertAdminPilotCostLine(line: AdminPilotCostLine) {
+  const { data, error } = await supabase
+    .from("pilot_cost_lines")
+    .upsert({
+      id: line.id,
+      item: line.item,
+      cost: line.cost,
+      note: line.note,
+      active: line.active !== false,
+      sort_order: Math.max(0, Math.round(Number(line.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select();
+  if (error) throw error;
+  return data?.[0];
+}
+
+export async function deleteAdminPilotCostLine(id: string) {
+  const { error } = await supabase
+    .from("pilot_cost_lines")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// --- Curriculum highlights ---
+
+export type AdminCurriculumHighlight = {
+  id: string;
+  ageBand: string;
+  items: string[];
+  active: boolean;
+  sortOrder: number;
+};
+
+export async function listAdminCurriculumHighlights(): Promise<
+  AdminCurriculumHighlight[]
+> {
+  const { data, error } = await supabase
+    .from("curriculum_highlights")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    ageBand: String(row.age_band ?? ""),
+    items: toStringArray(row.items),
+    active: row.active !== false,
+    sortOrder: Number(row.sort_order ?? 0),
+  }));
+}
+
+export async function upsertAdminCurriculumHighlight(
+  highlight: AdminCurriculumHighlight,
+) {
+  const { data, error } = await supabase
+    .from("curriculum_highlights")
+    .upsert({
+      id: highlight.id,
+      age_band: highlight.ageBand,
+      items: highlight.items,
+      active: highlight.active !== false,
+      sort_order: Math.max(0, Math.round(Number(highlight.sortOrder) || 0)),
+      updated_at: new Date().toISOString(),
+    })
+    .select();
+  if (error) throw error;
+  return data?.[0];
+}
+
+export async function deleteAdminCurriculumHighlight(id: string) {
+  const { error } = await supabase
+    .from("curriculum_highlights")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}

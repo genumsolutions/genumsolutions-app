@@ -1,0 +1,906 @@
+// =====================================================================
+// carProtocol.ts - SINGLE source of truth for the GENUM car command
+// protocol on the native side.
+//
+// Mirrors the ESP32 remote firmware (Genum_ESP32_Remote_v1.0.0
+// comms.cpp + README) and the website's lib/robo-car-transport.ts so the
+// app speaks exactly the same wire protocol no matter which transport is
+// used (BLE-UART, Classic BT SPP, or WiFi WebSocket):
+//
+//   Outgoing (app -> car), newline terminated:
+//     Direction  F | B | L | R | S            (non-2WD1M modes)
+//     Speed      SPD<n>    ±255 (2WD1M signed) or SPD<100..255> (absolute)
+//     Servo      SERVO<n>  0..180, center 90
+//     Steer      STEER<n>  steering travel LIMIT — max |servo − 90|, 10..90
+//                          (2WD1M family; R-20. Car persists + echoes via
+//                          STATE ;STEER= so remote + app share one truth)
+//     Trim       TRIM<n>   steering offset, persisted on the car
+//     Emergency  ESTOP
+//     Mode       BT | 2WD1M | AUTO | PATH | OBS_US | OBS_IR | MAN | ESP_CLI | ESP_SER
+//     Calibrate  CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:..
+//     Request    REQ_STATE
+//   Incoming (car -> app):
+//     (parity helpers exported: quantizeSpeedToStep, isAllowedDriveStatus,
+//      statusToDirection, SPEED_MIN/MAX/STEP)
+//     STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
+//     TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
+//     SPD<value> / SPD:<value>   simple speed feedback
+//     NACK;E=UNKNOWN_MODE;ARG=<token>   mode-token rejection (R-4 fleet)
+//
+// Transport services (bleService, sppService, the WiFi socket in the
+// screens) import the builders + parser from here so one bugfix fixes
+// every link.
+// =====================================================================
+
+export type CarTelemetry = {
+  mode?: string;
+  speed?: number;
+  trim?: number;
+  status?: string;
+  /** R-19 (FIN-45): car's TRIP= — avg |speed| over moving seconds (2WD1M family). */
+  trip?: number;
+  /** R-19: car's MSTEER= — max |steer deviation from 90| seen since reset. */
+  maxSteer?: number;
+  /**
+   * R-20: car's STEER= — the steering travel LIMIT (max |servo − 90|, 10..90).
+   * Car-persisted car truth; the app mirrors it into steerLimit state.
+   */
+  steerLimit?: number;
+  // AUTO live PID
+  kp?: number;
+  ki?: number;
+  kd?: number;
+  out?: number;
+  off?: number;
+  angle?: number;
+  // WiFi wireless-car JSON status (Genum_WIRELESS_CAR WebServerComm)
+  ip?: string;
+  rssi?: number;
+  connected?: boolean;
+  /** WiFi link signal strength % (ESP32 WiFi.getRssi() → 0..100). */
+  signal?: number;
+  /** Uptime ms since the car booted (JSON `uptime_ms`). */
+  uptimeMs?: number;
+  /** Free heap bytes (JSON `free_heap`) — low heap = car running tight. */
+  freeHeap?: number;
+  /**
+   * U-96i: the firmware's OWN version (JSON `fw`, car `/status`). Before this
+   * the phone had no way to know what firmware a car runs — the bundled catalog
+   * value (a static guess) was presented as truth, and the fleet crash table's
+   * `fw_version` was filled from it. Absent on firmware older than 1.2.5 — treat
+   * "missing" as "unknown". It is NOT the board id (`j.id`): identity and
+   * version are separate facts (the app once conflated them: `fw: telemetry.id`).
+   */
+  fwVersion?: string;
+  /**
+   * U-95/F-79 restart record. The car persisted *why* it rebooted and sends the
+   * record on `/status`; before this the phone parsed `free_heap` out of the very
+   * same JSON and silently dropped these, so the evidence U-95 was built to
+   * collect never reached the owner. All six are absent on firmware older than
+   * 1.2.0 — every consumer must treat "missing" as "unknown", never as zero.
+   */
+  /** Human-readable reset reason (JSON `reset_reason`) — the car's mapped label. */
+  resetReason?: string;
+  /** Boots since the counter was last cleared (JSON `boot_count`). */
+  bootCount?: number;
+  /**
+   * UNSOLICITED restarts (JSON `crash_count`) — boots that were not power-on,
+   * external-pin, deep-sleep or software resets. This is the number that answers
+   * "does the car restart on its own?", and it is the one worth showing: a
+   * growing value is the reset loop the owner reports.
+   */
+  crashCount?: number;
+  /** The operation in flight when the car died (JSON `last_crash_phase`). */
+  lastCrashPhase?: string;
+  /** Free heap at the last crash (JSON `last_crash_heap`) — low = ran out of heap. */
+  lastCrashHeap?: number;
+  /** v1.4.0 provisioning reply from the car (REPLY=WIFICFG;… on STATE lines). */
+  reply?: string;
+  /** v1.4.0: car truth flags — AP broadcast id, configured SSID, stub mode. */
+  ap?: string;
+  ssid?: string;
+  stub?: boolean;
+  /**
+   * U-105 (1.3.5): the car's persisted transport toggles — Wi-Fi (`WIFICFG;WIFI`,
+   * NVS `t_wifi`), Bluetooth (`WIFICFG;BT`, NVS `t_bt`) and boot auto-join
+   * (`WIFICFG;AUTOJOIN`, NVS `boot_autojoin`). Ridden on STATE lines as
+   * `;WIFI=ON|OFF` / `;BT=ON|OFF` / `;AUTOJOIN=ON|OFF` and in the WS JSON as
+   * `wifi_enabled` / `bt_enabled` / `boot_autojoin`. Absent on firmware older
+   * than 1.3.5 — consumers must treat "missing" as "don't know", never as OFF.
+   */
+  wifiEnabled?: boolean;
+  btEnabled?: boolean;
+  bootAutojoin?: boolean;
+  /**
+   * U-117 (2026-10-20): is the car's own web page (:80/:81) serving RIGHT
+   * NOW — `"page_on":0|1` in the WS JSON (`/status`, since car U-116) and
+   * `;PAGE=ON|OFF` on the STATE line (so a Bluetooth-only app reads it
+   * without a WS round-trip). `true` = serving, `false` = the owner turned it
+   * off. Absent on firmware that predates the field — consumers must treat
+   * "missing" as "don't know", never as OFF (the switch then stays neutral).
+   */
+  pageOn?: boolean;
+  /**
+   * P4/P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict —
+   * `;LINKCAP=0|1` on every STATE line (so a Bluetooth-only app reads it
+   * without a WS round-trip) and `"link_cap":0|1` in the WS JSON. `true` = a
+   * second link is (or could be) admitted; `false` = the car REFUSED the
+   * second link to keep the run-time alive (latched car-side; the incumbent
+   * link stays up). Absent on pre-1.3.13 firmware — consumers must treat
+   * "missing" as "don't know" = CAPABLE (F-88), never as a denial.
+   */
+  linkCap?: boolean;
+  /**
+   * R-4 fleet parity: the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>` (or
+   * `:` separators) when it does not recognize a sent mode token. The app
+   * surfaces the rejection like the remote (comms.cpp:482-513) and parks the
+   * token as car-truth stub. `nackArg` is the rejected token as sent (not yet
+   * canonicalized); consumers canonicalize via canonicalCarToken().
+   */
+  nackError?: string;
+  nackArg?: string;
+  /**
+   * R-10 (2026-09-15 fleet): the car broadcasts its complete per-token
+   * availability table on every STATE send — `CAPS;4WD4M:LIVE;ESP_SER:LIVE;
+   * PATH:CS;…;2WD1M:CS` (device order, no trailing `;`), also carried in the
+   * WS JSON as `"caps": {"4WD4M":"LIVE", …}`. Values are LIVE / WIP / CS.
+   * CAPS is authoritative per token; it replaces the old single-current-mode
+   * stub flag (kept for back-compat with v1.4.0 cars).
+   */
+  caps?: Record<string, string>;
+  /**
+   * T-49/A-27 (device-round-5): the wireless car's saved-router registry,
+   * names only — WS JSON `"networks":["a","b",…]`. The app mirrors it in
+   * DevicePrefs (per car) for the WiFi & Router panel. NEVER contains
+   * passwords (the car never sends them off-device — W-14).
+   */
+  networks?: string[];
+  /**
+   * Connections-Hub round: the car's BOARD-unique id, derived from
+   * `ESP.getEfuseMac()` (last 6 hex, uppercase) — `STATE;…;ID=…` and JSON
+   * `"id"`. The stable identity behind per-device profiles for WiFi-only
+   * cars (no BT MAC to key on). Firmware v2 only.
+   */
+  id?: string;
+  /**
+   * Connections-Hub round: the car-side WiFi scan result (answering
+   * `ROUTERS;SCAN`). `STATE`-free: carried as WS JSON `"scan":[…]` (fields
+   * `ssid`, `rssi` dBm, `open`) and as an SPP line `SCAN;<ssid>,<rssi>,<1|0>;…`
+   * (`SCAN;NONE` when empty). Lets the app show "router available + strength"
+   * from the CAR's antenna (not the phone's). Firmware v2 only.
+   */
+  scan?: ScanNetwork[];
+  /**
+   * D6 (U-68, 2026-10-02): the saved-router registry as the car sends it on
+   * a TEXT line — `NETW;<ownAP>;<ssid>;…`, its own line after every STATE on
+   * every transport. This is the ONLY shape a Bluetooth link carries (the
+   * `"networks"` JSON array is WebSocket-only), which is why the router
+   * feature used to work on WiFi alone. Same field as the JSON array so one
+   * consumer serves both links (F-66). Names only, never passwords (W-14).
+   */
+  netw?: string[];
+};
+
+export type ScanNetwork = {
+  ssid: string;
+  /** Signal in dBm (−100..0), car-side. */
+  rssi: number;
+  /** True when the network has no password. */
+  open: boolean;
+};
+
+/** Neutral commands sent on disconnect / stale telemetry (safe stop). */
+export const SAFE_STOP_LINES = ["SPD0", "SERVO90"];
+
+// -------------------------------------------------------------------
+// ESP-remote parity primitives (Genum_ESP32_Remote_v1.0.0)
+// -------------------------------------------------------------------
+
+/** ESP remote SPEED_MIN (config.h): UI speed floor. */
+export const SPEED_MIN = 100;
+/** ESP remote SPEED_MAX (config.h): UI speed ceiling. */
+export const SPEED_MAX = 255;
+/** ESP remote SPEED_STEP (config.h): UI speed grid. */
+export const SPEED_STEP = 5;
+
+/**
+ * R-20 steering travel limit range (STEER token / STATE ;STEER=): the max
+ * |servo − 90| the 2WD1M drive model may command. Car-persisted; remote +
+ * app mirror the car's value. Floor 10 keeps at least a sliver of steering.
+ */
+export const STEER_LIMIT_MIN = 10;
+export const STEER_LIMIT_MAX = 90;
+
+/**
+ * Exact port of the ESP remote's quantizeSpeedToStep() (ui_misc.cpp):
+ * snap a raw value to the nearest SPEED_STEP grid point inside
+ * SPEED_MIN..SPEED_MAX. Values at/below the floor clamp to SPEED_MIN
+ * (the car never drives below it), at/above the ceiling to SPEED_MAX.
+ */
+export function quantizeSpeedToStep(
+  v: number,
+  step: number = SPEED_STEP,
+): number {
+  if (v <= SPEED_MIN) return SPEED_MIN;
+  if (v >= SPEED_MAX) return SPEED_MAX;
+  const offset = v - SPEED_MIN;
+  const q = Math.round(offset / step) * step;
+  let res = SPEED_MIN + q;
+  if (res < SPEED_MIN) res = SPEED_MIN;
+  if (res > SPEED_MAX) res = SPEED_MAX;
+  return res;
+}
+
+/**
+ * Short statuses the remote may display (exact whitelist from the ESP
+ * remote's isAllowedDriveStatusRemote() in state.cpp — same whitelist the
+ * car uses). Anything longer/unknown (e.g. verbose WiFi-JSON statuses) is
+ * ignored so the status bar never shows car-internal noise.
+ */
+const ALLOWED_DRIVE_STATUSES = [
+  "Forward",
+  "Backward",
+  "Left",
+  "Right",
+  "Stopped",
+  "Stop",
+  "Steer Left",
+  "Steer Right",
+  "EMERGENCY STOP",
+  "Speed set",
+  "Trim updated",
+] as const;
+
+/** Case-insensitive prefix match against the whitelist. */
+export function isAllowedDriveStatus(s: string | null | undefined): boolean {
+  if (!s) return false;
+  const up = s.toUpperCase();
+  return ALLOWED_DRIVE_STATUSES.some((a) => up.startsWith(a.toUpperCase()));
+}
+
+/**
+ * Map a whitelisted drive status back to the direction letter it
+ * represents, so the app's d-pad/joystick highlight and the OLED body
+ * mirror the car even when the car was driven by its OWN buttons
+ * (STATE;STATUS=Left arrives with no command from us). Returns 'S' for
+ * stop statuses and null for statuses that imply no direction.
+ */
+export function statusToDirection(
+  s: string | null | undefined,
+): "F" | "B" | "L" | "R" | "S" | null {
+  if (!s) return null;
+  const up = s.toUpperCase();
+  if (up.startsWith("FORWARD")) return "F";
+  if (up.startsWith("BACKWARD")) return "B";
+  if (up.startsWith("STEER LEFT") || up.startsWith("LEFT")) return "L";
+  if (up.startsWith("STEER RIGHT") || up.startsWith("RIGHT")) return "R";
+  if (
+    up.startsWith("STOP") ||
+    up.startsWith("STOPPED") ||
+    up.startsWith("EMERGENCY")
+  )
+    return "S";
+  return null;
+}
+
+/** Build a signed/absolute speed command: SPD<value>. */
+export function buildSpd(value: number): string {
+  return `SPD${Math.round(value)}`;
+}
+
+/** Build a servo command: SERVO<angle>, 0..180 center 90. */
+export function buildServo(value: number): string {
+  return `SERVO${Math.round(value)}`;
+}
+
+/**
+ * Build a steering travel LIMIT command: STEER<n> (R-20) — the max |servo − 90|
+ * the car's drive model may command (10..90). The car persists it and echoes
+ * STATE ;STEER= so the remote + app mirrors stay in sync.
+ */
+export function buildSteer(value: number): string {
+  return `STEER${Math.round(value)}`;
+}
+
+/** Build a trim command: TRIM<offset> (persisted on the car). */
+export function buildTrim(value: number): string {
+  return `TRIM${Math.round(value)}`;
+}
+
+export const ESTOP_LINE = "ESTOP";
+export const REQ_STATE_LINE = "REQ_STATE";
+
+/** Build the on-connect epoch sync line: TIME;<unixEpoch>. */
+export function buildTimeLine(epochSeconds: number): string {
+  return `TIME;${Math.floor(epochSeconds)}`;
+}
+
+/** Build the factory reset command for the car: FACTORY;RESET. */
+export const FACTORY_RESET_LINE = "FACTORY;RESET";
+
+/**
+ * A-46 (round-9): the car's OWN network — its default + protected entry.
+ * The car broadcasts this name first on every list (NETW; / `networks` JSON),
+ * and DEL/CLEAR/ADD refuse it (car T-66). The app pins it as a non-deletable
+ * "Default" row and never sends it to ROUTERS;DEL.
+ *
+ * v2 (Genum_4WD4M_CAR, owner plan 2026-09-28): own-AP names are UNIQUE per
+ * car, so the app identifies a car's own network by NAME, never by a bare
+ * constant. Use `isOwnApName()` everywhere that distinction matters; the
+ * registry below is the fleet list it consults.
+ *
+ * U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
+ * `4WD4MCar_WiFi` — the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
+ * are purged from the registry (both firmware and app). `OWN_AP_NAMES` is kept
+ * as a one-element array so every existing caller (`isOwnApName()`, discovery,
+ * dial, DevicePrefs) keeps working untouched while a stray legacy name can
+ * never match again.
+ */
+export const OWN_AP_NAME = "4WD4MCar_WiFi";
+export const OWN_AP_NAMES: readonly string[] = ["4WD4MCar_WiFi"];
+
+/**
+ * True when `name` is ANY car's own AP (protected, never deletable).
+ *
+ * F-64 (2026-10-02): this was case-SENSITIVE while a second helper
+ * (`staHandoff.isOwnApSsid`, since removed) was case-insensitive — two helpers, one job, one of them wrong. A car that
+ * reported its AP as `4wd4mcar_wifi` therefore rendered Switch/Delete on its own
+ * network and earned a `ROUTERS;ERROR;Reserved`. The registry is folded once
+ * here and every layer uses this function.
+ */
+export function isOwnApName(name: string): boolean {
+  return OWN_AP_NAMES_FOLDED.has(name.trim().toUpperCase());
+}
+
+const OWN_AP_NAMES_FOLDED: ReadonlySet<string> = new Set(
+  OWN_AP_NAMES.map((n) => n.toUpperCase()),
+);
+
+/**
+ * v2 defaults for the new 4WD4M car: its own AP sits on 192.168.245.1/24
+ * (subnet .245 — the donor owns .244; 192.168.4.x is forbidden fleet-wide
+ * after the FIN-48 phone-side collision). These are the URL/IP the app
+ * suggests when no live IP is known (raw-URL field placeholder, AP fallback
+ * chip, post-provision default).
+ */
+export const DEFAULT_AP_IP = "192.168.245.1";
+export const DEFAULT_WS_URL = `ws://${DEFAULT_AP_IP}:81`;
+
+/**
+ * Build a T-48 router-registry line for the wireless car (v1.7.1), sent over
+ * ANY live link (the car dispatches ROUTERS;* from its system-command hook in
+ * every mode). The car is the source of truth for the saved list; passwords
+ * never leave the car's NVS (W-14). `USE` switches the car's ACTIVE pair and
+ * rejoins the router — the server stays up, so a linked WS survives (T-34).
+ * Semicolons are stripped from SSID/password (the protocol splits on ';').
+ */
+export function buildRouterCommand(
+  op: "LIST" | "ADD" | "USE" | "DEL" | "CLEAR" | "SCAN",
+  ssid: string,
+  pass = "",
+): string {
+  // A-40 (round-9): CLEAR wipes every saved router + the active pair on the
+  // car and reverts it to its OWN network (ROUTERS;CLEAR, T-62). No ssid/pass.
+  if (op === "CLEAR") return "ROUTERS;CLEAR";
+  // Connections-Hub round: SCAN asks the CAR to enumerate nearby networks
+  // (its antenna) and reply with ssid/rssi/open — see CarTelemetry.scan.
+  if (op === "SCAN") return "ROUTERS;SCAN";
+  const s = ssid.replace(/;/g, "").trim();
+  if (!s) return "ROUTERS;LIST";
+  if (op === "ADD") return `ROUTERS;ADD;${s};${pass.replace(/;/g, "")}`;
+  return `ROUTERS;${op};${s}`;
+}
+
+/**
+ * Build the v1.4.0 WiFi provisioning line: WIFICFG;<ssid>;<password>.
+ * Sent over ANY live link (BT SPP or the car's WS): the car stores the pair
+ * in Preferences and joins the router. v2 cars (Genum_4WD4M_CAR) stay in
+ * 4WD4M and keep every transport live while joining; donor-firmware cars
+ * still switch themselves to ESP_SER. An empty password provisions an open
+ * network. The password must never be logged.
+ *
+ * Semicolons are stripped from SSID/password, exactly as buildRouterCommand()
+ * does: the car's parser (WebServerComm::handleWifiConfigCommand) splits on
+ * the FIRST ';', so a stray semicolon would truncate the SSID (or silently
+ * mangle the password). The SSID is also trimmed; the password is not.
+ */
+export function buildWifiConfigLine(ssid: string, password: string): string {
+  const s = ssid.replace(/;/g, "").trim();
+  return `WIFICFG;${s};${password.replace(/;/g, "")}`;
+}
+
+// -------------------------------------------------------------------
+// A-7 / R-10: car-truth mode availability (3-state per token)
+// -------------------------------------------------------------------
+
+/**
+ * Per-token availability a car may announce (CAPS wire / `caps` JSON).
+ *   LIVE  – drives today
+ *   WIP   – WORK IN PROGRESS (works in progress / partially wired) — NOT live yet
+ *   CS    – COMING SOON (parked) — NOT live yet
+ * Controllers render the state as a mark (drawAvailMarkBody parity) and the
+ * car renders its own frame; every token stays selectable so app and device
+ * can toggle across all 9 modes.
+ */
+/**
+ * How functional a mode is on the PAIRED car.
+ *
+ * `GONE` is new in U-81 and means: **this car does not have this mode at all.**
+ * It is not a flavour of "not ready" — the token is absent from the car's own
+ * registry, so sending it can only ever be refused.
+ */
+export type ModeAvailReport = "LIVE" | "WIP" | "CS" | "GONE";
+
+/**
+ * Fallback stub table for tokens the paired car has NOT reported yet.
+ *
+ * Owner decision 2026-09-15: unreported tokens default AVAILABLE (the fleet
+ * wire lets every car drive every mode it recognizes, and a mode wait all of
+ * a car's tokens announced up-front). The only hard exception is MAN —
+ * RF-manual needs the RF handset, which no GENUM car carries, so it stays
+ * COMING SOON fleet-wide until a handset ships.
+ */
+export const FALLBACK_STUB_TOKENS: ReadonlySet<string> = new Set(["MAN"]);
+
+/**
+ * Normalize a mode token for stub-map lookups (uppercase, trimmed).
+ */
+export function normalizeModeToken(token: string | null | undefined): string {
+  return (token ?? "").trim().toUpperCase();
+}
+
+/**
+ * X-8 legacy aliases: pre-v1.5.0 cars emit `MODE=BT` for the 4WD4M mode.
+ * Receivers (this app) accept both forever; map the incoming token to the
+ * new canonical one so mode mirroring and the stub map keep working against
+ * old and new cars alike.
+ */
+export const LEGACY_TOKEN_ALIASES: Readonly<Record<string, string>> = {
+  BT: "4WD4M",
+};
+
+/** Canonicalize an incoming car token (applies legacy aliases). */
+export function canonicalCarToken(token: string | null | undefined): string {
+  const t = normalizeModeToken(token);
+  return LEGACY_TOKEN_ALIASES[t] ?? t;
+}
+
+/**
+ * Pure helper (A-7 / R-10): resolve a mode's availability for the paired
+ * car. Resolution order:
+ *  1. `carAvailMap` (from the car's CAPS broadcast) when it mentions the
+ *     token — authoritative per token (LIVE / WIP / CS).
+ *  2. the legacy per-token stub flag (CAP=STUB for the CURRENT mode) — for
+ *     v1.4.0 cars that don't broadcast the full table yet.
+ *  3. the fleet fallback: everything defaults LIVE except MAN (hard CS).
+ *
+ * The legacy stub map keeps filling as the car visits modes, so mixed
+ * old/new fleets converge without extra controller work.
+ *
+ * ---- U-81: a CAPS line is the car's COMPLETE registry, so ABSENCE means GONE
+ *
+ * `ModeManager::buildCapsMap` walks the whole `MODE_REGISTRY` and prints every
+ * row (`ModeManager.cpp:64-81`), so a `CAPS;` line is not a delta — it is the
+ * entire list of modes that car will ever accept. Before this fix, step 3
+ * answered "not in the table" with LIVE, which was only safe while every car
+ * really did have all nine modes.
+ *
+ * U-79 stopped being safe: it REMOVED `ESP_SER`/`ESP_CLI` from the registry
+ * outright rather than marking them CS, so the new 4WD4M broadcasts
+ *
+ *     CAPS;4WD4M:LIVE;PATH:CS;OBS_US:CS;OBS_IR:CS;MAN:CS;AUTO:CS;2WD1M:CS
+ *
+ * with no `ESP_SER` key at all — and the app rendered "EspWebServer" as fully
+ * available on the one car that had deleted it. Tapping it sent a token the car
+ * refuses, every time. Absence was being read as permission.
+ *
+ * This only trusts absence when a CAPS table was actually received, so a car
+ * too old to broadcast one keeps the fleet fallback and old cars are
+ * unaffected: the pre-U-79 4WD4M announces `ESP_SER:LIVE` / `ESP_CLI:WIP`
+ * itself.
+ */
+export function modeAvailStatus(
+  token: string | null | undefined,
+  carStubMap: Record<string, boolean>,
+  carAvailMap?: Record<string, string>,
+): ModeAvailReport {
+  const t = canonicalCarToken(token);
+  if (!t) return "CS";
+  const report = carAvailMap?.[t];
+  if (report === "LIVE" || report === "WIP" || report === "CS") return report;
+  // We have the car's whole registry and this token is not in it.
+  if (carAvailMap && Object.keys(carAvailMap).length > 0) return "GONE";
+  const reported = carStubMap[t];
+  if (typeof reported === "boolean") return reported ? "CS" : "LIVE";
+  return FALLBACK_STUB_TOKENS.has(t) ? "CS" : "LIVE";
+}
+
+/**
+ * Pure helper (A-7): whether a mode is NOT functional for the paired car
+ * (either WORK IN PROGRESS or COMING SOON). Car truth wins token by token; the
+ * car's CAPS table (or legacy stub map) overrides the default. Selectable
+ * in every controller regardless — it only changes the mark/badge.
+ */
+export function isTokenComingSoon(
+  token: string | null | undefined,
+  carStubMap: Record<string, boolean>,
+  carAvailMap?: Record<string, string>,
+): boolean {
+  return modeAvailStatus(token, carStubMap, carAvailMap) !== "LIVE";
+}
+
+/** Build the AUTO calibration line: CFG;Kp:..;Ki:..;Kd:..;OUT:..;OFF:.. */
+export function buildCalibration(p: {
+  kp: number;
+  ki: number;
+  kd: number;
+  out: number;
+  off: number;
+}): string {
+  return `CFG;Kp:${p.kp.toFixed(2)};Ki:${p.ki.toFixed(3)};Kd:${p.kd.toFixed(3)};OUT:${p.out.toFixed(0)};OFF:${p.off.toFixed(2)}`;
+}
+
+/**
+ * Parse one GENUM telemetry line into a partial CarTelemetry. Returns an
+ * empty object when the line carries no telemetry (so callers can skip it).
+ * Handles:
+ *   STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward  (keys use '=' or ':')
+ *   TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
+ *   SPD<value> / SPD:<value> / SPD=<value>
+ */
+/**
+ * Parse one availability table body — the `;`-separated `TOKEN:STATUS`
+ * grammar the car uses in BOTH carriers:
+ *
+ *   • STATE text:  `CAPS;4WD4M:LIVE;ESP_SER:CS;2WD1M:CS`
+ *   • WS JSON:     `"caps":"4WD4M:LIVE;ESP_SER:CS;2WD1M:CS"`
+ *
+ * These were parsed by two separate blocks with near-identical logic, and
+ * only the text form was ever handled. The firmware (WebServerComm
+ * buildStatusJson) emits the STRING form, so over WiFi the app silently
+ * produced no availability table at all: every mode looked available, and
+ * the mode chooser would happily send a `CS` token that the car accepts
+ * and persists (ModeManager::setMode + saveBootState) — parking the car in
+ * a COMING SOON stub that survives a reboot.
+ *
+ * One grammar, one parser, both carriers. `;`-tolerant so a body that
+ * still carries a leading "CAPS" element parses correctly either way.
+ */
+export function parseCapsBody(body: string): Record<string, string> {
+  const caps: Record<string, string> = {};
+  for (const raw of body.split(";")) {
+    const part = raw.trim();
+    if (!part) continue;
+    // Tolerate a leading "CAPS" element.
+    if (part.toUpperCase() === "CAPS") continue;
+    const eqIdx = part.indexOf("=");
+    const sep = eqIdx >= 0 ? eqIdx : part.indexOf(":");
+    if (sep <= 0) continue;
+    const tok = canonicalCarToken(part.slice(0, sep));
+    const val = part
+      .slice(sep + 1)
+      .trim()
+      .toUpperCase();
+    if (tok && val) caps[tok] = val;
+  }
+  return caps;
+}
+
+export function parseTelemetryLine(line: string): CarTelemetry {
+  const l = line.trim();
+  if (!l) return {};
+  const up = l.toUpperCase();
+  const telemetry: CarTelemetry = {};
+
+  // R-4 (app half, fleet parity): the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>`
+  // (tolerating `:` separators — comms.cpp:482) when it does not recognize a
+  // mode token it was sent. The remote marks the token a permanent stub and
+  // surfaces "Not supported by car"; we parse the same line here and let the
+  // consumer (useControlHub) apply the same policy.
+  if (/^NACK[:;]/i.test(up)) {
+    const body = l.split(/[;:]/);
+    let err = "";
+    let arg = "";
+    for (let i = 1; i < body.length; i++) {
+      const m = /^([A-Za-z]+)[:=](.*)$/.exec(body[i].trim());
+      if (!m) continue;
+      const key = m[1].toUpperCase();
+      if (key === "E") err = m[2].trim();
+      else if (key === "ARG") arg = m[2].trim();
+    }
+    if (arg) {
+      telemetry.nackArg = arg;
+      if (err) telemetry.nackError = err.toUpperCase();
+    }
+    return telemetry;
+  }
+
+  // STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward
+  // Car firmware uses '=' as key-value separator (e.g. MODE=2WD1M),
+  // while older remote firmware uses ':'.  Split on ';' only and find
+  // the first '=' or ':' within each token — mirrors the ESP32 remote's
+  // C parser (comms.cpp: strtok_r + strchr('=' / ':')).
+  if (up.startsWith("STATE")) {
+    const body = l.split(";");
+    for (let i = 1; i < body.length; i++) {
+      const eqIdx = body[i].indexOf("=");
+      const sep = eqIdx >= 0 ? eqIdx : body[i].indexOf(":");
+      if (sep < 0) continue;
+      const key = body[i].slice(0, sep).toUpperCase();
+      const val = body[i].slice(sep + 1).trim();
+      if (key === "MODE") telemetry.mode = val;
+      else if (key === "SPD") telemetry.speed = Number(val) || 0;
+      else if (key === "TRIM") telemetry.trim = Number(val) || 0;
+      else if (key === "TRIP") telemetry.trip = Number(val) || 0;
+      else if (key === "MSTEER") telemetry.maxSteer = Number(val) || 0;
+      else if (key === "STEER") telemetry.steerLimit = Number(val) || 0;
+      else if (key === "STATUS") telemetry.status = val;
+      else if (key === "CAP") {
+        // A-7 (fleet parity with the remote's R-10): the car announces the
+        // CURRENT mode as a stub via CAP=STUB on its STATE lines. Bare token
+        // and key=value shapes both accepted (comms.cpp emits `;CAP=STUB`).
+        telemetry.stub = val.trim().toUpperCase() === "STUB";
+      } else if (key === "REPLY") {
+        // The reply payload itself contains semicolons (WIFICFG;STORED;<ssid>)
+        // — rejoin everything after 'REPLY=' so it survives the split.
+        const rest = body.slice(i + 1).join(";");
+        telemetry.reply = rest ? `${val};${rest}` : val;
+        break;
+      } else if (key === "AP") telemetry.ap = val;
+      else if (key === "SSID") telemetry.ssid = val;
+      else if (key === "IP") telemetry.ip = val;
+      else if (key === "ID") telemetry.id = val;
+      else if (key === "WIFI") {
+        // U-105: the Wi-Fi transport toggle rides STATE as `;WIFI=ON|OFF`.
+        telemetry.wifiEnabled = val.toUpperCase() === "ON";
+      } else if (key === "BT") {
+        // U-105: Bluetooth transport toggle `;BT=ON|OFF`.
+        telemetry.btEnabled = val.toUpperCase() === "ON";
+      } else if (key === "AUTOJOIN") {
+        // U-105: boot auto-join toggle `;AUTOJOIN=ON|OFF`.
+        telemetry.bootAutojoin = val.toUpperCase() === "ON";
+      } else if (key === "PAGE") {
+        // U-117: the web page server state rides STATE as `;PAGE=ON|OFF`, the
+        // same fact `/status` carries as `page_on`. Empty/garbage stays
+        // ABSENT — "don't know", never OFF.
+        const v = val.toUpperCase();
+        if (v === "ON" || v === "OFF") telemetry.pageOn = v === "ON";
+      } else if (key === "LINKCAP") {
+        // P4 (firmware 1.3.13): the link-admission verdict rides every STATE
+        // line, so a Bluetooth-only app learns whether the car can host a
+        // second link. `;LINKCAP=1` = a second link is admitted; `;LINKCAP=0`
+        // = the car refused the second link (latched; the incumbent stays
+        // up). Empty/garbage stays ABSENT — absence means capable (F-88),
+        // never denied.
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.linkCap = n !== 0;
+      } else if (key === "UP" || key === "UPTIME") {
+        // U-102: the STATE line now carries the same uptime/heap/signal the WS
+        // JSON does, so a Bluetooth link renders the top-line telemetry too.
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.uptimeMs = n;
+      } else if (key === "HEAP") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.freeHeap = n;
+      } else if (key === "SIG" || key === "SIGNAL") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.signal = n;
+      } else if (key === "RSSI") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.rssi = n;
+      } else if (key === "RST") {
+        // U-R3 (1.3.2): the persisted restart record now rides the STATE line —
+        // same fields as the WS JSON's reset_reason/boot_count/crash_count/
+        // last_crash_phase/last_crash_heap, so a Bluetooth link reports WHY the
+        // car reset without this phone ever seeing /status. This is what lets
+        // the crash-report fleet sync (useControlHub) fire over SPP too.
+        if (val !== "") telemetry.resetReason = val;
+      } else if (key === "BC") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.bootCount = n;
+      } else if (key === "CC") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.crashCount = n;
+      } else if (key === "PH") {
+        if (val !== "") telemetry.lastCrashPhase = val;
+      } else if (key === "LH") {
+        const n = Number(val);
+        if (val !== "" && Number.isFinite(n)) telemetry.lastCrashHeap = n;
+      }
+    }
+    return telemetry;
+  }
+
+  // R-10 (2026-09-15 fleet): the car broadcasts its COMPLETE per-token
+  // availability table on every STATE send — `CAPS;4WD4M:LIVE;ESP_SER:LIVE;
+  // PATH:CS;…;2WD1M:CS` (device order, no trailing ';'). Tolerates ':' or
+  // '=' separators (remote comms.cpp applyCapsMap). Keyed canonical so a
+  // legacy `CAPS;BT:LIVE` resolves onto the 4WD4M row.
+  if (up.startsWith("CAPS")) {
+    const caps = parseCapsBody(l);
+    if (Object.keys(caps).length > 0) telemetry.caps = caps;
+    return telemetry;
+  }
+
+  // TEL;Kp:12.30;Ki:0.50;Kd:3.10;OUT:050;OFF:+0.75;ANGLE:+12.34
+  if (up.startsWith("TEL")) {
+    const body = l.replace(/^TEL[:;]/i, "");
+    for (const part of body.split(";")) {
+      const m = /^([A-Za-z]+)[:=](.+)$/.exec(part.trim());
+      if (!m) continue;
+      const key = m[1]!.toUpperCase();
+      const num = Number(m[2]) || 0;
+      if (key === "KP") telemetry.kp = num;
+      else if (key === "KI") telemetry.ki = num;
+      else if (key === "KD") telemetry.kd = num;
+      else if (key === "OUT") telemetry.out = num;
+      else if (key === "OFF") telemetry.off = num;
+      else if (key === "ANGLE") telemetry.angle = num;
+    }
+    return telemetry;
+  }
+
+  // SPD<value> or SPD:<value> or SPD=<value> — positive echo only (SPD0 = stop echo)
+  if (/^SPD[:=]?-?[\d]+$/i.test(l)) {
+    const num = Number(l.replace(/^SPD[:=]?/i, "")) || 0;
+    if (num > 0) telemetry.speed = num;
+  }
+
+  // D6 / F-66 (U-68, 2026-10-02): the car broadcasts the saved-router
+  // registry as its OWN line — `NETW;<ownAP>;<ssid>;…` — immediately after
+  // every STATE, on EVERY transport. This branch did not exist, so over
+  // Bluetooth the app received the line, matched nothing, and fell back to a
+  // the router list existed on WiFi only (historical note, WiFi was the only link)
+  // "add a router" a WiFi-shaped accident (F-66). Names only, never
+  // passwords (W-14), and the car's own network leads the list by design.
+  // A BARE `NETW` is a real shape: `buildNetworksLine` starts the buffer with
+  // "NETW" and appends `;<ssid>` per entry, so an empty registry ships a bare
+  // "NETW" line. It must parse to an empty list, not to a missing field —
+  // otherwise the UI cannot tell "no routers" from "no answer".
+  if (/^NETW([:;]|$)/i.test(up)) {
+    telemetry.networks = l
+      .replace(/^NETW[:;]?/i, "")
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return telemetry;
+  }
+
+  // Connections-Hub round: car-side scan over SPP —
+  //   SCAN;SSID1,-57,1;SSID2,-72,0     (ssid,rssi dBm,open 1|0)  /  SCAN;NONE
+  // Carried the same shape as the WS JSON `scan`, so ONE consumer works over
+  // whichever link answered ROUTERS;SCAN.
+  if (/^SCAN[:;]/i.test(up)) {
+    const body = l.replace(/^SCAN[:;]/i, "").trim();
+    if (body.toUpperCase() !== "NONE" && body) {
+      telemetry.scan = body
+        .split(";")
+        .map((entry) => {
+          const parts = entry.split(",");
+          if (parts.length < 2) return null;
+          const ssid = parts[0]!.trim();
+          const rssi = Number(parts[1]) || 0;
+          const open = parts[2]?.trim() === "1";
+          return ssid ? { ssid, rssi, open } : null;
+        })
+        .filter((n): n is ScanNetwork => n !== null);
+    }
+    return telemetry;
+  }
+
+  // JSON status from the wireless-car WebServerComm (broadcast WITHOUT a
+  // trailing newline): {"status":"OK","mode":"ESP_SER","connected":true,
+  // "ip":"192.168.4.1","rssi":-45,"signal":62,"uptime_ms":120000,"free_heap":1048576,
+  // "speed":170,...}. Maps the display + telemetry-deck fields.
+  // U-95/F-79 restart fields (`reset_reason`, `boot_count`, `crash_count`,
+  // `last_crash_phase`, `last_crash_heap`) ride the same object — see below.
+  if (l.startsWith("{") && l.endsWith("}")) {
+    try {
+      const j = JSON.parse(l) as Record<string, unknown>;
+      if (typeof j.status === "string") telemetry.status = j.status;
+      if (typeof j.mode === "string") telemetry.mode = j.mode;
+      if (typeof j.speed === "number") telemetry.speed = j.speed;
+      if (typeof j.trim === "number") telemetry.trim = j.trim;
+      if (typeof j.ip === "string") telemetry.ip = j.ip;
+      if (typeof j.rssi === "number") telemetry.rssi = j.rssi;
+      if (typeof j.signal === "number") telemetry.signal = j.signal;
+      if (typeof j.uptime_ms === "number") telemetry.uptimeMs = j.uptime_ms;
+      if (typeof j.free_heap === "number") telemetry.freeHeap = j.free_heap;
+      // U-96i: the firmware version the car reports about itself.
+      if (typeof j.fw === "string") telemetry.fwVersion = j.fw;
+      // U-95/F-79 restart record. Same JSON, same transport — these were being
+      // discarded here while free_heap two lines up was honoured. The firmware
+      // sends `phase` (the LIVE phase) too; it is not mapped because it changes
+      // on every frame and would make this field a permanent "true" rather than
+      // a record of something that happened.
+      if (typeof j.reset_reason === "string")
+        telemetry.resetReason = j.reset_reason;
+      if (typeof j.boot_count === "number") telemetry.bootCount = j.boot_count;
+      if (typeof j.crash_count === "number")
+        telemetry.crashCount = j.crash_count;
+      if (typeof j.last_crash_phase === "string")
+        telemetry.lastCrashPhase = j.last_crash_phase;
+      if (typeof j.last_crash_heap === "number")
+        telemetry.lastCrashHeap = j.last_crash_heap;
+      if (typeof j.connected === "boolean") telemetry.connected = j.connected;
+      if (typeof j.ssid === "string") telemetry.ssid = j.ssid;
+      if (typeof j.ap === "string") telemetry.ap = j.ap;
+      if (typeof j.stub === "boolean") telemetry.stub = j.stub;
+      // U-105 (1.3.5): transport toggles in the WS JSON — `wifi_enabled` /
+      // `bt_enabled` / `boot_autojoin`. Same three facts the STATE line carries
+      // so a Bluetooth-only remote reads them without a WS round-trip.
+      if (typeof j.wifi_enabled === "boolean")
+        telemetry.wifiEnabled = j.wifi_enabled;
+      if (typeof j.bt_enabled === "boolean") telemetry.btEnabled = j.bt_enabled;
+      if (typeof j.boot_autojoin === "boolean")
+        telemetry.bootAutojoin = j.boot_autojoin;
+      // P4 (firmware 1.3.13): the link-admission verdict in the WS JSON — the
+      // same fact the STATE line carries as `;LINKCAP=`. `link_cap:0` = the
+      // car refused the second link; an ABSENT field stays absent = capable
+      // (F-88), never denied.
+      if (typeof j.link_cap === "number") telemetry.linkCap = j.link_cap !== 0;
+      // U-117: the car's web-page server state in the WS JSON — the same fact
+      // the STATE line carries as `;PAGE=`. Wrong type / absent stays ABSENT
+      // ("don't know"), so the panel never manufactures an OFF.
+      if (typeof j.page_on === "number") telemetry.pageOn = j.page_on !== 0;
+      // Connections-Hub round: board-unique id (ESP.getEfuseMac(), last 6).
+      if (typeof j.id === "string") telemetry.id = j.id;
+      // Connections-Hub round: car-side WiFi scan (reply to ROUTERS;SCAN).
+      if (Array.isArray(j.scan)) {
+        telemetry.scan = (j.scan as unknown[])
+          .filter(
+            (n): n is { ssid: string; rssi?: unknown; open?: unknown } =>
+              typeof n === "object" &&
+              n !== null &&
+              typeof (n as { ssid?: unknown }).ssid === "string",
+          )
+          .map((n) => ({
+            ssid: n.ssid,
+            rssi: typeof n.rssi === "number" ? n.rssi : 0,
+            open: typeof n.open === "boolean" ? n.open : false,
+          }));
+      }
+      // R-10: WS JSON carries the full availability table. The 4WD4M car
+      // emits it as a `;`-delimited STRING (WebServerComm buildStatusJson);
+      // the donor emits an OBJECT. Accept both through the one shared
+      // parser so a carrier change can never silently blank the table.
+      if (typeof j.caps === "string") {
+        const caps = parseCapsBody(j.caps);
+        if (Object.keys(caps).length > 0) telemetry.caps = caps;
+      } else if (j.caps && typeof j.caps === "object") {
+        const caps: Record<string, string> = {};
+        for (const [k, v] of Object.entries(
+          j.caps as Record<string, unknown>,
+        )) {
+          const tok = canonicalCarToken(k);
+          const val = String(v).trim().toUpperCase();
+          if (tok && val) caps[tok] = val;
+        }
+        if (Object.keys(caps).length > 0) telemetry.caps = caps;
+      }
+      // T-49/A-27: saved-router registry (names only, from the car's NVS).
+      if (Array.isArray(j.networks)) {
+        telemetry.networks = (j.networks as unknown[])
+          .filter(
+            (n): n is string => typeof n === "string" && n.trim().length > 0,
+          )
+          .map((n) => n.trim());
+      }
+    } catch {
+      /* not JSON — ignore */
+    }
+  }
+
+  return telemetry;
+}
+
+/**
+ * True when the buffered WebSocket text is a complete JSON object with no
+ * trailing newline. The wireless-car status broadcasts look like this, so
+ * transports can flush the buffer and parse it immediately instead of
+ * waiting for a line terminator that never comes.
+ */
+export function isCompleteJsonObject(text: string): boolean {
+  const t = text.trim();
+  return t.startsWith("{") && t.endsWith("}");
+}

@@ -1,0 +1,301 @@
+// =====================================================================
+// Uploads the built Android release APK to the shared Supabase project
+// into a public "app-releases" bucket and prints the public download URL.
+//
+// Self-contained: uses Node's built-in fetch (Node >= 18) and the Supabase
+// Storage REST API, so it has no runtime dependency on @supabase/supabase-js.
+//
+// Secrets come from environment variables (or a local .env.local file):
+//   SUPABASE_URL                 e.g. https://xxxx.supabase.co
+//   SUPABASE_SERVICE_ROLE_KEY    Supabase -> Project Settings -> API
+//                                (service_role, NEVER commit this key)
+//
+// Usage:
+//   node scripts/upload-release.mjs                       (default APK path)
+//   node scripts/upload-release.mjs --apk <path>          (custom APK path)
+//   node scripts/upload-release.mjs --keep <n>            (versioned APKs to keep)
+// =====================================================================
+import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadSupabaseEnv } from "./supabase-env.mjs";
+
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// ── Read version from app.json (single source of truth) ────────────
+const appJson = JSON.parse(readFileSync(resolve(rootDir, "app.json"), "utf8"));
+const expo = appJson.expo;
+const VERSION = expo.version;
+const VERSION_CODE = expo.android?.versionCode;
+if (!VERSION || !VERSION_CODE) {
+  console.error("Error: Could not read version/versionCode from app.json");
+  process.exit(1);
+}
+const defaultApk = resolve(
+  rootDir,
+  "releases",
+  `genum-solutions-${VERSION}-arm64-v8a.apk`,
+);
+
+// The commit this release was built from. OTA Guard (ota-guard.yml) parses a
+// short SHA out of the manifest's `notes` and refuses the push unless that
+// commit is an ancestor of the pushed tip — i.e. unless a bundle/APK that
+// carries the JS actually shipped. Without the SHA the guard can only fail.
+// GITHUB_SHA is set by Actions; the git fallback covers a local run.
+export function currentCommitSha() {
+  const fromEnv = String(process.env.GITHUB_SHA || "").trim();
+  if (/^[0-9a-f]{7,40}$/i.test(fromEnv))
+    return fromEnv.slice(0, 12).toLowerCase();
+  try {
+    const sha = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      cwd: rootDir,
+      encoding: "utf8",
+    }).trim();
+    return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.toLowerCase() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function buildReleaseNotes(sha) {
+  const base =
+    "Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates.";
+  return sha ? `${base} (${sha})` : base;
+}
+
+const BUCKET = "app-releases";
+const LATEST_FILE = "genum-solutions-latest.apk";
+const VERSIONED_FILE = `genum-solutions-${VERSION}.apk`;
+const MANIFEST_NAME = "release.json";
+const CONTENT_TYPE = "application/vnd.android.package-archive";
+
+function parseArgs(argv) {
+  const args = { apk: null, keep: 3 };
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--apk" && argv[i + 1]) args.apk = argv[i + 1];
+    if (argv[i] === "--keep" && argv[i + 1]) {
+      const n = Number.parseInt(argv[i + 1], 10);
+      if (Number.isFinite(n) && n >= 1) args.keep = n;
+    }
+  }
+  return args;
+}
+
+const VERSIONED_RE = /^genum-solutions-\d+\.\d+\.\d+\.apk$/;
+
+async function listBucketObjects(url, key) {
+  const res = await fetch(`${url}/storage/v1/object/list/${BUCKET}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prefix: "", limit: 1000 }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Bucket list failed: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+async function pruneOldReleases(url, key, keep) {
+  const objects = await listBucketObjects(url, key);
+  const versioned = objects
+    .filter((o) => VERSIONED_RE.test(o.name))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const protectedNames = new Set([MANIFEST_NAME, LATEST_FILE, VERSIONED_FILE]);
+  const doomed = versioned
+    .slice(keep)
+    .map((o) => o.name)
+    .filter((name) => !protectedNames.has(name));
+  if (!doomed.length) {
+    console.log(
+      `Prune: nothing to remove (${versioned.length} versioned APK(s), keeping newest ${keep}).`,
+    );
+    return;
+  }
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prefixes: doomed }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Prune failed: ${res.status} ${text}`);
+  }
+  console.log(
+    `Prune: removed ${doomed.length} superseded APK(s) beyond newest ${keep}: ${doomed.join(", ")}`,
+  );
+}
+
+async function ensureBucket(url, key) {
+  const list = await fetch(`${url}/storage/v1/bucket`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (list.ok) {
+    const buckets = await list.json();
+    if (buckets.some((b) => b.name === BUCKET)) return;
+  }
+  const create = await fetch(`${url}/storage/v1/bucket`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: BUCKET, public: true }),
+  });
+  if (!create.ok) {
+    // 400 usually means the bucket already exists (race) - that's fine.
+    const text = await create.text().catch(() => "");
+    if (create.status !== 400) {
+      throw new Error(
+        `Failed to create bucket "${BUCKET}": ${create.status} ${text}`,
+      );
+    }
+  } else {
+    console.log(`Created public bucket "${BUCKET}".`);
+  }
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const {
+    baseUrl: url,
+    serviceRoleKey: serviceKey,
+    urlError,
+  } = loadSupabaseEnv();
+  if (urlError) throw new Error(urlError);
+  const apkPath = args.apk ? resolve(rootDir, args.apk) : defaultApk;
+
+  if (!url || !serviceKey) {
+    throw new Error(
+      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Set them as env vars or in mobile/.env.local.",
+    );
+  }
+  if (!existsSync(apkPath)) throw new Error(`APK not found: ${apkPath}`);
+
+  await ensureBucket(url, serviceKey);
+
+  const body = readFileSync(apkPath);
+  const sizeBytes = body.length;
+  const commitSha = currentCommitSha();
+  if (!commitSha) {
+    console.warn(
+      "Warning: no commit SHA available (no GITHUB_SHA / git) — OTA Guard will not be able to verify this release.",
+    );
+  }
+  // Decimal MB (1,000,000 bytes) — matches what download managers, browsers,
+  // Google Play and file explorers show. Never 1024-based "MiB" labels.
+  const actualSizeMb = +(sizeBytes / 1_000_000).toFixed(1);
+  // Upload as both versioned and latest filenames
+  for (const fileName of [VERSIONED_FILE, LATEST_FILE]) {
+    console.log(
+      `Uploading ${apkPath} (${actualSizeMb} MB) to ${BUCKET}/${fileName} ...`,
+    );
+    const upload = await fetch(
+      `${url}/storage/v1/object/${BUCKET}/${fileName}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          "Content-Type": CONTENT_TYPE,
+          "x-upsert": "true",
+          "cache-control": "3600",
+        },
+        body,
+      },
+    );
+    if (!upload.ok) {
+      const text = await upload.text().catch(() => "");
+      throw new Error(
+        `Upload failed for ${fileName}: ${upload.status} ${text}`,
+      );
+    }
+  }
+
+  // Verify what was actually stored matches the bytes we sent — catches any
+  // proxy/CDN rewriting so the manifest never advertises a wrong size.
+  const publicUrl = `${url}/storage/v1/object/public/${BUCKET}/${LATEST_FILE}`;
+  const versionedUrl = `${url}/storage/v1/object/public/${BUCKET}/${VERSIONED_FILE}`;
+  try {
+    const head = await fetch(versionedUrl, { method: "HEAD" });
+    const servedLength = Number(head.headers.get("content-length") ?? "0");
+    if (servedLength > 0 && servedLength !== body.length) {
+      throw new Error(
+        `Size mismatch after upload: local ${body.length} bytes vs served ${servedLength} bytes`,
+      );
+    }
+  } catch {
+    // HEAD may be blocked/cached by some networks — size is still exact from
+    // the local file, so fail only when we can reach the object, not otherwise.
+  }
+
+  console.log("Uploaded. Public download URLs:");
+  console.log("  Latest:", publicUrl);
+  console.log("  Versioned:", versionedUrl);
+
+  // Publish the release manifest the native app checks for updates against.
+  const manifest = JSON.stringify(
+    {
+      version: VERSION,
+      version_code: VERSION_CODE,
+      apkUrl: versionedUrl,
+      latestApkUrl: publicUrl,
+      size_mb: actualSizeMb,
+      size_bytes: sizeBytes,
+      sizeLabel: `${actualSizeMb} MB`,
+      releaseUrl: `${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
+      appsPagePath: "/app",
+      notes: buildReleaseNotes(commitSha),
+      updated_at: new Date().toISOString(),
+    },
+    null,
+    2,
+  );
+  const manifestUpload = await fetch(
+    `${url}/storage/v1/object/${BUCKET}/${MANIFEST_NAME}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        "x-upsert": "true",
+        "cache-control": "0", // No cache — website must always get fresh
+      },
+      body: manifest,
+    },
+  );
+  if (!manifestUpload.ok) {
+    const text = await manifestUpload.text().catch(() => "");
+    throw new Error(`Manifest upload failed: ${manifestUpload.status} ${text}`);
+  }
+  console.log(
+    `Released v${VERSION}. Manifest: ${url}/storage/v1/object/public/${BUCKET}/${MANIFEST_NAME}`,
+  );
+
+  try {
+    await pruneOldReleases(url, serviceKey, args.keep);
+  } catch (pruneErr) {
+    console.warn(
+      `Prune: skipped (${pruneErr.message}). The release itself is live; re-run with --keep to retry.`,
+    );
+  }
+}
+
+// Only run when executed directly — importing this module (e.g. to unit-test
+// buildReleaseNotes) must never upload anything.
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}

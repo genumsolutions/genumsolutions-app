@@ -1,0 +1,2967 @@
+# TESTING — Physical Device Test Checklist
+
+## U-125 round — 2026-10-25: dual-link heap verdict and stable connection feedback (app **3.2.8/61** + car **1.3.19** — DEVICE VERIFY PENDING)
+
+> Install the locally built 3.2.8/61 APK and flash firmware 1.3.19. The app
+> must use the car's live `LINKCAP` verdict, keep an incumbent method usable,
+> and show connection outcomes in a fixed bottom lane. **All rows are unticked:
+> source tests do not replace a real-phone + car pass (F-61).**
+
+- [ ] **U-125-1 — the first method remains available; low heap blocks only the
+      second.** Connect by Bluetooth or Wi-Fi. With `LINKCAP=0` / `link_cap:0`,
+      confirm only the other method is disabled and the explanation names low
+      memory, the one-link limit, and the safe next step. Controls over the
+      incumbent link still work. Reverse the first-link order and repeat.
+- [ ] **U-125-2 — capacity verdicts are respected in both directions.** With
+      `LINKCAP=1`, confirm the second method is offered; with `LINKCAP=0`,
+      confirm it is not. A car that omits `LINKCAP` remains usable and does not
+      acquire a made-up refusal.
+- [ ] **U-125-3 — disconnect is single-shot and method-specific.** Start a
+      Bluetooth or Wi-Fi disconnect and tap again while it is pending. The
+      action disables and reads “Disconnecting…”; only one disconnect runs.
+      The other live method remains connected. A failed close gives one clear
+      error; a manual close does not raise an unexpected-reconnect dialog.
+- [ ] **U-125-4 — connection feedback stays in its fixed bottom lane.** Repeat
+      successful/failed Bluetooth and Wi-Fi connects, manual disconnects, and
+      the car-silent warning. Each outcome appears once at the bottom; no
+      second message appears under Connect, the controls do not move when a
+      message appears, and the message neither covers nor blocks controls.
+- [ ] **U-125-5 — reconnect prompt is one informative decision.** Cause one
+      unexpected Wi-Fi drop, then one unexpected Bluetooth drop. Each shows
+      one method-specific dialog with the paused-control context and retry
+      guidance; repeated status events do not stack dialogs or silently retry.
+
+## U-123 round — 2026-10-24: the storyboard/wireframe re-review's six findings (app 3.2.7/60 JS-only OTA — DEVICEVERIFY PENDING; car half = RUNSHEET records patch only)
+
+> Re-review of `storyboard.md` + `TRACKS/remote-wireframe-2026-10-24.png`
+> against the render. Six findings, all fixed: the storyboard §1 table row
+> that swallowed the gear slot · the type scale (mode 13→12, speed value
+> 11→12, telemetry labels 8→10 — nothing below the 9 px floor) · the settings
+> panel's doubled first divider · the below-fold Danger zone with no scroll
+> affordance · the phone chip's dead `onPress` + `shrink-0`/`flex-1`
+> contradiction · two stale size docs. Car repo: RUNSHEET staleness patched
+> (§1 heading 1.3.13→1.3.17, `fw` expectation → 1.3.17, live manifest hash,
+> newest-first tick order). **Every row unticked — F-61: green gates are not
+> device evidence.**
+
+- [ ] **U-123-1 — the type scale is one hierarchy on the device.** In the
+      chrome: Back reads strongest (14 px), mode name / speed value / tab
+      labels sit together at 12 px (mode and speed value were visibly off
+      tier), chips/labels at 11 px, and the merged row's Up/Heap/Sig labels
+      are legible 10 px — no text on the two bars is smaller than the 9 px
+      group headers.
+- [ ] **U-123-2 — the settings panel has one rhythm and no hidden section.**
+      Exactly ONE divider sits above each group (the doubled rule under the
+      header is gone), the panel's scroll indicator shows while it is taller
+      than the screen, and on the shortest landscape orientation the Danger
+      zone + Factory reset are reachable by scrolling — never invisible.
+- [ ] **U-123-3 — the phone chip on the first bar is information, not a
+      button.** Tapping it does nothing (no press fade, no fake button
+      announcement), it still truncates at ~200 px instead of hiding, and a
+      screen reader reads it as text ("Phone on <label>").
+- [ ] **U-123-4 — ⭐ the narrowest phone keeps every control (640 px, both
+      disconnect chips).** On the narrowest bench phone (≈640 px landscape)
+      with BOTH disconnect chips live (Bluetooth + Wi-Fi) plus the phone
+      chip: the merged row stays `h-9`, all four tabs (D-pad · Joystick ·
+      Telemetry · Connectivity) are fully visible and tappable at the right
+      edge — nothing clipped, nothing wrapped — and the compact telemetry
+      line is correctly absent below 700 px. If ANY element clips or wraps,
+      photograph it and report which one (this row exists because static math
+      says it might not fit).
+
+## U-124 round — 2026-10-24/25: the connect-outcome fix, the re-measured chrome and the hidden IP (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FW **1.3.18**'s one-line ghost-page fix + records)
+
+> Owner: the connect layer fixed the fake-success defect — `handleConnect` and
+> `handleWifiConnect` now return `ConnectOutcome` instead of swallowing a
+> failure into `error` and resolving normally, the ConnectionPanel renders the
+> returned outcome, and `DeviceConnectionScreen` awaits the WiFi handler.
+> Every row unticked — F-61: green gates are not device evidence.
+
+- [ ] **U-124-1 — the handler returns a ConnectOutcome on both branches.**
+      Source-pinned in `mobile/src/components/tools/useControlHubConnectOutcome.test.ts`
+      (the real pin lives in the app, not this file): `handleConnect` returns
+      `{ ok: true, message }` on the success branch and `{ ok: false, reason }`
+      on the catch branch — no failure is ever swallowed into `error` alone.
+- [ ] **U-124-2 — the failure path clears the outbound state before the
+      outcome returns.** `setConnecting(false)`, `setConnectingAddress(null)`
+      and `setSppDevices([])` all run before the `return { ok: false, reason }`
+      in the catch, so a second connect starts from a clean board and a second
+      drop cannot read a stale "Connected to <car>" shape.
+- [ ] **U-124-3 — the panel renders the real outcome.** `connectBluetooth` and
+      `connectWifi` consume the handler's `ConnectOutcome` and render the
+      success/error tone, so a failed connect cannot read as "Connected".
+- [ ] **U-124-4 — the WiFi connect awaits the outcome.** `DeviceConnectionScreen`'
+      s `connect()` awaits `handleWifiConnect()` instead of letting a
+      non-awaited failure resolve to success.
+- [ ] **U-124-5 — the page address follows BOTH the Webpage and Wi-Fi toggles.**
+      With the car linked over Wi-Fi, turn the Webpage OFF and confirm the Wi-Fi
+      transport remains ON and connected while the page address disappears.
+      Turn the page ON and confirm the address returns. Then turn Wi-Fi OFF:
+      the address must disappear even if the webpage setting remains ON.
+      Re-enable Wi-Fi and confirm the address returns with the car-reported
+      router IP or own-hotspot gateway, as appropriate.
+- [ ] **U-124-6 — with the Webpage toggle OFF the broadcast IP is hidden on
+      EVERY surface.** Remote: no chip right of Back (`deck-link-status`
+      absent — gate requires a live link, an enabled page and Wi-Fi, and a
+      known address); Connectivity: the card's **Control address**
+      row absent (`car-network-ip` not rendered). Toggle ON over a live link
+      → both return. Pinned `pageServingTruth.test.ts`; car twin:
+      FW 1.3.18 contract `page-state` + M144.
+- [ ] **U-124-7 — the car's page in a browser while the toggle is OFF shows
+      the “turned off” message, NOT a white screen.** Join the car's network,
+      open its IP in a phone browser with the page off: the ghost page's text
+      renders (firmware half — `serveGhostPage` now declares its real
+      Content-Length). F-61: source-level until flashed — FW 1.3.18 is
+      UNFLASHED.
+- [ ] **U-124-8 — ⭐ the landscape screen's own chrome (2026-10-25 owner
+      fix).** On the Remote (landscape-locked): (a) the black strip above the
+      Back row is ONE status bar tall — no doubled band, the back line sits
+      right under the phone's status icons; (b) the punch-hole camera strip on
+      the LEFT edge (and the right, if the device reports one) is **solid
+      black**, not the theme surface, and the 12 px floor beyond it is normal
+      padding; (c) the status-bar chip left of the disconnect button reads
+      **`Wi-Fi`** (or `Wi-Fi · <network>`) — **never** a mask like
+      `192.168.245.0/24`. Photograph the top-left corner of the deck; if any of
+      the three is off, say which.
+- [ ] **U-124-9 — per-link disconnect controls are consistent.** In an external
+      router network, connect Wi-Fi and open Remote: its Wi-Fi disconnect control
+      must appear and disconnect only Wi-Fi. Connect Bluetooth and verify the
+      Bluetooth control appears; with both links up, both controls appear and
+      each drops only its own transport. Repeat with the car's own hotspot.
+
+## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
+
+> Owner (2026-10-24): _"check the both project for the residues, dublicates, or
+> bugs or any discrepancies or the abnormalities. Also make the remote screen
+> hieracrhial in the size of the contents. also organize the remtoe screen and
+> the the tabs under this screen like conectivity and the others too. also make
+> the setting too organized and proper size and also mind the spaces of the
+> status bar of the phones and the position of the camera … some of the
+> sections got increased in the space twice or more i think during
+> rectififcation."
+>
+> Audit scope: BOTH repos (residues / duplicates / dead code / stale comments /
+> discrepancies). Findings + fixes below; the car repo had **NO actionable
+> findings** — every "removed-feature" string there lives in intentional NVS
+> migration code (`w.remove("ap_psave")` etc.) or historical records. Layout
+> truth: `storyboard.md` §0–5 + the measured wireframe
+> `TRACKS/remote-wireframe-2026-10-24.png` (not a device screenshot).
+> **Every row unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **896/896** (60 files) · prettier clean;
+> car: **unchanged** at 1.3.17 gates (syntax 9/9 · contract 0 · webpage-js 0 ·
+> mutate 137/137) — no car file touched.
+
+- [ ] **U-122-1 — ⭐ the shell respects the camera and the gesture bar.** On a
+      landscape phone with a punch-hole / side camera: nothing in the chrome
+      row or the merged row sits under the camera (the inset, floor 12 px,
+      applies on ALL FOUR sides), and the deck clears the gesture bar. Back and
+      the leftmost chip on the line below it start on the SAME left edge.
+- [ ] **U-122-2 — the tabs read as tabs.** D-pad · Joystick · Telemetry ·
+      Connectivity render as ONE segmented strip (single bordered pill
+      container, active view filled navy, `tablist` a11y role); tapping each
+      switches the deck and exactly one tab is filled.
+- [ ] **U-122-3 — the settings panel is grouped, closable and inset-safe.** The
+      gear opens a panel titled "Settings · <mode>" with an ✕ close (the scrim
+      closes it too); sections read **Car connection → Driving → Danger zone
+      LAST** — factory reset sits at the bottom, never between routine
+      settings. The panel anchors inside the insets (side camera / gesture bar
+      clear) and scrolls inside its own height.
+- [ ] **U-122-4 — the doubled spacing is gone.** The Connectivity panel's method
+      row sits one padding-step below the panel edge (the old 18 px top gap is
+      now 10 px), and the message strips ("the car may have frozen", connect
+      outcomes) read at a real 16 px line height instead of 10 px type in a
+      12 px box.
+
+## U-122 round — 2026-10-24: full audit + the Remote screen's layout, hierarchy & settings (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; NO car change)
+
+> Owner (2026-10-24): _"check the both project for the residues, dublicates, or
+> bugs or any discrepancies or the abnormalities. Also make the remote screen
+> hieracrhial in the size of the contents. also organize the remtoe screen and
+> the the tabs under this screen like conectivity and the others too. also make
+> the setting too organized and proper size and also mind the spaces of the
+> status bar of the phones and the position of the camera … some of the
+> sections got increased in the space twice or more i think during
+> rectififcation."
+>
+> Audit scope: BOTH repos (residues / duplicates / dead code / stale comments /
+> discrepancies). Findings + fixes below; the car repo had **NO actionable
+> findings** — every "removed-feature" string there lives in intentional NVS
+> migration code (`w.remove("ap_psave")` etc.) or historical records. Layout
+> truth: `storyboard.md` §0–5 + the measured wireframe
+> `TRACKS/remote-wireframe-2026-10-24.png` (not a device screenshot).
+> **Every row unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **896/896** (60 files) · prettier clean;
+> car: **unchanged** at 1.3.17 gates (syntax 9/9 · contract 0 · webpage-js 0 ·
+> mutate 137/137) — no car file touched.
+
+- [ ] **U-122-1 — ⭐ the shell respects the camera and the gesture bar.** On a
+      landscape phone with a punch-hole / side camera: nothing in the chrome
+      row or the merged row sits under the camera (the inset, floor 12 px,
+      applies on ALL FOUR sides), and the deck clears the gesture bar. Back and
+      the leftmost chip on the line below it start on the SAME left edge.
+- [ ] **U-122-2 — the tabs read as tabs.** D-pad · Joystick · Telemetry ·
+      Connectivity render as ONE segmented strip (single bordered pill
+      container, active view filled navy, `tablist` a11y role); tapping each
+      switches the deck and exactly one tab is filled.
+- [ ] **U-122-3 — the settings panel is grouped, closable and inset-safe.** The
+      gear opens a panel titled "Settings · <mode>" with an ✕ close (the scrim
+      closes it too); sections read **Car connection → Driving → Danger zone
+      LAST** — factory reset sits at the bottom, never between routine
+      settings. The panel anchors inside the insets (side camera / gesture bar
+      clear) and scrolls inside its own height.
+- [ ] **U-122-4 — the doubled spacing is gone.** The Connectivity panel's method
+      row sits one padding-step below the panel edge (the old 18 px top gap is
+      now 10 px), and the message strips ("the car may have frozen", connect
+      outcomes) read at a real 16 px line height instead of 10 px type in a
+      12 px box.
+
+## U-121 round 2 — 2026-10-24: the owner's snag list (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FLASH **1.3.17**)
+
+> Owner (2026-10-24): _"the car resets again and again whenever i try to
+> connect the wifi from the app"_ · _"the remote screen show the duplicate
+> messages like the words, wifi network name hidden"_ · remove the **This
+> phone** box as a whole · remove the **Other ESP / IoT projects** section
+> totally · in the Car network section add **entering the wifi network the car
+> is at** + **the broadcast IP for the control**, auto-filled most of the time ·
+> think the Bluetooth and Wi-Fi methods through and drop the duplicates ·
+> **note the Remote screen's storyboard**, use the line below Back and the
+> space right of Back, and be precise about everything after it.
+> Car-side bench rows for the firmware half live in
+> `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (**U-121-E · U-121-E2**, unticked).
+> **Every row here is unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **896/896** (60 files) · prettier clean;
+> car: syntax 9/9 · contract 0 (`switch-heap` new) · webpage-js 0 · mutate
+> **137/137** (M137–M143 new).
+
+- [ ] **U-121-A1 — ⭐ the car does NOT reset when the app connects its Wi-Fi.**
+      Flash **1.3.17**, Bluetooth ON (heap at the 13–20 kB floor), then switch
+      the car to a router from the app: either the switch completes, or serial
+      shows `[RADIO] step deferred: low heap …` → `[RADIO] switch abandoned:
+low heap …` after 4 s. **No reset in either case**, `crash_count` flat,
+      and the same switch runs clean with Bluetooth OFF.
+- [ ] **U-121-A2 — the phone's network appears exactly ONCE.** On the Remote:
+      one chip on the line below Back (`remote-phone-network`), and **no**
+      "This phone / … name hidden" box anywhere in the Connectivity panel — the
+      words `name hidden` must never appear twice on one screen. The
+      "Other ESP / IoT projects" card is gone from the network list too.
+- [ ] **U-121-B1 — ⭐ the Car network card answers both questions, auto-filled.**
+      "The car is on" shows the car's reported network with no typing;
+      "Control address" shows the broadcast IP (the car's AP address on its own
+      hotspot, the router IP when it is on one) and follows the car when it
+      moves networks.
+- [ ] **U-121-B2 — a typed network survives a restart.** Type the network the
+      car is on (when it cannot report it) and ✓ → force-quit and reopen the
+      app → reconnect to that car: the field still shows what you typed (per-car
+      pref `carSsidAnswer`), and clearing it returns the field to car truth.
+- [ ] **U-121-C1 — one place to act on a network.** Connectivity → Wi-Fi: the
+      left "Added networks" list only DISPLAYS (Connected / Car hotspot /
+      Saved); switching, adding, editing and forgetting happen exclusively in
+      the right pane, and the right pane still does all four.
+- [ ] **U-121-C2 — the storyboard matches the screen.** `storyboard.md`'s
+      regions are what you see: chrome row (Back · IP chip · mode · speed ·
+      gear), the `h-9` line below Back (phone chip → disconnect chips →
+      telemetry → pills), one message strip, one deck panel, settings dropdown,
+      reconnect prompt on top. Anything that disagrees is a doc bug or a code
+      bug — say which.
+
+### Carried from U-121 round 1 (2026-10-23) — landed then, still UNVERIFIED
+
+> Those phases were committed and pushed with green gates but never got device
+> rows of their own (F-61). They are recorded here rather than left implicit.
+
+- [ ] **U-121-R1-A — ⭐ the chip right of Back is the BROADCAST IP alone, and
+      only while the car serves its page.** Webpage ON + any live link (Bluetooth
+      too) → the bare IP renders and tapping it opens the car's page; Webpage
+      OFF → the chip is gone. No transport label, no car-network name, no device
+      name in it, ever.
+- [ ] **U-121-R1-B — the connect screen picks the car's network BY NAME.** In
+      the Wi-Fi setup card the saved-network rows sit beside the broadcast-IP
+      field, the car's own network is marked, and choosing one prefills the
+      field (or issues `ROUTERS;USE` over a live link).
+- [ ] **U-121-R1-C — the add-network form is a centered modal card.** Fields are
+      labelled and readable in landscape, clear of the split keyboard; Save and
+      Cancel both work and the added network lands in the car's list.
+- [ ] **U-121-R1-D — ⭐ the app KNOWS when the car stopped answering.** With a
+      link up, stop the car's answers (freeze/power-cut it): within
+      `CAR_SILENT_MS` the deck shows _"The car has not answered for a while — it
+      may have frozen. Check its power … then Reconnect."_ and it clears when
+      frames resume. The link being up must NOT hide it.
+
+## U-120 round — 2026-10-22/23: Q1–Q3 close-out + owner list B (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; car half = FLASH **1.3.15**)
+
+> Owner (2026-10-22): implement the Q1–Q3 defaults (both halves) and owner list
+> B, no confirmation needed, push mid-phase. **A** = Q1 firmware boot-hop OFF
+> (car 1.3.15) + Q2/Q3 pins · **B** = the webpage toggle's command reaches its
+> handler (car fix + app reply-branch pin) · **C** = reconnecting is NEVER
+> automatic — one method-naming yes/no dialog · **D** = no dummy paired row +
+> the by-name car-network selector by the broadcast-IP field + the phone's own
+> network before connecting · **E** = auto-join says AND does "last used
+> router" (sense ×3 surfaces + recency pick + strength machinery removed) +
+> settings/connectivity audit + cleansing.
+> Car-side bench rows for the firmware half live in
+> `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (**Q1-1 · Q1-2 · U-120-B**, unticked).
+> **Every row here is unticked — F-61: green gates are not device evidence.**
+> Gates this round: app tsc 0 · vitest **882/882** (59 files) · prettier clean;
+> car: syntax 9/9 · contract 0 · webpage-js PASS · mutate-gates **123/123**.
+
+- [ ] **U-120-C1 — ⭐ NO automatic reconnect anywhere.** Mid-drive, cut the car
+      off (or kill its link): the app must NOT re-dial on its own — no Wi-Fi
+      quiet re-dial (the old 3 s one), no SPP silent backoff burst (the old
+      1s→2s→4s→8s). ONE dialog raises instead, immediately.
+- [ ] **U-120-C2 — ⭐ the dialog names the METHOD and only reconnects on yes.**
+      Bluetooth drop → title "Bluetooth disconnected", body "Reconnect to your
+      car over Bluetooth?"; Wi-Fi drop → "Wi-Fi disconnected" / "…over Wi-Fi?".
+      **Reconnect** runs exactly that transport (SPP retry / Wi-Fi re-dial);
+      **Cancel** dismisses and NOTHING reopens the link in the background (a
+      fresh manual Connect must still work).
+- [ ] **U-120-C3 — no narration noise on the dialog.** No "stopping itself on
+      link loss", no "no Wi-Fi link is up", no reset record — one title, one
+      sentence, two buttons.
+- [ ] **U-120-C4 — a live other link suppresses the prompt (U-110).** Kill BT
+      while Wi-Fi still answers (and vice versa): no dialog — the car is still
+      reachable, so the claim would be false.
+- [ ] **U-120-D1 — ⭐ no dummy "Paired car" row.** Connectivity → Bluetooth:
+      the paired list shows only devices with a real name; the invented
+      "Paired car" placeholder entry is GONE — and a real named car must still
+      appear (a fully EMPTY paired list is a FAIL: the old guard removed every
+      entry).
+- [ ] **U-120-D2 — ⭐ the car-network selector by the broadcast-IP field.**
+      Connect screen → Wi-Fi STA card: chips of the car's networks sit beside
+      the `ws://…` field; the car's current network is marked "· car"; tapping
+      the CURRENT one prefills the field with the car's reported IP; tapping
+      another while linked tells the car to join it and the field follows the
+      new `STATE;IP`.
+- [ ] **U-120-D3 — the phone's own network is known BEFORE connecting.** The
+      Connect screen shows "This phone · Wi-Fi · <SSID>" (etc.) above the
+      setup card with no link up at all.
+- [ ] **U-120-E1 — ⭐ auto-join says LAST USED router (sense).** Remote
+      Settings and Tools → car profile both read "Auto-join last used router
+      (app)" with last-used help text; the smart-link toast names the same
+      setting; NOTHING on any surface says "strongest saved router".
+- [ ] **U-120-E2 — ⭐ auto-join DOES last used router (operations).** With ≥2
+      saved routers and the car on its own AP: link up → the car joins the
+      MOST RECENTLY USED one (not whichever it hears loudest), promptly — no
+      6 s strength-scan wait, no automatic `ROUTERS;SCAN` for the pick (the
+      explicit "Search for networks" button still scans).
+- [ ] **U-120-E3 — audit + cleansing regression pass.** Remote → Connectivity
+      and the Settings menu read correctly (labels, toggles, lists); drive on
+      both links, connect/disconnect each method, factory-reset dialog — all
+      unchanged. Anything behavioral that moved here is a regression.
+
+## U-117/U-118/U-119 round — 2026-10-20: settings truth + reconnect honesty + cleansing (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; webpage rows need CAR FLASH **1.3.14**)
+
+> Owner report: *"webpage toggle off button is not working … other settings in
+> the remote screen … reconnect shows the last reset thing, remove that … the
+> app is not aware about its own connected network … cleansing."
+> **U-117** = webpage-toggle truth (parse/adopt/query/rename `pageOn`, offline
+> toast; car half = `;PAGE=` on STATE, firmware **1.3.14**) · **U-118** = the
+> restart RECORD card removed from the deck + the "This phone" network row ·
+> **U-119** = dead-export cleansing (behaviour-neutral).
+> **Every row is unticked — F-61: green gates are not device evidence.**
+> Gates this round: tsc 0 · vitest **843/843** (55 files) · prettier clean;
+> car: contract 0 failures (new rule `page-state`) · webpage-js PASS ·
+> syntax 9/9 · mutate-gates **120/120**.
+
+- [ ] **U-117-1 — ⭐ the Webpage switch shows CAR truth on connect.** Car
+      serving its page, app fresh-started, open the Remote settings: the
+      switch is ON before you touch it (it queries `WIFICFG;WIFI;PAGE;?` on
+      link-up). It must NOT show OFF-then-flip — an assumed state is the bug.
+- [ ] **U-117-2 — ⭐ Webpage OFF actually stops the page (needs 1.3.14).**
+      Toggle OFF from the app with BT linked: phone browser to the car's IP
+      gets the GHOST page, not the control page; Wi-Fi/BT toggles do NOT move.
+      Serial `[WIFICFG] web page OFF`. Toggling ON serves again.
+- [ ] **U-117-3 — the choice survives BOTH restarts.** Webpage OFF → restart
+      the CAR (page still off, `/status` `page_on:0`) → restart the APP
+      (switch still OFF). No 1 Hz write churn: profile save count must not
+      tick every second while idle.
+- [ ] **U-117-4 — offline toggle is honest.** Not linked: every switch in the
+      panel is DISABLED, and a `WIFICFG` send path shows _"… connect to the
+      car first"_ instead of silently doing nothing. State via BT-only also
+      shows `;PAGE=` after the flash (U-117-2's car half).
+- [ ] **U-118-1 — ⭐ the reconnect prompt carries NO reset record.** Force a
+      car restart with no link: the ONE card says "Bluetooth disconnected"
+      with a plain cause sentence — no `Boot N → N+1`, no reset reason, no
+      crash count. **Cancel** clears it (restart-raised cards must be
+      dismissible); Reconnect runs the normal SPP retry.
+- [ ] **U-118-2 — the reset record still lives where it belongs.** Control
+      Panel → Tools → Diagnostics → "Last restart record" still LEADS with
+      the last reset (P2) — U-118 removed it from the deck, not from here.
+- [ ] **U-118-3 — ⭐ "This phone" row tells the truth.** Connectivity panel:
+      `Wi-Fi · <your SSID>` on Wi-Fi; `Wi-Fi · network name hidden` when the
+      OS withholds it; `Cellular`; `No network` in airplane mode — and it
+      updates live when you switch networks.
+- [ ] **U-118-4 — deck chrome unchanged (regression guard).** The old
+      "on <ssid>" chip stays GONE from the Remote deck (U-113 P2 issue 4) —
+      the phone's network lives ONLY in the Connectivity panel row.
+- [ ] **U-119-1 — cleansing is behaviour-neutral.** With 3.2.7/60 OTA after
+      `c26b9cf`: drive both links, connect/disconnect each method, open the
+      Update screen (version label reads correctly), car-profile sync — all
+      as before. Six dead exports were removed; anything that changes here is
+      a regression, not a "cleanup side-effect".
+
+## U-116 round — the 2026-10-17 six-item round (app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING; needs CAR FLASH **1.3.13**)
+
+> Master plan: `TRACKS/PLAN-2026-10-17-multiconnect-logs-connectivity.md` (mirror of
+> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-17-multiconnect-logs-connectivity.md`).
+> Phases P1, P2, P5, P3, P7, P8 landed in that order (each JS-only); **P4/P6 are
+> the car half (1.3.13); P9 is deferred to this sheet's U-116-19/20 result.**
+> **Every row is unticked — F-61: green gates are not device evidence.**
+
+- [ ] **U-116-1 — ⭐ a Bluetooth drop raises the reconnect prompt at the RIGHT
+      moment.** With the car powered off mid-drive: the prompt appears once the SPP
+      backoff is exhausted AND no link is up; its copy names the cause; **Reconnect
+  - Cancel only** (two actions, no Leave).
+- [ ] **U-116-2 — a Wi-Fi drop gets its own honest copy.** Drop the WS link
+      only (e.g. leave the car's network): the prompt names Wi-Fi, not Bluetooth.
+- [ ] **U-116-3 — a detected car restart leads with the restart.** Power-cycle
+      the car while linked: the restart card names the reset reason + boot change
+      and offers **Reconnect + Cancel**.
+- [ ] **U-116-4 — a cleared cause dismisses the prompt.** Reconnect (or power
+      the car back): the prompt goes within one tick; it never outlives its cause.
+- [ ] **U-116-5 — ⭐ the Diagnostics strip leads with the LAST RESET.** On a
+      crashed car the headline reads `TASK_WDT · http-root` (reason · phase), the
+      counts sit secondary, `low heap` only under 64 kB.
+- [ ] **U-116-6 — a clean car shows `None` + a clean-boot hint** (no false
+      crash claim from a zero count).
+- [ ] **U-116-7 — an OFFLINE car shows a dash, never a stale record as current**;
+      firmware without the fields reads `Firmware too old to report resets`.
+- [ ] **U-116-8 — ⭐ the second link's raise is DESCRIBED.** With Wi-Fi live,
+      start Bluetooth: the panel shows "Bluetooth coming up…" while it negotiates;
+      the Remote label never says `BT+WiFi` before both are genuinely up (mirror
+      order too — U-116-9).
+- [ ] **U-116-9 — a car-refused second raise shows REFUSED, not pending.** On a
+      `LINKCAP=0` car (see car row U-116-11): starting the second link shows the
+      car's reason immediately; the button that would START a refused raise is
+      muted with the same reason (never a silent disable).
+- [ ] **U-116-13 — ⭐ the LINKCAP verdict surfaces honestly.** A `LINKCAP=0`
+      car: the second connect action is disabled WITH the reason ("the car is low
+      on memory right now — it will hold one link only"); the FIRST connect (no
+      link up) is never gated; an older car (no field) is never refused — F-88.
+- [ ] **U-116-16 — ⭐ the per-car log viewer shows REAL car events.** Tools →
+      Saved settings → Car profile → "Car log": after a reset, Refresh lists the
+      car's BOOT/FAULT rows newest-first with chip + source (CAR), the stamp line
+      shows when it was read.
+- [ ] **U-116-17 — clear-on-car is confirmed and real.** "Clear on car" asks
+      first; on Clear the car's `LOG;CLEAR` wipes the ring and the viewer reads
+      back a real zero from the car.
+- [ ] **U-116-18 — an OFFLINE viewer shows the cached view, labelled.** With
+      the car off: the last fetch shows with its timestamp; nothing pretends to be
+      live.
+- [ ] **U-116-19 — ⭐ the "Car network" hint is found FIRST.** Set Car network
+      to the car's IP: discovery probes it before mDNS/sweep and connects; the
+      hint survives an app restart (per-car profile).
+- [ ] **U-116-20 — a phone network change re-finds the car, including a
+      REJOIN to the same network.** Toggle phone Wi-Fi off/on on the same SSID: the
+      app re-finds and re-offers the car without a manual Connect tap.
+
+> **P9 note (findability):** implement the car-side phase only if U-116-19/20
+> show the app still cannot find the car reliably — the phase is conditional by
+> design (plan §P9).
+
+## U-113 round — the 2026-10-15 rectification round (14-issue list; app 3.2.7/60 JS-only OTA unless a row says otherwise; car flash target 1.3.11)
+
+> Master plan: `TRACKS/PLAN-2026-10-15-dual-link-and-remote-ux.md` (mirror of
+> `Genum_4WD4M_CAR\TRACKS\PLAN-2026-10-15-dual-link-and-remote-ux.md`). Phases P1..P8,
+> one at a time; device rows accumulate here as each phase lands. **Rows below marked
+> (code landed) still need the owner's bench pass — F-61: our gates are NOT device evidence.**
+>
+> **P8 close-out (2026-10-16): the round is SOURCE-COMPLETE.** All 14 issues are
+> code-complete and gated (car + app gates green; the app ships JS-only
+> **3.2.7 / versionCode 60**, OTA published). **No row below is ticked — every U-113
+> row is still the owner's bench pass (F-61).** The car-side rows (U-113-8..15) and
+> U-115-1..3 live in `Genum_4WD4M_CAR\TRACKS\DEVICE-TESTS.md`; the order + capture
+> commands are in that repo's `TRACKS/RUNSHEET.md`.
+
+### P1 — issue 11: mode-rotate cycles again (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
+
+- [ ] **U-113-1 — the mode-rotate button cycles AND skips the car's GONE modes.** On the
+      Remote screen the rotate icon next to the mode chooser advances through the fleet
+      cycle; on the 4WD4M it must go 4WD4M → **PATH** (ESP_SER/ESP_CLI were removed from
+      the car's registry in U-79 and are absent from its CAPS table = GONE — the old code
+      sent ESP_SER, the car NACKed and the display rolled back to 4WD4M, i.e. "resets to
+      the same 4wd4m"). A full spin must visit every mode the car's CAPS table lists
+      exactly once before wrapping to 4WD4M, and planned/CS modes stay cyclable (R-10).
+      Needs ANY 1.3.11+ flash (the CAPS GONE keys come from U-79). Force-close and reopen
+      ×2 after the OTA (`A-2`).
+
+### P2 — issues 2, 3, 4, 10, 14: Remote chrome rebuilt (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
+
+> Plan: P2. All rows need the owner's bench pass; capture before/after screenshots
+> for the merged row and the prompts.
+
+- [ ] **U-113-2 — issue 2: ONE row below Back.** The disconnect chips and the
+      D-pad/Joystick/Telemetry/Connectivity pills now share a SINGLE constant-height
+      row; the content area gains their ~28 px. There is no second row, and the pills
+      still switch tabs.
+- [ ] **U-113-3 — issue 3: the disconnect chips are per-live-method.** The BT chip
+      appears only while a Bluetooth link is live and disconnects ONLY Bluetooth
+      (Wi-Fi stays up); the Wi-Fi chip appears only while a Wi-Fi link is live and
+      disconnects ONLY Wi-Fi. Before P2 the BT chip rode the shared `connected` flag
+      (which a Wi-Fi connect also sets) and its tap killed BOTH links.
+- [ ] **U-113-4 — issues 4 + 10: the chrome line is honest.** The "on &lt;phone-ssid&gt;"
+      chip is gone (no phone-network name anywhere on the Remote). The broadcast IP
+      right of Back IS the tappable link to the car's page, the long
+      "BT · name + WiFi · ip (AP)" label is gone, and there is no second page chip in
+      the tabs row.
+- [ ] **U-113-16 — issue 14: the prompts are readable.** Both the network-reconnect
+      and the car-restart dialogs are OPAQUE high-contrast cards (solid background +
+      border) — the screen text no longer shows through — and each names the real
+      connection state (which link dropped / which is still up), not a generic
+      "Connection lost".
+
+### P3 — issues 5, 12: Settings panel widened + audited (code landed 2026-10-15, JS-only OTA — DEVICE VERIFY PENDING)
+
+> Plan: P3. The widen + the toggle removal are IN; the control AUDIT is the bench
+> pass these rows exist to produce (log pass/fail per control, not just "works").
+
+- [ ] **U-113-5 — issue 5: the settings dropdown fits.** Open the Settings menu on a
+      narrow phone: labels, switches and helper text all fit without truncation (the
+      panel was widened `w-64` → `w-80`); the list still scrolls when it overflows.
+- [ ] **U-113-6 — issue 12a: the CAR's boot auto-join toggle is gone; the app's is the
+      only one.** The Settings menu no longer offers "Boot auto-join (car)". The
+      remaining "Auto-join saved router (app)" toggle still works: on car selection
+      the app switches the car to the strongest saved router it hears (walk the
+      smart-link path end-to-end and report any failure — this half may need a code
+      fix).
+- [ ] **U-113-7 — issue 12b: the whole panel audited.** Toggle and verify EACH
+      control, logging pass/fail: Wi-Fi toggle, Bluetooth toggle (the two can't both
+      go off), Reset car data, Steering-limit + Trim steppers (2WD1M gate), mode
+      chooser + rotate (see U-113-1), the speed strip, the four tab pills, settings
+      open/close, Back (navigates without disconnecting), the reconnect/restart
+      prompts, and the floating-button drag. Report every failure with a repro.
+
+## U-112 round — the Internet method removed from the app (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.9)
+
+> Owner directive: the Internet / remote-link ("control from anywhere") method is
+> dropped ENTIRELY — removed, not parked — and will be rebuilt from scratch later.
+> Car half: `Genum_4WD4M_CAR` firmware **1.3.9** deletes `RelayComm` and every
+> relay seam. Nothing reachable is lost: the method was offered as
+> honestly-unavailable and the relay was build-blocked (F-84).
+
+- [ ] **U-112-1 — exactly TWO connection methods.** The Connections area offers
+      **Bluetooth** and **WiFi (LAN)** pills only. There is **no Internet pill,
+      no globe icon, no "not set up yet" card** anywhere — it was removed by
+      owner directive (2026-10-14), not parked. If it renders, the removal failed.
+- [ ] **U-112-2 — no relay/Internet transport is reachable.** The transport
+      registry carries **6** ids (`bt-classic`, `bt-ble`, `wifi-ap-ws`,
+      `wifi-sta-ws`, `http`, `mdns`): no `mqtt`, no `cloud-relay`, no `internet`
+      radio in any grouping, help window or teaching text.
+- [ ] **U-112-3 — nothing else moved.** Bluetooth and Wi-Fi connect + disconnect,
+      router add / switch / forget, the Remote chrome and the two prompts behave
+      exactly as they did before the removal (the two live methods are untouched).
+
+## U-111 round — car settings applied on connect + BT name (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.8)
+
+> Owner: "after the car gets connected it should send its state and preferences to the
+> app and the app should apply them, and the car should save them for the next power
+> cycle." The car half is firmware 1.3.8 (`Genum_4WD4M_CAR`); the app is a JS-only OTA
+> (version 3.2.7 / versionCode 60 unchanged — force-close and reopen ×2, `A-2`).
+
+- [ ] **U-111-1 — the app shows the car's settings on connect (round-trip).** Connect
+      (Bluetooth or Wi-Fi) with a **fresh app profile** (or after the 1.3.8 flash wipes
+      the car's toggles): the Remote ⚙ Settings' Wi-Fi / Bluetooth / Boot-auto-join
+      switches show the car's **real** values immediately — both transports ON, auto-join
+      ON by default — instead of "don't know"/stale local state.
+- [ ] **U-111-2 — a change round-trips and survives a power cycle.** Toggle Boot
+      auto-join OFF in the app → the car confirms and the app shows OFF; **power-cycle the
+      car** → it returns with auto-join OFF (the car persisted it). Turn it back ON.
+- [ ] **U-111-3 — the app names the car's Bluetooth `4WD4M Car`.** The pairing row, the
+      device detail "Pairs as" value, the connect help text and the mobile TESTING rows
+      all read `4WD4M Car` (was `4WD CAR`), matching the firmware's advertisement.
+- [ ] **U-111-4 — no optimistic-flip flicker.** Flip a transport toggle and watch it: the
+      switch does NOT bounce back to the old value while the car's next telemetry frame
+      arrives.
+
+## U-110 round — stale reconnect prompt + centered prompts (2026-10-14, app 3.2.7/60 JS-only OTA — DEVICE VERIFY PENDING, needs CAR FLASH 1.3.7)
+
+> Owner's post-flash report: the app showed "Connection lost / Reconnect to your
+> car?" **while the car was connected and working** (over Wi-Fi), and the prompt
+> sat as a bottom banner rather than a dialog.
+
+- [ ] **U-110-1 — no stale prompt while connected.** With the car live on its
+      Wi-Fi (or Bluetooth) link and driving, the "Connection lost / Reconnect to
+      your car?" prompt does **not** appear. (It used to surface when the SPP
+      backoff gave up even though Wi-Fi was answering.)
+- [ ] **U-110-2 — the prompt is a centered modal when it IS real.** Kill the car
+      (or its AP) so no link is live: the prompt appears as a **dimmed card in
+      the middle of the screen**, not a bottom banner. Reconnect works.
+- [ ] **U-110-3 — the restart prompt is a centered modal.** After a real car
+      restart, "Car restarted" shows centered with Reconnect / Leave / Cancel.
+- [ ] **U-110-4 — link-up retires the prompt.** If the prompt is showing and the
+      car comes back (any transport), it disappears on its own.
+
+## U-105 round — one own-hotspot `4WD4MCar_WiFi`; Parallel + power-save REMOVED; Wi-Fi / Bluetooth / boot-auto-join toggles; no teardown (2026-10-13 — DEVICE VERIFY PENDING, needs CAR FLASH)
+
+> Owner's device-report round + redesign mandate ("keep both"): the car keeps Bluetooth AND Wi-Fi live
+> **simultaneously** by default — the app's parallel + own-hotspot power-save settings and the
+> one-active-link teardown are REMOVED, and the fleet own-hotspot name is ONE: `4WD4MCar_WiFi`
+> (donor `WirelessCar_Wifi` + old `4WDCar_Wifi` purged). **This round REQUIRES the car re-flash** —
+> the SSID rename and the `WIFICFG;WIFI|BT|AUTOJOIN` toggles live in firmware **1.3.5** (the car's
+> current bench runs 1.0.5; `Update` over the app alone cannot change the SSID). App is a JS-only
+> OTA (version 3.2.7 / versionCode 60 unchanged — force-close and reopen ×2, `A-2`). Run the car's
+> `TRACKS/DEVICE-TESTS.md` **U-105-1..8** rows in the same session (they share the flash).
+
+- [ ] **U-105-0 — flash the car to 1.3.5 first (from the Genum_4WD4M_CAR repo).** The own-hotspot
+      SSID becomes `4WD4MCar_WiFi` on that flash. After it, the OTA app (force-close ×2) must agree
+      with the car everywhere: scans, the "Added networks" own-AP pin, `OWN_AP_NAME`/`OWN_AP_NAMES`.
+- [ ] **U-105-1 — only ONE own-hotspot name exists anywhere.** A Wi-Fi scan while the car is on its
+      own hotspot shows `4WD4MCar_WiFi` — and NEVER `WirelessCar_Wifi` or `4WDCar_Wifi` in the app's
+      networks list, saved routers, or the car's NETW echo. Deleting on the old name is impossible
+      because the app no longer recognises it as "our" network.
+- [ ] **U-105-2 — Wi-Fi / Bluetooth / Boot auto-join toggles in Remote Settings.** Linked car →
+      Remote ⚙ → Settings shows THREE switches: **Wi-Fi** (default ON), **Bluetooth** (default ON),
+      **Boot auto-join** (default ON). They mirror CAR truth on link-up (not stale local state), and
+      the label says what each does.
+- [ ] **U-105-3 — both transports stay live together (the mandate).** With Wi-Fi + Bluetooth both ON,
+      connect Bluetooth, then connect/keep Wi-Fi: BOTH links stay open — the Connectivity strip says
+      "Bluetooth + Wi-Fi", the Remote chrome row says `BT · <name> + WiFi · <ip>`, and driving works.
+      Turning ONE toggle OFF from the app turns that transport off on the car; the OTHER stays up.
+      The removed settings (Parallel BT + Wi-Fi, Hotspot power-save) are GONE from the Settings drawer.
+- [ ] **U-105-4 — the pair can never BOTH be off.** Toggle Wi-Fi OFF → the Bluetooth switch becomes
+      disabled (and vice versa) — the UI cannot request a two-OFFs state; the car clamps one too
+      (firmware-side, `WIFICFG;WIFI;OFF` while BT is off is answered with the clamp).
+- [ ] **U-105-5 — the toggles persist across a power cycle (car truth).** Turn Bluetooth OFF in the
+      app, power-cycle the car, reconnect: Bluetooth is still OFF on the car and the Settings switch
+      reads OFF — it survives `t_bt` in NVS. Same for Wi-Fi (`t_wifi`) and Boot auto-join
+      (`boot_autojoin`). Over Wi-Fi: telemetry STATE/JSON keys `wifi_enabled`/`bt_enabled`/`boot_autojoin`
+      report what you set (checked in the Remote diagnostics hint text).
+- [ ] **U-105-6 — a deleted network STAYS deleted across a power cycle (the reported defect).**
+      Forget a saved router (case-insensitively — `ROUTERS;DEL` now matches by folded name): it
+      leaves the app + car registry immediately, and after the car power-cycles it is STILL gone
+      (it used to resurrect itself). `ROUTERS;ERROR;Not saved:<ssid>` on a double-delete still shows
+      the car's refusal, never a fake success.
+- [ ] **U-105-7 — delete works case-insensitively.** A saved router added as `MiFi` deletes by
+      tapping a row the car echoed as `mifi` (case difference) — one DEL goes out, one `DELETED`
+      comes back, the row clears.
+- [ ] **U-105-8 — regressions.** BT connect no longer drops an open Wi-Fi socket and vice versa;
+      the "phone joined a new network → find the car" recovery still works; router add/switch/clear
+      unchanged; F-65 keep-looking still re-finds a rebooting car; only `4WD4MCar_WiFi` appears in
+      any scan (see U-105-1). No repeat of U-93's double-DEL, no `ROUTERS;STARTED` phantom rows.
+
+## U-108 round — fresh start + timestamps + auto-join labels + Reset car data (2026-10-13, app 3.2.7/60 — DEVICE VERIFY PENDING)
+
+> JS-only OTA (version 3.2.7/60 unchanged, force-close ×2). Requires car firmware 1.3.6
+> (`Genum_4WD4M_CAR` 1.3.6 with `FACTORY;RESET`, `TIME;<epoch>`, `config_epoch`).
+
+- [ ] **U-108-1 — on-connect clock sync.** Link a car on 1.3.6 (SPP or WiFi). The app sends
+      `TIME;<unixEpoch>` alongside `REQ_STATE` on connect (serial capture shows `TIME;1760...`
+      before `REQ_STATE`). The car's `TIME?` reply reflects the adopted epoch.
+- [ ] **U-108-2 — Reset car data button.** Remote screen ⚙ Settings → scroll to "Reset car
+      data" (red, `testID: reset-car-data`). Tap → destructive confirm dialog. Confirm: serial
+      shows `[FACTORY] botcfg namespace cleared`; app clears all car AsyncStorage keys; toast
+      "Car data reset — power cycle the car for a fresh start"; Remote panel resets to defaults
+      (both toggles ON, no router list, auto-join ON).
+- [ ] **U-108-3 — auto-join labels.** Remote Settings: the CAR toggle reads "Boot auto-join
+      (car)" (`power` icon, caption "On power-up the CAR rejoins its last router..."). The APP
+      toggle reads "Auto-join saved router (app)" (`refresh-cw` icon, caption "When you open
+      the car, the APP switches it..."). Distinct accessibility labels. CarProfileCard shows
+      "Auto-join saved router (app)" and cross-references the car setting.
+- [ ] **U-108-4 — config_epoch propagation.** After a router switch (`ROUTERS;USE`), a toggle
+      flip, or a `WIFICFG` store, the car's `TIME?` shows an advanced `configEpoch`. The app
+      does not read it directly (car firmware exposes it via `TIME?`); this row is a car-side
+      check in `Genum_4WD4M_CAR\TRACKS\DEVICE-TESTS.md` U-108-3.
+
+## F-65 round — reconnect rebuild: fleet-AP discovery, honest reconnecting, bounded keep-looking (2026-10-13, OTA `bc9062c` — DEVICE VERIFY PENDING)
+
+> Owner's post-1.3.3 field failures: car won't (re)connect, car restarts after connecting, flaky
+> WiFi/parallel display, absent car page, restart/freeze. App JS-only OTA (version 3.2.7 unchanged,
+> `bc9062c`); **car firmware 1.3.4 UNFLASHED** (`02e1081` — 1.3.4 contains 1.3.3; it is THE flash
+> target for this pass). Force-close and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **F-65-1 — a 4WD4M car is re-found on the phone's network.** Phone on a router the car has
+      saved, car on 1.3.4 in router mode: after the car reboots, the WiFi link drops, or a
+      force-close + reopen of the app, the app must find the car by `4WDCar_Wifi` (the fleet
+      registry) — it must NEVER hang on the donor `WirelessCar_Wifi` name.
+- [ ] **F-65-2 — a dropped socket stops lying.** Car connected over WiFi; kill the car (or pull it
+      off the router): within ~1 s the app drops the green link — status "Reconnecting" (no
+      banner), steering stops, commands are NOT silently swallowed. If the car returns, the app
+      re-dials the same address once and re-syncs.
+- [ ] **F-65-3 — keep-looking re-sweeps (brownout round-trip).** With the car OFF, the app sweeps
+      every ~15 s for ~90 s and CONNECTS the moment the car's boot round finishes and it reappears
+      on the router — no manual retry. After ~90 s with no find it errors out honestly (the car is
+      gone, not merely rebooting).
+- [ ] **F-65-4 — no regression on U-R4 connectivity.** The status strip, one disconnect place,
+      parallel BT+WiFi display and the Restarts row all behave as before this OTA (re-run the
+      U-R4 checks against 1.3.4).
+
+## U-R4 round — connectivity restructure + parallel display (2026-10-13 — DEVICE VERIFY PENDING, F-61)
+
+> Owner: implement the second connectivity review — one status/disconnect strip and exactly one
+> disconnect place, always-visible paired/added inventories, networks list WITHOUT random nearby
+> beacons, an entry for other ESP/IoT projects, and parallel BT+Wi-Fi displaying BOTH links on the
+> app and the car. App JS-only OTA (version 3.2.7 unchanged) pushed as `08f0351`; **car firmware
+> 1.3.4 UNFLASHED** (`02e1081` — 1.3.4 contains 1.3.3) — bench car is still 1.0.5 (F-61). Flash
+> BEFORE the panel/OLED checks below that depend on firmware. Force-close and reopen the app ×2 for
+> the OTA (`A-2`).
+
+- [ ] **U-R4-0 — bring the car up to 1.3.4.** Bench is on 1.0.5; every firmware-dependent check
+      below (parallel truth, OLED row, crash phase) needs 1.3.4 flashed. Note on the flash screen
+      that 1.3.4 = 1.3.0 + 1.3.1 + 1.3.2 + M3 (currentLink parallel truth) + U-104's WDT feed.
+- [ ] **U-R4-1 — OTA the app round.** Remote → verify the Connectivity panel shows the full-width
+      status strip on top, "Connection method" pills are the method ONLY, and there is exactly ONE
+      disconnect place (the strip). Force-close/reopen ×2 first.
+- [ ] **U-R4-2 — the ONE disconnect place.** Sub-header/chrome has no disconnect or Bluetooth
+      details (friendly name only). With parallel OFF: one `Disconnect`. With parallel ON: two
+      bigger `Bluetooth`/`Wi-Fi` buttons — each drops its own link and the OTHER stays up. Nothing
+      else anywhere else disconnects.
+- [ ] **U-R4-3 — always-visible inventories.** Bluetooth method: "Paired cars" left-bottom stays
+      visible before AND after a link comes up; only friendly names, never a raw hex MAC. Wi-Fi
+      method: "Added networks" (car hotspot + saved routers) stays visible, shows
+      Connected/Car hotspot/Saved tags.
+- [ ] **U-R4-4 — networks list is honest.** The right pane "Switch networks" shows only the car's
+      own hotspot + saved networks + (after tapping Search) the scan results. Random nearby beacons
+      must NOT appear before a Search. Switching a saved network still works and the phone-side
+      "Join <ssid> on this phone" notice clears ITSELF once the phone joins that network.
+- [ ] **U-R4-5 — other ESP/IoT entry.** The "Other ESP / IoT projects" card is under the manager;
+      "Add a network" opens the same add form and a saved network is switchable for the fleet.
+- [ ] **U-R4-6 — parallel shows BOTH links (needs 1.3.4).** Parallel ON, Bluetooth + Wi-Fi both
+      connected: Remote chrome row + sub-header line 1 show `BT · <name> + WiFi · <ip>`;
+      Connectivity strip status says "Bluetooth + Wi-Fi"; car OLED row shows `Parallel : BT+WiFi`;
+      TelemetryLine reports `BT+WiFi`.
+- [ ] **U-R4-7 — freeze/reset follow-up (needs 1.3.4).** The DB currently records a reset loop on
+      `1FB608` (929 boots / 746 crashes, PANIC + BROWNOUT, no crash phase captured). After flashing,
+      drive + switch networks + run parallel, then read Tools → Restarts row: `RST`, `BC`, `CC`,
+      `PH`, `LH` must report real values; note whether a PANIC row now carries a phase. A BROWNOUT
+      under load points at the motor supply (L298N inrush), not firmware.
+
+## U-R3 round — fleet diagnostics: the restart record over Bluetooth + a shared app/device log medium (2026-10-12, OTA `503af36` — DEVICE VERIFY PENDING)
+
+> Owner: the car "restarts/freezes" and the app has no place to read its own errors → make the
+> error/log medium efficient and reachable via the DB/app/remote across cars and projects. App
+> JS-only (no version bump); **car firmware 1.3.2 UNFLASHED** (F-61). The restart-record STATE
+> fields and the relay byte-budget change need the flash before the Bluetooth half can show numbers.
+> Force-close and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **U-R3-1 — the restart record rides the Bluetooth STATE line (needs firmware 1.3.2 flash).**
+      Connected over Bluetooth SPP to a car on 1.3.2, the Remote's Diagnostics row ("Last restart
+      record") shows a real reason (e.g. `TASK_WDT`) + phase after a reset — previously it stayed
+      empty over Bluetooth (only the Wi-Fi `/status` JSON carried it). The fleet crash report also
+      syncs over Bluetooth now (`device_crash_reports` gains a row on connect).
+
+> ⚠️ **U-R3-2 is OBSOLETE as of U-112 (2026-10-14):** the relay transport was deleted from the
+> car firmware (1.3.9) and the Internet method from the app — there is no relay path left to run.
+> Kept for history only.
+
+- [ ] **U-R3-2 — a long STATE is no longer dropped by the relay.** A STATE line carrying the record
+      plus a full `REPLY=` exceeds 448 bytes; with the relay cap raised to 512 it reaches the phone
+      instead of vanishing. Over the relay transport the Remote still updates (no "paired into
+      silence"). `check-relay-contract.mjs` reports `outbound cap 512`.
+- [ ] **U-R3-3 — Admin → System Logs (app).** Signed in as staff, the Admin console has a **System
+      Logs** tab with two newest-first lists: **Car crash / restart reports** (board id, reason,
+      counts, phase, connection method) and **App logs** (level, `[scope]`, message, app version).
+      A deliberate app error (e.g. pull the network) appears as an `error` row; paging works on both.
+- [ ] **U-R3-4 — Admin → System Logs (website).** The website `/admin` panel has the same **System
+      Logs** tab showing both lists (`device_crash_reports` + `app_logs`) with the same fields and a
+      crash badge. Staff see all rows; a non-staff user is refused (`401`).
+- [ ] **U-R3-5 — regressions.** The tab strip order is Dashboard · Orders · Electronic Products · 3D
+      Products · Projects · Content · Users · **System Logs** · Settings on BOTH clients (parity tests
+      pin it); the other tabs still load; the app never blocks or crashes when a log flush fails
+      offline (the row stays queued and uploads on the next link).
+
+## U-R3 round (connectivity rebuild): auto-join in Remote Settings, smart disconnect, compact Connectivity panel, OLED blink (2026-10-12 — DEVICE VERIFY PENDING)
+
+> Owner: consolidate settings (auto-join → Remote gear; dark theme → Menu only); smart disconnect
+> by Parallel state; compact Connectivity panel (no full-width status line, status+disconnect right
+> of method pills, no "Connectivity" header); rename right-pane headers; Bluetooth shows only paired
+> cars; OLED blinks last two rows (network + IP). Car firmware 1.3.2 UNFLASHED (F-61) for ap_psave/
+> allow_parallel in STATE + /status.
+
+- [ ] **U-R3-6 — Auto-join saved router lives in Remote Settings gear.** Open Remote Settings (gear)
+      on a linked car; the "Auto-join saved router" toggle appears below Parallel BT+Wi-Fi, mirrors
+      DevicePrefs and cloud profile. Toggling it updates the car via `WIFICFG;PARALLEL`? No — auto-join
+      is app-side smart-link; the toggle is `autoJoinRouter` (DevicePrefs). Removed from Control Panel
+      Saved settings card and User Preferences per-device editor — exactly one control now.
+
+- [ ] **U-R3-7 — Dark theme only in Menu → Appearance.** Remote Settings gear no longer has a Dark
+      theme toggle; the Menu tab → Appearance group is the single source of truth.
+
+- [ ] **U-R3-8 — Smart disconnect by Parallel state.** Parallel OFF: Remote header shows one
+      "Disconnect" pill (drops both links); Connectivity panel status card shows one "Disconnect"
+      button. Parallel ON: Remote header shows separate "BT" and "WiFi" pills; Connectivity panel
+      shows "BT" and "WiFi" buttons side-by-side. Both honor the `allowParallelLinks` flag.
+
+- [ ] **U-R3-9 — Compact Connectivity panel.** Full-width "Connection" status line removed.
+      Status text + disconnect buttons now sit on the right of the method pills row (left pane).
+      "Connectivity" header text removed. Right-pane headers: "Paired cars" (Bluetooth) /
+      "Networks on the car" (Wi-Fi). Bluetooth list shows ONLY paired/known devices — no scan
+      results list. Layout fits single screen without scrolling.
+
+- [ ] **U-R3-10 — OLED blinks last two rows.** Car on 1.3.2: the last two OLED body rows
+      (network method + IP) blink at ~1 Hz (500 ms toggle) to indicate live connectivity.
+      First two rows (Status, Speed) remain steady.
+
+## U-102 round — Remote feedback follow-up: OLED mirror back, readings on the status line, Bluetooth split, Wi-Fi form + keyboard (2026-10-12, OTA `f7262c4` + `78e6412` — DEVICE VERIFY PENDING)
+
+> Owner: the middle readings were _"too small and not perfectly managed"_ → restore the old OLED
+> mirror there and move the readings to the top status line; _"mirror WiFi: connect left, list
+> right"_ for Bluetooth; and the Wi-Fi form _"has too less space … give the scrolling thing"_ with
+> the keyboard/inputs feeling _"weird and not proper."_ JS-only OTA — no firmware change. Force-close
+> and reopen the app ×2 for the OTA (`A-2`).
+
+- [ ] **U-102-1 — the OLED mirror is back in the gamepad centre.** In robocar mode the gap between
+      the sticks shows the compact 128×64 mirror (2:1), NOT the readings. It renders the same
+      dashboard the pre-rebuild Remote did (mode, speed, steer, link).
+- [ ] **U-102-2 — the readings are on the top status line.** Just under the chrome row, right of the
+      CarName/link chip, the line shows `Up` / `Heap` / `Sig`; all three dash (`--`) with no link,
+      a real 0 s uptime shows `0s` (not a dash). The line and the IP/BT/Wi-Fi chips do not overflow
+      or overlap at the smallest landscape width.
+- [ ] **U-102-3 — Bluetooth is connect-left / list-right.** Choosing Bluetooth shows the connect card
+      on the LEFT and the networks ("Available networks") list on the RIGHT — the same shape as
+      Wi-Fi. There is NO "What do you want to do?" dropdown any more. With no link the right list
+      shows its honest empty state ("Connect to the car to search"), not a dead button.
+- [ ] **U-102-4 — the Wi-Fi add/edit form scrolls and the keyboard behaves.** Open the add form in
+      landscape: it has its own bounded box with the Save/Cancel row reachable. Tapping a field
+      raises the keyboard WITHOUT covering the field (the Connectivity panel scrolls it clear);
+      SSID "next" moves focus to the password; Enter on the password saves. Editing a saved router
+      still pre-fills the name and empties the password.
+- [ ] **U-102-5 — regressions.** The three method pills still switch methods; Disconnect still works
+      from the status card; switching a saved router still works; the non-robocar Telemetry view
+      still shows the 2×2 readings grid (`DriveTelemetry`), not the OLED mirror.
+
+## U-102 round (follow-up): the mode button works in every mode, telemetry rides Bluetooth, Connectivity is one split, AUTO fits one screen (2026-10-12 — DEVICE VERIFY PENDING)
+
+> Owner: the mode switch control was _"working inconsistently"_; the telemetry should reach the app
+> over Bluetooth (firmware + app); the Connectivity tab showed _"two separate format running"_ → unify
+> it into one immediate split (methods left / the method's own stuff right, paired/added car first,
+> the rest behind a scroll); the settings **gear no longer needs its own Connectivity row** (the pill
+> is always visible); and AUTO mode's telemetry screen had _"elongated across the landscape view"_ →
+> restore the old telemetry setup (the OLED mirror) to fit a single screen without scrolling.
+> App JS-only; **car firmware 1.3.1 UNFLASHED** (F-61) — the `UP`/`HEAP`/`SIG`/`RSSI` STATE fields
+> need the flash before telemetry over Bluetooth can show numbers. Force-close + reopen the app ×2.
+
+- [ ] **U-102-6 — the mode button works in ALL modes.** The circular rotate-arrows button in the mode
+      selector cycles through the modes from every mode (including a live ROBOCAR and AUTO run) and
+      spins; it is only disabled while the car is locked/unlinked (like the dropdown rows).
+- [ ] **U-102-7 — telemetry over Bluetooth (needs firmware 1.3.1 flash).** Connected via Bluetooth SPP
+      with the car on 1.3.1, the top status line shows real `Up` (counting up), `Heap`, and `Sig` —
+      the same values the Wi-Fi socket showed. Sig shows `--` (dashed) when the car is NOT on a router
+      (`WL_CONNECTED` false → no `SIG`/`RSSI` in the STATE line). `carProtocol.test.ts` snaps the
+      parse (`UP=`/`HEAP=`/`SIG=`/`RSSI=`; empty/omitted keys stay unknown).
+- [ ] **U-102-8 — Connectivity opens DIRECTLY as the split.** Opening the Connectivity panel shows
+      both panes at once: LEFT = "Connection method" pills (Bluetooth preselected) + the one connect
+      card; RIGHT = "Cars found · networks" with the paired/added device first, the rest inside the
+      bounded scroll (the whole list hides once a link is up). No one-column blank-then-two-column
+      state. Every method — Bluetooth, Wi-Fi — renders this same split look.
+      (U-112: the Internet method was removed; there are two, not three.)
+- [ ] **U-102-9 — the Settings gear has no Connectivity row.** The Remote's ⚙ dropdown lists Dark
+      theme / the rest but NOT Connectivity (that is the corner pill). Tapping the gear never opens
+      a duplicate/other connection panel.
+- [ ] **U-102-10 — AUTO mode fits one landscape screen.** AUTO shows the OLED mirror dashboard
+      (the AUTO Angle / P / D / OUT / I / OFF rows) in the PID deck — the old telemetry look with the
+      new data — inside ONE screen: no tall single column, no scrolling. On other modes the Telemetry
+      view still shows the 2×2 `DriveTelemetry` grid (unchanged).
+
+## U-93 round — the router actions, honestly (2026-10-04, OTA — DEVICE VERIFY PENDING)
+
+> Owner: _"the router select is not working sometime … the connect device button doesnt work …
+> the deleted button is not working and also not able to edit those"_. OTA only — no firmware
+> change (the car already answers DEL exactly once since U-88). Force-close + reopen the app ×2.
+
+- [ ] **U-93-1 — delete works and tells the truth.** On a live link, forget a saved router:
+      exactly ONE command goes out (serial shows one `ROUTERS;DEL`), one `DELETED` answer, the
+      row disappears; deleting it again shows the car's refusal — never a fake success.
+- [ ] **U-93-2 — edit works.** Tap the pencil on a saved router → the form opens titled
+      "Set a new password for …" with the name fixed and EMPTY password field; save →
+      `Saved on the car` + the car switches (ADD upsert + USE). Reconnect with the new password
+      on the car's next join to that router.
+- [ ] **U-93-3 — Connect works on the right network with a stale address.** After the car has
+      switched routers at least once, tap Connect: the app may briefly search (the bounded
+      sweep) and then connect, reporting `Car found automatically at <ip>` — or it says plainly
+      that the car's address may have changed. Never a silent dead button.
+- [ ] **U-93-4 — honest disabled states.** With NO link: the scan button reads "Connect to the
+      car to search" and rows explain they need a live link (no silent nothing).
+- [ ] **U-93-5 — switch still works (regression).** Tap a saved router row → the car switches,
+      the phone-switch prompt appears, and the U-80 auto-join flow follows the car.
+
+## U-91 round — one responsive idiom; home carousels survive rotation (2026-10-04, OTA — DEVICE VERIFY PENDING)
+
+> Owner: _"untangle the app's legacy viewport/responsive CSS debt before the next UI round"_.
+> The app ships `"orientation": "default"` AND a web build, so the window size is NOT fixed —
+> the old home layout froze its card width at launch.
+
+- [ ] **U-91-1 — rotate on the Home tab.** Open the home screen, rotate the phone (or resize
+      the window on web): the two product carousels re-flow to exactly TWO cards per width and
+      snap correctly. Before U-91 the card width was a module-level constant — frozen at app
+      start, wrong in landscape, tablets, and web.
+- [ ] **U-91-2 — everything else unchanged (the point of the round).** Router panel still goes
+      two-column at ≥640 (tablet/landscape), the remote's landscape layout still flips,
+      the account sheet still caps its card at 316, the mode dropdown still budgets its
+      height — same numbers as before, now reactive.
+
+## U-86 / U-89 round — one Wi-Fi target, controls that follow the link (2026-10-03, OTA `23524c0` + `e4a9132` — DEVICE VERIFY PENDING)
+
+> Owner: _"switching or going back to default esp hotspot is not allowed, please enable that
+> through the app"_ · _"there is still the home router and things mentioned in the app's control
+> panel page, please remove... merge all those wifi"_ · _"the wifi method is not built well and
+> complete, not everything works"_ · _"the car is at nijandangal_2.4 and the app is also at the
+> same, there proper response while clicking connect"_. Backfilled 2026-10-04 from the commit
+> bodies — the ledger was not written at the time. Force-close + reopen the app ×2 for the OTA.
+
+- [ ] **U-89-1 — the controls appear however you connected (the headline).** Connect by automatic
+      discovery (the U-80-3 path) or with the Connect button on a car already reachable: the
+      Wi-Fi panel — saved routers, tap to switch, "Search for networks", the add form — must be
+      on the screen WITHOUT ever opening the method dropdown. Before U-89 it rendered only when
+      the dropdown had been tapped; a working connection with no configuration UI was the bug.
+- [ ] **U-89-2 — the parser reads the car's real bytes.** While connected over WiFi, the status
+      line shows the car's actual STATE fields (mode, speed, network, REPLY slot). CI now pins
+      the parsers against bytes captured verbatim from the car (`realCarBytes.test.ts`) — the
+      earlier tests used a hand-written STATE line the real car never emits.
+- [ ] **U-86-1 — the hotspot is switchable again.** From the router list, the car's own hotspot
+      can be selected and the switch is confirmed (`ROUTERS;USED;4WDCar_Wifi`); the saved-router
+      registry survives it (USE-only — the AP must never enter the registry).
+- [ ] **U-86-2 — ONE Wi-Fi target, no "Where is the car?" split.** No dropdown offers
+      "The car's hotspot" vs "Your home router"; the network names shown come from the car's own
+      NETW line, on this car and on old cars alike.
+- [ ] **U-86-3 — the page is quiet and the title stays put.** No method blurbs, no per-target
+      requirement paragraphs, no "The car is answering on this link" line; the page title is
+      fixed at the top (outside the scroll) and the dashboard starts directly beneath it.
+
+## U-81 round — the router list that could not update, modes that lied, and a Control Panel that reads like an instrument (2026-10-03, SHIPPED — flashed + OTA published; rows still DEVICE VERIFY PENDING)
+
+> Owner: _"the app control panel needs redesign it's too confusing and shows unnecessary datas too
+> much … the setup page should be like the webserver mode telemetry style"_ · _"the where the car is
+> section is not having the new home routers that has just been added"_ · _"mode changes are not
+> working"_ · _"the webpage is not functioning properly"_.
+>
+> **This round is mostly the CAR's fault, not the app's.** The firmware's WiFi text transport was a
+> sink — `WebServerComm::write()` returned `len` and sent nothing — so every router answer, every
+> `CAPS` line and every mode refusal was silently discarded over WiFi. Firmware commit `7998a4f` is
+> the fix and **must be flashed first**; no app-only change can work around it.
+>
+> Full plan: `guide/PLAN-2026-10-03-U79-U80-ONE-WIFI-SETUP.md`.
+
+- [ ] **U-81-1 — the new home router actually appears (the headline bug).** Add a home router from
+      the app over WiFi. The router is confirmed **immediately** (`ROUTERS;ADDED;<ssid>`), the car
+      joins it, the socket drops. Join the same network on the phone and reopen: **the router is in
+      the "where the car is" list, and survives a restart.** Before U-81 it appeared nowhere.
+- [ ] **U-81-2 — no phantom router.** After any scan, the saved list contains only real SSIDs. There
+      must be no network called `STARTED` — `ROUTERS;SCAN;STARTED` is an acknowledgement, not a
+      router, and it used to be persisted as one.
+- [ ] **U-81-3 — the switch is confirmed and announced.** Switching to a saved router reports
+      `ROUTERS;USED;<ssid>` and the U-80 "join <ssid> on this phone" card appears (the app can
+      now actually receive that answer for the first time).
+- [ ] **U-81-4 — refusals are shown as refusals.** Force each of `ROUTERS;FULL`, `Reserved`
+      (the car's own AP name), `Password too long`, `SSID length`, `Not saved:<ssid>`. In the app
+      **and** on the car webpage, the car's own reason must be shown and the input kept. No success
+      message, no cleared form, no optimistic list.
+- [ ] **U-81-5 — a mode the car does not have cannot be picked.** On the U-79 car, `EspWebServer`
+      and `EspWebClient` are absent from the car's `CAPS` registry, so they must show **"Not on this
+      car"** and be unselectable. Tapping one (via any remaining path, e.g. the cycle button) must
+      show "not supported by this car" AND roll the mode display back — it must not sit there
+      claiming success.
+- [ ] **U-81-6 — fleet regression guard (old cars KEEP their modes).** On a pre-U-79 car
+      (WIRELESS_CAR / 2WD1M / SELF_BALANCE) `EspWebServer` / `EspWebClient` still appear, still
+      switch, still drive. A car that broadcasts no `CAPS` line at all must keep the fleet
+      fallback — nothing may be greyed out on old hardware.
+- [ ] **U-81-7 — the Control Panel reads like an instrument.** Top of page: status dot, the car's
+      reported mode · network · IP, then six tiles (Mode, Speed, Signal, Uptime, Heap, Link) with
+      uppercase micro-labels and monospaced values. Then **Connect**. Then **Projects**. The page
+      must no longer open with the project catalog, and the "Test & control your projects" subtitle
+      is gone.
+- [ ] **U-81-8 — every reading is real or an em dash.** Offline: all six tiles dash and Link reads
+      "Offline" (no stale last-known numbers). Connected but silent on a field: that tile dashes. A
+      **stopped** car shows Speed `0` and a just-booted car shows Uptime `0s` — those are readings,
+      not unknowns, and must not dash.
+- [ ] **U-81-9 — the signal tile never flatters.** A car reporting `rssi: 0` (which some firmwares
+      send to mean "no reading") shows `—`, not `0 dBm`.
+- [ ] **U-81-10 — the car webpage.** Load `http://192.168.245.1` on the car AP, ~10×. The page
+      must render fully each time — never a blank/hanging document. Every router action must report
+      the car's real answer in the notice line: green for confirmations, red for refusals, and a
+      refused mode must be named.
+- [ ] **U-81-11 — no regressions.** Bluetooth driving unchanged; drive deck still opens from every
+      Projects pill; Saved settings and About still expand; pull-to-refresh still reloads categories.
+
+## U-80 round — the phone is told when the car switches, and the app finds the car (2026-10-03, OTA `d97d6f1` ✓ published, group `c838d9b1`)
+
+> Owner: _"prompt the user to switch the phones network router too when the car switches the
+> network but simply"_ · _"the car app doesnt show where the car is for the new routers too"_ ·
+> _"there are other cars that still have those two mode in their setup so make app so as to not
+> break things for those"_. **Needs the car flashed with U-79** (`abb7297`) AND this OTA
+> (force-close + reopen the app ×2; the updater row must read `OTA · Short update (d97d6f1…)`).
+> Full plan: `guide/PLAN-2026-10-03-U79-U80-ONE-WIFI-SETUP.md`.
+
+- [ ] **U-80-1 — the simple prompt.** From the app (or the webpage), switch the car to a saved
+      router. A card appears IMMEDIATELY: "The car switched networks — join <ssid> on this
+      phone", with ONE button ("I joined — find the car") + Dismiss. No extra screens.
+- [ ] **U-80-2 — the prompt is honest and temporary.** It auto-expires after ~4 minutes (or on
+      Dismiss), and it appears no matter which surface fired the switch (panel, webpage, remote).
+- [ ] **U-80-3 — automatic discovery.** Phone joins the new router → reconnect in the app →
+      even if the old address is dead, the app finds the car itself and says
+      "Car found automatically at <ip>" (remembered lease or /24 sweep — no manual IP entry).
+- [ ] **U-80-4 — the find button works from the prompt.** "I joined — find the car" runs the
+      same sweep and opens the drive deck.
+- [ ] **U-80-5 — fleet regression guard (old cars KEEP their modes).** On a WIRELESS_CAR /
+      2WD1M / SELF_BALANCE car (pre-U-79 firmware): ESP_SER / ESP_CLI still appear, still
+      switch, still drive exactly as before. Nothing hardcoded — availability comes from each
+      car's own CAPS map.
+- [ ] **U-80-6 — new-firmware car NACKs retired tokens harmlessly.** On the U-79 4WD4M car,
+      selecting an old-car-only token (if any UI path still offers one) results in
+      `NACK;E=UNKNOWN_MODE` and the car STAYS in 4WD4M — no crash, no stuck UI.
+- [ ] **U-80-7 — copy truth.** WiFi provisioning no longer says "switching to Webserver/join
+      mode" — it says the car is joining that network and to join it on this phone too.
+
+## U-71 round — the restart, the boot auto-join, and remembered settings (2026-10-02)
+
+> Owner: _"i used the other router switch thing but the car restarted as soon as i tried to access
+> the webpage"_ · _"save the last connected router configs for the power restart too if that router is
+> in the range to connect if not goes back to esps own hottspot"_ · _"all the car and app to rememnber
+> the old setting in the database too and both app and cars too"_.
+>
+> **U-71-1 and U-71-2 need the car flashed.** That one flash now carries U-67 + U-68 + U-70 + U-71.
+> **U-71-3 is app-only.**
+>
+> ⚠ U-70 reversed a standing ruling — the car now **auto-joins** the last working router on power-up
+> instead of waiting for an explicit request (R-16/T-64). It is deliberately bounded to one 6 s
+> attempt; **U-71-2 exists to prove the fallback still holds**, which is the reason that ruling existed.
+
+### U-71-1 — the switch no longer restarts the car ⭐ (the reported bug)
+
+- [ ] Serial monitor at **115200**, then: switch the car to the home router, then immediately open
+      the car's web page.
+- [ ] **The car must not restart.** If it does, paste the `[BOOT] reset reason: N (label)` line —
+      that is now the whole diagnosis (U-70-4).
+- [ ] The car must **answer** the web-page request during the switch (the AP + servers stay up for
+      the whole hand-over), and the page must load once the car is on the router.
+
+### U-71-2 — boot auto-join, and the fallback still holds ⭐ (⚠ reverses R-16/T-64)
+
+- [ ] With the car **on the home router**, power-cycle it → within a few seconds it **rejoins the
+      router by itself**; the OLED shows the router name and the app finds it at its router address.
+- [ ] **Turn the router OFF**, power-cycle the car → within a few seconds it is **back on its own
+      hotspot** (`4WDCar_Wifi`) and reachable there. **It must not sit unreachable trying.**
+- [ ] Confirm the wait is short: one 6 s window, not a long retry sequence. If the hotspot takes
+      noticeably longer than that to come back, report it.
+- [ ] A router that **never** worked must not be auto-joined — only one that has actually connected
+      before.
+
+### U-71-3 — settings are remembered by BOTH (app only)
+
+- [ ] Add a router from the app → **force-close the app completely and reopen it** → the router is
+      still listed.
+- [ ] Switch to a different router, reopen the app → the app still knows the router you switched to
+      (it pre-fills the name field).
+- [ ] Delete a router, reopen → still gone.
+- [ ] Sign in on another device / check the car's profile in the admin dashboard → **the saved routers
+      are in the cloud row**, not only on the phone.
+- [ ] A router the car **REFUSED** (e.g. a 7th one, or a too-long password) must **not** appear in
+      the remembered list.
+
+---## U-70 round — the car's network honesty, the join, and the scan list (2026-10-02)
+
+> Owner: _"the car is displaying the new router in its oled but not switching actually to that new
+> router network and the car still show the website only on its own esp hotspot. and doesnt show to
+> new router"_ · _"the car restarts when the app directs to cars webpage"_ · _"the list of the
+> bluetooth device found while scanning are too long, please keep all those in a scrolling window.
+> and also the list shoulnt be displayed when connected to any one of those devices."_
+>
+> **U-70-1/2 need the car flashed** (that one flash now carries U-67 + U-68 + U-70). **U-70-3 is
+> app-only.**
+>
+> ⚠ **The single most important row is U-70-4.** The "car restarts" report is **not fixed** — it is
+> _instrumented_. The reset reason is now printed on the serial line at every boot.
+
+### U-70-1 — the car never claims a router it is not on ⭐ (this is what made the bug invisible)
+
+- [ ] Save a router, switch the car to it, and watch **both** the OLED and the app:
+- [ ] With the car **on its own hotspot**: the OLED shows `4WDCar_Wifi` and the app shows the car's
+      OWN network as current — with the requested router shown separately as **"trying to join …"**.
+      It must **NOT** claim the car is already on the new router.
+- [ ] Only once the car has actually associated does the current network become the new router's
+      name, in both places, at the same time.
+- [ ] Turn the home router OFF (or use a wrong password), switch, and wait: the car must end up
+      **saying it is on its own hotspot**, not on the router it failed to join.
+
+### U-70-2 — the switch actually joins ⭐ (the mode-change/begin race)
+
+- [ ] From the car's own hotspot, switch to the home router and **wait without touching the phone**.
+      The car must join on its own.
+- [ ] On success the OLED shows the **router** name (not `AP:`) and the car answers on its router
+      address.
+- [ ] Open the car's web page **from the router address** while the phone is on that router — it must
+      load. This is the row that was failing ("the website only shows on its own esp hotspot").
+- [ ] Switch back to the car's own hotspot afterwards and confirm it is reachable there again.
+
+### U-70-3 — the scan list is a window, and it hides when connected (app only)
+
+- [ ] Scan in a place with many devices nearby → the list is a **bounded scrolling window** (~5 rows
+      visible, scrolls inside itself). The rest of the page keeps its shape and stays reachable.
+- [ ] **Once connected to any car, the scan button and the whole list disappear.** Bluetooth or WiFi
+      — either counts.
+- [ ] They come back after Disconnect.
+
+### U-70-4 — ⭐ READ THE SERIAL LINE FOR THE RESTART (the row that unblocks the next round)
+
+- [ ] Open the serial monitor at **115200** and reproduce: app → the car's web page.
+- [ ] At the restart, the car prints `[BOOT] reset reason: N (<label>)`. **Paste that line.**
+- [ ] `TASK WATCHDOG (loop hung >5s)` → `loop()` blocked; `PANIC (crash/exception)` → a crash;
+      `BROWNOUT (undervoltage)` → power; `power-on` → it was not a crash at all.
+- [ ] Until this line exists, **the restart is not diagnosed** — do not record it as fixed or as
+      not-reproducible.
+
+---## U-69 round — Bluetooth really connects, one method at a time, contrast (2026-10-02, app SHIPPED)
+
+> The owner's second review: _"the bluetooth is not build in the app and i am not able to connect the
+> device to the app to test the device. fix this first"_ · _"connections methods are scattered all over
+> the page. please only show one method at a time and use the drop down menu for that and dont populate
+> contents unnecessary"_ · _"the text and the background are merging and the texts are not visible
+> properly. please fix the contrast too for once and for all"_ · _"use the drop down menu where ever
+> the things are overly populated"_.
+>
+> **U-69-1/2/3 are app-only.** U-69-3 must be checked in BOTH Light and Dark — that is the whole point.
+
+### U-69-1 — Bluetooth connects, and a failure says so ⭐ (the reported blocker)
+
+- [ ] Connection method → **Bluetooth** → **Find my car** → a permission prompt appears → the car
+      appears in the list → tap it → the status bar says **Bluetooth · <car>** and the car's live
+      data starts arriving (mode, speed, battery/telemetry values update).
+- [ ] **The failure case is the one that was broken.** Turn the car OFF, then tap it in the list →
+      the card must show a RED error saying it could not connect. It must **NOT** say "Connected".
+      (Before this fix the app reported success on every failure.)
+- [ ] No car in range + Find my car → either an empty list with no false success, or an error. Never
+      "Connected".
+- [ ] If the phone has Bluetooth switched off → the app asks for it / explains, rather than failing
+      silently.
+
+### U-69-2 — one method at a time, and crowded things collapsed
+
+- [ ] There is **one** method control (a dropdown) — **not** three stacked cards.
+- [ ] Choosing a method shows **only that method's** card. Bluetooth shows nothing about WiFi and
+      vice versa. The page does not grow when you look at a different method.
+- [ ] The dropdown row always shows the **current** method's name without being opened.
+- [ ] With **5–6 saved routers**, switching the car to one is a **dropdown**, not a wall of rows.
+- [ ] Add / Edit / Remove are behind a single action each; the common path is short.
+- [ ] A disabled control still shows **why** it is disabled (it is not silently absent).
+
+### U-69-3 — text is readable in BOTH themes ⭐ (the contrast report)
+
+- [ ] Switch the app to **Dark** (Account → theme) **and** check the OS in dark mode.
+- [ ] Every one of these is clearly readable on its background, in both themes: the card titles, the
+      explanatory lines, the **error** message, the **success** message, and the selected dropdown row.
+- [ ] The selected method/target/router row is obviously selected — not a barely-visible tint.
+- [ ] No text is the same colour as what is behind it. Pay attention to error text and to the grey
+      secondary lines on the dark cards.
+- [ ] Primary buttons: white label on a dark blue fill, legible in both themes.
+
+---## U-68 round — Control Panel connection rebuild (2026-10-02, app SHIPPED · firmware NEEDS A FLASH)
+
+> Owner: _"nothing is fixed please rebuild the control panel page from the begning with new design…
+> the method switching was not working, the adding the new router is not working. the cards and the
+> section of the control panel page are not unifrom in the fuctiion. the netword data login is not
+> proper, the selecting of the network is not proper, the keyboard apperaing is blocking the entry
+> field. also the car not switching to next router."_
+>
+> **Read `guide/PLAN-2026-10-02-CONTROL-PANEL-CONNECTION-REBUILD.md` first.** U-68-1/2/3 run on the
+> **app alone** (same-version OTA). **U-68-4 needs the car flashed** — `ROUTERS;SCAN` did not exist in
+> any shipped binary, so "Find networks near the car" cannot work until then.
+>
+> ⚠ **F-61: this round is NOT "verified" by the fact that CI is green.** Every earlier round shipped
+> on that evidence and the owner came back with "nothing is fixed". These rows are the only thing
+> that can close it.
+
+### U-68-1 — exactly two methods, one uniform surface (Internet removed U-112, 2026-10-14)
+
+- [ ] The Connections area shows **Connection**, then **Bluetooth · WiFi (LAN)**, then
+      one setup card, then the routers — in that order, every option on the same card component.
+- [ ] **Bluetooth** offers one target only (SPP). There is **no BLE row anywhere**.
+- [ ] **WiFi (LAN)** offers the car on the network it reports (one target).
+- [ ] **Internet is GONE, not parked.** No pill, no card, no disabled row, no reason text. It was
+      removed by owner directive on 2026-10-14 (U-112) and the tests pin its ABSENCE — if it
+      renders at all, the removal failed.
+
+### U-68-2 — method switching actually switches ⭐ ("the method switching was not working")
+
+- [ ] Disconnected → pick **your home router** → the Connect button is **disabled** with the reason
+      "the car has not joined your router yet". It must **not** dial `192.168.245.1` (the car's own
+      hotspot) behind a green "connected".
+- [ ] Disconnected → pick **the car's hotspot** → Connect works and reaches the car at its hotspot.
+- [ ] **While connected**, picking the other method does **not** tear the link down before the car
+      is ready: no disconnect flash, no reset, and the status bar keeps naming the live link until
+      the new one answers.
+- [ ] Disconnect clears the status bar to "Not connected" and no stale method keeps claiming to be
+      live.
+
+### U-68-3 — router management works, and says what happened ⭐ ("adding a new router is not working")
+
+- [ ] **Over Bluetooth** (the case that never worked): connect BT → the car's routers appear →
+      **Add a router** → Save & switch → the car answers and the card says **what actually
+      happened**.
+- [ ] A **wrong password** or a **wrong name** → the car refuses and the message says so. The form
+      does **not** silently clear as if it worked.
+- [ ] Fill all **6** slots → **Add a router** is disabled and says why (delete one first).
+- [ ] **The car's own network has NO Switch button** — it is shown as the always-available default.
+      This is the D1 fix: switching to it is what erased the stored credentials.
+- [ ] Switching to a real router: the car joins it, and the card reports the car's **own** answer
+      (`ROUTERS;USED;…`). A car that never answers produces a **visible timeout**, not a fake
+      success.
+- [ ] The keyboard: tap the **Router name** field → the keyboard opens **and** the field stays
+      visible above it; the tap is not swallowed. Same for the password field.
+
+### U-68-4 — nearby-network selection ⭐ **NEEDS THE CAR FLASHED**
+
+- [ ] **Find networks near the car** → within a few seconds a list of real SSIDs with strengths
+      appears, tapped to pre-fill the add form.
+- [ ] On the **old** binary this button returns `ROUTERS;ERROR;Syntax`. The app must say the car
+      needs a **flash** rather than showing an empty list as if nothing were there.
+
+---## U-67 round — router switch: no reset, one-go retry, ONE confirm (2026-10-02, IMPLEMENTED — app JS OTA + firmware FLASH both required)
+
+> Owner bench: "the car resets when I switch the wifi router from the app and the car is not
+> always switching properly… the app still doesn't have switch ui ux standardly, n missing ok
+> or confirm buttons while switching routers." **Two firmware bugs + one app UX defect, and
+> the reset was NOT the already-known `cd3158f` bug** — it was the BT watchdog calling
+> `ESP.restart()`. **U-67-3/4 cannot pass until the new firmware is flashed**; U-67-1/2 need the
+> OTA. Order: flash first, then close+reopen the app ×2, then run.
+
+### U-67-1 — ONE standard switch confirm, everywhere
+
+- [ ] **Home router settings** → a saved router's **Switch**: a confirm card appears naming
+      THAT router. Nothing is sent yet.
+- [ ] **Cancel** on that card → the car does **not** move networks (check the OLED network
+      row / the app banner still shows the car's own AP).
+- [ ] **Switch now** → the car is told to join, and the card advances to the waiting step.
+- [ ] Same again via **Home router settings** → **Add** a brand-new SSID+password: the confirm
+      says **"Save "<ssid>" on the car and switch to it?"** with a **Save & switch** button;
+      Cancel sends nothing (the router is not saved and the car does not move).
+- [ ] The **picker's** Home router pick still shows the original "Yes, join it" / Cancel
+      (unchanged) — and both paths now behave identically from there.
+
+### U-67-2 — the confirm never offers a switch that cannot work
+
+- [ ] With the car's own network among the panel rows, tapping **Switch** on it opens **no**
+      confirm and sends nothing (the car reserves its own AP).
+- [ ] An empty SSID in the Add form keeps its button disabled.
+
+### U-67-3 — the car does NOT reset when switching to the home router ⭐ (the reported bug)
+
+- [ ] Connect over the car's AP (or BT), switch to the home router via the confirm.
+- [ ] **Leave the car alone for 3+ minutes** (past `BT_HARD_RESTART_MS` = 120 s) with **no**
+      Bluetooth client attached — the car must stay up on the router: OLED keeps showing the
+      router SSID + its real IP, and the app's link stays verified.
+- [ ] An **unattended** car parked on the router for ~10 minutes must **not** reboot on a
+      ~60 s loop (watch the OLED; the old binary rebooted repeatedly here).
+- [ ] On the OLD flashed binary this row reproduces the reset — that is the unflashed-firmware
+      class, not a new bug.
+
+### U-67-4 — the switch completes in ONE go ⭐ (the reported "not always switching properly")
+
+- [ ] From the car's own AP, switch to the home router and just WAIT — do not touch the phone.
+      The car must end up on the router on its own (the firmware now retries a failed
+      association within its capped budget instead of giving up at 8 s).
+- [ ] The card must reach **"Connect via home router"** with the car's real router IP (a
+      192.168.x.x address — **never** 192.168.245.1, the car's own-AP gateway).
+- [ ] A **wrong** password → the card must return to the step-1 join offer (U-66-2), not hang.
+
+---
+
+## U-66 round — integration fixes: gateway dial refused + auto-join labelled (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> App↔4WD4M integration audit found a REAL cross-repo bug: the car's JSON `ip` reports the
+> softAP gateway (192.168.245.1) while it sits on its own AP, and with a router stored the
+> handoff could read "ready" and offer the CAR'S OWN HOTSPOT as the home-router dial — the
+> phone never left the AP while the banner said verified (this presents exactly as "the
+> home-router deck is dull / not usable"). Fixed: ready requires a non-gateway IP and
+> staDialUrl refuses the gateway outright (4 tests). Also: the smart-link auto-join toast
+> now says the join is AUTOMATIC and names the off-switch (Saved settings → Auto-join
+> saved router). Gates: tsc 0 · vitest **457/457** · prettier clean.
+
+### U-66-1 — the card never offers the car's own hotspot as the router dial
+
+- [ ] With a router saved on the car, connect over the car's AP and pick **Home router** →
+      Yes → while the car is still on its AP, the card shows Step 1/2 (or re-offers the
+      join) — it NEVER shows "The car is on the router at 192.168.245.1" and never unlocks
+      a Connect button pointed at the car's own hotspot.
+- [ ] Only when the OLED/network row shows a real router address (e.g. 192.168.1.x) does
+      "Connect via home router" appear, and connecting from the phone-on-router verifies.
+
+### U-66-2 — a wrong router password lands back on Step 1, not a fake wait
+
+- [ ] Save & join with a WRONG password → the card returns to the Step-1 offer (join
+      re-offered / inline add) instead of sitting at "getting an address" forever.
+
+### U-66-3 — the auto-join toast says what it is
+
+- [ ] Connect over the car's AP with auto-join ON and a saved router → the toast reads
+      "Smart-link joined … automatically … Turn this off under Saved settings → Auto-join
+      saved router" (not a bare "Smart-link: joining …").
+
+---
+
+## ⭐ BENCH MASTER RUN — after flashing firmware `main` (2026-10-02, owner run sheet)
+
+> Flash the 4WD4M ONCE via USB (115200, huge_app). That single flash clears ALL pending car
+> rows: T21–T23 + Round 1's OLED row, **U-67's reset/retry fixes (T24–T26)** and **U-68's
+> `ROUTERS;SCAN` / reply-buffer / ack-redaction fixes (U-68-4)**. Then run the rounds BELOW in
+> this order. After each app round: close + reopen the app ×2 and confirm Menu → Update shows
+> `Short update (3f469ed…)` — that is the OTA containing U-63…U-68 (curl cannot verify the served
+> bundle; the Update screen is the proof).
+
+**Stage 0 — flash sanity (5 min, no app):**
+
+- [ ] Car boots; OLED shows the BT name + `Type: SPP` and a real joined SSID/IP (v1.0.1 rows).
+- [ ] Open `http://192.168.245.1` on the phone (joined to `4WDCar_Wifi`) — page loads.
+
+**Stage 1 — car rows (car repo `DEVICE-TESTS.md`):** **T24 · T25** (U-67: the reset and the
+one-go router switch — the reported bugs) → T21 · T22 · T23 (router switch must NOT reset;
+`ROUTERS;USE` joins and the car stays up) → T1–T10 → safety rows A/B (BT + e-stop; `SPD0` must
+stop) LAST, on whichever link you end up using.
+
+**Stage 2 — app rounds (this file), in order:**
+
+0. **U-68-1..4 FIRST** — the rebuilt connection section. This is the surface the owner
+   complained about, so it is the one most worth judging first. U-68-4 (nearby networks)
+   **cannot pass** without the new firmware — that is the flash's whole point.
+1. **U-67-3/4** — the reset + one-go switch (the other reported bugs).
+2. **U-61-1..5** — audit round (deck button, pills, single error, switch dials the target).
+3. **U-63-1..2** — BT naming (re-pick shows the CURRENT name; direct-MAC never refuses).
+4. **U-65-1..2** — both-links-live driving + the smooth connect collapse.
+5. **U-66-1..3** — gateway-dial refusal (the ④ dull-deck fix) + auto-join labelling.
+
+**Reading results:**
+
+- A row PASS → tick it. A row FAIL → note the exact step + what the screen showed; the
+  FAILING row on the NEW binary is a bug (report it), the SAME failure on the OLD binary
+  was the unflashed-firmware class — do not re-report those.
+- **U-68-1..3 failing on the NEW app** → report. Those rows are app-only, so there is no
+  firmware excuse for them; a failure there is a real defect in the rebuild.
+- If **U-68-4** returns "the car did not understand the request" → that is `ROUTERS;SCAN`
+  not on the board. Re-flash and confirm the IDE used `huge_app` + `main`.
+- If the home-router switch still resets the car AFTER the flash → stop and report: that is
+  the U-67 BT-watchdog fix (`26d41d5`) not actually on the board.
+- If **U-68-2** shows the home-router target dialling `192.168.245.1` → stop and report. That
+  is D4 resurfacing, and it means `resolveDial` is not the only thing producing a URL.
+- If the STA deck is STILL dull with a verified link (U-65-1 driving passes but tiles are
+  dead/empty) → that is candidate ④c (no STATE over STA) — capture the Remote window's
+  banner + OLED row and report; ④a is already fixed by U-65-1 passing.
+
+---
+
+## U-65 round — queue round: chosen-link routing tie-break + smooth connect collapse (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> ④b: when two links are live, a drive command can no longer be stranded on a stale
+> secondary link — the user's CHOSEN method is added as a carrier (pure rule, 11 CI tests).
+> ⑤: the picker's post-connect chrome collapse is animated (Android). F-46's regression pin
+> is CI-only (no device row). Gates: tsc 0 · vitest **453/453** · prettier clean.
+
+### U-65-1 — the drive follows the chosen method when BOTH links are live (needs the car)
+
+- [ ] Connect over BT, then do U-64-1 (Yes, join the router) and complete the handoff so the
+      STA link is live WHILE BT is still up → open the Drive deck and drive → the car moves
+      (before this fix a BT-transport mode could send to the stale BT link only).
+- [ ] No double-motion/duplicate-command artefacts while both links are live; after
+      disconnecting BT, driving continues normally over the STA link.
+
+### U-65-2 — the connect collapse is smooth (visual)
+
+- [ ] Tap Connect (or pick a BT device): the address/scan card collapses and the footer
+      appears as ONE gentle ease-in-ease-out glide — content below no longer jumps.
+- [ ] Disconnect: the card returns the same way.
+
+---
+
+## U-64 round — bench feedback: panel simplified, handoff confirms, diagnostics gone (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner bench report (2026-10-02 evening): control panel too confusing, home-router switch
+> prompt has no confirm button (only cancel), car resets when switching, remove the WiFi
+> test panel. ①②③ fixed same evening; ④ (STA deck dullness) queued — needs the flashed
+> car. Gates: tsc 0 · vitest **439/439** · prettier clean. **U-62-1 is SUPERSEDED** (the
+> card now ASKS before the car is told; see U-64-1). ⚠ The car-reset half needs firmware
+> `main` flashed (T21–T23) — on the current board the switch cannot pass by design.
+
+### U-64-1 — the handoff ASKS before anything is sent
+
+- [ ] Connect over the car's AP (or SPP), pick **Home router (WiFi)** → the card shows
+      "Join \"<your router>\" now?" with **Yes, join it** and **Cancel**.
+- [ ] Tap **Cancel** → the card closes and the car was NEVER told (its OLED/network row
+      still shows the car's own AP).
+- [ ] Tap **Yes, join it** → the card changes to "The car was told to join …" and then
+      advances on its own from the car's reports (joined → IP → Connect via home router).
+
+### U-64-2 — no saved router: the card IS the add form
+
+- [ ] With no router saved on the car, pick Home router → the card shows inline **Router
+      name** + **Router password** fields and **Save & join** (no "add it below" pointer).
+- [ ] Save & join → the car stores the pair and switches to it; the card advances.
+
+### U-64-3 — the car drops the link mid-handoff (needs the car)
+
+- [ ] With the OLD firmware still flashed, do U-64-1 (Yes) → the car resets → within
+      seconds the card flips to "The car dropped the link while switching — it may have
+      rebooted" + **Got it** (it no longer waits forever).
+- [ ] After flashing `main`: the same flow never drops the link and never resets the car.
+
+### U-64-4 — the simplified panel
+
+- [ ] Control Panel: no WiFi diagnostics panel anywhere; the category card shows a
+      **Details** toggle (description + capabilities only when open); **Saved settings**
+      and **About this project** are collapsed header rows; no duplicate helper lines.
+- [ ] Details resets when switching category pills; both disclosures open/close cleanly.
+
+---
+
+## U-63 round — BT connect names the car the user JUST tapped (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Audit OPS-3 (the one ⑧-class defect left open after the U-61 audit round): the hub's
+> screen-level scan list survives a method switch un-cleared, so a BT → Car-AP → BT
+> re-pick could resolve the connect against a STALE row from the earlier session — most
+> visibly a MAC-shaped fallback name an old scan recorded when the device name was
+> unresolved. The connect worked; the label lied. Fix: the name from the CURRENT
+> connect request (the row just tapped) always wins; the screen list fills gaps only
+> (`resolveBtConnectDevice`, 6 CI tests). Gates: tsc 0 · vitest **434/434** · prettier
+> clean.
+
+### U-63-1 — a re-pick shows the CURRENT name
+
+- [ ] Connect over BT, switch to Car-AP (confirm strip), switch back to BT → scan and
+      pick the car → the connect succeeds AND the header/banner names the car with its
+      CURRENT name (not a MAC-shaped string and not an old name from before a rename).
+
+### U-63-2 — the direct-MAC fallback still never refuses (F-40 must not regress)
+
+- [ ] On a fresh app open, pick BT and IMMEDIATELY tap the car row the moment it appears
+      (before the screen list refreshes) → the connect still dials by MAC and succeeds —
+      never "That car is no longer in the scan list. Rescan."
+
+---
+
+## U-62 round — guided home-router handoff (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner bench report: picking Home router while connected showed the switch prompt but
+> nothing worked, and the car never joined. Root cause + fix = F-59: the switch is a guided
+> HANDOFF (car joins over the live link → car reports its router IP → phone follows → dial
+> the reported IP), not a teardown. Gates: tsc 0 · vitest **428/428** · prettier clean.
+
+### U-62-1 — the STA pick opens the handoff (no teardown, no strip) — ⚠ SUPERSEDED by U-64-1
+
+- [ ] (SUPERSEDED: the original row expected Step 1 to fire immediately; the card now
+      ASKS first — verify U-64-1 instead. The "NO confirm strip + AP link stays live" half
+      still holds.)
+- [ ] Other-method picks while connected (AP ↔ BT) still use the confirm strip as before.
+
+### U-62-2 — the car actually joins (needs the car)
+
+- [ ] Step 1 fires over the live link; within seconds the car's OLED/network row shows the
+      ROUTER's SSID (firmware T21/T22 rows — flash `main` first) and the app's card moves to
+      "joined / waiting for its IP" on its own.
+- [ ] With NO router saved on the car, the card says to add one below and NEVER dials a
+      default address.
+
+### U-62-3 — the dial uses only the car's reported IP
+
+- [ ] When the car reports its router IP, the card shows it and unlocks **Connect via home
+      router**; before that, there is no dial (nothing to mis-dial).
+- [ ] Join the SAME router on the phone, tap Connect → the link verifies over the home
+      router (banner: verified, car id).
+
+### U-62-4 — the handoff stays escapable
+
+- [ ] The card's ✕ dismisses it at any step; a live link at dismiss time keeps working.
+
+---
+
+## U-61 round — Control Panel audit fixes: one surface, one dial, one disconnect (2026-10-02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> The 2026-10-02 Control Panel audit (UI/UX + operations) found five defects; all fixed with
+> CI-pinned regression tests (`toolsScreenFlow.test.ts`, `transportPickerFlow.test.ts` — F-58).
+> Gates: tsc 0 · vitest **419/419** · prettier clean.
+
+### U-61-1 — the deck button opens on the FIRST tap
+
+- [ ] Tap "Open … deck" once → the Remote window opens every time (the old inline cleanup
+      could cancel the 150 ms navigation — the dead-end first tap).
+- [ ] Double-tap → exactly ONE window opens (the debounce replaces, never duplicates).
+
+### U-61-2 — a chosen category stays chosen
+
+- [ ] Tap any category pill → pull-to-refresh, leave and re-enter the page → the SAME pill is
+      still selected (mount/refresh no longer snaps the selection back to the first pill).
+- [ ] Disconnect a live link → the selection DOES reset to the first pill (transport loss
+      still cleans up — that part is F-57, kept).
+
+### U-61-3 — a failure shows ONCE
+
+- [ ] Force a BT connect failure (car off) → the red banner appears; NO second toast repeating
+      the same sentence.
+
+### U-61-4 — a method switch dials the TARGET's address (needs the car)
+
+- [ ] With the phone on the home router and a live home-router link: switch method to
+      Car access point → confirm → the dial goes to the AP default, and after joining
+      `4WDCar_Wifi` the link verifies (the old bug dialled the PREVIOUS method's URL).
+- [ ] Switch back AP → home-router → the router's stored address is dialled, not the AP's.
+
+### U-61-5 — one disconnect flow
+
+- [ ] Tap the picker's Disconnect → the confirm dialog appears (centered on the phone, F-47);
+      Cancel keeps the link; Confirm tears down safely.
+- [ ] WiFi links confirm the same way (previously the dialog only covered BT).
+
+---
+
+## U-60 round — live-link method switching + connect-flow snags (2026-10-01→02, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> The 4WD4M integration bench session produced five app-side fixes. Headline: the method
+> dropdown no longer LOCKS while a link is live (R4-2 revised) — switching method is a
+> CONFIRMED teardown, and two transports are never live at once. Gates: tsc 0 · vitest
+> **409/409** · CI ✓ `36911189810` · OTA ✓ published (3.2.7 android+ios, run `36911189952`).
+
+### U-60-1 — switch communication method while connected
+
+- [ ] Connect over BT (`4WD4M Car`), drive, tap the method chip → the list OPENS while the link
+      is live (R4-2 used to lock it).
+- [ ] Pick a DIFFERENT method (e.g. Car access point) → an INLINE confirm strip names the
+      target and says what will be disconnected — no overlay centered below the fold.
+- [ ] Confirm → the BT link tears down FIRST, then the new method dials; the banner/picker
+      never shows two live links at once.
+- [ ] Re-pick the ALREADY-live method → no-op: the link never drops, no reconnect churn.
+
+### U-60-2 — the F-41 gate still protects a live link
+
+- [ ] While connected, the "Coming Soon" rows (BLE, HTTP/REST, …) stay dimmed and can NEVER
+      open the confirm strip — a parked method must never tear down a working link (the
+      PRIMARY gate runs before the live-link branch).
+
+### U-60-3 — connect flicker is gone
+
+- [ ] Connect over BT or WS → the app lands on the Remote screen exactly ONCE — no double
+      navigation or flash (150 ms debounce before RemoteControl navigation).
+
+### U-60-4 — disconnect cleanup
+
+- [ ] There is exactly ONE disconnect control (the duplicate header button is gone).
+- [ ] After disconnect, the Control Panel selection resets to the FIRST category pill — no
+      stuck connected-category view; the section order is unchanged (U-53-4 regression).
+
+### U-60-5 — touch targets + honest mode badges
+
+- [ ] Method rows are ≥48 dp tall with a per-row Connect button; comfortable at 320–360 px.
+- [ ] All six unbuilt modes carry the planned badge (garage card, project info, mode chips) —
+      displayed, never selectable on the 4WD4M.
+
+---
+
+## U-59 round — Connection-Manager Phase B: envelope wiring (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Phase B wires the JSON command envelope built in Phase A
+> (`transports/commandEnvelope.ts`) into the live path. It adds
+> `LinkManager.sendEnvelope` + ONE flag-gated intake in the hub
+> (`sendEnvelopeCommand`), and nothing else. **No screen changed** — the
+> intake ships OFF (F-41) and no UI calls it yet, so on the shipped build
+> this round must be invisible.
+>
+> Bench rows for the actual envelope exercise are T11–T14 in
+> `../../Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (that car is the only
+> permitted test target). The rows below are the app-side regression
+> guard.
+
+### U-59-1 — the shipped build is unchanged (the important one)
+
+- [ ] Install the OTA (close + reopen the app ×2). Control Panel behaves
+      exactly as before: drive, mode switch, speed/servo/trim, e-stop,
+      router panel, all five decks, the connection banner.
+- [ ] Nothing new appeared in any menu, and no control was added anywhere
+      for JSON envelopes (that is deliberate — F-41).
+
+### U-59-2 — both dialects coexist
+
+- [ ] The existing hand-written wire path still drives the car normally
+      (this is what the hub's fan-out was left untouched to guarantee).
+- [ ] `sendEnvelopeCommand` exists on the hub return value and, with the
+      gate off, refuses with "Command envelopes are not enabled on this
+      build." rather than throwing or silently dropping.
+
+### U-59-3 — nothing user-selectable changed
+
+- [ ] Transport picker rows unchanged (6 registered since U-112 — MQTT + Internet relay removed;
+      the F-41 gate on selectable methods is untouched by this round).
+- [ ] Connection-method list, teaching text and the primary-method gate
+      all render as before.
+
+---
+
+## U-58 round — deck landscape layout fix: no more merging/overlapping (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner: "the drive deck you made earlier opens the drive screen for each project category
+> but everything is merging and overlapping everything together in the landscape view… the
+> robocar drive deck is proper and no changes needed; the other categories are a mess; the
+> drive deck for those remaining projects should be in landscape and properly displayed."
+> Root causes (3): ① the deck branch's row had no bounded height, so the OLED's
+> `max-h-[55%]` resolved against an indefinite parent and was ignored while the deck card
+> overflowed the screen bottom (clipped → "merged"); ② decks drew their own DeckCard INSIDE
+> the screen's card → double borders/padding; ③ per-tile `w-[47%] flex-1 min-w-[120px]`
+> fought each other → unpredictable wraps/collisions. Fixed: the branch now uses the
+> robocar telemetry-view idiom (flex-1 min-h-0 row · fixed 2:1 OLED column at 30% width,
+> max 280 px · the deck's OWN DeckCard fills the column · stable explicit 2-up tile rows,
+> no percentages). Robocar branch + DroneControls untouched. Gates: tsc 0 · vitest
+> **317/317** · prettier clean.
+
+### U-58-1 — every non-robocar deck fills the landscape window cleanly
+
+- [ ] Open each of Smart Home / Smart Farm / Smart City / Smart Dustbin / Remote Controller
+      → Remote: the deck card sits fully INSIDE the window — nothing clipped at the bottom,
+      nothing overlapping the OLED, no border-inside-border (exactly ONE card edge around
+      the deck).
+- [ ] The OLED mirror (top-left, 2:1) stays a fixed size next to the deck at every landscape
+      width (small folded-keyboard window included) and never covers the deck tiles.
+
+### U-58-2 — tile rows are stable
+
+- [ ] Readout tiles (gauges/values/planned chips) render as tidy 2-up rows; an odd count
+      leaves the last slot empty (never a stretched lone tile); no tile ever collides with
+      its neighbour at any landscape width.
+
+### U-58-3 — robocar untouched (regression)
+
+- [ ] Robo Car drive deck (D-pad/Joystick/Telemetry + OLED 180×90 + Mode/Speed chrome) is
+      pixel-identical to before this round; Aerial Drones gimbal view unchanged.
+
+### U-58-4 — nothing else moved
+
+- [ ] Chrome row / sub-header / settings dropdown / reconnect banner behave as before on a
+      deck category; back navigation returns to the Control Panel with the link alive.
+
+---
+
+> 🆕 **2026-09-18 — RELEASE FINALIZATION (v3.2.0).** Release plan:
+> `../../guide/RELEASE-FINALIZATION-PLAN.md`; checklist `../../guide/FINALIZATION-TODO.md`;
+> failsafe `../../guide/FINALIZATION-FAILSAFE.md`. **RC: app v3.2.0 / 53**.
+> **#1 gate = the owner device verify** — close+reopen app to receive OTA.
+
+> Target: **v3.2.0/53 + OTA** — full remote rebuild + car mode sync via REQ_STATE; fleet allow-all/mark (2026-09-15) — all 9 modes selectable everywhere + LIVE/WIP/CS marks from the car's `CAPS;` broadcast; R13 — singleton WiFi/WS link, token-based mode cycling, standardized disconnect, state remembered across power cycles, ESP_SER IP + health deck; device-round-3 — A-17 fleet wording + A-18 project names/asset line; tsc clean + **52/52 tests**; device verification pending: rounds R10 + R11 + R12 + R13 + A-17/A-18.
+> Companion doc: `GUIDE.md` (project root) — session log + release state + AI session protocol.
+
+---
+
+## U-57 round — decks steps ②+③: all five category decks + kind headers (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner approved the Smart Home pilot screenshot → steps ② and ③ landed in one round:
+> every non-robocar/non-drone category now has its OWN deck (the shared SensorGrid fallback
+> is fully retired) and the pill row is grouped under two kind headers. Gates: tsc 0 ·
+> vitest **317/317** · prettier clean.
+
+### U-57-1 — every category opens its OWN deck
+
+- [ ] **Smart Farm** → Remote shows the farm deck: Pump Room / Solenoid Valve switches, Soil
+      Wetness gauge, Soil Temp, and a "Ready for firmware" Irrigation Plan tile — no home/
+      city/dustbin tiles anywhere.
+- [ ] **Smart City** → Street Lamps / Parking Slots switches, AQ (ppm) gauge, Daylight % tile.
+- [ ] **Smart Dustbin** → Fill % gauge, Lid Open / Compactor Run switches, "Ready for
+      firmware" Last Empty tile.
+- [ ] **Remote Controller** → Battery % / RSSI (dBm) tiles, Ch1/Ch2 switches, "Ready for
+      firmware" throttle-curve tile.
+- [ ] The old shared grid (Outputs + Live Sensors) no longer appears for ANY category;
+      Robo Car and Aerial Drones decks are unchanged.
+
+### U-57-2 — switches are live; placeholders stay honest
+
+- [ ] With the car linked: each deck's switches send real `OUT<i>:n` writes (Farm Pump Room
+      = relay 1, Solenoid Valve = relay 2; City Street Lamps = relay 1, Parking Slots =
+      relay 2; Dustbin Lid Open = relay 1, Compactor Run = relay 2; Handheld Ch1/Ch2 =
+      relays 1/2); disabled while no link is up.
+- [ ] Planned tiles (Irrigation Plan, Last Empty, Throttle / Steer curve) never fire a
+      command and always show the amber "Ready for firmware" chip.
+
+### U-57-3 — kind headers on the Control Panel
+
+- [ ] The pill row now reads **DEVICES THAT DRIVE** (Robo Car · Aerial Drones · Remote
+      Controller) then **DEVICES THAT MONITOR & SWITCH** (Smart Home · Smart Farm · Smart
+      City · Smart Dustbin) — same 7 pills, same order inside each group.
+- [ ] Selecting a pill still opens the same detail card as before; nothing else on the
+      page moved.
+
+### U-57-4 — deck isolation regression sweep
+
+- [ ] Open each of the five decked categories in turn and confirm zero label overlap:
+      no deck shows another category's tile wording (pinned by the deckkit parity test;
+      verify visually on device at small landscape widths).
+
+## U-56 round — per-category decks step ①: Smart Home deck pilot (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner plan: `guide/PLAN-2026-09-29-CONTROL-PANEL-KINDS.md` — every non-robocar/non-drone
+> category gets its OWN remote deck showing ONLY its own things; robocar + drones untouched.
+> Step ① ships the shared deck kit + the **Smart Home** pilot; the other four decks wait for
+> the owner's screenshot approval (step ②). Gates: tsc 0 · vitest **313/313** · prettier clean.
+
+### U-56-1 — only Smart Home changes
+
+- [ ] Control Panel → **Smart Home** → Open deck: the Remote window shows the Smart Home deck
+      (relay wall + Temperature/Humidity + a "Ready for firmware" Motion/IR tile) — NOT the old
+      Outputs/Live Sensors grid.
+- [ ] **Smart Farm, Smart City, Smart Dustbin, Remote Controller** still open the shared grid
+      exactly as before (step ② pending); **Robo Car** and **Aerial Drones** decks are unchanged
+      (gold standard).
+
+### U-56-2 — the deck shows ONLY Smart Home things
+
+- [ ] No farm/city/dustbin/handheld wording anywhere in the deck (no Pumps, Street Light, Fill
+      Level, Battery…) — only Light / Fan / Socket / Temperature / Humidity / Motion-IR.
+- [ ] Rotating the phone (deck is landscape-locked like the robocar window) keeps the deck
+      laid out; nothing overlaps at small widths.
+
+### U-56-3 — the switches are real; the placeholder is honest
+
+- [ ] With the car linked: flipping **Light / Fan / Socket** sends `OUT1/2/3:<n>` on the live
+      link (relay clicks on hardware that wires relays 1–3); switches are disabled while no
+      link is up.
+- [ ] **Motion / IR** reads "Ready for firmware", is disabled, and never pretends to work;
+      Temperature/Humidity show the live sensor values (0° placeholders until a real firmware
+      protocol exists — the established U-47 pattern).
+
+### U-56-4 — decks stay separate (regression pin)
+
+- [ ] Open Smart Home, back out, open Smart Farm: the farm category still shows the shared
+      grid (never the home deck); repeat for the other categories.
+- [ ] After an app restart the same routing holds (the deck choice is by category, not by
+      session state).
+
+## U-55 round — R4-7: User preferences hub (devices ever connected + robot profiles) (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner: "Robot preferences → User preferences … every car/device the user has EVER connected
+> through ANY transport with set · edit · delete per device, easily, from one place." Built on
+> the existing stores (car_profiles + robot_user_settings — no new table). Gates: tsc 0 ·
+> vitest **305/305** · prettier clean.
+
+### U-55-1 — the Menu entry moved
+
+- [ ] Menu → the group reads **User Settings** with the item **User preferences** (no "Robot
+      preferences" text anywhere; the Pro chip still shows for free users).
+- [ ] Opening it shows the title **User preferences** — no crash, and free users see the Pro
+      explanation card as before.
+
+### U-55-2 — My devices lists every car ever connected (any transport)
+
+- [ ] After linking a car over **Bluetooth**, **Car access point**, and **Home router** (one
+      link each is enough to test), the hub's **My devices** list shows that car ONCE — not
+      one entry per transport (fw:<boardId> wins over MAC over wifi:<identity>).
+- [ ] The row shows the car's name, its stable key, and a badge: **synced** (mirrored to your
+      account) or **this phone** (local only — e.g. you were signed out when you linked it).
+- [ ] A car linked for the very first time appears in the list even before its first settings
+      save (the last-device spill makes it visible).
+
+### U-55-3 — set · edit · forget per device
+
+- [ ] **Set name:** tap it, type a new name, Save — the row renames; reopen the hub and the
+      name is still there; on a second device signed into the same account the renamed car
+      shows the new name too (cloud mirror).
+- [ ] **Auto-join on/off:** the button flips the smart-link auto-join preference for that car;
+      reopening the hub keeps the choice; the Control Panel's Car Profile toggle shows the
+      same state next link.
+- [ ] **Forget:** confirm dialog explains the car itself is NOT touched. After forgetting, the
+      device leaves the list and its local memory is gone; re-linking the car in the Control
+      Panel starts a fresh profile (and it re-appears in the hub).
+
+### U-55-4 — offline-first: phone memory first, DB when online
+
+- [ ] With the phone in airplane mode, open the hub: the devices list still renders (badge
+      reads **offline — phone memory**), and forget/rename still work locally.
+- [ ] Back online, reopen the hub: locally-known devices push to the account automatically
+      (badge flips to **synced**); no manual action needed.
+
+### U-55-5 — Robot profiles still work inside the hub
+
+- [ ] The **per-robot profiles** section below behaves exactly as before: add / edit / delete
+      a profile with code values, parameters, telemetry channels.
+
+### U-55-6 — nothing else moved
+
+- [ ] Control Panel connect/drive flows unchanged; the Car Profile card still shows the
+      sync badge; signing out hides nothing it shouldn't.
+
+---
+
+## U-54 round — Round 4: AP truth, method lock, home-router method + router editor, profile restores the last router (2026-09-30, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner round 4: "when the car is the AP the dBm line must read as the AP, not as some home
+> router · lock the connection dropdown while connected · unlock the home-router method and
+> give it the same router management the remote's webserver mode has · user can add/edit/delete
+> saved routers · nothing mixes between methods · the car shares its info to the app then the
+> database on connect." Shipped: R4-1 `3a9d2c5` · R4-2 `c029b3e` · R4-6 `fe2e909` · R4-3
+> `0e9349c` · R4-1b + R4-4 + R4-5 (2026-09-30, this round). Gates: tsc 0 · vitest **296/296** ·
+> prettier clean.
+
+### U-54-1 — AP link shows ZERO home-router flavor
+
+- [ ] Connect via **Car access point**, banner on **own access point**: the Signal row reads
+      **Car AP signal** — with the note "phone to the car's hotspot". The words "router" and
+      "home" appear NOWHERE in the banner while the car is on its AP.
+- [ ] The **Car Profile** card on the same AP link shows NO Saved-routers / Wi-Fi-history
+      sections (R4-1) — only identity + last-saved drive settings + the smart-link toggle.
+- [ ] The **Home router settings** section is ABSENT (it exists only under the home-router
+      method — see U-54-3).
+
+### U-54-2 — home-router link reads as the router
+
+- [ ] Put the car on your home router (or read the banner while the car reports a joined
+      SSID): the Network row says **On your router · <ssid>** and the Signal row reads
+      **Router signal** with the note "car to your router" — distinct from the AP wording.
+
+### U-54-3 — home-router method: router management like the remote's webserver mode
+
+- [ ] Pick **Home router (WiFi STA)** in the dropdown: a **Home router settings** section
+      appears under the Car Profile card with the SAME layout the remote's webserver mode
+      hosts — Active connection card (IP tappable → car web page), **Saved on the car** list
+      with the car's own network pinned as **Default**, and the Add form.
+- [ ] Each saved row shows **Switch**, **Edit**, **Delete**; "Clear all" still confirms first.
+- [ ] Tap **Edit** on a row: the row highlights with an **Editing** chip and the form
+      pre-fills its SSID. Save (or "Add + switch") sends the update to the car; the edit
+      highlight clears. The car keeps one password per SSID, so the save is a re-ADD —
+      after saving, use **Switch** to rejoin with the new password.
+- [ ] **Car AP method regression:** pick the Car access point method — the Home router
+      settings section does NOT render (no method mixing), and the AP's own steps still work.
+- [ ] **Bluetooth regression:** under SPP the router section is also absent.
+
+### U-54-4 — the dropdown stays locked while a link is live (R4-2)
+
+- [ ] Connect by any method: the Connection method chip is read-only — tapping it does not
+      open the list; the Disconnect capsule is the only way to change methods.
+- [ ] After Disconnect the dropdown opens again and all three primary methods are selectable
+      (Classic Bluetooth, Car access point, Home router).
+
+### U-54-5 — the profile restores the last router (R4-5, signed in)
+
+- [ ] On device A (signed in), connect the car to a router (or use the STA method), then edit
+      drive settings and wait for the profile badge to show **synced**.
+- [ ] On device B (same account, factory-fresh for this car): connect via any method — the
+      Car Profile card adopts the cloud row: mode/speed/steer/trim/joystick come back AND the
+      last router SSID re-fills the WiFi-provision field; if the car was on a router, the
+      STA address field pre-fills toward that router so the next home-router connect is one tap.
+- [ ] The Wi-Fi test panel (R4-6) still collapses to a one-line result after a run.
+
+### U-54-6 — nothing else moved
+
+- [ ] Panel order unchanged: category → detail card → Connections (banner, picker, [home-router
+      section when chosen], Car Profile) → About.
+- [ ] Remote window (Drive deck) webserver-mode RouterPanel unchanged (now with the same
+      per-row **Edit** button).
+
+---
+
+## U-53 round — Control Panel round 3: false statusCallbacks error, portrait banner rows, dialog on the phone (2026-09-29, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner round: ① red `Cannot read properties of undefined (reading 'statusCallbacks')` just below
+> the verified line when connected (car answered fine on BT + WiFi — the error was a parallel
+> path, not the link); ② the Linked / "Network on the car · own access point" lines broken in
+> PORTRAIT only (lots of dead space); ③ the disconnect dialog centered on the page, not the
+> phone screen. Fixes = FAILSAFES **F-46/F-47/F-48**; commits `2a8b406` · `ca5822d` · `f890a2e`;
+> JS-only → same-version OTA 3.2.7/60 (run `36593994243` green). Gates: tsc 0 · vitest
+> **292/292** · prettier clean.
+
+### U-53-1 — the red statusCallbacks error is dead (F-46)
+
+- [ ] Connect via **SPP** → wait for the car to answer. The banner shows **Linked & verified**
+      with **NO red error line** under it — at any time, including right after connect and after
+      switching methods.
+- [ ] Repeat over the **Car access point (WiFi)** — same: verified, never the red
+      `statusCallbacks` message.
+- [ ] Leave the panel open ~2 min mid-drive: no red line may appear late (the throw used to
+      surface on the manager's re-subscribe too).
+
+### U-53-2 — banner rows are tidy in PORTRAIT (F-48)
+
+- [ ] Connected (BT or WiFi), **portrait**: the **Car** row and the **Network on the car** row
+      each fill the card width — label on top, value below, NO big empty gap, no squeezed text.
+- [ ] The **Signal** row (WiFi link) keeps its bars at the RIGHT edge; the %/dBm text stays in
+      the main column.
+- [ ] **Landscape regression:** everything still reads correctly (the fix must not break the
+      orientation that already looked fine).
+
+### U-53-3 — the disconnect dialog centers on the PHONE (F-47)
+
+- [ ] Connected → tap **Disconnect**: the confirm dialog appears in the MIDDLE of the phone
+      screen — also when the page is scrolled to the top AND to the bottom.
+- [ ] Cancel and Disconnect buttons both work; cancelling leaves the link alive.
+- [ ] **Landscape regression:** dialog still centers and is reachable in both orientations.
+
+### U-53-4 — nothing else moved (owner: panel "not in sync / not organized")
+
+- [ ] The panel's sections still read in order: category → detail card → Connections (banner,
+      picker) → Car Profile → About. No content was removed or re-ordered this round.
+- [ ] The BIGGER request — re-organizing the Control Panel per project kind (robo cars, smart
+      home, city, …) — is NOT in this build; it is queued as its own design round. Do not test
+      for it here.
+
+---
+
+## U-52 round — Car profiles everywhere: DB live, sync-on-connect, account surface (2026-09-29, IMPLEMENTED — needs SIGNED-IN device round)
+
+> Owner round: "car profiles and their data to the database from all app and websites… gets sync
+> with the device as soon as everything gets connected… save the last save things… ready for at
+> least 4wd4m, 2wd1m, selfbalance." DB `car_profiles` **applied live** (`db:apply`, REST probe
+> `200 []`); app sync engine wired (pull-on-link, push-on-save, last-saved-wins); Car Profile card
+> elaborated; website account page gained Car Profiles (read/rename/remove). Failsafes **F-44,
+> F-45**. Gates: mobile vitest **292/292** · website **164/164**. Sign-in required — profiles
+> follow the ACCOUNT; signed-out use still works (local only, amber badge in the card).
+
+### U-52-1 — profile row lands in the cloud account (needs: signed-in phone + one car)
+
+1. Sign in on the app → link any car (BT or WiFi) → change something remembered (speed, mode, or
+   save a router).
+2. Expected: Car Profile card badge shows **"synced to account"** within a few seconds.
+3. Supabase check (owner/SQL): `select profile_key, car_name, settings from car_profiles;` → row
+   with the car's `fw:<id>` (or MAC) key; NO password material anywhere in `settings`.
+
+### U-52-2 — a second device restores the last save on link (the core promise)
+
+1. Same account on another phone (or after clearing app storage) → link the SAME car.
+2. Expected: before touching anything, mode/speed/steer/trim/joystick + saved routers + Wi-Fi
+   history match the first device's last save; card badge shows **"restored from account"**.
+3. Also verify per mode: repeat with the 4WD4M, the 2WD1M, and the self-balance car — each keeps
+   its OWN profile (keys differ per car).
+
+### U-52-3 — newer local save wins (both directions)
+
+1. Device A (offline or airplane-mode BT session) changes speed to 130 → badge flips to
+   **"saved on this phone"** while offline.
+2. Back online, link the car again → A's 130 pushes to cloud (badge → synced). Device B linking
+   the car then receives 130, not the older cloud value.
+
+### U-52-4 — website account page mirrors + manages profiles
+
+1. Sign in on the website with the SAME account → Account → **Car profiles**.
+2. Expected: one card per linked car with a settings summary (mode · speed · routers · updated).
+3. Rename a car → re-open the app → the card shows the new name (next pull).
+4. Remove a profile on the web → the app re-pushes it on the next link (expected: removal is
+   overridden by the device's local copy — by design, the phone is the source of the fleet).
+
+### U-52-5 — signed-out / offline behavior
+
+1. Signed out: profile card shows the amber **"saved on this phone"** state + sign-in hint; drive
+   flow unaffected.
+2. Signed in but offline: badge shows "saved on this phone"; on reconnect the save mirrors.
+
+## U-51 round — Control Panel snag round 2: SPP false error, method gate, speed linearity, FAB in landscape (2026-09-29, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> Owner round: Control Panel + Drive Deck snags ("go dont wait … make notes of all and push thing
+> properly"). Six fixes, one concern per commit (`cc8f671` → `fdb0941`), all JS-only → same-version
+> OTA, **version stays 3.2.7/60**. Failsafes **F-40..F-43**. Gates: tsc 0 · vitest **285/285**.
+> Supersedes the U-50 rows that referenced the "Every way the car can be controlled" card (removed).
+
+### U-51-1 — a paired car connects; the false "no longer in the scan list" error is dead (F-40)
+
+- [ ] **BT session.** Pair the car in Android Settings (if not already). Control Panel → Connection
+      method → **Classic Bluetooth (SPP)** → Scan for cars → tap the paired car. It must CONNECT.
+- [ ] Specifically: the error **"That car is no longer in the scan list. Rescan."** must never
+      appear for a car you just tapped in the list — even if you scanned twice, re-opened the page,
+      or the scan list refreshed in between.
+- [ ] The car shows its real scanned name (not the raw MAC) in the Connected banner + Drive deck.
+- [ ] Regression: an out-of-range/unpowered car still fails with the timeout message within ~10 s
+      (no endless "Connecting…").
+
+### U-51-2 — method gate: SPP + Car access point live, everything else Coming Soon (F-41)
+
+- [ ] The dropdown lists all **6** methods (no Cable row, no duplicates; 8 → 6 with U-112, which
+      dropped MQTT and Internet relay).
+- [ ] **Classic Bluetooth (SPP)** and **Car access point** are bright and selectable.
+- [ ] The other four (**BLE, Home router, HTTP / REST, mDNS**) are dimmed with
+      a **"Coming Soon"** tag; tapping the row does NOTHING — no connection steps open, no dial,
+      no error, no selection change.
+- [ ] Tapping **ⓘ on a Coming Soon row** still opens its full help window (readable, closable by
+      outside-tap / ✕ / back), with the Coming Soon note inside. Help is never gated.
+- [ ] With BT connected, switching methods still works between the two primary rows only.
+
+### U-51-3 — speed is linear and stops jumping (F-42)
+
+- [ ] **WiFi session** (or BT). Drive Deck: set speed to a distinctive value (e.g. **130**), commit,
+      then drive forward/backward for ~10 s. The speed display must HOLD 130 — it must not snap to
+      another number mid-drive or mid-slider-drag.
+- [ ] Drag the slider slowly without committing: the number follows the thumb exactly (linear
+      100→255, 5-step grid) and never re-bases or jumps to a different value while held.
+- [ ] The number shown before and after commit is identical, and it IS the value the car reports
+      back (`STATE;SPD=`) once it echoes.
+- [ ] Steppers (− / +) move exactly 5 per tap within 100..255; the ends clamp at 100 / 255.
+- [ ] With the car's own buttons: changing speed at the car updates the app display (car truth
+      still mirrors — only the RACE was fixed, not the mirror).
+
+### U-51-4 — the Remote FAB survives rotation (F-43)
+
+- [ ] Connect any link. On a portrait screen (Home, Shop, Control Panel), confirm the FAB is
+      visible where you last dragged it.
+- [ ] Rotate to landscape (outside the Drive deck): the FAB must remain **visible** — pulled back
+      into the window — not vanished. Rotate back to portrait: still visible.
+- [ ] Drag it in landscape, release, rotate again: it stays in bounds and remembers its spot.
+- [ ] Regression: tap still opens the Remote window; drag-to-bottom-center still dismisses; the
+      × still dismisses; a new connect re-arms after dismissal.
+
+### U-51-5 — Control Panel error placement + page rhythm
+
+- [ ] Trigger a connect failure (wrong WiFi address / car off). The red error box appears **with
+      the banner + status messages above the picker**, not detached at the bottom of the section
+      under the profile card.
+- [ ] Below "About this project" the page ENDS (the teaching card is gone; U-50 rows that mention
+      it are superseded).
+- [ ] Pull-to-refresh, category switching, disconnect-confirm overlay: unchanged.
+
+---
+
+## U-48 round — final snags: save feedback, refresh, pressed state (2026-09-27, IMPLEMENTED — JS OTA — DEVICE VERIFY PENDING)
+
+> App half of the U-48 final snag round. Plan: `../../../guide/PLAN-2026-09-27-U48-FINAL-SNAGS.md`
+> (§6 = what changed, §7 = what was deliberately not changed) + full log
+> `../../../guide/SESSION-2026-09-27-U48-FINAL-SNAGS.md`.
+> NO native bump — 3.2.6/59 stays, this rides an OTA. Gates: **tsc 0 + vitest 205/205 + prettier clean**.
+> ⚠ **Run `supabase functions deploy site-content payment-khalti` (website repo) BEFORE the admin
+> content-save row below**, or that row will fail with 401 by design.
+
+### U-48-1 — admin save shows a response, and cannot be double-submitted
+
+- [ ] Admin → edit a product → Save: button shows "Saving…", is disabled while in flight, then
+      confirms. Double-tapping rapidly still creates exactly ONE product row.
+- [ ] Admin → product editor → **link import** (the owner's original complaint: "save doesn't show
+      proper response after clicking, hence user clicks more than once"): preview then create shows
+      its own busy state, and a rapid double-tap creates exactly one product.
+- [ ] Admin → Services, Journal, Project tabs: same "Saving…" + disabled behaviour; a forced error
+      still re-enables the button (no permanently-stuck busy state).
+- [ ] Admin → content tab: saving home hero shows busy, and **succeeds** (needs the redeployed
+      `site-content` function). A non-admin signed-in user cannot reach an admin save.
+
+### U-48-2 — pull-to-refresh
+
+- [ ] Home: pull down → spinner appears, catalog reloads, spinner dismisses.
+- [ ] Printing: pull down → reloads, filters preserved.
+- [ ] Tools: pull down → reloads, current selection preserved.
+- [ ] Projects: pull down → reloads (this one already worked; confirm no regression).
+- [ ] Shop and Account: still refresh (pre-existing) — confirm no regression.
+
+### U-48-3 — buttons respond instantly + busy states
+
+- [ ] Product detail → "Add to build list": shows "Adding…" while in flight, disables, and a fast
+      double-tap adds the quantity **once** (not twice).
+- [ ] Cart → tap "+" quickly several times: the final quantity is exactly what you tapped (no lost
+      or doubled increments from overlapping writes).
+- [ ] Account → newsletter subscribe: shows "Subscribing…", and if the network fails the button
+      re-enables and shows an error instead of staying dead.
+- [ ] Buttons now dim slightly on press: product cards, Shop filter chips + checkout provider rows,
+      Cart "Continue shopping", Contact cards, Home "Open tools", Order-success "Back",
+      Projects/Services clear-search, sign-in show/hide password, PID modal quick-set/Cancel/Set.
+
+### U-48-4 — no double catalog fetch on open (perf)
+
+- [ ] Cold-open the app: no visible stall/jank while Home + Shop both mount (one shared catalog
+      fetch, not two).
+- [ ] Swipe through the tab pager: switching tabs does NOT re-download the catalog, and the cart
+      list does not re-render when nothing changed.
+- [ ] Offline: the cached catalog still renders with the offline badge (dedupe must not break the
+      cache fallback).
+
+### U-48-5 — regression sweep (must still work)
+
+- [ ] Add to cart → cart badge, quantities, totals, checkout placement all unchanged.
+- [ ] Collection hearts + admin tabs single-row + biometric lock re-arm: unchanged.
+- [ ] Push notification permission + subscribe/unsubscribe: unchanged (the U-25 cleanup deliberately
+      KEPT the `EXPO_PUBLIC_EAS_PROJECT_ID` fallback).
+
+---
+
+## device-round-12 — theme tokens + OLED font + Telemetry pill + overflow (2026-09-17, IMPLEMENTED — A-48..A-51; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-12. Full run sheet: `../../guide/DEVICE-ROUND-12-2026-09-17.md`.
+> NO native bump — v2.0.6/49 stays. Gates: **tsc clean + vitest 54/54 + expo-doctor 18/18**.
+
+### A-48 — theme token refresh (whole app, subtle)
+
+- [ ] Remote screen, **light**: background no longer pure white — screens/panels separate clearly
+- [ ] Remote screen, **dark**: soft navy midnight (not pitch black); text/cards readable
+- [ ] Home/Shop/Account/Menu/Tools still look consistent with the refresh
+
+### A-49 — OLED data font standardized + fit
+
+- [ ] Compact OLED mirror (Remote): every readout in ONE consistent mono scale (no mixed sizes)
+- [ ] AUTO rows (Angle / P / D / OUT / I / OFF) fit the 160×80 slot with no clipping
+- [ ] Long mode names/directions truncate cleanly (no overflow)
+
+### A-50 — "Hide" → "Telemetry" control pill
+
+- [ ] Third pill reads **Telemetry**, SAME row as D-pad and Joystick
+- [ ] Webserver mode + Telemetry → WiFi & Router panel; PID-auto + Telemetry → balance controls
+- [ ] Any OTHER robocar mode + Telemetry → useful telemetry (full OLED mirror), NOT "Pad hidden"
+
+### A-51 — add-router card overflow
+
+- [ ] "Add a router" card: helper sentences stay INSIDE the rounded card (light AND dark)
+- [ ] "No saved routers yet…" and the Active-connection helper text also stay inside
+
+---
+
+## device-round-9 — WiFi clear-all + own-AP default + E-stop removal + light theme + FAB reliability (2026-09-17, PUSHED `aa560bd` — A-40..A-47; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-9. Full run sheet: `../../guide/DEVICE-ROUND-9-2026-09-17.md` (§3 fix
+> matrix, §5 checks, §6 failsafe note). NO native bump — v2.0.6 stays (rounds 5..9 roll into
+> one same-version OTA bundle; runtimeVersion 1.0.0). Gates: **tsc clean + vitest 54/54 +
+> expo-doctor 18/18** (2026-09-17). **Pushed `aa560bd` on the owner go; the `OTA Only`
+> workflow (`ota-only.yml`) publishes the bundle on main — close + reopen the app to
+> receive it.**
+>
+> - **A-40/A-41** `carProtocol.ts` `buildRouterCommand('CLEAR', …)` → `ROUTERS;CLEAR`;
+>   `useControlHub.routerClearAll()` broadcasts on every live link, optimistically clears
+>   `carNetworks`, persists `savedRouters: []` and reports "All routers cleared".
+> - **A-42/A-46** RouterPanel: **Clear all** pill (destructive `Alert` confirm, only when
+>   user routers exist) + count shows user routers `/6`; the car's OWN network is pinned as a
+>   non-deletable **Default** row (`OWN_AP_NAME = 'WirelessCar_Wifi'`, exported from
+>   carProtocol) with no Switch/Delete; `routerDelete` guard can never DEL the own name (the
+>   car also refuses it, T-66). Verify A-42/46a: clear-all asks first and wipes car+remote;
+>   the Default row always shows and cannot be deleted.
+> - **A-43/A-43b** The emergency-stop **button is removed from the app UI** (owner): E-stop
+>   FAB + latent DriveControls pill + `onEStop` prop + type deleted. `handleEStop`, the
+>   `ESTOP` command path and link-loss auto safe-stop are UNCHANGED (hub-only). A NEW
+>   **Disconnect** pill in the sub-header (right of the status/IP chips, only while linked)
+>   confirms via `Alert` then `hub.handleDisconnect()` (safe-stops first). Verify A-43a: no
+>   E-stop button anywhere; failsafe still walks on link loss. A-43ba: Disconnect closes BT
+>   and WiFi links.
+> - **A-44** light-theme contrast: ModeChooser trigger + cycle button now skin via theme
+>   tokens (`border-line bg-card` / `text-ink`, chevrons #475569/#cbd5e1) — the old white-on-
+>   white is gone in light mode; the fly-out stays a fixed dark slate-900 palette (its row
+>   text is tuned for that surface, matches the ESP32 remote hardware UI). StepperPill icon
+>   `#fff`→`#64748b`; ValueStrip rail max-track is `dark`-aware (`rgba(255,255,255,0.15)`
+>   dark / `rgba(100,116,139,0.3)` light); BalanceControls PID chips + coarse ± buttons use
+>   `bg-mist` + black/white alpha with `dark:` variants. Verify A-44a: every remote/deck
+>   control readable on white.
+> - **A-45** FloatingRemoteButton: the navigation `state` listener now RETRIES attach until
+>   `navigationRef.isReady()` (it was silently skipped at early mount → the FAB could float
+>   over the Remote screen), plus a 1 s poll re-checks link state + `remoteInFront`. Verify
+>   A-45a: FAB shows reliably on fresh boot + reconnect, hides when Remote is open.
+> - **A-47** text-overflow pass: RouterPanel AP + saved SSID rows (min-w-0 + middle ellipsis),
+>   Settings dropdown title (numberOfLines + middle ellipsis), ModeChooser trigger
+>   constrained; WeblinkControls rows verified inside the bounded ScrollView. Verify A-47a:
+>   long SSIDs never bleed outside their cards/boxes.
+
+## device-round-8 — real BT name + RouterPanel fixed card widths (2026-09-17, DONE — A-38/A-39; JS OTA pushed + published, owner device-verified)
+
+> App half of round-8. Full run sheet: `../../guide/DEVICE-ROUND-8-2026-09-17.md` (§3 fix
+> matrix, §5 checks). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7+8 roll into one
+> same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18** (2026-09-17).
+> Code status: A-38/A-39 implemented, pushed `23724ea`; **JS OTA bundle published** by the
+> round-8 push (`OTA Only` workflow run `35197115585` = success). **Owner device verify
+> 2026-09-17 (after app close+reopen): round "worked out all fine for most of the things"** —
+> A-38a/A-39a exercised OK; per-check result not itemized, any residual item logged next session.
+>
+> - **A-38** `RemoteControlScreen.tsx` `friendlyBtName()` no longer invents a car name: a
+>   MAC-shaped scan result (or a 1–2 char fragment) now returns `''` instead of `'ESP32 Car'`.
+>   Callers already render `<name> || 'Connected'`, so the header shows the neutral state label
+>   when there is no real name. Owner rule (round-8): `WIRELESS CAR` (BT) and `WirelessCar_Wifi`
+>   (WiFi/SSID) are the only real names; no stray "ESP"/"esp car" wording. Verify A-38a: with a
+>   real SPP name the header shows `WIRELESS CAR`; with only a MAC it shows `Connected`, never
+>   "ESP32 Car".
+> - **A-39** `RouterPanel.tsx` card width is now a **fixed pixel** value measured on layout —
+>   `(available − 2×12 gap) / 3`, clamped **260–380 px**, `shrink-0` — replacing the previous
+>   `width:'46%'` percentage that mis-measured inside the horizontal `ScrollView` and made the
+>   sections stretch/elongate (last card unreachable at max scroll). Horizontal scroll + 12 px
+>   gap unchanged. Verify A-39a: with 3 cards the row fits exactly on landscape; every card,
+>   including the LAST (add-router), is reachable by scrolling; no card stretches to fill.
+
+## device-round-7 — IP chip + RouterPanel grid + mode-flip flicker (2026-09-17, IMPLEMENTED — A-35..A-37; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-7. Full run sheet: `../../guide/DEVICE-ROUND-7-2026-09-17.md` (§3 fix
+> matrix, §4 A-35..A-37 rationale). NO native bump — v2.0.6/49 stays, JS OTA (rounds 5+6+7
+> roll into one same-version bundle). Gates: **tsc clean + vitest 50/50 + expo-doctor 18/18**
+> (2026-09-17). Code status: all A-35..A-37 implemented, push PENDING.
+>
+> - **A-36** the top-bar IP chip (`RemoteControlScreen.tsx`) is **ALWAYS tappable** — no
+>   `disabled={!wifiConnected}`, and `handleOpenWebPage()` no longer early-returns when
+>   telemetry is missing: with a reachable STA IP it opens `http://<ip>`, otherwise it opens
+>   `http://192.168.4.1` (the car's AP page) so "nothing happens" is gone even offline; the
+>   chip label shows `(AP)` when the STA IP is absent. Verify A-36a (STA IP opens the car
+>   page) + A-36b (WiFi off / only-AP → still opens 192.168.4.1).
+> - **A-35/A-35b** `RouterPanel.tsx` is rebuilt as a **landscape split-card grid**: the panel
+>   is now a horizontal `ScrollView` of three min-width ~300 px cards — (1) the car's own WiFi
+>   connection (SSID + AP line + tappable IP, A-35b), (2) saved routers (Switch/Delete rows),
+>   (3) the add-router form. On a wide landscape deck the cards sit side-by-side; on a narrow
+>   screen they scroll sideways instead of squeezing. Inputs + buttons grew to `h-12` and the
+>   body type to 13–14 px. Verify A-35a (landscape shows ≥2 cards side-by-side, no squeeze) +
+>   A-35b (car's own WiFi card shows SSID/AP/IP correctly).
+> - **A-37** dead mode-flip flicker: the car's `MODE` echo was mirrored unconditionally
+>   (`useControlHub.ts` applyTelemetry) and a **stale in-flight echo of the pre-change mode**
+>   kept rewriting `activeMode` back to the old value right after the user picked a new one.
+>   Fix = ESP-remote R-33 parity: `selectMode()` opens a `MODE_CHANGE_GRACE_MS` (2500 ms)
+>   commit window (`{token, stale, at}`); while pending, an echo still equal to the pre-commit
+>   mode AND ≠ the chosen token is skipped (the optimistic pick stands) — any changed echo is
+>   car truth and adopts + clears. `ModeChooser.tsx` additionally freezes the shown selection
+>   to the mode captured at open-time while the dropdown is open (`openModeRef`). Verify A-37a
+>   (open dropdown, car sends a stale old-mode echo → highlight does not snap back; new echo
+>   → it follows) + A-37b (cycle button + dropdown select still land + OLED mirrors).
+
+## device-round-6 — remote chrome rectification (2026-09-17, IMPLEMENTED — A-29..A-34; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-6. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-6-2026-09-17.md`.
+> Checklist: `guide/SESSION-NOTES.md` → "Round-6 device tests". NO native bump — v2.0.6/49
+> stays, JS OTA (rounds 5+6 rolled into one same-version bundle). tsc clean + **50/50 tests**.
+>
+> - **A-29** RouterPanel shown only in the ESP32 (Webserver) mode; other hidden-pad modes → "Pad hidden" placeholder.
+> - **A-30** Saved routers + device name persist across a forced app restart (global `genum.lastDevice` spill + `savedNetworksRef`).
+> - **A-31** Constant-height sub-header band for every robocar mode — the deck never shifts; IP chip only in webserver mode.
+> - **A-32** RouterPanel readable type + real em dash/apostrophe (no escape artifacts).
+> - **A-33** Dark-theme toggle in Remote Settings; chrome/sub-header/dropdown/RouterPanel token-skinned (drive deck stays dark).
+> - **A-34** Duplicate fixed Control-Panel header remote icon removed.
+
+## device-round-5 — friendly BT name + WiFi panel + saved routers + keyboard (2026-09-16, IMPLEMENTED — A-25..A-28; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-5. Full run sheet: `../../guide/DEVICE-ROUND-5-2026-09-16.md`.
+> NO native bump — v2.0.6/49 stays, JS OTA. tsc clean + **50/50 tests**.
+
+### A-25 — friendly BT name in header
+
+- [ ] Header shows the car's friendly BT name right of "Remote" (`_` → space,
+      e.g. `WIRELESS_CAR` → `WIRELESS CAR`)
+- [ ] Never a raw hex MAC — a MAC-shaped scan name renders as `ESP32 Car`
+- [ ] No standalone IP chip in the top chrome row anymore
+- [ ] ESP_SER mode: sub-header row below chrome shows the name + tappable IP
+      chip (opens the car's web page in the default browser)
+- [ ] `192.168.4.1 (AP)` shown when the car is in its own AP mode
+
+### A-26 — single "WiFi & Router" panel
+
+- [ ] Hide hides BOTH drives (D-pad + joystick) and shows the WiFi & Router panel
+- [ ] The old WeblinkControls card and the "Pad hidden" placeholder are gone
+- [ ] The Settings gear no longer contains a WiFi provisioning card
+- [ ] Panel shows: active SSID + AP name (tappable IP), LINK state, saved router
+      list, and the Add form
+
+### A-27 — saved-router add / switch / delete over WS
+
+- [ ] RouterPanel list entries re-sync from the car's `networks` (WS JSON) within
+      ~1-2 s after any change
+- [ ] Add: saves on the car (`ROUTERS;ADD;<ssid>;<pass>`), appears in the list,
+      persist across app restarts (car NVS is the source of truth)
+- [ ] Switch (Switch on): sets active router (`ROUTERS;USE;<ssid>`), car rejoins
+      over WiFi when reachable; app returns to BT fallback until then
+- [ ] Delete: removes from the car registry (`ROUTERS;DEL;<ssid>`)
+- [ ] Per-car: each vehicle keeps its own saved list (fleet parity)
+- [ ] Passwords are NEVER sent by the app back to the hub/panel (W-14)
+
+### A-28 — keyboard never covers inputs
+
+- [ ] Add-form inputs sit above the soft keyboard (resize + KeyboardAvoidingView)
+- [ ] Focused input scrolls into view; no obscured TextInput
+
+## device-round-4 — remote window + floating icon (2026-09-16, IMPLEMENTED + pushed `ec90656` — A-19..A-24; JS OTA — DEVICE VERIFY PENDING)
+
+> App half of round-4. Full run sheet + failsafe note: `../../guide/DEVICE-ROUND-4-2026-09-16.md`.
+> Docs BEFORE code (owner rule). NO native bump — v2.0.6/49 stays, JS OTA. Assumptions:
+> joystick Show/Hide choice is session-only; the floating icon shows ONLY while a device
+> is linked; disconnect remains exclusively on the Control Panel (A-22 keeps safe-stop
+> on disconnect — `handleDisconnect` still sends `SPD0`/`SERVO90` first, A-23 transports
+> are singletons so nothing else tears the link).
+>
+> **Code status (2026-09-16): all A-19..A-24 implemented. `npx tsc --noEmit` clean;
+> vitest 50/50. Pushed to `main` (`ec90656`). Owner gate: flash + device verify.**
+
+- [x] **A-19 — joystick show/hide promoted to the toggle row** — the D-pad/Joystick
+      toggle becomes `D-pad | Joystick | Hide` in `RemoteControlScreen.tsx` (~413);
+      D-pad/Joystick also restore `showJoystick`; the "Joystick pad Show/Hide" card is
+      removed from Settings and its hidden-state text now points at the toggle row.
+      Hidden state is session-only. Verify A-19a.
+- [x] **A-20 — WiFi/webserver setup moved into settings** — the provisioning card
+      (SSID/password/Send + Car WiFi / Fallback AP truth) leaves the Weblink deck
+      (`WeblinkControls.tsx`) and now lives in the Settings dropdown (~600), shown
+      only when the active mode is ESP_SER and BT-gated (`connected`); WeblinkControls
+      is display-only now (provisioning props dropped from the component + type).
+      Verify A-20a.
+- [x] **A-21 — broadcast IP chip** — a persistent IP chip in the remote chrome row
+      whenever the active mode is ESP_SER (`telemetry.ip` else `192.168.4.1 (AP)`),
+      independent of `showJoystick`; tapping opens the car web page when linked.
+      Verify A-21a.
+- [x] **A-22 — remove the red power button + disconnect dialog** — the red power
+      button (chrome) and the `showDisconnectConfirm` dialog are deleted; the device-name
+      indicator is kept. Disconnect only via Control Panel. Verify A-22a.
+- [x] **A-23 — BT survives navigation (verify only)** — singleton transports +
+      non-tearing cleanup already implemented in `useControlHub.ts`; connect over BT →
+      navigate Home → back → link still live. No code change expected. Verify A-23a.
+- [x] **A-24 — floating draggable remote icon** — new `FloatingRemoteButton` overlay
+      (`src/components/FloatingRemoteButton.tsx`) rendered above the stack in
+      `RootNavigator.tsx`, hidden on the `RemoteControl` route, visible only while a
+      device is linked (global link hook over spp/ble/wifi singletons); PanResponder
+      drag repositions with the position remembered via AsyncStorage (`genum.remote.fabSlot`);
+      tap → `navigate('RemoteControl', { category: lastUsedCategory })`, where the last
+      category is captured from the RemoteControl route params and persisted under
+      `genum.remote.lastCategory`. Verify A-24a.
+
+---
+
+## device-round-3 — fleet wording + project names (2026-09-16, IMPLEMENTED — A-17/A-18; JS OTA after push — DEVICE VERIFY PENDING)
+
+> Device-round-3 wording pass so app marks match the 2026-09-15 firmware fleet
+> (`COMING SOON` / `WORK IN PROGRESS`, no trailing dots). Project card now names the
+> physical car and states the Genum asset line.
+
+- [x] **A-17 — work-in-progress wording (badge + OLED preview):** `ModeChooser` badge →
+      `Work in progress` (renders `WORK IN PROGRESS`), row mark `· work in progress on
+this car`; `OledDisplay` preview body now renders the mode's own mark (`COMING SOON`
+      or `WORK IN PROGRESS`) instead of hardcoding `COMING SOON...`; comments synced
+      (`carProtocol.ts`, `types.ts`, `useControlHub.ts`).
+- [x] **A-18 — project names + Genum asset line:** `ProjectInfo` shows the physical
+      car per mode (`Wireless Car` for 4WD4M/ESP_SER/ESP_CLI, `2WD1M Car`, `Self Balance
+Car`) and a footer `Asset of GENUM SOLUTIONS PVT. LTD.` on both the robocar and
+      category cards.
+
+---
+
+## snag round 14 — device-round-2 fixes (2026-09-15, IMPLEMENTED — A-11..A-16; JS OTA after push — DEVICE VERIFY PENDING)
+
+> Owner field report from the R13 flash round (2026-09-15): app connection part still
+> flickers sometimes; the web-server screen still **overflows** the remote screen;
+> the "Enter ESP_SER" button does nothing; the app doesn't show the broadcast IP in
+> ESP_SER; the WiFi card keeps showing the DEFAULT network after provisioning; the
+> car only joined the new network after toggling back to webserver mode the next
+> cycle and reverted to default WiFi after a power cycle. Firmware root causes are
+> car T-33/T-34/T-35 (see wireless TRACKS) + remote R-17..R-21; app side is A-11..A-16
+> below. Owner directive: keep ALL cars/bots consistent in UI/UX (fleet pass).
+
+- [x] **R14-1 — broadcast IP always shown in ESP_SER (A-11):** the IP row renders in
+      `isServer` mode even before the WebSocket connects; value = `telemetry.ip` else
+      `192.168.4.1 (AP fallback)` (fixes the hidden-IP-just-when-you-need-it gate at
+      `WeblinkControls.tsx`).
+- [x] **R14-2 — dead "Enter ESP_SER" button removed (A-12):** no control claims to
+      "enter" an already-active mode; show a passive hint instead (it sent the active
+      token and was no-op — the owner reported it "does nothing").
+      New: `Mode active · drive below` chip in the Weblink card header.
+- [x] **R14-3 — webserver screen fits the Remote window (A-13):** the Weblink overlay
+      wrapper gets `min-h-0` and the duplicated border/padding is stripped — one chrome
+      level, no horizontal overflow.
+- [x] **R14-4 — no connection flicker (A-14):** steady drive → no live-updating
+      indicator/state churn; the chrome link indicator stays mounted and only swaps
+      text/colour; REQ_STATE interval deps are stable (focus-only via ref).
+- [x] **R14-5 — SSID shows the just-sent network instantly (A-15):** `handleWifiProvision`
+      optimistically updates the deck's SSID (car T-35 now confirms anyway).
+- [x] **R14-6 — status line dedupes (A-16):** `setDriveStatus` only fires on actual
+      change (kills the 4WD4M flooding).
+- [x] **R14-7 — fleet UI consistency (round-3, 2026-09-16):** label color token is
+      `text-muted` everywhere in the control panels (`text-border` misuse removed from
+      `DriveControls`, `DroneControls`, `SensorGrid` → they were rendering the border
+      slate-400/lighter instead of the muted label color); ProjectInfo tab badge now uses
+      the fleet badge family (`font-black`, wording `COMING SOON`-consistent) instead of
+      the "Soon" variant. Panel cards stay the canonical `rounded-2xl border-line bg-card
+shadow-card` + `text-xs font-black uppercase tracking-widest text-navy` header;
+      detail cards `rounded-xl border-line bg-surface`. Dark Remote-deck tokens unchanged
+      (those are the immersive deck's own family).
+
+---
+
+## snag round 13 — singleton WiFi link, token cycling, disconnect/remember-state, IP deck (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
+
+> Fixes from device round R1 (owner: remote window stuck on 4WD4M, flickering over
+> WiFi-only links): the WebSocket/state was per-hub-instance, so the Remote window
+> had NO socket. Fix = **singleton `wifiService.ts`** (one socket per car, `onTelemetry`/
+> `onStatus` subscription API mirroring `sppService`/`bleService`, same-URL reuse,
+> silent 5×3 s reconnect then error, only explicit `disconnect()` tears the link down —
+> screen unmount never kills it). Mode cycle is now canonical-token based
+> (`roboCarCatalog.ts`: shared `REMOTE_MODE_ORDER` 4WD4M→ESP_SER→PATH→OBS_US→OBS_IR→
+> MAN→AUTO→ESP_CLI→2WD1M + `nextRemoteModeToken` + `sortRemoteModes`; cycle NEVER falls
+> back to the first available pool model — the "stuck on 4WD4M" bug). Disconnect UX is
+> standardized (both screens show the same confirm and stop-safe copy) and
+> disconnect **no longer forgets** speed/servo/steer-limit/trim/PID/gimbal/telemetry/
+> sensor values or the saved mode (persists `modeId` first; WiFi-only links use the
+> `wifi:<ssid|ap|url>` memory key). ESP_SER deck grew an IP row + RSSI/signal +
+> UP/HEAP health (car v1.5.0 broadcasts `;IP=` on STATE + JSON `ip`/`signal`/
+> `uptime_ms`/`free_heap`; remote v1.2.0 shows `IP:` on its ESP_SER dashboard line 3).
+> App is JS-only (OTA after push — car + remote need a re-flash for the IP fields).
+
+- [ ] **R13-1 — Remote window drives over WiFi (THE flicker/stuck bug):** open Remote → connect WiFi (Router) or fallback AP → Remote window drives BOTH axes with live telemetry, no flicker; returning from Chrome/fullscreen or switching tabs keeps the link alive (unmount no longer kills the socket).
+- [ ] **R13-2 — cycle never lands on pool[0]:** cycle from any mode walks 4WD4M→ESP_SER→PATH→OBS_US→OBS_IR→MAN→AUTO→ESP_CLI→2WD1M, wrapping in order — including with only a subset LIVE on the car (previous builds jumped to the first live mode).
+- [ ] **R13-3 — mode list ordering:** every mode-picker (Tools dropdown + Remote NAV preview) lists modes in the shared fleet order with parked modes last-ish by their fixed rank — stable across sessions, no random pool order.
+- [ ] **R13-4 — standardized disconnect + stop:** the power/disconnect control on Tools AND the remote's red button both open the same confirm ("The car will stop safely before the link closes…"); confirming stops (S + SPD0) then drops the link; on WiFi the link actually closes (was: WS left dangling in one window).
+- [ ] **R13-5 — state remembered across power cycles:** set speed/servo/trim/PID + a mode → disconnect → power-cycle the app and the car → values and mode are restored from memory on the same car; nothing resets on disconnect.
+- [ ] **R13-6 — WiFi-only memory key:** with no BT MAC in range, tuning values still persist per car via the SSID/AP/URL key.
+- [ ] **R13-7 — ESP_SER IP + health deck:** Weblink card shows an IP row under mode/status (tappable → opens browser), RSSI/signal %, and UP/HEAP rows against car v1.5.0; pre-v1.5.0 car → request-state + signals still work, IP/health simply absent.
+- [ ] **R13-8 — remote ESP_SER IP line:** hand-held remote's ESP_SER dashboard line 3 reads `IP: <station|192.168.4.1>` with car v1.5.0 (old constancy: shows the WiFi summary).
+- [ ] **R13-9 — focus-only polling:** REQ_STATE is only sent while the Remote window is focused; recording/leading comes back instantly when re-focusing.
+
+---
+
+## snag round 12 — 4WD4M rename, allow-all/mark, CAPS availability, metadata (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
+
+> Implemented with the fleet allow-all/mark session (owner decision 2026-09-15): every
+> mode is selectable from the app; selects toggle the mode token (no refusal gate); the
+> car renders its own frame. App side: `carProtocol.ts` (`ModeAvailReport`,
+> `modeAvailStatus()` = CAPS table → stub map → default-available, MAN hard-CS,
+> `isTokenComingSoon`, `caps` on CarTelemetry + `CAPS;` line + JSON `caps` parsing;
+> catalog token + `canonicalizeModeToken`), `useControlHub.ts` (`carAvailMap` fed from
+> all 3 telemetry paths + cleared on fresh link; `selectMode` allow-all; `cycleMode`
+> walks all 9 in MODE_CMDS order; `EVERY_LINK_COMMANDS` broadcast = mode tokens +
+> `ESTOP`/`SPD0`/`SERVO90`/`S`/`REQ_STATE`; transport scoping = wifi modes WS-only),
+> `ModeChooser.tsx` (3-state badges In progress/Coming soon, all rows tappable),
+> `OledDisplay.tsx` (preview marks), `WeblinkControls.tsx` (root→ScrollView fix).
+> 44/44 tests, tsc clean. Car = v1.5.0, remote = v1.2.0. Design:
+> `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2d (X-6/X-7/X-8).
+
+- [ ] **R12-1 — 4WD4M naming (three-way):** the mode formerly labelled "Bluetooth"/"BLUETOOTH" displays as **4WD4M** on the car OLED, the remote dashboard, and the app catalog; wire token renamed too (X-8): new firmware sends/emits `MODE=4WD4M`, and a pre-v1.5.0 car's `MODE=BT` still mirrors via the legacy alias.
+- [ ] **R12-2 — COMING SOON-only body:** on the car, parked modes show a clean centered `COMING SOON` in the body — no mode-name repeat, no `(stub)` suffix (top bar already carries mode + link info).
+- [ ] **R12-3 — status dedupe:** during steady driving, the status line does not re-announce the unchanged state; it updates on changes only.
+- [ ] **R12-4 — allow-all + transport scoping:** every mode is selectable in the app and the toggle follows the car (no refusal gate); app BT drive works in every mode the car reports LIVE via `CAPS;`; the car's own BT transport gate refuses drive in CS modes without OLED spam; mode tokens + `REQ_STATE` + `WIFICFG` work in every mode.
+- [ ] **R12-5 — site ↔ OLED mode parity:** the car-hosted page and website `/robocar` list exactly the car's modes with matching names + coming-soon marks.
+- [ ] **R12-6 — remote ESP_SER WiFi display:** in ESP_SER the remote dashboard shows configured SSID, fallback AP broadcast id (`ESP32_Car_<mac>`), and current WiFi connection state.
+- [ ] **R12-7 — metadata visible:** boot splash shows project name + version + "GENUM SOLUTIONS PVT. LTD." on car and remote.
+- [ ] **R12-8 — wire token `4WD4M` (X-8, IMPLEMENTED with this round):** new car's STATE reads `MODE=4WD4M`; the app mirrors it; an OLD car's `MODE=BT` still mirrors (legacy alias in `carProtocol.ts` + remote `mapTokenToModeIndex()`). Mixed-pair matrix: new app/remote ↔ old car (v1.4.0) and old app ↔ new car must both behave.
+
+---
+
+## snag round 11 — car-truth availability marks + WiFi-card layout fit (2026-09-15, IMPLEMENTED — PENDING DEVICE VERIFY)
+
+> Code complete (allow-all/mark rework): `carProtocol.ts` (per-token CAPS parse +
+> `modeAvailStatus()` 3-state + `isTokenComingSoon`), `useControlHub.ts`
+> (`carAvailMap` + car-sourced selectMode/cycleMode + SSID pre-fill),
+> `ModeChooser.tsx` (In progress / Coming soon badges), `OledDisplay.tsx`
+> (preview marks), `WeblinkControls.tsx` (collapsible compact card in a bounded
+> ScrollView + `__DEV__` layout log). 44/44 tests, tsc clean.
+> Design record: `Genum_WIRELESS_CAR/TRACKS/INTEGRATION.md` §2c (A-7, A-8).
+
+**If something goes wrong (recovery):**
+
+- **Revert path:** `git checkout main && git reset --hard backup` is the fleet
+  full-revert (see `guide/REBUILD-FAILSAFE.md`); for a surgical revert use
+  `git revert <commit>` — the allow-all batch is one commit on `main`.
+- **Mode list looks wrong / everything says coming soon:** check the car actually
+  emits `CAPS;4WD4M:LIVE;…` on the serial monitor (start + on mode change); the app
+  falls back to default-available (only MAN stays hard-COMING-SOON) when the car
+  reports nothing. Unknown tokens are tagged by `modeAvailStatus()` (CAPS → stub map
+  → default-available).
+- **WiFi card overlaps the deck again:** the card logs its measured size in dev
+  builds (`[A-8] WiFi card measured: WxH`) — compare against the deck budget noted
+  in R11-4 before changing styles.
+- **SSID pre-fill leaks across cars:** pre-fill is keyed per BT address via
+  `DevicePrefs.lastWifiSsid`; verify `addressForMemory` is non-null when the card
+  opens.
+
+- [ ] **R11-1 — mode toggle lists ALL 9 modes:** dropdown shows every token; parked ones render muted with an "In progress"/"Coming soon" badge but stay tappable.
+- [ ] **R11-2 — marks are CAR truth:** availability comes from the `CAPS;` broadcast (per-token 3-state cache fed from WS + SPP + BLE telemetry, cleared on fresh link); picking any mode toggles the token and the car accepts it (no refusal gate — parked modes just can't drive). Flip a car's CAPS state → the app update with zero app changes.
+- [ ] **R11-3 — cycle walks ALL 9:** cycle goes through 4WD4M, ESP_SER, PATH, OBS_US, OBS_IR, MAN, AUTO, ESP_CLI, 2WD1M (MODE_CMDS order).
+- [ ] **R11-4 — WiFi card fits the deck (measured):** SSID + password fields, show/hide, send button and status chips all visible without scrolling on the target phone; explainer condensed to one line; measured deck budget recorded in this round's notes.
+- [ ] **R11-5 — keyboard doesn't cover inputs:** with the keyboard open, both TextInputs stay reachable (KeyboardAvoidingView/scroll).
+- [ ] **R11-6 — SSID pre-fill after restart:** send WiFi to car → kill + reopen the app → card pre-filled with the last-sent SSID for that car; password never stored on the phone.
+- [ ] **R11-7 — car keeps network after power cycle:** provision → power-cycle car → rejoins router with no re-provision (pairs with car T-26 / R3 V-11).
+- [ ] **R11-8 — password never displayed back:** app UI, `WIFICFG?` reply and car OLED show SSID only, never the password.
+
+---
+
+## snag round 10 — reconnect UX + WiFi provisioning (2026-09-14, PENDING DEVICE VERIFY)
+
+> JS-only OTA after push: fully close the app → reopen. Car needs a re-flash (arduino-cli 54%, huge_app).
+
+- [ ] **R10-1 — reconnect banner position (Remote window, landscape):** power the car off mid-drive → amber "Connection lost" banner appears at the BOTTOM of the remote screen (clear of the status bar/notch); Reconnect + Cancel both reachable.
+- [ ] **R10-2 — pads show by default:** open the Remote window in every live mode (BT, ESP_SER) → drive pads visible immediately, no "Joystick pad hidden" placeholder; Settings → Hide still works.
+- [ ] **R10-3 — connect button survives disconnect (THE restart bug):** connect BT → power car off → wait for the banner → power car back on → tap Reconnect → reconnects WITHOUT restarting the app. Then scan + Connect from the device list again → also works first tap.
+- [ ] **R10-4 — native disconnect detection:** power the car off mid-drive → within ~2 s the app flips to "Connection lost"/banner (no more phantom "Connected" with a dead link).
+- [ ] **R10-5 — banner on exhaustion:** let the 4 silent reconnect attempts lapse (~15 s) → banner appears (it used to give up silently).
+- [ ] **R10-6 — Cancel keeps device list:** tap Cancel on the banner → banner closes; Scan + device list still shows the car; Connect still works (no app restart).
+- [ ] **R10-7 — allow-all mode select:** Mode dropdown lists all 9 with LIVE/In progress/Coming soon marks; picking any mode toggles it (covers old coming-soon-blocked behaviour — the app no longer refuses, the car marks and refuses only drive). Cycle button walks all 9.
+
+> **Owner partial run 2026-09-14:** R10/R11 were NOT fully executed — owner
+> observation: "not all the modes are accessible to both the remote and the car".
+> Assessment: expected — v1.4.0+ lockdown makes only 4WD4M + ESP_SER live by design
+> (car truth via `CAP=STUB`); parked modes show COMING SOON on car, remote, and app
+> alike. No PASS boxes ticked from the partial run; the full round re-runs against
+> car v1.5.0 + remote v1.2.0 (R12 checklist above folds in — R12-1's three-way check
+> covers the rename on hardware).
+
+- [ ] **R10-8 — WiFi provisioning over BT (ESP_SER deck):** connect BT → open ESP_SER deck → enter SSID/password → "Send WiFi to car" → car OLED shows mode change to ESP32(WEBSERVER) → car joins the router (IP on OLED) → app "Car WiFi: <ssid>" appears in the deck.
+- [ ] **R10-9 — AP fallback broadcast id:** provision a wrong SSID on purpose → car falls back to AP mode → deck shows "Fallback AP: ESP32_Car_<mac>"; connect the phone to that AP → ws://192.168.4.1:81 still connects.
+- [ ] **R10-10 — no drive from stub modes on the car:** switch the car into a coming-soon mode by its own button → F/B/L/R and SPD<n> show "Coming soon" on the car OLED; motors never spin; S always stops.
+
+**Pass criteria:** all boxes tick. R10-3 is the headline regression (old builds needed an app restart to reconnect).
+
+---
+
+## snag round 8 — industrial-hardening pass (SHIPPED as OTA after push — device verify pending)
+
+> JS-only hardening. After the push lands: fully close the app → reopen (OTA applies silently).
+
+- [ ] **R8-1 — sign-in survives restart WITHOUT plaintext tokens:** sign in (email or Google) → fully close the app → reopen → still signed in (restore now comes exclusively from SecureStore; the AsyncStorage session cache is disabled).
+- [ ] **R8-2 — sign-out is complete:** sign out → reopen app → signed-out state, and signing back in works.
+- [ ] **R8-3 — no regressions from the hardening pass:** cart badge, shop, orders, remote connect (BT + 2WD1M) all behave as in the last verified round.
+- [ ] **R8-4 — website admin dashboard counts:** with data present, `/admin` totals (orders/products/messages/transactions) match reality — the dashboard switched to SQL-side counting.
+- [ ] **R8-5 — wireless car snag round R9:** (new in this pass) BT connect as "WIRELESS CAR", all F/B/L/R/S commands work, push button cycles modes, push-button lag fixed, mode change reflects on app immediately, disconnect/reconnect dialog appears on ToolsScreen and RemoteControlScreen, back navigation preserves connection.
+
+**Pass criteria:** all boxes tick. If R8-1 fails, note the sign-in method (email vs Google) — they use different persist paths.
+
+---
+
+## snag round 9 — wireless car major fix snag round (PENDING DEVICE VERIFY)
+
+> Physical device test after OTA. After the push lands + OTA applies: fully close app → reopen → verify OTA applied.
+
+- [ ] **R9-1 — BT connect as "WIRELESS CAR":** device detects the car by BT name, not "ESP32_Car"
+- [ ] **R9-2 — push button cycles modes:** no lag; each mode change is instantaneous on OLED + app
+- [ ] **R9-3 — mode change from app reaches car immediately:** STATE broadcast on setMode — app shows new mode within 1s, not waiting for 2s periodic broadcast
+- [ ] **R9-4 — disconnect/reconnect dialog:** power car off during connection → reconnect dialog appears on ToolsScreen AND RemoteControlScreen; Reconnect button works, Cancel dismisses
+- [ ] **R9-5 — back navigation preserves connection:** navigate from RemoteControlScreen → Back → connection stays alive; re-enter Remote → still shows connected
+- [ ] **R9-6 — ESP_SER mode — WiFi connects:** non-blocking connect; button responsive during WiFi connect; WeblinkControls shows status
+- [ ] **R9-7 — no double-execution:** WiFi commands sent once only (not doubled from handleCommand + queue)
+- [ ] **R9-8 — car web-page mode dropdown works:** open the car's own page (`http://<car-ip>`), pick a mode in the dropdown → Set Mode → car OLED + app both reflect it (ESP_SERVER/ESP_CLIENT/MANUAL aliases accepted)
+- [ ] **R9-9 — WiFi retry backoff:** with car in ESP_SER out of WiFi range ≥10s, no reconnect hammering (BT button stays responsive); when WiFi becomes reachable, car connects; if STA fails 8s, AP `WIRELESS_CAR_<mac>` appears
+
+**Pass criteria:** all boxes tick. If any fail, note which scenario and which transport (SPP vs WiFi).
+
+---
+
+## v2.0.6 device test — full remote rebuild + car mode sync (PENDING)
+
+> Install v2.0.6 APK (41.4 MB) from `/app` or the OTA. The remote screen was rebuilt from scratch.
+
+### A. Remote screen — basic controls
+
+- [ ] **Joystick:** left stick drives (up = forward, down = reverse), right stick steers in 2WD1M mode. Both sticks track fingers 1:1, re-grab re-centers, release snaps back and stops.
+- [ ] **D-pad:** all 5 cells visible in standard 3x3 cross shape on both pads. Left pad: F/B + center stop. Right pad: L/R + center stop.
+- [ ] **Both controls work simultaneously:** joystick and d-pad can be used interchangeably without conflict.
+- [ ] **E-stop:** red floating FAB stops car immediately with haptic feedback.
+
+### B. Chrome row
+
+- [ ] **Back/Select/Mode/Speed all functional:** Back exits, Select enters NAV, mode cycles, speed slider works.
+- [ ] **Settings:** steer limit + trim adjust correctly for 2WD1M; opens as in-window panel.
+- [ ] **Disconnect:** confirmation dialog appears, safe stop sent before dropping link.
+
+### C. OLED + mode sync
+
+- [ ] **OLED:** shows mode | speed/steer, body direction word, status bar. Size matches compact 160×80 layout.
+- [ ] **Mode from car button reflects in app immediately** (REQ_STATE polling for SPP + WiFi).
+- [ ] **Mode change from app reaches car** and car confirms via STATE telemetry.
+
+### D. Carry-overs from rounds 3-7
+
+- [ ] **R3-B1:** landscape lock works, restores on exit.
+- [ ] **R3-B2:** single screen, no scroll in remote.
+- [ ] **R3-C1-C4:** account dropdown, latest orders, My Profile, sign out.
+- [ ] **R3-D1-D4:** cold start, shop+cart, admin, menu tab.
+
+**Pass criteria:** all boxes tick. If mode sync fails, note which direction (car→app vs app→car) and which transport (SPP vs WiFi).
+
+---
+
+## snag round 7 — ESP32-remote replica parity (SHIPPED — device verify pending)
+
+> The app remote is now a faithful mirror of `Genum_ESP32_Remote_v1.0.0` (ui.md storyboard + state.cpp/comms.cpp behaviour). Reload first: fully close the app → reopen → tap Reload.
+
+- [ ] **R7-1 — Select/Back buttons:** chrome row now has Back (where Exit was) and Select. Select in DRIVE highlights the mode field (inverted box on mode + OLED top bar) and NOTHING drives while editing. Select again confirms. Back cancels NAV; Back in DRIVE asks "Disconnect / Cancel" (the ESP Return-Confirmation dialog) instead of exiting instantly.
+- [ ] **R7-2 — NAV mode editing:** with NAV active, pads/joystick up/down cycle modes (preview shows in the mode trigger AND the OLED body, unavailable modes show COMING SOON); Left/Right move the cursor Mode → Speed (or Steer in 2WD1M). Up/down on Speed steps ±5 within 100..255; on Steer steps the limit 0..180. Nothing is sent until Select confirms.
+- [ ] **R7-3 — Speed/steer never live while driving:** moving the slider or holding a stick does NOT change the confirmed speed grid value — speed only changes via NAV confirm (or slider release commit), exactly like the physical remote's v1.1.2 fix.
+- [ ] **R7-4 — 2WD1M top bar shows Steer limit:** in 2WD1M the chrome strip + OLED right field show the STEER LIMIT (0..180) instead of speed — matching ui.md screen 6b. Limit edits never move the servo.
+- [ ] **R7-5 — OLED mirrors the ESP dashboard:** top bar `Mode | Spd/Steer` with vertical separator; body shows big direction word (Forward/Backward/…) for BT/2WD1M, AUTO PID rows (inverted Angle, P/D, OUT/I/OFF) for self-balancing, centered title for other modes; bottom inverted status bar.
+- [ ] **R7-6 — Car→app sync:** switch mode using the CAR's own button (or physical remote) → the app's mode, OLED and controls follow (STATE;MODE mirror). Drive the car with the physical remote → the app's d-pad direction display and status line follow (STATUS whitelist mirror).
+- [ ] **R7-7 — 30ms hold-resend:** holding a d-pad direction keeps commanding the car (self-heals dropped lines, matches DRIVE_RESEND_MS). No more single-shot taps needed.
+- [ ] **R7-8 — Steering direction:** right stick LEFT increases servo angle (turn left = larger angle), right decreases — matching comms.cpp.
+- [ ] **R7-9 — Carry-overs still pass:** R6-1 touch accuracy, R6-2 chrome responsiveness, R6-3 joysticks, R4-3 single row, R4-4 uniform cells, R5-3 single updates row, R5-4 no overflow.
+
+**Pass criteria:** all boxes tick. If R7-6 fails, note which direction (car→app or app→car) — they use different paths (STATE telemetry vs mode token send).
+
+---
+
+## snag round 6 — touch rebuild + Control Panel category organizer (SHIPPED 12:07Z — device verify pending)
+
+> Reload first: fully close the app → reopen → tap Reload in the banner.
+
+- [ ] **R6-1 — Touch lands where cells render (THE decisive one):** in the Remote d-pad, every cell responds exactly where it is drawn — tap the CENTER of each of the 6 functional cells on both pads, then tap near the EDGES. No shift in any direction, no cell reacting when you touch its neighbor.
+- [ ] **R6-2 — Chrome buttons instant:** Exit, joystick↔d-pad toggle, ⚙ Settings, E-stop FAB, Disconnect respond immediately (no lag, no mis-registered taps).
+- [ ] **R6-3 — Joysticks clean:** sticks track fingers 1:1, re-grab anywhere re-centers the knob, both sticks work together on 2WD1M, release snaps back and stops.
+- [ ] **R6-4 — Speed slider longer:** the chrome-row slider now fills the free space (≈2-3× wider than before) and is easy to drag.
+- [ ] **R6-5 — Control Panel is a category organizer:** NO joysticks/d-pad/speed/E-stop on the page; category tabs (Robo Car · Home Automation · Smart Farm · Smart City · Drones) switch per-category detail cards; each category has its own "Open … deck" button that opens the Remote window for THAT category (robocar → drive deck, drones → flight deck, others → relay/sensor tiles).
+- [ ] **R6-6 — About this project:** the Control Panel card is titled "About this project" (project/build info per category) — not "About this mode".
+
+### Carry-overs to re-check in the same pass (rounds 4+5)
+
+- [ ] R4-3 single chrome row · R4-4 uniform d-pad cells · R4-7 bigger Exit/⚙/toggle
+- [ ] R5-3 single App Updates row (no bordered duplicate) · R5-4 no text overflow on card edges
+
+**Pass criteria:** all boxes tick. If R6-1 or R6-2 still fails, capture WHICH button/cell and the direction of the shift — but the root cause is now removed at the coordinate-system level.
+
+---
+
+## v2.0.4 remote rectification — snag round 4 (CODE DONE — device verify pending)
+
+> Fixes the remote window after the round-3 pass. JS-only → ships via OTA (Track 2, no version bump). Implemented in local commit `d8111a2` (RemoteControlScreen, DriveControls, ModeChooser, OledDisplay).
+
+- [ ] **R4-1 — Stop button removed** from the remote screen (E-stop FAB + pad center cells remain).
+- [ ] **R4-2 — Speed slider compact + relocated** to the top row, beside the mode changer and OLED.
+- [ ] **R4-3 — Single chrome row:** Exit · REMOTE · mode · OLED · speed · toggle · settings all on ONE top row; drive deck gains the freed row.
+- [ ] **R4-4 — Uniform d-pad cells:** up/down = left/center/right size on BOTH pads (fixed cell grid, aspect-ratio-locked).
+- [ ] **R4-5 — Joystick fit:** deck uses the freed space; stick radius cap raised (112 → ~124) so sticks fill their zone.
+- [ ] **R4-6 — Touch offset FIXED (critical):** d-pad cells and chrome icons respond exactly where they render — zone mapping from `locationX/Y` relative to the responder surface + re-measure/re-mount after the landscape lock.
+- [ ] **R4-7 — Chrome buttons bigger + responsive:** Exit/Settings/toggle enlarged with hitSlop + pressed feedback.
+
+**Pass criteria:** all boxes tick on device; drive/steer/E-stop behaviour unchanged from round 3.
+
+---
+
+> **Historical note:** the v1.5.14-era status line below is outdated; current state lives in GUIDE.md.
+> Status: **v1.5.14 code complete + committed + pushed to `main`** (both repos; version bumped 1.5.14/22; typecheck + lint + 33/33 tests + production build + expo-doctor 18/18 all green). Physical-device pass pending; APK not yet built.
+
+---
+
+## v2.0.4 device checklist — snag list round 3 (PASSED 2026-09-09 — 18/18)
+
+> Report snags by ID (e.g. "R3-A3 fails"). Scope: everything shipped since v2.0.1 — remote overhaul (v2.0.2), joystick-first OTA remaster, version-accurate update detection (v2.0.4).
+
+### A. Update & OTA (the v2.0.4 headline features)
+
+- [x] **R3-A1 — OTA pickup at same version:** open the app → it checks on load → gold "update available" pill appears when a newer bundle exists (or "App updated" chip after one just applied).
+- [x] **R3-A2 — version-accurate detection:** Update screen shows the correct live version (2.0.4/47) — not a display-version guess.
+- [x] **R3-A3 — reload banner:** after an OTA applies, the "Update applied — reload" banner offers a reload that lands you on the new bundle.
+- [x] **R3-A4 — no false prompt:** when fully up to date, NO update pill/banner appears.
+
+### B. Remote window (landscape gaming remote)
+
+- [x] **R3-B1 — landscape lock:** remote opens landscape and stays landscape; on exit the rest of the app returns to normal orientation.
+- [x] **R3-B2 — single screen, no scroll:** HUD + compact 2:1 OLED + mode chooser + drive deck + E-stop all fit without scrolling; nothing overflows in landscape.
+- [x] **R3-B3 — joystick feel:** big pro sticks (drive left / steer right), right stick dims + "UNUSED" on non-2WD1M modes; D-pad layout works via the toggle.
+- [x] **R3-B4 — drive semantics (2WD1M):** left stick up/down = signed SPD, right stick = steer within limit; speed strip reflects changes; E-stop FAB halts instantly (with haptic).
+- [x] **R3-B5 — mode chooser dropdown:** opens below the trigger without overflow; cycle button works; mode changes reach the car AND car-side mode changes sync back into the app.
+- [x] **R3-B6 — settings dropdown:** steer limit + trim steppers work for 2WD1M; on other modes it opens with a note instead of controls; outside-tap closes.
+
+### C. Account dropdown + screens
+
+- [x] **R3-C1 — dropdown:** top-bar avatar opens the anchored card (initials, name, gold Admin chip if admin, email) — backdrop tap closes it.
+- [x] **R3-C2 — latest orders:** up to 3 orders with correct status pills + provider + total NPR; loading/empty/error states look right.
+- [x] **R3-C3 — My Profile:** opens the full Account screen (order status pills, details form, messages).
+- [x] **R3-C4 — sign out:** inline confirm works; admin-only "Admin Panel" row hidden for customers.
+
+### D. General regression
+
+- [x] **R3-D1 — cold start:** no crash, sign-in (email + Google) works.
+- [x] **R3-D2 — shop + cart:** browse, add to cart, quantity edit, checkout flow intact.
+- [x] **R3-D3 — admin:** dashboard cards don't overflow right-edge (Messages card), tabs function.
+- [x] **R3-D4 — menu tab:** Downloads & Software Updates group + theme switch behave.
+
+**Pass criteria:** all boxes tick, or failures logged as snags below and triaged (OTA-fixable vs needs-native).
+**Result: 18/18 PASSED on device 2026-09-09.** No snags reported; round 3 closed with no fixes required.
+
+---
+
+## 2026-09-05 device checklist (cart sync · Menu tab · compact My Account) — pending
+
+These verify the UI fixes from the 2026-09-05 session (uncommitted at time of writing).
+
+1. **Cart count matches the list** — add items from Product Detail / Projects (badge increments), then open the Cart tab: the badge and the sum of plus/minus quantities shown match exactly, and the list reflects the adds you made since you last opened the tab (no stale rows).
+2. **Editing the cart works** — on the Cart tab, tap **+ / −** on any line → the quantity, the Total, and the badge all update immediately (list stays in step, no re-fetch). Press **−** down to 0 → the line and row disappear.
+3. **Cart syncs on focus return** — add a product, leave to another tab, come back (or visit the Cart tab fresh) → the cart list is current. After a COD/paid checkout the empty state shows and the badge is 0.
+4. **Menu tab (not a modal)** — bottom bar has **four** tabs (Home/Shop/Cart/Menu). Tapping Menu shows a destinations page in the normal tab area — tabs stay visible + tappable, back bar shows the page, swiping Home↔Shop↔Cart↔Menu works, and Android Back from Menu goes Home in one step. Services/Projects/Journal/3D Printing/Open Tools/Tools & IoT/About/Contact/Privacy/Terms/Admin Dashboard all navigate to their screens.
+5. **My Account is short + neat** — signed in → header card (Welcome, {name}., email, log-out on My Account screen), two stat cards (Orders placed / Items in build list), Your orders, Edit profile, and a compact footer (App version+update, App theme, legal links, Sign out). No repeated account/theme/update rows anywhere in the Menu tab; the only theme control lives on My Account.
+6. **Admin — Project packages tab** — the heading "Project packages (N)" renders on its own big line (no wrap/overflow) with the + New project button in the filter row below; heading font is larger than before and readable.
+7. **Web-render regression** — `npm run web`: all four tab pages + Admin tabs render; Menu tab works; no modal; theme toggle on My Account works.
+
+---
+
+## v1.5.13 device checklist (native UX polish)
+
+These verify the v1.5.13 polish, on top of the v1.5.12 Settings tabs and the v1.5.11 UX fixes.
+
+1. **Menu tab (4th bottom slot)** — tap **Menu** in the bottom bar → it opens as a **normal tab page** in the same space between the top bar and the bottom tab bar as Home/Shop/Cart (no modal, no overlay, tabs stay tappable). It lists destination groups (Explore / Company / Admin) only — no duplicate account row / theme / sign-out / update (those live on **My Account**).
+2. **Account in the top bar (website parity)** — top bar shows a user icon (initials when signed in). Signed in → tapping it opens **My Account** (a stack screen with back button); signed out → tapping it opens the **sign-in sheet** directly. Back from My Account returns to the tab you left.
+3. **Menu is a real 4th tab** — Home / Shop / Cart / **Menu** are all swipeable pager pages; the bottom bar shows four tabs and highlights the active one. Swiping across all four stays in sync with the bottom bar.
+4. **Tab-aware Android back** — from Shop/Cart/Menu press Back → lands on **Home** (one step); on Home press Back → app exits (or pops a screen beneath Main after a deep link). Never more than one step per press.
+5. **Theme toggle works** — on My Account pick Light → whole app restyles light even if the OS is dark; pick Dark → restyles dark; System → follows the OS. Choice persists across app restarts. (On the web preview the same toggle must restyle the app too.)
+6. **Web-render regression** — the app runs in a browser (`npm run web`): tabs, admin tabs (PlatformPager web variant), menu, theme, and navigation all render without the native-only pager crashing the bundle.
+
+## Car Remote device checklist (per-package robot-car remote — in development, after v1.5.13)
+
+Scope: the **Car Remote** screen for robot-car project packages, starting with the **2WD1M Basic Robot Car** paired like the ESP remote over **Classic BT (SPP)**. Same GENUM line protocol as the physical remote / MIT apps (`SPD`/`SERVO`/`STEER`/`TRIM`/`ESTOP`, `STATE;`/`TEL;` telemetry). Requires an Android phone (SPP is Android-only) and a 2WD1M car.
+
+1. **Reach the remote** — on Projects, tap **Control** on the 2WD1M Basic Robot Car package card (or "Control this car" on its product page) → the Car Remote opens preconfigured for 2WD1M (steer-limit/trim/e-stop card present, OLED + drive deck visible). No mode picker detour.
+2. **SPP pairing + connect** — pick **Classic BT (SPP)**, tap **Scan cars (SPP)** → the car appears (show a "Paired" tag when the phone already knows it). Tap Connect → header shows **Connected · <car name>**, and the OLED chip reads **SPP LINK**. If the car asks for a PIN at pairing time, `1234`.
+3. **Left stick = signed speed** — with the car powered and connected, push the left stick forward → car drives forward and the deck sends signed `SPD+n`; pull back → reverse (`SPD−n`); release/center → `SPD0` stop. Speed grows with deflection (5-unit steps, up to ±255) — the ESP-remote transient-drive mapping, not the letter commands.
+4. **Right stick = steering within the limit** — right stick left/right steers the servo around center 90 and never exceeds the **Steer limit** shown on the card (default 90 = full lock-to-lock). Lower the limit (e.g. 45) → full stick deflection only reaches 90±45.
+5. **ESP-remote extras** — Trim ±1 adjusts `TRIM`; **Emergency stop** sends `ESTOP` + `SPD0` and the car halts; the OLED status tracks Forward/Backward/Stop from `STATE;` feedback.
+6. **Disconnect is safe** — tap Disconnect → the app sends neutral `SPD0`/`SERVO90` before dropping the link, like the ESP remote; reconnecting re-syncs state via `REQ_STATE`.
+7. **Other links (same protocol)** — WiFi WebSocket cars connect via `ws://192.168.4.1:81` and BLE cars via the BLE scan; whichever link is used, the same deck + OLED apply (label changes to WiFi WS / BLE LINK).
+
+## Car Remote — remaining modes (self-balancing PID deck + per-mode decks, in development)
+
+1. **Self-Balancing Robot Car package** (Projects → Control, or the product page) opens the **self-balancing deck**, not the generic joystick deck: a live **ANGLE** readout on a dark tile (status pill BALANCING / CORRECTING / TILT! / NO TELEMETRY) fed by the car's `TEL;…ANGLE` frames, plus full PID sliders **Kp / Ki / Kd / OUT / OFF** that send the `CFG;…` line.
+2. **Enter AUTO** chip — with the car connected, tap **Enter AUTO** → the car switches to AUTONOMOUS mode (token `AUTO`) and starts balancing; the angle readout goes live and the status pill reacts to tilting the bot by hand.
+3. **PID live tuning** — drag Kp/Ki/Kd/OUT/OFF while the bot balances: it should visibly react (stiffer/looser), and the value shown under the slider matches what the car echoes in `TEL;…`. Release at sensible values so the bot doesn't oscillate.
+4. **Obstacle / path packages get an autonomous deck (firmware-exact Run/Stop)** — Obstacle-Avoidance (US / IR) and Path-Following packages open the **AutonomousControls** card instead of the joystick deck. Semantics verified against the modular token firmware (`UNO_Base_project_V2.0.1_MOD` `Bluetooth.cpp`/`ModeManager.cpp`): **Run** sends the mode token (`OBS_US`/`OBS_IR`/`PATH`) — the car switches mode and its routine runs continuously from `loop()`; **Stop** sends `BT` — back to manual, motors halt, routine stops (letters `F`/`S` only act in BT mode and can't stop a routine, so they're not used). Device test: tap **Run** → the car (token-capable build) starts avoiding/following; raise the **Run speed (SPD 110–250 / 5-step)** slider and hear the pace change; tap **Stop** → motors stop and the car answers to letters again. On switch-wired (non-token) builds, the panel explains that tokens are ignored and the physical mode switch rules. The **Thresholds on this car** panel documents firmware constants per mode.
+5. **Other packages now say what they are** — 4WD and website packages show an **Enter <token> mode** chip once connected (switches the car into that package's mode, mirroring the ESP remote's mode select) above the normal drive deck; the **RF Manual Robot Car** shows an informational card (RF handset only — no app link) instead of a dead connection panel.
+6. **Tools hub parity** — the shared Tools hub PID grid gained the missing **OFF** slider (same `CFG;…` line), matching the remote's AUTO dashboard P/D/I/OUT/OFF set.
+7. **Hub 2WD1M + autonomous parity** — in the Tools hub, switch the mode to **2WD1M** and the joysticks behave like the Car Remote (left stick = signed SPD, right stick clamped to the Steer limit card that now appears above the controls, plus Trim and Emergency stop — same shared card component as the Car Remote). Switch the hub to an obstacle/path mode and Run now enters the mode token while Stop returns to `BT` (manual), matching the verified firmware semantics; the website `/tools` deck does the same.
+8. **Multimode wireless-car (weblink) deck** — open the Website-Server Robot Car package → connect over WiFi to the car's WS (`ws://<ip>:81`; AP fallback 192.168.4.1) → the **Car status (WS)** tile shows live `M:ESP_SER` / status / SPD / RSSI / IP streamed as JSON from the car's WebServerComm; **Open car web page** opens `http://<ip>/` (the car's own `WebPage.h` UI) in the browser; Enter ESP_SER/ESP_CLI switches modes over the same link; letters + SPD drive from the deck below. Repeat with the Website-Client package: the card explains the car is the client (use the website /tools as the server; the app connects directly only in ESP_SER/AP mode).
+
+## v1.5.12 device checklist (adds the v1.5.12 Settings tabs, on top of the v1.5.11 fixes)
+
+These verify the Settings tabs added in v1.5.12 (app + website admins), plus the 3 UX bugs fixed in v1.5.11 and the Phase G swipe pager.
+
+1. **AppMenu Modal (historical — the menu is now a 4th tab page, not a Modal; see the 2026-09-05 checklist)**
+   - Tap the hamburger on Home → menu slides in over a dimmed backdrop; the rest of the screen is inert while open.
+   - Tap a nav item (e.g. Services) → menu closes AND you land on Services in one tap (previously the next tap could be swallowed).
+   - Open the menu, then tap the X → closes; open again quickly → works every time (never "stuck").
+   - From a **deep link / pushed screen** (e.g. reach a screen, then return to Main) → the menu is reliably closed; it never stays open over the next screen.
+   - Menu items on stack screens (Services/Projects/Tools/About/Contact/Journal/Printing/OpenTools) navigate to that screen; Sign in / Sign out work from the menu.
+
+2. **Back navigation (was navigating too far)**
+   - Home → Services → (push) → Tools → … press Android Back repeatedly → you step back **one screen at a time** through the exact screens you opened (previously Back could skip several).
+   - Products → Product detail → back → returns to the same product list / search results.
+   - Place an order → OrderSuccess → Back → returns to where the order flow started (not a far-away screen). Verify a deep-link order flow also steps back sanely (no crash, no overshoot).
+
+3. **Pager focus re-sync (was resetting to Home)**
+   - Swipe to the **Account** tab, go into **Admin** (or any pushed screen), press Back → you return to **Account** (previously reset to Home). Repeat for Shop/Cart — the tab you left is the tab you come back to.
+   - Swipe between tabs → bottom bar highlights the active tab; tapping a tab animates the pager; per-tab state (scroll position / filters) is preserved across swipes and tab taps.
+
+4. **Phase G swipe pager sanity** — swipe Home↔Shop↔Cart↔Account horizontally and via the bottom bar; both stay in sync; no crash, no stuck pager.
+
+## Pre-flight checks (no device — verified 2026-09-03)
+
+These were run on the build machine against the published artifact and do not need a phone:
+
+1. ✅ **Published APK == local build** — SHA-256 of `genum-solutions-latest.apk` on Supabase matches `releases/genum-solutions-1.5.5-arm64-v8a.apk` (`f4c7cff2a94fd16f9599c2262694278dc971f2f3fb963c86a81a2bbfda3c2fd2`).
+2. ✅ **Release-signed** — `apksigner verify --print-certs`: `CN=GENUM Solutions, OU=Mobile, O=GENUM Solutions Pvt Ltd, L=Kathmandu, ST=Bagmati, C=NP` (release keystore, not the Android debug cert).
+3. ✅ **Final code inside the APK** — `assets/index.android.bundle` contains `1.5.5` and the `sizeLabel` fix string from commit `1525291`.
+4. ✅ **Live manifest** — `release.json` reports v1.5.5 / versionCode 13 / 32.9 MB; both repos `npx tsc --noEmit` clean.
+
+---
+
+## Setup
+
+- Android phone (≥ Android 9) with the v1.5.11 APK installed
+- Robot car powered on and advertising BLE
+- For WiFi tests: phone joined to the car's AP (`192.168.4.1`)
+- Accept all Bluetooth / location permission prompts on first use
+
+---
+
+## A. Cold start & navigation (no crash)
+
+1. Open the app fresh → lands on Home without crash.
+2. Navigate Home → Shop → Account → Tools rapidly → no crash, no white screen.
+3. Check the Tools footer reads `App v1.5.5`.
+
+## B. BLE scan & connect (lazy BleManager crash-fix regression)
+
+4. Open **Tools** directly from a cold start → screen renders, **no crash on import**.
+5. Tap **Scan BLE** → spinner ~8 s → device list shows the car.
+6. Tap **Connect** → status dot green, header shows `BLE · <name>`, OLED shows `BLE LINK`; never hangs on "Connecting…".
+7. Connect to a slow/unresponsive device → fails with the **10 s timeout** message in the red banner; button re-enables.
+8. **Disconnect** → controls grey out and state resets (speed 170, servo 90, telemetry cleared).
+
+## C. D-pad driving (haptics)
+
+9. Drive F/B/L/R/S → car responds; each press gives a light vibration tick; repeated same-direction presses don't spam (debounce).
+10. **Run / Stop** vibrate and send `F` / `S`; OLED status text updates (Forward/Stop/`<mode> running|stopped`).
+
+## D. Joystick mode (stale-closure regression — the key one)
+
+11. Open Tools **before** connecting → toggle **Joystick** → knob does not move (correct, disabled).
+12. Connect BLE **now**, then drag the left joystick → **knob moves smoothly and the car drives** (fixed bug: PanResponder now reads current `disabled`/`onMove` via refs).
+13. Release → knob springs back to center and the car stops/neutralizes.
+14. In 2WD1M mode: right joystick steers the servo (approx ±90° around center 90°); knob clamped to the circular boundary; no runaway command stream.
+
+## E. WiFi WebSocket + auto-reconnect
+
+15. Join the car's AP, enter `ws://192.168.4.1:81`, tap **Connect WiFi** → green dot, OLED shows `WiFi WS`, mode chips become usable.
+16. Kill the car's power mid-session → banner shows `reconnecting (attempt 1/5)…` climbing to 5, then `WiFi connection lost — reconnection failed. Tap Connect WiFi to retry.` No crash.
+17. Restore power within the reconnect window → reconnects automatically; attempt counter resets; error banner clears.
+18. Tap **Disconnect WiFi** (manual) → **no** auto-reconnect attempts fire afterwards.
+19. Leave the Tools screen while a reconnect is pending → return later: no stray error toast, no duplicate socket, controls clean (unmount cleanup).
+
+## F. Telemetry, PID & sensors
+
+20. OLED / SensorGrid update from `STATE` / `TEL` frames (speed, mode, angle, PID values) while connected.
+21. PID sliders send `CFG;Kp:…;Ki:…;Kd:…;OUT:…;OFF:…`; AUTO-mode values echo back into the display.
+22. Non-robocar categories (Smart Farm / Smart City / Home Automation): Relay switches toggle `OUT1–4` and show correct on/off state; live sensor cards populate from `sensors` messages.
+23. **About this mode** card expands and shows token/car/wheel/steering/sensors/transport/remote-with correctly for the active mode.
+
+## G. In-app update screen (sizeLabel fix)
+
+24. Account → update check reports **up to date v1.5.5** on this build; on an older build it offers the download and shows the **APK size label** (e.g. `32.9 MB`) — previously missing.
+
+## H. Drone (only if drone hardware is available)
+
+25. Altitude + gimbal sliders stream `ALT` / `GIMBAL_PAN` / `GIMBAL_TILT`; **Take Off / Land** send their commands; **Emergency Stop** resets altitude to 0 and sends `EMERGENCY`.
+
+---
+
+## Broader v1.5.5 regression (quick pass)
+
+26. **Admin Dashboard** (admin login): revenue, page views (30d + today), conversion rate, top pages, and the daily-traffic chart render real data; Finance tab shows real paid/fulfilled/cancelled counts.
+27. **Error boundaries**: force-crash a screen is impractical manually — instead verify screens render normally and the Account → Theme toggle + order history still work (boundaries wrap every screen).
+28. **Offline indicators**: with the device in airplane mode, open Shop / a Product detail → amber "offline/cached" badge appears; clear airplane mode and refresh → badge disappears.
+
+---
+
+## Pass criteria
+
+Every step behaves as described above. No app crash or permanently dead control; the OLED/status indicators always track the real connection state. Record anything failing, plus the device model + Android version, in the next GUIDE.md session log.
+
+## Test log
+
+| Date       | Device / Android | Build installed                     | Result                   | Notes                                                                                                                                                                                                                                                                    |
+| ---------- | ---------------- | ----------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-03 | — (no device)    | v1.5.5                              | ✅ Pre-flight PASS       | SHA-256 match, release signature, `1.5.5`+`sizeLabel` in bundle, manifest live. Hardware steps A–H pending.                                                                                                                                                              |
+| 2026-09-03 | Owner phone      | v1.5.8-admin-fixes QA (`0dc84b44…`) | ✅ PASS (admin scope)    | All 12 admin tabs scroll with no dead bottom band; Orders/Messages/Activity no longer clip; Journal Edit/New lands on the fields; ProjectPackages/RobotCarProjects edit in place with filter/page kept; product images load from Supabase only (works in airplane mode). |
+| 2026-09-03 | — (no device)    | v1.5.9                              | ✅ Pre-flight PASS       | sha256 `efe58825…`, bundle contains `1.5.9` + **0** website-URL refs + admin-fix marker, manifest live 1.5.9/17, remote Content-Length == local. v1.5.9 = the QA-passed code + version bump.                                                                             |
+| 2026-09-03 | — (no device)    | v1.5.10                             | ✅ Pre-flight PASS       | sha256 `789fb692…`, bundle contains `1.5.10` + **0** website-URL refs + `grow-0`/`shrink-0` strip-fix markers, manifest live 1.5.10/18, remote Content-Length == local. v1.5.10 = v1.5.9 + tab-strip gap fix; visual device pass for the strip fix still pending.        |
+| 2026-09-04 | — (no device)    | v1.5.11                             | ✅ Build + manifest PASS | `gradlew assembleRelease` BUILD SUCCESSFUL (36,024,345 B / 34.4 MB); uploaded versioned + latest; fresh manifest 1.5.11/19/34.4 MB (cache-busted GET). Device pass for the AppMenu modal / back-nav / pager re-sync / swipe pager still pending.                         |
+
+---
+
+## U-49 round - transport picker + the WiFi that never worked (2026-09-28, SHIPPED in 3.2.7/60 -> DEVICE VERIFY PENDING)
+
+> Owner report: _"the car is working perfect on bluetooth connection but that app and car doesn't
+> connect at all in the wifi connection. I don't know what going on."_ Root cause + rules:
+> ../../../guide/FAILSAFES.md **F-30**/**F-31**. Design + WiFi playbook:
+> ../../../guide/TRANSPORTS-WIFI-GUIDE.md.
+> Gates: **tsc 0 + vitest 243/243 (16 files)**.
+> **OK SHIPPED: app `5c99357` = v3.2.6/59 -> v3.2.7/60.** CI `36436791234` green; Release
+> `36436791172` green -> `genum-solutions-3.2.7.apk` (42.9 MB) + `latest` + `release.json`
+> published; `ota-only` correctly skipped by its release-guard.
+> **U-49-1 IS DONE** - F-8 verified in the _published_ APK with `aapt`: `versionCode=60` / `3.2.7`,
+> `ACCESS_WIFI_STATE` / `CHANGE_WIFI_STATE` / `ACCESS_NETWORK_STATE` / `NEARBY_WIFI_DEVICES` all
+> present (the last with `neverForLocation` = `usesPermissionFlags 0x10000`), and
+> `android:usesCleartextTraffic=0xffffffff` (true).
+> **So rows U-49-0 and U-49-2..6 are now the owner's, on a real phone.** Install **3.2.7** first
+> (Menu -> App Updates, or the website `/app` page). It is a **new APK, not an OTA** - an OTA would
+> NOT bring the manifest fix. U-49-0 (the browser check) is still worth running first: it proves
+> the car is healthy before you judge anything the app does.
+
+### U-49-0 - do this FIRST, on the current build (30 seconds, no new APK)
+
+- [ ] Power the car on, wait for the OLED. Join WiFi network `4WDCar_Wifi` on the phone
+      (password open/none). Confirm the phone's WiFi list shows it as connected.
+- [ ] **Open `http://192.168.245.1` in the phone BROWSER (not the app).**
+- [ ] **Page loads** -> firmware + radio are healthy; the fault was ours (manifest layer D). Stop
+      here, the fix needs the new APK. Note the page contents for later comparison.
+- [ ] **Page does NOT load** -> the fault is the car side, NOT the app: car off / different IP /
+      it is in router mode / another device is on the AP (max 4 clients). Re-read the OLED for the
+      real IP and retry. **Do not file this as an app bug.**
+- [ ] Leave the phone on the car AP. Android may auto-switch to mobile data because the AP has no
+      internet - that is expected and is diagnosed as layer B, not a failure.
+
+### U-49-1 - APK build + manifest gate (DONE 2026-09-28 by the AI - do not re-run)
+
+- [x] Build the native APK through the normal release flow -> **app `5c99357`, v3.2.7/60, CI
+      `36436791234` green, Release `36436791172` green**, `genum-solutions-3.2.7.apk` (42.9 MB) +
+      `latest` + `release.json` published to `app-releases`.
+- [x] **F-8 manifest proof** - the _published_ APK was downloaded and dumped with `aapt`
+      (`build-tools/36.0.0/aapt.exe dump badging` + `dump xmltree`), NOT trusted from the build log:
+      `versionCode='60' versionName='3.2.7'`; `ACCESS_WIFI_STATE`, `CHANGE_WIFI_STATE`,
+      `ACCESS_NETWORK_STATE`, `NEARBY_WIFI_DEVICES` all present; `NEARBY_WIFI_DEVICES` carries
+      `usesPermissionFlags=0x10000` (`neverForLocation`); `android:usesCleartextTraffic=0xffffffff`
+      (true). This is why F-8 exists - prebuild caches `mobile/android/`, so a clean-looking build
+      can still ship a stale manifest.
+- [x] **Version bump was mandatory, not cosmetic.** `app.json` + `plugins/**` trigger `release.yml`,
+      and `upload-release.mjs` derives the filename from `app.json`. Without 59 -> 60 the push would
+      have overwritten the live 3.2.6 APK at the _same_ versionCode, which Android never offers as
+      an update - the fix would have shipped to nobody.
+- [x] `ota-only.yml` **skipped** itself via its release-guard ("app.json versionCode 60 is newer
+      than published manifest 59"), so no stale-OTA/suppressed-update-pill state.
+
+### U-49-2 - Control Panel, transport picker (new surface, sits above the old card)
+
+- [ ] Open **Tools -> 4WD4M**. The **Connection method** card lists 4 rows: Classic Bluetooth,
+      Bluetooth LE, Car WiFi, Home WiFi. Each shows capability chips (Drive / Data / Mode /
+      WiFi setup / **Firmware** - the last one dimmed on every row, because no link pushes firmware). > ⚠️ **SUPERSEDED by U-50-1 (2026-09-29):** this list is now ONE dropdown, the method count is > **8**, and the capability chips moved into each method's help window. Run **U-50**, not this > row, for the picker layout. The rest of U-49-2 (banner/Drive-deck agreement, both links, > diagnostics, wrong-IP error, Disconnect clearing) still stands.
+- [ ] The **status dot, banners and Drive deck gating all agree** with the picker's state. This is
+      the F-17 check; the picker deliberately asks the screen to own the connect so the hub's state
+      cannot desync.
+- [ ] Connect via **Classic Bluetooth**: scan -> pick the car -> connected. **This is the known-good
+      path - it must not regress.** Confirm the OLED shows CONNECTED and telemetry is live.
+- [ ] With BT connected, pick **Car WiFi** -> BT **actually disconnects** (not just relabels) and the
+      WiFi link comes up. Two links at once is a fail.
+- [ ] **WiFi diagnostics** card: run it while failing and while connected. The verdict must name a
+      layer (A-E) and a fix, not just say "failed".
+- [ ] Enter a wrong IP -> a definite error within ~20 s, **never an endless "Connecting..."** (F-16).
+- [ ] **Disconnect** via the picker -> the status dot, banner and Drive deck all clear together.
+- [ ] **Bluetooth LE** row: it must either connect and report, or say clearly that it is
+      unsupported. It is marked experimental; report what actually happens, do not assume.
+
+### U-49-3 - the actual drive, on BOTH links (remote first, per fleet rule 11)
+
+- [ ] Test the **physical ESP32 remote** FIRST, then the app's remote screen.
+- [ ] Drive over **Bluetooth**: forward/reverse/steer, speed steps, stop.
+- [ ] Drive over **WiFi AP**: same. Car keeps driving, no stutter, telemetry updates.
+- [ ] Mode list now shows LIVE / WIP / COMING SOON correctly (the caps string parser fix). A
+      **CS mode must be visibly marked** - do not tap it while driving.
+- [ ] WIFICFG over Bluetooth -> car joins the home LAN -> try **Home WiFi (STA)** row with the
+      car's new IP. This is the first test of the STA path.
+
+### U-49-4 - safety (unchanged behaviour is the pass condition)
+
+- [ ] Link loss on **either** transport -> motors stop within the firmware's 2 s
+      (FAILSAFE_TIMEOUT_MS). Time it.
+- [ ] No ESTOP button is expected anywhere in the app (removed by directive; the firmware has no
+      ESTOP handler). If one reappeared, **stop and report**.
+- [ ] Safe stop commands (S, SPD0) still work on both links.
+
+### U-49-5 - mode persistence trap (F-31) - only with the car on the bench
+
+- [ ] If the car is ever stuck in a Coming-Soon / no-drive mode, recover with the **live command**
+      MODE_4WD4M (or http://192.168.245.1/mode?val=4WD4M). Confirm that a **power cycle does
+      NOT fix it** - that is the trap this row exists to document.
+
+### U-49-6 - regression on the rest of the app
+
+- [ ] Other projects/categories in Tools still open and their cards render (the picker must not leak
+      state across categories).
+- [ ] Leave the Control Panel mid-connect and come back: no duplicate link, no stuck spinner.
+- [ ] Admin/site-content rounds from U-48: content save + pull-to-refresh still fine.
+
+## U-50 round — connection method dropdown, help windows, cable removed (2026-09-29, SHIPPED as OTA `b0d0e1f` / run `36518703689` -> DEVICE VERIFY PENDING)
+
+Owner requests this round: (1) the top of the Control Panel had **duplicate content about connection
+methods** — make it ONE dropdown with all methods; (2) each method gets a **small help icon** opening
+a **separate small window** with how to use it; (3) **"the scanning for the device seems to be missing
+from the control page"**; (4) **"also remove the cable ones method too totally"**; (5)
+**"also dont display dublicates"**.
+
+No native change — `app.json` untouched, so this ships on the **OTA Only** channel (same version,
+new JS bundle). Do not expect a new APK or a version bump.
+
+- [x] **Shipped:** commit `b0d0e1f`, OTA Only run `36518703689` **green**; `release.json` notes now
+      read `OTA · Short update (b0d0e1f…)`, `updated_at 2026-09-29T03:50:10Z`, version still
+      `3.2.7` / `version_code 60`. The release-guard was checked **before** pushing (live manifest
+      `3.2.7`/60 == `app.json`) so the run published instead of skipping.
+- [x] **Gates at ship:** `tsc --noEmit` 0 · `vitest` 285/285 (19 files) · prettier + lint-hook clean.
+- [ ] **On the device:** open the app and let it fetch the OTA (Menu -> App Updates) before running
+      U-50-1..4 below. The U-49 rows still apply; U-49-2's "4 rows with capability chips" is now
+      **obsolete** — those chips moved into the per-method help window (F-39).
+
+### U-50-1 - the dropdown replaces the method list (F-39)
+
+- [ ] Open **Tools -> 4WD4M**. The top of the page shows a single **"Connection method"** dropdown
+      (a row with a chevron), **not** a long repeated list of method cards. The repeated capability
+      chips / blurb text under every method must be **gone** from the page.
+- [ ] Dropdown closed on a fresh open shows **"Choose a method"** (no method pre-selected).
+- [ ] Tap the dropdown: it lists every registered method, grouped **Bluetooth / WiFi**. Count them — there must be **6** (U-112 dropped MQTT + Internet
+      relay):
+      Classic Bluetooth (SPP) · Bluetooth Low Energy (GATT) · Car access point · Home router ·
+      HTTP / REST · mDNS.- [ ] **No Cable group and no "USB serial" anywhere** in the dropdown or anywhere else in the app. If a Cable/USB row appears, the removal failed — report it. (The separate "Every way the car can be controlled" teaching list below About was REMOVED — 2026-09-29 owner round: the per-method ⓘ help windows carry that content now.)
+- [ ] No method appears **twice** (scan the list carefully; each is a distinct label).
+- [ ] After picking a method the dropdown collapses and the trigger shows that method's name.
+
+### U-50-2 - the per-method help window (F-39)
+
+- [ ] Each option in the dropdown has a small **ⓘ** icon on the right. Tap it on **Classic
+      Bluetooth**: a small separate window opens over the page (not a full screen, not an inline
+      expansion) with what the method is, what you need, when to use it, connect+verify steps, and
+      the capability chips.
+- [ ] Tap **ⓘ on a roadmap method** (Bluetooth LE, mDNS — MQTT and Internet relay were removed by
+      U-112): its window shows an
+      amber roadmap note explaining what is missing. The window must be readable, not truncated.
+- [ ] Close the window by tapping **outside** it, by the **✕**, and by the Android **back** button —
+      all three must dismiss it. The Control Panel must still be usable afterwards.
+- [ ] Tapping **ⓘ must NOT connect anything** and must not change the selected method. It is a help
+      button, not a second select button.
+
+### U-50-3 - the scan is back, and in the right place (F-38) — this is the real bug
+
+- [ ] **Fresh app open, nothing connected.** Open Tools -> 4WD4M, pick **Classic Bluetooth** from the
+      dropdown. The **"Scan for cars"** button and the device list must appear **immediately**,
+      _before_ any successful connection. This is the owner-reported bug: the scan used to be
+      invisible because the panel had no active link yet.
+- [ ] Choosing Classic Bluetooth must **not** show an error and must **not** attempt a blind connect.
+      Previously it failed with "Pick a car from the Bluetooth list" as if the method were broken.
+- [ ] Tap **Scan for cars** -> the paired car appears -> tap it -> connects. **This is the known-good
+      path; it must not regress.** Confirm the OLED shows CONNECTED and telemetry is live.
+- [ ] With no car in range, the scan must say **"No devices found"** (not fail silently, not hang).
+- [ ] Pick **Car access point**: the **Car address** box appears with `ws://192.168.245.1:81`
+      pre-filled and a **Connect** button. Type a wrong IP -> a definite error within ~20 s, never an
+      endless "Connecting…" (F-16).
+- [ ] Switch between Car access point and HTTP / REST: the address box must not carry a `ws://` value
+      into the HTTP box (or vice versa).
+- [ ] A chosen-but-not-connected method shows **"Not connected"**, and the status dot + Disconnect
+      footer must **not** appear until a link is genuinely up. A choice is not a connection.
+
+### U-50-4 - no regressions on the rest of the picker
+
+- [ ] With BT connected, pick a WiFi method -> BT **actually disconnects** (not just relabels). Two
+      links at once is a fail (F-17).
+- [ ] **Disconnect** via the picker -> status dot, banner and Drive deck all clear together.
+- [ ] **WiFi diagnostics** card still appears for a WiFi method and names a layer (A-E) on failure.
+- [ ] Other Tools projects/categories still open — the picker must not leak state across categories.
+- [ ] The "Every way the car can be controlled" card below About is **GONE** — removed in the
+      2026-09-29 round (owner: duplicated the per-method ⓘ windows). Below "About this project" the
+      scroll ends; nothing else renders after it except the disconnect confirmation overlay when
+      invoked.

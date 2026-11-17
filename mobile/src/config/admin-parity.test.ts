@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { ADMIN_TAB_HINTS, ADMIN_TABS } from "./adminTabs";
+import { DASHBOARD_SUBTABS } from "./app_admin_subtabs";
+
+// =====================================================================
+// Admin-surface parity guard (was "ARCHITECTURE.md B-6"; that spec is NOT in
+// the repo). The website AdminPanel
+// and the app AdminScreen must expose the SAME tab inventory, in the SAME
+// order. The website's canonical list lives in
+// `components/admin/admin-types.ts` (TABS); the app's in
+// `src/config/adminTabs.ts`. Change both + both tests together.
+// =====================================================================
+
+/**
+ * Pull the hints map out of the source text. Values are single-line
+ * double-quoted strings by construction (no quotes inside).
+ */
+function readHints(
+  source: string,
+  declaration: string,
+): Record<string, string> {
+  const block = source.match(
+    new RegExp(`export const ${declaration}[^=]*= \\{([\\s\\S]*?)\\n\\};`),
+  );
+  const out: Record<string, string> = {};
+  for (const line of (block?.[1] ?? "").split(/\r?\n/)) {
+    const match = line.match(
+      /^\s*(?:"([^"]+)"|([A-Za-z][\w ]*))\s*:\s*"([^"]*)"/,
+    );
+    if (!match) continue;
+    const key = match[1] ?? match[2];
+    if (key) out[key] = match[3] ?? "";
+  }
+  return out;
+}
+
+describe("admin tab inventory (website <-> app mirror, B-6)", () => {
+  it("exposes the 8 canonical tabs in the canonical order", () => {
+    // U-44 (2026-09-26, owner): Catalog split into three catalog tabs that
+    // mirror the customer storefront (Electronic Products / 3D Products /
+    // Projects). U-R3 (2026-10-12): "System Logs" added (fleet diagnostics).
+    // U-R4 (2026-11-09): "User Logs" + "Profile Entries" added — both clients
+    // read the shared user_activity_log / user_profile_entries tables.
+    // U-R5: System Logs + User Logs + Profile Entries merged into "Logs".
+    expect(ADMIN_TABS).toEqual([
+      "Dashboard",
+      "Orders",
+      "Electronic Products",
+      "3D Products",
+      "Projects",
+      "Content",
+      "Users",
+      "Settings",
+    ]);
+  });
+
+  it("matches the website AdminPanel TABS list (read from the sibling repo)", () => {
+    const websitePath = resolve(
+      __dirname,
+      "../../../../genumsolutions-website/components/admin/admin-types.ts",
+    );
+    if (!existsSync(websitePath)) {
+      // Website repo not checked out next to the app (CI) — canonical list
+      // above is the contract; skip the cross-repo read.
+      return;
+    }
+    const source = readFileSync(websitePath, "utf8");
+    const match = source.match(/export const TABS = \[([^\]]+)\] as const/);
+    expect(match, "admin-types.ts TABS declaration not found").toBeTruthy();
+    const webTabs = (match![1] ?? "")
+      .split(",")
+      // Quote-agnostic strip: prettier (singleQuote:false) may render the
+      // website's literals double-quoted.
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+    expect(webTabs).toEqual([...ADMIN_TABS]);
+  });
+
+  it("is reflected verbatim in the app AdminScreen tab strip", () => {
+    const screenPath = resolve(__dirname, "../screens/AdminScreen.tsx");
+    const source = readFileSync(screenPath, "utf8");
+    for (const tab of ADMIN_TABS) {
+      // Quote-agnostic: prettier may render literals with ' or " — the
+      // contract is the tab string itself, not the surrounding quote style.
+      const singleQuoted = source.includes(`'${tab}'`);
+      const doubleQuoted = source.includes(`"${tab}"`);
+      expect(
+        singleQuoted || doubleQuoted,
+        `tab '${tab}' not found in AdminScreen.tsx`,
+      ).toBe(true);
+    }
+  });
+
+  // U-UI1 (2026-11-09): the per-tab description is shared console copy now —
+  // the app renders ADMIN_TAB_HINTS under the strip and the website renders the
+  // same sentences from TAB_HINTS. Guard coverage and cross-repo equality.
+  it("describes every tab with the same sentences the website uses", () => {
+    expect(Object.keys(ADMIN_TAB_HINTS).sort()).toEqual([...ADMIN_TABS].sort());
+    for (const [tab, hint] of Object.entries(ADMIN_TAB_HINTS))
+      expect(hint.length, `empty hint for ${tab}`).toBeGreaterThan(10);
+
+    const websitePath = resolve(
+      __dirname,
+      "../../../../genumsolutions-website/components/admin/admin-types.ts",
+    );
+    if (!existsSync(websitePath)) return; // website repo absent (CI layout)
+    const webHints = readHints(readFileSync(websitePath, "utf8"), "TAB_HINTS");
+    expect(webHints).toEqual({ ...ADMIN_TAB_HINTS });
+  });
+});
+
+describe("admin data tab wiring", () => {
+  const screenPath = resolve(__dirname, "../screens/AdminScreen.tsx");
+  const source = readFileSync(screenPath, "utf8");
+
+  it("loads Dashboard activity and Content records from their own tab", () => {
+    expect(source).toContain("async function loadTab() {");
+    expect(source).toContain("loadActivity(1)");
+    expect(source).toContain('else if (tab === "Content")');
+    expect(source).toContain("listAdminTrainingPrograms()");
+    expect(source).toContain("listAdminPilotCostLines()");
+    expect(source).toContain("listAdminCurriculumHighlights()");
+  });
+
+  it("renders the system, user-activity, and profile sections in Logs", () => {
+    expect(source).toContain("function LogsTab(");
+    expect(source).toContain("function SystemLogsTab(");
+    expect(source).toContain("function UserLogsTab(");
+    expect(source).toContain("function ProfileEntriesTab(");
+    expect(source).toContain("<SystemLogsTab");
+    expect(source).toContain("<UserLogsTab");
+    expect(source).toContain("<ProfileEntriesTab");
+  });
+
+  it("surfaces project component and pricing load failures with retry actions", () => {
+    const componentLoad = source.match(
+      /void listProjectComponents\([\s\S]*?\.finally\(\(\) => \{[\s\S]*?\n      \}\);/,
+    )?.[0];
+    expect(componentLoad).toContain("setLinkerLoadError");
+    expect(componentLoad).not.toContain(".catch(() => undefined)");
+
+    const pricingLoad = source.match(
+      /void getAdminProjectPricing\([\s\S]*?\.finally\(\(\) => \{[\s\S]*?\n      \}\);/,
+    )?.[0];
+    expect(pricingLoad).toContain("setPricingLoadError");
+    expect(pricingLoad).not.toContain(".catch(() => undefined)");
+    expect(source).toContain("Retry loading component links");
+    expect(source).toContain("Retry loading project pricing");
+  });
+
+  it("keeps Dashboard Overview and Activity in separate subtabs", () => {
+    const dashboard = source.match(
+      /case "Dashboard":([\s\S]*?)\n      case "Orders":/,
+    )?.[1];
+
+    expect(DASHBOARD_SUBTABS).toEqual(["Overview", "Activity"]);
+    expect(dashboard).toContain('label="Dashboard sections"');
+    expect(dashboard).toContain("<AdminSectionPanels");
+    expect(dashboard).toContain("<DashboardTab");
+    expect(dashboard).toContain("<ActivityTab");
+  });
+
+  it("keeps print studio lists scrollable and editors opt-in", () => {
+    const printPath = resolve(__dirname, "../screens/PrintAdminPanel.tsx");
+    const printSource = readFileSync(printPath, "utf8");
+    const printScreen = source.match(
+      /if \(tab === "3D Products" && printSection !== "Catalog"\) \{([\s\S]*?)\n        \}/,
+    )?.[1];
+
+    expect(printScreen).toContain("<ScrollView");
+    expect(printScreen).toContain("contentContainerStyle");
+
+    for (const [section, state, nextSection] of [
+      ["Categories", "category", "Pricing"],
+      ["Pricing", "materials", "Costs"],
+      ["Costs", "costing", "Promotions"],
+      ["Promotions", "promotion", "Services"],
+      ["Services", "service", "Requests"],
+    ] as const) {
+      const start = printSource.indexOf(`if (section === "${section}") {`);
+      const end = printSource.indexOf(
+        `if (section === "${nextSection}") {`,
+        start,
+      );
+      const block =
+        start >= 0 && end > start ? printSource.slice(start, end) : "";
+
+      expect(block, `${section} section was not found`).not.toBe("");
+      // Each print section's editor is opt-in (state guard): the list renders
+      // as a read-only view; the {state} ? (editor) branch only appears when
+      // the editor is open.
+      if (section === "Pricing" || section === "Costs") {
+        expect(block, `${section} editor should be opt-in`).toContain(
+          `set${state.charAt(0).toUpperCase() + state.slice(1)}`,
+        );
+      } else {
+        expect(block, `${section} editor should be opt-in`).toContain(
+          `{${state} ? (`,
+        );
+      }
+    }
+  });
+});

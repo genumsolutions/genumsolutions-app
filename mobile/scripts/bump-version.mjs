@@ -1,0 +1,147 @@
+// =====================================================================
+// bump-version.mjs - bump the app version from ONE source of truth and
+// re-derive every derived metadata copy so nothing is hand-edited.
+//
+//   app.json                SINGLE SOURCE OF TRUTH (version + versionCode)
+//   src/config/site.ts      APP_VERSION (display string)
+//   package.json            "version"
+//   package-lock.json       "version" (root + package entry)
+//   android/app/build.gradle versionName + versionCode (local native build)
+//
+// The website does NOT get bumped here on purpose: the /app download page
+// reads the LIVE release.json manifest (written only when an upload actually
+// happens), and its bundled fallback must reflect the LAST RELEASED build.
+// After uploading the release, sync the website fallback with:
+//   (website repo) node scripts/sync-app-fallback.mjs
+//
+// Usage:
+//   node scripts/bump-version.mjs <version> <versionCode>
+//   node scripts/bump-version.mjs 1.5.12 20
+//   node scripts/bump-version.mjs 2.0.0 43 --runtime 1.0.1
+//
+// The version/versionCode are written to app.json first, then every derived
+// app-side value is regenerated from them.
+// =====================================================================
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), ".."); // mobile/
+
+// ── Parse args ───────────────────────────────────────────────────────
+const positionals = [];
+const flags = {};
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === "--website" && argv[i + 1]) {
+    flags.website = argv[i + 1];
+    i++;
+  } else if (argv[i] === "--runtime" && argv[i + 1]) {
+    flags.runtime = argv[i + 1];
+    i++;
+  } else {
+    positionals.push(argv[i]);
+  }
+}
+if (positionals.length < 2) {
+  console.error(
+    "Usage: node scripts/bump-version.mjs <version> <versionCode> [--runtime <runtimeVersion>]",
+  );
+  process.exit(1);
+}
+const VERSION = positionals[0];
+const VERSION_CODE = String(parseInt(positionals[1], 10));
+if (!/^\d+\.\d+\.\d+$/.test(VERSION)) {
+  console.error(`Invalid version '${VERSION}' - expected semver like 1.5.12`);
+  process.exit(1);
+}
+if (!/^\d+$/.test(VERSION_CODE)) {
+  console.error(`Invalid versionCode '${VERSION_CODE}' - expected an integer`);
+  process.exit(1);
+}
+if (flags.runtime && !/^\d+\.\d+\.\d+$/.test(flags.runtime)) {
+  console.error(
+    `Invalid runtimeVersion '${flags.runtime}' - expected semver like 1.0.0`,
+  );
+  process.exit(1);
+}
+
+function readJson(p) {
+  return JSON.parse(readFileSync(p, "utf8"));
+}
+function writeJson(p, obj) {
+  writeFileSync(p, JSON.stringify(obj, null, 2) + "\n", "utf8");
+}
+function editFile(p, fn) {
+  if (!existsSync(p)) throw new Error(`File not found: ${p}`);
+  const before = readFileSync(p, "utf8");
+  const after = fn(before);
+  if (after !== before) writeFileSync(p, after, "utf8");
+  return after !== before;
+}
+
+// 1) app.json (source of truth) - targeted replace to preserve file formatting
+const appJsonPath = resolve(rootDir, "app.json");
+editFile(appJsonPath, (src) =>
+  src
+    .replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`)
+    .replace(/"versionCode": \d+/, `"versionCode": ${VERSION_CODE}`),
+);
+console.log(`  app.json            -> ${VERSION} (${VERSION_CODE})`);
+if (!existsSync(appJsonPath)) throw new Error(`File not found: ${appJsonPath}`);
+
+// 1b) Keep the checked-in native Gradle project in sync for local APK builds.
+editFile(resolve(rootDir, "android/app/build.gradle"), (src) =>
+  src
+    .replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`)
+    .replace(/versionName\s+"[^"]+"/, `versionName "${VERSION}"`),
+);
+
+// 2) src/config/site.ts -> APP_VERSION
+// Quote-agnostic (2026-09-23 sweep): prettier (pre-commit) renders site.ts
+// strings with single OR double quotes; match either and preserve the file's
+// current style so the bump never silently no-ops after a prettier pass.
+editFile(resolve(rootDir, "src/config/site.ts"), (src) => {
+  const q =
+    /["']/.exec(src.match(/APP_VERSION\s*=\s*["']/)?.[0] ?? "'")?.[0] ?? "'";
+  const pattern = new RegExp(`export const APP_VERSION = ["'][^"']*["'];`);
+  if (!pattern.test(src)) return src;
+  return src.replace(pattern, `export const APP_VERSION = ${q}${VERSION}${q};`);
+});
+
+// 3) package.json + package-lock.json version
+editFile(resolve(rootDir, "package.json"), (src) =>
+  src.replace(/"version": "\d+\.\d+\.\d+"/, `"version": "${VERSION}"`),
+);
+const lockPath = resolve(rootDir, "package-lock.json");
+const lock = readJson(lockPath);
+lock.version = VERSION;
+if (lock.packages?.[""]) lock.packages[""].version = VERSION;
+writeJson(lockPath, lock);
+
+// 3b) Bump runtimeVersion in app.json (forces devices to check for new OTA bundle)
+if (flags.runtime) {
+  editFile(appJsonPath, (src) =>
+    src.replace(
+      /"runtimeVersion": "[^"]*"/,
+      `"runtimeVersion": "${flags.runtime}"`,
+    ),
+  );
+  console.log(`  app.json runtimeVersion -> ${flags.runtime}`);
+}
+
+// 4) website lib/company.ts androidApp (fallback) is intentionally NOT bumped
+//    here. Bumping it in advance made /app advertise a version whose APK wasn't
+//    uploaded yet. The live manifest drives the site; after a release upload,
+//    sync the fallback with the website repo's scripts/sync-app-fallback.mjs.
+console.log("Version bumped. Commit + push the app repo with:");
+console.log(
+  '  git add -A && git commit -m "chore: bump app version to ..." && git push origin main',
+);
+console.log("After the release uploads, sync the website fallback:");
+console.log("  (genumsolutions-website) node scripts/sync-app-fallback.mjs");
+if (flags.runtime) {
+  console.log(
+    "RuntimeVersion bumped for OTA — devices will check for new bundle on next load.",
+  );
+}

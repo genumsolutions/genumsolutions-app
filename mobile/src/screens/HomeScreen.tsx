@@ -1,0 +1,477 @@
+// =====================================================================
+// HomeScreen - native home. Reads site_content, services, products, and
+// programs/curriculum from Supabase (shared tables), with the bundled
+// config as offline fallback.
+// =====================================================================
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { HOME_CARD_GAP, homeCardWidth, useViewport } from "../lib/viewport";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { pilotTotalLabel } from "../lib/pilotCostTotal";
+import { applyComponentsScope, getProducts } from "../services/productService";
+import { getServices } from "../services/serviceService";
+import { fetchSiteContent } from "../services/orderService";
+import { getProgramsContent } from "../services/programsService";
+import {
+  pilotCosts as fallbackPilotCosts,
+  stemProjectHighlights as fallbackHighlights,
+  trainingPrograms as fallbackPrograms,
+} from "../config/programs";
+import { type Product, type Service } from "../types";
+import { ProductCard } from "../components/ProductCard";
+import { PrintPromoSticker } from "../components/PrintPromoSticker";
+import { getPrintContent, type PrintPromotion } from "../services/printService";
+import type { RootStackParamList } from "../navigation/types";
+
+type Nav = NativeStackNavigationProp<RootStackParamList, "Main">;
+
+// U-47v5 (owner: home shop items "stacked 5 in a row and elongated" — the
+// flex-wrap row squeezed 6 cards across the phone width): the home strips
+// are snap carousels showing TWO cards per viewport width, like the
+// website's home shelves and the app's 3D Products tab grid.
+// U-90: the card width used to be a MODULE-LEVEL Dimensions.get constant —
+// frozen at import time, so after a rotation (the app ships
+// "orientation": "default" and a web build) both strips kept portrait-width
+// cards and snapped to the wrong interval forever. The rule now lives in
+// lib/viewport.ts (homeCardWidth + HOME_CARD_GAP), computed from the LIVE
+// viewport every render below.
+
+export function HomeScreen() {
+  const navigation = useNavigation<Nav>();
+  // U-90: reactive viewport — see the U-47v5 note above.
+  const { width } = useViewport();
+  const homeCardW = homeCardWidth(width);
+  const [services, setServices] = useState<Service[]>([]);
+  const [featured, setFeatured] = useState<Product[]>([]);
+  // U-41 (2026-09-26): home 3D-printing band — mirrors the website's home
+  // section. 2026-11-13: the "Models we print" strip was removed here too.
+  // It republished the same four catalogue cards the 3D Products tab already
+  // shows (the website dropped its copy in the same pass), so the band is now
+  // the offers text plus the two CTAs.
+  const [heroTitle, setHeroTitle] = useState(
+    "Technology you can touch, test, and trust.",
+  );
+  const [heroBody, setHeroBody] = useState(
+    "Robotics kits, project solutions, fabrication, open tools, and training for curious builders, schools, and teams.",
+  );
+  const [trainingPrograms, setTrainingPrograms] = useState(fallbackPrograms);
+  const [pilotCosts, setPilotCosts] = useState(fallbackPilotCosts);
+  const [stemProjectHighlights, setStemProjectHighlights] =
+    useState(fallbackHighlights);
+  // 2026-11-14 (owner): the landing-page 3D-printing offer sticker. Comes from
+  // the website's active promotion row (Admin → 3D Products → Promotions), so
+  // the wording — including "first year only" — is owned there, not here.
+  const [printPromo, setPrintPromo] = useState<PrintPromotion | null>(null);
+  // PERF (2026-09-25): the old render gated EVERY band behind a full-screen
+  // spinner until the SLOWEST of four fetches settled (services + catalog +
+  // site content + programs). The hero now paints instantly on the bundled
+  // fallbacks and each band re-renders as its own promise resolves — the
+  // screen is usable while slower reads are still in flight.
+  const [servicesReady, setServicesReady] = useState(false);
+  const [featuredReady, setFeaturedReady] = useState(false);
+  const [programsReady, setProgramsReady] = useState(false);
+  // U-48: pull-to-refresh — re-run every home read, then repaint the bands.
+  const [refreshing, setRefreshing] = useState(false);
+  // 2026-11-13: the total used to be typed beside admin-editable rows.
+  const pilotTotal = pilotTotalLabel(pilotCosts);
+
+  const load = useCallback(async () => {
+    await Promise.allSettled([
+      getServices()
+        .then((svcs) => {
+          setServices(svcs.slice(0, 4));
+          setServicesReady(true);
+        })
+        .catch(() => {
+          setServicesReady(true); // nothing to add — hide the band
+        }),
+      getProducts()
+        .then((prods) => {
+          // U-47v6 parity (owner removed 3D residue from the WEBSITE home
+          // shelves): the app's home Shop strip is ELECTRONIC-ONLY too —
+          // same applyComponentsScope as ShopScreen; 3D keeps its own band.
+          setFeatured(
+            applyComponentsScope(prods)
+              .filter((p) => p.stock > 0)
+              .slice(0, 6),
+          );
+          setFeaturedReady(true);
+        })
+        .catch(() => {
+          setFeaturedReady(true);
+        }),
+      fetchSiteContent()
+        .then((content) => {
+          if (content?.content?.home_title)
+            setHeroTitle(content.content.home_title);
+          if (content?.content?.home_body)
+            setHeroBody(content.content.home_body);
+        })
+        .catch(() => {
+          /* hero keeps the bundled copy */
+        }),
+      getPrintContent()
+        .then(({ content }) => setPrintPromo(content.promotion))
+        .catch(() => {
+          /* no offer — nothing to show */
+        }),
+      getProgramsContent()
+        .then((programContent) => {
+          setTrainingPrograms(programContent.trainingPrograms);
+          setPilotCosts(programContent.pilotCosts);
+          setStemProjectHighlights(programContent.stemProjectHighlights);
+          setProgramsReady(true);
+        })
+        .catch(() => {
+          setProgramsReady(true); // bundled fallbacks already set
+        }),
+    ]);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
+  return (
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ paddingBottom: 32 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      {/* Hero */}
+      <View className="bg-navy px-5 pb-8 pt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">
+          Kathmandu · Nepal
+        </Text>
+        <Text className="mt-2 font-display text-3xl font-bold leading-tight tracking-tight text-white">
+          {heroTitle}
+        </Text>
+        <Text className="mt-3 text-sm leading-6 text-white/80">{heroBody}</Text>
+      </View>
+
+      {/* 2026-11-14: the offer sticker sits directly under the hero, above
+          every band, so it is the first thing after the headline — and it can
+          be dismissed for good on this device. */}
+      <PrintPromoSticker
+        promo={printPromo}
+        onPress={() => navigation.push("Printing")}
+      />
+
+      {/* PERF: no full-screen gate — the hero paints instantly and each band
+          appears as its own read resolves. One small spinner covers the first
+          paint window before the earliest band lands. */}
+      {!servicesReady && !featuredReady && !programsReady && (
+        <View className="items-center py-16">
+          <ActivityIndicator size="large" color="#1e3a8a" />
+        </View>
+      )}
+      {
+        <>
+          {/* PERF: hero + bands paint progressively — each band shows a quiet
+              inline placeholder only while ITS OWN read is still in flight,
+              so one slow fetch can never blank the whole screen again. */}
+          {!servicesReady && (
+            <View className="items-center py-6">
+              <ActivityIndicator size="small" color="#1e3a8a" />
+            </View>
+          )}
+          {/* Services */}
+          {servicesReady && services.length > 0 && (
+            <View className="px-5 pt-6">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  What GENUM does
+                </Text>
+                <Pressable onPress={() => navigation.push("Services")}>
+                  <Text className="text-sm font-bold text-navy underline">
+                    View all
+                  </Text>
+                </Pressable>
+              </View>
+              <View className="mt-3">
+                {services.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => navigation.push("Services")}
+                    className="mb-2 overflow-hidden rounded-2xl border border-line bg-card p-4"
+                  >
+                    <Text className="font-display text-lg font-bold leading-snug text-ink">
+                      {s.name}
+                    </Text>
+                    <Text
+                      numberOfLines={2}
+                      className="mt-1 text-sm leading-5 text-muted"
+                    >
+                      {s.description}
+                    </Text>
+                    <Text className="mt-2 text-sm font-black text-navy">
+                      {s.priceLabel}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* 3D printing band (U-41 parity with the website home) */}
+          {featuredReady && (
+            <View className="px-5 pt-6">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  3D & 2D printing
+                </Text>
+                <Pressable onPress={() => navigation.push("Printing")}>
+                  <Text className="text-sm font-bold text-navy underline">
+                    Printing services
+                  </Text>
+                </Pressable>
+              </View>
+              <Text className="mt-1 text-sm leading-6 text-muted">
+                Print-to-order fabrication — start with a file, a reference
+                object, or a rough idea.
+              </Text>
+              <View className="mt-4 flex-row flex-wrap gap-3">
+                <Pressable
+                  onPress={() => navigation.push("Contact")}
+                  className="rounded-full bg-navy px-5 py-3 active:opacity-70"
+                >
+                  <Text className="text-sm font-black text-white">
+                    Send a file for a print review
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => navigation.push("Printing")}
+                  className="rounded-full border border-line bg-card px-5 py-3 active:opacity-70"
+                >
+                  <Text className="text-sm font-black text-ink">
+                    Browse 3D prints
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Curriculum + training + pilot costing share one programs read —
+              PERF: they render only once that read settles (bundled fallbacks
+              mean it is ALWAYS populated by then; nothing to gate per-band). */}
+          {programsReady && (
+            <>
+              {/* Curriculum */}
+              <View className="px-5 pt-6">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                    100+ project curriculum
+                  </Text>
+                  <Pressable onPress={() => navigation.push("Contact")}>
+                    <Text className="text-sm font-bold text-navy underline">
+                      Request the full catalog
+                    </Text>
+                  </Pressable>
+                </View>
+                <View className="mt-4 space-y-3">
+                  {Object.entries(stemProjectHighlights).map(
+                    ([ages, projects]) => (
+                      <View
+                        key={ages}
+                        className="rounded-2xl border border-line bg-card p-4"
+                      >
+                        <Text className="text-xs font-black uppercase tracking-widest text-gold">
+                          {ages}
+                        </Text>
+                        <View className="mt-2 flex-row flex-wrap gap-x-4 gap-y-1">
+                          {projects.map((p) => (
+                            <Text
+                              key={p}
+                              className="text-sm leading-6 text-muted"
+                            >
+                              • {p}
+                            </Text>
+                          ))}
+                        </View>
+                      </View>
+                    ),
+                  )}
+                </View>
+              </View>
+
+              {/* Training programs — the website's home renders this band under
+                  the headline "Training programs that build careers." (its h2),
+                  not as an uppercase eyebrow, so the copy and weight match. */}
+              <View className="px-5 pt-6">
+                <Text className="font-display text-xl font-bold tracking-tight text-ink">
+                  Training programs that build careers.
+                </Text>
+                <View className="mt-4 space-y-3">
+                  {trainingPrograms.map((prog) => (
+                    <View
+                      key={prog.title}
+                      className="rounded-2xl border border-line bg-card p-4"
+                    >
+                      {/* Same fix as ServicesScreen: the title owns a full-width
+                          line, because beside the duration pill it clamped to
+                          "K–5 Ro…" and the program name was unreadable. */}
+                      {/* No clamp: the website's home renders the program title
+                          as an unclamped <h3> beside the duration pill. */}
+                      <Text className="font-display text-lg font-bold leading-snug text-ink">
+                        {prog.title}
+                      </Text>
+                      <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                        <Text className="text-xs font-black uppercase tracking-wide text-gold">
+                          {prog.audience}
+                        </Text>
+                        <Text className="shrink-0 rounded-full bg-sky px-2 py-0.5 text-xs font-bold text-navy">
+                          {prog.duration}
+                        </Text>
+                      </View>
+                      <Text className="mt-2 text-sm leading-6 text-muted">
+                        {prog.description}
+                      </Text>
+                      <Text className="mt-2 text-xs leading-5 text-muted">
+                        <Text className="text-ink font-bold">Outcome:</Text>{" "}
+                        {prog.outcome}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Pilot costing */}
+              <View className="px-5 pt-6">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Illustrative pilot costing
+                </Text>
+                <Text className="mt-2 font-display text-2xl font-bold text-navy">
+                  {pilotTotal ? `NPR ${pilotTotal}` : "Priced per proposal"}
+                  {pilotTotal ? (
+                    <Text className="font-sans text-sm font-normal text-muted">
+                      {" "}
+                      illustrative total
+                    </Text>
+                  ) : null}
+                </Text>
+                <View className="mt-4">
+                  {pilotCosts.map(([item, cost, note]) => (
+                    <View
+                      key={item}
+                      className="flex-row items-center justify-between border-b border-line py-2"
+                    >
+                      {/* No clamp: website rows wrap the pilot item and keep
+                          the cost `shrink-0` (the app's note stays inline). */}
+                      <Text className="min-w-0 flex-1 pr-2 text-sm font-semibold text-ink">
+                        {item}
+                        <Text className="text-xs font-normal text-muted">
+                          {" "}
+                          — {note}
+                        </Text>
+                      </Text>
+                      <Text className="shrink-0 font-display text-base font-bold text-navy">
+                        {cost}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* Featured products */}
+          {featuredReady && featured.length > 0 && (
+            <View className="px-5 pt-6">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Shop
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    navigation.navigate("Main", { screen: "Shop" })
+                  }
+                >
+                  <Text className="text-sm font-bold text-navy underline">
+                    Browse catalog
+                  </Text>
+                </Pressable>
+              </View>
+              <View className="mt-3">
+                <FlatList
+                  horizontal
+                  data={featured}
+                  keyExtractor={(p) => p.id}
+                  showsHorizontalScrollIndicator={false}
+                  snapToInterval={homeCardW + HOME_CARD_GAP}
+                  decelerationRate="fast"
+                  contentContainerStyle={{
+                    paddingBottom: 4,
+                    gap: HOME_CARD_GAP,
+                  }}
+                  renderItem={({ item: p }) => (
+                    <View style={{ width: homeCardW }}>
+                      {/* U-47v4b/v5: real ProductCard (themed fallback,
+                          contain-fit, elevation) instead of the squashed
+                          custom tile — matches the 3D Products display. */}
+                      <ProductCard product={p} />
+                    </View>
+                  )}
+                  ListEmptyComponent={
+                    <Text className="py-4 text-sm text-muted">
+                      Nothing on the shelf right now.
+                    </Text>
+                  }
+                />
+              </View>
+            </View>
+          )}
+
+          {/* CTA */}
+          <View className="px-5 pt-6">
+            <View className="rounded-2xl bg-ink p-5">
+              <Text className="text-xs font-black uppercase tracking-[0.24em] text-gold">
+                Need a starting point?
+              </Text>
+              <Text className="mt-2 font-display text-xl font-bold tracking-tight text-white">
+                Use the open tools or bring us the brief.
+              </Text>
+              <View className="mt-4 flex-row flex-wrap gap-3">
+                <Pressable
+                  onPress={() => navigation.push("Tools")}
+                  className="rounded-full bg-card px-5 py-3 active:opacity-70"
+                >
+                  <Text className="text-sm font-black text-ink">
+                    Open tools
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => navigation.push("Contact")}
+                  className="rounded-full border border-white/40 px-5 py-3"
+                >
+                  <Text className="text-sm font-black text-white">
+                    Contact GENUM
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </>
+      }
+    </ScrollView>
+  );
+}

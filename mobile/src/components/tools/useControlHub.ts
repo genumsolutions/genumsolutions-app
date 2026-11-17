@@ -1,0 +1,4337 @@
+// =====================================================================
+// useControlHub â€” shared connection/control/telemetry state + command
+// logic for the IoT Control Panel.
+//
+// Both the lean Control Panel page (ToolsScreen) and the immersive
+// game-style remote window (RemoteControlScreen) share this ONE hook so
+// they drive the same car state and never drift: same SPP/WiFi connect,
+// same mode / speed / servo / steer / trim / PID / gimbal / sensors /
+// relays, same ESP-remote safety clamps and instant-stop-on-release,
+// same per-device memory persistence.
+//
+// Every sender is safe when no device is linked (linkKind === 'none'):
+// commands no-op, but UI state (knobs, sliders) still updates so the
+// remote can be tested/debugged in a browser without hardware.
+// =====================================================================
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { PermissionsAndroid } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
+import { useRoute, type RouteProp } from "@react-navigation/native";
+import type { RootStackParamList } from "../../navigation/types";
+import { sppService, type SppDevice } from "../../services/sppService";
+import type { CarPageServingState } from "./CarPageServingState";
+import {
+  CAR_STATUS_URL,
+  CAR_WS_URL,
+  PROBE_TIMEOUT_MS,
+  looksLikeOurCar,
+  probeCarStatus,
+} from "./connection/discovery";
+import { buildDiscoveryPlan } from "./connection/discoveryPlan";
+import {
+  CAR_LOG_COMMANDS,
+  CAR_LOG_WINDOW,
+  type CarLogEntry,
+  carLogCacheKey,
+  parseLogGetReply,
+} from "./carLogModel";
+import { bleService } from "../../services/bleService";
+import { wifiService } from "../../services/wifiService";
+import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
+import {
+  fetchCarProfiles,
+  isFreshDefaultPrefs,
+  mergeCloudProfile,
+  saveCarProfile,
+  type ProfileSyncState,
+  type CarProfileCloudRecord,
+} from "../../services/carProfileService";
+import { addBtId, upsertWifiHistory } from "../../services/carProfileService";
+import { rememberDeviceKey } from "../../services/deviceProfileRegistryService";
+import { registerCurrentDevice } from "../../services/deviceRegistryService";
+import { syncCrashReport } from "../../services/crashReportService";
+import { appendLog, flushAppLogs } from "../../services/appLogService";
+import {
+  encodeEnvelopeWire,
+  isEnvelopeIntakeEnabled,
+  type EnvelopeInput,
+  type EnvelopeSendResult,
+} from "../../transports/envelopeWiring";
+import {
+  LOCAL_CAR_MODES,
+  type CarMode,
+  isModeToken,
+  nextCyclableToken,
+} from "../../config/roboCarCatalog";
+import { getCarModes } from "../../services/carModeService";
+import { PROJECT_CATEGORIES } from "../../config/project-catalog";
+import {
+  DRIVE_CMD_MIN_INTERVAL_MS,
+  TELEMETRY_FLUSH_MS,
+} from "./controlConstants";
+import { routeCommand } from "./commandRouting";
+import { isCarSilent } from "./carSilence";
+// U-120 Phase C: the reconnect dialog names the METHOD that dropped and
+// routes its Reconnect action through it — the hub stores that method
+// alongside the dialog flag.
+import type { LinkPromptMethod } from "./linkPrompt";
+
+// Imported from the PURE modules directly, not from the `./connection` barrel.
+// The barrel re-exports the UI (ConnectionSection → useControlHub, a
+// type-only back-reference), and a hook has no business pulling React
+// components into its dependency graph — nor sitting one hop from a cycle with
+// the screen that renders it.
+import {
+  outcomeFor,
+  parseRouterAnswer,
+  routerRequestLine,
+  timeoutOutcome,
+  type RouterOutcome,
+  type RouterRequest,
+  type SwitchPlan,
+} from "./connection/commands";
+import { deriveRouters } from "./connection/routerMemory";
+import { isCarApGateway } from "./connection/dial";
+import {
+  isAllowedDriveStatus,
+  statusToDirection,
+  quantizeSpeedToStep,
+  buildWifiConfigLine,
+  buildRouterCommand,
+  canonicalCarToken,
+  modeAvailStatus,
+  SPEED_MIN,
+  SPEED_MAX,
+  STEER_LIMIT_MIN,
+  STEER_LIMIT_MAX,
+  buildSteer,
+  buildTimeLine,
+  FACTORY_RESET_LINE,
+  type ScanNetwork,
+} from "../../services/carProtocol";
+import { MODE_NAMES as ESP_MODE_NAMES } from "../../config/roboCarCatalog";
+
+/** Token â†’ short display name for "Mode:<name>" statuses (MODE_NAMES[]). */
+const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES;
+
+// Round-6 (app): the app-wide "last touched car" spill. A per-device memory
+// entry is the primary store, but it is only REACHABLE once we know the
+// device address (a live link). Saving a small spill keyed globally here lets
+// a cold start with NO live link still show the last known saved-router names
+// in the Router panel ("options to use saved networks even after power cycle").
+// Names only — passwords never leave the car (W-14) and never touch the app.
+const LAST_DEVICE_KEY = "genum.lastDevice";
+
+/** U-80: how long the "join <ssid> on this phone" prompt stays up. */
+const ROUTER_SWITCH_NOTICE_MS = 4 * 60 * 1000;
+
+/**
+ * Commands that must reach the car over EVERY live link, regardless of the
+ * active mode's transport. Mode tokens (any live link can switch the car
+ * into that mode â€” the car renders its own frame), plus the neutral /
+ * emergency safety lines (ESTOP / SPD0 / SERVO90 / 'S' / REQ_STATE). Every
+ * other command follows the ACTIVE mode's own transports (R-4 fleet parity:
+ * WiFi modes drive over the WS, BT modes over SPP/BLE â€” never blast a
+ * WiFi-mode drive letter at a Bluetooth car).
+ */
+const EVERY_LINK_COMMANDS = new Set([
+  "4WD4M",
+  "BT",
+  // U-79 (car 1.3.x): ESP_SER / ESP_CLI are retired as drive modes and the
+  // 4WD4M registry no longer carries them (the car answers CAPS …;GONE and the
+  // app hides them). They were still broadcast here as live mode tokens; the
+  // two entries are dropped. The catalog keeps the tokens for pre-U-79
+  // backward-compat metadata (roboCarCatalog.ts).
+  "PATH",
+  "OBS_US",
+  "OBS_IR",
+  "MAN",
+  "AUTO",
+  "2WD1M",
+  "ESTOP",
+  "SPD0",
+  "SERVO90",
+  "REQ_STATE",
+  "S",
+  // A-27: router-registry commands are SYSTEM commands — they can switch the
+  // car's network but never drive; reaching the car over WHATEVER link is
+  // live (WS for wireless cars, BT for the hand-held remote path) rides the
+  // car's single system-command hook (W-14/F-21).
+  "ROUTERS",
+]);
+import { deviceMemory } from "./types";
+
+import type { CarTelemetry } from "../../services/carProtocol";
+import { DEFAULT_WS_URL, OWN_AP_NAMES } from "../../services/carProtocol";
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
+
+import { findCarOnNetwork, subnetCandidates } from "./connection/discovery";
+import { formatPhoneNetwork } from "./connection/phoneNetwork";
+import type { SensorData } from "./types";
+
+type Route = RouteProp<RootStackParamList, "Tools">;
+
+/**
+ * U-69 (2026-10-02): the outcome of a connect attempt.
+ *
+ * `handleConnect` and `handleWifiConnect` have always stored their failure in
+ * the hub's `error` state and returned NORMALLY. That was survivable only while
+ * `error` had a renderer — `ConnectionBanner`. U-68 replaced the banner with the
+ * rebuilt ConnectionSection, and with no surface and no return value a FAILED
+ * connect was indistinguishable from a successful one: the app announced
+ * "Connected to <car>" and nothing was connected. The owner's report — *"the
+ * bluetooth is not build in the app and i am not able to connect the device to
+ * the app"* — is exactly that bug. It was never a missing permission or a
+ * missing native module.
+ *
+ * A fake success is worse than no success: it sends the tester hunting for a
+ * link that does not exist (F-61/F-62). So a connect now reports what happened
+ * and the UI is obliged to show it. Adding a return value is backwards
+ * compatible — callers that ignore it are unaffected.
+ */
+export type ConnectOutcome =
+  { ok: true; message: string } | { ok: false; reason: string };
+
+// ---- Phone-network watcher (U-80b, owner report 2026-10-09) -------
+// The only signal the app can observe when the car is switched to another
+// router FROM THE CAR'S OWN WEBPAGE is the phone landing on a new network
+// (an app-issued ROUTERS;USE is the one that surfaces routerSwitchNotice; a
+// web-page switch is invisible to the hub). Whenever the phone moves onto a
+// new Wi-Fi network while no car link is up, look for the car on it
+// automatically instead of waiting for a re-entry + a tap.
+//
+// Shared, not per-instance: the Control Panel and the Remote window each run
+// a hub, and one phone has one network — so one sweep budget keeps two open
+// Auto-reconnect on network change has been removed per U-120 Phase C.
+// The phone's network is observed for display purposes only; no automatic
+// re-connection occurs. The user must explicitly tap Connect to re-establish a link.}
+
+/** A stable key for "which network is this phone on right now". */
+function phoneNetworkKey(state: NetInfoState): string {
+  if (state.type !== "wifi" || state.isConnected !== true) {
+    return state.type ?? "none";
+  }
+  const details = state.details as unknown as
+    Record<string, unknown> | undefined;
+  const ssid =
+    typeof details?.["ssid"] === "string" ? details["ssid"].trim() : "";
+  if (ssid) return `wifi:${ssid}`;
+  const ip =
+    typeof details?.["ipAddress"] === "string"
+      ? details["ipAddress"].trim()
+      : "";
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\./.exec(ip);
+  if (m) return `wifi:${m[1]}.${m[2]}.${m[3]}`;
+  return ip ? `wifi:${ip}` : "wifi:unknown";
+}
+
+/**
+ * U-108 Phase 4 (owner 2026-10-13): the SSID the PHONE is on right now, so the
+ * app always knows which network it sits on (safe switching). `null` when the
+ * phone is not on Wi-Fi.
+ */
+function phoneSsidOf(state: NetInfoState): string | null {
+  if (state.type !== "wifi" || state.isConnected !== true) return null;
+  const details = state.details as unknown as
+    Record<string, unknown> | undefined;
+  const ssid =
+    typeof details?.["ssid"] === "string" ? details["ssid"].trim() : "";
+  return ssid || null;
+}
+
+export function useControlHub(routeCategory?: string) {
+  // The `transports/` LinkManager registry is NOT wired here: the live
+  // connection UI is the `connection/methods.ts` picker, and the hub's own
+  // `sendCommand` fan-out (below) is the ONE wire path. Nothing in production
+  // calls linkManager.adopt()/activate()/loadSelection(); registering the
+  // transports only to read a never-set `getActive()` was dead wiring, so it
+  // is gone. The library and its tests stay as the documented roadmap registry.
+  const route = useRoute<Route>();
+  const resolvedCategory = routeCategory ?? route.params?.category;
+
+  // ---- Connection state (SPP primary, WiFi secondary).
+  // Initialised from the current sppService snapshot so a second consumer
+  // (e.g. the RemoteControl window opened while ToolsScreen is already
+  // connected) starts out showing an existing live link instead of "no
+  // device", and keeps working when nothing is linked (simulation). ----
+  const [sppDevices, setSppDevices] = useState<SppDevice[]>([]);
+  const [connected, setConnected] = useState(
+    sppService.isConnected || bleService.isConnected || wifiService.isConnected,
+  );
+  // U-113 P2 (issue 3): `connected` is the SHARED "some link is up" flag — a
+  // Wi-Fi connect sets it too. The Remote screen's Bluetooth chip must show
+  // only while a BT transport is REALLY linked, so BT truth gets its own
+  // state, written by the SPP/BLE handlers (each one consults the other BT
+  // transport before clearing — SPP dropping must not hide a live BLE link
+  // and vice versa). Wi-Fi truth already has its own flag (`wifiConnected`).
+  const [btLinked, setBtLinked] = useState(
+    sppService.isConnected || bleService.isConnected,
+  );
+  // F-34: read the LIVE singles at mount, not just sppService — a window
+  // opened while the Control Panel already holds a Wi-Fi/BLE link used to show
+  // "no device" (no status event ever replays), so the deck rendered dim even
+  // though traffic flowed.
+  const [deviceName, setDeviceName] = useState(
+    sppService.deviceName ?? bleService.deviceName ?? "",
+  );
+  // The connection method this device chose, board-unique and surviving the
+  // disconnect — the method a connect (BT or Wi-Fi) is raised through, which
+  // is also the radio a command is dialled over when the active mode lists
+  // BOTH transports. Owned by the device: a disconnected connect never
+  // changes it.
+  const [connMethod, setConnMethodState] = useState<"bluetooth" | "wifi">(
+    "bluetooth",
+  );
+  // The connection method the Wi-Fi flow was first raised in — captured when
+  // `handleWifiConnect` is called, before `connected` flips or `sppConnected`
+  // changes. The method the second link was raised in is the one the car
+  // remembers, so the UI keeps asking for the STALE radio while the first one
+  // is up. Set once per call, before anything else moves, so it is never
+  // stale when `handleWifiConnect` runs.
+  const [wirelessMethod, setWirelessMethod] = useState<"bluetooth" | "wifi">(
+    "wifi",
+  );
+  const [scanning, setScanning] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [linkVerified, setLinkVerified] = useState(wifiService.linkVerified);
+  const [connectingAddress, setConnectingAddress] = useState<string | null>(
+    null,
+  );
+  const [wifiConnected, setWifiConnected] = useState(wifiService.isConnected);
+  // U-108 Phase 4: the SSID the PHONE is joined to (null = not on Wi-Fi), so the
+  // deck can always say which network it sits on before a switch.
+  const [phoneSsid, setPhoneSsid] = useState<string | null>(null);
+  // U-118: the human label for the phone's OWN network (pure formatter in
+  // ./connection/phoneNetwork), refreshed on every NetInfo event below and
+  // rendered by the Connectivity panel — the fact the owner asked for
+  // ("the app is not aware about its own connected network").
+  const [phoneNetworkLabel, setPhoneNetworkLabel] = useState<string | null>(
+    null,
+  );
+  // U-105 (1.3.5, owner 2026-10-13): the car's THREE persisted transport
+  // toggles. `WIFICFG;WIFI;ON|OFF` (NVS `botcfg/t_wifi`), `WIFICFG;BT;ON|OFF`
+  // (NVS `botcfg/t_bt`) and `WIFICFG;AUTOJOIN;ON|OFF` (NVS
+  // `botcfg/boot_autojoin`) replaced the removed parallel-links / power-save
+  // pair (`WIFICFG;PARALLEL` / `WIFICFG;APSAVE` and their `ap_psave` /
+  // `allow_parallel` NVS keys are GONE). `null` = not yet read from the car.
+  // Wi-Fi and Bluetooth default ON and can never both be OFF — the car clamps
+  // the both-off request, and the UI disables the last live toggle. Both
+  // transports stay up SIMULTANEOUSLY when enabled (no one-active-link
+  // teardown anywhere).
+  const [wifiEnabled, setWifiEnabled] = useState<boolean | null>(null);
+  // U-117 (2026-10-20): HONEST NAMING. This state used to be called `pageOff`
+  // while holding the page-ON value (every writer stored `pageOn`, every reader
+  // compared it as ON) — an inverted name that invited exactly the bug class it
+  // was misnamed to prevent. It is now `pageOn` end to end: true = the car is
+  // serving its page. The persisted key follows it (`pageOn` in DevicePrefs);
+  // the old `pageOff` key was written but NEVER read by any restore path, so no
+  // migration is needed — a stale row is simply ignored.
+  const [pageOn, setPageOnState] = useState<boolean | null>(null);
+  const [btEnabled, setBtEnabled] = useState<boolean | null>(null);
+  const [bootAutojoin, setBootAutojoin] = useState<boolean | null>(null);
+  // P5 (2026-10-17, firmware 1.3.13): the car's LINK-CAPACITY verdict, as the
+  // car last said it. `null` = the car has not said (pre-1.3.13 firmware).
+  // This is a LIVE fact, not a stored preference — it mirrors the car's latched
+  // admission verdict (`;LINKCAP=` / `"link_cap"`), so it is adopted from the
+  // telemetry stream and never persisted: the car re-broadcasts it on every
+  // STATE line, and the F-88 rule lives at the point of use, not here.
+  const [linkCap, setLinkCap] = useState<boolean | null>(null);
+  // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
+  // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
+  // user-editable and the remembered per-device URL wins when present.
+  const [wifiUrl, setWifiUrl] = useState(DEFAULT_WS_URL);
+  // v1.4.0 provisioning: the WiFi network the CAR should join (its own AP
+  // broadcast id + IP ride the car's status JSON for display).
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [wifiProvisioning, setWifiProvisioning] = useState(false);
+  // A-27 (device-round-5): saved-router names mirror — from the wireless
+  // car's `networks` JSON (every WS status broadcast), optimistic edits, and
+  // the per-device savedRouters prefs (restored before the car is linked).
+  // The car's NVS registry stays the source of truth; passwords never sync.
+  const [carNetworks, setCarNetworks] = useState<string[]>([]);
+  // Broadcast id of the car's AP fallback + its configured SSID (car truth,
+  // from the status JSON `ap` / `ssid` fields). Shown in the Wi-Fi panel.
+  const [carApName, setCarApName] = useState<string | null>(null);
+  const [carSsid, setCarSsid] = useState<string | null>(null);
+  // A-7 legacy car-truth map: token -> stub flag, fed by CAP=STUB on
+  // the car's STATE lines and `stub` in its WS JSON (both describe the
+  // car's CURRENT mode â€” the map fills as the car visits modes, and stays
+  // for v1.4.0 cars that don't broadcast the full CAPS table). Tokens
+  // absent from the map fall back to the fleet default (modeAvailStatus in
+  // carProtocol.ts).
+  const [carStubMap, setCarStubMap] = useState<Record<string, boolean>>({});
+  // R-10: full per-token availability table from the car's CAPS broadcast
+  // (`caps` on STATE-style lines / WS JSON). Authoritative 3-state truth
+  // (LIVE / WIP / CS) for the mode badges; supersedes the per-current-mode
+  // stub flag for cars that announce the whole table (v1.5.0 fleet).
+  const [carAvailMap, setCarAvailMap] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(
+    null,
+  );
+  const [connectionMsgType, setConnectionMsgType] = useState<
+    "success" | "error" | null
+  >(null);
+  const [disconnectingLink, setDisconnectingLink] = useState<
+    "bluetooth" | "wifi" | null
+  >(null);
+  const [sppStatus, setSppStatus] = useState<
+    "idle" | "connecting" | "connected" | "disconnected" | "error"
+  >(
+    sppService.getConnectionInfo().status === "connected"
+      ? "connected"
+      : "idle",
+  );
+  const [sppStatusMsg, setSppStatusMsg] = useState<string | null>(
+    sppService.getConnectionInfo().status === "connected" ? "Connected" : null,
+  );
+  // U-124 (owner item ⑧): the connection method this device chose, by the
+  // DEVICE, not the MODE. `connMethod` survives the disconnect so the next
+  // connect to the same device re-dials over the same radio; `wirelessMethod`
+  // is the stale copy the old sendCommand read and therefore the one the car
+  // was left on when Bluetooth went up. Both are replaced below.
+  // U-120 Phase C (owner item 8): "reconnecting should not be automatic —
+  // it should prompt the reconnect dialog box with proper method and only
+  // reconnect if sayed yes." No transport reconnects on its own anymore
+  // (the Wi-Fi quiet re-dial and the SPP silent backoff are both gone).
+  // An unexpected drop raises ONE dialog: `reconnectDue` gates it,
+  // `reconnectMethod` names what dropped (title/body + the Reconnect route).
+  const [reconnectDue, setReconnectDue] = useState(false);
+  const [reconnectMethod, setReconnectMethod] =
+    useState<LinkPromptMethod>("Bluetooth");
+  // U-121 Phase D (owner 2026-10-23): the app KNOWS when the car stops
+  // answering. A live transport says nothing about a live car — the owner's
+  // freeze report (BT on, Wi-Fi drops, heap collapses to ~15 KB, the car
+  // locks up while the app still shows a link). `carSilent` is the pure
+  // `isCarSilent` rule fed by two facts: the last car frame (stamped at the
+  // top of applyTelemetry, over EITHER link) and the link-up instant,
+  // evaluated on a bounded tick while a link is up.
+  const lastCarFrameRef = useRef<number | null>(null);
+  const linkUpAtRef = useRef<number | null>(null);
+  const [carSilent, setCarSilent] = useState(false);
+  // U-108 Phase 4 (owner 2026-10-13): a car RESTART detected from the boot
+  // counter. Carries the reason + crash count on the next connect so the app can
+  // prompt Reconnect / Leave / Cancel (previously only the SPP backoff banner
+  // existed, and only after the retries were exhausted).
+  const [carRestartNotice, setCarRestartNotice] = useState<{
+    prevBoot: number | null;
+    boot: number;
+    crashCount: number | null;
+    resetReason: string | null;
+  } | null>(null);
+
+  // ---- Active mode + state (mirrors ESP remote) ----
+  // speed starts at the ESP remote's default speedValue = 170.
+  const [activeCategory, setActiveCategory] = useState(
+    resolvedCategory &&
+      PROJECT_CATEGORIES.some((c) => c.slug === resolvedCategory)
+      ? resolvedCategory
+      : "robocar",
+  );
+
+  const [activeMode, setActiveMode] = useState<CarMode>(LOCAL_CAR_MODES[0]);
+  const [speed, setSpeed] = useState(170);
+  const [servo, setServo] = useState(90);
+  // R-20: steerLimit = the steering travel LIMIT (max |servo − 90|, 10..90).
+  // Car truth rides STATE ;STEER=; edits send STEER<n> and the car echoes.
+  const [steerLimit, setSteerLimit] = useState(90);
+  const [trim, setTrim] = useState(0);
+  // R-19 (FIN-45): car-truth trip mirrors (STATE TRIP=/MSTEER=; telemetry-only,
+  // never persisted — the car owns them).
+  const [tripAvg, setTripAvg] = useState(0);
+  const [maxSteer, setMaxSteer] = useState(0);
+  // driveStatus = the remote's bottom-bar status line (ESP statusMessage):
+  // local action messages ("Speed:170", "Steer limit:90", "Mode:2WD1M")
+  // merged with whitelisted car statuses ("Forward", "EMERGENCY STOP").
+  const [driveStatus, setDriveStatus] = useState("Stop");
+  // driveDir = the dashboard BODY direction (ESP currentDir): mirrored from
+  // the car's own status (so driving the car by its own buttons updates the
+  // app) and from local input. The OLED body + HUD read this.
+  const [driveDir, setDriveDir] = useState<"F" | "B" | "L" | "R" | "S">("S");
+  // A-16 (device-round-2): guarded setters â€” the status/direction row only
+  // repaints on an ACTUAL change. Every writer in this hook routes through
+  // them, so steady drive (repeated "Forward"/"Stop" STATUS frames) no longer
+  // floods the 4WD4M status card (pairs with remote R-21 setStatusLocked).
+  const driveStatusRef = useRef(driveStatus);
+  driveStatusRef.current = driveStatus;
+  const driveDirRef = useRef(driveDir);
+  driveDirRef.current = driveDir;
+  // Speed mirror (owner round 2026-09-29): fresh value for the telemetry
+  // pipeline so its change-guard reads the CURRENT speed, not a stale closure.
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  const setDriveStatusOnce = useCallback((s: string) => {
+    if (driveStatusRef.current === s) return;
+    driveStatusRef.current = s;
+    setDriveStatus(s);
+  }, []);
+  const setDriveDirOnce = useCallback((d: "F" | "B" | "L" | "R" | "S") => {
+    if (driveDirRef.current === d) return;
+    driveDirRef.current = d;
+    setDriveDir(d);
+  }, []);
+  const [telemetry, setTelemetry] = useState<CarTelemetry>({});
+  // U-97 (bluetooth lag): coalesce incoming telemetry into a bounded flush so a
+  // fast car broadcast (or two live links at once) cannot re-render the panel
+  // once per frame. The buffer holds the latest values; the timer flushes them.
+  const telemetryBufferRef = useRef<CarTelemetry | null>(null);
+  const telemetryFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  // NAV state (ESP INPUT_NAV parity): while true the pads/joysticks navigate
+  // the top-bar fields and NOTHING drives; the hub also stops mirroring the
+  // car's speed echo so an in-progress edit never snaps back (state.cpp:
+  // "Skip the mirror during NAV editing").
+  const [navActive, setNavState] = useState(false);
+  const navActiveRef = useRef(false);
+  const setNavActive = useCallback((v: boolean) => {
+    navActiveRef.current = v;
+    setNavState(v);
+  }, []);
+  // Which top-bar field NAV is editing right now.
+  const [navField, setNavField] = useState<"mode" | "speed" | "steer" | "none">(
+    "none",
+  );
+  // NAV mode preview (ESP previewModeIndex): the browsed-to mode shown
+  // before Select confirms.
+  const [previewMode, setPreviewMode] = useState<CarMode | null>(null);
+
+  // ---- PID state (self-balancing) ----
+  const [pidKp, setPidKp] = useState(12.0);
+  const [pidKi, setPidKi] = useState(3.0);
+  const [pidKd, setPidKd] = useState(1.0);
+  const [pidOut, setPidOut] = useState(0);
+  const [pidOff, setPidOff] = useState(0);
+
+  // ---- Drone controls ----
+  const [gimbalPan, setGimbalPan] = useState(90);
+  const [gimbalTilt, setGimbalTilt] = useState(90);
+  const [targetAltitude, setTargetAltitude] = useState(0);
+
+  // ---- Sensor data for non-robocar categories ----
+  // The setter is intentionally NOT bound: nothing in the app writes sensor
+  // data (the 4WD4M car reports no sensor channel), so this value has only
+  // ever been its zero-init. SensorGrid already documents that. Binding the
+  // setter anyway made this look like a live input.
+  const [sensorData] = useState<SensorData>({
+    temperature: 0,
+    humidity: 0,
+    soilMoisture: 0,
+    lightLevel: 0,
+    airQuality: 0,
+    distance: 0,
+  });
+
+  // ---- Control mode toggle ----
+  // P7 / issue 8: renamed from setUseJoystick — the PUBLIC setter returned
+  // below is the persisting wrapper defined next to persistPrefs.
+  const [useJoystick, setUseJoystickState] = useState(false);
+
+  // ---- ESP32-remote safety limits ----
+  const safetyLimits = DEFAULT_SAFETY_LIMITS;
+
+  // ---- Relays for non-robocar categories ----
+  const [relays, setRelays] = useState<Record<number, boolean>>({});
+
+  // Mode from car (mode sync)
+  const [carModeId, setCarModeId] = useState<string | null>(null);
+  const carModeIdRef = useRef<string | null>(null);
+  // Connections-Hub: the board-unique id from firmware (`<ID=last6hex>` /
+  // JSON `id`). STABLE profile identity — beats the BT MAC / WiFi identity
+  // in the memory key, so a car keeps one profile across renames and links.
+  const carFwIdRef = useRef<string | null>(null);
+  // The app preference mirrors the car's persisted boot AUTOJOIN setting;
+  // when enabled it also permits the app's existing smart-link behavior.
+  const [autoJoinRouter, setAutoJoinRouterState] = useState<boolean>(false);
+  const autoJoinRouterRef = useRef(autoJoinRouter);
+  autoJoinRouterRef.current = autoJoinRouter;
+  // One write per join guard for the wifi-history recorder.
+  const wifiJoinKeyRef = useRef<string>("");
+  // Connections-Hub (smart-link): the car-side scan result (ROUTERS;SCAN),
+  // carried as telemetry.scan. Strength-aware auto-join reads it.
+  const [carScan, setCarScan] = useState<ScanNetwork[] | null>(null);
+  // U-74: the last router lease the car reported (see DevicePrefs.lastRouterIp).
+  const [lastRouterIp, setLastRouterIp] = useState<string | null>(null);
+  // P8 (owner item E / F-91): the user's own "Car network" answer for THIS
+  // car — persisted per profile like every other pref, probed FIRST by the
+  // discovery plan. The state is local; the guarded writer below persists it.
+  const [carNetworkHint, setCarNetworkHintState] = useState<string | null>(
+    null,
+  );
+  const carNetworkHintRef = useRef<string | null>(null);
+  carNetworkHintRef.current = carNetworkHint;
+  /** P8: the ONLY writer — a change-guarded, profile-persisting save (a user
+      edit reaches the profile at once, P7/issue 8's rule), not a raw setter. */
+  const setCarNetworkHint = (value: string | null) => {
+    const next = value === null ? null : value.trim() || null;
+    if (next === carNetworkHintRef.current) return;
+    setCarNetworkHintState(next);
+    persistPrefsRef.current?.({ carNetworkHint: next });
+  };
+  // U-121 B2 (owner 2026-10-24): the SSID half of the same "Car network"
+  // card — THE WI-FI NETWORK THE CAR IS AT. Same shape as the address half
+  // above: local state, change-guarded, profile-persisting single writer.
+  // Auto-filled from car truth in the card; this is the user's override and
+  // the app's fallback whenever telemetry.ssid is not there to read.
+  const [carSsidAnswer, setCarSsidAnswerState] = useState<string | null>(null);
+  const carSsidAnswerRef = useRef<string | null>(null);
+  carSsidAnswerRef.current = carSsidAnswer;
+  const setCarSsidAnswer = (value: string | null) => {
+    const next = value === null ? null : value.trim() || null;
+    if (next === carSsidAnswerRef.current) return;
+    setCarSsidAnswerState(next);
+    persistPrefsRef.current?.({ carSsidAnswer: next });
+  };
+  // Live mirror for the phone-network watcher (avoids a stale closure).
+  const lastRouterIpRef = useRef<string | null>(null);
+  lastRouterIpRef.current = lastRouterIp;
+  // U-80: "the car switched to <ssid> - join it on this phone" prompt. Set the
+  // moment the car confirms a router switch (ROUTERS;USED) on ANY transport;
+  // auto-expires; dismissed by the renderer.
+  const [routerSwitchNotice, setRouterSwitchNoticeState] = useState<
+    string | null
+  >(null);
+  const routerSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const dismissRouterSwitchNotice = useCallback(() => {
+    if (routerSwitchTimerRef.current) {
+      clearTimeout(routerSwitchTimerRef.current);
+      routerSwitchTimerRef.current = null;
+    }
+    setRouterSwitchNoticeState(null);
+  }, []);
+
+  const setRouterSwitchNotice = useCallback((ssid: string) => {
+    setRouterSwitchNoticeState(ssid);
+    if (routerSwitchTimerRef.current) {
+      clearTimeout(routerSwitchTimerRef.current);
+    }
+    // The user needs a few minutes to walk the phone to the new network; the
+    // prompt must not linger forever after they have (or dismissed) it.
+    routerSwitchTimerRef.current = setTimeout(
+      () => setRouterSwitchNoticeState(null),
+      ROUTER_SWITCH_NOTICE_MS,
+    );
+  }, []);
+  /**
+   * D2 (U-68): how long a router request waits for the car's answer before it
+   * is reported as unanswered. The car answers inside one STATE broadcast
+   * (1 s) or the 2 s REQ_STATE poll, so this is generous — long enough not to
+   * flap, short enough that a silent car does not leave the UI spinning.
+   */
+  const ROUTER_ACK_TIMEOUT_MS = 6000;
+
+  /**
+   * U-69 (2026-10-02): the outcome of a connect attempt.
+   *
+   * `handleConnect` and `handleWifiConnect` have always stored their failure in
+   * the hub's `error` state and returned normally. That was survivable only
+   * while `error` had a renderer — ConnectionBanner. U-68 replaced the banner
+   * with the rebuilt ConnectionSection, and with no surface and no return value
+   * a FAILED connect looked exactly like a successful one: the app announced
+   * "Connected to <car>" and nothing was connected. The owner's report — *"the
+   * bluetooth is not build in the app and i am not able to connect the device to
+   * the app"* — is that bug.
+   *
+   * A fake success is worse than no success: it sends the tester hunting for a
+   * link that does not exist. So a connect now reports what happened, and the
+   * UI is obliged to show it (F-61, F-62).
+   *
+   * Adding a return value is backwards compatible — callers that ignore it are
+   * unaffected.
+   */
+
+  // A-37: user mode-commit grace (ESP remote R-33 parity) — remember the token
+  // the USER chose plus the car-truth mode at commit time so the stale in-flight
+  // echo (still the pre-commit mode) cannot undo the optimistic pick (that was
+  // the dropdown flicker). Any CHANGED echo is car truth and adopts + clears.
+  const MODE_CHANGE_GRACE_MS = 2500;
+  const modeCommitRef = useRef<{
+    token: string;
+    stale: string | null;
+    at: number;
+  } | null>(null);
+
+  // U-111: the same optimistic-commit protection for the three car transport
+  // toggles (Wi-Fi / Bluetooth / boot auto-join). A user flip is remembered
+  // briefly so the car's echo of the PRE-command frame cannot undo it; a
+  // CHANGED echo is car truth and adopts.
+  const TOGGLE_CHANGE_GRACE_MS = 2500;
+  const toggleCommitRef = useRef<{
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOn";
+    value: boolean;
+    at: number;
+  } | null>(null);
+  // U-111: live mirror of those three toggles. The telemetry-adopt effect has
+  // empty deps, so it reads the current values here to persist ONLY on a real
+  // change - never on the steady 1 Hz echo.
+  const transportToggleRef = useRef<{
+    wifiEnabled: boolean | null;
+    btEnabled: boolean | null;
+    bootAutojoin: boolean | null;
+    pageOn: boolean | null;
+  }>({ wifiEnabled: null, btEnabled: null, bootAutojoin: null, pageOn: null });
+  transportToggleRef.current = {
+    wifiEnabled,
+    btEnabled,
+    bootAutojoin,
+    // U-117 fix: this mirror used to be reset to `pageOff: null` on EVERY
+    // render, so the PAGE adopt's change-guard compared against null forever
+    // and every PAGE reply re-persisted. It now mirrors the live state like
+    // its three siblings.
+    pageOn,
+  };
+  // P7 / issue 8: the optimistic-commit grace as a NAMED predicate. It used
+  // to live as an inline closure inside the telemetry-adopt block, which is
+  // why the WIFICFG REPLY handler (`WIFICFG;WIFI|BT|AUTOJOIN;ON|OFF` answering
+  // a query or a set) adopted its value WITHOUT the grace — a reply that was
+  // in flight when the user flipped a toggle carried the PRE-flip state,
+  // rolled the panel back, and (worse) PERSISTED the pre-flip value into the
+  // per-car profile, so the wrong truth outlived the app restart. Every
+  // adoption path — STATE broadcast and reply alike — runs this one rule.
+  // A plain function on purpose: it only reads refs, so any render's
+  // instance is current and no effect has to depend on its identity.
+  const toggleChangeProtected = (
+    which: "wifiEnabled" | "btEnabled" | "bootAutojoin" | "pageOn",
+    incoming: boolean,
+  ) => {
+    const commit = toggleCommitRef.current;
+    if (commit && Date.now() - commit.at > TOGGLE_CHANGE_GRACE_MS)
+      toggleCommitRef.current = null;
+    const pending = toggleCommitRef.current;
+    return !(pending?.which === which && pending.value !== incoming);
+  };
+  const toggleChangeProtectedRef = useRef(toggleChangeProtected);
+  toggleChangeProtectedRef.current = toggleChangeProtected;
+
+  // A-14/A-16: always-fresh mirrors for the connection/status setters so the
+  // writers can dedupe without stale closures and without re-running drives.
+  const connectedRef = useRef(connected);
+  connectedRef.current = connected;
+
+  // Joystick layout style id persisted per device.
+  const [joystickLayoutId, setJoystickLayoutId] = useState<string>("dual");
+
+  // Remote settings drawer (in-window, non-overflowing).
+  // This copy of the drawer state was removed as dead: it was never returned
+  // from this hook and never read. RemoteControlScreen has its OWN separate
+  // showSettings/setShowSettings pair, which IS live — the two were never
+  // connected, and keeping a second one here only made that look accidental.
+
+  const mountedRef = useRef(true);
+  const manualCloseRef = useRef(false);
+  const disconnectingRef = useRef(false);
+  const lastDriveCmdAtRef = useRef<Record<string, number>>({});
+  const connectionMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  // U-120 Phase C: the SPP auto-reconnect machinery (attempts / re-arm
+  // guard / backoff timer) is GONE with the silent retries themselves.
+  // FIN-44: last status message seen by the dedupe gate (see onStatus below).
+  //
+  // U-125 (4WD4M freeze/reset loop, owner 2026-11-08): the EXTRA reset-line
+  // fan-out that used to be sent on every unexpected link drop was removed
+  // alongside the auto-reconnect. It was a redundancy on top of the safe-stop
+  // teardown (SPD0 / SERVO90 / S / REQ_STATE) already sent by `disconnect()`.
+  // Sending a second FACTORY;RESET or ESTOP storm across a link that is already
+  // dropping contributed to the car's freeze-then-soft-reset behaviour (the car
+  // accepted the duplicate safety lines while its heap was already collapsed).
+  // The safe-stop lines are enough; nothing extra is sent on drop.
+  const sppStatusMsgRef = useRef<string | null>(null);
+  const sppWasConnectedRef = useRef(sppService.isConnected);
+  const sppLastAddressRef = useRef<string | null>(
+    sppService.getConnectionInfo().address,
+  );
+
+  /**
+   * U-125 (4WD4M freeze/reset loop, owner 2026-11-08): when a link drops
+   * unexpectedly, the only honest thing the app can do is name the drop and wait
+   * for the user to decide. Re-sending a storm of safety/reset lines across a
+   * link that is already dropping was a redundancy on top of the safe-stop
+   * teardown (SPD0 / SERVO90 / S / REQ_STATE) the teardown itself sends, and it
+   * fed the car's freeze-then-soft-reset behaviour when its heap was already
+   * collapsed. Nothing extra is sent on drop; the notice is the recovery point.
+   *
+   */
+
+  // W5: refs to track previous telemetry IP/SSID for network switch detection
+  const prevIpRef = useRef<string | undefined>(undefined);
+  const prevSsidRef = useRef<string | undefined>(undefined);
+  // Car-mode catalogue: DB-first with bundled fallback
+  const [carModes, setCarModes] = useState<CarMode[]>(LOCAL_CAR_MODES);
+
+  // Always-fresh mirrors for the telemetry pipeline (no stale closures).
+  const carModesRef = useRef(carModes);
+  carModesRef.current = carModes;
+  const activeModeRef = useRef(activeMode);
+  activeModeRef.current = activeMode;
+
+  useEffect(() => {
+    let active = true;
+    getCarModes()
+      .then((modes) => {
+        if (!active || modes.length === 0) return;
+        setCarModes(modes);
+        // Only set a default mode if the car hasn't already reported one via
+        // telemetry (carModeIdRef is set in applyTelemetry).  The car's
+        // STATE;MODE=... is the authoritative source â€” don't overwrite it.
+        if (!carModeIdRef.current) {
+          const target = modes.find((m) => m.id === "2wd1m") || modes[0];
+          setActiveMode(target);
+        }
+      })
+      .catch(() => {
+        /* keep bundled fallback */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const carFwId = carFwIdRef.current;
+  // Restore remembered device prefs when a device identity becomes available.
+  // WiFi-only links have no BT MAC, so the remembered-key falls back to the
+  // car's wifi identity (`wifi:<ssid|ap|url>`). BT links keep using the MAC.
+  // The firmware board id (`fw:<id>`) is preferred above both when present.
+  const wifiIdentity =
+    wifiConnected && wifiUrl.trim()
+      ? carSsid || carApName || wifiUrl.trim()
+      : null;
+  const legacyMemoryKey =
+    sppService.currentAddress ??
+    sppService.getConnectionInfo().address ??
+    (wifiIdentity ? `wifi:${wifiIdentity}` : null);
+  // Connections-Hub: prefer the firmware board id (`fw:<id>`) — stable + unique.
+  // The previous key is kept as `legacyMemoryKey` so a first link under the
+  // new key migrates the stored prefs instead of starting from factory.
+  const addressForMemory = carFwId ? `fw:${carFwId}` : legacyMemoryKey;
+  // Ref mirroring the live profile key so callbacks (smart-link) read through
+  // without re-creating.
+  const profileKeyRef = useRef<string | null>(null);
+  profileKeyRef.current = addressForMemory;
+  const profileKey = addressForMemory;
+  const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
+  // Live mirror for the phone-network watcher (avoids a stale closure).
+  const savedPrefsRef = useRef(savedPrefs);
+  savedPrefsRef.current = savedPrefs;
+  // Profiles-sync: last cloud mirror attempt for the current car profile
+  // ("synced" = pushed to the user's account; "offline" = kept local only;
+  // null = no attempt yet this session).
+  const [profileSync, setProfileSync] = useState<ProfileSyncState | null>(null);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!addressForMemory) {
+        setSavedPrefs(null);
+        // Round-6: no live link — still recall the last device's saved
+        // router names from the global spill so the Router panel isn't
+        // empty after a power cycle (the car's `networks` echo re-syncs
+        // to car truth the moment a link opens).
+        let active = true;
+        void AsyncStorage.getItem(LAST_DEVICE_KEY).then((raw) => {
+          if (!active || !raw) return;
+          try {
+            const last = JSON.parse(raw) as {
+              address?: string;
+              name?: string;
+              savedRouters?: string[];
+            };
+            if (last?.savedRouters?.length) {
+              setCarNetworks((cur) =>
+                cur.length > 0 ? cur : last.savedRouters!,
+              );
+            }
+            if (last?.name) setDeviceName((cur) => cur || last.name!);
+          } catch {
+            /* ignore corrupt spill */
+          }
+        });
+        return () => {
+          active = false;
+        };
+      }
+      let active = true;
+      void deviceMemory.read(addressForMemory).then(async (prefs) => {
+        if (!active) return;
+        // Connections-Hub (profiles): the first link under the STABLE
+        // `fw:<id>` key migrates the old key's prefs (formely BT MAC or
+        // `wifi:<ssid>`) so nothing stored under the old identity is lost.
+        let resolved = prefs;
+        if (
+          !resolved &&
+          legacyMemoryKey &&
+          legacyMemoryKey !== addressForMemory
+        ) {
+          const legacy = await deviceMemory.read(legacyMemoryKey);
+          if (legacy) {
+            resolved = legacy;
+            void deviceMemory.write(addressForMemory, legacy);
+          }
+        }
+        if (!active) return;
+        setSavedPrefs(resolved);
+        if (resolved) {
+          if (
+            resolved.modeId &&
+            carModes.some((m) => m.id === resolved.modeId)
+          ) {
+            setActiveMode(carModes.find((m) => m.id === resolved.modeId)!);
+          }
+          if (resolved.speed != null) setSpeed(resolved.speed);
+          if (resolved.servo != null) setServo(resolved.servo);
+          if (resolved.steerLimit != null) setSteerLimit(resolved.steerLimit);
+          if (resolved.trim != null) setTrim(resolved.trim);
+          if (resolved.useJoystick != null)
+            setUseJoystickState(resolved.useJoystick);
+          const rememberedRouterEnabled =
+            resolved.bootAutojoin ?? resolved.autoJoinRouter ?? false;
+          setAutoJoinRouterState(rememberedRouterEnabled);
+          // The firmware's setting is live car truth; wait for its STATE
+          // frame before deciding whether a restored app preference needs sync.
+          setBootAutojoin(null);
+          // U-105 (1.3.5): restore the per-car transport toggles (Wi-Fi /
+          // Bluetooth) when their profile is resolved, so the panel shows car truth before any link is brought up. `undefined`
+          // (older firmware / never persisted) stays "don't know", never OFF.
+          if (typeof resolved.wifiEnabled === "boolean")
+            setWifiEnabled(resolved.wifiEnabled);
+          if (typeof resolved.btEnabled === "boolean")
+            setBtEnabled(resolved.btEnabled);
+          // A-8: pre-fill the WiFi card with the last SSID sent to THIS car
+          // (never the password â€” that lives only in flight + the car's NVS).
+          if (resolved.lastWifiSsid)
+            setWifiSsid((cur) => cur || resolved.lastWifiSsid!);
+          // A-27: restore the per-device saved-router mirror so the WiFi &
+          // Router panel renders before the car links (names only). The
+          // car's next `networks` echo re-syncs it to car truth.
+          if (resolved.savedRouters && resolved.savedRouters.length > 0) {
+            setCarNetworks((cur) =>
+              cur.length > 0 ? cur : (resolved.savedRouters ?? []),
+            );
+          }
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }, [addressForMemory, legacyMemoryKey, carModes]),
+  );
+
+  // Profiles-sync (owner: "gets sync with the device as soon as everything
+  // gets connected"): once a stable profile key exists, pull THIS user's
+  // cloud car profiles and adopt this car's row when it is newer than what
+  // the phone holds (or the phone holds only factory defaults). Adopting
+  // restores mode/speed/steer/trim/joystick + saved routers + Wi-Fi history
+  // so the car comes up exactly as the user last saved it — on any phone.
+  // Push happens in persistPrefs; pull happens here (last-saved-wins both
+  // ways; nothing secret is in the row — names only, never passwords).
+  const cloudAdoptedRef = useRef<string | null>(null);
+  // Registry claim guard: one claim attempt per car per session. Without it
+  // every effect re-run (and every reconnect) would fire another RPC.
+  const claimedDeviceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!addressForMemory) return;
+    if (cloudAdoptedRef.current === addressForMemory) return;
+    cloudAdoptedRef.current = addressForMemory;
+    let active = true;
+
+    // Register the unit in the shared device registry as soon as a stable
+    // identity exists, so it appears in the user's garage (app Account tab
+    // and the website /tools garage) instead of only as a car_profiles row.
+    // Fire-and-forget: a failed claim must never block the drive UI, and the
+    // car is still fully usable with a car_profiles row alone.
+    //
+    // The model is deliberately NOT passed. `savedPrefs.modeId` is a MODE id
+    // ("obstacle-us"), not a MODEL id ("4wd4m"); the two only coincide for
+    // three of the nine. register_device validates its model argument against
+    // device_models and raises on an unknown one, so sending a mode id would
+    // abort the whole claim and the car would never reach the garage. The
+    // RPC treats null as "did not say" and leaves the column alone, so
+    // passing nothing is both correct and non-destructive.
+    if (claimedDeviceRef.current !== addressForMemory) {
+      claimedDeviceRef.current = addressForMemory;
+      void registerCurrentDevice(addressForMemory, null);
+    }
+
+    void (async () => {
+      const { rows, offline } = await fetchCarProfiles();
+      if (!active || offline) {
+        if (active && offline) setProfileSync({ state: "offline" });
+        return;
+      }
+      const row = rows.find(
+        (r: CarProfileCloudRecord) => r.profile_key === addressForMemory,
+      );
+      if (!row) {
+        // First time this car is known in the cloud — push what we have.
+        const local = await deviceMemory.read(addressForMemory);
+        if (local && !isFreshDefaultPrefs(local)) {
+          void saveCarProfile(local, addressForMemory).then((res) => {
+            setProfileSync(
+              res.ok
+                ? { state: "synced", at: Date.now() }
+                : { state: "offline" },
+            );
+          });
+        }
+        return;
+      }
+      const local = await deviceMemory.read(addressForMemory);
+      if (!isFreshDefaultPrefs(local) && local?.savedAt) {
+        const localTime = local.savedAt;
+        const cloudTime = Date.parse(row.updated_at || "") || 0;
+        if (localTime >= cloudTime) {
+          // The phone holds the newer save — push it instead of adopting.
+          void saveCarProfile(local, addressForMemory).then((res) => {
+            setProfileSync(
+              res.ok
+                ? { state: "synced", at: Date.now() }
+                : { state: "offline" },
+            );
+          });
+          return;
+        }
+      }
+      const base: Omit<DevicePrefs, "address"> = {
+        name: null,
+        modeId: null,
+        speed: 170,
+        servo: 90,
+        steerLimit: 90,
+        trim: 0,
+        useJoystick: false,
+        fullscreen: false,
+        joystickLayout: "dual",
+        lastWifiSsid: null,
+        lastRouterIp: null,
+        savedRouters: [],
+      };
+      const merged = mergeCloudProfile(row, local, base);
+      if (!merged.changed) return;
+      await deviceMemory.write(addressForMemory, merged.prefs);
+      if (!active) return;
+      setSavedPrefs(merged.prefs);
+      if (
+        merged.prefs.modeId &&
+        carModes.some((m) => m.id === merged.prefs.modeId)
+      ) {
+        setActiveMode(carModes.find((m) => m.id === merged.prefs.modeId)!);
+      }
+      if (merged.prefs.speed != null) setSpeed(merged.prefs.speed);
+      if (merged.prefs.servo != null) setServo(merged.prefs.servo);
+      if (merged.prefs.steerLimit != null)
+        setSteerLimit(merged.prefs.steerLimit);
+      if (merged.prefs.trim != null) setTrim(merged.prefs.trim);
+      if (merged.prefs.useJoystick != null)
+        setUseJoystickState(merged.prefs.useJoystick);
+      if (merged.prefs.joystickLayout)
+        setJoystickLayoutId(merged.prefs.joystickLayout);
+      const rememberedRouterEnabled =
+        merged.prefs.bootAutojoin ?? merged.prefs.autoJoinRouter ?? false;
+      setAutoJoinRouterState(rememberedRouterEnabled);
+      // P8: the user's "Car network" answer restores with the profile too —
+      // a profile that forgot it would demote the manual override to a
+      // once-per-session entry (F-91 says the override must PERSIST and win).
+      if (typeof merged.prefs.carNetworkHint === "string")
+        setCarNetworkHintState(merged.prefs.carNetworkHint || null);
+      else if (merged.prefs.carNetworkHint === null)
+        setCarNetworkHintState(null);
+      // U-121 B2: the SSID answer restores with the profile too — the card
+      // must show what the owner last said the moment the profile loads.
+      if (typeof merged.prefs.carSsidAnswer === "string")
+        setCarSsidAnswerState(merged.prefs.carSsidAnswer || null);
+      else if (merged.prefs.carSsidAnswer === null) setCarSsidAnswerState(null);
+      // U-105 (1.3.5): an adopted (cloud/newer) profile carries the transport
+      // toggle mirror too; the firmware's boot-auto-join fact is refreshed
+      // from the car after the link comes up.
+      if (typeof merged.prefs.wifiEnabled === "boolean")
+        setWifiEnabled(merged.prefs.wifiEnabled);
+      if (typeof merged.prefs.btEnabled === "boolean")
+        setBtEnabled(merged.prefs.btEnabled);
+      setBootAutojoin(null);
+      // U-124 (owner item ⑧): restore the connection method the user chose on
+      // this device — the radio a connect (BT or Wi-Fi) is raised through. The
+      // default (bluetooth) is the right pick for a first connect on this
+      // device; a remembered pick survives a power cycle.
+      if (typeof merged.prefs.connMethod === "string")
+        setConnMethodState(
+          merged.prefs.connMethod === "bluetooth" ? "bluetooth" : "wifi",
+        );
+      if (typeof merged.prefs.wirelessMethod === "string")
+        setWirelessMethod(
+          merged.prefs.wirelessMethod === "bluetooth" ? "bluetooth" : "wifi",
+        );
+      if (merged.prefs.savedRouters && merged.prefs.savedRouters.length > 0) {
+        setCarNetworks((cur) =>
+          cur.length > 0 ? cur : (merged.prefs.savedRouters ?? []),
+        );
+      }
+      // R4-5 (owner: "after being connected, the car shares its info to the
+      // app, then the database — and back"): the adopted profile restores
+      // the last-used router too — the smart-link recency seed AND the
+      // home-router address field, so the next STA connect is one tap.
+      if (merged.prefs.lastWifiSsid) {
+        setWifiSsid((cur) => cur || merged.prefs.lastWifiSsid!);
+      }
+      if (merged.prefs.lastWifiUrl) {
+        setWifiUrl((cur) =>
+          cur && cur !== DEFAULT_WS_URL ? cur : merged.prefs.lastWifiUrl!,
+        );
+      }
+      setProfileSync({ state: "adopted", at: Date.now() });
+    })();
+    return () => {
+      active = false;
+    };
+  }, [addressForMemory, carModes]);
+
+  // Persist device prefs whenever the user changes a remembered value.
+  // Round-6 (bug): read the CURRENT saved-router names from a live ref, not
+  // from the `savedPrefs` closure — the old closure captured a stale copy of
+  // `savedRouters: []` at hook-scope, so any later speed/steer persist wiped
+  // the saved-router mirror back to empty (networks vanished after power
+  // cycle). The ref tracks the live `carNetworks` (car echo + optimistic
+  // adds/deletes), so every patch ships the latest names forward.
+  const savedNetworksRef = useRef<string[]>([]);
+  useEffect(() => {
+    savedNetworksRef.current = carNetworks;
+  }, [carNetworks]);
+  const persistPrefs = React.useCallback(
+    (patch: Partial<DevicePrefs>) => {
+      if (!addressForMemory) return;
+      const next: DevicePrefs = {
+        address: addressForMemory,
+        name: sppService.deviceName ?? deviceName,
+        modeId: activeMode.id,
+        speed,
+        servo,
+        steerLimit,
+        trim,
+        useJoystick,
+        joystickLayout: joystickLayoutId,
+        lastWifiSsid: savedPrefs?.lastWifiSsid ?? null,
+        // U-74: the last router lease the car reported. A HINT for the one-tap
+        // 'connect to the car on your router' after the hotspot link drops - never
+        // an authority, and never the hotspot gateway.
+        lastRouterIp: savedPrefs?.lastRouterIp ?? null,
+        // A-27 / round-6: ship the LIVE saved-router mirror with every patch
+        // (never a stale-captured base), so router additions survive later
+        // speed/steer persists AND a device power cycle.
+        savedRouters: savedNetworksRef.current.slice(),
+        // Connections-Hub (profiles): stable board id + every MAC this car
+        // has presented + the smart-link auto-join toggle.
+        uniqueId: carFwIdRef.current || null,
+        btIds: addBtId(
+          savedPrefs?.btIds ?? ([] as string[]),
+          sppService.currentAddress ??
+            sppService.getConnectionInfo().address ??
+            "",
+        ),
+        autoJoinRouter,
+        // U-124 (owner item ⑧): the connection method the user chose on this
+        // device — survives a disconnect and a power cycle, and is the radio a
+        // connect (BT or Wi-Fi) is raised through. A disconnected connect never
+        // changes it; a factory reset of the car never clears it (the pick is
+        // a device choice, not a car fact).
+        connMethod,
+        // The method the latest Wi-Fi flow was first raised in, captured
+        // inside handleWifiConnect before `connected` flips. The method the
+        // second link was raised in is the one the car remembers, so the UI
+        // keeps asking for the STALE radio while the first one is up. Set once
+        // per call, before anything else moves, so it is never stale when
+        // handleWifiConnect runs.
+        wirelessMethod,
+        // U-105 (1.3.5): carry the live transport toggles so a narrow patch
+        // (speed/mode/router) never wipes them.
+        wifiEnabled: wifiEnabled ?? undefined,
+        btEnabled: btEnabled ?? undefined,
+        bootAutojoin: bootAutojoin ?? undefined,
+        // Profiles-sync round: carry fields a narrow patch must NOT wipe
+        // (previously a speed/mode persist erased wifiHistory + fullscreen
+        // because the base record omitted them entirely).
+        wifiHistory: savedPrefs?.wifiHistory ?? [],
+        fullscreen: savedPrefs?.fullscreen ?? false,
+        // U-121 B2: the two "Car network" answers ride EVERY patch. This
+        // backend REPLACES the stored record (deviceMemory.write = one
+        // setItem), so a field missing from this base is not "kept", it is
+        // ERASED by the next unrelated save — wifiHistory/fullscreen above
+        // exist for exactly that reason, and the card's two answers now do
+        // too (an owner who typed their car's network would otherwise lose it
+        // the next time the speed changed).
+        carNetworkHint,
+        carSsidAnswer,
+        ...patch,
+        // Last-save stamp: feeds last-saved-wins cloud merging.
+        savedAt: Date.now(),
+      } as DevicePrefs;
+      void deviceMemory.write(addressForMemory, next);
+      setSavedPrefs(next);
+      // R4-7: register the key in the device-profile registry index so the
+      // User preferences hub can enumerate every device ever saved (the
+      // index is a best-effort spill; deviceMemory stays authoritative).
+      void rememberDeviceKey(addressForMemory);
+      // Profiles-sync: mirror the save to the user's cloud account so the
+      // same car restores its last-saved state on any device (fire-and-
+      // forget; local write already succeeded so this can never block UX).
+      void saveCarProfile(next, addressForMemory).then((res) => {
+        setProfileSync(
+          res.ok ? { state: "synced", at: Date.now() } : { state: "offline" },
+        );
+      });
+      // Round-6: spill the last-touched device globally so a cold start with
+      // no live link can still recall the saved-router names (see LAST_DEVICE_KEY).
+      const lastDevice = {
+        address: addressForMemory,
+        name: sppService.deviceName ?? deviceName,
+        savedRouters: next.savedRouters,
+      };
+      void AsyncStorage.setItem(
+        LAST_DEVICE_KEY,
+        JSON.stringify(lastDevice),
+      ).catch(() => {});
+    },
+    [
+      addressForMemory,
+      deviceName,
+      activeMode.id,
+      speed,
+      servo,
+      steerLimit,
+      trim,
+      useJoystick,
+      joystickLayoutId,
+      savedPrefs?.lastWifiSsid,
+      savedPrefs?.wifiHistory,
+      savedPrefs?.fullscreen,
+      savedPrefs?.lastRouterIp,
+      savedPrefs?.btIds,
+      autoJoinRouter,
+      wifiEnabled,
+      btEnabled,
+      bootAutojoin,
+      carNetworkHint,
+      carSsidAnswer,
+      connMethod,
+      wirelessMethod,
+    ],
+  );
+
+  // Ref mirror so NAV commit callbacks can persist without re-creating
+  // (and without stale captures) when called from deep in the input chain.
+  const persistPrefsRef = useRef(persistPrefs);
+  persistPrefsRef.current = persistPrefs;
+
+  const setConnMethod = useCallback((method: "bluetooth" | "wifi") => {
+    setConnMethodState(method);
+    persistPrefsRef.current?.({ connMethod: method });
+  }, []);
+
+  // P7 / issue 8: the Remote joystick preference persists through the
+  // coalescing profile writer. The remembered-router switch is wired to the
+  // car-backed AUTOJOIN setter below, which persists both the app preference
+  // and the firmware setting.
+  const setUseJoystick = (value: boolean) => {
+    setUseJoystickState(value);
+    persistPrefsRef.current?.({ useJoystick: value });
+  };
+  // Connections-Hub (profiles): record a Wi-Fi join into the per-car history
+  // (names only) once per join, and remember the last verified router URL.
+  // `telemetry.connected === true` is the STA-joined signal from firmware;
+  // the join-key guard keeps the steady 1s status frames from re-writing.
+  useEffect(() => {
+    const joined = telemetry.connected === true && linkVerified && !!carSsid;
+    const key = joined ? `${carSsid}:on` : "";
+    if (joined) {
+      if (wifiJoinKeyRef.current === key) return;
+      wifiJoinKeyRef.current = key;
+      persistPrefsRef.current?.({
+        wifiHistory: upsertWifiHistory(savedPrefs?.wifiHistory, carSsid!),
+        lastWifiUrl: wifiUrl || null,
+      });
+    } else {
+      wifiJoinKeyRef.current = "";
+    }
+  }, [telemetry.connected, carSsid, linkVerified, wifiUrl, savedPrefs]);
+
+  // Crash-report sync (owner 2026-10-08): on a live link, share the car's last
+  // stored restart record (reset_reason / boot_count / crash_count /
+  // last_crash_phase / last_crash_heap) with the fleet's
+  // `device_crash_reports` table so firmware faults can be tracked and fixed.
+  //
+  // One report per RESTART RECORD per session: the guard ref is keyed on the
+  // record itself, so the looping `/status` frames cannot re-report and a new
+  // boot or a new crash still gets through. The service queues offline and
+  // dedupes globally; this effect only decides WHEN a session snapshot exists.
+  const crashReportKeyRef = useRef<string | null>(null);
+  // U-R3: a link-up is the natural flush moment for the app log queue (same
+  // offline-first retry cadence as crash reports). Fire-and-forget, gated on
+  // the LIVE transition so it runs once per connection, not per telemetry frame.
+  useEffect(() => {
+    if (!(connected || wifiConnected)) return;
+    void flushAppLogs().catch(() => {});
+  }, [connected, wifiConnected]);
+  // U-110: a live link retires any "connection lost?" prompt.
+  // It can only be stale once the car is answering again — whether on the same
+  // transport that was retrying or on another one.
+  useEffect(() => {
+    // The link coming back is an event from the transports, not a render-time
+    // derivation: this clears the one "reconnect?" dialog that a drop raised.
+    // A derived value would have to keep the stale `true` in state and mask it
+    // at every read site, which is how the dialog leaked back in before.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external transport event
+    if (connected || wifiConnected) setReconnectDue(false);
+  }, [connected, wifiConnected]);
+  useEffect(() => {
+    const live = connected || wifiConnected;
+    if (!live) {
+      // A fresh link is a fresh session.
+      crashReportKeyRef.current = null;
+      return;
+    }
+    const boardId = telemetry.id ?? carFwIdRef.current ?? null;
+    // No restart record at all on old firmware: nothing honest to report.
+    const hasRecord =
+      telemetry.resetReason != null ||
+      telemetry.bootCount != null ||
+      telemetry.crashCount != null;
+    if (!hasRecord) return;
+    const key = [
+      boardId ?? "",
+      telemetry.bootCount ?? "",
+      telemetry.crashCount ?? "",
+      telemetry.resetReason ?? "",
+    ].join("|");
+    if (crashReportKeyRef.current === key) return;
+    crashReportKeyRef.current = key;
+    // U-97: also keep the latest restart record on the car's profile (local +
+    // cloud `car_profiles.settings`) so the diagnostics panel survives a power
+    // cycle and a second device sees the same history. The fleet push below is
+    // unchanged and still runs for both link methods.
+    persistPrefsRef.current?.({
+      diagnostics: {
+        resetReason: telemetry.resetReason ?? null,
+        bootCount: telemetry.bootCount ?? null,
+        crashCount: telemetry.crashCount ?? null,
+        lastCrashPhase: telemetry.lastCrashPhase ?? null,
+        lastCrashHeap: telemetry.lastCrashHeap ?? null,
+        at: new Date().toISOString(),
+      },
+    });
+    void syncCrashReport({
+      boardId,
+      // U-96i: the car's OWN reported version, not the catalog guess. Missing
+      // on pre-1.2.5 firmware → null → the row stores "", never a fabricated one.
+      fwVersion: telemetry.fwVersion ?? null,
+      connectionMethod: connected ? "bluetooth" : "wifi",
+      ssid: carSsid,
+      ip: telemetry.ip ?? null,
+      resetReason: telemetry.resetReason ?? null,
+      bootCount: telemetry.bootCount ?? null,
+      crashCount: telemetry.crashCount ?? null,
+      lastCrashPhase: telemetry.lastCrashPhase ?? null,
+      lastCrashHeap: telemetry.lastCrashHeap ?? null,
+      freeHeap: telemetry.freeHeap ?? null,
+      uptimeMs: telemetry.uptimeMs ?? null,
+      statusJson: {
+        mode: telemetry.mode ?? null,
+        // U-96i: this used to carry telemetry.id — the BOARD ID under a key
+        // named fw. Identity has its own column (board_id); fw is the version.
+        fw: telemetry.fwVersion ?? null,
+        free_heap: telemetry.freeHeap ?? null,
+      },
+    });
+  }, [
+    connected,
+    wifiConnected,
+    carSsid,
+    telemetry.id,
+    telemetry.resetReason,
+    telemetry.bootCount,
+    telemetry.crashCount,
+    telemetry.lastCrashPhase,
+    telemetry.lastCrashHeap,
+    telemetry.freeHeap,
+    telemetry.uptimeMs,
+    telemetry.ip,
+    telemetry.mode,
+    telemetry.fwVersion,
+  ]);
+
+  // U-108 Phase 4 (owner 2026-10-13): CAR RESTART detection from the boot
+  // counter. The car's boot counter only ever moves forward, so a count HIGHER
+  // than the one we last saw for this car means it rebooted. We seed the last
+  // seen value from the persisted per-car `diagnostics.bootCount` (survives an
+  // app restart), then compare live; the FIRST observation only seeds — it never
+  // raises a false prompt. Previously the only restart signal was the SPP
+  // backoff banner, and only after the retries were exhausted.
+  const lastBootSeenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      lastBootSeenRef.current == null &&
+      savedPrefs?.diagnostics?.bootCount != null
+    ) {
+      lastBootSeenRef.current = savedPrefs.diagnostics.bootCount;
+    }
+  }, [savedPrefs]);
+  useEffect(() => {
+    if (!(connected || wifiConnected)) return;
+    const boot = telemetry.bootCount;
+    if (typeof boot !== "number" || !Number.isFinite(boot)) return;
+    const prev = lastBootSeenRef.current;
+    lastBootSeenRef.current = boot;
+    if (prev == null || boot <= prev) return; // first observation / no restart
+    setCarRestartNotice({
+      prevBoot: prev,
+      boot,
+      crashCount: telemetry.crashCount ?? null,
+      resetReason: telemetry.resetReason ?? null,
+    });
+  }, [
+    connected,
+    wifiConnected,
+    telemetry.bootCount,
+    telemetry.crashCount,
+    telemetry.resetReason,
+  ]);
+
+  // Provisioning-reply handler mirror (defined below with useState deps).
+  const handleWifiProvisionReplyRef = useRef<((reply: string) => void) | null>(
+    null,
+  );
+  /**
+   * D2 (U-68): the router-answer consumer, reached from the telemetry path via
+   * a ref for the same reason `handleWifiProvisionReply` is — the telemetry
+   * callback is registered once and must not be re-subscribed when the
+   * consumer's identity changes.
+   */
+  const consumeRouterAnswerRef = useRef<((text: string) => boolean) | null>(
+    null,
+  );
+  // R-4 NACK handler mirror (defined below; applyTelemetry has empty deps).
+  const handleNackRef = useRef<((arg: string) => void) | null>(null);
+
+  // Set category from route params. This is React's own "adjust state when a
+  // prop changes" shape rather than an effect: an effect would render once with
+  // the stale category, then again with the right one, and the intermediate
+  // frame is what the tools grid would flash.
+  const [lastResolvedCategory, setLastResolvedCategory] = useState<
+    string | null | undefined
+  >(
+    // Sentinel: the first render has no previous param to compare against, so
+    // the initialiser on `activeCategory` (line ~421) is what seeds it.
+    "__initial__",
+  );
+  if (resolvedCategory !== lastResolvedCategory) {
+    setLastResolvedCategory(resolvedCategory);
+    if (
+      resolvedCategory &&
+      PROJECT_CATEGORIES.some((c) => c.slug === resolvedCategory)
+    ) {
+      setActiveCategory(resolvedCategory);
+    }
+  }
+
+  // Show connection message for a few seconds, then clear
+  const showConnectionMessage = useCallback(
+    (msg: string, type: "success" | "error") => {
+      setConnectionMessage(msg);
+      setConnectionMsgType(type);
+      if (connectionMsgTimerRef.current)
+        clearTimeout(connectionMsgTimerRef.current);
+      connectionMsgTimerRef.current = setTimeout(() => {
+        setConnectionMessage(null);
+        setConnectionMsgType(null);
+        connectionMsgTimerRef.current = null;
+      }, 4000);
+    },
+    [],
+  );
+
+  const handleCategoryPress = useCallback((slug: string) => {
+    setActiveCategory(slug);
+  }, []);
+
+  // F-34: a hub instance that MOUNTS after a link is already up must show it.
+  // Status events never replay, so the Drive Deck opened while the Control
+  // Panel is already WiFi-connected kept wifiConnected=false forever ->
+  // canControl=false -> the whole drive deck rendered dim/disabled ("as if
+  // connection is not made") even though traffic still flowed (sendCommand
+  // reads wifiService.isConnected live, which is also why the mode dropdown
+  // kept working over WiFi).
+  //
+  // That reconcile used to be an effect that set four pieces of state on
+  // mount. It is now the INITIALISER of each piece (see `connected`,
+  // `btLinked`, `deviceName`, `linkVerified`, `wifiConnected` above): same
+  // truth, but it lands on the first render instead of the second, so the
+  // deck never paints the dim frame at all.
+
+  // Cleanup on unmount â€” do NOT disconnect the singleton services; the
+  // BLE/SPP/WiFi connection must survive navigation between screens (and
+  // between ToolsScreen and the Remote window). Only explicit user action
+  // (handleDisconnect) should tear down a transport. wifiService owns its
+  // socket + reconnect timer, so there is nothing to tear down here.
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      manualCloseRef.current = true;
+      if (connectionMsgTimerRef.current) {
+        clearTimeout(connectionMsgTimerRef.current);
+        connectionMsgTimerRef.current = null;
+      }
+      // U-97: drop any pending telemetry flush timer.
+      if (telemetryFlushTimerRef.current) {
+        clearTimeout(telemetryFlushTimerRef.current);
+        telemetryFlushTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Telemetry + status wiring (SPP service)
+  // Parity with the ESP remote's parseTelemetryLine() + applyRemoteState()
+  // (state.cpp / comms.cpp):
+  //   â€¢ MODE: ALWAYS mirror the car's authoritative mode (the car's own mode
+  //     button must switch the app too).
+  //   â€¢ SPD: mirror the magnitude quantized to the 5-step grid inside
+  //     SPEED_MIN..SPEED_MAX; skipped while NAV is editing; SPD0 = stop echo
+  //     keeps the displayed speed.
+  //   â€¢ STATUS: only whitelisted short statuses are displayed.
+  //   â€¢ TRIM: mirrored.
+  useEffect(() => {
+    const applyTelemetry = (t: CarTelemetry) => {
+      if (!mountedRef.current) return;
+      // U-121 Phase D (owner 2026-10-23): every frame the car sends — over
+      // EITHER link — refreshes the silence clock. A frozen car stops
+      // producing frames while its transport stays nominally up, so this
+      // stamp is the half `carSilent` reads (the timer half evaluates it).
+      lastCarFrameRef.current = Date.now();
+      // U-97 (bluetooth lag): buffer + flush on a bounded tick instead of a
+      // setState per frame. Merged against the previous buffer so nothing in a
+      // burst is lost; the state update itself stays functional.
+      telemetryBufferRef.current = {
+        ...(telemetryBufferRef.current ?? {}),
+        ...t,
+      };
+      if (telemetryFlushTimerRef.current == null) {
+        telemetryFlushTimerRef.current = setTimeout(() => {
+          telemetryFlushTimerRef.current = null;
+          const buffered = telemetryBufferRef.current;
+          telemetryBufferRef.current = null;
+          if (buffered && mountedRef.current) {
+            setTelemetry((prev) => ({ ...prev, ...buffered }));
+          }
+        }, TELEMETRY_FLUSH_MS);
+      }
+      // Connections-Hub (profiles): remember the board-unique id. It changes
+      // the stable memory key to `fw:<id>` (see addressForMemory) and lands
+      // in the persisted profile as uniqueId.
+      if (t.id) carFwIdRef.current = t.id.trim() || null;
+      // Mode: always mirror (applyRemoteState parity). X-8: incoming tokens
+      // are canonicalized so old cars' MODE=BT still mirrors the 4WD4M row.
+      // A-37: R-33 parity — within MODE_CHANGE_GRACE_MS of selectMode, an echo
+      // still equal to the PRE-commit mode is the stale race line (skip, the
+      // optimistic pick stands); a changed echo is car truth → adopt + clear.
+      if (t.mode) {
+        const canonical = canonicalCarToken(t.mode);
+        const commit = modeCommitRef.current;
+        if (commit && Date.now() - commit.at > MODE_CHANGE_GRACE_MS)
+          modeCommitRef.current = null;
+        const pending = modeCommitRef.current;
+        const staleRace =
+          pending != null &&
+          canonical === pending.stale &&
+          canonical !== pending.token;
+        if (!staleRace) {
+          // P7 / issue 8: the car's OWN mode button (or a mode change made
+          // from another phone) must reach the per-car profile, not just the
+          // live state — selectMode persists its pick, so adoption must too,
+          // or the app resurrected the PREVIOUS mode after a restart. Stored
+          // as the local CarMode id (selectMode's shape), never the raw car
+          // token; change-guarded so the steady 1 Hz echo schedules nothing.
+          const modeChanged = carModeIdRef.current !== canonical;
+          if (pending != null) modeCommitRef.current = null;
+          setCarModeId(canonical);
+          carModeIdRef.current = canonical;
+          const matched = carModesRef.current.find(
+            (m) => m.id === canonical.toLowerCase() || m.token === canonical,
+          );
+          if (matched) setActiveMode(matched);
+          if (modeChanged)
+            persistPrefsRef.current?.({
+              modeId: matched ? matched.id : canonical.toLowerCase(),
+            });
+        }
+      }
+      // Speed mirror — car-truth, change-guarded, range-clamped (owner
+      // 2026-09-29: "speed is malicious — mid-drive it shows something else").
+      // Rules, in order:
+      //   • skipped entirely while NAV is editing (state.cpp parity);
+      //   • magnitude only — SPD0 is the stop echo and keeps the display;
+      //   • clamped into the car's accepted 100..255 window BEFORE
+      //     quantizing (the car clamps there too — Config.h MIN/MAX), so an
+      //     out-of-window echo is noise, never a new speed to display;
+      //   • applied ONLY on a state-changing frame (STATUS "Speed set"/mode
+      //     change — the car confirming an actual speed), never on the
+      //     steady STATE echo, which raced the user's in-flight slider edit
+      //     and snapped the strip to a different number mid-drag.
+      if (!navActiveRef.current && t.speed != null) {
+        const mag = Math.abs(t.speed);
+        if (mag > 0) {
+          const confirmed = isAllowedDriveStatus(t.status) || t.mode != null;
+          const inWindow = mag >= SPEED_MIN && mag <= SPEED_MAX;
+          if (confirmed || inWindow) {
+            const next = quantizeSpeedToStep(
+              Math.max(SPEED_MIN, Math.min(SPEED_MAX, mag)),
+            );
+            if (next !== speedRef.current) {
+              setSpeed(next);
+              // P7 / issue 8: a speed the CAR confirmed (its own button, a mode
+              // change, another phone) now reaches the profile as well —
+              // adoption used to update live state only, so the app resurrected
+              // the pre-change speed after a restart. Same guarded writer as
+              // selectMode's path.
+              persistPrefsRef.current?.({ speed: next });
+            }
+          }
+        }
+      }
+      if (t.trim != null) setTrim(t.trim);
+      // R-19: car-truth trip metrics (2WD1M family STATE extras)
+      if (t.trip != null) setTripAvg(t.trip);
+      if (t.maxSteer != null) setMaxSteer(t.maxSteer);
+      // R-20: car-truth steering travel limit (STATE ;STEER=). Clamped to the
+      // car's persisted range; the local steppers send STEER<n> and the car
+      // echoes the stored value, so remote + app converge on one truth.
+      if (t.steerLimit != null) {
+        const lim = Math.max(
+          STEER_LIMIT_MIN,
+          Math.min(STEER_LIMIT_MAX, Math.round(t.steerLimit)),
+        );
+        setSteerLimit((prev) => (prev === lim ? prev : lim));
+      }
+      // PID telemetry from TEL; frames (self-balancing live values).
+      if (t.kp != null) setPidKp(t.kp);
+      if (t.ki != null) setPidKi(t.ki);
+      if (t.kd != null) setPidKd(t.kd);
+      if (t.out != null) setPidOut(t.out);
+      if (t.off != null) setPidOff(t.off);
+      // Status: whitelist only â€” verbose/unknown statuses never shown.
+      if (t.status && isAllowedDriveStatus(t.status)) {
+        setDriveStatusOnce(t.status);
+        const d = statusToDirection(t.status);
+        if (d) setDriveDirOnce(d);
+      }
+      // v1.4.0: provisioning replies ride STATE as REPLY=â€¦ (car â†’ app).
+      // V2: provisioning moves the car to its own AP or a STA join; the
+      // app must give up the AP dial so the drive socket is not stuck on the
+      // car's own AP. The car keeps every transport live; the next
+      // STATE;IP= broadcasts the router IP for the user to dial.
+      if (t.reply) {
+        // D2 (U-68): the car answers router commands in the SAME `REPLY=` slot
+        // as the legacy WIFICFG replies. Both are offered to both consumers:
+        // the WIFICFG handler ignores what it does not own, and the router
+        // consumer ignores what is not a `ROUTERS;…` answer. Before this, a
+        // `ROUTERS;FULL` or `ROUTERS;ERROR;…` was received and dropped, which
+        // is why a failed add was indistinguishable from a successful one.
+        handleWifiProvisionReplyRef.current?.(t.reply);
+        consumeRouterAnswerRef.current?.(t.reply);
+        // P7 (owner item D): the car's EVENT-LOG answers ride the SAME slot
+        // (LOG;GET windows). This consumer ignores every reply that is not a
+        // LOG;GET — the other consumers ignore what is not theirs.
+        carLogReplyRef.current?.(t.reply);
+      }
+      // U-74: remember a router lease as soon as the car reports one. The car
+      // broadcasts it on the hotspot link just before the AP moves channel, so
+      // this is the one chance the app gets to learn where the car went. The
+      // gateway check keeps the car's OWN hotspot address out of this field: it
+      // is not a lease, and offering it as "the car on your router" is the D4
+      // bug all over again.
+      if (t.ip !== undefined) {
+        const reported = (t.ip ?? "").trim();
+        if (reported && !isCarApGateway(reported)) {
+          setLastRouterIp((cur) => (cur === reported ? cur : reported));
+        }
+      }
+      if (t.ap !== undefined) setCarApName(t.ap || null);
+      if (t.ssid !== undefined) setCarSsid(t.ssid || null);
+      // U-111 (owner 2026-10-14): "after the car gets connected it should send
+      // its state and preferences to the app, and the app should apply them."
+      // The car broadcasts its three persisted transport settings on every STATE
+      // line (`;WIFI=` / `;BT=` / `;AUTOJOIN=`) and in every WS JSON frame
+      // (`wifi_enabled` / `bt_enabled` / `boot_autojoin`). carProtocol has parsed
+      // them since U-105, but NOTHING applied them — so a fresh phone (or a
+      // cleared profile) showed "don't know" until the user queried each toggle
+      // by hand. Adopt car truth here, so the panel agrees with the car the
+      // moment a link comes up. A just-flipped toggle is protected for the same
+      // short grace as the mode commit: the 1 Hz broadcast is NOT a neutral
+      // authority — a pre-command frame is in flight for up to a second after
+      // the tap, and adopting it would roll the panel back AND persist the
+      // pre-flip value into the per-car profile (the P7/issue-8 defect, which
+      // is why this same rule also gates the WIFICFG reply path). Persistence
+      // happens only on a real change, never on the steady 1 Hz echo. The
+      // no-transport case (nothing to adopt from) is handled honestly by the
+      // sendSystemLine guard's "connect to the car first" message instead of
+      // an optimistic toggle that silently does nothing.
+      {
+        const protect = toggleChangeProtectedRef.current;
+        const cur = transportToggleRef.current;
+        if (
+          typeof t.wifiEnabled === "boolean" &&
+          protect("wifiEnabled", t.wifiEnabled) &&
+          cur.wifiEnabled !== t.wifiEnabled
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            wifiEnabled: t.wifiEnabled,
+          };
+          setWifiEnabled(t.wifiEnabled);
+          persistPrefsRef.current?.({ wifiEnabled: t.wifiEnabled });
+        }
+        if (
+          typeof t.btEnabled === "boolean" &&
+          protect("btEnabled", t.btEnabled) &&
+          cur.btEnabled !== t.btEnabled
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            btEnabled: t.btEnabled,
+          };
+          setBtEnabled(t.btEnabled);
+          persistPrefsRef.current?.({ btEnabled: t.btEnabled });
+        }
+        if (
+          typeof t.bootAutojoin === "boolean" &&
+          protect("bootAutojoin", t.bootAutojoin) &&
+          (cur.bootAutojoin !== t.bootAutojoin ||
+            autoJoinRouterRef.current !== t.bootAutojoin)
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            bootAutojoin: t.bootAutojoin,
+          };
+          setBootAutojoin(t.bootAutojoin);
+          setAutoJoinRouterState(t.bootAutojoin);
+          autoJoinRouterRef.current = t.bootAutojoin;
+          persistPrefsRef.current?.({
+            bootAutojoin: t.bootAutojoin,
+            autoJoinRouter: t.bootAutojoin,
+          });
+        }
+        // U-117: the car's WEB PAGE state (`;PAGE=` / `page_on`) is adopted
+        // with the same change-guard as its siblings — the steady 1 Hz echo
+        // persists nothing, a genuine flip writes the per-car profile. No
+        // commit-grace: the page state is a car fact with no optimistic user
+        // edit on this path (the panel's own tap answers via the WIFICFG reply
+        // handler below), so a pre-command frame cannot roll anything back.
+        if (typeof t.pageOn === "boolean" && cur.pageOn !== t.pageOn) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            pageOn: t.pageOn,
+          };
+          setPageOnState(t.pageOn);
+          persistPrefsRef.current?.({ pageOn: t.pageOn });
+        }
+      }
+
+      // P5 (firmware 1.3.13): adopt the car's LINKCAP verdict straight from
+      // the telemetry stream — it rides every STATE line and every WS JSON
+      // frame. No commit-grace: this is a car fact, not a user edit, so no
+      // optimistic value exists to protect.
+      if (typeof t.linkCap === "boolean") setLinkCap(t.linkCap);
+      // The car-side scan answer (ROUTERS;SCAN, firmware v2) — feeds the
+      // Connectivity panel's nearby list (shown after an explicit Search).
+      // Change-guarded so steady frames don't thrash. U-120 item 12: smart-link
+      // no longer reads it — the pick is recency-only.
+      if (t.scan !== undefined) {
+        setCarScan((prev) =>
+          prev && prev.length === t.scan!.length
+            ? prev
+            : (t.scan ?? []).slice(),
+        );
+      }
+      // A-27: sync the saved-router mirror from the car's `networks` JSON
+      // (broadcast on every WS status frame + REQ_STATE). Change-guarded to
+      // skip identical arrays (steady 1 s broadcasts don't thrash the panel).
+      //
+      // D6 (U-68): the car ALSO sends the registry as a `NETW;…` text line on
+      // every transport, and that is the only shape a Bluetooth link carries.
+      // Both feed the same state, so the router list is no longer a WiFi-shaped
+      // accident (F-66) — it is a property of the connection, which is what
+      // lets it be managed over Bluetooth at all.
+      const incomingRouters =
+        t.networks && Array.isArray(t.networks)
+          ? t.networks
+          : t.netw && Array.isArray(t.netw)
+            ? t.netw
+            : null;
+      if (incomingRouters) {
+        const incoming: string[] = incomingRouters;
+        // P7 / issue 8: a registry changed on ANOTHER surface (a second
+        // phone, the car's own answer to ROUTERS;ADD/DEL) adopted into live
+        // state here but never reached the per-car profile — the next
+        // restart resurrected the stale list from disk. Change-guarded on the
+        // same mirror the state setter uses, so the steady 1 s broadcast
+        // schedules no write.
+        const prevRouters = savedNetworksRef.current;
+        const unchanged =
+          prevRouters.length === incoming.length &&
+          prevRouters.every((n, i) => n === incoming[i]);
+        if (!unchanged)
+          persistPrefsRef.current?.({ savedRouters: incoming.slice() });
+        setCarNetworks((prev) =>
+          prev.length === incoming.length &&
+          prev.every((n, i) => n === incoming[i])
+            ? prev
+            : incoming.slice(),
+        );
+      }
+      // A-7: car truth â€” CAP=STUB (STATE lines) / `stub` (WS JSON) describe
+      // the car's CURRENT mode; record it per token so the mode chooser and
+      // selectMode() gate on car reality, not a hardcoded app list
+      // (X-8: keys canonical â€” legacy BT â†’ 4WD4M).
+      if (t.stub !== undefined && t.mode) {
+        const tok = canonicalCarToken(t.mode);
+        if (tok)
+          setCarStubMap((prev) =>
+            prev[tok] === t.stub ? prev : { ...prev, [tok]: t.stub! },
+          );
+      }
+      // R-10: full availability table (CAPS;â€¦ broadcast) â€” authoritative
+      // per-token 3-state truth. Canonical keys (legacy BT â†’ 4WD4M).
+      if (t.caps && Object.keys(t.caps).length > 0) {
+        // U-81: REPLACE, do not merge. A CAPS line is the car's complete registry
+        // (ModeManager::buildCapsMap walks all of MODE_REGISTRY), so it is a
+        // snapshot to adopt, not a delta to accumulate. Merging kept tokens from
+        // a PREVIOUS car alive forever, which would quietly defeat the
+        // absence-means-GONE rule in modeAvailStatus: a mode the current car does
+        // not have would still look supported because some other car once
+        // announced it.
+        setCarAvailMap((prev) => {
+          const incoming = t.caps as Record<string, string>;
+          let changed =
+            Object.keys(prev).length !== Object.keys(incoming).length;
+          if (!changed) {
+            for (const [tok, val] of Object.entries(incoming)) {
+              if (prev[tok] !== val) {
+                changed = true;
+                break;
+              }
+            }
+          }
+          return changed ? { ...incoming } : prev;
+        });
+      }
+      // R-4 (app half): the car rejected a sent mode token â€” park it as
+      // car-truth stub and surface "Not supported by car" (remote
+      // comms.cpp:505-508 parity).
+      if (t.nackError === "UNKNOWN_MODE" && t.nackArg)
+        handleNackRef.current?.(t.nackArg);
+    };
+    const offSpp = sppService.onTelemetry(applyTelemetry);
+    const offBle = bleService.onTelemetry(applyTelemetry);
+    const offWifi = wifiService.onTelemetry(applyTelemetry);
+    const offStatus = sppService.onStatus((kind, message) => {
+      if (!mountedRef.current) return;
+      // FIN-50: FIN-44's dedupe compares against sppStatusMsgRef, but the ref
+      // was never WRITTEN — every comparison saw `null`, so the 'error'
+      // same-message guard never matched and the reconnect burst kept
+      // re-rendering. Keep it truthful (ref write = no re-render).
+      sppStatusMsgRef.current = message ?? null;
+      // U-120 Phase C: the SILENT auto-reconnect burst is GONE (nothing
+      // retries on its own anymore), so the FIN-50 burst collapse has
+      // nothing left to collapse — every status reaches the UI exactly as
+      // emitted, and the reconnect dialog owns recovery.
+      const presentationKind = kind;
+      const presentationMsg = message ?? null;
+      // FIN-44 flicker fix: dedupe repeats of the same status kind (the SPP
+      // service emits per event; repeated 'connecting'/'error' bursts from the
+      // auto-reconnect backoff re-rendered the BT connection-details row on
+      // every attempt even though nothing changed). Transitions still render.
+      setSppStatus((prevKind) => {
+        if (prevKind === presentationKind) {
+          // Same state again — only 'error' carries a NEW message worth a repaint.
+          if (
+            presentationKind !== "error" ||
+            presentationMsg === sppStatusMsgRef.current
+          )
+            return prevKind;
+        }
+        return presentationKind;
+      });
+      switch (kind) {
+        case "connecting":
+          sppWasConnectedRef.current = false;
+          setSppStatusMsg("");
+          setReconnectDue(false);
+          break;
+        case "connected":
+          sppWasConnectedRef.current = true;
+          setSppStatus("connected");
+          setSppStatusMsg(message ?? "Connected");
+          setReconnectDue(false);
+          // A-7: fresh link â€” drop any stub truth from the previous session
+          // so the next car (or a re-flashed car) starts from the fallback
+          // table until it reports per-token truth again (remote R-10 parity).
+          setCarStubMap({});
+          setCarAvailMap({});
+          // Bugfix: only the manual handleConnect() used to set connected=true;
+          // a silent auto-reconnect or retry that reached 'connected' left the
+          // UI believing the link was down (dead Connect button on return).
+          setConnected(true);
+          // U-113 P2: an SPP link IS Bluetooth truth for the Remote chip.
+          setBtLinked(true);
+          // U-98: a live SPP link IS a verified car link. Before this only the
+          // Wi-Fi paths set `linkVerified`, so a Bluetooth connect left the
+          // Control Panel's Connection card stuck on "Connecting…" forever
+          // (gold busy dot) while the Remote deck already showed "Connected".
+          setLinkVerified(true);
+          // Force the car to broadcast its current STATE so the app
+          // immediately picks up the active mode, speed, trim, etc.
+          // Also sync the app's clock so the car can stamp config writes.
+          setTimeout(() => {
+            sppService
+              .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
+              .catch(() => {});
+            sppService.requestState().catch(() => {});
+          }, 200);
+          break;
+        case "disconnected": {
+          const hadLiveConnection = sppWasConnectedRef.current;
+          sppWasConnectedRef.current = false;
+          setSppStatus("disconnected");
+          setSppStatusMsg("");
+          setDeviceName("");
+          // U-98 → U-105 (1.3.5): Bluetooth events used to fight over `connected`
+          // with a Wi-Fi connect that tore SPP down on purpose; that teardown is
+          // gone (both links stay live). A Bluetooth event still only owns
+          // `connected`/`linkVerified` below as long as no answered Wi-Fi link
+          // is up — a FAILED Bluetooth attempt leaves the Wi-Fi socket up, so
+          // clearing here unconditionally would put a live, answered Wi-Fi link
+          // back on "Connecting…" (gold dot) and stop the REQ_STATE poll, which
+          // is keyed on `connected`.
+          if (!wifiService.isConnected && !bleService.isConnected) {
+            setConnected(false);
+            if (!sppService.isConnected && !bleService.isConnected) {
+              setLinkVerified(false);
+            }
+          }
+          // U-113 P2: SPP is down — hide the BT chip unless BLE still holds
+          // a link (the two BT transports are independent transports).
+          if (!bleService.isConnected) setBtLinked(false);
+          setDriveStatusOnce("Stop");
+          setDriveDirOnce("S");
+          // U-120 Phase C: NO silent auto-reconnect. An unexpected
+          // Bluetooth drop raises the reconnect dialog at once — the
+          // dialog names the method and only reconnects on an explicit yes.
+          // The U-110 rule survives at presentation level: while ANY link
+          // answers, `!linked` keeps the dialog hidden; the guard below also
+          // skips raising it while the car is reachable on Wi-Fi/BLE.
+          // A manual disconnect clears the prompt instead (nothing to ask).
+          if (
+            hadLiveConnection &&
+            !manualCloseRef.current &&
+            !sppService.manualClose &&
+            sppLastAddressRef.current &&
+            !(wifiService.isConnected || bleService.isConnected)
+          ) {
+            setReconnectDue(true);
+            setReconnectMethod("Bluetooth");
+          } else {
+            setReconnectDue(false);
+          }
+          break;
+        }
+        case "error": {
+          const hadLiveConnection = sppWasConnectedRef.current;
+          sppWasConnectedRef.current = false;
+          setSppStatusMsg(presentationMsg ?? "Connection error");
+          setDeviceName("");
+          // U-98: same rule as "disconnected" — a failed Bluetooth attempt
+          // must not un-verify the Wi-Fi link that is still up.
+          if (!wifiService.isConnected && !bleService.isConnected) {
+            setConnected(false);
+            setLinkVerified(false);
+          }
+          // U-113 P2: SPP is down — hide the BT chip unless BLE still holds
+          // a link (the two BT transports are independent transports).
+          if (!bleService.isConnected) setBtLinked(false);
+          setDriveStatusOnce("Stop");
+          setDriveDirOnce("S");
+          // U-120 Phase C: same rule as "disconnected" — no automatic
+          // retry; the user is asked, with the method named, and decides.
+          if (
+            hadLiveConnection &&
+            !manualCloseRef.current &&
+            !sppService.manualClose &&
+            sppLastAddressRef.current &&
+            !(wifiService.isConnected || bleService.isConnected)
+          ) {
+            setReconnectDue(true);
+            setReconnectMethod("Bluetooth");
+          } else {
+            setReconnectDue(false);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+    // BLE status â€” mirrors SPP connected/disconnected handling so BLE-only
+    // links trigger REQ_STATE and set connected=true.
+    const offBleStatus = bleService.onStatus((kind, _message) => {
+      if (!mountedRef.current) return;
+      if (kind === "connected") {
+        setConnected(true);
+        setBtLinked(true);
+        setDeviceName(bleService.deviceName ?? "Car");
+        setTimeout(() => {
+          bleService
+            .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
+            .catch(() => {});
+          bleService.requestState().catch(() => {});
+        }, 200);
+      } else if (kind === "disconnected") {
+        // Only clear connected if SPP is also not linked.
+        if (!sppService.isConnected) {
+          setConnected(false);
+          setBtLinked(false);
+          setDeviceName("");
+        }
+      } else if (kind === "error") {
+        // BLE monitoring error â€” treat like disconnect if SPP is also down
+        if (!sppService.isConnected) {
+          setConnected(false);
+          setBtLinked(false);
+          setDeviceName("");
+        }
+      }
+    });
+    // WiFi status â€” mirrors SPP/BLE handling so a shared link updates every
+    // hub instance (Remote window + Control Panel) from the ONE socket.
+    const offWifiStatus = wifiService.onStatus((kind, message) => {
+      if (!mountedRef.current) return;
+      switch (kind) {
+        case "connecting":
+          setConnecting(true);
+          setError(null);
+          break;
+        case "connected":
+          // A working link again: cancel any pending re-sweep for the next breakdown.
+          setConnected(true);
+          setWifiConnected(true);
+          setConnecting(false);
+          setError(null);
+          setReconnectDue(false);
+          // A-7/R-10: fresh link â€” drop stale stub/avail truth from the old
+          // session (same reset the SPP handler does on its own reconnect).
+          setCarStubMap({});
+          setCarAvailMap({});
+          setTimeout(() => {
+            wifiService
+              .sendLine(buildTimeLine(Math.floor(Date.now() / 1000)))
+              .catch(() => {});
+            wifiService.requestState().catch(() => {});
+          }, 200);
+          break;
+        case "disconnected":
+          setWifiConnected(false);
+          setConnecting(false);
+          // The link that was verified is gone. Leaving this true would let the
+          // next status frame read as "live" before any car had answered —
+          // which is exactly the stale-visual report ("the app is still in the
+          // old state").
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setLinkVerified(false);
+          }
+          // U-120 Phase C: "disconnected" is the MANUAL path (disconnect()).
+          // The user chose to drop the link — no dialog asks them to reconnect.
+          setReconnectDue(false);
+          // Only clear the global "connected" if SPP/BLE are also down.
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setConnected(false);
+            setDeviceName("");
+          }
+          break;
+        // F-65 (2026-10-13) → U-120 Phase C: an UNEXPECTED socket loss used to
+        // be swallowed silently, so the hub kept `wifiConnected` true and the
+        // app looked green while every command vanished (the owner's "the app
+        // freezes / the car is still connected but nothing works"). The
+        // service announces the drop; this handler tells the UI the truth
+        // immediately AND raises the reconnect dialog — no automatic re-dial
+        // runs anymore (owner item 8), so recovery is the user's call: one
+        // dialog naming the method (Wi-Fi), Reconnect or Cancel.
+        case "reconnecting":
+          setWifiConnected(false);
+          setConnecting(false);
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setLinkVerified(false);
+          }
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setConnected(false);
+            setDeviceName("");
+          }
+          // U-110's rule at presentation level too: while the car answers on
+          // Bluetooth, a Wi-Fi-shaped loss is stale — don't ask.
+          if (
+            !wifiService.isManualClose &&
+            !(sppService.isConnected || bleService.isConnected)
+          ) {
+            setReconnectDue(true);
+            setReconnectMethod("Wi-Fi");
+          } else {
+            setReconnectDue(false);
+          }
+          // U-LINK1 (2026-11-09): an unexpected drop used to leave no trace
+          // anywhere — the owner could only report that it "resets sometime".
+          // Ship the socket's own closing facts (code, reason, uptime, frames)
+          // to app_logs, where the admin Logs tab can read them, so the next
+          // occurrence is diagnosable instead of anecdotal.
+          if (!wifiService.isManualClose) {
+            void appendLog({
+              scope: "link/wifi",
+              level: "warn",
+              message: "Wi-Fi link dropped",
+              detail: wifiService.lastClose,
+            });
+          }
+          break;
+        case "error":
+          setWifiConnected(false);
+          setConnecting(false);
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setLinkVerified(false);
+          }
+          setError(message ?? "WiFi connection lost");
+          if (!sppService.isConnected && !bleService.isConnected) {
+            setConnected(false);
+            setDeviceName("");
+          }
+          // U-120 Phase C: a failed dial's rescue is still automatic
+          // FINDING, not reconnecting — the user asked to connect (or said
+          // yes to the dialog), and when the car moved routers the old
+          // address is dead by definition, so the sweep runs instead of
+          // re-dialing a corpse. The sweep already has inflight/cooldown/
+          // manual-close guards, so this cannot hammer the network or
+          // reopen a link the user closed.
+          // auto-discover removed per U-120 Phase C — user must tap Connect.
+          break;
+        default:
+          break;
+      }
+    });
+    return () => {
+      offSpp();
+      offBle();
+      offStatus();
+      offBleStatus();
+      offWifi();
+      offWifiStatus();
+    };
+    // NOTE: deps are intentionally empty — activeMode is read via
+    // carModesRef (fresh on every telemetry frame) and setActiveMode is a
+    // stable setState.  The old [activeMode] dependency tore down and
+    // re-created the subscription on every mode change, which caused the
+    // app to miss STATE;MODE=... frames from the car during the gap.
+    // The two `…Once` writers are useCallback([], …) so they are stable and
+    // cannot re-subscribe anything; they are listed for honesty, not effect.
+  }, [setDriveDirOnce, setDriveStatusOnce]);
+
+  // U-121 Phase D (owner 2026-10-23): "the car freezes and the app doesn't
+  // know about that." A live transport says nothing about a live car — the
+  // owner's freeze keeps the link nominally up while the car stops answering
+  // entirely. This is the detector: while a link is up, a bounded 2 s tick
+  // evaluates the PURE `isCarSilent` rule against two refs — the last car
+  // frame (stamped at the top of applyTelemetry, over EITHER link) and the
+  // link-up instant (so a car that freezes during connect is caught too).
+  // No interval runs while nothing is linked; the state resets on every link
+  // change, so a fresh link never inherits a stale "silent" verdict.
+  useEffect(() => {
+    if (!connected && !wifiConnected) {
+      lastCarFrameRef.current = null;
+      linkUpAtRef.current = null;
+      // Resetting the verdict on a link change is the point of the effect: the
+      // alternative is exposing a masked value, which would leave the "car may
+      // have frozen" strip's state true between sessions.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets on link change
+      setCarSilent(false);
+      return;
+    }
+    if (linkUpAtRef.current == null) linkUpAtRef.current = Date.now();
+    const evaluate = () => {
+      const next = isCarSilent({
+        linked: true,
+        nowMs: Date.now(),
+        lastFrameAtMs: lastCarFrameRef.current,
+        sinceLinkUpMs: linkUpAtRef.current,
+      });
+      setCarSilent((cur) => (next === cur ? cur : next));
+    };
+    evaluate();
+    const id = setInterval(evaluate, 2000);
+    return () => clearInterval(id);
+  }, [connected, wifiConnected]);
+
+  // W5: Detect car-side network switch from telemetry changes.
+  // When the car reports a new IP or SSID (meaning it moved to a different
+  // router), trigger a fresh REQ_STATE so the UI updates without requiring
+  // the user to leave/re-enter the Control Panel.
+  useEffect(() => {
+    const ip = telemetry.ip;
+    const ssid = telemetry.ssid;
+
+    // Initialize refs on first meaningful value
+    if (prevIpRef.current === undefined && ip !== undefined) {
+      prevIpRef.current = ip;
+    }
+    if (prevSsidRef.current === undefined && ssid !== undefined) {
+      prevSsidRef.current = ssid;
+    }
+
+    // Detect change: car reported a different IP or SSID
+    const ipChanged = ip !== undefined && prevIpRef.current !== ip;
+    const ssidChanged = ssid !== undefined && prevSsidRef.current !== ssid;
+
+    if (ipChanged || ssidChanged) {
+      // Update refs
+      if (ip !== undefined) prevIpRef.current = ip;
+      if (ssid !== undefined) prevSsidRef.current = ssid;
+      // Trigger a fresh state request so the UI gets the new network info
+      if (wifiService.isConnected) {
+        wifiService.requestState().catch(() => {});
+      } else if (sppService.isConnected) {
+        sppService.requestState().catch(() => {});
+      }
+    }
+  }, [telemetry.ip, telemetry.ssid]);
+
+  // check if SPP is supported on this device
+  const sppSupported = sppService.supported;
+  // U-120: the page-state triple — the HUB's public `carPageServing` opinion
+  // (returned below). Screens read that opinion, never `pageOn` directly.
+  //
+  // U-124 ⑫ (owner 2026-10-24: "the ip is not hidden anywhere … fix these
+  // when webpage is off"): this used to be a REF whose triple NOTHING ever
+  // wrote — and the Remote chip read `hub.carPageServing?.current`, which on
+  // a ref-of-triple was the OBJECT `{current, old, changeFlag}` (always
+  // truthy), so the broadcast-IP chip never hid no matter what the car
+  // reported. The opinion is now the OBJECT ITSELF, derived at render time
+  // from `pageOn` (the hub's car truth: `;PAGE=` / `page_on` / the WIFICFG
+  // reply), so `hub.carPageServing?.current` is finally a boolean that flips
+  // with the car's report. `old`/`changeFlag` keep their documented shape via
+  // the steady-frame ref below, caught up one commit later by the effect.
+  const pageStateOld = useRef<boolean>(false);
+  const pageServingNow = pageOn === true;
+  const carPageServing: CarPageServingState = {
+    current: pageServingNow,
+    old: pageStateOld.current,
+    changeFlag: pageStateOld.current !== pageServingNow,
+  };
+  useEffect(() => {
+    pageStateOld.current = pageServingNow;
+  }, [pageServingNow]);
+
+  // Periodic REQ_STATE â€” keeps the app synced with the car's current mode,
+  // speed, and trim. The ESP32 firmware may not auto-broadcast STATE when
+  // the physical mode button is pressed, so we poll every 2 s.
+  // Works for SPP, BLE, and WiFi transports. Polling only runs while THIS
+  // hub is the focused screen, so the Tools+Remote pair never sends
+  // duplicate REQ_STATEs to the same car (bug: two wsRefs polled before).
+  const isFocused = useIsFocused();
+  // A-14: the poll loop depends ONLY on focus — `connected` is read from a
+  // fresh ref, so connect/disconnect churn never tears down and re-creates
+  // the interval (was a flicker source: the interval restarted whenever
+  // `connected`/`wifiConnected` flipped, right when the link was recovering).
+  useEffect(() => {
+    if (!isFocused || !connectedRef.current) return;
+    const id = setInterval(() => {
+      if (sppService.isConnected) {
+        sppService.requestState().catch(() => {});
+      }
+      if (bleService.isConnected) {
+        bleService.requestState().catch(() => {});
+      }
+      if (wifiService.isConnected) {
+        wifiService.requestState().catch(() => {});
+      }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [isFocused]);
+
+  // P7 / issue 8: a focus gain is a re-sync moment. The car's own buttons  // (mode on the car, toggles changed from a second phone) move state while
+  // this app is parked on another screen; previously nothing was re-read
+  // until the LINK bounced — the three toggles were queried only on the
+  // link-up transition, and the poll above only restarts its 2 s tick on
+  // return. One REQ_STATE refreshes mode/speed/trim AND the toggles (they
+  // ride every STATE line — WebServerComm's /status JSON and ModeManager's
+  // `;WIFI=`/`;BT=`/`;AUTOJOIN=` keys), so a single line per focus-gain is
+  // the whole fix. Fire-and-forget, same as the poll.
+  useEffect(() => {
+    if (!isFocused || !connectedRef.current) return;
+    if (sppService.isConnected) sppService.requestState().catch(() => {});
+    if (bleService.isConnected) bleService.requestState().catch(() => {});
+    if (wifiService.isConnected) wifiService.requestState().catch(() => {});
+  }, [isFocused]);
+
+  // Scan for SPP devices (Classic Bluetooth)
+  const handleScan = useCallback(async () => {
+    if (!sppSupported) {
+      setError("Classic Bluetooth (SPP) is not available on this device");
+      return;
+    }
+    setScanning(true);
+    setError(null);
+    setSppDevices([]);
+    try {
+      const devices = await sppService.scan();
+      if (devices.length > 0) {
+        setSppDevices(devices);
+        if (connectionMsgType) {
+          setConnectionMessage(null);
+          setConnectionMsgType(null);
+        }
+      } else {
+        setError(
+          "No Bluetooth cars found. Make sure your ESP32 car is powered on.",
+        );
+      }
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : "Scan failed");
+      }
+    } finally {
+      if (mountedRef.current) setScanning(false);
+    }
+  }, [sppSupported, connectionMsgType]);
+
+  // Connect to SPP device
+  const handleConnect = useCallback(
+    async (device: SppDevice): Promise<ConnectOutcome> => {
+      if (!device.address) {
+        const reason =
+          "This car has no Bluetooth address. Rescan and try again.";
+        setError(reason);
+        return { ok: false, reason };
+      }
+      // A fresh, unbonded car is NORMAL and must connect here: the native
+      // classic-BT layer bonds on demand (react-native-bluetooth-classic's
+      // connectToDevice calls createBond() and waits), which is what raises
+      // Android's pairing dialog (PIN 1234 on the cars). The old U-98 guard
+      // REFUSED any unbonded device with "pair the car in Android Settings
+      // first" — so a brand-new car, or one that had been factory-reset, could
+      // never be connected from the app at all. `bonded` is now presentation
+      // only (it labels a row "Paired"); it never gates the connect.
+      // The method is captured here and persisted with the device profile, so
+      // the NEXT connect to this same device re-raises over the same radio
+      // (the owner's bench item ⑧: "i can connect to the wifi signal too when
+      // the bluetooth is already connected").
+      setConnMethodState("bluetooth");
+      persistPrefsRef.current?.({ connMethod: "bluetooth" });
+      setConnectingAddress(device.address);
+      setError(null);
+      manualCloseRef.current = false;
+      try {
+        await sppService.connect(device.address);
+        sppLastAddressRef.current = device.address;
+        setConnected(true);
+        setBtLinked(true);
+        setDeviceName(device.name);
+        setConnecting(false);
+        setConnectingAddress(null);
+        // U-98 → U-105 (1.3.5): those lines tore an open Wi-Fi socket down
+        // "so the two links can never both be live". The owner ruled that out —
+        // the car now keeps Bluetooth AND Wi-Fi up simultaneously by design, so
+        // raising Bluetooth here NEVER drops Wi-Fi (and vice versa).
+        showConnectionMessage(`Connected to ${device.name}`, "success");
+        // Persist the chosen method with the device profile so the next
+        // connect to this same device raises over the same radio.
+        persistPrefsRef.current?.({ connMethod: "bluetooth" });
+        // Seed wirelessMethod so the SAME radio is used when the car is
+        // reached a second time from a Wi-Fi connect.
+        setWirelessMethod("bluetooth");
+        void sppService.requestState().catch(() => {});
+        return {
+          ok: true,
+          message: `Connected to ${device.name || device.address}.`,
+        };
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : "Connection failed";
+        if (mountedRef.current) {
+          setError(reason);
+          setConnecting(false);
+          setConnectingAddress(null);
+          // UX-1: no toast here - the hub's `error` is the single failure
+          // state; the Control Panel's connection section renders it.
+        }
+        // U-69 + UX-1: the outcome is returned now, AND the stale "success"
+        // state is cleared on the failure path so a second call cannot read an
+        // old "Connected to <car>" message off the screen. The live link facts
+        // (connected / btLinked / deviceName) are untouched, so devices that a
+        // native layer already bonded on a previous attempt can still ride the
+        // same native flow without a rethrow.
+        setConnecting(false);
+        setConnectingAddress(null);
+        setSppDevices([]);
+        setError(reason);
+        if (mountedRef.current) showConnectionMessage(reason, "error");
+        return { ok: false, reason };
+      }
+    },
+    [showConnectionMessage],
+  );
+
+  // The user SAID YES to the reconnect dialog's Bluetooth method: retry the
+  // remembered device once. No silent backoff follows (U-120 Phase C) — a
+  // failure surfaces through the hub's error, and a fresh drop re-asks.
+  const handleSppsRetry = useCallback(async () => {
+    setReconnectDue(false);
+    setError(null);
+    manualCloseRef.current = false;
+    try {
+      await sppService.retryConnect();
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : "Retry failed");
+      }
+    }
+  }, []);
+
+  // U-118 (owner 2026-10-20): the restart prompt's dedicated actions
+  // (handleRestartReconnect / handleRestartDismiss) are GONE with the restart
+  // card. The deck has ONE prompt now: Reconnect runs the same SPP retry the
+  // reconnect card always had, and Cancel is handleReconnectPromptCancel,
+  // which clears BOTH the backoff flag and the restart notice.
+
+  // UX-1 (2026-10-02 audit): a connect failure surfaces ONCE — through the
+  // hub's `error` (the ConnectionBanner is the single problem surface on the
+  // Control Panel). The extra toast here was the duplicate-message defect
+  // the 2026-09-30 cleanup killed, reintroduced by the picker bridge.
+  /**
+   * U-80 (2026-10-03): LOOK for the car without being asked. Owner ruling:
+   * discovery on a new network is AUTOMATIC. Two lookups, cheapest first:
+   *   1. the remembered router lease (U-74) — one HTTP probe;
+   *   2. a bounded /24 sweep of the phone's own subnet (U-74b engine).
+   * Pure lookups; never mutates connection state — the caller decides.
+   */
+  const findCarForUser = useCallback(async (): Promise<{
+    ok: boolean;
+    host: string | null;
+  }> => {
+    try {
+      // P8 (owner item E / F-91): the ordered plan runs BEFORE the sweep —
+      // the user's own "Car network" hint first (a live hit at the user's
+      // address is authoritative and ends the search), then the car's mDNS
+      // name, then the last router lease the car reported, and only then
+      // the bounded /24. Each probe is one short request; a miss falls
+      // through to the next method without throwing.
+      const plan = buildDiscoveryPlan({
+        hint: carNetworkHintRef.current,
+        leaseHost: lastRouterIpRef.current,
+      });
+      for (const p of plan.probes) {
+        try {
+          const payload = await probeCarStatus(
+            CAR_STATUS_URL(p.host),
+            PROBE_TIMEOUT_MS,
+          );
+          if (looksLikeOurCar(payload, { apNames: OWN_AP_NAMES })) {
+            return { ok: true, host: p.host };
+          }
+        } catch {
+          /* a miss on this method just falls through */
+        }
+      }
+      const state = await NetInfo.fetch();
+      const details = state.details as Record<string, unknown> | undefined;
+      const rawIp = details?.["ipAddress"];
+      const phoneIp = typeof rawIp === "string" ? rawIp : null;
+      const candidates = subnetCandidates(phoneIp);
+      if (candidates.length === 0) return { ok: false, host: null };
+      const host = await findCarOnNetwork({
+        candidates,
+        // F-65 (2026-10-13): the sweep passes the FLEET registry of own-AP
+        // names, not the donor's name. It used to pass `OWN_AP_NAME`
+        // ("WirelessCar_Wifi") — the donor car's hotspot — so a 4WD4M car
+        // (AP `4WDCar_Wifi`) NEVER matched, and every rescue path that ran
+        // this sweep (WS error, half-open link, refused connect, phone moved
+        // to a new network) ended in "car not found" even though the car was
+        // on the same router as the phone.
+        expect: { apNames: OWN_AP_NAMES },
+        fetchJson: probeCarStatus,
+      });
+      return { ok: true, host };
+    } catch {
+      return { ok: false, host: null };
+    }
+  }, []);
+
+  // U-98 → U-105 (1.3.5): the one-active-link teardown is GONE. `dropBluetoothForWifi`
+  // used to prove it, but the owner ruled parallel transport down OUT ("keep both");
+  // the car keeps Bluetooth + Wi-Fi live simultaneously and the app never tears
+  // either down to raise the other. All call sites removed.
+  const handleWifiConnect = useCallback(
+    async (overrideUrl?: string) => {
+      // A failed connect is indistinguishable from success just by looking at
+      // the flags; clear everything stale so the next attempt starts from a
+      // clean board. (U-69: the old code stored the failure and returned
+      // normally — the caller could not tell, and the ConnectionPanel kept
+      // saying "Connected to <car>".) The live state is NOT touched here: it
+      // is owned by the status subscriptions, and the failure path in this
+      // callback clears only the connect action itself.
+      setError(null);
+      setConnecting(false);
+      setLinkVerified(sppService.isConnected || bleService.isConnected);
+      if (!wifiService.isConnected) setWifiConnected(false);
+      setConnectingAddress(null);
+      // OPS-2: the ToolsScreen bridge calls setWifiUrl(options.url) and then
+      // this handler in the SAME tick — the `wifiUrl` state has not re-rendered
+      // yet, so a first connect would dial the bundled default instead of the
+      // restored address. An explicit override is dialled directly.
+      const effectiveUrl = overrideUrl?.trim() || wifiUrl;
+      if (!effectiveUrl) {
+        const reason = `Enter the car WiFi address (e.g. ${DEFAULT_WS_URL})`;
+        setError(reason);
+        showConnectionMessage(reason, "error");
+        return { ok: false, reason };
+      }
+      const wsUrl =
+        effectiveUrl.startsWith("ws://") || effectiveUrl.startsWith("wss://")
+          ? effectiveUrl
+          : `ws://${effectiveUrl}`;
+      manualCloseRef.current = false;
+      // Capture the method the SECOND link is raised in BEFORE anything else
+      // moves — `connected` and `sppConnected` will flip the moment the car
+      // answers, and with both live `routeCommand` would prefer the stale
+      // `wirelessMethod`, so the radio the user actually tapped for the new
+      // link is the one the car keeps. `connMethod` owns the device and is
+      // never touched here (a disconnected connect never changes it).
+      setWirelessMethod("wifi");
+      setConnecting(true);
+      setLinkVerified(sppService.isConnected || bleService.isConnected);
+      // Deliver over the ONE shared socket every hub reads — the SAME
+      // WebSocket the website page (http://192.168.245.1) uses for drive.
+      // R1: connect() only proves the socket opened, so wait for the car to
+      // actually answer before claiming a working link.
+      try {
+        await wifiService.connect(wsUrl);
+        const answered = await wifiService.waitForCarAnswer();
+        if (!mountedRef.current) {
+          return {
+            ok: false,
+            reason: "The app closed before the car answered.",
+          };
+        }
+        setLinkVerified(
+          answered || sppService.isConnected || bleService.isConnected,
+        );
+        if (answered) {
+          setWifiConnected(true);
+          setError(null);
+          setConnMethodState("wifi");
+          persistPrefsRef.current?.({ connMethod: "wifi" });
+          showConnectionMessage(`Connected to car via WiFi`, "success");
+          setTimeout(() => {
+            wifiService.requestState().catch(() => {});
+          }, 200);
+          return { ok: true, message: "Connected." };
+        }
+        // The socket opened but the car never spoke — a half-open link. U-93:
+        // do NOT give up here — the address may simply be stale (the car moved
+        // routers and this is the old lease). Look, exactly like the refused
+        // path below.
+        const lookedHalf = await findCarForUser();
+        if (lookedHalf.ok && lookedHalf.host) {
+          try {
+            await wifiService.connect(CAR_WS_URL(lookedHalf.host));
+            const reanswered = await wifiService.waitForCarAnswer();
+            if (reanswered && mountedRef.current) {
+              setWifiConnected(true);
+              setLinkVerified(true);
+              setError(null);
+              setConnMethodState("wifi");
+              persistPrefsRef.current?.({ connMethod: "wifi" });
+              showConnectionMessage(
+                `Car found automatically at ${lookedHalf.host} — connected.`,
+                "success",
+              );
+              setTimeout(() => {
+                wifiService.requestState().catch(() => {});
+              }, 200);
+              return {
+                ok: true,
+                message: `Found the car at ${lookedHalf.host}.`,
+              };
+            }
+          } catch {
+            /* fall through to the honest error below */
+          }
+        }
+        const reasonHalfOpen =
+          "The car did not answer at that address. Check the car is powered and that this phone is on the same network as the car.";
+        setWifiConnected(false);
+        setLinkVerified(sppService.isConnected || bleService.isConnected);
+        setError(reasonHalfOpen);
+        showConnectionMessage(reasonHalfOpen, "error");
+        return { ok: false, reason: reasonHalfOpen };
+      } catch (e) {
+        // U-80 (owner 2026-10-03, "automatic"): the phone probably just followed
+        // the car onto a NEW router and the old address is dead. Before giving
+        // up, LOOK for the car automatically — remembered lease first (one
+        // probe), then a bounded /24 sweep of the phone's own subnet. Every
+        // ingredient is app-local (NetInfo + the car's own /status), so this
+        // needs no new APK and costs nothing when the phone is somewhere else.
+        const looked = await findCarForUser();
+        if (looked.ok && looked.host) {
+          try {
+            await wifiService.connect(CAR_WS_URL(looked.host));
+            const answered = await wifiService.waitForCarAnswer();
+            if (answered && mountedRef.current) {
+              setWifiConnected(true);
+              setLinkVerified(true);
+              setError(null);
+              setConnMethodState("wifi");
+              persistPrefsRef.current?.({ connMethod: "wifi" });
+              showConnectionMessage(
+                `Car found automatically at ${looked.host} — connected.`,
+                "success",
+              );
+              setTimeout(() => {
+                wifiService.requestState().catch(() => {});
+              }, 200);
+              return {
+                ok: true,
+                message: `Found the car at ${looked.host}.`,
+              };
+            }
+          } catch {
+            /* fall through to the honest error below */
+          }
+        }
+        // U-93: the rescue above already looked; the honest message now NAMES
+        // the real suspect — a stale address from the car's previous network —
+        // instead of a bare service error.
+        const reason =
+          e instanceof Error
+            ? `Could not connect (${e.message}). The car's address may have changed — make sure this phone is on the same network as the car, then try again.`
+            : "Could not connect. The car's address may have changed — make sure this phone is on the same network as the car, then try again.";
+        if (mountedRef.current) {
+          setError(reason);
+          setWifiConnected(false);
+          setLinkVerified(sppService.isConnected || bleService.isConnected);
+          setConnecting(false);
+          setConnectingAddress(null);
+        }
+        if (mountedRef.current) showConnectionMessage(reason, "error");
+        return { ok: false, reason };
+      } finally {
+        if (mountedRef.current) setConnecting(false);
+      }
+    },
+    [wifiUrl, showConnectionMessage, findCarForUser],
+  ) as (overrideUrl?: string) => Promise<ConnectOutcome>;
+
+  // U-80b: AUTO-discover when the PHONE lands on a new network.
+  //
+  // handleWifiConnect's two rescues only run when the user taps connect. The
+  // owner's "the car was switched from its own webpage" path never taps, so
+  // the app sat on a dead link until the page was re-entered. This is the
+  // missing half: watch the phone's network and, the moment it changes onto a
+  // new Wi-Fi while no car link is up (and the link was not closed by the
+  // user), run the SAME bounded discovery and reconnect by itself.
+  //
+  // The phone-network watcher observes the phone's network for display purposes
+  // only — no longer auto-reconnects. Network changes are tracked but do not
+  // trigger any dial or connect action; the user must use the Connect button.
+  //
+  // U-124 ②: publishing the label is pulled out into its own callback so the
+  // permission path below can re-read NetInfo the moment the OS starts
+  // handing the SSID over — one writer for the pair (ssid + label), so they
+  // can never disagree.
+  const publishPhoneNetState = useCallback((state: NetInfoState) => {
+    // U-108 Phase 4: keep the phone-network truth fresh on EVERY event (not
+    // just a move) so the deck can show which network the phone is on.
+    const ssid = phoneSsidOf(state);
+    setPhoneSsid(ssid);
+    // U-118: and keep the rendered label in step with it (same event, so the
+    // SSID and the label can never disagree). 2026-10-25 (owner): the subnet
+    // that used to ride along as a stand-in name is GONE — a mask is not a
+    // name, and the chip on the Remote's first bar is there to NAME the
+    // network this phone is on.
+    setPhoneNetworkLabel(
+      formatPhoneNetwork({
+        type: state.type ?? "",
+        connected: state.isConnected === true,
+        ssid,
+      }),
+    );
+  }, []);
+
+  const phoneNetworkKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    phoneNetworkKeyRef.current = null;
+    return NetInfo.addEventListener((state) => {
+      publishPhoneNetState(state);
+      const next = phoneNetworkKey(state);
+      const prev = phoneNetworkKeyRef.current;
+      phoneNetworkKeyRef.current = next;
+      if (prev === null || prev === next) return;
+      // P8 (owner item E / F-91): a DOWN event (the phone lost Wi-Fi, or
+      // isConnected flipped false) is recorded as a sentinel, so the moment
+      // the phone comes back on ANY network — even the same SSID — the next
+      // event is a genuine change and the car is re-found. Previously the
+      // down event just updated the key, so a rejoin to the SAME network
+      // was indistinguishable from "nothing happened" and the app sat on a
+      // dead link until the user tapped Connect.
+      if (state.type !== "wifi" || state.isConnected !== true) {
+        phoneNetworkKeyRef.current = `down:${state.type ?? "none"}`;
+        return;
+      }
+      // NO AUTO-RECONNECT: previously resetPhoneNetDiscoverBudget() and
+      // void autoDiscoverAndConnect() were called here. Now the app simply
+      // observes the network change without re-dialing. The user must use
+      // the Connect button to re-establish a link.
+    });
+  }, [publishPhoneNetState]);
+
+  // U-124 ② (owner 2026-10-24): *"shows the wifi. name hidden, which is
+  // meaningless and should show the wifi network the app is connected to, at
+  // all time and in sync with the phone's network."*
+  //
+  // The watcher above is already in step with the phone (it fires on every
+  // network change, including a switch). What it could not do is get the NAME:
+  // Android withholds the SSID until the app holds ACCESS_FINE_LOCATION, and
+  // this app only ever asked for that permission as a side effect of a
+  // Bluetooth scan — so a session that never scanned read "name hidden".
+  //
+  // So the ask is tied to the fact it exists for: while a Wi-Fi network is
+  // live and UNNAMED, request the permission ONCE and re-read NetInfo when it
+  // is granted (the label then carries the real network name). A phone that
+  // already answers is never prompted, a refusal is accepted silently (the
+  // chip says "Wi-Fi" until a name arrives), and nothing here can block the
+  // screen.
+  const ssidPermissionAskedRef = useRef(false);
+  useEffect(() => {
+    if (ssidPermissionAskedRef.current) return;
+    if (phoneSsid) return;
+    if (!phoneNetworkLabel?.startsWith("Wi-Fi") && phoneNetworkLabel !== null)
+      return;
+    ssidPermissionAskedRef.current = true;
+    void (async () => {
+      try {
+        const permission = PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION;
+        if (await PermissionsAndroid.check(permission)) return;
+        const answer = await PermissionsAndroid.request(permission);
+        if (answer !== PermissionsAndroid.RESULTS.GRANTED) return;
+        publishPhoneNetState(await NetInfo.fetch());
+      } catch {
+        /* a permission that cannot be asked for leaves the honest fallback */
+      }
+    })();
+  }, [phoneSsid, phoneNetworkLabel, publishPhoneNetState]);
+
+  const handleWifiDisconnect = useCallback(async () => {
+    if (disconnectingRef.current) return;
+    disconnectingRef.current = true;
+    setDisconnectingLink("wifi");
+    manualCloseRef.current = true;
+    wifiService.markManualClose();
+    // Safe-stop: send stop commands before closing (only over the live socket).
+    if (wifiService.isConnected) {
+      try {
+        await wifiService.sendLine("S");
+      } catch {
+        /* ignore — link may already be dead */
+      }
+      try {
+        await wifiService.sendLine("SPD0");
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      await wifiService.disconnect();
+      setWifiConnected(false);
+      const bluetoothStillConnected =
+        sppService.isConnected || bleService.isConnected;
+      if (!bluetoothStillConnected) {
+        setConnected(false);
+        setLinkVerified(false);
+        setDeviceName("");
+        setTelemetry((prev) => ({
+          ...prev,
+          ip: undefined,
+          ssid: undefined,
+          connected: undefined,
+        }));
+      }
+      setError(null);
+      showConnectionMessage("Wi-Fi disconnected.", "success");
+    } catch (e) {
+      const reason =
+        e instanceof Error ? e.message : "The Wi-Fi link could not be closed.";
+      showConnectionMessage(`Could not disconnect Wi-Fi: ${reason}`, "error");
+    } finally {
+      disconnectingRef.current = false;
+      setDisconnectingLink(null);
+    }
+  }, [showConnectionMessage]);
+
+  // U-113 P2 (owner issue 3): a BLUETOOTH-ONLY disconnect. The Remote
+  // screen's BT chip used to call the full `handleDisconnect`, which tore
+  // the Wi-Fi link down too — the owner's "each must really disconnect its
+  // own method". This safe-stops over Bluetooth, closes SPP + BLE, and
+  // LEAVES the Wi-Fi link up: `connected` / `linkVerified` are only cleared
+  // by the guarded paths when no answered Wi-Fi link remains (the same rule
+  // the BT status handlers already follow). `manualCloseRef` stops the SPP
+  // auto-reconnect from reopening a link the user deliberately dropped.
+  const handleBtDisconnect = useCallback(async () => {
+    if (disconnectingRef.current) return;
+    disconnectingRef.current = true;
+    setDisconnectingLink("bluetooth");
+    manualCloseRef.current = true;
+    sppService.manualClose = true;
+    try {
+      // Safe-stop: neutral commands over each LIVE BT transport before closing.
+      if (sppService.isConnected) {
+        try {
+          await sppService.sendLine("S");
+        } catch {
+          /* ignore — link may already be dead */
+        }
+        try {
+          await sppService.sendLine("SPD0");
+        } catch {
+          /* ignore */
+        }
+      }
+      if (bleService.isConnected) {
+        try {
+          await bleService.sendLine("S");
+        } catch {
+          /* ignore */
+        }
+        try {
+          await bleService.sendLine("SPD0");
+        } catch {
+          /* ignore */
+        }
+        await bleService.disconnect();
+      }
+      await sppService.disconnect();
+      setBtLinked(false);
+      // A live Wi-Fi link keeps the shared truth (`connected` / `linkVerified` /
+      // deviceName belong to whatever link remains); with no Wi-Fi socket up
+      // this is a full link loss and must un-verify it.
+      if (!wifiService.isConnected) {
+        setConnected(false);
+        if (!sppService.isConnected && !bleService.isConnected) {
+          setLinkVerified(false);
+        }
+        setDeviceName("");
+      }
+      // The car heard S / SPD0 over BT — "Stop" is honest on every surface.
+      setDriveStatusOnce("Stop");
+      setDriveDirOnce("S");
+      showConnectionMessage("Bluetooth disconnected.", "success");
+    } catch (e) {
+      const bluetoothStillConnected =
+        sppService.isConnected || bleService.isConnected;
+      setBtLinked(bluetoothStillConnected);
+      if (!bluetoothStillConnected && !wifiService.isConnected) {
+        setConnected(false);
+        setLinkVerified(false);
+        setDeviceName("");
+      }
+      const reason =
+        e instanceof Error
+          ? e.message
+          : "The Bluetooth link could not be closed.";
+      showConnectionMessage(
+        `Could not disconnect Bluetooth: ${reason}`,
+        "error",
+      );
+    } finally {
+      disconnectingRef.current = false;
+      setDisconnectingLink(null);
+    }
+  }, [showConnectionMessage, setDriveDirOnce, setDriveStatusOnce]);
+
+  // ---- v1.4.0 WiFi provisioning (app → BT → car) ----
+  // Sends WIFICFG;<ssid>;<password> over the Bluetooth link; the car stores
+  // the pair in Preferences and REJOINS that router. v2: it does NOT switch to
+  // a webserver mode — the web layer is always-on in 4WD4M — so the car's STATE
+  // echo carries REPLY=WIFICFG;…
+  const handleWifiProvision = useCallback(async () => {
+    const ssid = wifiSsid.trim();
+    if (!ssid) {
+      setError("Enter the WiFi network name (SSID) first.");
+      return;
+    }
+    if (!connected || !sppService.isConnected) {
+      setError(
+        "Connect the car over Bluetooth first â€” credentials travel the BT link.",
+      );
+      return;
+    }
+    setWifiProvisioning(true);
+    setError(null);
+    try {
+      await sppService.sendLine(buildWifiConfigLine(ssid, wifiPassword));
+      // A-15 (device-round-2): update the deck optimistically — show the
+      // just-sent network immediately instead of waiting for the car's
+      // REPLY (the stale default-SSID bug). The car's T-35 confirm
+      // (sendStateOn → REPLY=WIFICFG;STORED;<ssid>) re-confirms anyway.
+      // V2: provisioning moves the car to its own AP or a STA join; the
+      // app must give up the AP dial so the drive socket is not stuck on the
+      // car's own AP. The car keeps every transport live; the next
+      // STATE;IP= broadcasts the router IP for the user to dial.
+      wifiService.disconnect().catch(() => {});
+      showConnectionMessage(
+        `Sent WiFi "${ssid}" to the car — it is joining that network. Join it on this phone too; the U-80 prompt will remind you.`,
+        "success",
+      );
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Failed to send WiFi credentials",
+      );
+    } finally {
+      setWifiProvisioning(false);
+    }
+  }, [wifiSsid, wifiPassword, connected, showConnectionMessage]);
+
+  // REPLY=â€¦ lines from the car (WIFICFG;STORED;<ssid>) confirm provisioning
+  // and pre-fill the WS URL for the deck.
+  const lastProvisionReplyRef = useRef<string | null>(null);
+  const handleWifiProvisionReply = useCallback(
+    (reply: string) => {
+      if (reply.startsWith("WIFICFG;STORED;")) {
+        const ssid = reply.slice("WIFICFG;STORED;".length).trim();
+        setCarSsid(ssid);
+        setWifiPassword("");
+        // A-8: keep the SSID in the field (it doubles as confirmation of what
+        // the car stored) and remember it per car so the card pre-fills next
+        // session. The password is cleared â€” it must never linger in the UI.
+        persistPrefs({ lastWifiSsid: ssid });
+        // The car joins the router and gets a DHCP IP; default to the car's
+        // AP address until the user reads the real IP off the OLED/deck.
+        // v2: the new 4WD4M car's own AP is 192.168.245.1 (donor owns .244;
+        // SDK-default .4.x is forbidden fleet-wide).
+        // V2: drop the AP socket on provisioning so the dial is not stuck
+        // on the car's own AP; the car keeps every transport live and the
+        // next STATE;IP= broadcasts the router IP for the user to dial.
+        wifiService.disconnect().catch(() => {});
+        setWifiUrl(DEFAULT_WS_URL);
+        showConnectionMessage(
+          `Car stored WiFi "${ssid}" â€” switched to Webserver/join mode (v2 cars keep every transport live).`,
+          "success",
+        );
+      } else if (reply.startsWith("WIFICFG;ERROR")) {
+        setError(`Car rejected WiFi settings: ${reply}`);
+      } else if (reply.startsWith("WIFICFG;SSID;")) {
+        setCarSsid(reply.slice("WIFICFG;SSID;".length).trim() || null);
+      } else if (reply.startsWith("WIFICFG;WIFI;PAGE;")) {
+        // U-116: the car's WEBPAGE server toggle. Distinct from the Wi-Fi /
+        // Bluetooth transport toggles (t_wifi / t_bt). The car answers
+        // WIFICFG;WIFI;PAGE;ON | OFF so the app mirrors car truth (the user
+        // may have flipped it from the car's own page, BT, or another phone).
+        // Unlike the transport toggles, the PAGE flip has NO optimistic-commit
+        // grace on the reply path: the request is one-shot (the panel sends
+        // ON or OFF and the car echoes the result), so a late echo of the
+        // pre-flip value can never be a stale race line — adopting it would be
+        // a lie, not a protection. Adopt every PAGE reply, but only PERSIST on
+        // a real change (U-117: the persist used to sit outside the guard, so
+        // every echo re-wrote the profile).
+        const pageOn =
+          reply.slice("WIFICFG;WIFI;PAGE;".length).trim().toUpperCase() ===
+          "ON";
+        if (transportToggleRef.current.pageOn !== pageOn) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            pageOn,
+          };
+          setPageOnState(pageOn);
+          persistPrefs({ pageOn });
+        }
+      } else if (reply.startsWith("WIFICFG;WIFI;")) {
+        // U-105 (1.3.5): the car's Wi-Fi transport toggle (ON|OFF), answered
+        // to both a bare `WIFICFG;WIFI;?` query and an ON/OFF set.
+        // P7 / issue 8: the reply runs the SAME optimistic-commit grace as the
+        // STATE adoption path. A query answer (or set echo) in flight when the
+        // user flipped the toggle carries the PRE-flip value; adopting it
+        // here rolled the panel back — and PERSISTED that pre-flip value into
+        // the per-car profile, so the wrong truth survived the restart. Car
+        // truth still wins outside the grace window.
+        const on =
+          reply.slice("WIFICFG;WIFI;".length).trim().toUpperCase() === "ON";
+        if (
+          toggleChangeProtectedRef.current("wifiEnabled", on) &&
+          transportToggleRef.current.wifiEnabled !== on
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            wifiEnabled: on,
+          };
+          setWifiEnabled(on);
+          persistPrefs({ wifiEnabled: on });
+        }
+      } else if (reply.startsWith("WIFICFG;BT;")) {
+        const on =
+          reply.slice("WIFICFG;BT;".length).trim().toUpperCase() === "ON";
+        if (
+          toggleChangeProtectedRef.current("btEnabled", on) &&
+          transportToggleRef.current.btEnabled !== on
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            btEnabled: on,
+          };
+          setBtEnabled(on);
+          persistPrefs({ btEnabled: on });
+        }
+      } else if (reply.startsWith("WIFICFG;AUTOJOIN;")) {
+        const on =
+          reply.slice("WIFICFG;AUTOJOIN;".length).trim().toUpperCase() === "ON";
+        if (
+          toggleChangeProtectedRef.current("bootAutojoin", on) &&
+          (transportToggleRef.current.bootAutojoin !== on ||
+            autoJoinRouterRef.current !== on)
+        ) {
+          transportToggleRef.current = {
+            ...transportToggleRef.current,
+            bootAutojoin: on,
+          };
+          setBootAutojoin(on);
+          setAutoJoinRouterState(on);
+          autoJoinRouterRef.current = on;
+          persistPrefs({ bootAutojoin: on, autoJoinRouter: on });
+        }
+      }
+      lastProvisionReplyRef.current = reply;
+    },
+    [showConnectionMessage, persistPrefs],
+  );
+  handleWifiProvisionReplyRef.current = handleWifiProvisionReply;
+
+  // R-4 (app half, fleet parity): the car replied NACK;E=UNKNOWN_MODE;ARG=<token>
+  // to a mode token it doesn't recognize (mixed-pair case). Surface "Not
+  // supported by car" and park the token as car-truth stub so ModeChooser
+  // BADGES it as work-in-progress, which is what the hand-held remote does
+  // (comms.cpp:505-508: setCarStub(arg,true) + setStatus(...)).
+  //
+  // It does NOT refuse the token, and an earlier version of this comment
+  // claimed it did. Parking is presentation-only: selectMode() sends every
+  // token and the car is the authority on what it accepts.
+  // The stale "refuse it from here on" wording survived a deliberate removal
+  // of that gate, which is the worst kind of comment — one that describes a
+  // safety control that isn't there.
+  //
+  // F-52: a NACK is NOT only about modes. handleCommand() falls through to
+  // setModeFromString() for any line it does not handle, so the car answers
+  // every unrecognised COMMAND with the same UNKNOWN_MODE error. The 4WD4M
+  // (differential drive) implements neither ESTOP, SERVO<n>, TRIM<n> nor
+  // STEER<n> — all four are sent by this screen — so every EMERGENCY STOP
+  // press (and every trim / steering-limit edit) arrived here and produced a
+  // red "ESTOP is not supported by this car" toast on the one control that
+  // must never look broken, overwrote the "EMERGENCY STOP" status with
+  // "Not supported by car", and parked a phantom `ESTOP` stub. The car did
+  // stop (SPD0 is correct) — which is exactly why it survived every bench
+  // round. Only a real MODE token may be parked or reported.
+  const handleNack = useCallback(
+    (arg: string) => {
+      const tok = canonicalCarToken(arg);
+      if (!tok) return;
+      if (!isModeToken(tok)) return;
+      setCarStubMap((prev) =>
+        prev[tok] === true ? prev : { ...prev, [tok]: true },
+      );
+      setDriveStatusOnce("Not supported by car");
+      showConnectionMessage(
+        `${MODE_NAME_FOR_TOKEN[tok] ?? tok} is not supported by this car.`,
+        "error",
+      );
+
+      // U-81: roll the DISPLAY back. `selectMode` set the new mode optimistically
+      // the instant it was tapped, and before this the refusal did not undo it —
+      // so the app showed a mode the car had just rejected and only corrected
+      // itself if some later, unrelated `MODE=` frame happened to arrive after
+      // MODE_CHANGE_GRACE_MS. F-62: consume the answer. The car said no, so stop
+      // showing yes.
+      //
+      // A NACK frame carries no `mode` field (carProtocol.ts returns early), so
+      // the car's own last-reported mode is the only truth available to restore.
+      const commit = modeCommitRef.current;
+      modeCommitRef.current = null;
+      if (commit && commit.token === tok) {
+        const reportedId = carModeIdRef.current ?? commit.stale;
+        const back =
+          (reportedId
+            ? carModesRef.current.find(
+                (m) =>
+                  m.id === reportedId.toLowerCase() || m.token === reportedId,
+              )
+            : undefined) ??
+          carModesRef.current.find((m) => m.token === commit.stale);
+        if (back) {
+          setActiveMode(back);
+          // The refused id was persisted on tap; leaving it there would restore
+          // a mode this car does not have on the next launch.
+          persistPrefsRef.current?.({ modeId: back.id });
+        }
+      }
+    },
+    [showConnectionMessage, setDriveStatusOnce],
+  );
+  handleNackRef.current = handleNack;
+
+  // Safe stop on link loss (comms.cpp safeStopAndClearQueue parity): the
+  // neutral commands are sent by the transport layer on disconnect; here we
+  // reset the on-screen drive state so the app never shows a stale
+  // "Forward" after the car already stopped.
+  useFocusEffect(
+    React.useCallback(() => {
+      return sppService.onStatus((kind) => {
+        if (!mountedRef.current) return;
+        if (kind === "disconnected" || kind === "error") {
+          setDriveDirOnce("S");
+        }
+      });
+    }, [setDriveDirOnce]),
+  );
+
+  const handleDisconnect = useCallback(async () => {
+    // Persist everything before tearing down so the car remembers for next
+    // power cycle (owner: "remember state after restart").
+    persistPrefsRef.current?.({ modeId: activeMode.id });
+    manualCloseRef.current = true;
+    sppService.manualClose = true;
+    wifiService.markManualClose();
+    // Safe-stop: send neutral commands over every live transport.
+    try {
+      await sppService.sendLine("SPD0");
+    } catch {
+      /* ignore */
+    }
+    try {
+      await sppService.sendLine("SERVO90");
+    } catch {
+      /* ignore */
+    }
+    if (bleService.isConnected) {
+      try {
+        await bleService.sendLine("SPD0");
+      } catch {
+        /* ignore */
+      }
+      try {
+        await bleService.sendLine("SERVO90");
+      } catch {
+        /* ignore */
+      }
+      await bleService.disconnect();
+    }
+    if (wifiService.isConnected) {
+      try {
+        await wifiService.sendLine("SPD0");
+      } catch {
+        /* ignore */
+      }
+      try {
+        await wifiService.sendLine("SERVO90");
+      } catch {
+        /* ignore */
+      }
+      await wifiService.disconnect();
+    }
+    await sppService.disconnect();
+    // W5: clear stale telemetry so the UI doesn't show old IP/SSID after full disconnect
+    setTelemetry((prev) => ({
+      ...prev,
+      ip: undefined,
+      ssid: undefined,
+      connected: undefined,
+    }));
+    // Drive UI reset: only the live drive state â€” speed / servo / PID /
+    // gimbal / telemetry stay at their current values so they restore on
+    // reconnect (bug fix 2026-09-15: "remember after power cycle").
+    setConnected(false);
+    setWifiConnected(false);
+    setDeviceName("");
+    setSppDevices([]);
+    setDriveStatusOnce("Stop");
+    setDriveDirOnce("S");
+    setNavActive(false);
+    setNavField("none");
+    setPreviewMode(null);
+  }, [activeMode, setDriveDirOnce, setDriveStatusOnce, setNavActive]);
+
+  // Send a command over the right transport(s) for the ACTIVE mode; no-ops
+  // when nothing is linked.
+  //   • Every-link commands (mode tokens + neutral/emergency lines) go over
+  //     all live links.
+  //   • Everything else follows the active mode's own transports (R-4 parity:
+  //     a Bluetooth car must never hear a WiFi-only drive letter). The 4WD4M
+  //     mode lists BT + WiFi, so with both links live the command rides both.
+  //   • When only ONE link is live it is used regardless of mode, so a 4WD4M
+  //     car connected purely over the car's WS still drives.
+  //   • routeCommand() also takes an optional `chosenRadio` tie-breaker; it is
+  //     set to `wirelessMethod` so a second connection is raised by the same
+  //     method the first one was — a BT-connected car still answers a Wi-Fi
+  //     dial (and vice versa), exactly what this bench round asks for.
+  //     `connMethod` is the user's durable choice on the device and is never
+  //     overwritten by a disconnected connect; `wirelessMethod` is the fresh
+  //     capture taken inside handleWifiConnect before anything else moves, so
+  //     it is never stale when the second link is raised.
+  const sendCommand = useCallback(
+    (cmd: string) => {
+      const btLive = sppService.isConnected || bleService.isConnected;
+      const wsLive = wifiService.isConnected;
+      const modeUsesBt =
+        activeMode.transport.includes("classic-bt") ||
+        activeMode.transport.includes("ble");
+      const modeUsesWifi = activeMode.transport.includes("wifi");
+      const broadcast = EVERY_LINK_COMMANDS.has(
+        cmd.trim().toUpperCase().split(";")[0],
+      );
+      const route = routeCommand({
+        broadcast,
+        btLive,
+        wsLive,
+        modeUsesBt,
+        modeUsesWifi,
+        chosenRadio: wirelessMethod,
+      });
+      if (route.bt && connected && sppService.isConnected) {
+        void sppService.sendLine(cmd).catch(() => {});
+      }
+      if (route.bt && connected && bleService.isConnected) {
+        void bleService.sendLine(cmd).catch(() => {});
+      }
+      if (route.ws && wifiService.isConnected) {
+        void wifiService.sendLine(cmd).catch(() => {});
+      }
+    },
+    [connected, activeMode, wirelessMethod],
+  );
+
+  // U-105 (1.3.5): the car's three transport toggles. Like the ROUTERS;… system
+  // commands, WIFICFG;WIFI/BT/AUTOJOIN are SYSTEM commands (switch the car's own
+  // behaviour, never drive) and can ride WHATEVER link is live. `sendCommand`
+  // routes by the ACTIVE mode's transports, which would strand the command when
+  // the mode's radio is not the one that is up; so this fan-out targets every
+  // live transport directly (spp → ble → wifi), no duplicate sends.
+  const sendSystemLine = useCallback((line: string) => {
+    const spp = sppService.isConnected;
+    const ble = bleService.isConnected;
+    const ws = wifiService.isConnected;
+    if (spp) void sppService.sendLine(line).catch(() => {});
+    if (ble) void bleService.sendLine(line).catch(() => {});
+    if (ws) void wifiService.sendLine(line).catch(() => {});
+    return spp || ble || ws;
+  }, []);
+  // One generic setter/query pair for the three keys — ON/OFF toggles that
+  // persist on the car. Optimistic: the car's reply re-confirms (or corrects)
+  // through handleWifiProvisionReply, which also updates the per-car pref.
+  const setCarTransportToggle = useCallback(
+    (which: "WIFI" | "BT" | "AUTOJOIN", on: boolean) => {
+      const patch = {
+        WIFI: "wifiEnabled",
+        BT: "btEnabled",
+        AUTOJOIN: "bootAutojoin",
+      }[which] as "wifiEnabled" | "btEnabled" | "bootAutojoin";
+      if (patch === "wifiEnabled") setWifiEnabled(on);
+      else if (patch === "btEnabled") setBtEnabled(on);
+      else {
+        setBootAutojoin(on);
+        setAutoJoinRouterState(on);
+        autoJoinRouterRef.current = on;
+      }
+      toggleCommitRef.current = { which: patch, value: on, at: Date.now() };
+      persistPrefsRef.current?.(
+        patch === "bootAutojoin"
+          ? { bootAutojoin: on, autoJoinRouter: on }
+          : { [patch]: on },
+      );
+      if (!sendSystemLine(`WIFICFG;${which};${on ? "ON" : "OFF"}`)) {
+        showConnectionMessage(
+          which === "AUTOJOIN"
+            ? `Remembered-router startup ${on ? "enabled" : "disabled"} — connect to the car first.`
+            : `Turn the ${patch.replace(/([A-Z])/g, " $1").trim()} transport ${on ? "on" : "off"} — connect to the car first.`,
+          "error",
+        );
+      }
+    },
+    [sendSystemLine, showConnectionMessage],
+  );
+  const setAutoJoinRouter = (value: boolean) => {
+    setCarTransportToggle("AUTOJOIN", value);
+  };
+  const queryCarTransportToggle = useCallback(
+    (which: "WIFI" | "BT" | "AUTOJOIN" | "PAGE") => {
+      // U-117: PAGE queries the web-page server state (`WIFICFG;WIFI;PAGE;?`)
+      // — the panel asks for it the moment a link comes up, so the switch
+      // shows CAR truth instead of an assumption, even on firmware that has
+      // not yet put `;PAGE=` on the STATE line.
+      sendSystemLine(
+        which === "PAGE" ? "WIFICFG;WIFI;PAGE;?" : `WIFICFG;${which};?`,
+      );
+    },
+    [sendSystemLine],
+  );
+
+  // ---- page-server power (U-116) ----
+  const setPageOn = useCallback(
+    (on: boolean) => {
+      setPageOnState(on);
+      persistPrefsRef.current?.({ pageOn: on });
+      if (!sendSystemLine(`WIFICFG;WIFI;PAGE;${on ? "ON" : "OFF"}`)) {
+        showConnectionMessage(
+          `The car's web page ${on ? "on" : "off"} — connect to the car first.`,
+          "error",
+        );
+      }
+    },
+    [sendSystemLine, showConnectionMessage],
+  );
+
+  // ---- Connection-Manager Phase B: the ONE opt-in envelope intake ----
+  //
+  // Both dialects now coexist: the existing screen code keeps calling
+  // sendCommand("SPD140") with hand-written wire lines, and this accepts
+  // the additive JSON envelope. The envelope is encoded to a line FIRST,
+  // then handed to the SAME sendCommand fan-out above — deliberately, not
+  // to linkManager. Going through linkManager would have been shorter but
+  // WRONG: sendCommand is where R-4 fleet parity lives (mode-based
+  // transport routing + the EVERY_LINK_COMMANDS broadcast set), and
+  // linkManager.sendLine is not on that path. Encoding here is also what
+  // makes "the envelope never changes a byte on the wire" true by
+  // construction rather than by test.
+  //
+  // Fails CLOSED in three places, none of which put anything on the wire:
+  //   • gate off (the shipped default)      → refused
+  //   • malformed envelope                  → its readable error
+  //   • no link / nothing connected         → the fan-out's own no-op
+  const sendEnvelopeCommand = useCallback(
+    (input: EnvelopeInput): EnvelopeSendResult => {
+      if (!isEnvelopeIntakeEnabled()) {
+        return {
+          ok: false,
+          error: "Command envelopes are not enabled on this build.",
+        };
+      }
+      const encoded = encodeEnvelopeWire(input);
+      if (!encoded.ok) {
+        // Surface the translation layer's own reason (F-30: one readable
+        // error, never a silent drop).
+        setError(encoded.error);
+        return { ok: false, error: encoded.error };
+      }
+      // The line is now a normal wire line: mode routing, the broadcast
+      // set and the canControl gating all behave exactly as they do for a
+      // hand-written one. W-14: the password-bearing lines (ROUTERS;ADD,
+      // WIFICFG) go to the car and are never echoed into a status string.
+      sendCommand(encoded.line);
+      return { ok: true };
+    },
+    [sendCommand],
+  );
+
+  // ---- A-27: saved-router registry (wireless car v1.7.1, ROUTERS;*) ----
+  // The car (NVS `botcfg`) is the source of truth; the app mirrors names in
+  // savedRouters so the panel restores instantly. Commands broadcast over
+  // EVERY link (W-14: system commands, never drive). Each edit persists the
+  // mirror optimistically; the car's `networks` echo re-syncs within ~1-2 s
+  // (1 s WS broadcast + 2 s REQ_STATE poll).
+  const routerUse = useCallback(
+    (ssid: string) => {
+      const s = ssid.trim();
+      if (!s) return;
+      sendCommand(buildRouterCommand("USE", s));
+      setDriveStatusOnce(`Switching WiFi to ${s}`);
+      persistPrefsRef.current?.({ savedRouters: [...carNetworks] });
+    },
+    [sendCommand, carNetworks, setDriveStatusOnce],
+  );
+
+  const routerAdd = useCallback(
+    (ssid: string, pass: string) => {
+      const s = ssid.trim();
+      if (!s) return;
+      sendCommand(buildRouterCommand("ADD", s, pass));
+      // Optimistic list update (the car's next echo is authoritative).
+      setCarNetworks((prev) => (prev.includes(s) ? prev : [...prev, s]));
+      persistPrefsRef.current?.({
+        savedRouters: carNetworks.includes(s)
+          ? [...carNetworks]
+          : [...carNetworks, s],
+      });
+      setDriveStatusOnce(`Saved router ${s}`);
+    },
+    [sendCommand, carNetworks, setDriveStatusOnce],
+  );
+
+  // -------------------------------------------------------------------
+  // D2 (U-68): RUN A ROUTER REQUEST AND WAIT FOR THE CAR'S ANSWER.
+  //
+  // The car answers every router command (`ROUTERS;ADDED` / `USED` /
+  // `DELETED` / `CLEARED` / `FULL` / `ERROR;…`). Until now the app parsed
+  // `REPLY=` off the STATE line and threw it away — only `WIFICFG;*` was
+  // handled — so "add a router" was fire-and-forget: a success and a
+  // `ROUTERS;FULL` looked identical, and the form cleared itself on a 600 ms
+  // timer. That is why the owner could not make adding a router work and
+  // could not see why.
+  //
+  // F-62: an answer must be CONSUMED. `requestRouter` sends the line, arms a
+  // timeout, and resolves with the outcome the user is shown. Silence becomes
+  // a VISIBLE failure — never a fake success. Exactly one request is in
+  // flight at a time, which is what lets a single answer be attributed.
+  // -------------------------------------------------------------------
+  const routerPendingRef = useRef<{
+    request: RouterRequest;
+    resolve: (o: RouterOutcome) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+
+  const settleRouter = useCallback((outcome: RouterOutcome) => {
+    const pending = routerPendingRef.current;
+    if (!pending) return;
+    routerPendingRef.current = null;
+    clearTimeout(pending.timer);
+    pending.resolve(outcome);
+  }, []);
+
+  /**
+   * Consume an inbound answer. Called from the telemetry path with the raw
+   * `REPLY=` text, and separately with any `ROUTERS;…` line.
+   *
+   * Exported through the hub so the Control Panel can also feed it a line it
+   * received directly (a Bluetooth `REPLY` arrives on the same STATE line, so
+   * this is belt-and-braces rather than a second path).
+   */
+  // U-71 (2026-10-02): remember CONFIRMED router changes, so the app and the car
+  // both keep the setting.
+  //
+  // The owner asked for it directly ("all the car and app to remember the old
+  // setting in the database too and both app and cars too"), and it was a real
+  // gap I introduced in U-68: the pre-existing `routerUse`/`routerAdd` pair
+  // persisted its optimistic local list, but the ack-consuming path built in
+  // U-68 (`requestRouter`/`runSwitchPlan`) only persisted on a `list` answer. So
+  // adding or switching a router updated the car and the screen, and nothing was
+  // written to AsyncStorage or to the Supabase `car_profiles` row — the setting
+  // was forgotten the moment the app restarted.
+  //
+  // The list is derived from the car's ANSWER, never from what we hoped would
+  // happen: `ROUTERS;ADDED;<ssid>` adds that exact name, `DELETED` removes it,
+  // `CLEARED` empties it, and a `list` replaces it wholesale. A FAILED answer
+  // changes nothing, which is the point of consuming it at all (F-62).
+  const persistRouters = useCallback(
+    (next: string[], lastSsid?: string | null) => {
+      savedNetworksRef.current = next.slice();
+      persistPrefsRef.current?.({
+        savedRouters: next.slice(),
+        ...(lastSsid ? { lastWifiSsid: lastSsid } : {}),
+      });
+    },
+    [],
+  );
+
+  const consumeRouterAnswer = useCallback(
+    (text: string) => {
+      const answer = parseRouterAnswer(text);
+      if (!answer) return false;
+
+      // A list is DATA, not an acknowledgement: refresh the mirror but never
+      // let it resolve a pending command (a scan result must not look like
+      // the answer to an add).
+      if (answer.kind === "list") {
+        setCarNetworks(answer.ssids.slice());
+        persistRouters(answer.ssids.slice());
+        return true;
+      }
+
+      // U-81: the derivation itself is `deriveRouters` in ./connection/routerMemory
+      // — the SAME function the tests assert. It used to be inlined here with a
+      // transcribed twin in the test file, which let the two disagree (the
+      // phantom "STARTED" router). `null` = this answer changes nothing.
+      const memory = deriveRouters(savedNetworksRef.current, answer);
+      if (memory) {
+        setCarNetworks(memory.next.slice());
+        persistRouters(memory.next.slice(), memory.lastSsid);
+        // U-80 (owner 2026-10-03): the car just moved networks - TELL the user
+        // to move the phone too, simply and immediately, no matter which
+        // surface fired the switch (panel, webpage, remote, smart-link).
+        if (answer.kind === "used") setRouterSwitchNotice(answer.ssid);
+      }
+
+      const pending = routerPendingRef.current;
+      if (!pending) return true; // nothing to attribute it to; not an error
+      settleRouter(outcomeFor(answer, pending.request));
+      return true;
+    },
+    [persistRouters, settleRouter, setRouterSwitchNotice],
+  );
+  consumeRouterAnswerRef.current = consumeRouterAnswer;
+
+  const requestRouter = useCallback(
+    (request: RouterRequest): Promise<RouterOutcome> => {
+      // One at a time: a second request supersedes the first rather than
+      // racing it, and the superseded one is failed honestly.
+      settleRouter({
+        ok: false,
+        reason: "Another router request was started before this one finished.",
+      });
+      return new Promise<RouterOutcome>((resolve) => {
+        const timer = setTimeout(() => {
+          settleRouter(timeoutOutcome(request));
+        }, ROUTER_ACK_TIMEOUT_MS);
+        routerPendingRef.current = { request, resolve, timer };
+        sendCommand(routerRequestLine(request));
+      });
+    },
+    [sendCommand, settleRouter],
+  );
+
+  /** Run a switch plan's steps in order, stopping at the first failure. */
+  const runSwitchPlan = useCallback(
+    async (plan: SwitchPlan): Promise<RouterOutcome> => {
+      let last: RouterOutcome = { ok: true, message: "" };
+      for (const step of plan.steps) {
+        last = await requestRouter(step);
+        if (!last.ok) return last;
+      }
+      return last;
+    },
+    [requestRouter],
+  );
+
+  /** Ask the car to enumerate the networks its own antenna can see. */
+  const requestScan = useCallback(
+    () => requestRouter({ kind: "scan" }),
+    [requestRouter],
+  );
+
+  // U-93 (owner: *"deleted button is not working"*): this used to SEND the DEL
+  // line itself and persist an OPTIMISTIC local list — no ack consumed, no
+  // timeout, no error (F-62), and the caller went through the ack path FIRST,
+  // so the car received the same DEL TWICE (the second answering
+  // `ROUTERS;ERROR;Not saved:<ssid>` — a working delete reporting failure).
+  // One command, one answer, one mirror: the ack path (`requestRouter`) is the
+  // only sender; the confirmed `DELETED` answer derives the mirror in
+  // `consumeRouterAnswer`. This helper now only mirrors a CONFIRMED deletion
+  // for callers that have one.
+  const routerDelete = useCallback(
+    async (ssid: string) => {
+      const s = ssid.trim();
+      if (!s) return;
+      const next = carNetworks.filter((n) => n !== s);
+      setCarNetworks(next);
+      // U-98: optimistic list update – always persist, even if the car
+      // doesn't acknowledge the deletion (the car's next echo will
+      // reconcile any discrepancy).
+      persistPrefsRef.current?.({ savedRouters: next });
+    },
+    [carNetworks],
+  );
+
+  const routerClearAll = useCallback(() => {
+    // A-41 (round-9): wipe EVERY saved router + the stored active pair on the
+    // car and remote (ROUTERS;CLEAR over every link, T-62). Optimistic reset
+    // to an empty list — the car's own network (4WD4MCar_WiFi) is virtual;
+    // the car's next `networks` echo re-appends it as the leading, protected
+    // entry (T-66). Never touches the car's own AP.
+    sendCommand(buildRouterCommand("CLEAR", ""));
+    setCarNetworks([]);
+    persistPrefsRef.current?.({ savedRouters: [] });
+    setDriveStatusOnce("All routers cleared");
+  }, [sendCommand, setDriveStatusOnce]);
+
+  // Auto-dial: when the car announces its new router IP (STATE;IP=<ip>) after
+  // a smart-link USE, pre-fill the WS URL toward the router so the user only
+  // joins that WiFi and taps Connect — no more reading the IP off a 0.96″ OLED.
+  const telemetryIpRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ip = telemetry.ip?.trim();
+    if (ip) telemetryIpRef.current = ip;
+  }, [telemetry.ip]);
+  const smartLinkDialedRef = useRef(false);
+  useEffect(() => {
+    if (!linkVerified) {
+      smartLinkDialedRef.current = false;
+      return;
+    }
+    if (smartLinkDialedRef.current) return;
+    const ip = telemetryIpRef.current;
+    if (!ip) return;
+    const bare = ip
+      .replace(/^ws:\/\//, "")
+      .replace(/:\d+$/, "")
+      .trim();
+    if (!bare) return;
+    const currentHost = (wifiService.url ?? "").match(/\/\/([^:/]+)/)?.[1];
+    if (bare === currentHost) return;
+    smartLinkDialedRef.current = true;
+    const newUrl = /^\d{1,3}(\.\d{1,3}){3}$/.test(bare)
+      ? `ws://${bare}:81`
+      : ip.startsWith("ws://")
+        ? ip
+        : `ws://${ip}`;
+    setWifiUrl(newUrl);
+    showConnectionMessage(
+      `Car is on router at ${ip} — join that network and tap Connect.`,
+      "success",
+    );
+  }, [
+    linkVerified,
+    profileKey,
+    telemetry.ip,
+    setWifiUrl,
+    showConnectionMessage,
+  ]);
+
+  const handleDirection = useCallback(
+    (d: "F" | "B" | "L" | "R" | "S") => {
+      setDriveDirOnce(d);
+      if (d === "S") {
+        setDriveStatusOnce("Stop");
+        sendCommand("S");
+        return;
+      }
+      setDriveStatusOnce(
+        d === "F"
+          ? "Forward"
+          : d === "B"
+            ? "Backward"
+            : d === "L"
+              ? "Left"
+              : "Right",
+      );
+      sendCommand(d);
+    },
+    [sendCommand, setDriveDirOnce, setDriveStatusOnce],
+  );
+
+  const sendThrottled = useCallback(
+    (kind: string, cmd: string) => {
+      const now = Date.now();
+      if (cmd === "S" || cmd === "SPD0" || cmd === "SERVO90") {
+        sendCommand(cmd);
+        lastDriveCmdAtRef.current[kind] = now;
+        return;
+      }
+      const last = lastDriveCmdAtRef.current[kind] ?? 0;
+      if (now - last < DRIVE_CMD_MIN_INTERVAL_MS) return;
+      lastDriveCmdAtRef.current[kind] = now;
+      sendCommand(cmd);
+    },
+    [sendCommand],
+  );
+
+  // ESP-remote parity: speed is NEVER sent live while driving. handleSpeed
+  // only edits the PREVIEW (NAV highlight field); commitSpeed â€” called on
+  // Select â€” sends SPD<n> once, sets the local "Speed:<n>" status and
+  // persists (the .ino TOP_SPEED branch).
+  //
+  // Owner round 2026-09-29 ("speed is malicious"): the slider is LINEAR
+  // 100..255 — exactly the window the car accepts (Config.h MIN/MAX speed).
+  // The number shown IS the number sent as SPD<n>; nothing re-scales,
+  // re-offsets or re-bases it. The old "input is 0..255" comment was wrong
+  // (the strip has always been bounded 100..255); the real mid-drive number
+  // jumps came from the telemetry echo overwriting this state, fixed above.
+  const handleSpeed = useCallback((value: number) => {
+    const q = quantizeSpeedToStep(
+      Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(value))),
+    );
+    setSpeed(q);
+  }, []);
+
+  const commitSpeed = useCallback(() => {
+    setSpeed((s) => {
+      sendThrottled("spd", `SPD${Math.round(s)}`);
+      setDriveStatusOnce(`Speed:${Math.round(s)}`);
+      persistPrefsRef.current?.({ speed: s });
+      return s;
+    });
+  }, [sendThrottled, setDriveStatusOnce]);
+
+  const handleServo = useCallback(
+    (value: number) => {
+      setServo(value);
+      sendThrottled("servo", `SERVO${Math.round(value)}`);
+    },
+    [sendThrottled],
+  );
+
+  const applyPid = useCallback(
+    (key: "kp" | "ki" | "kd" | "out" | "off", value: number) => {
+      const next = {
+        kp: pidKp,
+        ki: pidKi,
+        kd: pidKd,
+        out: pidOut,
+        off: pidOff,
+      };
+      next[key] = value;
+      if (key === "kp") setPidKp(value);
+      if (key === "ki") setPidKi(value);
+      if (key === "kd") setPidKd(value);
+      if (key === "out") setPidOut(value);
+      if (key === "off") setPidOff(value);
+      sendCommand(
+        `CFG;Kp:${next.kp.toFixed(2)};Ki:${next.ki.toFixed(3)};Kd:${next.kd.toFixed(3)};OUT:${next.out.toFixed(0)};OFF:${next.off.toFixed(2)}`,
+      );
+    },
+    [pidKp, pidKi, pidKd, pidOut, pidOff, sendCommand],
+  );
+
+  // R-20 fixed throttle (owner: "speed fixed, not gradually increasing"): the
+  // joystick/d-pad signals DIRECTION only — the magnitude sent is ALWAYS the
+  // speed setting (quantized 100..255). The car clamps it into MIN..MAX and
+  // holds that exact PWM while the stick is deflected.
+  const handleStickDrive = useCallback(
+    (signed: number) => {
+      setDriveDirOnce(signed > 0 ? "F" : signed < 0 ? "B" : "S");
+      setDriveStatusOnce(
+        signed > 0 ? "Forward" : signed < 0 ? "Backward" : "Stop",
+      );
+      const mag = quantizeSpeedToStep(speed);
+      sendThrottled("spd", `SPD${signed > 0 ? mag : signed < 0 ? -mag : 0}`);
+    },
+    [sendThrottled, speed, setDriveDirOnce, setDriveStatusOnce],
+  );
+
+  // R-20: steering travel LIMIT edits — clamp to the car's 10..90 range,
+  // send STEER<n> IMMEDIATELY (car persists + echoes STATE ;STEER=, so the
+  // hand-held remote mirrors the same value), and persist locally. Same
+  // pattern as adjustTrim (TRIM<n>).
+  const adjustSteerLimit = useCallback(
+    (delta: number) => {
+      setSteerLimit((prev) => {
+        const next = Math.max(
+          STEER_LIMIT_MIN,
+          Math.min(STEER_LIMIT_MAX, prev + delta),
+        );
+        if (next !== prev) {
+          sendCommand(buildSteer(next));
+          persistPrefsRef.current?.({ steerLimit: next });
+        }
+        return next;
+      });
+    },
+    [sendCommand],
+  );
+
+  const adjustTrim = useCallback(
+    (delta: number) => {
+      setTrim((prev) => {
+        const next = Math.max(
+          -safetyLimits.maxTrim,
+          Math.min(safetyLimits.maxTrim, prev + delta),
+        );
+        sendCommand(`TRIM${next}`);
+        persistPrefs({ trim: next });
+        return next;
+      });
+    },
+    [safetyLimits.maxTrim, sendCommand, persistPrefs],
+  );
+
+  const handleEStop = useCallback(() => {
+    setDriveDirOnce("S");
+    setDriveStatusOnce("EMERGENCY STOP");
+    sendCommand("ESTOP");
+    sendCommand("SPD0");
+    sendCommand("SERVO90");
+  }, [sendCommand, setDriveDirOnce, setDriveStatusOnce]);
+
+  // Mode select = the ESP confirm path: clear the queue, send the token
+  // immediately, mirror the mode, status "Mode:<name>", stop driving.
+  // Owner decision 2026-09-15: ALL 9 firmware modes are selectable â€” a
+  // WIP/CS mode still receives its token (the car renders its own frame /
+  // COMING SOON, WORK IN PROGRESS states) and the controller shows the badge.
+  // The old A-7 app-side refuse gate is gone (the car says no itself via its
+  // frame or a NACK;E=UNKNOWN_MODE if it truly rejects a token).
+  const selectMode = useCallback(
+    (m: CarMode) => {
+      setActiveMode(m);
+      setDriveDirOnce("S");
+      setDriveStatusOnce(`Mode:${MODE_NAME_FOR_TOKEN[m.token] ?? m.token}`);
+      sendCommand("S");
+      sendCommand(m.token);
+      // A-37: open the commit-grace window (pre-commit car truth + chosen token)
+      // so the stale in-flight MODE echo can't flicker the optimistic pick back.
+      modeCommitRef.current = {
+        token: canonicalCarToken(m.token),
+        stale: carModeIdRef.current,
+        at: Date.now(),
+      };
+      // Persist the selected mode so it restores on reconnect / next power cycle.
+      persistPrefsRef.current?.({ modeId: m.id });
+    },
+    [sendCommand, setDriveDirOnce, setDriveStatusOnce],
+  );
+
+  const cycleMode = useCallback(() => {
+    // Remote fleet cycle order — always advances and wraps through
+    // ALL 9 firmware modes per REMOTE_MODE_ORDER. Planned/CS modes stay
+    // cyclable per owner ruling R-10 (the car renders its own planned-mode
+    // frame) — so we do NOT pre-filter the pool by availability. The ONE
+    // exception is U-113 P1: a token the paired car declared GONE in its
+    // CAPS table (absent from the car's own registry — ESP_SER/ESP_CLI on
+    // the 4WD4M since U-79) is SKIPPED. Sending one is guaranteed to come
+    // back as NACK;E=UNKNOWN_MODE, and handleNack rolls the optimistic pick
+    // straight back to car truth — which is exactly why the rotate button
+    // looked dead on the owner's car: 4WD4M → ESP_SER → NACK → 4WD4M,
+    // forever. With no CAPS table yet (older cars) every token resolves to
+    // the fleet fallback and the predicate is uniformly false, so the
+    // cycle is byte-for-byte what it was before.
+    const nextToken = nextCyclableToken(activeMode.token, (tok) => {
+      const avail = modeAvailStatus(tok, carStubMap, carAvailMap);
+      return avail === "GONE";
+    });
+    const next = LOCAL_CAR_MODES.find(
+      (m) => canonicalCarToken(m.token) === nextToken,
+    );
+    if (next) selectMode(next);
+  }, [activeMode, selectMode, carStubMap, carAvailMap]);
+
+  const toggleRelay = useCallback(
+    (i: number) => {
+      setRelays((prev) => {
+        const next = !prev[i];
+        sendCommand(`OUT${i}:${next ? 1 : 0}`);
+        return { ...prev, [i]: next };
+      });
+    },
+    [sendCommand],
+  );
+
+  const handleGimbalPan = useCallback(
+    (value: number) => {
+      setGimbalPan(value);
+      sendCommand(`GIMBAL_PAN:${Math.round(value)}`);
+    },
+    [sendCommand],
+  );
+  const handleGimbalTilt = useCallback(
+    (value: number) => {
+      setGimbalTilt(value);
+      sendCommand(`GIMBAL_TILT:${Math.round(value)}`);
+    },
+    [sendCommand],
+  );
+  const handleAltitude = useCallback(
+    (value: number) => {
+      setTargetAltitude(value);
+      sendCommand(`ALT:${Math.round(value)}`);
+    },
+    [sendCommand],
+  );
+
+  const selectJoystickLayout = useCallback(
+    (id: string) => {
+      setJoystickLayoutId(id);
+      // raw setter on purpose: the full patch below persists both fields
+      // itself (P7 / issue 8 - the public wrapper would write twice)
+      setUseJoystickState(id === "dual");
+      persistPrefs({ joystickLayout: id, useJoystick: id === "dual" });
+    },
+    [persistPrefs],
+  );
+
+  // U-120 Phase C (owner item 8): the dialog's Reconnect — the ONLY
+  // reconnect path now — routes through the METHOD that dropped: the
+  // Bluetooth method retries the remembered device once (handleSppsRetry),
+  // the Wi-Fi method re-dials the last address through handleWifiConnect,
+  // whose own rescue re-FINDS the car when the address died with the
+  // network. Nothing retries unless this runs — the user said yes.
+  const handleReconnectConfirm = useCallback((): Promise<unknown> => {
+    setReconnectDue(false);
+    setCarRestartNotice(null);
+    return reconnectMethod === "Wi-Fi"
+      ? handleWifiConnect()
+      : handleSppsRetry();
+  }, [reconnectMethod, handleWifiConnect, handleSppsRetry]);
+
+  // The user SAID NO. Dismiss the dialog WITHOUT tearing the remembered
+  // device down — the user may just want to keep browsing; a fresh connect
+  // from the device list must stay possible. `manualCloseRef` marks the link
+  // as user-closed so no background sweep reopens it (U-120: nothing
+  // reconnects without an explicit yes).
+  const handleReconnectPromptCancel = useCallback(() => {
+    setReconnectDue(false);
+    // U-118: the restart CAUSE may be what raised the card now (there is no
+    // restart card anymore), so cancelling must clear it too — otherwise a
+    // restart-raised prompt could never be dismissed (F-85: when the cause
+    // clears, so does the prompt).
+    setCarRestartNotice(null);
+    manualCloseRef.current = true;
+    sppService.manualClose = true;
+    wifiService.markManualClose();
+  }, []);
+
+  /**
+   * Reset car data — sends FACTORY;RESET to the car and wipes all car-related
+   * local storage (device registry, car profile cache, active transport, crash
+   * queue). The DB migration (Phase 7c) handles the cloud-side wipe for this
+   * car + owner. Called from the Remote screen settings panel.
+   */
+  const resetCarData = useCallback(async (): Promise<{
+    ok: boolean;
+    error?: string;
+  }> => {
+    try {
+      // 1) Send FACTORY;RESET to the car if connected.
+      if (connected) {
+        try {
+          await sppService.sendLine(FACTORY_RESET_LINE).catch(() => {});
+        } catch {
+          /* ignore send failure */
+        }
+      }
+      if (wifiConnected) {
+        try {
+          await wifiService.sendLine(FACTORY_RESET_LINE).catch(() => {});
+        } catch {
+          /* ignore send failure */
+        }
+      }
+      if (bleService.isConnected) {
+        try {
+          await bleService.sendLine(FACTORY_RESET_LINE).catch(() => {});
+        } catch {
+          /* ignore send failure */
+        }
+      }
+
+      // 2) Clear local car-related AsyncStorage keys.
+      const keysToRemove: string[] = [
+        "genum.device.index",
+        "genum.lastDevice",
+        "genum-car-profiles-v1",
+        "genum.crashReports.queue",
+        "genum.crashReports.last",
+        "genum.activeTransport.v1",
+        "genum.app.logs.ring",
+        "genum.app.logs.pending",
+      ];
+      await Promise.all(
+        keysToRemove.map((k) => AsyncStorage.removeItem(k).catch(() => {})),
+      );
+
+      // 3) Also clear all per-device prefs (genum.device.*) via the index.
+      try {
+        const indexRaw = await AsyncStorage.getItem("genum.device.index");
+        if (indexRaw) {
+          const index = JSON.parse(indexRaw) as string[];
+          if (Array.isArray(index)) {
+            await Promise.all(
+              index.map((k) => AsyncStorage.removeItem(k).catch(() => {})),
+            );
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      // 4) Refresh the hub's in-memory state so the UI updates immediately.
+      setCarStubMap({});
+      setCarAvailMap({});
+      setCarNetworks([]);
+      setCarRestartNotice(null);
+      // Reset transport toggles to defaults (car will be fresh).
+      setWifiEnabled(true);
+      setBtEnabled(true);
+      setBootAutojoin(true);
+      // The method is a device choice, not a car fact: a factory reset of the
+      // car leaves the next connect on whatever the user picked (default
+      // bluetooth), so nothing to clear here. A pick that resets a saved
+      // profile brings it back. The savedPrefs persist will be overwritten on
+      // next save.
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Reset failed",
+      };
+    }
+  }, [connected, wifiConnected]);
+
+  // Derived helpers
+  const usesBtComm =
+    activeMode.transport.includes("classic-bt") ||
+    activeMode.transport.includes("ble");
+  const usesWifi = activeMode.transport.includes("wifi");
+  const canControl = connected || wifiConnected;
+  const isDrone = activeCategory === "drones";
+  const isNonRobocar = activeCategory !== "robocar";
+  const is2wd1mActive = activeMode.controls.includes("drive-2wd1m");
+
+  // ---------------------------------------------------------------------
+  // P7 (owner item D, 2026-10-17): the per-car LOG VIEWER feed — the app
+  // half of the car's bounded event ring (P6: LOG? / LOG;GET;<n> /
+  // LOG;CLEAR). The ring's answers ride REPLY= on STATE; this block is the
+  // only consumer of LOG-shaped replies, so one car's log stays one car's
+  // feed (F-90: logs are per-device or they are rumours).
+  //
+  // Window chain: LOG;GET;0 returns ≤3 newest events plus the ring total;
+  // fetchLog keeps issuing windows until it has read `total` or a window
+  // comes back short, then writes ONE cache snapshot per car (keyed by the
+  // same `profileKey` the profile card uses) so an offline viewer shows a
+  // LINKED, timestamped view rather than a stale live one (F-86 shape: label
+  // what the viewer knows and when it knew it).
+  // ---------------------------------------------------------------------
+  const [carLogEvents, setCarLogEvents] = useState<CarLogEntry[]>([]);
+  const [carLogTotal, setCarLogTotal] = useState(0);
+  const [carLogFetchedAt, setCarLogFetchedAt] = useState<number | null>(null);
+  const carLogFetchRef = useRef<{
+    entries: CarLogEntry[];
+    next: number;
+  } | null>(null);
+  const carLogCacheKeyRef = useRef<string | null>(null);
+  carLogCacheKeyRef.current = carLogCacheKey(profileKeyRef.current);
+
+  // The ONE LOG-reply consumer. Registered below by ref so the telemetry
+  // effect can fan it out without re-creating on every state change.
+  const carLogReplyRef = useRef<(reply: string) => void>(() => {});
+  carLogReplyRef.current = (reply) => {
+    const parsed = parseLogGetReply(reply);
+    if (!parsed) return; // not ours: WIFICFG/ROUTERS/TIME have their own consumers
+    const acc = carLogFetchRef.current;
+    if (!acc) {
+      // A window the viewer did not ask for (a P6-era terminal session, or
+      // another REPLY= racing): still honest data — adopt it as the newest
+      // window without chaining.
+      setCarLogEvents(parsed.events);
+      setCarLogTotal(parsed.total);
+      setCarLogFetchedAt(Date.now());
+      return;
+    }
+    if (parsed.start !== acc.next) return; // stale/interleaved window: ignore
+    const entries = [...acc.entries, ...parsed.events];
+    const expectNext = parsed.start + parsed.events.length;
+    const done =
+      entries.length >= parsed.total || parsed.events.length < CAR_LOG_WINDOW;
+    if (done) {
+      carLogFetchRef.current = null;
+      setCarLogEvents(entries);
+      setCarLogTotal(parsed.total);
+      const at = Date.now();
+      setCarLogFetchedAt(at);
+      if (carLogCacheKeyRef.current) {
+        void AsyncStorage.setItem(
+          carLogCacheKeyRef.current,
+          JSON.stringify({
+            entries: [...entries].reverse(),
+            total: parsed.total,
+            at,
+          }),
+        ).catch(() => {});
+      }
+    } else {
+      carLogFetchRef.current = { entries, next: expectNext };
+      void sendCommand(CAR_LOG_COMMANDS.get(expectNext));
+    }
+  };
+
+  /** Ask the car for its event log (the newest window first; the reply
+      consumer chains the rest). Works over ANY live transport. */
+  const requestCarLog = useCallback(() => {
+    carLogFetchRef.current = { entries: [], next: 0 };
+    void sendCommand(CAR_LOG_COMMANDS.get(0));
+  }, [sendCommand]);
+
+  /** Confirmed-elsewhere clear: the car drops the ring (LOG;CLEAR →
+      LOG;CLEARED); this cache dies with it, then one fresh fetch shows the
+      honest empty state. Never called without the viewer's confirm dialog. */
+  const clearCarLog = useCallback(() => {
+    carLogFetchRef.current = null;
+    if (carLogCacheKeyRef.current) {
+      void AsyncStorage.removeItem(carLogCacheKeyRef.current).catch(() => {});
+    }
+    setCarLogEvents([]);
+    setCarLogTotal(0);
+    void sendCommand(CAR_LOG_COMMANDS.clear());
+    // Read back the now-empty ring so the viewer shows a real zero, not an
+    // assumption (F-61: the car's answer, not our wish). Commands ride the
+    // same queue, so the fresh GET is answered by the post-clear ring.
+    void sendCommand(CAR_LOG_COMMANDS.get(0));
+  }, [sendCommand]);
+
+  // Restore the per-car cached view when the profile changes (F-90: never
+  // another car's history). Marked restored — the fetch stamps it fresh.
+  useEffect(() => {
+    const key = carLogCacheKey(addressForMemory);
+    if (!key) return;
+    let alive = true;
+    void AsyncStorage.getItem(key)
+      .then((raw) => {
+        if (!raw || !alive) return;
+        const cached = JSON.parse(raw) as {
+          entries: CarLogEntry[];
+          total: number;
+          at: number;
+        };
+        setCarLogEvents(cached.entries ?? []);
+        setCarLogTotal(cached.total ?? 0);
+        setCarLogFetchedAt(cached.at ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // The identity is what scopes the cache (F-90), so the profile itself is
+    // the dependency — a ref in a dep list never re-runs and read the value
+    // during render, which is exactly the staleness the rule warns about.
+  }, [addressForMemory]);
+
+  // U-124 ⑨ (owner 2026-10-24): "by matching its own network and prompt to
+  // change the phone's network if the two networks doesn match."
+  //
+  // The comparison lives HERE, not in the panel: this hook is the only place
+  // BOTH networks are known — the phone's SSID (the NetInfo watcher, refreshed
+  // on every network change) and the car's (its live STATE report, then its
+  // configured SSID, then the owner's own answer — the same precedence the
+  // Car-network card shows). It also keeps the single-copy rule intact: the
+  // panel never renders the PHONE's network (that fact has exactly one home,
+  // the Remote's first bar) — it only says whether the two agree, and names
+  // the CAR's network when they do not.
+  const matchPhone = (phoneSsid ?? "").trim().toLowerCase();
+  const matchCar = (telemetry.ssid ?? carSsid ?? carSsidAnswer ?? "")
+    .trim()
+    .toLowerCase();
+  const carNetMatch: "same" | "different" | "unknown" =
+    !matchPhone || !matchCar
+      ? "unknown"
+      : matchPhone === matchCar
+        ? "same"
+        : "different";
+
+  return {
+    // connection
+    sppDevices,
+    connected,
+    // U-113 P2: per-method link truth — BT chip shows only while a BT
+    // transport is really up (Wi-Fi truth is `wifiConnected` below).
+    btLinked,
+    deviceName,
+    scanning,
+    connecting,
+    connectingAddress,
+    wifiConnected,
+    // R1: the WiFi socket is open AND the car has answered on it. Distinct
+    // from wifiConnected's transport-only truth so the UI can say "linked,
+    // but the car is not answering" instead of a plain false.
+    linkVerified,
+    wifiUrl,
+    error,
+    connectionMessage,
+    connectionMsgType,
+    disconnectingLink,
+    sppStatus,
+    sppStatusMsg,
+    // P5 (owner item F, 2026-10-17 / firmware 1.3.13): the car's LINK-CAPACITY
+    // verdict — `null` = the car has not said (pre-1.3.13 firmware; F-88:
+    // absence means CAPABLE, never denied). The connection panel gates the
+    // SECOND-link raises on `linkCap === false`.
+    linkCap,
+    reconnectDue,
+    reconnectMethod,
+    // U-108 Phase 4 (owner 2026-10-13): the network the PHONE is on (safe
+    // switching) and a detected CAR RESTART (boot-count change) with the
+    // Reconnect / Leave / Cancel actions.
+    phoneSsid,
+    phoneNetworkLabel,
+    // U-124 ⑨: does this phone sit on the network the CAR is on? Derived
+    // above from both SSIDs — the panel consumes the VERDICT only, never the
+    // phone's own name.
+    carNetMatch,
+    // U-121 Phase D: the linked car has stopped answering (may be frozen).
+    carSilent,
+    carRestartNotice,
+    sppSupported,
+    canControl,
+    setWifiUrl,
+    handleScan,
+    handleConnect,
+    handleSppsRetry,
+    handleWifiConnect,
+    handleWifiDisconnect,
+    // U-113 P2: per-method disconnects — BT-only and Wi-Fi-only. The full
+    // `handleDisconnect` (both links down) stays for surfaces that mean it.
+    handleBtDisconnect,
+    handleDisconnect,
+    showConnectionMessage,
+    // v1.4.0 WiFi provisioning (app â†’ BT â†’ car) + car WiFi truth
+    wifiSsid,
+    setWifiSsid,
+    wifiPassword,
+    setWifiPassword,
+    wifiProvisioning,
+    handleWifiProvision,
+    // U-105 (1.3.5): the car's three transport toggles — Wi-Fi / Bluetooth /
+    // boot auto-join. Both transports stay live together when enabled; never
+    // both OFF (car-clamped + UI-disabled). `null` = not yet read.
+    wifiEnabled,
+    btEnabled,
+    bootAutojoin,
+    setCarTransportToggle,
+    queryCarTransportToggle,
+    carApName,
+    carSsid,
+    carStubMap,
+    carAvailMap,
+    // A-27: saved-router registry (car truth names + command helpers)
+    carNetworks,
+    routerUse,
+    routerAdd,
+    routerDelete,
+    routerClearAll,
+    // D2 (U-68): the ack-consuming API. `routerUse`/`routerAdd` above are the
+    // legacy fire-and-forget pair and are still exported because the Remote
+    // screen (which this round must not change) calls them directly; the
+    // Control Panel uses these instead so a failure is visible.
+    requestRouter,
+    runSwitchPlan,
+    requestScan,
+    consumeRouterAnswer,
+    // Reset car data (Phase 7b)
+    resetCarData,
+    // P7 (owner item D): the per-car log viewer's feed — the car's bounded
+    // event ring parsed and cached, plus the live commands. `carLogFetchedAt`
+    // says WHEN the viewer knows what it knows (a cached/offline view is
+    // labelled, never silently mixed with a live one — F-85/F-86 shape).
+    carLogEvents,
+    carLogTotal,
+    carLogFetchedAt,
+    requestCarLog,
+    clearCarLog,
+    // U-74: the last router lease the car reported, so the Control Panel can offer
+    // a one-tap reconnect after the hotspot link drops.
+    lastRouterIp,
+    // U-80: the car switched networks — "join <ssid> on this phone" prompt
+    // (simple, immediate, on any surface; auto-expires).
+    routerSwitchNotice,
+    dismissRouterSwitchNotice,
+    // D3 (U-68): the car's own antenna scan result, so the Control Panel can
+    // offer a real nearby-network list. `null` until the car answers.
+    carScan,
+    // U-120 Phase C: the ONE reconnect dialog's actions — confirm routes
+    // the retry through the method that dropped, cancel dismisses and marks
+    // the link user-closed.
+    handleReconnectConfirm,
+    handleReconnectPromptCancel,
+    // mode + category (carStubMap is returned with the WiFi-truth group above)
+    activeCategory,
+    setActiveCategory,
+    activeMode,
+    carModes,
+    carModeId,
+    selectMode,
+    cycleMode,
+    handleCategoryPress,
+    // drive state
+    speed,
+    setSpeed,
+    servo,
+    steerLimit,
+    trim,
+    driveStatus,
+    driveDir,
+    telemetry,
+    safetyLimits,
+    handleDirection,
+    handleSpeed,
+    handleServo,
+    applyPid,
+    handleStickDrive,
+    adjustSteerLimit,
+    commitSpeed,
+    adjustTrim,
+    handleEStop,
+    sendCommand,
+    // Connection-Manager Phase B — flag-gated JSON envelope intake. Shipped
+    // OFF (F-41); no screen calls it yet. Exposed so the 4WD4M testbed
+    // acceptance round can exercise it without touching the UI.
+    sendEnvelopeCommand,
+    isEnvelopeIntakeEnabled,
+    // R-19 (FIN-45): car-truth trip metrics (2WD1M family)
+    tripAvg,
+    maxSteer,
+    // NAV (ESP INPUT_NAV parity)
+    navActive,
+    setNavActive,
+    navActiveRef,
+    navField,
+    setNavField,
+    previewMode,
+    setPreviewMode,
+    // pid
+    pidKp,
+    pidKi,
+    pidKd,
+    pidOut,
+    pidOff,
+    // drone
+    gimbalPan,
+    gimbalTilt,
+    targetAltitude,
+    handleGimbalPan,
+    handleGimbalTilt,
+    handleAltitude,
+    // sensors + relays
+    sensorData,
+    relays,
+    toggleRelay,
+    // U-120 + U-124 ⑫: the HUB's local page-serving truth, returned for the Remote
+    // chrome chip and any future dependents. A remote reachability path (HEAD/GET,
+    // on-the-wire page detection) is a separate concern and does not feed this.
+    // It is the derived OBJECT (not a ref), so `carPageServing.current` is a
+    // real boolean that tracks the car's `;PAGE=`/`page_on` truth.
+    carPageServing,
+    // toggles
+    useJoystick,
+    setUseJoystick,
+    // U-116: webpage view power. Distinct from the Wi-Fi/BT transport
+    // toggles — mutes the car's web page server (:80) while keeping the
+    // transport layer and BT up. Persisted to car NVS `page_off` so a
+    // power restart keeps the choice; the app's device prefs also keep
+    // this screen's copy in sync.
+    pageOn,
+    setPageOn,
+    joystickLayoutId,
+    selectJoystickLayout,
+    // persistence
+    savedPrefs,
+    persistPrefs,
+    addressForMemory,
+    // Connections-Hub (per-device profiles)
+    profileKey: addressForMemory,
+    carUniqueId: carFwIdRef.current,
+    autoJoinRouter,
+    setAutoJoinRouter,
+    // P8 (owner item E / F-91): the user's own "Car network" answer —
+    // persisted per car, probed FIRST by discovery.
+    carNetworkHint,
+    setCarNetworkHint,
+    // U-121 B2 (owner 2026-10-24): the SSID half of the same card — the
+    // Wi-Fi network the car is at, auto-filled from car truth, owner-editable.
+    carSsidAnswer,
+    setCarSsidAnswer,
+    // Profiles-sync (cloud mirror state for the current car profile)
+    profileSync,
+    // derived
+    isDrone,
+    isNonRobocar,
+    is2wd1mActive,
+    usesBtComm,
+    usesWifi,
+    // U-124 (owner item ⑧): the connection method this device chose, and the
+    // method the latest Wi-Fi flow was first raised in. Both survive a
+    // disconnect and a power cycle, and drive which radio a connect is raised
+    // through when the active mode lists both transports.
+    connMethod,
+    setConnMethod,
+    wirelessMethod,
+  };
+}

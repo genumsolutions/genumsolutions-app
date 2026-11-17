@@ -1,0 +1,150 @@
+// =====================================================================
+// JournalScreen - tutorials, field notes, and industry observations.
+// Reads the shared `journal_posts` table (DB-first, same as the website)
+// so both clients always show the same latest posts, with the bundled
+// posts as an offline fallback.
+// =====================================================================
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Linking,
+  ScrollView,
+  Text,
+  View,
+  Pressable,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { LOCAL_JOURNAL_POSTS, type JournalPost } from "../config/journal";
+import { getJournalPosts } from "../services/journalService";
+import type { RootStackParamList } from "../navigation/types";
+
+export function JournalScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList, "Journal">>();
+  const [posts, setPosts] = useState<JournalPost[]>(LOCAL_JOURNAL_POSTS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const latest = await getJournalPosts();
+        if (active) setPosts(latest);
+      } catch {
+        // fallback posts already set
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
+      <View className="px-5 pt-6">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Journal · signals and practice
+        </Text>
+        <Text className="mt-2 font-display text-3xl font-bold text-ink">
+          Notes from the workbench.
+        </Text>
+        <Text className="mt-3 text-base leading-7 text-muted">
+          Tutorials, field notes, and industry observations for people building
+          a more useful future.
+        </Text>
+      </View>
+
+      {loading ? (
+        <View className="items-center py-12">
+          <ActivityIndicator size="large" color="#1e3a8a" />
+        </View>
+      ) : (
+        <View className="px-5 py-8 gap-4">
+          {posts.map((post) => (
+            <View
+              key={post.id}
+              className="overflow-hidden border-t-2 border-ink bg-card p-5"
+            >
+              <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                {post.tag}
+              </Text>
+              {/* No clamp: the website's /journal renders the post title as a
+                  plain <h2> (text-xl font-bold), so long titles wrap there. */}
+              <Text className="mt-3 font-display text-xl font-bold text-ink">
+                {post.title}
+              </Text>
+              <Text className="mt-2 text-sm leading-6 text-muted">
+                {post.text}
+              </Text>
+              <Pressable
+                onPress={() => navigation.push("Contact")}
+                accessibilityRole="link"
+                className="mt-5 flex-row items-center gap-1.5"
+              >
+                <Text className="text-sm font-bold text-navy underline">
+                  Get in touch about this
+                </Text>
+                <Feather name="external-link" size={12} color="#1e3a8a" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View className="mx-5 mb-8 rounded-2xl border-t border-b border-line bg-mist p-5">
+        <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+          Trend brief · August 2026
+        </Text>
+        <Text className="mt-3 font-display text-xl font-bold text-ink">
+          The useful future is more human than the hype cycle.
+        </Text>
+        <Text className="mt-3 text-sm leading-6 text-muted">
+          The World Economic Forum points to technology change and skills gaps
+          as major forces through 2030. The International Federation of Robotics
+          emphasizes that robots automate tasks, while skills development and
+          training help people capture the benefits. UNESCO's digital education
+          guidance keeps human agency, critical thinking, and ethics at the
+          center of AI learning. That is the standard we are building toward.
+        </Text>
+        <View className="mt-4 flex-row flex-wrap gap-4">
+          {/* R6 parity: web renders these as real links — mirror 1:1 instead
+              of inert underlined text. */}
+          {(
+            [
+              [
+                "WEF Future of Jobs 2025",
+                "https://www.weforum.org/publications/the-future-of-jobs-report-2025/",
+              ],
+              [
+                "IFR robotics research",
+                "https://ifr.org/ifr-press-releases/news/world-robotics-2025-report-asia-leads-global-robotics-growth",
+              ],
+              [
+                "UNESCO digital education",
+                "https://www.unesco.org/en/digital-education",
+              ],
+            ] as const
+          ).map(([label, url]) => (
+            <Pressable
+              key={label}
+              onPress={() => void Linking.openURL(url)}
+              accessibilityRole="link"
+              accessibilityLabel={label}
+            >
+              <Text className="text-xs font-bold text-navy underline">
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}

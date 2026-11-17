@@ -1,0 +1,263 @@
+// =====================================================================
+// ShopScreen - native product catalog backed by the shared Supabase
+// `products` table. Supports category chips + search.
+// =====================================================================
+import React, { useEffect, useMemo, useState } from "react";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import {
+  distinctCategories,
+  filterProducts,
+  getProductsWithSource,
+  inStockOnly,
+  PRICE_CEILINGS,
+  priceCeilingLabel,
+  SORT_LABELS,
+  sortProducts,
+  withinPrice,
+  type SortOption,
+} from "../services/productService";
+import { OfflineBadge } from "../components/OfflineBadge";
+import { CategoryDropdown } from "../components/CategoryDropdown";
+import { PagePager } from "../components/PagePager";
+import { ShopSkeletonGrid } from "../components/SkeletonCard";
+import { ProductCard } from "../components/ProductCard";
+import { applyComponentsScope } from "../services/productService";
+import type { Product } from "../types";
+
+export function ShopScreen() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [offline, setOffline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [category, setCategory] = useState("All");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortOption>("featured");
+  const [maxPrice, setMaxPrice] = useState(0);
+  const [inStock, setInStock] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 8;
+
+  // U-47: scope to Electronic Products — 3D Models / kits / project
+  // packages are excluded here (they duplicate the 3D Products screen).
+  const electronic = useMemo(() => applyComponentsScope(products), [products]);
+  const categories = useMemo(
+    () => distinctCategories(electronic),
+    [electronic],
+  );
+  const visible = useMemo(
+    () =>
+      inStockOnly(
+        withinPrice(
+          sortProducts(filterProducts(electronic, category, query), sort),
+          maxPrice,
+        ),
+        inStock,
+      ),
+    [electronic, category, query, sort, maxPrice, inStock],
+  );
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const pageItems = visible.slice((page - 1) * pageSize, page * pageSize);
+  // 2026-11-13: the empty state clears every filter the shopper can set — it
+  // used to leave the category and the search term applied, so "Clear filters"
+  // could leave the list empty.
+  const hasActiveFilters =
+    category !== "All" ||
+    query.trim() !== "" ||
+    sort !== "featured" ||
+    maxPrice > 0 ||
+    inStock;
+
+  function clearAllFilters() {
+    setCategory("All");
+    setQuery("");
+    setSort("featured");
+    setMaxPrice(0);
+    setInStock(false);
+  }
+
+  const load = async (asRefresh = false) => {
+    if (asRefresh) setRefreshing(true);
+    try {
+      const { products, source } = await getProductsWithSource();
+      setProducts(products);
+      // "bundled" is the website's own fallback catalog, so it is still
+      // offline data as far as the shopper is concerned.
+      setOffline(source !== "live");
+    } catch {
+      // keep previous data
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    // The loader sets its own loading flag first; products land in promise
+    // callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
+    void load();
+  }, []);
+
+  // U-47 (owner): the Recently-viewed strip is REMOVED — replaced by the
+  // per-user Collection (hearts). No focus-effect re-read remains.
+
+  // Back to page 1 whenever the filter set changes — adjusted during render so
+  // the list never paints the old page against the new results.
+  const filterSig = `${category}|${query}|${sort}|${maxPrice}|${inStock}`;
+  const [lastFilterSig, setLastFilterSig] = useState(filterSig);
+  if (lastFilterSig !== filterSig) {
+    setLastFilterSig(filterSig);
+    setPage(1);
+  }
+
+  if (loading) {
+    // C8 (2026-09-23): skeleton grid instead of a bare spinner — the card
+    // shapes match the real grid so nothing jumps when data arrives.
+    return (
+      <View className="flex-1 bg-surface pt-3">
+        <View className="px-4 pb-3">
+          <View className="h-11 rounded-xl border border-line bg-card" />
+        </View>
+        <ShopSkeletonGrid />
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-surface">
+      {/* Search */}
+      <View className="px-4 pt-3">
+        <View className="flex-row items-center rounded-xl border border-line bg-card px-3">
+          <Feather name="search" size={16} color="#64748b" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search products…"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+            className="flex-1 px-2 py-2.5 text-sm text-ink"
+          />
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => setQuery("")}
+              accessibilityLabel="Clear search"
+            >
+              <Feather name="x" size={16} color="#64748b" />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Offline indicator (data came from local cache) */}
+      {offline && (
+        <View className="px-4 pb-1">
+          <OfflineBadge />
+        </View>
+      )}
+
+      {/* Category / sort / price filters (C2 2026-09-23) */}
+      <View className="gap-2 px-4 pb-2">
+        <CategoryDropdown
+          value={category}
+          options={["All", ...categories]}
+          onChange={setCategory}
+          placeholder="All categories"
+          title="Filter by category"
+        />
+        <View className="flex-row gap-2">
+          <CategoryDropdown
+            value={SORT_LABELS[sort]}
+            options={Object.values(SORT_LABELS)}
+            onChange={(label) => {
+              const entry = (
+                Object.entries(SORT_LABELS) as [SortOption, string][]
+              ).find(([, l]) => l === label);
+              if (entry) setSort(entry[0]);
+            }}
+            placeholder="Sort: Featured"
+            title="Sort products"
+            buttonClassName="flex-1"
+          />
+          <CategoryDropdown
+            value={priceCeilingLabel(maxPrice)}
+            options={PRICE_CEILINGS.map(priceCeilingLabel)}
+            onChange={(label) => {
+              const entry = PRICE_CEILINGS.find(
+                (c) => priceCeilingLabel(c) === label,
+              );
+              if (entry != null) setMaxPrice(entry);
+            }}
+            placeholder="Any price"
+            title="Maximum price"
+            buttonClassName="flex-1"
+          />
+        </View>
+        <Pressable
+          onPress={() => setInStock((current) => !current)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: inStock }}
+          className="flex-row items-center self-start rounded-lg border border-line bg-card px-3 py-2 active:opacity-70"
+        >
+          <Feather
+            name={inStock ? "check-square" : "square"}
+            size={16}
+            color={inStock ? "#1e3a8a" : "#94a3b8"}
+          />
+          <Text className="ml-2 text-sm text-ink">In stock only</Text>
+        </Pressable>
+      </View>
+
+      {/* Results */}
+      <FlatList
+        data={pageItems}
+        keyExtractor={(p) => p.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshing={refreshing}
+        onRefresh={() => load(true)}
+        ListHeaderComponent={null}
+        ListEmptyComponent={
+          // An empty catalog and an over-filtered one are different problems;
+          // "No products found." blamed the shopper's filters for both.
+          <View className="mx-4 items-center rounded-2xl border border-line bg-card px-5 py-10">
+            <Feather name="inbox" size={32} color="#94a3b8" />
+            <Text className="mt-3 text-base font-bold text-ink">
+              {electronic.length === 0
+                ? "The catalog is being restocked"
+                : "No products found"}
+            </Text>
+            <Text className="mt-2 text-center text-sm leading-6 text-muted">
+              {electronic.length === 0
+                ? "Nothing is listed for sale right now. Tell us what you need and we will check stock or source it."
+                : "No listing matches the current search, category or price filter."}
+            </Text>
+            {electronic.length > 0 && hasActiveFilters && (
+              <Pressable
+                onPress={clearAllFilters}
+                className="mt-4 rounded-full border border-navy px-5 py-2 active:opacity-70"
+                accessibilityLabel="Clear all product filters"
+              >
+                <Text className="text-xs font-black text-navy">
+                  Clear all filters
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        }
+        ListFooterComponent={
+          // U-43: numbered page buttons for fast navigation.
+          <PagePager
+            page={page}
+            totalPages={totalPages}
+            onPage={setPage}
+            label="item"
+            totalItems={visible.length}
+          />
+        }
+        renderItem={({ item }) => <ProductCard product={item} />}
+      />
+    </View>
+  );
+}

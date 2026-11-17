@@ -1,0 +1,410 @@
+// =====================================================================
+// FloatingRemoteButton (A-24) — a small draggable FAB shown app-wide
+// while ANY car transport is linked (SPP / BLE / WiFi WS), so the user
+// can jump straight back into the Remote window from anywhere.
+//
+// Behaviour:
+//   - Shows ONLY while a link is live (spp | ble | wifi).
+//   - Hidden while the RemoteControl screen itself is in front.
+//   - Tap re-opens RemoteControl at the LAST USED category (persisted in
+//     AsyncStorage; captured from the RemoteControl route params).
+//   - Drag repositions the button; position persists via AsyncStorage.
+//   - A drag is only treated as such past a movement threshold — a tap
+//     that stays put navigates instead.
+//   - Rotation-safe: the slot is re-clamped into the visible window on
+//     every window-size change, so a portrait-dragged position cannot
+//     park the FAB off-screen in landscape.
+// =====================================================================
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Dimensions,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { sppService } from "../services/sppService";
+import { bleService } from "../services/bleService";
+import { wifiService } from "../services/wifiService";
+import { feedbackTap } from "../services/hapticsService";
+import { navigationRef, navigate } from "../navigation/navigationRef";
+
+const FAB_SIZE = 56;
+const EDGE = 12;
+/** Past this move distance a tap becomes a drag (reposition) instead. */
+const DRAG_THRESHOLD = 12;
+
+const SLOT_KEY = "genum.remote.fabSlot";
+const CATEGORY_KEY = "genum.remote.lastCategory";
+/** Owner-approved dismiss: the FAB stays hidden until a NEW link session. */
+const DISMISSED_KEY = "genum.remote.fabDismissed";
+/** Drag-to-bottom-center hides the FAB (drop-zone dismiss, owner-approved). */
+const DROP_ZONE_BOTTOM = 110;
+const DROP_ZONE_CENTER_HALF = 72;
+
+type Slot = { x: number; y: number };
+
+function anyLinked(): boolean {
+  return (
+    sppService.isConnected || bleService.isConnected || wifiService.isConnected
+  );
+}
+
+function isRemoteInFront(): boolean {
+  return (
+    navigationRef.isReady() &&
+    navigationRef.getCurrentRoute()?.name === "RemoteControl"
+  );
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function defaultSlot(): Slot {
+  const { width, height } = Dimensions.get("window");
+  return { x: width - FAB_SIZE - EDGE, y: height - FAB_SIZE - EDGE };
+}
+
+async function loadSlot(): Promise<Slot> {
+  try {
+    const raw = await AsyncStorage.getItem(SLOT_KEY);
+    if (raw) {
+      const s = JSON.parse(raw) as Slot;
+      if (typeof s.x === "number" && typeof s.y === "number") return s;
+    }
+  } catch {
+    /* fall through to default */
+  }
+  return defaultSlot();
+}
+
+async function persistSlot(slot: Slot): Promise<void> {
+  try {
+    await AsyncStorage.setItem(SLOT_KEY, JSON.stringify(slot));
+  } catch {
+    /* best effort */
+  }
+}
+
+async function loadLastCategory(): Promise<string | undefined> {
+  try {
+    const raw = await AsyncStorage.getItem(CATEGORY_KEY);
+    return raw || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function FloatingRemoteButton() {
+  const [linked, setLinked] = useState(anyLinked);
+  const [remoteInFront, setRemoteInFront] = useState(isRemoteInFront);
+  const [slot, setSlot] = useState<Slot | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [inDropZone, setInDropZone] = useState(false);
+  const slotRef = useRef<Slot | null>(null);
+  const dismissedRef = useRef(false);
+  const dragStart = useRef<Slot | null>(null);
+  const movedRef = useRef(false);
+  const wasLinkedRef = useRef(anyLinked());
+  const lastCategoryRef = useRef<string | undefined>(undefined);
+  // Owner round 2026-09-29 ("FAB disappears in landscape outside the drive
+  // deck"): live window size — the persisted slot is saved in the space of
+  // the orientation it was dragged in (typically portrait), so when the app
+  // rotates the saved y can land BELOW the shorter landscape height and the
+  // button renders off-screen. The re-clamp effect below pulls it back into
+  // the visible window on every size change.
+  const dim = useWindowDimensions();
+
+  // Link state: live refresh from every transport's status stream. A FRESH
+  // connect while dismissed re-arms the FAB.
+  useEffect(() => {
+    const update = () => {
+      const nowLinked = anyLinked();
+      setLinked(nowLinked);
+      if (nowLinked && !wasLinkedRef.current && dismissedRef.current) {
+        setDismissed(false);
+        dismissedRef.current = false;
+        void AsyncStorage.removeItem(DISMISSED_KEY).catch(() => undefined);
+      }
+      wasLinkedRef.current = nowLinked;
+    };
+    const offSpp = sppService.onStatus(update);
+    const offBle = bleService.onStatus(update);
+    const offWifi = wifiService.onStatus(update);
+    return () => {
+      offSpp();
+      offBle();
+      offWifi();
+    };
+  }, []);
+
+  // Live mirrors so the subscriptions and the gesture handlers above/below
+  // read the freshest values without re-subscribing (their deps are empty on
+  // purpose). They are written from an effect, never during render: a
+  // render-time write is lost if that render is discarded, which is how the
+  // FAB once came back dismissed after a re-mount raced a dismiss tap.
+  useEffect(() => {
+    dismissedRef.current = dismissed;
+  }, [dismissed]);
+  useEffect(() => {
+    slotRef.current = slot;
+  }, [slot]);
+
+  const isDropZone = useCallback(
+    (s: Slot): boolean => {
+      const { width, height } = dim;
+      return (
+        s.y >= height - DROP_ZONE_BOTTOM &&
+        Math.abs(s.x + FAB_SIZE / 2 - width / 2) <= DROP_ZONE_CENTER_HALF
+      );
+    },
+    [dim],
+  );
+
+  const dismissFab = useCallback(() => {
+    setDismissed(true);
+    void AsyncStorage.setItem(DISMISSED_KEY, "1").catch(() => undefined);
+  }, []);
+
+  // Persisted position + last category; and track navigation so we know when
+  // the Remote window is in front (hide) or which category to reopen.
+  //
+  // A-45 (round-9) reliability: the navigation 'state' listener below used to
+  // only attach when navigationRef was ALREADY ready at mount — but it rarely
+  // is that early, so remoteInFront never updated and the FAB floated over the
+  // Remote screen. Now we (a) retry attaching until the ref is ready, always
+  // calling refresh() on attach, and (b) run a 1 s poll that re-checks
+  // linked + remoteInFront as a safety net for any missed transport status
+  // or navigation event.
+  useEffect(() => {
+    let mounted = true;
+    let unsub: (() => void) | undefined;
+    const attachIfReady = () => {
+      if (!navigationRef.isReady() || unsub) return;
+      unsub = navigationRef.addListener("state", refresh);
+      refresh();
+    };
+    const refresh = () => {
+      setRemoteInFront(isRemoteInFront());
+      const route = navigationRef.getCurrentRoute();
+      const cat = (route?.params as { category?: string } | undefined)
+        ?.category;
+      if (route?.name === "RemoteControl" && cat) {
+        lastCategoryRef.current = cat;
+        void AsyncStorage.setItem(CATEGORY_KEY, cat);
+      }
+    };
+    void loadSlot().then((s) => {
+      if (mounted) setSlot(s);
+    });
+    void AsyncStorage.getItem(DISMISSED_KEY)
+      .then((v) => {
+        if (mounted && v === "1") {
+          setDismissed(true);
+          dismissedRef.current = true;
+        }
+      })
+      .catch(() => undefined);
+    void loadLastCategory().then((c) => {
+      if (mounted && c) lastCategoryRef.current = c;
+    });
+    attachIfReady();
+    const poll = setInterval(() => {
+      setLinked(anyLinked());
+      if (!navigationRef.isReady()) attachIfReady();
+      else refresh();
+    }, 1000);
+    return () => {
+      mounted = false;
+      clearInterval(poll);
+      unsub?.();
+    };
+  }, []);
+
+  const openRemote = useCallback(() => {
+    navigate("RemoteControl", { category: lastCategoryRef.current });
+  }, []);
+
+  // Landscape rescue: whenever the window size changes (rotation, fold,
+  // split-screen), pull the slot back inside the visible window. A slot in
+  // bounds is left untouched (and not re-persisted); an out-of-bounds one is
+  // clamped and persisted so the position is honest for the new shape.
+  useEffect(() => {
+    if (!slot) return;
+    const max = {
+      x: Math.max(EDGE, dim.width - FAB_SIZE - EDGE),
+      y: Math.max(EDGE, dim.height - FAB_SIZE - EDGE),
+    };
+    const next = {
+      x: clamp(slot.x, EDGE, max.x),
+      y: clamp(slot.y, EDGE, max.y),
+    };
+    if (next.x === slot.x && next.y === slot.y) return;
+    // Window size is an external event (rotation / split-screen), and the
+    // clamped slot is written back BOTH to state and to storage so the next
+    // launch does not reload an off-screen position. There is no render-time
+    // equivalent that can do the persist.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- window resize
+    setSlot(next);
+    void persistSlot(next);
+  }, [dim.width, dim.height, slot]);
+
+  const pan = useMemo(
+    () =>
+      // eslint-disable-next-line react-hooks/refs -- PanResponder handlers run only from native touch events, never during render
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          dragStart.current = slotRef.current;
+          movedRef.current = false;
+        },
+        onPanResponderMove: (_evt, gesture) => {
+          if (!dragStart.current) return;
+          if (
+            !movedRef.current &&
+            (Math.abs(gesture.dx) >= DRAG_THRESHOLD ||
+              Math.abs(gesture.dy) >= DRAG_THRESHOLD)
+          ) {
+            movedRef.current = true;
+          }
+          if (!movedRef.current) return;
+          const { width, height } = Dimensions.get("window");
+          const next = {
+            x: clamp(
+              dragStart.current.x + gesture.dx,
+              EDGE,
+              width - FAB_SIZE - EDGE,
+            ),
+            y: clamp(
+              dragStart.current.y + gesture.dy,
+              EDGE,
+              height - FAB_SIZE - EDGE,
+            ),
+          };
+          setSlot(next);
+          setInDropZone(isDropZone(next));
+        },
+        onPanResponderRelease: (_evt, gesture) => {
+          const wasDrag = movedRef.current;
+          const last = slotRef.current;
+          dragStart.current = null;
+          movedRef.current = false;
+          setInDropZone(false);
+          if (wasDrag) {
+            if (last && isDropZone(last)) {
+              // Dropped in the bottom-center zone → hide the FAB (dismiss).
+              feedbackTap();
+              dismissFab();
+              return;
+            }
+            if (last) void persistSlot(last);
+            return;
+          }
+          if (
+            Math.abs(gesture.dx) < DRAG_THRESHOLD &&
+            Math.abs(gesture.dy) < DRAG_THRESHOLD
+          ) {
+            feedbackTap();
+            openRemote();
+          }
+        },
+        onPanResponderTerminate: () => {
+          dragStart.current = null;
+          movedRef.current = false;
+        },
+      }),
+    [dismissFab, isDropZone, openRemote],
+  );
+
+  if (dismissed || !linked || remoteInFront || !slot) return null;
+
+  return (
+    <>
+      {inDropZone && (
+        <View pointerEvents="none" style={styles.dropHint}>
+          <Text style={styles.dropHintText}>Release to hide</Text>
+        </View>
+      )}
+      <View
+        {...pan.panHandlers}
+        style={[styles.fab, { left: slot.x, top: slot.y }]}
+        accessibilityRole="button"
+        accessibilityLabel="Open Remote window"
+        testID="floating-remote-button"
+      >
+        <Feather name="target" size={24} color="#fff" />
+        <Pressable
+          onPress={dismissFab}
+          hitSlop={10}
+          style={styles.close}
+          accessibilityRole="button"
+          accessibilityLabel="Hide floating Remote button"
+          testID="floating-remote-dismiss"
+        >
+          <Feather name="x" size={10} color="#fff" />
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  fab: {
+    position: "absolute",
+    zIndex: 999,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
+    backgroundColor: "#1e3a8a",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 8,
+  },
+  close: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#172554",
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropHint: {
+    position: "absolute",
+    zIndex: 998,
+    bottom: DROP_ZONE_BOTTOM - 44,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  dropHintText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1e3a8a",
+    backgroundColor: "rgba(226, 232, 240, 0.92)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+});

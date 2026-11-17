@@ -1,0 +1,248 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck + Expo doctor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      # Full history required: gitleaks-action resolves the pushed commit
+      # range (BASE^..HEAD), which fails on a shallow clone (git exit 128).
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Dead code and unused props: tsc compiles them happily, ESLint does not
+      # (this is what caught the admin screens passing props nobody read).
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Expo doctor
+        run: npm run doctor
+
+      # Font paths in app.json only bite during `expo prebuild`, which the
+      # quality job does not run — a typo used to cost a 10-minute release
+      # build. This is the same check the release preflight runs.
+      - name: app.json asset paths exist
+        run: node scripts/check-app-json-paths.mjs
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Layout smoke test — typecheck and vitest prove what the SOURCE says;
+  # this renders the exported bundle in Chromium at 390x844 and looks at it.
+  # It exists because two real defects passed every other check: a training
+  # title clamped to "K–5 Ro…" and a card title to "Robotics Lab Consul…".
+  e2e:
+    name: Layout smoke (Playwright)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # No .env.local in CI, so the bundle keeps the placeholder Supabase host:
+      # every read fails fast and the screens paint their bundled content. That
+      # is why the assertions only target strings true with or without a DB.
+      - name: Export web bundle
+        # Dummy values enable the test-only mock staff flow; Playwright intercepts backend requests.
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://admin-layout.invalid
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: local-preview-anon-key
+        run: npx expo export --platform web
+
+      - name: Layout smoke test
+        run: npx playwright test
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: mobile/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # App-vs-website parity. The app is a mirror of the public website, so this
+  # job renders BOTH surfaces side by side in one Playwright run and diffs
+  # them. It needs the website repo, which the e2e job above does not have —
+  # hence a separate job that checks out both repos.
+  #
+  # With no credentials both surfaces serve the same bundled catalog (the app
+  # ships a generated copy of the website's), so this job compares the real
+  # numbers too: 55 / 0 / 0 / 7 on both. It also checks the Home program band
+  # order and that every Services training program, pilot line item/cost and
+  # curriculum band the website lists exists in the app.
+  parity:
+    name: App vs website (Playwright)
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v5
+
+      # The read-only cross-repository secret grants access to the private site.
+      - name: Checkout website
+        uses: actions/checkout@v5
+        with:
+          repository: genumsolutions/genumsolutions-website
+          path: website
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN || github.token }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            website/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
+
+      # next dev compiles on demand and needs no build step. Credentials are
+      # placeholders: lib/supabase refuses to construct a client without a
+      # URL, and the pages then paint their bundled content.
+      - name: Start website
+        working-directory: website
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+        run: |
+          nohup npm run dev > "$RUNNER_TEMP/website.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:3000/about; then
+              echo "website ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "website never became ready:"; tail -40 "$RUNNER_TEMP/website.log"; exit 1
+
+      # The bundled catalog is generated from the website's fallback catalog,
+      # so it drifts silently the moment the website catalog changes. Rebuild
+      # it against the checked-out website and fail if the committed copy
+      # differs — the fix is to run the generator locally and commit.
+      - name: Bundled catalog is current
+        working-directory: mobile
+        run: |
+          npx --yes tsx scripts/generate-bundled-catalog.mts --website ../website
+          if ! git diff --quiet -- src/config/bundledProducts.ts; then
+            echo "::error::src/config/bundledProducts.ts is stale — run 'npx tsx scripts/generate-bundled-catalog.mts' from mobile/ (website as a sibling) and commit the result. If the website catalog changed in a commit that is not on this run's checkout, re-run the job."
+            git diff --stat -- src/config/bundledProducts.ts
+            git --no-pager diff -- src/config/bundledProducts.ts | head -80
+            exit 1
+          fi
+          echo "bundled catalog matches the website"
+
+      - name: Install Chromium
+        working-directory: mobile
+        run: npx playwright install --with-deps chromium
+
+      - name: Export web bundle
+        working-directory: mobile
+        run: npx expo export --platform web
+
+      - name: Compare app against website
+        working-directory: mobile
+        env:
+          WEBSITE_URL: http://127.0.0.1:3000
+        run: npx playwright test website-parity
+
+      - name: Website server log
+        if: always()
+        run: tail -60 "$RUNNER_TEMP/website.log" 2>/dev/null || true
+
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-report
+          path: mobile/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Order items contract — the app and the website write the SAME Supabase
+  # orders.items JSON. They drifted once: the app wrote `priceNpr` while the
+  # website read `price`, so app orders rendered as "NPR NaN". Unit tests can
+  # only see their own repo's copy, so each repo ships a verbatim contract
+  # file and this job fails when the two copies differ.
+  order-items-contract:
+    name: Order items contract matches website
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v5
+
+      # The read-only cross-repository secret grants access to the private site.
+      - name: Checkout website
+        uses: actions/checkout@v5
+        with:
+          repository: genumsolutions/genumsolutions-website
+          path: website
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Fail when the copies differ
+        run: |
+          if ! diff -u mobile/src/config/order-items.contract.json website/supabase/order-items.contract.json; then
+            echo "::error::The orders.items contract copies differ. Copy website/supabase/order-items.contract.json verbatim to mobile/src/config/order-items.contract.json, and update both repos' writers/tests in the same change."
+            exit 1
+          fi
+          echo "orders.items contract matches the website"

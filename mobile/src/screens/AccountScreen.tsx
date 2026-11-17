@@ -1,0 +1,774 @@
+// =====================================================================
+// AccountScreen - native "My Account" page (website /account parity).
+// Mirrors the website's AccountPanel layout:
+//   - header (avatar, name, email, admin badge, sign out)
+//   - stats row: orders placed · build-list item types · support messages
+//   - "My garage" (the signed-in user's own devices, each named by them —
+//     the standing inventory, distinct from the live per-car card in Tools)
+//   - "Your orders" (status pill, provider, total, line items)
+//   - "Your details" (name / phone / address profile form)
+//   - "Your messages" (support history with status pills)
+//
+// App updates + theme toggles now live on the Menu tab (visible without
+// signing in); nothing here gates updates behind an account.
+// =====================================================================
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../navigation/types";
+import { useApp } from "../context/AppContext";
+import { useCollection } from "../context/CollectionContext";
+import { getMyHabits, type UserHabits } from "../services/collectionService";
+import { getProductMedia } from "../lib/productMedia";
+import { getProducts } from "../services/productService";
+import {
+  getMyMessages,
+  getMyOrders,
+  updateProfile,
+} from "../services/orderService";
+import { logger } from "../services/logger";
+import { subscribeToNewsletter } from "../services/newsletterService";
+import DeviceGarageCard from "../components/tools/DeviceGarageCard";
+import { galleryImages, type Order, type Product } from "../types";
+
+const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-800",
+  paid: "bg-emerald-100 text-emerald-800",
+  fulfilled: "bg-navy/10 text-navy",
+  cancelled: "bg-red-100 text-red-700",
+};
+
+function statusLabel(status: string): string {
+  return status || "pending";
+}
+
+function providerLabel(provider: string): string {
+  switch (provider) {
+    case "cod":
+      return "Pay on delivery";
+    case "esewa":
+      return "eSewa";
+    case "khalti":
+      return "Khalti";
+    default:
+      return provider;
+  }
+}
+
+function formatNPR(amount: number): string {
+  return `NPR ${(amount || 0).toLocaleString("en-IN")}`;
+}
+
+export function AccountScreen() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const {
+    user,
+    isSignedIn,
+    isAdmin,
+    isStaff,
+    isOwner,
+    signOut,
+    cartCount,
+    setAuthSheetOpen,
+    refreshProfile,
+  } = useApp();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  // U-47v4: habit counters for the "Your activity" block (null hides it).
+  const [habits, setHabits] = useState<UserHabits | null>(null);
+  const [messages, setMessages] = useState<
+    { message: string; status: string; createdAt: string }[]
+  >([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [name, setName] = useState(user?.name || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [address, setAddress] = useState(user?.address || "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // A3 (2026-09-24): newsletter opt-in — the app mirror of the website's
+  // footer/checkout capture (same newsletter_subscribers table + edge
+  // guardrails). Consent checkbox is REQUIRED, same wording as the web.
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
+  const [newsletterBusy, setNewsletterBusy] = useState(false);
+  // U-47: per-user collection — read from the APP-WIDE CollectionContext
+  // (same state the hearts on every card write), plus a local catalog
+  // snapshot to resolve saved ids into displayable cards.
+  const { savedIds, refresh: refreshCollection } = useCollection();
+  const [collectionProducts, setCollectionProducts] = useState<Product[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const collection: {
+    itemId: string;
+    itemKind: "product";
+    createdAt: string;
+  }[] = useMemo(
+    () =>
+      Array.from(savedIds).map((itemId) => ({
+        itemId,
+        itemKind: "product" as const,
+        createdAt: "",
+      })),
+    [savedIds],
+  );
+  const [newsletterStatus, setNewsletterStatus] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
+
+  // C8: shared loader so pull-to-refresh can re-run both fetches.
+  const reload = useCallback(() => {
+    if (!isSignedIn) return Promise.resolve();
+    setOrdersLoading(true);
+    setMessagesLoading(true);
+    // C8: failures used to be swallowed silently — log them so field issues
+    // are visible, but keep the UI stable (empty lists, not error screens).
+    return Promise.all([
+      getMyOrders()
+        .then(setOrders)
+        .catch((e: unknown) => {
+          logger.error("account", "load orders failed", e);
+          setOrders([]);
+        }),
+      // U-47v4: activity counters ride the same refresh cycle; failure
+      // just leaves the block hidden (getMyHabits resolves null).
+      getMyHabits()
+        .then(setHabits)
+        .catch(() => setHabits(null)),
+      getMyMessages()
+        .then(setMessages)
+        .catch((e: unknown) => {
+          logger.error("account", "load messages failed", e);
+          setMessages([]);
+        }),
+      // U-47: the collection rides the same refresh cycle — re-pull the
+      // shared context state + keep the catalog snapshot fresh.
+      (async () => {
+        setCollectionLoading(true);
+        try {
+          await refreshCollection();
+          setCollectionProducts(
+            await getProducts().catch(() => [] as Product[]),
+          );
+        } catch (e) {
+          logger.error("account", "load collection failed", e);
+        } finally {
+          setCollectionLoading(false);
+        }
+      })(),
+    ]).finally(() => {
+      setOrdersLoading(false);
+      setMessagesLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    // reload() flips the two loading flags immediately by design (the blocks
+    // show spinners until the promises settle); the rows themselves land in
+    // promise callbacks.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
+    void reload();
+  }, [reload]);
+
+  // A role promotion (website Users tab) must surface here without a
+  // re-login: re-read the profile whenever this screen gains focus.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshProfile();
+    }, [refreshProfile]),
+  );
+
+  // Seed the editable fields from the profile whenever the PROFILE ITSELF
+  // changes (fresh load, or a staff edit synced down). Keyed on the values, not
+  // the object identity, so a re-render with an equal user does not clobber an
+  // in-progress edit — and applied during render so the inputs never paint the
+  // previous account's details for a frame.
+  const userSig = user
+    ? `${user.id}\u0000${user.name ?? ""}\u0000${user.phone ?? ""}\u0000${user.address ?? ""}`
+    : "";
+  const [lastUserSig, setLastUserSig] = useState(userSig);
+  if (userSig !== lastUserSig) {
+    setLastUserSig(userSig);
+    if (user) {
+      setName(user.name || "");
+      setPhone(user.phone || "");
+      setAddress(user.address || "");
+    }
+  }
+
+  const initials = (user?.name || "U")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+
+  // C8: pull-to-refresh — re-run both fetches, guarded so an in-flight
+  // spinner can't be re-triggered concurrently.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await reload();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reload]);
+
+  async function saveProfile() {
+    setProfileSaving(true);
+    setProfileSaved(false);
+    try {
+      await updateProfile(user?.id || "", { name, phone, address });
+      setProfileSaved(true);
+      setEditingProfile(false);
+    } catch (e) {
+      // C8: was a silent no-op — the button just appeared to do nothing.
+      logger.error("account", "save profile failed", e);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  if (!isSignedIn) {
+    return (
+      <View className="flex-1 items-center justify-center bg-surface px-8">
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-navy">
+          <Feather name="user" size={26} color="#ffffff" />
+        </View>
+        <Text className="mt-4 font-display text-xl font-bold text-ink">
+          Sign in to account
+        </Text>
+        <Text className="mt-1 text-center text-sm text-muted">
+          Access your profile, orders, and synced build list.
+        </Text>
+        <Pressable
+          onPress={() => setAuthSheetOpen(true)}
+          className="mt-6 w-full max-w-xs items-center rounded-full bg-navy py-3"
+        >
+          <Text className="font-bold text-white">Sign in</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // C8: ScrollView root — long profiles clipped on small screens before, and
+  // this gives the screen pull-to-refresh over orders + messages.
+  // Mirror website's skeleton loading state (3 stat cards + header block).
+  if (ordersLoading && messagesLoading && collectionLoading) {
+    return (
+      <View className="flex-1 bg-surface">
+        <View className="h-40 animate-pulse rounded-2xl border border-line bg-card mx-5 mt-4" />
+        <View className="mt-4 flex-row gap-3 px-5">
+          <View className="h-28 animate-pulse flex-1 rounded-2xl border border-line bg-card" />
+          <View className="h-28 animate-pulse flex-1 rounded-2xl border border-line bg-card" />
+          <View className="h-28 animate-pulse flex-1 rounded-2xl border border-line bg-card" />
+        </View>
+      </View>
+    );
+  }
+
+  // C8: ScrollView root — long profiles clipped on small screens before, and
+  // this gives the screen pull-to-refresh over orders + messages.
+  return (
+    <ScrollView
+      className="flex-1 bg-surface"
+      contentContainerStyle={{ paddingBottom: 24 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <View className="px-5 pb-2 pt-4">
+        {/* Header card — avatar + name + email + admin badge + sign out */}
+        <View className="rounded-2xl border border-line bg-card p-4">
+          <View className="flex-row items-center justify-between">
+            <View className="min-w-0 flex-1 flex-row items-center">
+              <View className="h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy">
+                <Text className="text-sm font-black text-white">
+                  {initials}
+                </Text>
+              </View>
+              <View className="ml-3 min-w-0 flex-1">
+                <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                  Customer account
+                </Text>
+                <Text
+                  // No clamp: the website's AccountPanel prints the welcome
+                  // line and email unclamped (text-xl / text-sm).
+                  className="mt-0.5 font-display text-xl font-bold tracking-tight text-ink"
+                >
+                  Welcome, {user?.name || "Genum user"}.
+                </Text>
+                <Text className="mt-0.5 text-sm text-muted">{user?.email}</Text>
+              </View>
+            </View>
+            {isStaff && (
+              <View className="shrink-0 rounded-full bg-gold px-2 py-0.5">
+                <Text className="text-xs font-black uppercase text-ink">
+                  {isOwner ? "Owner" : isAdmin ? "Admin" : "Staff"}
+                </Text>
+              </View>
+            )}
+          </View>
+          {/* Website header parity: every staff role gets a direct Admin
+              dashboard entry, not only admins/owners. */}
+          {isStaff ? (
+            <Pressable
+              onPress={() => navigation.push("Admin")}
+              accessibilityRole="button"
+              accessibilityLabel="Open admin dashboard"
+              className="mt-4 flex-row items-center justify-center gap-2 rounded-full bg-navy py-2.5"
+            >
+              <Feather name="shield" size={15} color="#ffffff" />
+              <Text className="text-sm font-bold text-white">
+                Admin dashboard
+              </Text>
+              <Feather name="arrow-right" size={15} color="#ffffff" />
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={signOut}
+            className={`${isStaff ? "mt-2" : "mt-4"} items-center rounded-full border border-red-200 bg-card py-2.5`}
+          >
+            <Text className="text-sm font-bold text-red-600">Log out</Text>
+          </Pressable>
+        </View>
+
+        {/* Stats row — orders placed · build-list item types · support messages */}
+        <View className="mt-4 flex-row gap-3">
+          <View className="flex-1 rounded-2xl border border-line bg-card p-4">
+            <Text className="font-display text-3xl font-bold text-ink">
+              {ordersLoading ? "…" : orders.length}
+            </Text>
+            <Text className="mt-1 text-xs font-semibold text-muted">
+              Order{orders.length === 1 ? "" : "s"} placed
+            </Text>
+          </View>
+          <View className="flex-1 rounded-2xl border border-line bg-card p-4">
+            <Text className="font-display text-3xl font-bold text-ink">
+              {cartCount}
+            </Text>
+            <Text className="mt-1 text-xs font-semibold text-muted">
+              Items in build list
+            </Text>
+          </View>
+          <View className="flex-1 rounded-2xl border border-line bg-card p-4">
+            <Text className="font-display text-3xl font-bold text-ink">
+              {messagesLoading ? "…" : messages.length}
+            </Text>
+            <Text className="mt-1 text-xs font-semibold text-muted">
+              Support message{messages.length === 1 ? "" : "s"}
+            </Text>
+          </View>
+        </View>
+
+        {/* U-47: My collection — every card the user hearted (products,
+            projects, services), straight from user_collection (RLS own-rows). */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="font-display text-lg font-bold text-ink">
+              My collection
+            </Text>
+            <Text className="text-xs font-semibold text-muted">
+              {collectionLoading ? "…" : `${collection.length} saved`}
+            </Text>
+          </View>
+          {collectionLoading ? (
+            <View className="mt-4 items-center py-4">
+              <ActivityIndicator color="#1e3a8a" />
+            </View>
+          ) : collection.length === 0 ? (
+            <Text className="mt-3 text-sm text-muted">
+              Nothing saved yet — tap the ♥ on any card to keep it here.
+            </Text>
+          ) : (
+            <View
+              className="mt-3 flex-row flex-wrap"
+              style={{ marginHorizontal: -6 }}
+            >
+              {collection.map((item) => {
+                const product = collectionProducts.find(
+                  (p) => p.id === item.itemId,
+                );
+                const openItem = () => {
+                  if (product) {
+                    navigation.push("ProductDetail", { productId: product.id });
+                  }
+                };
+                return (
+                  <View
+                    key={`${item.itemKind}-${item.itemId}`}
+                    className="mb-3 w-[31%] max-w-[31%]"
+                    style={{ marginHorizontal: 6 }}
+                  >
+                    <Pressable
+                      onPress={openItem}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${product?.name ?? item.itemId}`}
+                      className="overflow-hidden rounded-xl border border-line bg-surface"
+                    >
+                      <View className="aspect-square w-full items-center justify-center bg-mist">
+                        {/* U-47v4b (card parity): themed fallback for
+                            photoless saved cards, same as the website. */}
+                        {product ? (
+                          <Image
+                            source={{
+                              uri:
+                                galleryImages(product)[0] ||
+                                product.image ||
+                                getProductMedia(product.category).src,
+                            }}
+                            className="h-full w-full"
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Feather name="heart" size={22} color="#94a3b8" />
+                        )}
+                      </View>
+                      <View className="px-2 pb-2 pt-1.5">
+                        <Text
+                          numberOfLines={1}
+                          className="text-[12px] font-bold text-ink"
+                        >
+                          {product?.name ?? item.itemId}
+                        </Text>
+                        {product ? (
+                          <Text className="mt-0.5 text-[11px] font-black text-navy">
+                            {product.priceLabel}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* U-47v4: "Your activity" — the habit counters the app has been
+            silently recording since v2 (views, searches, cart adds, orders).
+            Hidden entirely when counters are all zero or the fetch failed. */}
+        {habits &&
+          (habits.viewed_count > 0 ||
+            habits.search_count > 0 ||
+            habits.cart_adds > 0 ||
+            habits.orders_placed > 0) && (
+            <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+              <Text className="font-display text-lg font-bold text-ink">
+                Your activity
+              </Text>
+              <Text className="mt-1 text-xs text-muted">
+                A private tally of how you use GENUM — only you can see this.
+              </Text>
+              <View className="mt-3 flex-row flex-wrap gap-2">
+                {(
+                  [
+                    { label: "Viewed", count: habits.viewed_count },
+                    { label: "Searches", count: habits.search_count },
+                    { label: "Cart adds", count: habits.cart_adds },
+                    { label: "Orders", count: habits.orders_placed },
+                  ] as const
+                ).map(({ label, count }) => (
+                  <View
+                    key={label}
+                    className="min-w-[46%] flex-1 rounded-xl border border-line bg-mist px-3 py-2.5"
+                  >
+                    <Text className="text-[10px] font-black uppercase tracking-wide text-muted">
+                      {label}
+                    </Text>
+                    <Text className="mt-0.5 font-display text-xl font-bold text-ink">
+                      {count}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+        {/* My garage — every car this account owns, named by the user.
+            Placed above orders because a device is a more likely reason to
+            open Account than a past order, and it shares the same identity
+            source (device_registry) the Tools screen registers against. */}
+        <View className="mt-5">
+          <DeviceGarageCard userId={user?.id ?? null} />
+        </View>
+
+        {/* Your orders — status pill + provider + total + line items */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <Text className="font-display text-lg font-bold text-ink">
+            Your orders
+          </Text>
+          {ordersLoading ? (
+            <View className="mt-4 items-center py-4">
+              <ActivityIndicator color="#1e3a8a" />
+            </View>
+          ) : orders.length === 0 ? (
+            <Text className="mt-3 text-sm text-muted">
+              No orders yet — they appear here right after checkout.
+            </Text>
+          ) : (
+            <View className="mt-3 space-y-3">
+              {orders.map((o) => (
+                <View key={o.id} className="rounded-xl border border-line p-4">
+                  <View className="flex-row flex-wrap items-center justify-between gap-2">
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-bold text-ink">
+                        #{o.id.slice(0, 8).toUpperCase()}
+                      </Text>
+                      <Text
+                        className="mt-0.5 text-xs text-muted"
+                        numberOfLines={1}
+                      >
+                        {new Date(o.created_at).toLocaleDateString()} ·{" "}
+                        {providerLabel(o.provider)}
+                      </Text>
+                    </View>
+                    <View className="flex-row items-center gap-3">
+                      <Text
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${STATUS_STYLES[statusLabel(o.status)] || "bg-mist text-ink"}`}
+                      >
+                        {statusLabel(o.status)}
+                      </Text>
+                      <Text className="font-black text-ink">
+                        {formatNPR(o.total_npr)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View className="mt-2">
+                    {o.items.map((item) => (
+                      <Text
+                        key={`${o.id}-${item.name}`}
+                        className="text-xs leading-5 text-muted"
+                        numberOfLines={1}
+                      >
+                        {item.quantity} × {item.name} ·{" "}
+                        {formatNPR(
+                          (item.price ?? item.priceNpr ?? 0) * item.quantity,
+                        )}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Your details — profile edit */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <Text className="font-display text-lg font-bold text-ink">
+            Your details
+          </Text>
+          <Text className="mt-1 text-sm text-muted">
+            Used for delivery and order updates.
+          </Text>
+
+          {!editingProfile ? (
+            <Pressable
+              onPress={() => setEditingProfile(true)}
+              className="mt-3 rounded-full bg-navy px-4 py-2 self-start"
+            >
+              <Text className="text-xs font-bold text-white">Edit Profile</Text>
+            </Pressable>
+          ) : (
+            <View className="mt-3">
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Name
+              </Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                className="mt-1 mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                placeholder="Name"
+              />
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Phone
+              </Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                className="mt-1 mb-3 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                placeholder="Phone"
+                keyboardType="phone-pad"
+              />
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Delivery address
+              </Text>
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                className="mt-1 mb-4 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+                placeholder="Address"
+                multiline
+              />
+              <View className="flex-row gap-3">
+                <Pressable
+                  onPress={saveProfile}
+                  disabled={profileSaving}
+                  className="rounded-full bg-gold px-5 py-2"
+                >
+                  <Text className="text-xs font-black text-ink">
+                    {profileSaving ? "Saving…" : "Save details"}
+                  </Text>
+                </Pressable>
+                {profileSaved && (
+                  <Text className="self-center text-xs font-bold text-emerald-700">
+                    Details saved.
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* A3: newsletter opt-in — mirrors the website's capture with the
+            same required-consent wording; stored in the shared table. */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <Text className="font-display text-lg font-bold text-ink">
+            Newsletter
+          </Text>
+          <Text className="mt-1 text-sm leading-5 text-muted">
+            One email when something worth building ships. No spam.
+          </Text>
+          <TextInput
+            value={newsletterEmail}
+            onChangeText={setNewsletterEmail}
+            placeholder="you@example.com"
+            placeholderTextColor="#94a3b8"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            maxLength={254}
+            accessibilityLabel="Newsletter email"
+            className="mt-3 rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink"
+          />
+          <Pressable
+            onPress={() => setNewsletterConsent((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: newsletterConsent }}
+            className="mt-3 flex-row items-start gap-2"
+          >
+            <View
+              className={`mt-0.5 h-5 w-5 items-center justify-center rounded border ${newsletterConsent ? "border-navy bg-navy" : "border-line bg-surface"}`}
+            >
+              {newsletterConsent ? (
+                <Feather name="check" size={13} color="#ffffff" />
+              ) : null}
+            </View>
+            <Text className="flex-1 text-xs leading-5 text-muted">
+              Email me news about new kits, projects, and training. I can
+              unsubscribe anytime.
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={async () => {
+              if (newsletterBusy) return;
+              setNewsletterStatus(null);
+              if (!newsletterConsent) {
+                setNewsletterStatus({
+                  text: "Please tick the consent box first.",
+                  isError: true,
+                });
+                return;
+              }
+              setNewsletterBusy(true);
+              let result: Awaited<ReturnType<typeof subscribeToNewsletter>>;
+              try {
+                result = await subscribeToNewsletter(
+                  newsletterEmail,
+                  "app-account",
+                );
+              } catch {
+                result = {
+                  ok: false,
+                  error: "Subscription failed. Try again.",
+                };
+              } finally {
+                setNewsletterBusy(false);
+              }
+              if (result.ok) {
+                setNewsletterEmail("");
+                setNewsletterConsent(false);
+                setNewsletterStatus({
+                  text: "Subscribed — welcome aboard!",
+                  isError: false,
+                });
+              } else {
+                setNewsletterStatus({ text: result.error, isError: true });
+              }
+            }}
+            disabled={newsletterBusy}
+            className="mt-3 items-center rounded-full bg-navy py-2.5 disabled:opacity-60"
+          >
+            <Text className="text-sm font-bold text-white">
+              {newsletterBusy ? "Subscribing…" : "Subscribe"}
+            </Text>
+          </Pressable>
+          {newsletterStatus && (
+            <Text
+              className={`mt-2 text-xs font-semibold ${newsletterStatus.isError ? "text-red-600" : "text-emerald-700"}`}
+            >
+              {newsletterStatus.text}
+            </Text>
+          )}
+        </View>
+
+        {/* Your messages — support history with status pills */}
+        <View className="mt-5 rounded-2xl border border-line bg-card p-4">
+          <Text className="font-display text-lg font-bold text-ink">
+            Your messages
+          </Text>
+          {messagesLoading ? (
+            <View className="mt-4 items-center py-4">
+              <ActivityIndicator color="#1e3a8a" />
+            </View>
+          ) : messages.length === 0 ? (
+            <Text className="mt-3 text-sm text-muted">
+              No messages yet. Ask us about a project from the Contact page.
+            </Text>
+          ) : (
+            <View className="mt-3">
+              {messages.map((m, i) => (
+                <View
+                  key={m.createdAt + String(i)}
+                  className="py-3 first:pt-0 last:pb-0"
+                  style={{
+                    borderTopWidth: i > 0 ? 1 : 0,
+                    borderTopColor: "#e2e8f0",
+                  }}
+                >
+                  <Text className="text-sm leading-6 text-ink">
+                    {m.message}
+                  </Text>
+                  <View className="mt-2 flex-row items-center gap-2">
+                    <Text className="text-xs text-muted">
+                      {new Date(m.createdAt).toLocaleDateString()}
+                    </Text>
+                    <Text
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${m.status === "replied" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
+                    >
+                      {m.status === "replied" ? "Replied" : "New"}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}

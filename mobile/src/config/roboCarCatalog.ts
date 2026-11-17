@@ -1,0 +1,465 @@
+// =====================================================================
+// roboCarCatalog.ts - bundled (OFFLINE FALLBACK) robot-car catalogue.
+//
+// The DISPLAY catalogue is read DB-first from the shared `robo_car_modes`
+// Supabase table via services/carModeService.ts (the same rows the website
+// admin edits). This bundled list is the fallback when Supabase is
+// unreachable, mirrors the website's lib/robo-car-catalog.ts, and doubles
+// as the seed source for the table. Keep it in sync with that file.
+//
+// The protocol helpers below (TOKEN_TO_MODE_ID, resolveModeByToken,
+// resolveModeByIndex, nextMode) stay bound to the bundled 9 firmware modes:
+// the ESP32 firmware only understands those fixed tokens, so they are the
+// command-protocol truth regardless of DB catalogue edits.
+// =====================================================================
+
+export type CarModeId =
+  | "4wd4m" // Bluetooth — 4WD (4M)
+  | "2wd1m" // Bluetooth — 2WD + Servo (1M)
+  | "self-balancing" // Self-Balancing
+  | "obstacle-us" // Obstacle Avoidance — Ultrasonic
+  | "obstacle-ir" // Obstacle Avoidance — IR
+  | "website-client" // Website Controlled — Client
+  | "website-server" // Website Controlled — Server
+  | "path-follow" // Path Following — IR
+  | "rf-manual"; // Manual — RF
+
+export type ControlKind =
+  | "drive-tank" // 4WD: drive+direction
+  | "drive-2wd1m" // 2WD1M: motor speed + servo steer
+  | "pid-auto" // self-balancing: PID sliders + live angle
+  | "start-stop" // autonomous: run/stop + read-only telemetry
+  | "tuning" // config-driven (path/obstacle thresholds)
+  | "weblink"; // website client/server: point at ESP IP
+
+export interface CarMode {
+  id: CarModeId;
+  name: string;
+  token: string;
+  deviceIndex: number;
+  car: string;
+  wheel: string;
+  steering: string;
+  sensors: string[];
+  transport: ("ble" | "wifi" | "classic-bt" | "rf")[];
+  remoteWith: string;
+  controls: ControlKind[];
+  requiresConnection: boolean;
+  blurb: string;
+  /**
+   * True when the firmware for this mode has NOT been built yet (owner
+   * decision 2026-10-01). The mode is a sellable product with no
+   * repository behind it, so the UI must say so rather than imply a car
+   * that does not exist. Mirrored in the `robo_car_modes_flags.is_planned`
+   * column; `carModeService` merges the two.
+   *
+   * This is NOT a protocol change: `token` and `deviceIndex` stay exactly as
+   * the firmware defines them, so mode cycling and the remote's button parity
+   * are unaffected.
+   */
+  isPlanned?: boolean;
+}
+
+/**
+ * Modes whose firmware does not exist yet (owner decision 2026-10-01).
+ *
+ * Kept OFF the LOCAL_CAR_MODES entries on purpose: it is a separate exported
+ * set so the OFFLINE fallback path can flag them too. A mode missing from
+ * this set has firmware; a mode in it is a planned product. `rf-manual` is
+ * here because the remote performs that mode, not the car.
+ */
+export const PLANNED_MODE_IDS: readonly CarModeId[] = [
+  "obstacle-us",
+  "obstacle-ir",
+  "website-client",
+  "website-server",
+  "path-follow",
+  "rf-manual",
+];
+
+/**
+ * Is this mode's firmware actually built?
+ *
+ * LABEL, DO NOT GATE (R-10, owner decision 2026-09-15): callers use this to
+ * BADGE a mode as coming soon, never to disable it. A planned mode stays
+ * selectable because the CAR refuses it with its own COMING SOON frame or a
+ * NACK — the app must not claim a capability no firmware delivers (F-53), and
+ * must not silently swallow a tap either.
+ *
+ * `mode` is matched by id first, then token, so callers that hold either
+ * identifier get the same answer. An unknown identifier is treated as BUILT:
+ * a missing catalogue entry is this function's problem to report, not a
+ * reason to label a real mode as unbuilt.
+ */
+export function isCarModeBuilt(
+  mode: { id?: string; token?: string; isPlanned?: boolean } | null | undefined,
+): boolean {
+  if (!mode) return true;
+  if (typeof mode.isPlanned === "boolean") return !mode.isPlanned;
+  const entry = LOCAL_CAR_MODES.find(
+    (m) =>
+      (mode.id != null && m.id === mode.id) ||
+      (mode.token != null && m.token === mode.token),
+  );
+  return entry ? !entry.isPlanned : true;
+}
+
+// The 9 modes from the ESP32 remote firmware (Genum_ESP32_Remote_v1.0.0)
+export const LOCAL_CAR_MODES: CarMode[] = [
+  {
+    id: "4wd4m",
+    name: "4WD4M",
+    token: "4WD4M",
+    deviceIndex: 0,
+    car: "4-Wheel Drive",
+    wheel: "4 × BO/brushed motors",
+    steering: "Skid-steer (differential)",
+    sensors: [],
+    // v2 architecture: the 4WD4M car runs its WiFi access point up for the
+    // WHOLE uptime as a connection/setup channel and accepts drive over it
+    // directly in 4WD4M. Listing WiFi here is a factual correction — the
+    // previous ["ble","classic-bt"] described pre-v2 donor behaviour and is
+    // what made WiFi look unsupported in the mode chooser.
+    transport: ["classic-bt", "wifi"],
+    remoteWith: "ESP REMOTE or app",
+    controls: ["drive-tank"],
+    requiresConnection: true,
+    blurb: "A 4-motor drive car driven by direction (F/B/L/R) and speed.",
+  },
+  {
+    id: "2wd1m",
+    name: "Bluetooth — 2WD + Servo (1M)",
+    token: "2WD1M",
+    deviceIndex: 8,
+    car: "2-Wheel Drive",
+    wheel: "1 × BO motor (rear)",
+    steering: "1 × servo (0..180, center 90)",
+    sensors: [],
+    transport: ["ble", "classic-bt"],
+    remoteWith: "ESP REMOTE two-joystick",
+    controls: ["drive-2wd1m"],
+    requiresConnection: true,
+    blurb:
+      "One drive motor plus a steering servo. Speed is signed SPD (fwd +ve).",
+  },
+  {
+    id: "self-balancing",
+    name: "Self-Balancing",
+    token: "AUTO",
+    deviceIndex: 6,
+    car: "Self-Balancing",
+    wheel: "2 × BO motors",
+    steering: "Self-balance (PID)",
+    sensors: ["MPU6050 IMU"],
+    transport: ["ble", "wifi", "classic-bt"],
+    remoteWith: "ESP REMOTE (PID tuning)",
+    controls: ["pid-auto"],
+    requiresConnection: true,
+    blurb:
+      "Balances itself in AUTO mode. The app/remote tune Kp/Ki/Kd OUT/OFF live.",
+  },
+  {
+    id: "obstacle-us",
+    name: "Obstacle Avoidance — Ultrasonic",
+    token: "OBS_US",
+    deviceIndex: 3,
+    car: "Obstacle Avoider",
+    wheel: "2/4 × BO motors",
+    steering: "Skid-steer",
+    sensors: ["HC-SR04 / ultrasonic"],
+    transport: ["ble", "wifi", "classic-bt"],
+    remoteWith: "ESP REMOTE",
+    controls: ["start-stop"],
+    requiresConnection: true,
+    isPlanned: true,
+    blurb: "Runs autonomous obstacle avoidance using an ultrasonic sensor.",
+  },
+  {
+    id: "obstacle-ir",
+    name: "Obstacle Avoidance — IR",
+    token: "OBS_IR",
+    deviceIndex: 4,
+    car: "Obstacle Avoider",
+    wheel: "2/4 × BO motors",
+    steering: "Skid-steer",
+    sensors: ["IR / photodiode pair"],
+    transport: ["ble", "wifi", "classic-bt"],
+    remoteWith: "ESP REMOTE",
+    controls: ["start-stop"],
+    requiresConnection: true,
+    isPlanned: true,
+    blurb: "Autonomous obstacle avoidance driven by IR sensors.",
+  },
+  {
+    id: "website-client",
+    name: "Website Controlled — Client",
+    token: "ESP_CLI",
+    deviceIndex: 7,
+    car: "Website Car",
+    wheel: "2/4 × BO motors",
+    steering: "Skid-steer",
+    sensors: [],
+    transport: ["wifi"],
+    remoteWith: "Browser / app",
+    controls: ["weblink"],
+    requiresConnection: false,
+    isPlanned: true,
+    blurb:
+      "The ESP32 is a WiFi client; the browser/app acts as the control server.",
+  },
+  {
+    id: "website-server",
+    name: "Website Controlled — Server",
+    token: "ESP_SER",
+    deviceIndex: 1,
+    car: "Website Car",
+    wheel: "2/4 × BO motors",
+    steering: "Skid-steer",
+    sensors: [],
+    transport: ["wifi"],
+    remoteWith: "Browser / app",
+    controls: ["weblink"],
+    requiresConnection: false,
+    isPlanned: true,
+    blurb: "The ESP32 hosts its own web page; open its IP to drive it.",
+  },
+  {
+    id: "path-follow",
+    name: "Path Following — IR",
+    token: "PATH",
+    deviceIndex: 2,
+    car: "Line Follower",
+    wheel: "2/4 × BO motors",
+    steering: "Skid-steer",
+    sensors: ["IR line sensors"],
+    transport: ["ble", "wifi", "classic-bt"],
+    remoteWith: "ESP REMOTE",
+    controls: ["start-stop"],
+    requiresConnection: true,
+    isPlanned: true,
+    blurb: "Follows an IR-detected line or path autonomously.",
+  },
+  {
+    id: "rf-manual",
+    name: "Manual — RF",
+    token: "MAN",
+    deviceIndex: 5,
+    car: "RF Car",
+    wheel: "2/4 × BO motors",
+    steering: "Skid-steer",
+    sensors: [],
+    transport: ["rf"],
+    remoteWith: "RF hand-held remote",
+    controls: ["drive-tank"],
+    requiresConnection: false,
+    isPlanned: true,
+    blurb:
+      "Manual control over RF modules (not BT or WiFi) - drive with the RF handset.",
+  },
+];
+
+// Map from mode token to CarModeId (mirrors website MODE_CMDS[] ordering)
+export const TOKEN_TO_MODE_ID: Record<string, CarModeId> = {
+  BT: "4wd4m",
+  ESP_SER: "website-server",
+  PATH: "path-follow",
+  OBS_US: "obstacle-us",
+  OBS_IR: "obstacle-ir",
+  MAN: "rf-manual",
+  AUTO: "self-balancing",
+  ESP_CLI: "website-client",
+  "2WD1M": "2wd1m",
+};
+
+// Map from mode token to remote OLED display name (state.cpp MODE_NAMES[])
+// X-8: the drive mode's token is `4WD4M`; legacy key `BT` kept for display
+// lookups of cached old-token data.
+export const MODE_NAMES: Record<string, string> = {
+  "4WD4M": "4WD4M",
+  BT: "4WD4M",
+  ESP_SER: "EspWebServer",
+  PATH: "PathFollowing",
+  OBS_US: "Obstacle_US",
+  OBS_IR: "ObstacleIR",
+  MAN: "Manual",
+  AUTO: "Autonomous",
+  ESP_CLI: "EspWebClient",
+  "2WD1M": "2WD1M",
+};
+
+// -------------------------------------------------------------------
+// Resolve a mode by its token (as sent over BLE/WS protocol)
+// -------------------------------------------------------------------
+export function resolveModeByToken(token: string): CarMode | undefined {
+  const id = TOKEN_TO_MODE_ID[token];
+  if (!id) return undefined;
+  return LOCAL_CAR_MODES.find((m) => m.id === id);
+}
+
+// Resolve a mode by its index in the firmware cycle (0..8)
+export function resolveModeByIndex(idx: number): CarMode | undefined {
+  return LOCAL_CAR_MODES.find((m) => m.deviceIndex === idx);
+}
+
+// Get the mode that follows `from` in the firmware cycle (wrapping)
+export function nextMode(from: CarMode): CarMode {
+  const fromIdx = LOCAL_CAR_MODES.findIndex((m) => m.id === from.id);
+  if (fromIdx === -1) return LOCAL_CAR_MODES[0];
+  return LOCAL_CAR_MODES[(fromIdx + 1) % LOCAL_CAR_MODES.length];
+}
+
+// -------------------------------------------------------------------
+// Fleet mode-cycling order (owner matrix 2026-09-15) — the ONE source of
+// truth for how the remote / app walk the 9 firmware modes. Mirrors the
+// ESP remote's state.cpp MODE_CMDS[] scroll order. Every consumer (Mode
+// Chooser browse, Remote nav preview, hub cycleMode) must use these
+// helpers so no screen invents its own order or falls back to pool[0].
+// -------------------------------------------------------------------
+export const REMOTE_MODE_ORDER = [
+  "4WD4M",
+  "ESP_SER",
+  "PATH",
+  "OBS_US",
+  "OBS_IR",
+  "MAN",
+  "AUTO",
+  "ESP_CLI",
+  "2WD1M",
+] as const;
+
+function remoteOrderIndex(token: string): number {
+  const t = token.trim().toUpperCase();
+  const idx = REMOTE_MODE_ORDER.indexOf(
+    t as (typeof REMOTE_MODE_ORDER)[number],
+  );
+  return idx;
+}
+
+/**
+ * Is `token` one of the 9 fleet MODE tokens (the X-8 `BT` legacy alias
+ * included)? Derived from REMOTE_MODE_ORDER — never hand-write the list
+ * again (F-51: a hand-written literal is not evidence).
+ *
+ * Needed because the car answers EVERY unrecognised line with
+ * `NACK;E=UNKNOWN_MODE;ARG=<token>`: handleCommand() falls through to
+ * setModeFromString() for anything it does not otherwise handle, so the
+ * "unknown MODE" error also covers "this car has no such COMMAND"
+ * (ESTOP, SERVO<n>, TRIM<n>, STEER<n> on the differential-drive 4WD4M).
+ * Callers that interpret a NACK as "mode not supported" must gate on this
+ * or they will raise a false error for an unimplemented command.
+ */
+export function isModeToken(token: string): boolean {
+  return remoteOrderIndex(token) !== -1 || token.trim().toUpperCase() === "BT";
+}
+
+/**
+ * The mode token that follows `token` in the fleet order — ALWAYS advances
+ * and wraps, never falls back to a "default" mode (the old cycleMode could
+ * bounce to pool[0] when its id-lookup missed). Unknown / legacy tokens
+ * (BT) start from the head of the order (4WD4M) and move to its successor.
+ */
+export function nextRemoteModeToken(token: string): string {
+  const t = token.trim().toUpperCase();
+  const idx = remoteOrderIndex(t);
+  const base = idx === -1 ? 0 : idx;
+  return REMOTE_MODE_ORDER[(base + 1) % REMOTE_MODE_ORDER.length];
+}
+
+/**
+ * The next mode token in the fleet order, SKIPPING every token the caller
+ * marks unavailable for the paired car — the U-113 P1 companion to
+ * `nextRemoteModeToken`.
+ *
+ * The plain cycle walks all 9 tokens regardless of the car, per owner ruling
+ * R-10: planned (WIP) and not-yet-built (CS) modes must stay cyclable; the
+ * car renders its own "planned mode" frame. That ruling does NOT extend to a
+ * token the car declared `GONE` in its CAPS table: GONE means the mode is
+ * absent from the car's own registry (U-79 removed `ESP_SER`/`ESP_CLI` from
+ * the 4WD4M outright), so sending it can only ever come back as
+ * `NACK;E=UNKNOWN_MODE` — and the app's NACK handler rolls the optimistic
+ * pick straight back to car truth. That combination made the remote's rotate
+ * button look dead on the 4WD4M: 4WD4M → ESP_SER → NACK → 4WD4M, forever.
+ *
+ * Semantics:
+ *  - `isUnavailable` is called with the canonical (uppercase) token.
+ *  - The current token stays in the pool as the LAST candidate, so a car
+ *    whose only cyclable mode is the one already selected lands honestly on
+ *    itself instead of dead-ending.
+ *  - Unknown / legacy tokens (BT) start from the head of the order (4WD4M)
+ *    — same as `nextRemoteModeToken` — so with an empty predicate the two
+ *    helpers are identical for every input.
+ *  - If literally every token is filtered out (pathological CAPS data), the
+ *    plain unfiltered successor is returned so the button still moves and
+ *    the car's answer decides.
+ */
+export function nextCyclableToken(
+  token: string,
+  isUnavailable: (token: string) => boolean,
+): string {
+  const t = token.trim().toUpperCase();
+  const n = REMOTE_MODE_ORDER.length;
+  const base = remoteOrderIndex(t) === -1 ? 0 : remoteOrderIndex(t);
+  for (let step = 1; step <= n; step++) {
+    const candidate = REMOTE_MODE_ORDER[(base + step) % n];
+    if (!isUnavailable(candidate)) return candidate;
+  }
+  return nextRemoteModeToken(t);
+}
+
+/**
+ * Stable-sort a mode list (DB rows or bundled) into the fleet cycle order.
+ * Unknown/unmapped tokens drop to the tail. Used by the chooser, the
+ * remote nav preview and cycleMode so the on-screen order ALWAYS matches
+ * the car's physical scroll order.
+ */
+export function sortRemoteModes<T extends Pick<CarMode, "token">>(
+  modes: Array<T>,
+): Array<T> {
+  return [...modes].sort(
+    (a, b) =>
+      (remoteOrderIndex(a.token) === -1 ? 999 : remoteOrderIndex(a.token)) -
+      (remoteOrderIndex(b.token) === -1 ? 999 : remoteOrderIndex(b.token)),
+  );
+}
+
+// -------------------------------------------------------------------
+// Product → car-mode resolution (per-package remotes)
+// -------------------------------------------------------------------
+
+/**
+ * Resolve the robot-car mode a store product corresponds to, so a
+ * per-package "Control" button can open the remote already configured for
+ * that car. Matches, in order:
+ *  1. the product `badge` when it is a CarModeId or a mode token
+ *  2. the product `id` prefix (e.g. `2wd1m-basic` → `2wd1m`)
+ *
+ * Returns undefined for non-car products (plain kits, materials, services).
+ */
+export function resolveModeForProduct(product: {
+  id?: string;
+  badge?: string;
+}): CarMode | undefined {
+  const candidates = [product.badge, product.id].filter(Boolean) as string[];
+
+  for (const raw of candidates) {
+    const norm = raw.trim().toLowerCase();
+    if (!norm) continue;
+
+    // Exact CarModeId match (badges like `2wd1m`, `self-balancing`, …)
+    const byId = LOCAL_CAR_MODES.find((m) => m.id === norm);
+    if (byId) return byId;
+
+    // Mode token match (badges like `2WD1M`, `AUTO`, `BT`, …)
+    const tokenId = TOKEN_TO_MODE_ID[raw.trim().toUpperCase()];
+    if (tokenId) {
+      const byToken = LOCAL_CAR_MODES.find((m) => m.id === tokenId);
+      if (byToken) return byToken;
+    }
+
+    // id-prefix match (`2wd1m-basic` → `2wd1m`)
+    const byPrefix = LOCAL_CAR_MODES.find((m) => norm.startsWith(`${m.id}-`));
+    if (byPrefix) return byPrefix;
+  }
+
+  return undefined;
+}

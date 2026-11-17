@@ -1,0 +1,926 @@
+// =====================================================================
+// ProductDetailScreen - full product detail (parity with the website's
+// ProductDetailPro). Retail kits add to the build list; Project packages /
+// out-of-stock items request a scoped quote instead.
+// =====================================================================
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import {
+  getProductByIdWithSource,
+  getProducts,
+  recordProductView,
+  relatedProducts,
+} from "../services/productService";
+import { resolveModeForProduct } from "../config/roboCarCatalog";
+import { OfflineBadge } from "../components/OfflineBadge";
+import { ProductCard } from "../components/ProductCard";
+import { addToCart } from "../services/cartService";
+import {
+  listProjectComponents,
+  listProjectUsage,
+  type ProjectComponentLink,
+} from "../services/adminService";
+import { useApp } from "../context/AppContext";
+import {
+  defaultProjectPricing,
+  estimateProject,
+  formatNPR,
+  projectPricingAvailable,
+  resolveLine,
+  type ProjectPricing,
+} from "../lib/project-pricing";
+import { getPublishedProjectPricing } from "../services/projectPricingService";
+import { trackHabit } from "../services/collectionService";
+import { galleryImages, type Product } from "../types";
+import { getProductMedia } from "../lib/productMedia";
+import type { RootStackParamList } from "../navigation/types";
+
+type Nav = NativeStackNavigationProp<RootStackParamList, "ProductDetail">;
+type Route = RouteProp<RootStackParamList, "ProductDetail">;
+
+export function ProductDetailScreen() {
+  const navigation = useNavigation<Nav>();
+  const route = useRoute<Route>();
+  const insets = useSafeAreaInsets();
+  const { setCart } = useApp();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [qty, setQty] = useState(1);
+  const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  // C3 (2026-09-23): related (same category → same type) rows resolved
+  // against the full catalog once it loads. (Recently-viewed removed U-47.)
+  const [related, setRelated] = useState<Product[]>([]);
+  // U-23: gallery pagination (primary + thumbnails).
+  const [activeImage, setActiveImage] = useState(0);
+  // U-45 Phase 2 (2026-09-27): project↔component links for THIS product —
+  // for a project the catalog components it needs (with qty), for a
+  // component the ACTIVE projects that use it. Same data as the website's
+  // detail sections. The full catalog snapshot resolves the link ids into
+  // product cards; rows with an unknown/hidden id just vanish (never stubs).
+  const [catalogAll, setCatalogAll] = useState<Product[]>([]);
+  const [componentRows, setComponentRows] = useState<ProjectComponentLink[]>(
+    [],
+  );
+  const [usedInRows, setUsedInRows] = useState<{ projectId: string }[]>([]);
+  // 2026-11-13: published project pricing (approved rows only). Draft or
+  // missing => the page keeps "rate on request" and hides the calculator.
+  const [projectPricing, setProjectPricing] = useState<ProjectPricing>(
+    defaultProjectPricing,
+  );
+  // Buyer-adjusted component quantities for the live calculator.
+  const [quantityOverrides, setQuantityOverrides] = useState<
+    Record<string, number>
+  >({});
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { product, source } = await getProductByIdWithSource(
+          route.params.productId,
+        );
+        if (active) {
+          setProduct(product);
+          setOffline(source === "cache");
+          setActiveImage(0);
+          if (product) {
+            // C3: record the view BEFORE resolving the strip so this product
+            // lands at the front of "Recently viewed" on the next screen.
+            void recordProductView(product.id);
+            // U-47v2: habit counter (fire-and-forget; guests ignored).
+            void trackHabit("view");
+            // U-45 Phase 2: fetch the link rows alongside the catalog —
+            // public-read join table, so no auth and failures stay silent
+            // (sections vanish, the page never breaks).
+            if (product.productType === "Project package") {
+              void listProjectComponents(product.id)
+                .then((rows) => {
+                  if (active) setComponentRows(rows);
+                })
+                .catch(() => undefined);
+              void getPublishedProjectPricing(product.id)
+                .then((pricing) => {
+                  if (active && pricing) setProjectPricing(pricing);
+                })
+                .catch(() => undefined);
+            } else {
+              void listProjectUsage(product.id)
+                .then((rows) => {
+                  if (active) setUsedInRows(rows);
+                })
+                .catch(() => undefined);
+            }
+            void getProducts()
+              .then((all) => {
+                if (!active) return;
+                setCatalogAll(all);
+                setRelated(relatedProducts(all, product));
+              })
+              .catch(() => undefined);
+          }
+        }
+      } catch {
+        // no-op
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [route.params.productId]);
+
+  useEffect(() => {
+    if (!added) return;
+    const timer = setTimeout(() => setAdded(false), 2000);
+    return () => clearTimeout(timer);
+  }, [added]);
+
+  // New product => reset the calculator quantities. Adjusted during render so a
+  // product swap never shows the previous item's quantities for a frame.
+  const [lastProductId, setLastProductId] = useState(route.params.productId);
+  if (lastProductId !== route.params.productId) {
+    setLastProductId(route.params.productId);
+    setQuantityOverrides({});
+  }
+
+  if (loading || !product) {
+    return (
+      <View className="flex-1 items-center justify-center bg-surface">
+        <ActivityIndicator size="large" color="#1e3a8a" />
+      </View>
+    );
+  }
+
+  const isQuote =
+    product.productType === "Project package" || product.stock === 0;
+  const projectSections: [string, string[] | undefined][] = [
+    ["Objectives", product.objectives],
+    ["Materials required", product.materialsRequired],
+    ["Learning outcomes", product.learningOutcomes],
+    ["Build steps", product.buildSteps],
+    ["Control methods", product.controlMethods],
+    ["Prerequisites", product.prerequisites],
+    ["Deliverables", product.deliverables],
+  ];
+
+  const handleAdd = async () => {
+    if (isQuote || adding) return;
+    setAdding(true);
+    try {
+      const count = await addToCart(
+        product.id,
+        Math.min(qty, Math.max(1, product.stock)),
+      );
+      // U-47v2: habit counter (fire-and-forget).
+      void trackHabit("cart");
+      setCart({ count, size: count });
+      setAdded(true);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleQuote = () => {
+    navigation.push("Contact");
+  };
+
+  // U-45 Phase 2: resolve link rows into catalog cards (drop unknown/hidden
+  // ids). Direct links are staff-curated — no scope re-filtering here, same
+  // as the website's detail sections.
+  const componentProducts = componentRows
+    .map((row) => ({
+      qty: row.quantity,
+      product: catalogAll.find(
+        (p) => p.id === row.productId && p.active !== false,
+      ),
+    }))
+    .filter((entry): entry is { qty: number; product: Product } =>
+      Boolean(entry.product),
+    );
+  const usedInProjects = usedInRows
+    .map((row) =>
+      catalogAll.find((p) => p.id === row.projectId && p.active !== false),
+    )
+    .filter((p): p is Product => Boolean(p));
+
+  // 2026-11-13: project price lines + estimate. Same maths as the website
+  // detail page (src/lib/project-pricing.ts is a direct port).
+  const projectLines = componentProducts.map((entry) => {
+    const quantity = Math.max(
+      1,
+      quantityOverrides[entry.product.id] ?? entry.qty,
+    );
+    return {
+      ...resolveLine(
+        { productId: entry.product.id, quantity },
+        entry.product.price,
+        projectPricing.componentMarkupPercent,
+      ),
+      name: entry.product.name,
+    };
+  });
+  const projectEstimate = estimateProject({
+    pricing: projectPricing,
+    links: projectLines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+    })),
+    catalogPrices: new Map(
+      projectLines.map((line) => [line.productId, line.catalogPrice]),
+    ),
+  });
+  // Publish only when approved AND a real amount comes out of it.
+  const pricingPublished =
+    isQuote &&
+    product.productType === "Project package" &&
+    projectEstimate.available &&
+    projectPricingAvailable(projectPricing) &&
+    projectEstimate.total > 0;
+
+  const colorLabel =
+    product.color && !/from-\[.*?\]\s*to-\[.*?\]/.test(product.color)
+      ? product.color
+      : "Standard finish";
+
+  // U-47v4 (car-parity): when the product has no photos at all, show the
+  // themed category photo (same mapping as the website) instead of an
+  // empty gray hero.
+  const gallery = galleryImages(product);
+  const images =
+    gallery.length > 0 ? gallery : [getProductMedia(product.category).src];
+
+  // U-24 (2026-09-24): canonical specs as rows — structured when the import
+  // carried them, else parsed from the plain `specs` chip lines.
+  const specRows: { key: string; value: string }[] = product.importMeta
+    ?.structuredSpecs?.length
+    ? product.importMeta.structuredSpecs
+    : product.specs
+        .filter(Boolean)
+        .map((line) => {
+          const idx = line.indexOf(":");
+          return idx > 0
+            ? {
+                key: line.slice(0, idx).trim(),
+                value: line.slice(idx + 1).trim(),
+              }
+            : { key: "", value: line };
+        })
+        .filter((row) => row.key);
+
+  return (
+    <View className="flex-1 bg-surface">
+      <ScrollView
+        className="flex-1 bg-surface"
+        contentContainerStyle={{ paddingBottom: 104 }}
+      >
+        {/* Offline indicator (product came from local cache) */}
+        {offline && (
+          <View className="px-4 pt-3">
+            <OfflineBadge />
+          </View>
+        )}
+
+        {/* U-23 (2026-09-24): full gallery — larger contain-fit hero that never
+          crops the print, with thumbnail strip for multi-photo imports. */}
+        <View className="w-full bg-mist">
+          <View className="h-72 w-full items-center justify-center">
+            {images[activeImage] ? (
+              <Image
+                source={{ uri: images[activeImage] }}
+                className="h-full w-full"
+                resizeMode="contain"
+              />
+            ) : (
+              <Feather name="box" size={56} color="#64748b" />
+            )}
+          </View>
+          {/* (images.length > 0 is guaranteed by the fallback; thumbnails
+              only render when there are 2+ real/derived sources.) */}
+          {images.length > 1 && (
+            <View className="flex-row gap-2 px-4 pb-3">
+              {images.map((src, i) => (
+                <Pressable
+                  key={src}
+                  onPress={() => setActiveImage(i)}
+                  className={`h-14 w-14 overflow-hidden rounded-xl border-2 ${
+                    i === activeImage ? "border-navy" : "border-line"
+                  }`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show photo ${i + 1} of ${product.name}`}
+                >
+                  <Image
+                    source={{ uri: src }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                  />
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View className="px-5 pt-4">
+          <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+            {product.category} · {product.badge || product.productType}
+          </Text>
+          {product.note ? (
+            <Text className="mt-1 text-xs font-bold leading-4 text-gold">
+              {product.note}
+            </Text>
+          ) : null}
+          <Text className="mt-2 font-display text-2xl font-bold leading-tight tracking-tight text-ink">
+            {product.name}
+          </Text>
+          <Text className="mt-3 text-sm leading-6 text-muted">
+            {product.description}
+          </Text>
+          {product.importMeta?.creator ||
+          product.importMeta?.license ||
+          product.importMeta?.sourceSite ||
+          product.documentationUrl ? (
+            <View className="mt-3 overflow-hidden rounded-xl border border-line bg-mist/60">
+              {product.importMeta?.creator ? (
+                <View className="flex-row items-center justify-between gap-4 px-4 py-2">
+                  <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                    Design by
+                  </Text>
+                  <Text className="max-w-[70%] text-sm text-ink">
+                    {String(product.importMeta.creator)}
+                  </Text>
+                </View>
+              ) : null}
+              {product.importMeta?.license ? (
+                <View className="flex-row items-center justify-between gap-4 border-t border-line px-4 py-2">
+                  <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                    License
+                  </Text>
+                  {/* No clamp: the website renders the license as a plain <dd>
+                      that wraps however long the SPDX string is. */}
+                  <Text className="max-w-[70%] text-sm text-ink">
+                    {String(product.importMeta.license)}
+                  </Text>
+                </View>
+              ) : null}
+              {product.importMeta?.sourceSite || product.documentationUrl ? (
+                <View className="flex-row items-center justify-between gap-4 border-t border-line px-4 py-2">
+                  <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                    Source
+                  </Text>
+                  {product.documentationUrl ? (
+                    <Pressable
+                      onPress={() =>
+                        void Linking.openURL(product.documentationUrl!)
+                      }
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open ${product.importMeta?.sourceSite || "source link"}`}
+                      hitSlop={8}
+                    >
+                      <Text className="text-sm font-bold text-navy underline">
+                        {product.importMeta?.sourceSite || "Original"} ↗
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text className="text-sm text-ink">
+                      {product.importMeta?.sourceSite}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View className="mt-6 flex-row flex-wrap items-baseline gap-x-2">
+            <Text className="font-display text-3xl font-bold tracking-tight text-ink">
+              {pricingPublished
+                ? formatNPR(projectEstimate.total)
+                : product.priceLabel}
+            </Text>
+            <Text className="text-sm text-muted">
+              {product.productType === "Project package"
+                ? pricingPublished
+                  ? "indicative package estimate"
+                  : "rate on request"
+                : "per unit"}
+            </Text>
+          </View>
+
+          {/* 2026-11-13: live project calculator — only once the owner has
+              approved the rates. Mirrors the website's detail-page calculator. */}
+          {pricingPublished ? (
+            <View className="mt-4 rounded-xl border border-line bg-card p-4">
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="min-w-0 flex-1 text-sm font-bold text-ink">
+                  Quote calculator ({projectLines.length})
+                </Text>
+                <Text className="text-sm font-bold text-navy">
+                  {formatNPR(projectEstimate.total)}
+                </Text>
+              </View>
+              <Text className="mt-1 text-xs leading-5 text-muted">
+                Adjust the component quantities to see how the indicative price
+                changes. The final package price is confirmed after you request
+                a quote.
+              </Text>
+
+              {projectLines.length > 0 ? (
+                <View className="mt-3 gap-2">
+                  {projectLines.map((line) => (
+                    <View
+                      key={line.productId}
+                      className="rounded-lg border border-line bg-surface p-3"
+                    >
+                      <Text
+                        className="text-sm font-bold text-ink"
+                        numberOfLines={1}
+                      >
+                        {line.name}
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-muted">
+                        {formatNPR(line.catalogPrice)}/unit
+                        {projectPricing.componentMarkupPercent > 0
+                          ? ` + ${projectPricing.componentMarkupPercent}% = ${formatNPR(line.unitPrice)}`
+                          : ""}
+                      </Text>
+                      <View className="mt-2 flex-row items-center justify-between">
+                        <View className="flex-row items-center rounded-full border border-line">
+                          <Pressable
+                            onPress={() =>
+                              setQuantityOverrides((prev) => ({
+                                ...prev,
+                                [line.productId]: Math.max(
+                                  1,
+                                  line.quantity - 1,
+                                ),
+                              }))
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`Decrease ${line.name} quantity`}
+                            className="h-9 w-9 items-center justify-center rounded-full"
+                          >
+                            <Feather name="minus" size={14} color="#1e3a8a" />
+                          </Pressable>
+                          <Text className="min-w-8 text-center text-xs font-bold text-ink">
+                            {line.quantity}
+                          </Text>
+                          <Pressable
+                            onPress={() =>
+                              setQuantityOverrides((prev) => ({
+                                ...prev,
+                                [line.productId]: Math.min(
+                                  99,
+                                  line.quantity + 1,
+                                ),
+                              }))
+                            }
+                            accessibilityRole="button"
+                            accessibilityLabel={`Increase ${line.name} quantity`}
+                            className="h-9 w-9 items-center justify-center rounded-full"
+                          >
+                            <Feather name="plus" size={14} color="#1e3a8a" />
+                          </Pressable>
+                        </View>
+                        <Text className="text-sm font-bold text-ink">
+                          {formatNPR(line.lineTotal)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text className="mt-2 text-xs text-muted">
+                  No catalog components are linked to this package yet.
+                </Text>
+              )}
+
+              <View className="mt-3 border-t border-line pt-2">
+                <SummaryRow
+                  label="Package base charge"
+                  value={formatNPR(projectEstimate.packageBaseCharge)}
+                />
+                <SummaryRow
+                  label="Components"
+                  value={formatNPR(projectEstimate.componentsTotal)}
+                />
+                {projectEstimate.extrasTotal > 0 ? (
+                  <SummaryRow
+                    label="Extras"
+                    value={formatNPR(projectEstimate.extrasTotal)}
+                  />
+                ) : null}
+                <SummaryRow
+                  label="Subtotal"
+                  value={formatNPR(projectEstimate.subtotal)}
+                />
+                {projectEstimate.discountPercent > 0 ? (
+                  <SummaryRow
+                    label={`Bulk discount (${projectEstimate.discountPercent}%)`}
+                    value={`−${formatNPR(projectEstimate.discountAmount)}`}
+                  />
+                ) : null}
+                {projectEstimate.minimumApplied ? (
+                  <SummaryRow
+                    label={`Minimum order ${formatNPR(projectEstimate.minimumOrder)}`}
+                    value={formatNPR(projectEstimate.beforeMinimum)}
+                  />
+                ) : null}
+                <View className="mt-2 flex-row items-center justify-between border-t border-line pt-2">
+                  <Text className="text-sm font-bold text-ink">
+                    Indicative price
+                  </Text>
+                  <Text className="font-display text-lg font-bold text-navy">
+                    {formatNPR(projectEstimate.total)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          <View className="mt-4 flex-row flex-wrap gap-x-5 gap-y-2 border-t border-b border-line py-3">
+            <Info label="Price" value={product.priceLabel} />
+            <Info label="SKU" value={product.sku || "—"} />
+            <Info label="Category" value={product.category} />
+            <Info
+              label="Stock"
+              value={
+                product.stock > 0
+                  ? `${product.stock} in stock`
+                  : "Made to order"
+              }
+            />
+            {product.supplier ? (
+              <Info label="Supplier" value={product.supplier} />
+            ) : null}
+            {product.inventoryType ? (
+              <Info label="Type" value={product.inventoryType} />
+            ) : null}
+          </View>
+
+          {/* Audience / warranty */}
+          <View className="mt-4 flex-row border-b border-line pb-4">
+            <View className="flex-1 pr-3">
+              <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+                Audience
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                {product.audience}
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                {product.difficulty}
+              </Text>
+            </View>
+            <View className="flex-1 pl-3">
+              <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+                Warranty
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                {product.warranty}
+              </Text>
+            </View>
+          </View>
+
+          {/* Color / delivery */}
+          <View className="mt-4 flex-row border-b border-line pb-4">
+            <View className="flex-1 pr-3">
+              <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+                Color
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                {colorLabel}
+              </Text>
+            </View>
+            <View className="flex-1 pl-3">
+              <Text className="text-xs font-bold uppercase tracking-widest text-navy">
+                Delivery
+              </Text>
+              <Text className="mt-1 text-sm leading-5 text-muted">
+                {product.delivery}
+              </Text>
+            </View>
+          </View>
+
+          {specRows.length > 0 && (
+            <View className="mt-4">
+              <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Specifications
+              </Text>
+              {specRows.map((row, i) => (
+                <View
+                  key={`${row.key}-${i}`}
+                  className="mt-2 flex-row items-start"
+                >
+                  <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-gold" />
+                  <Text className="flex-1 text-sm leading-5 text-muted">
+                    <Text className="font-bold text-ink">{row.key}:</Text>{" "}
+                    {row.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {product.productType === "Project package" && (
+            <View className="mt-5 border-t-2 border-line pt-5">
+              <Text className="text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Project information
+              </Text>
+              {product.projectOverview ? (
+                <Text className="mt-3 text-sm leading-6 text-muted">
+                  {product.projectOverview}
+                </Text>
+              ) : null}
+              {product.estimatedDuration ? (
+                <Text className="mt-3 text-sm font-bold text-ink">
+                  Estimated duration:{" "}
+                  <Text className="font-normal text-muted">
+                    {product.estimatedDuration}
+                  </Text>
+                </Text>
+              ) : null}
+              {product.sourceFolder ? (
+                <Text className="mt-2 text-sm font-bold text-ink">
+                  Source folder:{" "}
+                  <Text className="font-normal text-muted">
+                    {product.sourceFolder}
+                  </Text>
+                </Text>
+              ) : null}
+
+              <View className="mt-5">
+                {projectSections
+                  .filter(([, items]) => items?.length)
+                  .map(([title, items]) => (
+                    <View key={title} className="mb-4">
+                      <Text className="text-sm font-bold text-ink">
+                        {title}
+                      </Text>
+                      {(items ?? []).map((item, i) => (
+                        <View
+                          key={i}
+                          className="mt-1.5 flex-row items-start pl-1"
+                        >
+                          <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-gold" />
+                          <Text className="flex-1 text-sm leading-5 text-muted">
+                            {item}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+              </View>
+
+              {product.maintenanceNotes ? (
+                <Text className="mt-2 text-sm leading-6 text-muted">
+                  <Text className="font-bold text-ink">
+                    Maintenance and safety:{" "}
+                  </Text>
+                  {product.maintenanceNotes}
+                </Text>
+              ) : null}
+
+              {(product.documentationUrl || product.videoUrl) && (
+                <View className="mt-4 flex-row flex-wrap gap-4">
+                  {product.documentationUrl ? (
+                    <LinkRow
+                      label="Documentation"
+                      url={product.documentationUrl}
+                    />
+                  ) : null}
+                  {product.videoUrl ? (
+                    <LinkRow label="Project video" url={product.videoUrl} />
+                  ) : null}
+                </View>
+              )}
+            </View>
+          )}
+
+          <Text className="mt-4 text-xs leading-5 text-muted">
+            {product.delivery} · {product.warranty}
+          </Text>
+        </View>
+
+        {/* U-45 Phase 2: project detail shows the catalog components its
+            build needs; component detail shows the projects that use it.
+            Both hidden when the join table has no rows for this product —
+            same contract as the website's detail sections. */}
+        {product.productType === "Project package" &&
+          componentProducts.length > 0 && (
+            <View className="mt-6 border-t-2 border-line pt-5">
+              <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Components used in this project
+              </Text>
+              <Text className="mt-1 px-5 text-xs leading-5 text-muted">
+                Every part below is a real catalog component — check specs,
+                availability, and add spares to your build list.
+              </Text>
+              <FlatList
+                horizontal
+                data={componentProducts}
+                keyExtractor={(entry) => entry.product.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingTop: 10,
+                  gap: 10,
+                }}
+                renderItem={({ item }) => (
+                  <View>
+                    <View className="absolute -top-1 right-2 z-10 rounded-full bg-gold px-1.5 py-0.5">
+                      <Text className="text-[10px] font-black text-ink">
+                        ×{item.qty}
+                      </Text>
+                    </View>
+                    <ProductCard product={item.product} compact />
+                  </View>
+                )}
+              />
+            </View>
+          )}
+        {product.productType !== "Project package" &&
+          usedInProjects.length > 0 && (
+            <View className="mt-6 border-t-2 border-line pt-5">
+              <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+                Used in these projects
+              </Text>
+              <FlatList
+                horizontal
+                data={usedInProjects}
+                keyExtractor={(p) => p.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                  paddingTop: 10,
+                  gap: 10,
+                }}
+                renderItem={({ item }) => (
+                  <ProductCard product={item} compact />
+                )}
+              />
+            </View>
+          )}
+
+        {/* C3: Related products — same category (closest price) → same type. */}
+        {related.length > 0 && (
+          <View className="mt-6 border-t-2 border-line pt-5">
+            <Text className="px-5 text-xs font-black uppercase tracking-[0.24em] text-navy">
+              Related products
+            </Text>
+            <FlatList
+              horizontal
+              data={related}
+              keyExtractor={(p) => p.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: 20,
+                paddingTop: 10,
+                gap: 10,
+              }}
+              renderItem={({ item }) => <ProductCard product={item} compact />}
+            />
+          </View>
+        )}
+
+        {/* U-47 (2026-09-27, owner): the Recently-viewed strip is REMOVED —
+            replaced by the per-user Collection (hearts) on the profile. */}
+
+        {/* U-23 (2026-09-24): pinned CTA bar — quantity + add/quote stays
+          reachable without scrolling to the end of a long product page. */}
+      </ScrollView>
+      <View
+        className="absolute inset-x-0 bottom-0 border-t border-line bg-white"
+        style={{ paddingBottom: Math.max(insets.bottom, 10) }}
+      >
+        <View className="flex-row items-center gap-3 px-5 py-3">
+          {!isQuote && (
+            <View className="flex-row items-center rounded-full border border-line bg-card">
+              <Pressable
+                onPress={() => setQty((q) => Math.max(1, q - 1))}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease quantity"
+                className="h-11 w-11 items-center justify-center rounded-full"
+              >
+                <Feather name="minus" size={16} color="#1e3a8a" />
+              </Pressable>
+              <Text className="min-w-8 text-center text-sm font-bold text-ink">
+                {qty}
+              </Text>
+              <Pressable
+                onPress={() =>
+                  setQty((q) => Math.min(Math.max(1, product.stock), q + 1))
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Increase quantity"
+                className="h-11 w-11 items-center justify-center rounded-full"
+              >
+                <Feather name="plus" size={16} color="#1e3a8a" />
+              </Pressable>
+            </View>
+          )}
+          {/* Robot-car products get a per-package remote that opens
+              preconfigured for the car's firmware mode - like the ESP remote.
+              The route is registered as `RemoteControl` (navigation/types.ts);
+              this comment used to call it CarRemote, a name that survives in
+              App.tsx's linking path only. */}
+          {isQuote && resolveModeForProduct(product) && (
+            <Pressable
+              onPress={() =>
+                navigation.push("Tools", { category: product.category })
+              }
+              accessibilityRole="button"
+              className="flex-1 flex-row items-center justify-center gap-2 rounded-full border-2 border-gold bg-gold/10 py-3"
+            >
+              <Feather name="activity" size={15} color="#1e3a8a" />
+              <Text className="font-bold text-navy">Control this car</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={isQuote ? handleQuote : () => void handleAdd()}
+            disabled={adding}
+            accessibilityRole="button"
+            accessibilityState={{ busy: adding, disabled: adding }}
+            accessibilityLabel={
+              isQuote
+                ? pricingPublished
+                  ? "Request this package"
+                  : "Request a scoped quote"
+                : "Add to build list"
+            }
+            className={`flex-1 flex-row items-center justify-center gap-2 rounded-full py-3.5 active:opacity-80 disabled:opacity-50 ${
+              added && !isQuote ? "bg-emerald-600" : "bg-navy"
+            }`}
+          >
+            <Text className="font-bold text-white">
+              {isQuote
+                ? pricingPublished
+                  ? "Request this package"
+                  : "Request a scoped quote"
+                : adding
+                  ? "Adding…"
+                  : added
+                    ? "Added to build list"
+                    : "Add to build list"}
+            </Text>
+            <Feather
+              name={
+                isQuote ? "arrow-up-right" : added ? "check" : "shopping-bag"
+              }
+              size={15}
+              color="#ffffff"
+            />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="mt-1 flex-row items-center justify-between">
+      <Text className="min-w-0 flex-1 pr-2 text-xs text-muted">{label}</Text>
+      <Text className="text-xs font-bold text-ink">{value}</Text>
+    </View>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="min-w-[40%]">
+      <Text className="text-xs font-bold uppercase tracking-wide text-border">
+        {label}
+      </Text>
+      {/* Values wrap like the website's <dd className="text-right text-sm">;
+          the R5 ellipsis hid the tail of longer specs ("Nepal-wide courier"). */}
+      <Text className="mt-0.5 text-sm font-semibold text-ink">{value}</Text>
+    </View>
+  );
+}
+
+function LinkRow({ label, url }: { label: string; url: string }) {
+  return (
+    <Pressable
+      onPress={() => void Linking.openURL(url)}
+      className="flex-row items-center gap-1"
+      accessibilityRole="link"
+    >
+      <Text className="text-sm font-bold text-navy">{label}</Text>
+      <Feather name="external-link" size={13} color="#1e3a8a" />
+    </Pressable>
+  );
+}
