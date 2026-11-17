@@ -4763,7 +4763,7 @@ function ServicesTab({
           title={preview.name}
           body={preview.description}
           priceLabel={preview.priceLabel}
-          image={preview.image || ""}
+          image=""
           active={preview.active}
           onClose={() => setPreview(null)}
         />
