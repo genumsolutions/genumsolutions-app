@@ -246,15 +246,6 @@ const ROWS: Record<string, Record<string, unknown>[]> = {
       active: true,
     },
   ],
-  print_gallery: [
-    {
-      id: "gal-1",
-      caption:
-        "Line-follower chassis bracket printed in PLA+ for a school robotics club",
-      image_url: "https://example.test/images/gallery-bracket.png",
-      active: true,
-    },
-  ],
   print_quote_requests: [
     {
       id: "quote-1",
@@ -433,7 +424,6 @@ const WALK: {
       "Costs",
       "Promotions",
       "Services",
-      "Gallery",
       "Requests",
       "Reports",
     ],

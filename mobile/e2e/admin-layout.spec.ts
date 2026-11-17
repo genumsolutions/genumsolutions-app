@@ -190,10 +190,11 @@ test("staff admin sections stay scrollable and editors open on demand", async ({
   });
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
+  // Gallery was retired from the 3D Products studio; PRINT_ADMIN_SECTIONS is
+  // the source of truth for what this loop may drive.
   for (const [section, title] of [
     ["Promotions", "New promotion"],
     ["Services", "New service"],
-    ["Gallery", "New gallery item"],
   ] as const) {
     await page.getByRole("tab", { name: section, exact: true }).click();
     await expect(
