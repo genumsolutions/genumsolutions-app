@@ -54,6 +54,14 @@ import PrintAdminPanel, {
 } from "./PrintAdminPanel";
 import { AdminSubTabs } from "../components/admin/AdminSubTabs";
 import { AdminEditorSheet } from "../components/admin/AdminEditorSheet";
+// 2026-11-18: the three new project blocks (code details, 3D material details,
+// coding procedure) live in products.import_meta.projectDetails — see
+// config/projectDetails.ts for the shape and why no migration was needed.
+import {
+  readProjectDetails,
+  writeProjectDetails,
+  type ProjectDetails,
+} from "../config/projectDetails";
 // 2026-11-14 (owner: "i dont like the split screen of the admin dashboards
 // tabs contents"): the tab pager is gone. Tabs are no longer pages in a
 // swipeable filmstrip — one tab renders at a time, full width, in normal
@@ -541,7 +549,8 @@ function AdminConsole() {
   // 2026-11-18 (owner): the Content tab is gone. Its panels live under
   // Settings, which is where an admin looks for anything that is not a
   // catalog item: company record, home page copy, storefront services, journal.
-  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>("Company");
+  const [settingsSubTab, setSettingsSubTab] =
+    useState<SettingsSubTab>("Company");
   const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("Users");
   const [editingService, setEditingService] = useState<AdminService | null>(
     null,
@@ -2777,11 +2786,38 @@ function ProductsTab({
   const [preview, setPreview] = useState<AdminProduct | null>(null);
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState("All");
+  // 2026-11-18 (owner: "Add sub-tabs to Electronic Products"): the one long
+  // catalog page is now three sections. The catalog list itself is unchanged;
+  // Categories answers "what is in this catalog and what is hidden", and
+  // Import hosts the link importer that used to be a toolbar button on every
+  // screen. Only the electronic catalog gets them — the 3D studio already has
+  // its own PrintSectionTabs.
+  const [subTab, setSubTab] = useState<ProductSubTab>("Catalog");
   const PAGE_SIZE = 8;
   const categories = [
     "All",
     ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))),
   ];
+  const categoryGroups = Array.from(
+    products.reduce((groups, product) => {
+      const key = product.category || "Uncategorised";
+      const group = groups.get(key) ?? {
+        name: key,
+        total: 0,
+        live: 0,
+        stock: 0,
+        lowest: Number.POSITIVE_INFINITY,
+        highest: 0,
+      };
+      group.total += 1;
+      if (product.active) group.live += 1;
+      group.stock += Math.max(0, product.stock);
+      group.lowest = Math.min(group.lowest, product.price);
+      group.highest = Math.max(group.highest, product.price);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, { name: string; total: number; live: number; stock: number; lowest: number; highest: number }>()),
+  ).sort((a, b) => a[0].localeCompare(b[0]));
   const needle = query.trim().toLowerCase();
   const filtered = products.filter(
     (p) =>
@@ -2832,145 +2868,250 @@ function ProductsTab({
 
   return (
     <View className="flex-1">
-      <FlatList
-        data={shown}
-        keyExtractor={(p) => p.id}
-        className="flex-1"
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-          paddingBottom: 40,
-        }}
-        ListHeaderComponent={
-          <View className="mb-3">
-            {/* U-47v5 (owner: toolbar overflowed the right edge): the title
+      {kind === "electronic" ? (
+        <AdminSubTabs
+          label="Electronic products sections"
+          options={PRODUCT_SUBTABS}
+          value={subTab}
+          onChange={setSubTab}
+        />
+      ) : null}
+      {kind === "electronic" && subTab === "Categories" ? (
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            paddingBottom: 40,
+          }}
+        >
+          <Text className="mb-1 font-display text-xl font-bold text-ink">
+            Categories ({categoryGroups.length})
+          </Text>
+          <Text className="mb-3 text-xs text-muted">
+            How the /products catalog is filed. Tap a category to open its
+            products in the catalog list.
+          </Text>
+          {categoryGroups.length === 0 ? (
+            <Text className="py-8 text-center text-sm text-muted">
+              No products yet.
+            </Text>
+          ) : (
+            categoryGroups.map(([name, group]) => (
+              <Pressable
+                key={name}
+                onPress={() => {
+                  setCategory(name);
+                  setPage(1);
+                  setSubTab("Catalog");
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${name} in the catalog`}
+                className="mb-3 rounded-xl border border-line bg-card p-4"
+              >
+                <View className="flex-row items-center justify-between gap-2">
+                  <Text
+                    numberOfLines={1}
+                    className="min-w-0 flex-1 text-sm font-bold text-ink"
+                  >
+                    {name}
+                  </Text>
+                  <Text className="shrink-0 text-xs font-black text-gold">
+                    {group.total} {group.total === 1 ? "item" : "items"}
+                  </Text>
+                </View>
+                <Text className="mt-1 text-xs text-muted">
+                  {group.live} visible · {group.total - group.live} hidden ·{" "}
+                  {group.stock} in stock ·{" "}
+                  {group.lowest === group.highest
+                    ? `NPR ${group.lowest.toLocaleString("en-IN")}`
+                    : `NPR ${group.lowest.toLocaleString("en-IN")}–${group.highest.toLocaleString("en-IN")}`}
+                </Text>
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      ) : kind === "electronic" && subTab === "Import" ? (
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            paddingBottom: 40,
+          }}
+        >
+          <Text className="mb-1 font-display text-xl font-bold text-ink">
+            Import into Electronic Products
+          </Text>
+          <Text className="mb-4 text-xs text-muted">
+            Paste a supplier or marketplace link and GENUM fills the product
+            sheet from that page — name, photos, specs and price. Review every
+            field before saving; imports always land as a draft you can edit.
+          </Text>
+          <Pressable
+            onPress={onImportLink}
+            disabled={importBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Import into Electronic Products by link"
+            className="self-start rounded-full bg-gold px-5 py-3"
+          >
+            <Text className="text-xs font-black text-ink">
+              {importBusy ? "Importing..." : "Import by link"}
+            </Text>
+          </Pressable>
+          <Text className="mt-3 text-[11px] leading-4 text-muted">
+            Prefer a blank sheet? Switch to Catalog and tap + New product.
+          </Text>
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={shown}
+          keyExtractor={(p) => p.id}
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            paddingBottom: 40,
+          }}
+          ListHeaderComponent={
+            <View className="mb-3">
+              {/* U-47v5 (owner: toolbar overflowed the right edge): the title
                 and the Import/+New pills shared one flex-row — on phones the
                 pills pushed past the screen. Title and actions now stack,
                 actions wrap on their own full-width row. */}
-            <View className="flex-row items-center justify-between gap-2">
-              <Text
-                numberOfLines={1}
-                className="min-w-0 flex-1 font-display text-xl font-bold text-ink"
-              >
-                {kind === "models" ? "3D Products" : "Electronic Products"} (
-                {products.length})
-              </Text>
-            </View>
-            <View className="mt-2 flex-row flex-wrap gap-2">
-              <Pressable
-                onPress={onImportLink}
-                disabled={importBusy}
-                className="self-start rounded-full bg-gold px-4 py-2"
-                accessibilityRole="button"
-                accessibilityLabel={`Import into ${kind === "models" ? "3D Products" : "Electronic Products"} by link`}
-              >
-                <Text className="text-xs font-black text-ink">
-                  {importBusy ? "Importing..." : "Import by link"}
+              <View className="flex-row items-center justify-between gap-2">
+                <Text
+                  numberOfLines={1}
+                  className="min-w-0 flex-1 font-display text-xl font-bold text-ink"
+                >
+                  {kind === "models" ? "3D Products" : "Electronic Products"} (
+                  {products.length})
                 </Text>
-              </Pressable>
-              <Pressable
-                onPress={onNew}
-                className="self-start rounded-full bg-navy px-4 py-2"
-                accessibilityRole="button"
-                accessibilityLabel={`Add a new ${kind === "models" ? "3D product" : "product"}`}
-              >
-                <Text className="text-xs font-black text-white">
-                  + New product
-                </Text>
-              </Pressable>
-            </View>
-            <View className="mt-3 flex-row flex-wrap items-center gap-2">
-              <View className="flex-1">
-                <CategoryDropdown
-                  value={category}
-                  options={categories}
-                  onChange={setCategory}
-                  placeholder="All categories"
-                  title="Filter by category"
+              </View>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {/* 2026-11-18: on the electronic catalog the importer has its own
+                  sub-tab, so the toolbar keeps only + New product here. */}
+                {kind === "models" ? (
+                  <Pressable
+                    onPress={onImportLink}
+                    disabled={importBusy}
+                    className="self-start rounded-full bg-gold px-4 py-2"
+                    accessibilityRole="button"
+                    accessibilityLabel="Import into 3D Products by link"
+                  >
+                    <Text className="text-xs font-black text-ink">
+                      {importBusy ? "Importing..." : "Import by link"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={onNew}
+                  className="self-start rounded-full bg-navy px-4 py-2"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add a new ${kind === "models" ? "3D product" : "product"}`}
+                >
+                  <Text className="text-xs font-black text-white">
+                    + New product
+                  </Text>
+                </Pressable>
+              </View>
+              <View className="mt-3 flex-row flex-wrap items-center gap-2">
+                <View className="flex-1">
+                  <CategoryDropdown
+                    value={category}
+                    options={categories}
+                    onChange={setCategory}
+                    placeholder="All categories"
+                    title="Filter by category"
+                  />
+                </View>
+                <TextInput
+                  value={query}
+                  onChangeText={onQueryChange}
+                  placeholder="Search name, SKU, id…"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
                 />
               </View>
-              <TextInput
-                value={query}
-                onChangeText={onQueryChange}
-                placeholder="Search name, SKU, id…"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
-              />
             </View>
-          </View>
-        }
-        ListEmptyComponent={
-          <Text className="py-8 text-center text-sm text-muted">
-            No products found.
-          </Text>
-        }
-        ListFooterComponent={
-          totalPages > 1 ? (
-            <AdminPager page={page} totalPages={totalPages} onPage={setPage} />
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <View className="mb-3 rounded-xl border border-line bg-card p-4">
-            <View className="flex-row items-start">
-              {galleryImages(item)[0] ? (
-                <Image
-                  source={{ uri: galleryImages(item)[0] }}
-                  className="mr-3 h-14 w-14 rounded-lg bg-mist"
-                  resizeMode="cover"
-                />
-              ) : null}
-              <View className="min-w-0 flex-1">
-                <View className="flex-row items-center justify-between gap-2">
+          }
+          ListEmptyComponent={
+            <Text className="py-8 text-center text-sm text-muted">
+              No products found.
+            </Text>
+          }
+          ListFooterComponent={
+            totalPages > 1 ? (
+              <AdminPager
+                page={page}
+                totalPages={totalPages}
+                onPage={setPage}
+              />
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <View className="mb-3 rounded-xl border border-line bg-card p-4">
+              <View className="flex-row items-start">
+                {galleryImages(item)[0] ? (
+                  <Image
+                    source={{ uri: galleryImages(item)[0] }}
+                    className="mr-3 h-14 w-14 rounded-lg bg-mist"
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <View className="min-w-0 flex-1">
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text
+                      className="min-w-0 flex-1 text-sm font-bold text-ink"
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text className="shrink-0 text-xs font-black text-navy">
+                      {item.priceLabel ||
+                        `NPR ${item.price.toLocaleString("en-IN")}`}
+                    </Text>
+                  </View>
                   <Text
-                    className="min-w-0 flex-1 text-sm font-bold text-ink"
+                    className="mt-0.5 text-xs font-bold uppercase tracking-wide text-gold"
                     numberOfLines={1}
                   >
-                    {item.name}
+                    {item.category}
                   </Text>
-                  <Text className="shrink-0 text-xs font-black text-navy">
-                    {item.priceLabel ||
-                      `NPR ${item.price.toLocaleString("en-IN")}`}
-                  </Text>
+                  {!item.active && (
+                    <Text className="mt-0.5 text-[10px] font-black uppercase text-red-500">
+                      Hidden from customers
+                    </Text>
+                  )}
                 </View>
-                <Text
-                  className="mt-0.5 text-xs font-bold uppercase tracking-wide text-gold"
-                  numberOfLines={1}
-                >
-                  {item.category}
-                </Text>
-                {!item.active && (
-                  <Text className="mt-0.5 text-[10px] font-black uppercase text-red-500">
-                    Hidden from customers
-                  </Text>
+              </View>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                <AdminAction
+                  onPress={() => onEdit(item)}
+                  label="Edit"
+                  tone="navy"
+                />{" "}
+                <AdminAction
+                  onPress={() => setPreview(item)}
+                  label="Preview"
+                  tone="plain"
+                />
+                <AdminAction
+                  onPress={() => onToggleActive(item)}
+                  label={item.active ? "Hide" : "Show"}
+                  tone="plain"
+                />
+                {canDelete && (
+                  <AdminAction
+                    onPress={() => onDelete(item.id)}
+                    label="Delete"
+                    tone="red"
+                  />
                 )}
               </View>
             </View>
-            <View className="mt-2 flex-row flex-wrap gap-2">
-              <AdminAction
-                onPress={() => onEdit(item)}
-                label="Edit"
-                tone="navy"
-              />{" "}
-              <AdminAction
-                onPress={() => setPreview(item)}
-                label="Preview"
-                tone="plain"
-              />
-              <AdminAction
-                onPress={() => onToggleActive(item)}
-                label={item.active ? "Hide" : "Show"}
-                tone="plain"
-              />
-              {canDelete && (
-                <AdminAction
-                  onPress={() => onDelete(item.id)}
-                  label="Delete"
-                  tone="red"
-                />
-              )}
-            </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
       {preview && (
         <ProductPreviewModal
           product={preview}
@@ -2980,6 +3121,26 @@ function ProductsTab({
     </View>
   );
 }
+
+const PRODUCT_SUBTABS = ["Catalog", "Categories", "Import"] as const;
+type ProductSubTab = (typeof PRODUCT_SUBTABS)[number];
+
+// Editor sections. A retail product keeps its four groups; a project package
+// gets the five hierarchy levels the owner asked for (category → pricing →
+// code → 3D material → coding procedure).
+const PRODUCT_EDITOR_SUBTABS = [
+  "Basics",
+  "Pricing & stock",
+  "Content & specs",
+  "Images",
+] as const;
+const PROJECT_EDITOR_SUBTABS = [
+  "Category",
+  "Pricing",
+  "Code details",
+  "3D material details",
+  "Coding procedure",
+] as const;
 
 // ── Project editor ──
 // Share the website admin's project-category picker (6 categories, excluding
@@ -4052,6 +4213,388 @@ function ProductEditor({
     product.category === "Robot Cars" ||
     product.category === "Pre-packaged Kits";
 
+  // 2026-11-18 (owner): the project sheet was one 900-line scroll of twenty
+  // fields. It is now the hierarchy the owner asked for — Category, Pricing,
+  // Code details, 3D material details, Coding procedure — one panel at a time.
+  // Retail products keep their four groups (Basics / Pricing & stock / Content
+  // & specs / Images) with the same treatment so both editors behave alike.
+  const editorTabs: readonly string[] = isProject
+    ? PROJECT_EDITOR_SUBTABS
+    : PRODUCT_EDITOR_SUBTABS;
+  const [editorSubTab, setEditorSubTab] = useState<string>(
+    isProject ? "Category" : "Basics",
+  );
+  const projectDetails = readProjectDetails(product.importMeta);
+  const patchDetails = (next: ProjectDetails) =>
+    patch({ importMeta: writeProjectDetails(product.importMeta, next) });
+
+  // The project-only field groups, one per hierarchy level. Keeping them as
+  // fragments (rather than five copies of EditoSection) is what lets the tab
+  // strip above render exactly one level at a time.
+  const projectCategoryFields = (
+    <>
+      <Text className="mb-1 text-sm font-bold text-ink">Project category</Text>
+      <View className="mb-3">
+        <CategoryDropdown
+          value={product.projectCategory || ""}
+          options={PROJECT_CATEGORIES.filter(
+            (c) => c.slug !== "remote-controller",
+          ).map((c) => c.name)}
+          onChange={(projectCategory) =>
+            patch({ projectCategory: projectCategory || null })
+          }
+          placeholder="Select a project category"
+          title="Project category"
+          allowCustom={false}
+        />
+      </View>
+      <Text className="mb-1 text-sm font-bold text-ink">Project overview</Text>
+      <TextInput
+        value={product.projectOverview}
+        onChangeText={(projectOverview) => patch({ projectOverview })}
+        multiline
+        style={{ textAlignVertical: "top" }}
+        className={`mb-3 min-h-20 ${inputClass}`}
+        placeholder="Fully-built demo car with instructions…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Objectives (one per line)
+      </Text>
+      <TextInput
+        value={product.objectives.join("\n")}
+        onChangeText={(v) => patch({ objectives: toStringArrayLines(v) })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Control motors and servo via ESP32…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Learning outcomes (one per line)
+      </Text>
+      <TextInput
+        value={product.learningOutcomes.join("\n")}
+        onChangeText={(v) => patch({ learningOutcomes: toStringArrayLines(v) })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Understand PWM signal control…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Prerequisites (one per line)
+      </Text>
+      <TextInput
+        value={product.prerequisites.join("\n")}
+        onChangeText={(v) => patch({ prerequisites: toStringArrayLines(v) })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Basic wiring knowledge…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Deliverables (one per line)
+      </Text>
+      <TextInput
+        value={product.deliverables.join("\n")}
+        onChangeText={(v) => patch({ deliverables: toStringArrayLines(v) })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Fully assembled robot car…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Audience</Text>
+      <TextInput
+        value={product.audience}
+        onChangeText={(audience) => patch({ audience })}
+        className={`mb-3 ${inputClass}`}
+        placeholder="Students, Makers, Hobbyists"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Difficulty</Text>
+      <View className="mb-3">
+        <CategoryDropdown
+          value={product.difficulty || "Beginner"}
+          options={["Beginner", "Intermediate", "Advanced", "Professional"]}
+          onChange={(difficulty) => patch({ difficulty })}
+          placeholder="Difficulty"
+          title="Difficulty"
+        />
+      </View>
+    </>
+  );
+
+  const projectPricingFields = (
+    <>
+      <Text className="mb-1 text-sm font-bold text-ink">Warranty</Text>
+      <TextInput
+        value={product.warranty}
+        onChangeText={(warranty) => patch({ warranty })}
+        className={`mb-3 ${inputClass}`}
+        placeholder="30 days for manufacturing defects"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Maintenance notes</Text>
+      <TextInput
+        value={product.maintenanceNotes}
+        onChangeText={(maintenanceNotes) => patch({ maintenanceNotes })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Safety / maintenance notes"
+      />
+      {pricingCard}
+    </>
+  );
+
+  const projectCodeFields = (
+    <>
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Language / toolchain
+      </Text>
+      <TextInput
+        value={projectDetails.code.language}
+        onChangeText={(language) =>
+          patchDetails({
+            ...projectDetails,
+            code: { ...projectDetails.code, language },
+          })
+        }
+        className={`mb-3 ${inputClass}`}
+        placeholder="Arduino C++ (ESP32 core)"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Repository / firmware link
+      </Text>
+      <TextInput
+        value={projectDetails.code.repositoryUrl}
+        onChangeText={(repositoryUrl) =>
+          patchDetails({
+            ...projectDetails,
+            code: { ...projectDetails.code, repositoryUrl },
+          })
+        }
+        className={`mb-3 ${inputClass}`}
+        placeholder="https://github.com/genumsolutions/…"
+        autoCapitalize="none"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Libraries / dependencies (one per line)
+      </Text>
+      <TextInput
+        value={projectDetails.code.libraries}
+        onChangeText={(libraries) =>
+          patchDetails({
+            ...projectDetails,
+            code: { ...projectDetails.code, libraries },
+          })
+        }
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder={"ESP32Servo\nWiFi.h"}
+        autoCapitalize="none"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Source folder</Text>
+      <TextInput
+        value={product.sourceFolder}
+        onChangeText={(sourceFolder) => patch({ sourceFolder })}
+        className={`mb-3 ${inputClass}`}
+        placeholder="Genum_SMART_DUSTBIN_V1.0.0"
+        autoCapitalize="none"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Documentation URL</Text>
+      <TextInput
+        value={product.documentationUrl}
+        onChangeText={(documentationUrl) => patch({ documentationUrl })}
+        className={`mb-3 ${inputClass}`}
+        placeholder="https://…"
+        autoCapitalize="none"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Video URL</Text>
+      <TextInput
+        value={product.videoUrl}
+        onChangeText={(videoUrl) => patch({ videoUrl })}
+        className={`mb-3 ${inputClass}`}
+        placeholder="https://…"
+        autoCapitalize="none"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Code notes (pin map, flashing caveats…)
+      </Text>
+      <TextInput
+        value={projectDetails.code.notes}
+        onChangeText={(notes) =>
+          patchDetails({
+            ...projectDetails,
+            code: { ...projectDetails.code, notes },
+          })
+        }
+        multiline
+        style={{ textAlignVertical: "top" }}
+        className={`mb-3 min-h-20 ${inputClass}`}
+        placeholder="Motor driver on GPIO 25/26…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Control methods (one per line)
+      </Text>
+      <TextInput
+        value={product.controlMethods.join("\n")}
+        onChangeText={(v) => patch({ controlMethods: toStringArrayLines(v) })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Bluetooth remote (GENUM app)…"
+      />
+    </>
+  );
+
+  const projectMaterialFields = (
+    <>
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Materials required (one per line)
+      </Text>
+      <TextInput
+        value={product.materialsRequired.join("\n")}
+        onChangeText={(v) =>
+          patch({ materialsRequired: toStringArrayLines(v) })
+        }
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="ESP32 dev board…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Printer</Text>
+      <TextInput
+        value={projectDetails.material.printer}
+        onChangeText={(printer) =>
+          patchDetails({
+            ...projectDetails,
+            material: { ...projectDetails.material, printer },
+          })
+        }
+        className={`mb-3 ${inputClass}`}
+        placeholder="Bambu Lab P1S"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Filament</Text>
+      <TextInput
+        value={projectDetails.material.filament}
+        onChangeText={(filament) =>
+          patchDetails({
+            ...projectDetails,
+            material: { ...projectDetails.material, filament },
+          })
+        }
+        className={`mb-3 ${inputClass}`}
+        placeholder="PLA 1.75 mm"
+      />
+      <View className="mb-3 flex-row gap-3">
+        <View className="flex-1">
+          <Text className="mb-1 text-sm font-bold text-ink">Layer height</Text>
+          <TextInput
+            value={projectDetails.material.layerHeight}
+            onChangeText={(layerHeight) =>
+              patchDetails({
+                ...projectDetails,
+                material: { ...projectDetails.material, layerHeight },
+              })
+            }
+            className={inputClass}
+            placeholder="0.2 mm"
+          />
+        </View>
+        <View className="flex-1">
+          <Text className="mb-1 text-sm font-bold text-ink">Infill</Text>
+          <TextInput
+            value={projectDetails.material.infill}
+            onChangeText={(infill) =>
+              patchDetails({
+                ...projectDetails,
+                material: { ...projectDetails.material, infill },
+              })
+            }
+            className={inputClass}
+            placeholder="20%"
+          />
+        </View>
+      </View>
+      <Text className="mb-1 text-sm font-bold text-ink">Print time</Text>
+      <TextInput
+        value={projectDetails.material.printTime}
+        onChangeText={(printTime) =>
+          patchDetails({
+            ...projectDetails,
+            material: { ...projectDetails.material, printTime },
+          })
+        }
+        className={`mb-3 ${inputClass}`}
+        placeholder="6 h 20 m"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Material notes (supports, colour, post-processing…)
+      </Text>
+      <TextInput
+        value={projectDetails.material.notes}
+        onChangeText={(notes) =>
+          patchDetails({
+            ...projectDetails,
+            material: { ...projectDetails.material, notes },
+          })
+        }
+        multiline
+        style={{ textAlignVertical: "top" }}
+        className={`mb-3 min-h-20 ${inputClass}`}
+        placeholder="Print the chassis upright, no supports…"
+      />
+    </>
+  );
+
+  const projectProcedureFields = (
+    <>
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Build steps (one per line)
+      </Text>
+      <TextInput
+        value={product.buildSteps.join("\n")}
+        onChangeText={(v) => patch({ buildSteps: toStringArrayLines(v) })}
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder="Mount the motors on the chassis…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Coding procedure (one step per line)
+      </Text>
+      <TextInput
+        value={projectDetails.procedure.steps.join("\n")}
+        onChangeText={(v) =>
+          patchDetails({
+            ...projectDetails,
+            procedure: {
+              ...projectDetails.procedure,
+              steps: toStringArrayLines(v),
+            },
+          })
+        }
+        multiline
+        className={`mb-3 ${inputClass}`}
+        placeholder={
+          "Open the sketch in Arduino IDE…\nPick the ESP32 board…\nUpload…"
+        }
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">Procedure notes</Text>
+      <TextInput
+        value={projectDetails.procedure.notes}
+        onChangeText={(notes) =>
+          patchDetails({
+            ...projectDetails,
+            procedure: { ...projectDetails.procedure, notes },
+          })
+        }
+        multiline
+        style={{ textAlignVertical: "top" }}
+        className={`mb-3 min-h-20 ${inputClass}`}
+        placeholder="Hold BOOT while flashing…"
+      />
+      <Text className="mb-1 text-sm font-bold text-ink">
+        Estimated duration
+      </Text>
+      <TextInput
+        value={product.estimatedDuration}
+        onChangeText={(estimatedDuration) => patch({ estimatedDuration })}
+        className={`mb-3 ${inputClass}`}
+        placeholder="2-3 hours"
+      />
+    </>
+  );
+
   // 2026-11-14 (owner: "Group the product editor's twenty fields into
   // collapsible sections"): the form had ~20 fields in one column, which was
   // hard to scan on a phone. Collapsible groups keep every field and binding
@@ -4059,6 +4602,12 @@ function ProductEditor({
 
   return (
     <View className="flex-1">
+      <AdminSubTabs
+        label={isProject ? "Project sections" : "Product sections"}
+        options={editorTabs}
+        value={editorSubTab}
+        onChange={setEditorSubTab}
+      />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -4073,478 +4622,340 @@ function ProductEditor({
             {isNew ? "Add a new product" : `Edit ${product.id}`}
           </Text>
           <Text className="mb-4 text-xs text-muted">
-            Type: {product.productType || "Retail kit"}. Open a section to edit
-            its fields.
+            Type: {product.productType || "Retail kit"}. One section at a time —
+            Save keeps everything you have typed on every section.
           </Text>
 
-          <EditorSection
-            title="Basics"
-            subtitle="Id, name, category and type"
-            defaultOpen
-          >
-            <Text className="mb-1 text-sm font-bold text-ink">
-              Id (slug, e.g. arduino-uno)
-            </Text>
-            <TextInput
-              value={product.id}
-              onChangeText={(id) =>
-                patch({ id: id.trim().toLowerCase().replace(/\s+/g, "-") })
-              }
-              className={`mb-3 ${inputClass}`}
-              placeholder="arduino-uno"
-              autoCapitalize="none"
-            />
-            <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
-            <TextInput
-              value={product.name}
-              onChangeText={(name) => patch({ name })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="Product name"
-            />
-            <Text className="mb-1 text-sm font-bold text-ink">Category</Text>
-            <View className="mb-3">
-              <CategoryDropdown
-                value={product.category || ""}
-                options={categoryOptions}
-                onChange={(category) => patch({ category })}
-                placeholder="Select a category"
-                title="Category"
-                allowCustom
+          {editorSubTab === "Basics" || editorSubTab === "Category" ? (
+            <EditorSection
+              title="Basics"
+              subtitle="Id, name, category and type"
+              defaultOpen
+            >
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Id (slug, e.g. arduino-uno)
+              </Text>
+              <TextInput
+                value={product.id}
+                onChangeText={(id) =>
+                  patch({ id: id.trim().toLowerCase().replace(/\s+/g, "-") })
+                }
+                className={`mb-3 ${inputClass}`}
+                placeholder="arduino-uno"
+                autoCapitalize="none"
               />
-            </View>
-            <Text className="mb-1 text-sm font-bold text-ink">
-              Product type
-            </Text>
-            <View className="mb-1">
-              <CategoryDropdown
-                value={product.productType || "Retail kit"}
-                options={[
-                  "Retail kit",
-                  "Project package",
-                  "Robot Cars",
-                  "Material",
-                  "Service package",
-                ]}
-                onChange={(productType) => patch({ productType })}
-                placeholder="Select a product type"
-                title="Product type"
-                allowCustom
+              <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
+              <TextInput
+                value={product.name}
+                onChangeText={(name) => patch({ name })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="Product name"
               />
-            </View>
-          </EditorSection>
-
-          <EditorSection
-            title="Pricing & stock"
-            subtitle="Price, label, stock and SKU"
-          >
-            <View className="mb-3 flex-row gap-3">
-              <View className="flex-1">
-                <Text className="mb-1 text-sm font-bold text-ink">
-                  Price (NPR)
-                </Text>
-                <TextInput
-                  value={String(product.price)}
-                  onChangeText={(price) =>
-                    patch({ price: Math.max(0, Number(price) || 0) })
-                  }
-                  keyboardType="numeric"
-                  className={inputClass}
-                  placeholder="0"
+              <Text className="mb-1 text-sm font-bold text-ink">Category</Text>
+              <View className="mb-3">
+                <CategoryDropdown
+                  value={product.category || ""}
+                  options={categoryOptions}
+                  onChange={(category) => patch({ category })}
+                  placeholder="Select a category"
+                  title="Category"
+                  allowCustom
                 />
               </View>
-              <View className="flex-1">
-                <Text className="mb-1 text-sm font-bold text-ink">Stock</Text>
-                <TextInput
-                  value={String(product.stock)}
-                  onChangeText={(stock) =>
-                    patch({
-                      stock: Math.max(0, Math.round(Number(stock) || 0)),
-                    })
-                  }
-                  keyboardType="numeric"
-                  className={inputClass}
-                  placeholder="0"
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Product type
+              </Text>
+              <View className="mb-1">
+                <CategoryDropdown
+                  value={product.productType || "Retail kit"}
+                  options={[
+                    "Retail kit",
+                    "Project package",
+                    "Robot Cars",
+                    "Material",
+                    "Service package",
+                  ]}
+                  onChange={(productType) => patch({ productType })}
+                  placeholder="Select a product type"
+                  title="Product type"
+                  allowCustom
                 />
               </View>
-            </View>
-            <Text className="mb-1 text-sm font-bold text-ink">
-              Price label (e.g. NPR 1,450)
-            </Text>
-            <TextInput
-              value={product.priceLabel}
-              onChangeText={(priceLabel) => patch({ priceLabel })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="NPR 1,450"
-            />
-            <Text className="mb-1 text-sm font-bold text-ink">SKU</Text>
-            <TextInput
-              value={product.sku}
-              onChangeText={(sku) => patch({ sku })}
-              className={inputClass}
-              placeholder="GEN-…"
-              autoCapitalize="characters"
-            />
-          </EditorSection>
+            </EditorSection>
+          ) : null}
 
-          <EditorSection
-            title="Content & specs"
-            subtitle="Summary, description and spec lines"
-          >
-            <Text className="mb-1 text-sm font-bold text-ink">
-              Short summary (note)
-            </Text>
-            <TextInput
-              value={product.note}
-              onChangeText={(note) => patch({ note })}
-              multiline
-              numberOfLines={2}
-              className={`mb-3 ${inputClass}`}
-              placeholder="Short summary"
-            />
-            <Text className="mb-1 text-sm font-bold text-ink">Description</Text>
-            <TextInput
-              value={product.description}
-              onChangeText={(description) => patch({ description })}
-              multiline
-              style={{ textAlignVertical: "top" }}
-              className={`mb-3 min-h-20 ${inputClass}`}
-              placeholder="Full description"
-            />
-            <Text className="mb-1 text-sm font-bold text-ink">
-              Specs (one per line)
-            </Text>
-            <TextInput
-              value={product.specs.join("\n")}
-              onChangeText={(specs) => patch({ specs: specs.split("\n") })}
-              multiline
-              style={{ textAlignVertical: "top" }}
-              className={`min-h-20 ${inputClass}`}
-              placeholder={"1.3-inch OLED\nI2C interface"}
-            />
-          </EditorSection>
+          {editorSubTab === "Pricing & stock" || editorSubTab === "Pricing" ? (
+            <EditorSection
+              title="Pricing & stock"
+              subtitle="Price, label, stock and SKU"
+            >
+              <View className="mb-3 flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    Price (NPR)
+                  </Text>
+                  <TextInput
+                    value={String(product.price)}
+                    onChangeText={(price) =>
+                      patch({ price: Math.max(0, Number(price) || 0) })
+                    }
+                    keyboardType="numeric"
+                    className={inputClass}
+                    placeholder="0"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-1 text-sm font-bold text-ink">Stock</Text>
+                  <TextInput
+                    value={String(product.stock)}
+                    onChangeText={(stock) =>
+                      patch({
+                        stock: Math.max(0, Math.round(Number(stock) || 0)),
+                      })
+                    }
+                    keyboardType="numeric"
+                    className={inputClass}
+                    placeholder="0"
+                  />
+                </View>
+              </View>
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Price label (e.g. NPR 1,450)
+              </Text>
+              <TextInput
+                value={product.priceLabel}
+                onChangeText={(priceLabel) => patch({ priceLabel })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="NPR 1,450"
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">SKU</Text>
+              <TextInput
+                value={product.sku}
+                onChangeText={(sku) => patch({ sku })}
+                className={inputClass}
+                placeholder="GEN-…"
+                autoCapitalize="characters"
+              />
+            </EditorSection>
+          ) : null}
+
+          {editorSubTab === "Content & specs" ||
+          editorSubTab === "Code details" ? (
+            <EditorSection
+              title="Content & specs"
+              subtitle="Summary, description and spec lines"
+            >
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Short summary (note)
+              </Text>
+              <TextInput
+                value={product.note}
+                onChangeText={(note) => patch({ note })}
+                multiline
+                numberOfLines={2}
+                className={`mb-3 ${inputClass}`}
+                placeholder="Short summary"
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Description
+              </Text>
+              <TextInput
+                value={product.description}
+                onChangeText={(description) => patch({ description })}
+                multiline
+                style={{ textAlignVertical: "top" }}
+                className={`mb-3 min-h-20 ${inputClass}`}
+                placeholder="Full description"
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Specs (one per line)
+              </Text>
+              <TextInput
+                value={product.specs.join("\n")}
+                onChangeText={(specs) => patch({ specs: specs.split("\n") })}
+                multiline
+                style={{ textAlignVertical: "top" }}
+                className={`min-h-20 ${inputClass}`}
+                placeholder={"1.3-inch OLED\nI2C interface"}
+              />
+            </EditorSection>
+          ) : null}
 
           {/* 2026-11-18 (owner): images were hidden behind a collapsed section,
               so "Add a new product" arrived with no pictures visible. Images
               are the first thing staff check after an import — this section
               now opens by default. */}
-          <EditorSection
-            title="Images"
-            subtitle="Cover photo and gallery"
-            defaultOpen
-          >
-            <Text className="mb-1 text-sm font-bold text-ink">Image URL</Text>
-            {product.image ? (
-              <View className="mb-2 flex-row items-start gap-3">
-                <View className="relative h-20 w-20">
-                  <Pressable
-                    onPress={() =>
-                      setImagePreview({
-                        uri: product.image,
-                        label: product.name
-                          ? `${product.name} cover`
-                          : "Product cover",
-                      })
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel="View product image full size"
-                    className="h-20 w-20 overflow-hidden rounded-lg border border-line bg-mist"
-                  >
-                    <Image
-                      source={{ uri: product.image }}
-                      className="h-20 w-20"
-                      resizeMode="cover"
-                      accessibilityLabel="Extracted product image"
-                    />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => patch({ image: "" })}
-                    accessibilityRole="button"
-                    accessibilityLabel="Remove product image"
-                    hitSlop={10}
-                    className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
-                  >
-                    <Feather name="x" size={14} color="#0f172a" />
-                  </Pressable>
-                </View>
-                <Text className="min-w-0 flex-1 text-[11px] leading-4 text-muted">
-                  Tap the photo to check the imported picture at full size. The
-                  × removes it from the product.
-                </Text>
-              </View>
-            ) : null}
-            <TextInput
-              value={product.image}
-              onChangeText={(image) => patch({ image })}
-              className={`mb-3 ${inputClass}`}
-              placeholder="https://…"
-              autoCapitalize="none"
-            />
-            <Text className="mb-1 text-sm font-bold text-ink">
-              Gallery (one URL per line)
-            </Text>
-            {Array.isArray(product.gallery) && product.gallery.length > 0 && (
-              <View className="mb-2 flex-row flex-wrap gap-2">
-                {clampGallery(product.gallery).map((uri, i) => (
-                  <View key={`${uri}-${i}`} className="h-16 w-16">
+          {editorSubTab === "Images" ||
+          (isProject && editorSubTab === "Category") ? (
+            <EditorSection
+              title="Images"
+              subtitle="Cover photo and gallery"
+              defaultOpen
+            >
+              <Text className="mb-1 text-sm font-bold text-ink">Image URL</Text>
+              {product.image ? (
+                <View className="mb-2 flex-row items-start gap-3">
+                  <View className="relative h-20 w-20">
                     <Pressable
                       onPress={() =>
                         setImagePreview({
-                          uri,
-                          label: `${product.name || "Product"} gallery ${i + 1}`,
+                          uri: product.image,
+                          label: product.name
+                            ? `${product.name} cover`
+                            : "Product cover",
                         })
                       }
                       accessibilityRole="button"
-                      accessibilityLabel={`View gallery image ${i + 1} full size`}
-                      className="h-16 w-16 overflow-hidden rounded-lg border border-line bg-mist"
+                      accessibilityLabel="View product image full size"
+                      className="h-20 w-20 overflow-hidden rounded-lg border border-line bg-mist"
                     >
                       <Image
-                        source={{ uri }}
-                        className="h-16 w-16"
+                        source={{ uri: product.image }}
+                        className="h-20 w-20"
                         resizeMode="cover"
-                        accessibilityLabel={`Gallery ${i + 1}`}
+                        accessibilityLabel="Extracted product image"
                       />
                     </Pressable>
                     <Pressable
-                      onPress={() =>
-                        patch({
-                          gallery: (product.gallery as string[]).filter(
-                            (_, j) => j !== i,
-                          ),
-                        })
-                      }
+                      onPress={() => patch({ image: "" })}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove gallery image ${i + 1}`}
+                      accessibilityLabel="Remove product image"
                       hitSlop={10}
                       className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
                     >
                       <Feather name="x" size={14} color="#0f172a" />
                     </Pressable>
                   </View>
-                ))}
-              </View>
-            )}
-            <TextInput
-              value={
-                Array.isArray(product.gallery) ? product.gallery.join("\n") : ""
-              }
-              onChangeText={(gallery) =>
-                patch({
-                  // One clamp, shared with the website's budget: dedupe, drop
-                  // blanks and stop at maxImagesPerItem. Typing a 9th line
-                  // simply does not land.
-                  gallery: clampGallery(gallery.split("\n")),
-                })
-              }
-              multiline
-              style={{ textAlignVertical: "top" }}
-              className={`min-h-20 ${inputClass}`}
-              placeholder={"https://…\nhttps://…"}
-              autoCapitalize="none"
-            />
-            <Text className="mt-1 text-[11px] leading-4 text-muted">
-              {IMAGE_BUDGET_HINT}
-            </Text>
-          </EditorSection>
-
-          {isProject ? (
-            <EditorSection
-              title="Project details"
-              subtitle="Overview, build, audience, links and pricing"
-              defaultOpen
-            >
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Project category
-              </Text>
-              <View className="mb-3">
-                <CategoryDropdown
-                  value={product.projectCategory || ""}
-                  options={PROJECT_CATEGORIES.filter(
-                    (c) => c.slug !== "remote-controller",
-                  ).map((c) => c.name)}
-                  onChange={(projectCategory) =>
-                    patch({ projectCategory: projectCategory || null })
-                  }
-                  placeholder="Select a project category"
-                  title="Project category"
-                  allowCustom={false}
-                />
-              </View>
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Project overview
-              </Text>
+                  <Text className="min-w-0 flex-1 text-[11px] leading-4 text-muted">
+                    Tap the photo to check the imported picture at full size.
+                    The × removes it from the product.
+                  </Text>
+                </View>
+              ) : null}
               <TextInput
-                value={product.projectOverview}
-                onChangeText={(projectOverview) => patch({ projectOverview })}
+                value={product.image}
+                onChangeText={(image) => patch({ image })}
+                className={`mb-3 ${inputClass}`}
+                placeholder="https://…"
+                autoCapitalize="none"
+              />
+              <Text className="mb-1 text-sm font-bold text-ink">
+                Gallery (one URL per line)
+              </Text>
+              {Array.isArray(product.gallery) && product.gallery.length > 0 && (
+                <View className="mb-2 flex-row flex-wrap gap-2">
+                  {clampGallery(product.gallery).map((uri, i) => (
+                    <View key={`${uri}-${i}`} className="h-16 w-16">
+                      <Pressable
+                        onPress={() =>
+                          setImagePreview({
+                            uri,
+                            label: `${product.name || "Product"} gallery ${i + 1}`,
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`View gallery image ${i + 1} full size`}
+                        className="h-16 w-16 overflow-hidden rounded-lg border border-line bg-mist"
+                      >
+                        <Image
+                          source={{ uri }}
+                          className="h-16 w-16"
+                          resizeMode="cover"
+                          accessibilityLabel={`Gallery ${i + 1}`}
+                        />
+                      </Pressable>
+                      <Pressable
+                        onPress={() =>
+                          patch({
+                            gallery: (product.gallery as string[]).filter(
+                              (_, j) => j !== i,
+                            ),
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove gallery image ${i + 1}`}
+                        hitSlop={10}
+                        className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-full border border-line bg-card"
+                      >
+                        <Feather name="x" size={14} color="#0f172a" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <TextInput
+                value={
+                  Array.isArray(product.gallery)
+                    ? product.gallery.join("\n")
+                    : ""
+                }
+                onChangeText={(gallery) =>
+                  patch({
+                    // One clamp, shared with the website's budget: dedupe, drop
+                    // blanks and stop at maxImagesPerItem. Typing a 9th line
+                    // simply does not land.
+                    gallery: clampGallery(gallery.split("\n")),
+                  })
+                }
                 multiline
                 style={{ textAlignVertical: "top" }}
-                className={`mb-3 min-h-20 ${inputClass}`}
-                placeholder="Fully-built demo car with instructions…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Objectives (one per line)
-              </Text>
-              <TextInput
-                value={product.objectives.join("\n")}
-                onChangeText={(v) =>
-                  patch({ objectives: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Control motors and servo via ESP32…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Materials required (one per line)
-              </Text>
-              <TextInput
-                value={product.materialsRequired.join("\n")}
-                onChangeText={(v) =>
-                  patch({ materialsRequired: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="ESP32 dev board…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Learning outcomes (one per line)
-              </Text>
-              <TextInput
-                value={product.learningOutcomes.join("\n")}
-                onChangeText={(v) =>
-                  patch({ learningOutcomes: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Understand PWM signal control…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Build steps (one per line)
-              </Text>
-              <TextInput
-                value={product.buildSteps.join("\n")}
-                onChangeText={(v) =>
-                  patch({ buildSteps: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Mount the motors on the chassis…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Control methods (one per line)
-              </Text>
-              <TextInput
-                value={product.controlMethods.join("\n")}
-                onChangeText={(v) =>
-                  patch({ controlMethods: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Bluetooth remote (GENUM app)…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Prerequisites (one per line)
-              </Text>
-              <TextInput
-                value={product.prerequisites.join("\n")}
-                onChangeText={(v) =>
-                  patch({ prerequisites: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Basic wiring knowledge…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Deliverables (one per line)
-              </Text>
-              <TextInput
-                value={product.deliverables.join("\n")}
-                onChangeText={(v) =>
-                  patch({ deliverables: toStringArrayLines(v) })
-                }
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Fully assembled robot car…"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Estimated duration
-              </Text>
-              <TextInput
-                value={product.estimatedDuration}
-                onChangeText={(estimatedDuration) =>
-                  patch({ estimatedDuration })
-                }
-                className={`mb-3 ${inputClass}`}
-                placeholder="2-3 hours"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Source folder
-              </Text>
-              <TextInput
-                value={product.sourceFolder}
-                onChangeText={(sourceFolder) => patch({ sourceFolder })}
-                className={`mb-3 ${inputClass}`}
-                placeholder="Genum_SMART_DUSTBIN_V1.0.0"
+                className={`min-h-20 ${inputClass}`}
+                placeholder={"https://…\nhttps://…"}
                 autoCapitalize="none"
               />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Documentation URL
+              <Text className="mt-1 text-[11px] leading-4 text-muted">
+                {IMAGE_BUDGET_HINT}
               </Text>
-              <TextInput
-                value={product.documentationUrl}
-                onChangeText={(documentationUrl) => patch({ documentationUrl })}
-                className={`mb-3 ${inputClass}`}
-                placeholder="https://…"
-                autoCapitalize="none"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">Video URL</Text>
-              <TextInput
-                value={product.videoUrl}
-                onChangeText={(videoUrl) => patch({ videoUrl })}
-                className={`mb-3 ${inputClass}`}
-                placeholder="https://…"
-                autoCapitalize="none"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Maintenance notes
-              </Text>
-              <TextInput
-                value={product.maintenanceNotes}
-                onChangeText={(maintenanceNotes) => patch({ maintenanceNotes })}
-                multiline
-                className={`mb-3 ${inputClass}`}
-                placeholder="Safety / maintenance notes"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">Audience</Text>
-              <TextInput
-                value={product.audience}
-                onChangeText={(audience) => patch({ audience })}
-                className={`mb-3 ${inputClass}`}
-                placeholder="Students, Makers, Hobbyists"
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Difficulty
-              </Text>
-              <View className="mb-3">
-                <CategoryDropdown
-                  value={product.difficulty || "Beginner"}
-                  options={[
-                    "Beginner",
-                    "Intermediate",
-                    "Advanced",
-                    "Professional",
-                  ]}
-                  onChange={(difficulty) => patch({ difficulty })}
-                  placeholder="Difficulty"
-                  title="Difficulty"
-                />
-              </View>
-              <Text className="mb-1 text-sm font-bold text-ink">Warranty</Text>
-              <TextInput
-                value={product.warranty}
-                onChangeText={(warranty) => patch({ warranty })}
-                className={`mb-1 ${inputClass}`}
-                placeholder="30 days for manufacturing defects"
-              />
-              {pricingCard}
+            </EditorSection>
+          ) : null}
+
+          {isProject && editorSubTab === "Category" ? (
+            <EditorSection
+              title="Category"
+              subtitle="What this project is, who it is for, and its photos"
+              defaultOpen
+            >
+              {projectCategoryFields}
+            </EditorSection>
+          ) : null}
+
+          {isProject && editorSubTab === "Pricing" ? (
+            <EditorSection
+              title="Pricing"
+              subtitle="Price, support and the package quote"
+              defaultOpen
+            >
+              {projectPricingFields}
+            </EditorSection>
+          ) : null}
+
+          {isProject && editorSubTab === "Code details" ? (
+            <EditorSection
+              title="Code details"
+              subtitle="Toolchain, repository, dependencies and sourcing"
+              defaultOpen
+            >
+              {projectCodeFields}
+            </EditorSection>
+          ) : null}
+
+          {isProject && editorSubTab === "3D material details" ? (
+            <EditorSection
+              title="3D material details"
+              subtitle="Materials, printer profile and print settings"
+              defaultOpen
+            >
+              {projectMaterialFields}
+            </EditorSection>
+          ) : null}
+
+          {isProject && editorSubTab === "Coding procedure" ? (
+            <EditorSection
+              title="Coding procedure"
+              subtitle="Assembly steps, flashing procedure and duration"
+              defaultOpen
+            >
+              {projectProcedureFields}
             </EditorSection>
           ) : null}
 
@@ -5707,7 +6118,8 @@ function ContentTab({
       )}
       {siteContent?.id === 0 && (
         <Text className="mt-3 text-center text-xs text-amber-600">
-          Showing bundled content — the live content service is unreachable. Save to publish.
+          Showing bundled content — the live content service is unreachable.
+          Save to publish.
         </Text>
       )}
       <View className="mt-5">
@@ -8378,19 +8790,24 @@ function ProductPreviewModal({
                 not as the customer's screen. It is now a full-width article:
                 the real cover at a readable size, then the same name, price,
                 category and copy the storefront shows. */}
-            <ScrollView className="max-h-[62vh]" contentContainerStyle={{ paddingBottom: 8 }}>
+            <ScrollView
+              className="max-h-[62vh]"
+              contentContainerStyle={{ paddingBottom: 8 }}
+            >
               <PreviewImage
                 uri={product.image}
-                label={
-                  product.name ? `${product.name} cover` : "Product cover"
-                }
+                label={product.name ? `${product.name} cover` : "Product cover"}
                 className="h-56 w-full"
               />
               {Array.isArray(product.gallery) && product.gallery.length > 0 ? (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 10 }}
+                  contentContainerStyle={{
+                    gap: 8,
+                    paddingHorizontal: 16,
+                    paddingTop: 10,
+                  }}
                 >
                   {clampGallery(product.gallery).map((uri, index) => (
                     <PreviewImage
@@ -8420,7 +8837,10 @@ function ProductPreviewModal({
                 {product.specs.length > 0 ? (
                   <View className="mt-3">
                     {product.specs.slice(0, 6).map((spec, index) => (
-                      <Text key={`${spec}-${index}`} className="text-xs leading-5 text-muted">
+                      <Text
+                        key={`${spec}-${index}`}
+                        className="text-xs leading-5 text-muted"
+                      >
                         · {spec}
                       </Text>
                     ))}
