@@ -7,8 +7,8 @@
 // stats on /about (with the same NUMBERS, both read the same DB), the same
 // program-band headings in the same order on Home, the same Services content,
 // the same project packages with the same project-information card on the
-// Projects screens, the same electronic-product cards on the Shop tab, and
-// the same 3D-model cards on the Printing tab.
+// Projects screens, the same electronic-product cards and detail on the Shop
+// tab, and the same 3D-model cards and detail on the Printing tab.
 //
 // Opt-in on purpose: it needs the website running, which the app repo's CI
 // does not check out. Set WEBSITE_URL and it runs; otherwise it skips.
@@ -632,7 +632,7 @@ test.describe("App vs website", () => {
       .replace(/&nbsp;/g, " ");
   }
 
-  test("Shop lists the website's electronic products", async ({
+  test("Shop lists the website's electronic products and shows the same product detail", async ({
     page,
     context,
     request,
@@ -705,6 +705,8 @@ test.describe("App vs website", () => {
       id: string;
       name: string;
       productType?: string | null;
+      priceLabel?: string;
+      sku?: string;
     }>;
     const target = catalog.find(
       (product) =>
@@ -719,15 +721,66 @@ test.describe("App vs website", () => {
       );
     }
 
+    // Open it on the phone. The card's own text bubbles to its Pressable.
+    await page
+      .getByRole("button", { name: `Open ${target.name}` })
+      .filter({ visible: true })
+      .first()
+      .click();
+    // ProductDetail renders after the deep-linked navigation settles; poll
+    // for the product name (the one piece every product page has).
+    await expect(
+      page.getByText(target.name).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // ---- the same product on the website ----
+    await website.goto(`${WEBSITE_URL}/products/${target.id}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      website.getByText(target.name).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 60_000 }); // Compare the product detail fields both surfaces share: the app's
+    // ProductDetail mirrors the website's product page. Both read the same
+    // catalog row, so the shared fields must agree. We check name + price +
+    // SKU (always present, exact-match) rather than scraping all text, because
+    // the app's stacked screen keeps the home/shop chrome in the DOM below the
+    // detail screen.
+    if (target.priceLabel) {
+      await expect(
+        page.getByText(target.priceLabel).filter({ visible: true }).first(),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        website
+          .getByText(target.priceLabel, { exact: true })
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible({ timeout: 10_000 });
+    }
+    if (target.sku) {
+      await expect(
+        page.getByText(target.sku).filter({ visible: true }).first(),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        website
+          .getByText(target.sku, { exact: true })
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible({ timeout: 10_000 });
+    }
+
     test.info().annotations.push({
       type: "compared",
-      description: `${appNames.length} app cards vs ${webSet.size} website products; sampled ${target.name}`,
+      description: `${appNames.length} app cards vs ${webSet.size} website products; detail ${target.name}: price ${target.priceLabel}, SKU ${target.sku || "—"}`,
     });
 
     await website.close();
   });
 
-  test("Printing lists the website's 3D models", async ({ page, context }) => {
+  test("Printing lists the website's 3D models and shows the same model detail", async ({
+    page,
+    context,
+    request,
+  }) => {
     // ---- the website: its /3d-printing model grid ----
     const website = await context.newPage();
     await website.goto(`${WEBSITE_URL}/3d-printing`, {
@@ -778,9 +831,37 @@ test.describe("App vs website", () => {
       ).toBe(true);
     }
 
+    // Open a model on the phone.
+    const modelName = appNames[0];
+    await page
+      .getByRole("button", { name: `Open ${modelName}` })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(
+      page.getByText(modelName).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // ---- the same model on the website ----
+    const model = (await (
+      await request.get(`${WEBSITE_URL}/api/products`)
+    ).json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+    const targetModel = model.find((m) => m.name === modelName);
+    if (targetModel) {
+      await website.goto(`${WEBSITE_URL}/products/${targetModel.id}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(
+        website.getByText(modelName).filter({ visible: true }).first(),
+      ).toBeVisible({ timeout: 60_000 });
+    }
+
     test.info().annotations.push({
       type: "compared",
-      description: `${appNames.length} app models vs ${webSet.size} website models`,
+      description: `${appNames.length} app models vs ${webSet.size} website models; detail ${modelName}`,
     });
 
     await website.close();

@@ -71,7 +71,7 @@ const linking = {
         },
       },
       Account: "account",
-      ProductDetail: "product/:id",
+      ProductDetail: "product/:productId",
       Services: "services",
       Projects: "projects",
       Contact: "contact",
