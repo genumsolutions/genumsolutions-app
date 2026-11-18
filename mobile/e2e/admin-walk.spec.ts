@@ -413,7 +413,12 @@ const WALK: {
     steps: ["Overview", "Activity"],
   },
   { tab: "Orders", sections: "Order sections", steps: ["Orders", "Finance"] },
-  { tab: "Electronic Products", steps: [] },
+  {
+    // 2026-11-18: the electronic catalog gained Catalog / Categories / Import.
+    tab: "Electronic Products",
+    sections: "Electronic products sections",
+    steps: ["Catalog", "Categories", "Import"],
+  },
   {
     tab: "3D Products",
     sections: "3D Products sections",
