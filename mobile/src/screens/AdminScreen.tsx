@@ -1,7 +1,8 @@
 // =====================================================================
 // AdminScreen - native admin dashboard mirroring the website AdminPanel.
-// Tabs (8): Dashboard · Orders · Electronic Products · 3D Products · Projects
-// · Content · Users · Settings. (Logs lives inside Users, mirroring the web.)
+// Tabs (7): Dashboard · Orders · Electronic Products · 3D Products · Projects
+// · Users · Settings. (Logs lives inside Users, mirroring the web. Content was
+// merged into Settings on 2026-11-18 — see docs/ADMIN_COHERENCE.md.)
 // U-R3: "System Logs" added (fleet crash reports + app logs).
 // U-R4: "User Logs" + "Profile Entries" added (per-user audit log and
 // per-user car/project profiles from the shared Supabase tables).

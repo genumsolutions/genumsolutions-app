@@ -4,7 +4,7 @@ Android mobile app (Expo SDK 54 / React Native) for **GENUM SOLUTIONS PVT. LTD.*
 native app with its own UI/UX. **Not** a WebView wrapper.
 
 - Entry app code: `mobile/` (see `mobile/README.md` and `mobile/AGENTS.md`).
-- Operating docs: `docs/ADMIN_COHERENCE.md` (the 8-tab admin contract shared with
+- Operating docs: `docs/ADMIN_COHERENCE.md` (the 7-tab admin contract shared with
   the website), `docs/STORAGE_BUDGET.md` (shared free-tier image/storage budget), and
   `docs/LINK_RESILIENCE.md` (why the car link drops, what the app does, how to read
   a drop from the admin logs).

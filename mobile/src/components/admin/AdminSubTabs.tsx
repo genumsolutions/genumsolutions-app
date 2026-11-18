@@ -1,7 +1,7 @@
 // Shared admin section strip (app).
 //
 // Both the console (Dashboard/Orders/Content/Users sections) and the 3D
-// Products print studio render a second-level tab row under the eight top
+// Products print studio render a second-level tab row under the seven top
 // tabs. They used to be two hand-copied pill strips that drifted apart in
 // size, casing and selected treatment. One component keeps the admin
 // hierarchy honest: the top tab strip owns uppercase + wide tracking, and
