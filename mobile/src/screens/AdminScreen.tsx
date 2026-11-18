@@ -1813,7 +1813,6 @@ function AdminConsole() {
                     <SettingsTab
                       company={companyInfo}
                       loaded={Boolean(visited.Settings)}
-                      setCompany={setCompanyInfo}
                       onCompanySaved={async (next) => {
                         await saveCompanyInfo(next);
                         setCompanyInfo(next);
@@ -3500,6 +3499,7 @@ function ProjectTab({
   React.useEffect(() => {
     if (section !== "Pricing") return;
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opened section load
     setPricingLoading(true);
     setPricingError(null);
     void listAdminProjectPricing()
@@ -6333,6 +6333,7 @@ function ProjectProfilesTab() {
 
   useEffect(() => {
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
     setLoading(true);
     setError(null);
     void listAdminCarProfiles()
@@ -8112,14 +8113,12 @@ const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
 function SettingsTab({
   company,
   loaded,
-  setCompany,
   onCompanySaved,
   onEditingChange,
 }: {
   company: AdminCompanyInfo | null;
   /** The Settings tab has finished its first load attempt. */
   loaded: boolean;
-  setCompany: (c: AdminCompanyInfo | null) => void;
   onCompanySaved: (next: AdminCompanyInfo) => void;
   onEditingChange: (v: boolean) => void;
 }) {
