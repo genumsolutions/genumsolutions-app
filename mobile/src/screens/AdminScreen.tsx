@@ -4211,7 +4211,15 @@ function ProductEditor({
             />
           </EditorSection>
 
-          <EditorSection title="Images" subtitle="Cover photo and gallery">
+          {/* 2026-11-18 (owner): images were hidden behind a collapsed section,
+              so "Add a new product" arrived with no pictures visible. Images
+              are the first thing staff check after an import — this section
+              now opens by default. */}
+          <EditorSection
+            title="Images"
+            subtitle="Cover photo and gallery"
+            defaultOpen
+          >
             <Text className="mb-1 text-sm font-bold text-ink">Image URL</Text>
             {product.image ? (
               <View className="mb-2 flex-row items-start gap-3">
@@ -8185,6 +8193,58 @@ function AdminAction({
   );
 }
 
+/** 2026-11-18: one image renderer for every admin preview.
+ *
+ * A load that fails used to paint an empty grey rounded box — the owner read it
+ * as "only the compressed type box like an error". A preview must either show
+ * the picture or say, in words, that it could not be loaded; never a silent
+ * empty frame. */
+function PreviewImage({
+  uri,
+  label,
+  className,
+  resizeMode = "cover",
+}: {
+  uri?: string;
+  label: string;
+  className?: string;
+  resizeMode?: "cover" | "contain";
+}) {
+  const [failed, setFailed] = useState(false);
+  if (!uri) {
+    return (
+      <View
+        className={`items-center justify-center bg-mist ${className ?? ""}`}
+      >
+        <Text className="px-4 text-center text-xs text-muted">
+          No image added yet.
+        </Text>
+      </View>
+    );
+  }
+  if (failed) {
+    return (
+      <View
+        className={`items-center justify-center bg-mist ${className ?? ""}`}
+      >
+        <Feather name="image" size={18} color="#64748b" />
+        <Text className="mt-1 px-4 text-center text-xs text-muted">
+          This image could not be loaded.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri }}
+      className={className}
+      resizeMode={resizeMode}
+      accessibilityLabel={label}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 /** Full-size look at an imported picture. 2026-11-14 (owner: "add the imported
  * picture preview") — admin thumbnails are 64–80px, too small to tell one
  * model's photo from another's. Tap the image, see it whole, close. */
@@ -8266,10 +8326,10 @@ function ProductPreviewModal({
           <View className="flex-row items-center justify-between gap-2 p-4">
             <View className="min-w-0 flex-1">
               <Text className="text-xs font-black uppercase tracking-widest text-navy">
-                Mobile storefront preview
+                App storefront preview
               </Text>
               <Text className="mt-1 text-[10px] text-muted">
-                Card width as shown in the two-column grid
+                Exactly what a customer sees in the app
               </Text>
             </View>
             <Pressable
@@ -8295,20 +8355,61 @@ function ProductPreviewModal({
                 {product.active ? "Published" : "Hidden"}
               </Text>
             </View>
-            {/* One column at the width the storefront's two-column grid gives
-                it. The old preview put the card beside an empty column, which
-                read as a broken half-width card (owner: "doesn't show
-                properly"). */}
-            <View
-              className="mx-auto mt-2 w-full max-w-[343px] flex-row gap-3"
-              pointerEvents="none"
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              <View style={{ width: "48%" }}>
-                <ProductCard product={product} />
+            {/* 2026-11-18 (owner): the preview rendered one card at 48% of a
+                343px grid — a ~165px card, which read as a compressed box and
+                not as the customer's screen. It is now a full-width article:
+                the real cover at a readable size, then the same name, price,
+                category and copy the storefront shows. */}
+            <ScrollView className="max-h-[62vh]" contentContainerStyle={{ paddingBottom: 8 }}>
+              <PreviewImage
+                uri={product.image}
+                label={
+                  product.name ? `${product.name} cover` : "Product cover"
+                }
+                className="h-56 w-full"
+              />
+              {Array.isArray(product.gallery) && product.gallery.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 10 }}
+                >
+                  {clampGallery(product.gallery).map((uri, index) => (
+                    <PreviewImage
+                      key={`${uri}-${index}`}
+                      uri={uri}
+                      label={`${product.name || "Product"} gallery ${index + 1}`}
+                      className="h-16 w-16 rounded-lg"
+                    />
+                  ))}
+                </ScrollView>
+              ) : null}
+              <View className="px-4 pt-3">
+                <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+                  {product.category || "Uncategorised"}
+                </Text>
+                <Text className="mt-1 font-display text-lg font-bold leading-snug text-ink">
+                  {product.name || "(untitled)"}
+                </Text>
+                <Text className="mt-1 text-base font-bold text-ink">
+                  {product.priceLabel || "—"}
+                </Text>
+                {product.note || product.description ? (
+                  <Text className="mt-2 text-sm leading-5 text-muted">
+                    {product.note || product.description}
+                  </Text>
+                ) : null}
+                {product.specs.length > 0 ? (
+                  <View className="mt-3">
+                    {product.specs.slice(0, 6).map((spec, index) => (
+                      <Text key={`${spec}-${index}`} className="text-xs leading-5 text-muted">
+                        · {spec}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
               </View>
-            </View>
+            </ScrollView>
           </View>
           <Text className="p-4 pt-3 text-[10px] leading-4 text-muted">
             Customer card for {product.name}: {product.priceLabel}.
@@ -8354,13 +8455,11 @@ function CatalogPreviewModal({
           className="w-full max-w-sm overflow-hidden rounded-2xl border border-line bg-card"
         >
           {image ? (
-            <View className="h-40 w-full bg-ink">
-              <Image
-                source={{ uri: image }}
-                className="h-full w-full"
-                resizeMode="cover"
-              />
-            </View>
+            <PreviewImage
+              uri={image}
+              label={`${title || "Listing"} image`}
+              className="h-52 w-full bg-ink"
+            />
           ) : null}
           <View className="p-5">
             <View className="flex-row items-center justify-between">
