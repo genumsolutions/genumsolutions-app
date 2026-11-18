@@ -106,6 +106,14 @@ const NAV_DEBOUNCE_MS = 120;
 // is still the first and only thing that drops.
 const MERGED_ROW_TELEMETRY_MIN_PX = 860;
 
+/**
+ * A1 + A2 (owner 2026-11-19): the deck the Remote shows is ONE choice, not
+ * three overlapping booleans. `dpad` / `joystick` are the two drive surfaces
+ * (the driver preference persists per device); `telemetry` and `connectivity`
+ * are inspection surfaces and live for the session only.
+ */
+type RemoteView = "dpad" | "joystick" | "telemetry" | "connectivity";
+
 function clampStep(
   value: number,
   min: number,
@@ -341,8 +349,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     sensorData,
     relays,
     toggleRelay,
-    useJoystick,
-    setUseJoystick,
     isDrone,
     isNonRobocar,
     is2wd1mActive,
@@ -429,17 +435,16 @@ export function RemoteControlScreen({ navigation }: Props) {
   // and queries it on link-up, so the chip stops the instant the page is turned
   // off, regardless of which transport is connected.
 
-  // Restore joystick layout choice per device. Depends on the two values it
-  // actually reads (the layout preference and its setter) rather than the whole
-  // hub object, which is a fresh object every render.
-  const savedJoystickLayout = hub.savedPrefs?.joystickLayout;
-  const selectJoystickLayout = hub.selectJoystickLayout;
-  useEffect(() => {
-    if (!connected && !wifiConnected) return;
-    if (savedJoystickLayout) {
-      selectJoystickLayout(savedJoystickLayout);
-    }
-  }, [connected, wifiConnected, savedJoystickLayout, selectJoystickLayout]);
+  // A1 (owner 2026-11-19, "the D-pad … is not showing when the car is once
+  // connected"): this effect used to re-apply the saved `joystickLayout` on
+  // EVERY connect. Because the legacy default id was "dual" (which meant
+  // joystick) and the setter also PERSISTED that choice, connecting a car
+  // switched the deck to joysticks and nothing ever switched it back — the
+  // D-pad simply disappeared. The layout is now SEEDED ONCE per mount (below)
+  // and only the user's own tap changes it afterwards.
+  //
+  // `hub.selectJoystickLayout` is still the writer for the two drive surfaces
+  // so the choice persists per device; it is no longer called on connect.
 
   // ── NAV state machine ──
   const modeList = carModes.length > 0 ? carModes : LOCAL_CAR_MODES;
@@ -545,14 +550,26 @@ export function RemoteControlScreen({ navigation }: Props) {
 
   // ── Settings ──
   const [showSettings, setShowSettings] = useState(false);
-  // Pads are the primary drive surface — show them by default for every mode;
-  // users can still hide via Settings (choice lives for the session only).
-  const [showJoystick, setShowJoystick] = useState(true);
-  // Phase 2 (owner 2026-10-12): `showRouter` now opens the CONNECTIVITY panel
-  // (BT + Wi-Fi + router management in one place). The connection method the
-  // embedded ConnectionSection shows is owned HERE so the choice survives the
-  // section re-rendering as car truth arrives.
-  const [showRouter, setShowRouter] = useState(false);
+  // A1 + A2 (owner 2026-11-19): ONE view owns the deck. `viewOverride` is the
+  // user's explicit pick for THIS session; until they tap a pill the view is
+  // DERIVED from the device profile, so no effect has to write state and no
+  // connect event can override what is on screen.
+  const [viewOverride, setViewOverride] = useState<RemoteView | null>(null);
+  const savedUseJoystick = hub.savedPrefs?.useJoystick;
+  const view: RemoteView =
+    viewOverride ??
+    (activeMode.id === "website-server"
+      ? "connectivity"
+      : savedUseJoystick
+        ? "joystick"
+        : "dpad");
+  // The two drive surfaces persist per device; telemetry/connectivity are
+  // inspection views and stay session-only.
+  const selectView = (next: RemoteView) => {
+    setViewOverride(next);
+    if (next === "dpad") hub.setUseJoystick(false);
+    else if (next === "joystick") hub.setUseJoystick(true);
+  };
   // U-102 (owner: the Connectivity screen must open as the split DIRECTLY):
   // default the method to Bluetooth so the left=method / right=network panes
   // both render on open — a null default left the panel as one full-width
@@ -1052,78 +1069,37 @@ export function RemoteControlScreen({ navigation }: Props) {
               accessibilityLabel="Control views"
               className="flex-shrink-0 flex-row items-center gap-0.5 rounded-full border border-line bg-card p-0.5"
             >
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  setShowJoystick(true);
-                  setUseJoystick(false);
-                }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="D-pad"
-                accessibilityState={{ selected: showJoystick && !useJoystick }}
-                className={`rounded-full px-3 py-1.5 ${showJoystick && !useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
-              >
-                <Text
-                  className={`text-[11px] font-bold ${showJoystick && !useJoystick ? "text-white" : "text-muted"}`}
-                >
-                  D-pad
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  setShowJoystick(true);
-                  setUseJoystick(true);
-                }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Joystick"
-                accessibilityState={{ selected: showJoystick && useJoystick }}
-                className={`rounded-full px-3 py-1.5 ${showJoystick && useJoystick ? "bg-navy" : "bg-transparent"} active:opacity-70`}
-              >
-                <Text
-                  className={`text-[11px] font-bold ${showJoystick && useJoystick ? "text-white" : "text-muted"}`}
-                >
-                  Joystick
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  setShowJoystick(false);
-                  setShowRouter(false);
-                }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Telemetry"
-                accessibilityState={{ selected: !showJoystick && !showRouter }}
-                className={`rounded-full px-3 py-1.5 ${!showJoystick && !showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
-              >
-                <Text
-                  className={`text-[11px] font-bold ${!showJoystick && !showRouter ? "text-white" : "text-muted"}`}
-                >
-                  Telemetry
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  feedbackTap();
-                  setShowJoystick(false);
-                  setShowRouter(true);
-                }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Connectivity"
-                accessibilityState={{ selected: showRouter }}
-                className={`rounded-full px-3 py-1.5 ${showRouter ? "bg-navy" : "bg-transparent"} active:opacity-70`}
-              >
-                <Text
-                  className={`text-[11px] font-bold ${showRouter ? "text-white" : "text-muted"}`}
-                >
-                  Connectivity
-                </Text>
-              </Pressable>
+              {(
+                [
+                  { id: "dpad" as const, label: "D-pad" },
+                  { id: "joystick" as const, label: "Joystick" },
+                  { id: "telemetry" as const, label: "Telemetry" },
+                  { id: "connectivity" as const, label: "Connectivity" },
+                ] satisfies { id: RemoteView; label: string }[]
+              ).map((tab) => {
+                const selected = view === tab.id;
+                return (
+                  <Pressable
+                    key={tab.id}
+                    onPress={() => {
+                      feedbackTap();
+                      selectView(tab.id);
+                    }}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={tab.label}
+                    accessibilityState={{ selected }}
+                    testID={`remote-tab-${tab.id}`}
+                    className={`rounded-full px-3 py-1.5 ${selected ? "bg-navy" : "bg-transparent"} active:opacity-70`}
+                  >
+                    <Text
+                      className={`text-[11px] font-bold ${selected ? "text-white" : "text-muted"}`}
+                    >
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           ) : null}
         </View>
@@ -1241,7 +1217,7 @@ export function RemoteControlScreen({ navigation }: Props) {
         ) : (
           /* ── Robocar drive deck ── */
           <View key={boardKey} className="relative mt-2 min-h-0 flex-1">
-            {showJoystick ? (
+            {view === "dpad" || view === "joystick" ? (
               <>
                 <DriveControls
                   canControl={canControl}
@@ -1254,7 +1230,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   pidKd={pidKd}
                   pidOut={pidOut}
                   pidOff={pidOff}
-                  useJoystick={useJoystick}
+                  useJoystick={view === "joystick"}
                   onDirection={handleDirection}
                   onSpeed={handleSpeed}
                   onServo={handleServo}
@@ -1268,7 +1244,7 @@ export function RemoteControlScreen({ navigation }: Props) {
                   telemetrySlot={oledSlot}
                 />
               </>
-            ) : showRouter || activeMode.id === "website-server" ? (
+            ) : view === "connectivity" ? (
               /* Phase 2 (owner 2026-10-12): the ONE "Connectivity" panel —
                    Bluetooth + Wi-Fi + router management in one place, renamed
                    from "WiFi & Router". Renders the same connection layer the
@@ -1403,13 +1379,21 @@ export function RemoteControlScreen({ navigation }: Props) {
             )}
           </View>
         )}
+        {/* A3 + A4 (owner 2026-11-19: "the status message … shifts and moves the
+            screens at bottom" and "that space is too much for the notification"):
+            this strip used to sit IN the flex column after the deck, so every
+            message appearing resized the drive deck underneath it. It is now a
+            zero-flow OVERLAY pinned to the bottom of the deck: the deck's height
+            never changes, and the note is a single compact pill over the
+            controls (pointerEvents none, so driving is never blocked). */}
         {hub.connectionMessage || hub.carSilent ? (
           <View
             pointerEvents="none"
             accessibilityLiveRegion="polite"
-            className="mt-1 flex-shrink-0 w-full items-center"
+            testID="remote-status-overlay"
+            className="absolute bottom-2 left-0 right-0 items-center px-2"
           >
-            <View className="w-full max-w-[520px]">
+            <View className="w-full max-w-[460px]">
               <InlineMessage
                 tone={
                   hub.connectionMessage && hub.connectionMsgType !== "error"

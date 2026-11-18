@@ -121,6 +121,21 @@ const MODE_NAME_FOR_TOKEN: Record<string, string> = ESP_MODE_NAMES;
 // a cold start with NO live link still show the last known saved-router names
 // in the Router panel ("options to use saved networks even after power cycle").
 // Names only — passwords never leave the car (W-14) and never touch the app.
+/**
+ * A1 (owner 2026-11-19): the Remote has exactly TWO drive surfaces — the
+ * D-pad and the joystick. `joystickLayout` used to carry three ids where
+ * `"dual"` meant joystick and two other ids meant pads, while a sibling
+ * `useJoystick` boolean could disagree. One normaliser now owns the mapping:
+ * `"dual"` / `"joystick"` -> joystick, everything else -> d-pad.
+ */
+export type JoystickLayoutId = "dpad" | "joystick";
+
+export function normalizeJoystickLayout(
+  id: string | null | undefined,
+): JoystickLayoutId {
+  return id === "joystick" || id === "dual" ? "joystick" : "dpad";
+}
+
 const LAST_DEVICE_KEY = "genum.lastDevice";
 
 /** U-80: how long the "join <ssid> on this phone" prompt stays up. */
@@ -1004,7 +1019,10 @@ export function useControlHub(routeCategory?: string) {
         trim: 0,
         useJoystick: false,
         fullscreen: false,
-        joystickLayout: "dual",
+        // A1: the default surface is the D-PAD (owner report). "dpad" is the
+        // canonical id; "dual" is only a legacy alias read by
+        // `normalizeJoystickLayout` below.
+        joystickLayout: "dpad",
         lastWifiSsid: null,
         lastRouterIp: null,
         savedRouters: [],
@@ -1028,7 +1046,9 @@ export function useControlHub(routeCategory?: string) {
       if (merged.prefs.useJoystick != null)
         setUseJoystickState(merged.prefs.useJoystick);
       if (merged.prefs.joystickLayout)
-        setJoystickLayoutId(merged.prefs.joystickLayout);
+        setJoystickLayoutId(
+          normalizeJoystickLayout(merged.prefs.joystickLayout),
+        );
       const rememberedRouterEnabled =
         merged.prefs.bootAutojoin ?? merged.prefs.autoJoinRouter ?? false;
       setAutoJoinRouterState(rememberedRouterEnabled);
@@ -1233,9 +1253,19 @@ export function useControlHub(routeCategory?: string) {
   // coalescing profile writer. The remembered-router switch is wired to the
   // car-backed AUTOJOIN setter below, which persists both the app preference
   // and the firmware setting.
+  // A1 (owner 2026-11-19, "the D-pad is not showing when the car is once
+  // connected"): `useJoystick` and `joystickLayout` are ONE choice. They used
+  // to be written independently, and `joystickLayout: "dual"` meant joystick
+  // while `useJoystick: false` meant d-pad — so a profile could say both, and
+  // the Remote's connect-time re-apply flipped a d-pad session to joysticks.
+  // Now the setter writes both fields together, so the two can never disagree.
   const setUseJoystick = (value: boolean) => {
     setUseJoystickState(value);
-    persistPrefsRef.current?.({ useJoystick: value });
+    setJoystickLayoutId(value ? "joystick" : "dpad");
+    persistPrefsRef.current?.({
+      useJoystick: value,
+      joystickLayout: value ? "joystick" : "dpad",
+    });
   };
   // Connections-Hub (profiles): record a Wi-Fi join into the per-car history
   // (names only) once per join, and remember the last verified router URL.
@@ -3830,11 +3860,19 @@ export function useControlHub(routeCategory?: string) {
 
   const selectJoystickLayout = useCallback(
     (id: string) => {
-      setJoystickLayoutId(id);
+      // A1: normalise the legacy ids. "dual" was the old joystick layout and
+      // is the reason a saved profile could silently switch the Remote to
+      // joysticks; it now maps to the explicit "joystick" id, and anything
+      // else maps to "dpad". Both fields are written together.
+      const layout = normalizeJoystickLayout(id);
+      setJoystickLayoutId(layout);
       // raw setter on purpose: the full patch below persists both fields
       // itself (P7 / issue 8 - the public wrapper would write twice)
-      setUseJoystickState(id === "dual");
-      persistPrefs({ joystickLayout: id, useJoystick: id === "dual" });
+      setUseJoystickState(layout === "joystick");
+      persistPrefs({
+        joystickLayout: layout,
+        useJoystick: layout === "joystick",
+      });
     },
     [persistPrefs],
   );

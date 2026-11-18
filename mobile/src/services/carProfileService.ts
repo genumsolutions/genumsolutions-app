@@ -335,7 +335,10 @@ export function isFreshDefaultPrefs(prefs: DevicePrefs | null): boolean {
     prefs.steerLimit === 90 &&
     prefs.trim === 0 &&
     prefs.useJoystick === false &&
-    prefs.joystickLayout === "dual" &&
+    // A1: the canonical "default surface" id is "dpad". Legacy profiles
+    // stored "dual" (which meant JOYSTICK, not the default), so they are not
+    // treated as a fresh default any more.
+    (prefs.joystickLayout === "dpad" || prefs.joystickLayout == null) &&
     prefs.modeId == null &&
     !meaningfulRouters &&
     !meaningfulHistory &&
