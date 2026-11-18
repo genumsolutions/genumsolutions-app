@@ -445,12 +445,7 @@ const WALK: {
     // company panel keeps its own three sub-sections underneath.
     tab: "Settings",
     sections: "Settings sections",
-    steps: [
-      "Company",
-      "Home page",
-      "Storefront services",
-      "Journal",
-    ],
+    steps: ["Company", "Home page", "Storefront services", "Journal"],
   },
 ];
 

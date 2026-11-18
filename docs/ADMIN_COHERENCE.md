@@ -37,13 +37,13 @@ importer, which no longer sits on the catalog's own header.
 
 Projects are edited one hierarchy level at a time, mirroring the website:
 
-| Subtab               | Fields                                                                 |
-| -------------------- | ---------------------------------------------------------------------- |
-| Category             | id, name, category, product type, project category, overview, outcomes, prerequisites, deliverables, audience, difficulty, cover + gallery |
-| Pricing              | price, label, stock, SKU, warranty, maintenance, package quote panel   |
-| Code details         | language/toolchain, repository, libraries, source folder, docs/video links, code notes, control methods, spec lines |
-| 3D material details  | materials required, printer, filament, layer height, infill, print time, material notes |
-| Coding procedure     | build steps, coding procedure steps, procedure notes, estimated duration |
+| Subtab              | Fields                                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Category            | id, name, category, product type, project category, overview, outcomes, prerequisites, deliverables, audience, difficulty, cover + gallery |
+| Pricing             | price, label, stock, SKU, warranty, maintenance, package quote panel                                                                       |
+| Code details        | language/toolchain, repository, libraries, source folder, docs/video links, code notes, control methods, spec lines                        |
+| 3D material details | materials required, printer, filament, layer height, infill, print time, material notes                                                    |
+| Coding procedure    | build steps, coding procedure steps, procedure notes, estimated duration                                                                   |
 
 Category and Pricing are the long-standing `products.project_category` and
 `project_pricing` records. Code details, 3D material details and coding
