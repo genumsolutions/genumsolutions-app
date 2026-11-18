@@ -4627,6 +4627,45 @@ function ProductEditor({
             Save keeps everything you have typed on every section.
           </Text>
 
+          {/* 2026-11-18: the owner asked for the product photos to be visible
+              the moment "Add a new product" opens. The full editor now sits on
+              the Images tab, so Basics keeps a live cover + count and a jump
+              button instead of hiding the pictures altogether. */}
+          {!isProject && editorSubTab === "Basics" ? (
+            <View className="mb-4 flex-row items-center gap-3 rounded-lg border border-line bg-surface p-3">
+              {galleryImages(product)[0] ? (
+                <Image
+                  source={{ uri: galleryImages(product)[0] }}
+                  className="h-14 w-14 rounded-lg bg-mist"
+                  resizeMode="cover"
+                  accessibilityLabel="Product cover photo"
+                />
+              ) : (
+                <View className="h-14 w-14 items-center justify-center rounded-lg border border-dashed border-line bg-card">
+                  <Feather name="image" size={18} color="#94a3b8" />
+                </View>
+              )}
+              <View className="min-w-0 flex-1">
+                <Text className="text-xs font-bold text-ink">
+                  {galleryImages(product).length > 0
+                    ? `${galleryImages(product).length} photo${galleryImages(product).length === 1 ? "" : "s"}`
+                    : "No photos yet"}
+                </Text>
+                <Text className="text-[11px] leading-4 text-muted">
+                  Cover and gallery live on the Images tab.
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setEditorSubTab("Images")}
+                accessibilityRole="button"
+                accessibilityLabel="Open the product images"
+                className="shrink-0 rounded-full border border-line px-3 py-1.5"
+              >
+                <Text className="text-[11px] font-black text-ink">Images</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {editorSubTab === "Basics" || editorSubTab === "Category" ? (
             <EditorSection
               title="Basics"
