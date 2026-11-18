@@ -34,14 +34,19 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 | A4  | "that space is too much for the notification to show, please manage the remote screen window properly"              | DONE   |
 | A5  | "inspect the control panel section totally and make all proper and standard"                                        | DONE   |
 
-### B. Website control parity
+### B. Car-hosted web page parity
+
+> **Owner clarification (2026-11-19):** "website controls for the 2wd1m mode means the one that
+> ESP hosts, not the Genum website yet." This work lives in
+> **`Genum_2WD1M_CAR_NEW/WebPage.h`** (the page the car serves at `/`), NOT in
+> `genumsolutions-website`.
 
 | #   | Requirement                                                                                                                         | Status |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| B1  | "the website controls should be different for the 2wd1m mode"                                                                       | TODO   |
-| B2  | "add and integrate those for the website of the 2wd1m car too… make it like the app has for the 2wd1m mode controls and operations" | TODO   |
-| B3  | "mind the controls for the landscape mode too for the mobile phone"                                                                 | TODO   |
-| B4  | "if it doesn't take much space, design the car website like the app's 2wd1m mode and 4wd4m mode d-pads only"                        | TODO   |
+| B1  | "the website controls should be different for the 2wd1m mode"                                                                       | DONE   |
+| B2  | "add and integrate those for the website of the 2wd1m car too… make it like the app has for the 2wd1m mode controls and operations" | DONE   |
+| B3  | "mind the controls for the landscape mode too for the mobile phone"                                                                 | DONE   |
+| B4  | "if it doesn't take much space, design the car website like the app's 2wd1m mode and 4wd4m mode d-pads only"                        | DONE   |
 
 ### C. 2WD1M car behaviour
 
@@ -145,8 +150,8 @@ grows — the reported "moves the screens at bottom". The block also has no heig
 
 1. **Phase 1 — Remote screen correctness** (A1–A5). Single view-state enum, D-pad default,
    notification as a zero-flow overlay, Control Panel audit.
-2. **Phase 2 — Website control parity** (B1–B4). Shared d-pad zone spec, D-pad primary for both
-   car modes, joystick demoted to a toggle, landscape check.
+2. **Phase 2 — Car-hosted page parity** (B1–B4). 2WD1M motor+steer pads on the ESP page,
+   trim/steer-limit controls, landscape layout (owner clarified: not the Genum website).
 3. **Phase 3 — 2WD1M persistence + router** (C1–C4, D1–D2). One `profile_key` per physical unit,
    write-through prefs, on-connect reconcile, telemetry per device.
 4. **Phase 4 — 4WD4M reset/freeze** (E1). Firmware worktree, reset-reason telemetry, CI compile gate.
@@ -158,6 +163,48 @@ grows — the reported "moves the screens at bottom". The block also has no heig
 ---
 
 ## 4. Session log
+
+### 2026-11-19 — Phase 2 shipped (B1–B4, ESP-hosted page)
+
+**Owner direction change:** the “website controls” are the page the **car** hosts, not the Genum
+website. A `components/CarDpad.tsx` draft was created in the website repo and then deleted —
+no website code is in scope for this request.
+
+`Genum_2WD1M_CAR_NEW/WebPage.h` now serves two decks:
+
+- `#deck-2wd` — the app's 2WD1M map: **Drive (motor)** pad `FWD / STOP / BWD` and
+  **Steer (servo)** pad `◀ / C / ▶`, plus **Trim** and **Steer limit** steppers.
+- `#deck-4wd` — the previous skid-steer cross, kept so the other modes lose nothing.
+
+How the deck is chosen: the 1 Hz status JSON's `mode` token drives `setDeck()` —
+`2WD1M` → motor+steer pads, anything else → the cross. No new page state to get stale.
+
+Commands (unchanged protocol, nothing new invented):
+
+| Control           | Frame                                                     | Notes                       |
+| ----------------- | --------------------------------------------------------- | --------------------------- |
+| Drive pad up/down | `F` / `B` on press, repeat 300 ms, `S` on release         | existing press/release path |
+| Drive STOP        | `S`                                                       | existing path               |
+| Steer ◀ / ▶       | `SERVO{90 ± steer_limit}` repeating, `SERVO90` on release | matches the app             |
+| Steer C           | `SERVO90`                                                 | centre                      |
+| Trim −/+          | `TRIM{d}` (range ±45)                                     | car persists it in NVS      |
+| Steer limit −/+   | `STEER{d}` (range 10–90, step 5)                          | car persists it in NVS      |
+
+The page now mirrors the car's own `trim` and `steer_limit` from the status JSON (with a 1.5 s
+tap guard so the car's frame never fights a press), so a value set from the app shows up here and
+vice versa.
+
+Firmware additions:
+
+- `ModeManager::getSteerLimit()` + the `/status` JSON field `steer_limit` (the web page and any
+  other consumer can read car truth instead of keeping a stale copy).
+- Page title/h1 corrected to **2WD1M Car** (they still said 4WD4M — G3 naming standard).
+
+Landscape: `.pads` turns into a flex row inside the existing 3-column stage, so the two pads grow
+with the window instead of being squeezed; portrait stacks them above the speed slider.
+
+**Verification:** `tools/check-webpage-js.mjs` PASS (all JS gates), `tools/check-firmware-contract.mjs`
+PASS (**0 gate failures**). Compilation is covered by the repo's `Arduino CI` on push.
 
 ### 2026-11-19 — Phase 1 shipped (A1–A5)
 
