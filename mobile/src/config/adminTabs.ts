@@ -19,15 +19,16 @@
 // (user_activity_log / user_profile_entries / profile_entry_types).
 // U-R5 (2026-11-09): those two and "System Logs" merged into ONE "Logs" tab
 // with three sections, because all three answered the same question (what
-// happened?) and each cost its own click. Both clients now expose the
-// identical 8-tab inventory.
+// happened?) and each cost its own click.
+// 2026-11-18 (owner): "Content" merged into "Settings" — company record, home
+// page copy, storefront services and journal are one surface now, so both
+// clients expose the identical 7-tab inventory.
 export const ADMIN_TABS = [
   "Dashboard",
   "Orders",
   "Electronic Products",
   "3D Products",
   "Projects",
-  "Content",
   "Users",
   "Settings",
 ] as const;
@@ -48,8 +49,7 @@ export const ADMIN_TAB_HINTS: Record<AdminTab, string> = {
   "Electronic Products": "The /products catalog — pricing, stock and photos.",
   "3D Products": "The /3d-printing catalog.",
   Projects: "Bundles sold on /projects, including pre-packaged kits.",
-  Content: "Services, journal posts and the home page copy.",
   Users:
     "Accounts, roles, messages, project profiles, activity and diagnostics.",
-  Settings: "Company details, socials and contact channels.",
+  Settings: "Company, home page, services and journal.",
 };

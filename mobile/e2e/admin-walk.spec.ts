@@ -430,20 +430,22 @@ const WALK: {
   },
   { tab: "Projects", steps: [] },
   {
-    tab: "Content",
-    sections: "Content sections",
-    // Labels, not stored values: Services -> "Storefront services" (the print
-    // studio has its own), Content -> "Site copy" (it sat inside "Content").
-    steps: ["Storefront services", "Journal", "Site copy"],
-  },
-  {
     tab: "Users",
     sections: "User administration sections",
     steps: ["Users", "Messages", "Logs"],
   },
   {
+    // 2026-11-18 (owner): the Content tab merged into Settings. The section
+    // strip is Company / Home page / Storefront services / Journal, and the
+    // company panel keeps its own three sub-sections underneath.
     tab: "Settings",
-    steps: ["Company details", "Contact", "Social & messaging"],
+    sections: "Settings sections",
+    steps: [
+      "Company",
+      "Home page",
+      "Storefront services",
+      "Journal",
+    ],
   },
 ];
 

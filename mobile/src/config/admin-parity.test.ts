@@ -37,7 +37,7 @@ function readHints(
 }
 
 describe("admin tab inventory (website <-> app mirror, B-6)", () => {
-  it("exposes the 8 canonical tabs in the canonical order", () => {
+  it("exposes the 7 canonical tabs in the canonical order", () => {
     // U-44 (2026-09-26, owner): Catalog split into three catalog tabs that
     // mirror the customer storefront (Electronic Products / 3D Products /
     // Projects). U-R3 (2026-10-12): "System Logs" added (fleet diagnostics).
@@ -50,7 +50,6 @@ describe("admin tab inventory (website <-> app mirror, B-6)", () => {
       "Electronic Products",
       "3D Products",
       "Projects",
-      "Content",
       "Users",
       "Settings",
     ]);
@@ -115,10 +114,11 @@ describe("admin data tab wiring", () => {
   const screenPath = resolve(__dirname, "../screens/AdminScreen.tsx");
   const source = readFileSync(screenPath, "utf8");
 
-  it("loads Dashboard activity and Content records from their own tab", () => {
+  it("loads Dashboard activity and Settings/content records from their own tab", () => {
     expect(source).toContain("async function loadTab() {");
     expect(source).toContain("loadActivity(1)");
-    expect(source).toContain('else if (tab === "Content")');
+    // 2026-11-18: Content merged into Settings.
+    expect(source).toContain('else if (tab === "Settings")');
     expect(source).toContain("listAdminTrainingPrograms()");
     expect(source).toContain("listAdminPilotCostLines()");
     expect(source).toContain("listAdminCurriculumHighlights()");

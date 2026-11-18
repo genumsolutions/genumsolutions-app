@@ -15,8 +15,8 @@ export const ORDERS_SUBTABS = [
 ] as const;
 type OrdersSubTab = (typeof ORDERS_SUBTABS)[number];
 
-export const CONTENT_SUBTABS = ["Services", "Journal", "Content"] as const;
-type ContentSubTab = (typeof CONTENT_SUBTABS)[number];
+// 2026-11-18: CONTENT_SUBTABS was removed with the Content tab — its panels are
+// Settings sections now (Company / Home page / Services / Journal).
 
 export const USERS_SUBTABS = ["Users", "Messages", "Logs"] as const;
 type UsersSubTab = (typeof USERS_SUBTABS)[number];
@@ -25,7 +25,6 @@ export type {
   DashboardSubTab,
   OrderPanel,
   OrdersSubTab,
-  ContentSubTab,
   UsersSubTab,
 };
 

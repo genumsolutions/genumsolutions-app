@@ -40,11 +40,9 @@ import type {
   DashboardSubTab,
   OrderPanel,
   OrdersSubTab,
-  ContentSubTab,
   UsersSubTab,
 } from "../config/app_admin_subtabs";
 import {
-  CONTENT_SUBTABS,
   DASHBOARD_SUBTABS,
   ORDER_PANELS,
   ORDERS_SUBTABS,
@@ -178,7 +176,6 @@ type Tab =
   | "Electronic Products"
   | "3D Products"
   | "Projects"
-  | "Content"
   | "Users"
   | "Settings";
 
@@ -247,7 +244,6 @@ const TABS: Tab[] = [
   "Electronic Products",
   "3D Products",
   "Projects",
-  "Content",
   "Users",
   "Settings",
 ];
@@ -542,7 +538,10 @@ function AdminConsole() {
   );
   const [ordersPanel, setOrdersPanel] = useState<OrderPanel>("Orders");
   const [ordersSubTab, setOrdersSubTab] = useState<OrdersSubTab>("All");
-  const [contentSubTab, setContentSubTab] = useState<ContentSubTab>("Services");
+  // 2026-11-18 (owner): the Content tab is gone. Its panels live under
+  // Settings, which is where an admin looks for anything that is not a
+  // catalog item: company record, home page copy, storefront services, journal.
+  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>("Company");
   const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("Users");
   const [editingService, setEditingService] = useState<AdminService | null>(
     null,
@@ -594,8 +593,9 @@ function AdminConsole() {
     ((tab === "Electronic Products" || tab === "3D Products") &&
       editingProduct != null) ||
     (tab === "Projects" && editingProject != null) ||
-    (tab === "Content" && (editingService != null || journalOpen)) ||
-    (tab === "Settings" && settingsEditing);
+    // Content lives under Settings now, so its editors count as Settings too.
+    (tab === "Settings" &&
+      (editingService != null || journalOpen || settingsEditing));
 
   const editingProductOpen = editingProduct != null;
   const editingServiceOpen = editingService != null;
@@ -615,7 +615,7 @@ function AdminConsole() {
         setEditingProject(null);
         return true; // consumed
       }
-      if (tab === "Content" && (editingService != null || journalOpen)) {
+      if (tab === "Settings" && (editingService != null || journalOpen)) {
         setEditingService(null);
         setJournalOpen(false);
         return true; // consumed
@@ -709,8 +709,11 @@ function AdminConsole() {
         loaded = await runAdminLoad("Projects", async () =>
           setProducts(await listAdminProducts()),
         );
-      } else if (tab === "Content") {
+      } else if (tab === "Settings") {
         const results = await Promise.all([
+          runAdminLoad("Company settings", async () =>
+            setCompanyInfo(await getCompanyInfo()),
+          ),
           runAdminLoad("Services", async () =>
             setServices(await listAdminServices()),
           ),
@@ -761,10 +764,6 @@ function AdminConsole() {
           ),
         ]);
         loaded = results.every(Boolean);
-      } else if (tab === "Settings") {
-        loaded = await runAdminLoad("Company settings", async () =>
-          setCompanyInfo(await getCompanyInfo()),
-        );
       }
       setRefreshedAt(loaded ? new Date() : null);
     } catch (e) {
@@ -1780,21 +1779,36 @@ function AdminConsole() {
             />
           </Sub>
         );
-      case "Content":
+      case "Settings":
         return (
           <Sub>
             <AdminSubTabs
-              label="Content sections"
-              options={CONTENT_SUBTABS}
-              value={contentSubTab}
+              label="Settings sections"
+              options={SETTINGS_SUBTABS}
+              value={settingsSubTab}
               // "Services" here is the storefront list; the print studio has
-              // its own. "Content" inside "Content" told staff nothing.
-              labels={{ Services: "Storefront services", Content: "Site copy" }}
-              onChange={setContentSubTab}
+              // its own. "Content" told staff nothing — it is the home page.
+              labels={{ Services: "Storefront services", Content: "Home page" }}
+              onChange={setSettingsSubTab}
             />
             <AdminSectionPanels
-              active={contentSubTab}
+              active={settingsSubTab}
               panels={[
+                {
+                  key: "Company",
+                  content: (
+                    <SettingsTab
+                      company={companyInfo}
+                      loaded={Boolean(visited.Settings)}
+                      setCompany={setCompanyInfo}
+                      onCompanySaved={async (next) => {
+                        await saveCompanyInfo(next);
+                        setCompanyInfo(next);
+                      }}
+                      onEditingChange={setSettingsEditing}
+                    />
+                  ),
+                },
                 {
                   key: "Services",
                   content: (
@@ -2003,22 +2017,6 @@ function AdminConsole() {
                 },
               ]}
             />
-          </Sub>
-        );
-      case "Settings":
-        return (
-          <Sub>
-            <SettingsTab
-              company={companyInfo}
-              loaded={Boolean(visited.Settings)}
-              setCompany={setCompanyInfo}
-              onCompanySaved={async (next) => {
-                await saveCompanyInfo(next);
-                setCompanyInfo(next);
-              }}
-              onEditingChange={setSettingsEditing}
-            />
-            {/* Customer messages live under Users now (see that case). */}
           </Sub>
         );
     }
@@ -6958,6 +6956,12 @@ function MessagesTab({
 // Mirrors the website's AdminSettings SECTIONS exactly (labels + hints), so the
 // two consoles group company fields the same way instead of the app showing one
 // 17-field wall.
+// 2026-11-18 (owner: "the content page should be moved to the setting"): the
+// old Content tab and the Settings tab are ONE surface now. Keys are stable
+// (they select the panel); the labels are what staff read.
+const SETTINGS_SUBTABS = ["Company", "Content", "Services", "Journal"] as const;
+type SettingsSubTab = (typeof SETTINGS_SUBTABS)[number];
+
 const SETTINGS_SECTIONS = [
   {
     id: "details",
