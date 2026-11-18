@@ -202,6 +202,25 @@ export function devicePrefsKey(address: string): string {
   return `genum.device.${address}`;
 }
 
+/**
+ * C3 (owner 2026-11-19: "the 2WD1M car is not remembering … the telemetries").
+ *
+ * The app kept prefs per device but threw the last readings away on every
+ * unmount, so the Telemetry tab opened empty until a link answered again. This
+ * snapshot is written per device address (the SAME identity the prefs use), so
+ * two cars never overwrite each other's readings.
+ */
+export type TelemetrySnapshot = {
+  /** Epoch ms the snapshot was taken. */
+  at: number;
+  /** The car's last reported readings, verbatim. */
+  telemetry: Record<string, unknown>;
+};
+
+export function telemetrySnapshotKey(address: string): string {
+  return `genum.device.${address}.telemetry`;
+}
+
 /** Minimal shape of the storage backend used for remembered device prefs. */
 type KVStore = {
   getItem: (key: string) => Promise<string | null>;
@@ -230,6 +249,36 @@ function getStorage(): Promise<KVStore | null> {
     steer, trim, joystick, fullscreen) are persisted per Bluetooth address so
     they survive app restarts; when storage is unavailable the backend falls
     back to in-memory only (returns null). */
+/** Last-known telemetry per device. Separate from prefs: a reading is not a
+    setting, and a corrupt snapshot must never affect drive preferences. */
+export const telemetryMemory = {
+  read: async (address: string): Promise<TelemetrySnapshot | null> => {
+    try {
+      const storage = await getStorage();
+      const raw = await storage?.getItem(telemetrySnapshotKey(address));
+      if (typeof raw === "string" && raw.length > 0) {
+        return JSON.parse(raw) as TelemetrySnapshot;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  write: async (address: string, snap: TelemetrySnapshot): Promise<void> => {
+    try {
+      const storage = await getStorage();
+      if (!storage) return;
+      await storage.setItem(
+        telemetrySnapshotKey(address),
+        JSON.stringify(snap),
+      );
+    } catch {
+      /* ignore write failures */
+    }
+  },
+};
+
 export const deviceMemory = {
   read: async (address: string): Promise<DevicePrefs | null> => {
     try {

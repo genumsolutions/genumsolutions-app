@@ -106,6 +106,8 @@ import {
   STEER_LIMIT_MIN,
   STEER_LIMIT_MAX,
   buildSteer,
+  buildServo,
+  buildTrim,
   buildTimeLine,
   FACTORY_RESET_LINE,
   type ScanNetwork,
@@ -175,7 +177,7 @@ const EVERY_LINK_COMMANDS = new Set([
   // car's single system-command hook (W-14/F-21).
   "ROUTERS",
 ]);
-import { deviceMemory } from "./types";
+import { deviceMemory, telemetryMemory } from "./types";
 
 import type { CarTelemetry } from "../../services/carProtocol";
 import { DEFAULT_WS_URL, OWN_AP_NAMES } from "../../services/carProtocol";
@@ -3260,6 +3262,75 @@ export function useControlHub(routeCategory?: string) {
     if (ws) void wifiService.sendLine(line).catch(() => {});
     return spp || ble || ws;
   }, []);
+
+  // C1/C2 (owner 2026-11-19: "the 2WD1M car is not remembering the last saved
+  // steering angles and trim (also the trim seems not to be working)").
+  // The profile already restores speed/servo/steerLimit/trim into the UI, but a
+  // reconnect never pushed them back to the car — so a car that rebooted into
+  // its own defaults kept driving with a centred servo and no trim while the
+  // app displayed the remembered values. Re-assert the setup once per link-up:
+  // TRIM and STEER are persisted by the firmware, SERVO re-applies the last
+  // steering angle. Guarded by a ref so a steady link (and every knob tweak,
+  // which sends its own command) never re-sends in a loop.
+  // C3: remember the car's last readings PER DEVICE, so the Telemetry tab has
+  // the previous session's numbers instead of an empty grid. Debounced (5 s) —
+  // the status frames arrive about once a second and a write per frame would
+  // hammer storage for no benefit.
+  useEffect(() => {
+    if (!addressForMemory) return;
+    if (!connected && !wifiConnected) return;
+    if (Object.keys(telemetry).length === 0) return;
+    const timer = setTimeout(() => {
+      void telemetryMemory.write(addressForMemory, {
+        at: Date.now(),
+        telemetry: telemetry as unknown as Record<string, unknown>,
+      });
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [addressForMemory, connected, wifiConnected, telemetry]);
+
+  // Seed those readings back while no link is up, so opening the Remote offline
+  // shows the last known values (the UI's own `linked` flags keep marking them
+  // as not live). Scoped by address: a second car never inherits the first
+  // car's numbers.
+  useEffect(() => {
+    if (!addressForMemory) return;
+    if (sppService.isConnected || wifiService.isConnected) return;
+    let active = true;
+    void telemetryMemory.read(addressForMemory).then((snap) => {
+      if (!active || !snap) return;
+      setTelemetry((cur) =>
+        Object.keys(cur).length > 0
+          ? cur
+          : (snap.telemetry as unknown as CarTelemetry),
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [addressForMemory]);
+
+  const driveSetupSyncedRef = useRef(false);
+  useEffect(() => {
+    if (!connected && !linkVerified) {
+      driveSetupSyncedRef.current = false;
+      return;
+    }
+    if (driveSetupSyncedRef.current) return;
+    driveSetupSyncedRef.current = true;
+    sendCommand(buildSteer(steerLimit));
+    sendCommand(buildTrim(trim));
+    if (activeMode.controls.includes("drive-2wd1m"))
+      sendCommand(buildServo(servo));
+  }, [
+    connected,
+    linkVerified,
+    activeMode,
+    steerLimit,
+    trim,
+    servo,
+    sendCommand,
+  ]);
   // One generic setter/query pair for the three keys — ON/OFF toggles that
   // persist on the car. Optimistic: the car's reply re-confirms (or corrects)
   // through handleWifiProvisionReply, which also updates the per-car pref.

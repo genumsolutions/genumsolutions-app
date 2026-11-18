@@ -52,10 +52,12 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 
 | #   | Requirement                                                                | Status |
 | --- | -------------------------------------------------------------------------- | ------ |
-| C1  | "the 2wd1m car is not remembering the last saved steering angles and trim" | TODO   |
-| C2  | "(also the trim seems not to be working too)"                              | TODO   |
-| C3  | "and the telemetries" (not remembered)                                     | TODO   |
-| C4  | "the 2wd1m car is not changing to other external router"                   | TODO   |
+| C1  | "the 2wd1m car is not remembering the last saved steering angles and trim" | DONE\* |
+| C2  | "(also the trim seems not to be working too)"                              | DONE\* |
+| C3  | "and the telemetries" (not remembered)                                     | DONE   |
+| C4  | "the 2wd1m car is not changing to other external router"                   | DONE\* |
+
+\* code fix shipped and gated; the device check (F-61) is still the proof.
 
 ### D. App data organisation
 
@@ -163,6 +165,42 @@ grows — the reported "moves the screens at bottom". The block also has no heig
 ---
 
 ## 4. Session log
+
+### 2026-11-19 — Phase 3 shipped (C1–C4, D1–D2)
+
+**C1/C2 — remembered steering angle + trim, and why trim looked dead.**
+The profile already restored `servo`, `steerLimit` and `trim` into the UI, but a link-up never
+pushed them back to the car. After a car reboot (or a switch from the car's own page) the app
+displayed the remembered values while the firmware ran its own defaults — trim 0, servo centred —
+so the trim looked like it did nothing. `useControlHub` now re-asserts the saved setup once per
+link-up (`TRIM{n}`, `STEER{n}`, and `SERVO{n}` for `drive-2wd1m` modes), guarded by a ref so a
+steady link never re-sends and every knob press still sends its own command. The firmware already
+persists `trim`/`steerlimit` in the `botcfg` NVS namespace, so both surfaces now agree after any
+power cycle.
+
+**C3 — telemetry is remembered per device.**
+New `TelemetrySnapshot` + `telemetryMemory` in `components/tools/types.ts`, stored under
+`genum.device.<address>.telemetry` — the same identity the prefs use, so two cars never overwrite
+each other's readings. The hub writes a debounced (5 s) snapshot while linked and seeds it back
+when no link is up, so the Telemetry tab opens with the last session's numbers instead of an empty
+grid (the existing `linked` flags still mark them as not live).
+
+**C4 — the car would not switch to an external router.**
+Root cause in `Genum_2WD1M_CAR_NEW/WebServerComm.cpp`: every `ROUTERS;USE` branch (and the
+`ADD`/`WIFICFG` variants that share it) armed the hand-over only `if (serverRunning)`. A car
+provisioned over **Bluetooth** — the app's normal path — has Wi-Fi enabled but its web server not
+started yet, so the switch stored the router and skipped the STA transition entirely: the car kept
+serving its own hotspot. `rejoinNetwork()` has started the servers itself since U-71 and runs as a
+deferred state machine (one radio call per loop pass), so the gate only ever blocked the switch.
+It is now `wifiEnabled_`, which keeps the deliberate `WIFICFG;WIFI;OFF` promise (U-79/U-105).
+Device evidence still required: a BT-provisioned car must move to the selected router.
+
+**D1/D2 — per-car scoping.** Both the prefs and the new telemetry snapshot are keyed by the device
+address (`fw:<id>` after migration), so the Remote screens read and write one car's data at a time;
+sorting/grouping across cars still belongs to Phase 5 (canonical project ids + unique identity).
+
+**Verification:** `tsc --noEmit` clean, `eslint` clean, `prettier` clean; car repo
+`tools/check-webpage-js.mjs` PASS and `tools/check-firmware-contract.mjs` **0 gate failures**.
 
 ### 2026-11-19 — Phase 2 shipped (B1–B4, ESP-hosted page)
 
