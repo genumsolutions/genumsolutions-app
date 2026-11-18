@@ -6,8 +6,9 @@
 // checks it against the thing it is supposed to mirror: the same four live
 // stats on /about (with the same NUMBERS, both read the same DB), the same
 // program-band headings in the same order on Home, the same Services content,
-// and the same project packages with the same project-information card on the
-// Projects screens.
+// the same project packages with the same project-information card on the
+// Projects screens, the same electronic-product cards on the Shop tab, and
+// the same 3D-model cards on the Printing tab.
 //
 // Opt-in on purpose: it needs the website running, which the app repo's CI
 // does not check out. Set WEBSITE_URL and it runs; otherwise it skips.
@@ -123,6 +124,109 @@ async function readCountsSettled(page: Page, labels: string[]) {
   return counts;
 }
 
+/**
+ * Card names on the app's Projects grid.
+ *
+ * react-native-web renders each ProductCard's Pressable (which carries
+ * accessibilityLabel = `Open {product.name}`) as a <button> with an
+ * aria-label, so we can read card names the same way the website test reads
+ * them: from the `Open ` prefix of the aria-label. This is more reliable than
+ * scanning visible text, because the card's secondary line ("Request quote" / a
+ * price) lives in the same button and would otherwise pollute a text-node scan.
+ *
+ * The Projects screen wraps each card in a <View className="mb-3 flex-1">;
+ * react-native-web renders that as a <div> carrying the "mb-3" class. The home
+ * screen's product grid (kept below the Projects screen by the stack and which
+ * would otherwise also surface "Open {name}" buttons) does not use that wrapper,
+ * so scoping to descendants of a "mb-3" container isolates the Projects grid.
+ *
+ * Nav buttons that also carry an "Open " aria-label ("Open cart", "Open Tools",
+ * "Open navigation menu", "Open checkout") are excluded so only real card names
+ * survive.
+ */
+async function appProjectCardNames(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll('div.mb-3 button[aria-label^="Open "]'),
+    )
+      .map((b) =>
+        b
+          .getAttribute("aria-label")!
+          .replace(/^Open /, "")
+          .trim(),
+      )
+      .filter((name) => {
+        if (!name) return false;
+        // Drop nav / chrome buttons that also carry an "Open " aria-label.
+        if (
+          name === "cart" ||
+          name === "Tools" ||
+          name === "navigation menu" ||
+          name === "checkout"
+        )
+          return false;
+        return true;
+      }),
+  );
+}
+
+/**
+ * Product / model card names visible on the app's Shop or Printing grid.
+ *
+ * Both grids render ProductCard via react-native-web as a <button> with an
+ * aria-label = `Open {product.name}`. Tab navigation (vs the stack navigation
+ * used for Projects) properly unmounts the previous tab's content, so a
+ * visibility-filtered scan of `button[aria-label^="Open "]` already isolates
+ * the active tab's cards — no wrapper-class scoping is needed.
+ *
+ * Nav buttons that also carry an "Open " aria-label ("Open cart", "Open Tools",
+ * "Open navigation menu", "Open checkout") are excluded so only real card names
+ * survive.
+ */
+async function appProductGridNames(page: Page): Promise<string[]> {
+  return page
+    .locator('button[aria-label^="Open "]')
+    .filter({ visible: true })
+    .evaluateAll((nodes) =>
+      nodes
+        .map((n) =>
+          n
+            .getAttribute("aria-label")!
+            .replace(/^Open /, "")
+            .trim(),
+        )
+        .filter((name) => {
+          if (!name) return false;
+          if (
+            name === "cart" ||
+            name === "Tools" ||
+            name === "navigation menu" ||
+            name === "checkout"
+          )
+            return false;
+          return true;
+        }),
+    );
+}
+
+/**
+ * Open a bottom tab (Shop / Printing) on the app. The tab bar renders its
+ * labels as text nodes inside a button; clicking the text toggles the tab and
+ * unmounts the previous tab's content.
+ */
+async function openAppTab(page: Page, label: string) {
+  await page.goto("/");
+  await expect(
+    page
+      .getByText("Technology you can touch")
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible({ timeout: 30_000 });
+  const tab = page.getByText(label).filter({ visible: true }).first();
+  await expect(tab).toBeVisible({ timeout: 10_000 });
+  await tab.click();
+}
+
 /** Vertical order of the given headings, top to bottom. */
 async function headingOrder(
   page: Page,
@@ -161,7 +265,9 @@ test.describe("App vs website", () => {
     });
     await expect(
       website.getByText("Engineering with a reason to exist.").first(),
-    ).toBeVisible({ timeout: 60_000 });
+    ).toBeVisible({
+      timeout: 60_000,
+    });
 
     const [appCounts, webCounts] = await Promise.all([
       readCountsSettled(page, LIVE_LABELS),
@@ -206,7 +312,9 @@ test.describe("App vs website", () => {
     await website.goto(`${WEBSITE_URL}/`, { waitUntil: "domcontentloaded" });
     await expect(
       website.getByText("100+ project curriculum").first(),
-    ).toBeVisible({ timeout: 60_000 });
+    ).toBeVisible({
+      timeout: 60_000,
+    });
 
     const [appOrder, webOrder] = await Promise.all([
       headingOrder(page, HOME_BAND),
@@ -376,25 +484,38 @@ test.describe("App vs website", () => {
 
     // ---- the app: the same grid ----
     await openAppScreen(page, "Projects");
+
+    // The RN-web bundle paints the Projects grid several seconds after the
+    // client-side navigation (the bundled Supabase client spends that time
+    // exhausting its placeholder connection attempt before the in-flight
+    // catalog promise resolves to BUNDLED_PRODUCTS). The other app tests
+    // wait on a specific visible element; mirror that here rather than
+    // asserting the empty state is absent immediately, which passes before
+    // the grid has rendered.
     await expect(
       page.getByText(/No projects found/).filter({ visible: true }),
       "app Projects rendered its empty state",
     ).toHaveCount(0);
 
+    // Wait for the grid to actually paint project cards. The RN-web bundle
+    // paints the Projects grid several seconds after the client-side
+    // navigation (the bundled Supabase client spends that time exhausting its
+    // placeholder connection attempt before the in-flight catalog promise
+    // resolves to BUNDLED_PRODUCTS). Poll the same visible-text scan used
+    // below so we only proceed once the first page of cards is on screen.
+    await expect
+      .poll(async () => (await appProjectCardNames(page)).length, {
+        timeout: 30_000,
+        message: "app Projects grid should render project cards",
+      })
+      .toBeGreaterThan(0);
+
     // The app paginates its grid, so this is a subset check: every package
-    // the phone shows first must be one the website lists.
-    const appNames = await page
-      .locator('[aria-label^="Open "]')
-      .filter({ visible: true })
-      .evaluateAll((nodes) =>
-        nodes
-          .map((node) =>
-            (node.getAttribute("aria-label") ?? "")
-              .replace(/^Open /, "")
-              .trim(),
-          )
-          .filter(Boolean),
-      );
+    // the phone shows first must be one the website lists. The app's cards
+    // carry their name in the Pressable's accessibilityLabel (`Open {name}`),
+    // which react-native-web renders as a <button> aria-label — read via the
+    // shared `appProjectCardNames` scan.
+    const appNames = await appProjectCardNames(page);
     expect(
       appNames.length,
       "app project cards on the first page",
@@ -440,7 +561,9 @@ test.describe("App vs website", () => {
     });
     await expect(
       website.getByText("Project information", { exact: true }).first(),
-    ).toBeVisible({ timeout: 60_000 });
+    ).toBeVisible({
+      timeout: 60_000,
+    });
 
     // Scrape the card: its prose (overview, estimated duration) and its
     // section headings (Objectives, Materials required, Software and code, …).
@@ -490,6 +613,175 @@ test.describe("App vs website", () => {
         `app is missing the website's project section: ${heading}`,
       ).toBeVisible();
     }
+
+    await website.close();
+  });
+
+  /**
+   * Decode HTML entities that appear in website card aria-labels (e.g.
+   * `&quot;` for `"`). The app renders the raw character, so we must normalise
+   * the website side to the same form before comparing.
+   */
+  function decodeHtmlEntities(s: string): string {
+    return s
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, " ");
+  }
+
+  test("Shop lists the website's electronic products", async ({
+    page,
+    context,
+    request,
+  }) => {
+    // ---- the website: its /products listing ----
+    const website = await context.newPage();
+    await website.goto(`${WEBSITE_URL}/products`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      website
+        .getByRole("heading", {
+          name: /electronic products/i,
+          level: 1,
+        })
+        .or(website.getByText(/electronic products/i).first()),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Product names as the site's cards announce them (ProductCard's
+    // aria-label). The website renders each card twice in the static HTML
+    // (SSR + hydration), so dedupe by name.
+    const webNames = await website.evaluate(() =>
+      Array.from(document.querySelectorAll('a[aria-label^="Open "]'))
+        .map((a) =>
+          a
+            .getAttribute("aria-label")!
+            .replace(/^Open /, "")
+            .trim(),
+        )
+        .filter(Boolean),
+    );
+    expect(webNames.length, "website product cards").toBeGreaterThan(0);
+    const webSet = new Set(webNames.map(decodeHtmlEntities));
+
+    // ---- the app: the Shop tab grid ----
+    await openAppTab(page, "Electronic Products");
+
+    // The RN-web bundle paints the Shop grid several seconds after the tab
+    // switch (the bundled Supabase client spends that time exhausting its
+    // placeholder connection attempt before the in-flight catalog promise
+    // resolves to BUNDLED_PRODUCTS). Poll the visible card scan so we only
+    // proceed once the first page of cards is on screen.
+    await expect
+      .poll(async () => (await appProductGridNames(page)).length, {
+        timeout: 30_000,
+        message: "app Shop grid should render product cards",
+      })
+      .toBeGreaterThan(0);
+
+    const appNames = await appProductGridNames(page);
+    expect(
+      appNames.length,
+      "app product cards on the first page",
+    ).toBeGreaterThan(0);
+
+    // The app paginates its grid, so this is a subset check: every product
+    // the phone shows first must be one the website lists.
+    for (const name of appNames) {
+      expect(
+        webSet.has(name),
+        `app lists a product the website does not: ${name}`,
+      ).toBe(true);
+    }
+
+    // Which of them is a shop product (not a project package)? The website's
+    // catalog endpoint serves the same row both surfaces render.
+    const response = await request.get(`${WEBSITE_URL}/api/products`);
+    expect(response.ok(), "the website catalog endpoint responds").toBeTruthy();
+    const catalog = (await response.json()) as Array<{
+      id: string;
+      name: string;
+      productType?: string | null;
+    }>;
+    const target = catalog.find(
+      (product) =>
+        appNames.includes(product.name) &&
+        String(product.productType ?? "")
+          .trim()
+          .toLowerCase() !== "project package",
+    );
+    if (!target) {
+      throw new Error(
+        `none of the app's first-page products is a shop product: ${appNames.join(", ")}`,
+      );
+    }
+
+    test.info().annotations.push({
+      type: "compared",
+      description: `${appNames.length} app cards vs ${webSet.size} website products; sampled ${target.name}`,
+    });
+
+    await website.close();
+  });
+
+  test("Printing lists the website's 3D models", async ({ page, context }) => {
+    // ---- the website: its /3d-printing model grid ----
+    const website = await context.newPage();
+    await website.goto(`${WEBSITE_URL}/3d-printing`, {
+      waitUntil: "domcontentloaded",
+    });
+    // The website's /3d-printing page headlines its model grid with "Pick a
+    // model, we print it." — the app's Printing tab headlines the same grid
+    // "3D Products / Printed in-house, on request." Either way we wait for
+    // the page to render its first H2 so the card scan below has something
+    // to read.
+    await expect(
+      website.getByRole("heading", { level: 2 }).first(),
+    ).toBeVisible({ timeout: 60_000 });
+
+    const webNames = await website.evaluate(() =>
+      Array.from(document.querySelectorAll('a[aria-label^="Open "]'))
+        .map((a) =>
+          a
+            .getAttribute("aria-label")!
+            .replace(/^Open /, "")
+            .trim(),
+        )
+        .filter(Boolean),
+    );
+    expect(webNames.length, "website 3d model cards").toBeGreaterThan(0);
+    const webSet = new Set(webNames.map(decodeHtmlEntities));
+
+    // ---- the app: the Printing tab grid ----
+    await openAppTab(page, "3D Products");
+
+    await expect
+      .poll(async () => (await appProductGridNames(page)).length, {
+        timeout: 30_000,
+        message: "app Printing grid should render model cards",
+      })
+      .toBeGreaterThan(0);
+
+    const appNames = await appProductGridNames(page);
+    expect(
+      appNames.length,
+      "app 3d model cards on the first page",
+    ).toBeGreaterThan(0);
+
+    for (const name of appNames) {
+      expect(
+        webSet.has(name),
+        `app lists a 3d model the website does not: ${name}`,
+      ).toBe(true);
+    }
+
+    test.info().annotations.push({
+      type: "compared",
+      description: `${appNames.length} app models vs ${webSet.size} website models`,
+    });
 
     await website.close();
   });
