@@ -40,7 +40,7 @@ website share ONLY the Supabase database (`products`, `services`, `carts`, `orde
 
 ## Admin Dashboard (Nov 2026)
 
-The admin dashboard (`AdminScreen.tsx`) has 8 top-level tabs, matching the website:
+The admin dashboard (`AdminScreen.tsx`) has 7 top-level tabs, matching the website:
 
 | Tab                 | Description                                                  |
 | ------------------- | ------------------------------------------------------------ |
@@ -48,12 +48,13 @@ The admin dashboard (`AdminScreen.tsx`) has 8 top-level tabs, matching the websi
 | Orders              | Order management                                             |
 | Electronic Products | Product catalog                                              |
 | 3D Products         | 3D printing catalog                                          |
-| Projects            | Project packages                                             |
-| Content             | Services, journal, home copy                                 |
+| Projects            | Project packages, grouped by project category                |
 | Users               | User directory, messages, profiles, and the Logs subtab       |
-| Settings            | Company info (17 fields) + training programs + pilot costs   |
+| Settings            | Company record, home page, storefront services, journal      |
 
 The Users tab has three subtabs: **Users**, **Messages**, and **Logs**.
+The Settings tab has four: **Company**, **Home page**, **Storefront services**,
+and **Journal** (the old Content tab was merged in on 2026-11-18).
 
 ### Users Subtab — 3 Sections
 
