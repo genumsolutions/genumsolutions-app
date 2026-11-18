@@ -96,16 +96,24 @@ because both clients already write it whole, so the blocks round-trip without a
 DDL migration; the reader/writer is one module, so promoting them to columns
 later needs no UI change.
 
-**A migration for those columns exists and is not applied yet.**
+**The columns are in code; the migration itself is still unapplied.**
 `supabase/migrations/20261118180000_project_details_columns.sql` in the website
 repo (the DB owner) adds twelve `products.project_*` columns and backfills them
 from the JSON block; its runbook is `docs/PROJECT_DETAILS_COLUMNS.md` there.
 Rollout order is backfill → reader that prefers a column and falls back to the
-JSON → dual write → drop the JSON copy. On this side only two modules move:
-`src/config/projectDetails.ts` (the reader/writer) and the two row mappers
-(`services/adminService.ts`, `services/productService.ts`); no admin screen
-touches the storage location. Do not start that swap before the migration runs —
-the console would read columns that do not exist and show every block empty.
+JSON → dual write → drop the JSON copy. On this side only two modules moved:
+`src/config/projectDetails.ts` (the reader/writer) and
+`services/adminService.ts` (the row mapper); no admin screen touches the storage
+location — `AdminScreen.tsx` reads `product.projectDetails`, already merged.
+
+Reads now take the column value per field and fall back to the JSON copy, so a
+database without the columns still shows every block (empty columns lose to a
+populated JSON copy, and an empty steps array does not hide JSON steps). Writes
+keep both copies, but only include the columns after a one-time probe
+(`select project_code_language from products limit 1`) confirms they exist — an
+unknown column is a `42703` that would fail the whole product save. So the
+migration can be applied before or after this build ships; the same binary
+switches over on its own, and until then nothing about the console changes.
 
 The 3D Products studio has its own section strip. Each section scrolls
 vertically within the available screen space. Categories, Promotions, Services,
