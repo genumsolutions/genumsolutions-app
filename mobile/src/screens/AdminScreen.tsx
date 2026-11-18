@@ -3025,14 +3025,29 @@ function ProjectTab({
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<AdminProduct | null>(null);
   const PAGE_SIZE = 6;
+  // 2026-11-18 (owner: "all the project show the robo car project"): this filter
+  // grouped by the PRODUCT category ("Robot Cars"), which every project shares,
+  // so it could never separate them. Projects are grouped by their own
+  // projectCategory (Smart City, Smart Farm, …), labelled from the catalog.
+  const projectCategoryName = (p: AdminProduct) =>
+    PROJECT_CATEGORIES.find((c) => c.slug === p.projectCategory)?.name ??
+    p.projectCategory ??
+    "Uncategorised";
   const categories = [
     "All",
-    ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))),
+    ...Array.from(
+      new Set(products.map((p) => projectCategoryName(p)).filter(Boolean)),
+    ),
   ];
+  // The editor's Category field is the PRODUCT category, not the project family
+  // — those are separate fields and must not be mixed up by this filter change.
+  const productCategories = Array.from(
+    new Set(products.map((p) => p.category).filter(Boolean)),
+  );
   const needle = query.trim().toLowerCase();
   const filtered = products.filter(
     (p) =>
-      (category === "All" || p.category === category) &&
+      (category === "All" || projectCategoryName(p) === category) &&
       (!needle ||
         `${p.name} ${p.sku} ${p.id} ${p.description}`
           .toLowerCase()
@@ -3306,7 +3321,7 @@ function ProjectTab({
           }}
           onCancel={() => onChange(null)}
           isNew={isNew}
-          categoryOptions={categories.filter((c) => c !== "All")}
+          categoryOptions={productCategories}
           pricingCard={
             pricingProjectId ? (
               <ProjectPricingCard
