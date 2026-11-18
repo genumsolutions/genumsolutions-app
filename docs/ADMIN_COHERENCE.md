@@ -96,6 +96,17 @@ because both clients already write it whole, so the blocks round-trip without a
 DDL migration; the reader/writer is one module, so promoting them to columns
 later needs no UI change.
 
+**A migration for those columns exists and is not applied yet.**
+`supabase/migrations/20261118180000_project_details_columns.sql` in the website
+repo (the DB owner) adds twelve `products.project_*` columns and backfills them
+from the JSON block; its runbook is `docs/PROJECT_DETAILS_COLUMNS.md` there.
+Rollout order is backfill → reader that prefers a column and falls back to the
+JSON → dual write → drop the JSON copy. On this side only two modules move:
+`src/config/projectDetails.ts` (the reader/writer) and the two row mappers
+(`services/adminService.ts`, `services/productService.ts`); no admin screen
+touches the storage location. Do not start that swap before the migration runs —
+the console would read columns that do not exist and show every block empty.
+
 The 3D Products studio has its own section strip. Each section scrolls
 vertically within the available screen space. Categories, Promotions, Services,
 Gallery, and Requests show their records by default; their editor opens only
