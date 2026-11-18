@@ -4,8 +4,10 @@
 //
 // The other specs check the app against its own expectations. This one
 // checks it against the thing it is supposed to mirror: the same four live
-// stats on /about (with the same NUMBERS, both read the same DB), and the
-// same program-band headings in the same order on Home.
+// stats on /about (with the same NUMBERS, both read the same DB), the same
+// program-band headings in the same order on Home, the same Services content,
+// and the same project packages with the same project-information card on the
+// Projects screens.
 //
 // Opt-in on purpose: it needs the website running, which the app repo's CI
 // does not check out. Set WEBSITE_URL and it runs; otherwise it skips.
@@ -328,6 +330,164 @@ test.describe("App vs website", () => {
       await expect(
         page.getByText(band, { exact: true }).filter({ visible: true }).first(),
         `curriculum band missing on app: ${band}`,
+      ).toBeVisible();
+    }
+
+    await website.close();
+  });
+
+  test("Projects lists the website's packages and shows the same project information", async ({
+    page,
+    context,
+    request,
+  }) => {
+    type CatalogProduct = {
+      id: string;
+      name: string;
+      productType?: string | null;
+    };
+
+    // ---- the website: its listing, then one of its project pages ----
+    const website = await context.newPage();
+    await website.goto(`${WEBSITE_URL}/projects`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      website.getByRole("heading", {
+        name: /teaching, automation, and robot-car projects\./i,
+        level: 1,
+      }),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Project names as the site's cards announce them (ProductCard's
+    // aria-label). Pre-packaged kits ride the same grid, hence the type
+    // filter further down.
+    const webNames = await website.evaluate(() =>
+      Array.from(document.querySelectorAll('a[aria-label^="Open "]'))
+        .map((a) =>
+          a
+            .getAttribute("aria-label")!
+            .replace(/^Open /, "")
+            .trim(),
+        )
+        .filter(Boolean),
+    );
+    expect(webNames.length, "website project cards").toBeGreaterThan(0);
+
+    // ---- the app: the same grid ----
+    await openAppScreen(page, "Projects");
+    await expect(
+      page.getByText(/No projects found/).filter({ visible: true }),
+      "app Projects rendered its empty state",
+    ).toHaveCount(0);
+
+    // The app paginates its grid, so this is a subset check: every package
+    // the phone shows first must be one the website lists.
+    const appNames = await page
+      .locator('[aria-label^="Open "]')
+      .filter({ visible: true })
+      .evaluateAll((nodes) =>
+        nodes
+          .map((node) =>
+            (node.getAttribute("aria-label") ?? "")
+              .replace(/^Open /, "")
+              .trim(),
+          )
+          .filter(Boolean),
+      );
+    expect(
+      appNames.length,
+      "app project cards on the first page",
+    ).toBeGreaterThan(0);
+
+    const webSet = new Set(webNames);
+    for (const name of appNames) {
+      expect(
+        webSet.has(name),
+        `app lists a project the website does not: ${name}`,
+      ).toBe(true);
+    }
+
+    // Which of them is a project package? Kits carry no project-information
+    // card. The website's catalog endpoint serves the same row both surfaces
+    // render.
+    const response = await request.get(`${WEBSITE_URL}/api/products`);
+    expect(response.ok(), "the website catalog endpoint responds").toBeTruthy();
+    const catalog = (await response.json()) as CatalogProduct[];
+    const target = catalog.find(
+      (product) =>
+        appNames.includes(product.name) &&
+        String(product.productType ?? "")
+          .trim()
+          .toLowerCase() === "project package",
+    );
+    if (!target) {
+      throw new Error(
+        `none of the app's first-page projects is a project package: ${appNames.join(", ")}`,
+      );
+    }
+
+    // Open it on the phone. The card's own text bubbles to its Pressable.
+    await vis(page, target.name).click();
+    await expect(
+      vis(page, "Project information"),
+      "the app's project page has no project-information card",
+    ).toBeVisible({ timeout: 20_000 });
+
+    // ---- the same project on the website ----
+    await website.goto(`${WEBSITE_URL}/products/${target.id}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      website.getByText("Project information", { exact: true }).first(),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Scrape the card: its prose (overview, estimated duration) and its
+    // section headings (Objectives, Materials required, Software and code, …).
+    const site = await website.evaluate(() => {
+      const text = (el: Element | null | undefined) =>
+        (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+      const label = Array.from(document.querySelectorAll("*")).find(
+        (el) =>
+          el.childElementCount === 0 && text(el) === "Project information",
+      );
+      const section = label?.parentElement;
+      if (!section) return { paragraphs: [], headings: [] };
+      return {
+        paragraphs: Array.from(section.querySelectorAll("p"))
+          .map(text)
+          .filter((t) => t && t !== "Project information"),
+        headings: Array.from(section.querySelectorAll("h2")).map(text),
+      };
+    });
+
+    // Guard the guard: if the website markup moved, fail loudly instead of
+    // silently comparing nothing.
+    expect(
+      site.paragraphs.length + site.headings.length,
+      "the website's project page rendered no project-information content",
+    ).toBeGreaterThan(0);
+
+    test.info().annotations.push({
+      type: "compared",
+      description: `${target.name}: ${site.paragraphs.length} paragraphs, ${site.headings.length} headings`,
+    });
+
+    // Every line of project copy the site shows — including the three detail
+    // blocks when the catalog carries them — must be on the app's page too.
+    for (const paragraph of site.paragraphs) {
+      await expect(
+        page
+          .getByText(paragraph, { exact: false })
+          .filter({ visible: true })
+          .first(),
+        `app is missing the website's project copy: ${paragraph.slice(0, 60)}…`,
+      ).toBeVisible();
+    }
+    for (const heading of site.headings) {
+      await expect(
+        vis(page, heading),
+        `app is missing the website's project section: ${heading}`,
       ).toBeVisible();
     }
 
