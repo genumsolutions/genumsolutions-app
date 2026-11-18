@@ -56,10 +56,11 @@ import PrintAdminPanel, {
 import { AdminSubTabs } from "../components/admin/AdminSubTabs";
 import { AdminEditorSheet } from "../components/admin/AdminEditorSheet";
 // 2026-11-18: the three new project blocks (code details, 3D material details,
-// coding procedure) live in products.import_meta.projectDetails — see
-// config/projectDetails.ts for the shape and why no migration was needed.
+// coding procedure) come from products.project_* columns with
+// import_meta.projectDetails as the fallback — both merged in
+// adminService.mapProductRow; see config/projectDetails.ts for the mapping.
 import {
-  readProjectDetails,
+  blankProjectDetails,
   writeProjectDetails,
   type ProjectDetails,
 } from "../config/projectDetails";
@@ -1071,6 +1072,7 @@ function AdminConsole() {
       image: "",
       gallery: [],
       importMeta: {},
+      projectDetails: blankProjectDetails(),
       badge: null,
       active: true,
       sortOrder: 1000,
@@ -2324,6 +2326,7 @@ function blankProjectProduct(): AdminProduct {
     image: "",
     gallery: [],
     importMeta: {},
+    projectDetails: blankProjectDetails(),
     badge: null,
     active: true,
     sortOrder: 1000,
@@ -3959,7 +3962,7 @@ function ProjectSectionPanel({
         ? total === 0
           ? empty
           : products.map((product) => {
-              const details = readProjectDetails(product.importMeta);
+              const details = product.projectDetails;
               const checks = [
                 Boolean(details.code.language.trim()),
                 Boolean(details.code.repositoryUrl.trim()),
@@ -4018,7 +4021,7 @@ function ProjectSectionPanel({
         ? total === 0
           ? empty
           : products.map((product) => {
-              const details = readProjectDetails(product.importMeta);
+              const details = product.projectDetails;
               return (
                 <View
                   key={product.id}
@@ -4059,7 +4062,7 @@ function ProjectSectionPanel({
         ? total === 0
           ? empty
           : products.map((product) => {
-              const details = readProjectDetails(product.importMeta);
+              const details = product.projectDetails;
               return (
                 <View
                   key={product.id}
@@ -4686,9 +4689,14 @@ function ProductEditor({
   const [editorSubTab, setEditorSubTab] = useState<string>(
     initialSection ?? (isProject ? "Category" : "Basics"),
   );
-  const projectDetails = readProjectDetails(product.importMeta);
+  // 2026-11-18: already merged by mapProductRow (column first, JSON fallback),
+  // so the editor never needs to know which side of the migration the row is on.
+  const projectDetails = product.projectDetails;
   const patchDetails = (next: ProjectDetails) =>
-    patch({ importMeta: writeProjectDetails(product.importMeta, next) });
+    patch({
+      projectDetails: next,
+      importMeta: writeProjectDetails(product.importMeta, next),
+    });
 
   // The project-only field groups, one per hierarchy level. Keeping them as
   // fragments (rather than five copies of EditoSection) is what lets the tab

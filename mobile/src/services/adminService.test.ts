@@ -34,6 +34,10 @@ const fake = vi.hoisted(() => {
         record("in", args);
         return Promise.resolve(result());
       },
+      limit: (...args: unknown[]) => {
+        record("limit", args);
+        return Promise.resolve(result());
+      },
       // `select()` is awaited directly by listAdminProjectPricing, so the
       // builder is thenable and resolves its table's response.
       then: (
@@ -44,13 +48,23 @@ const fake = vi.hoisted(() => {
     return builder;
   };
 
+  // The product save goes through the admin-products Edge Function, not a
+  // table write, so that call is recorded too (the payload is what the column
+  // gate decides).
+  const invoke = vi.fn(async (...args: unknown[]) => {
+    calls.push({ table: "functions.invoke", method: "invoke", args });
+    return { data: { ok: true }, error: null };
+  });
+
   return {
     calls,
     responses,
-    supabase: { from },
+    invoke,
+    supabase: { from, functions: { invoke } },
     reset() {
       calls.length = 0;
       responses.clear();
+      invoke.mockClear();
     },
     respond(table: string, data: unknown, error: unknown = null) {
       responses.set(table, { data, error });
@@ -60,10 +74,19 @@ const fake = vi.hoisted(() => {
 
 vi.mock("../config/supabase", () => ({ supabase: fake.supabase }));
 
-import { listAdminCarProfiles, listAdminProjectPricing } from "./adminService";
+import {
+  listAdminCarProfiles,
+  listAdminProjectPricing,
+  mapProductRow,
+  resetProjectDetailColumnsProbe,
+  toProductRow,
+  upsertAdminProduct,
+} from "./adminService";
+import { PROJECT_DETAIL_COLUMN_KEYS } from "../config/projectDetails";
 
 beforeEach(() => {
   fake.reset();
+  resetProjectDetailColumnsProbe();
 });
 
 describe("listAdminProjectPricing", () => {
@@ -156,6 +179,99 @@ const CAR_ROWS = [
     updated_at: "2026-11-17T08:00:00.000Z",
   },
 ];
+
+// ── Project-detail columns (2026-11-18 migration) ─────────────────────
+// The migration adds products.project_* columns while import_meta.projectDetails
+// stays the compatibility copy. Reads prefer the column per field; writes only
+// carry the columns once a one-time probe confirms they exist, because an
+// unknown column is a hard 42703 error that would fail the whole save.
+
+describe("project-detail columns", () => {
+  const product = () =>
+    mapProductRow({
+      id: "p1",
+      name: "Line follower",
+      category: "Project Packages",
+      project_category: "robotics",
+      import_meta: {
+        projectDetails: {
+          code: { language: "JSON language", notes: "JSON notes" },
+          material: { printer: "JSON printer" },
+        },
+      },
+    });
+
+  it("merges columns into the product, column winning per field", () => {
+    const mapped = mapProductRow({
+      id: "p1",
+      name: "Line follower",
+      category: "Project Packages",
+      import_meta: {
+        projectDetails: {
+          code: { language: "JSON language", notes: "JSON notes" },
+        },
+      },
+      project_code_language: "Column language",
+      project_material_printer: "Column printer",
+    });
+
+    expect(mapped.projectDetails.code.language).toBe("Column language");
+    expect(mapped.projectDetails.code.notes).toBe("JSON notes");
+    expect(mapped.projectDetails.material.printer).toBe("Column printer");
+  });
+
+  it("leaves the columns out of the payload unless the caller opts in", () => {
+    const details = product();
+    const row = toProductRow(details);
+    expect(PROJECT_DETAIL_COLUMN_KEYS.filter((key) => key in row)).toEqual([]);
+
+    const withColumns = toProductRow(details, { projectColumns: true });
+    expect(
+      Object.keys(withColumns).filter((key) => key.startsWith("project_")),
+    ).toEqual(expect.arrayContaining([...PROJECT_DETAIL_COLUMN_KEYS]));
+  });
+
+  it("keeps the JSON copy on every write, columns or not", () => {
+    const details = product();
+    for (const options of [{}, { projectColumns: true }]) {
+      const row = toProductRow(details, options);
+      expect(row.import_meta).toEqual(details.importMeta);
+      expect(
+        (row.import_meta as { projectDetails: unknown }).projectDetails,
+      ).toBeTruthy();
+    }
+  });
+
+  it("saves without the columns when the probe reports they are missing", async () => {
+    fake.respond("products", null, { message: "column does not exist" });
+
+    await upsertAdminProduct(product());
+
+    const body = fake.invoke.mock.calls[0][1] as {
+      body: { product: Record<string, unknown> };
+    };
+    expect(body.body.product.project_code_language).toBeUndefined();
+    expect(body.body.product.import_meta).toBeTruthy();
+  });
+
+  it("saves with the columns once the probe confirms them, probing only once", async () => {
+    fake.respond("products", [{ project_code_language: "Arduino C++" }]);
+
+    await upsertAdminProduct(product());
+    await upsertAdminProduct(product());
+
+    for (const call of fake.invoke.mock.calls) {
+      const body = call[1] as { body: { product: Record<string, unknown> } };
+      // Written from the merged product, i.e. the same value the console shows.
+      expect(body.body.product.project_code_language).toBe("JSON language");
+    }
+    expect(
+      fake.calls.filter(
+        (call) => call.table === "products" && call.method === "select",
+      ),
+    ).toHaveLength(1);
+  });
+});
 
 describe("listAdminCarProfiles", () => {
   it("lists every profile newest first and attaches the owner's name and email", async () => {

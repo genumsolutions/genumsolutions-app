@@ -11,6 +11,11 @@
 import { supabase } from "../config/supabase";
 import { clampGallery } from "../lib/imageLimits";
 import {
+  projectDetailColumns,
+  readProjectDetails,
+  type ProjectDetails,
+} from "../config/projectDetails";
+import {
   defaultProjectPricing,
   type ProjectPricing,
 } from "../lib/project-pricing";
@@ -67,6 +72,12 @@ export type AdminProduct = {
   warranty: string;
   gallery: string[];
   importMeta: Record<string, unknown>;
+  /**
+   * The code / 3D material / coding-procedure blocks, already merged from the
+   * columns and the JSON copy (see mapProductRow). Screens read this, never the
+   * storage location.
+   */
+  projectDetails: ProjectDetails;
 };
 
 export type AdminService = {
@@ -214,11 +225,49 @@ export function mapProductRow(row: RawRow): AdminProduct {
       row.import_meta && typeof row.import_meta === "object"
         ? (row.import_meta as Record<string, unknown>)
         : {},
+    // 2026-11-18: the six project-detail blocks. Read once, here, so no screen
+    // has to know whether they live in the columns or the JSON copy: each field
+    // prefers its column and falls back to import_meta.projectDetails.
+    projectDetails: readProjectDetails(
+      row.import_meta && typeof row.import_meta === "object"
+        ? (row.import_meta as Record<string, unknown>)
+        : {},
+      row,
+    ),
   };
 }
 
+/**
+ * True when the products table has the project-detail columns.
+ *
+ * A write that names a column the database does not have fails with 42703 and
+ * takes the whole product save with it, so the payload only carries those
+ * columns when this says yes. Probed once per session (one row, one column) and
+ * cached; a failed probe counts as "not there" — the JSON copy still works.
+ */
+let projectDetailColumnsProbe: Promise<boolean> | null = null;
+
+export function projectDetailColumnsAvailable(): Promise<boolean> {
+  projectDetailColumnsProbe ??= (async () => {
+    const { error } = await supabase
+      .from("products")
+      .select("project_code_language")
+      .limit(1);
+    return !error;
+  })().catch(() => false);
+  return projectDetailColumnsProbe;
+}
+
+/** Test seam: forget the cached probe answer. */
+export function resetProjectDetailColumnsProbe() {
+  projectDetailColumnsProbe = null;
+}
+
 /** camelCase product -> snake_case payload for the `products` table. */
-export function toProductRow(product: AdminProduct): RawRow {
+export function toProductRow(
+  product: AdminProduct,
+  options?: { projectColumns?: boolean },
+): RawRow {
   return {
     id: product.id,
     name: product.name,
@@ -259,6 +308,11 @@ export function toProductRow(product: AdminProduct): RawRow {
     // expects, whatever the editor posted.
     gallery: clampGallery(product.gallery),
     import_meta: product.importMeta,
+    // Dual write: the JSON copy stays for older bundles and for the website
+    // until it ships the same swap. The columns go along only when they exist.
+    ...(options?.projectColumns
+      ? projectDetailColumns(product.projectDetails)
+      : {}),
     updated_at: new Date().toISOString(),
   };
 }
@@ -447,8 +501,12 @@ export async function listAdminProducts(): Promise<AdminProduct[]> {
 }
 
 export async function upsertAdminProduct(product: AdminProduct) {
+  const projectColumns = await projectDetailColumnsAvailable();
   const { data, error } = await supabase.functions.invoke("admin-products", {
-    body: { action: "create", product: toProductRow(product) },
+    body: {
+      action: "create",
+      product: toProductRow(product, { projectColumns }),
+    },
   });
   if (error) {
     const message =
