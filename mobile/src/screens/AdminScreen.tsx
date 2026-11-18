@@ -65,7 +65,6 @@ import { AdminEditorSheet } from "../components/admin/AdminEditorSheet";
 import { useApp } from "../context/AppContext";
 import { CategoryDropdown } from "../components/CategoryDropdown";
 import { PagePager } from "../components/PagePager";
-import { ProductCard } from "../components/ProductCard";
 import { ServiceCard } from "../components/ServiceCard";
 import { isProjectPackage } from "../services/projectService";
 import { applyComponentsScope } from "../services/productService";
