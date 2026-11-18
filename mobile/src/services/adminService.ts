@@ -776,6 +776,27 @@ export async function getAdminProjectPricing(
   );
 }
 
+/**
+ * Every project's pricing row, keyed by project id.
+ *
+ * 2026-11-18: the Projects tab's Pricing section shows all packages at once
+ * (draft vs approved, base charge, markup) so staff can see which quotes are
+ * still hidden from customers. Staff+ RLS already exposes drafts; packages with
+ * no row yet simply do not appear and fall back to the in-editor defaults.
+ */
+export async function listAdminProjectPricing(): Promise<
+  Record<string, ProjectPricing>
+> {
+  const { data, error } = await supabase.from("project_pricing").select("*");
+  if (error) throw error;
+  const rows: Record<string, ProjectPricing> = {};
+  for (const row of (data as Record<string, unknown>[] | null) ?? []) {
+    const mapped = mapProjectPricingRow(row);
+    if (mapped) rows[mapped.id] = mapped;
+  }
+  return rows;
+}
+
 /** Save the pricing rules (staff+). Keeps the approval state the row loaded. */
 export async function saveAdminProjectPricing(
   pricing: ProjectPricing,
@@ -1022,6 +1043,63 @@ export async function listUserCarProfiles(
     settings: (row.settings as Record<string, unknown>) || {},
     updatedAt: String(row.updated_at ?? ""),
   }));
+}
+
+/**
+ * Every saved project (car) profile across all users, newest first.
+ *
+ * 2026-11-18: the Users tab gained a dedicated Project profiles window, so
+ * staff can see what builders have saved without opening one account at a time.
+ * Staff+ RLS already exposes every row; owner names come from the profiles
+ * table the directory already reads. Repairs stay on the per-user row in
+ * Accounts — this view is read-only on purpose.
+ */
+export type AdminProjectProfile = AdminCarProfile & {
+  userId: string;
+  ownerName: string;
+  ownerEmail: string;
+};
+
+export async function listAdminCarProfiles(): Promise<AdminProjectProfile[]> {
+  const { data, error } = await supabase
+    .from("car_profiles")
+    .select(
+      "id, user_id, profile_key, car_name, unique_id, settings, updated_at",
+    )
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  const rows = data || [];
+  const userIds = Array.from(
+    new Set(rows.map((row) => String(row.user_id ?? ""))),
+  ).filter(Boolean);
+  const owners = new Map<string, { name: string; email: string }>();
+  if (userIds.length > 0) {
+    const { data: people } = await supabase
+      .from("profiles")
+      .select("id, name, email")
+      .in("id", userIds);
+    for (const person of people || []) {
+      owners.set(String(person.id ?? ""), {
+        name: String(person.name ?? ""),
+        email: String(person.email ?? ""),
+      });
+    }
+  }
+  return rows.map((row) => {
+    const userId = String(row.user_id ?? "");
+    const owner = owners.get(userId);
+    return {
+      id: String(row.id ?? ""),
+      userId,
+      ownerName: owner?.name ?? "",
+      ownerEmail: owner?.email ?? userId,
+      profileKey: String(row.profile_key ?? ""),
+      carName: String(row.car_name ?? ""),
+      uniqueId: String(row.unique_id ?? ""),
+      settings: (row.settings as Record<string, unknown>) || {},
+      updatedAt: String(row.updated_at ?? ""),
+    };
+  });
 }
 
 export async function upsertAdminCarProfile(

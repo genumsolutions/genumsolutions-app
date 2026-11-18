@@ -21,10 +21,53 @@ made staff guess which surface owned a line of copy.
 `components/admin/admin-types.ts` and against the strip in `AdminScreen.tsx`.
 
 Dashboard has separate **Overview** and **Activity** subtabs; only one panel is
-shown at a time. Orders, Users and Settings also use subtabs. **Logs** is a
-Users subtab with _System_, _User activity_, and _Profiles_ sections, backed by
-`device_crash_reports` + `app_logs`, `user_activity_log`, and
-`user_profile_entries`.
+shown at a time. Orders, Users and Settings also use subtabs, and both of the
+latter carry a third level where it earns its keep.
+
+### Projects sections
+
+Projects works like the 3D studio: a six-section strip across the tab.
+
+| Section             | What it answers                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Catalog             | The package list — search, category filter, preview, edit, hide, delete                                                                                                                                 |
+| Categories          | Project families (Robo Car, Smart Home, Smart Farm, Smart City, Smart Dustbin, Aerial Drones, plus Uncategorised): package counts, live/hidden, price range. Tapping a family filters the catalog to it |
+| Pricing             | Every package's quote state in one place: approved / draft / no row, base charge, markup, minimum, extras and bulk-tier counts. Each row opens that package's editor on Pricing                         |
+| Software & features | Toolchain, repository, libraries, objectives, control methods and feature lines, with an `n/6` completeness count; opens the editor on Code details                                                     |
+| 3D materials        | Printer, filament, layer height, infill, print time and the materials list; opens 3D material details                                                                                                   |
+| Coding procedure    | Build steps, coding steps, duration and procedure notes; opens Coding procedure                                                                                                                         |
+
+Pricing reads `project_pricing` for all packages in one query
+(`listAdminProjectPricing`); draft rows are visible to staff through RLS but
+stay hidden from customers.
+
+### Users sections
+
+_Accounts · Project profiles · Messages · Diagnostics._
+
+- **Accounts** — the directory: role, tier, joined/last seen, per-user robot
+  settings and per-user project profiles, delete (owner only).
+- **Project profiles** — every saved `car_profiles` row across all builders,
+  newest first, searchable by builder/car/profile key, with a settings count and
+  last update. Read-only; repairs stay on the account row so there is one write
+  path.
+- **Messages** — customer messages plus newsletter opt-ins.
+- **Diagnostics** — crash reports + app logs (Fleet diagnostics), the user
+  activity log, and profile-entry changes, three nested sections backed by
+  `device_crash_reports` + `app_logs`, `user_activity_log`, and
+  `user_profile_entries`.
+
+### Settings sections
+
+_Company · Home page · Storefront services · Journal._
+
+- **Company** has three nested sections — Details / Contact / Social — over one
+  `company_info` row. The editor works on a draft: nothing touches the live
+  record or the read-only view until Save, name and email are required and the
+  email is validated, and a failed database write is shown in the sheet instead
+  of being swallowed. Every field carries a line explaining where it appears.
+- **Home page** has four nested sections — Hero / Training / Pilot costs /
+  Curriculum — instead of one long scroll mixing four record types.
 
 ### Electronic Products subtabs
 

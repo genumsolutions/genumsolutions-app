@@ -437,7 +437,7 @@ const WALK: {
   {
     tab: "Users",
     sections: "User administration sections",
-    steps: ["Users", "Messages", "Logs"],
+    steps: ["Accounts", "Project profiles", "Messages", "Diagnostics"],
   },
   {
     // 2026-11-18 (owner): the Content tab merged into Settings. The section

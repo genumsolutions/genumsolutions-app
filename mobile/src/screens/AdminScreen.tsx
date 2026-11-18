@@ -111,6 +111,8 @@ import {
   upsertUserRobotSettings,
   deleteUserRobotSetting,
   type AdminCarProfile,
+  type AdminProjectProfile,
+  listAdminCarProfiles,
   listUserCarProfiles,
   upsertAdminCarProfile,
   deleteAdminCarProfile,
@@ -146,6 +148,7 @@ import {
   upsertAdminCurriculumHighlight,
   deleteAdminCurriculumHighlight,
   getAdminProjectPricing,
+  listAdminProjectPricing,
   saveAdminProjectPricing,
   setAdminProjectPricingApproval,
   type AdminOrder,
@@ -552,7 +555,7 @@ function AdminConsole() {
   // catalog item: company record, home page copy, storefront services, journal.
   const [settingsSubTab, setSettingsSubTab] =
     useState<SettingsSubTab>("Company");
-  const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("Users");
+  const [usersSubTab, setUsersSubTab] = useState<UsersSubTab>("Accounts");
   const [editingService, setEditingService] = useState<AdminService | null>(
     null,
   );
@@ -1946,7 +1949,7 @@ function AdminConsole() {
               active={usersSubTab}
               panels={[
                 {
-                  key: "Users",
+                  key: "Accounts",
                   content: (
                     <UsersSection
                       users={users}
@@ -1964,6 +1967,10 @@ function AdminConsole() {
                       onDeleteUser={handleDeleteUser}
                     />
                   ),
+                },
+                {
+                  key: "Project profiles",
+                  content: <ProjectProfilesTab />,
                 },
                 {
                   key: "Messages",
@@ -1993,7 +2000,7 @@ function AdminConsole() {
                   ),
                 },
                 {
-                  key: "Logs",
+                  key: "Diagnostics",
                   content: (
                     <LogsTab
                       crashes={crashReports}
@@ -3142,6 +3149,19 @@ const PROJECT_EDITOR_SUBTABS = [
   "3D material details",
   "Coding procedure",
 ] as const;
+type ProjectEditorTab = (typeof PROJECT_EDITOR_SUBTABS)[number];
+
+// 2026-11-18 (owner): Projects now works like the 3D studio — a section strip
+// across the whole tab, not just inside one package's editor.
+const PROJECT_SECTIONS = [
+  "Catalog",
+  "Categories",
+  "Pricing",
+  "Software & features",
+  "3D materials",
+  "Coding procedure",
+] as const;
+type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 
 // ── Project editor ──
 // Share the website admin's project-category picker (6 categories, excluding
@@ -3179,6 +3199,20 @@ function ProjectTab({
   const isNew = editing ? !products.some((p) => p.id === editing.id) : false;
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
+  // 2026-11-18 (owner: "the project tab should have the subtab like the 3d
+  // product tabs has to show the categories and costing and project details
+  // like software and features"): the tab is now a strip of six sections, the
+  // first being the catalogue it always was. The other five are roll-ups across
+  // every package — costing state, software, 3D material, procedure — each row
+  // opening the editor on the matching sub-tab.
+  const [section, setSection] = useState<ProjectSection>("Catalog");
+  const [editorStartTab, setEditorStartTab] = useState<string>("Category");
+  const [pricingById, setPricingById] = useState<
+    Record<string, ProjectPricing>
+  >({});
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingError, setPricingError] = useState<string | null>(null);
+  const [pricingAllReload, setPricingAllReload] = useState(0);
   // 2026-11-13: the pricing approval stamp records who approved it.
   const { user: currentUser } = useApp();
   // U-48: this tab saves through onSaveProduct directly (not the guarded
@@ -3460,6 +3494,34 @@ function ProjectTab({
     catalogPrices: new Map(catalogProducts.map((p) => [p.id, p.price])),
   });
 
+  // The Pricing section needs every package's row at once; it is loaded when
+  // the section is opened (and on demand from its retry button), so the
+  // catalog stays free of an extra query.
+  React.useEffect(() => {
+    if (section !== "Pricing") return;
+    let active = true;
+    setPricingLoading(true);
+    setPricingError(null);
+    void listAdminProjectPricing()
+      .then((rows) => {
+        if (active) setPricingById(rows);
+      })
+      .catch(() => {
+        if (active) setPricingError("Could not load the project pricing.");
+      })
+      .finally(() => {
+        if (active) setPricingLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [section, pricingAllReload]);
+
+  const openEditorAt = (product: AdminProduct, tab: ProjectEditorTab) => {
+    setEditorStartTab(tab);
+    onEdit(product);
+  };
+
   if (editing) {
     return (
       <AdminEditorSheet
@@ -3469,7 +3531,9 @@ function ProjectTab({
         onClose={() => onChange(null)}
       >
         <ProductEditor
+          key={`${editing.id}-${editorStartTab}`}
           product={editing}
+          initialSection={editorStartTab}
           onChange={onChange}
           saving={saving}
           onSave={() => {
@@ -3523,118 +3587,144 @@ function ProjectTab({
 
   return (
     <View className="flex-1">
-      <FlatList
-        data={shown}
-        keyExtractor={(p) => p.id}
-        className="flex-1"
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-          paddingBottom: 40,
-        }}
-        ListHeaderComponent={
-          <View className="mb-3">
-            <Text className="font-display text-xl font-bold tracking-tight text-ink">
-              {title}{" "}
-              <Text className="text-base font-bold text-muted">
-                ({filtered.length})
-              </Text>
-            </Text>
-            <View className="mt-2 flex-row items-center gap-2">
-              <View className="flex-1">
-                <CategoryDropdown
-                  value={category}
-                  options={categories}
-                  onChange={setCategory}
-                  placeholder="All categories"
-                  title="Filter by category"
-                />
-              </View>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search name, SKU, id…"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
-              />
-              <Pressable
-                onPress={onNew}
-                className="shrink-0 rounded-full bg-navy px-4 py-2"
-              >
-                <Text className="text-xs font-black text-white">
-                  + New project
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        }
-        ListEmptyComponent={
-          <Text className="py-8 text-center text-sm text-muted">
-            No {title.toLowerCase()} found.
-          </Text>
-        }
-        ListFooterComponent={
-          totalPages > 1 ? (
-            <AdminPager page={page} totalPages={totalPages} onPage={setPage} />
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <View className="mb-3 overflow-hidden rounded-xl border border-line bg-card">
-            {galleryImages(item)[0] ? (
-              <Image
-                source={{ uri: galleryImages(item)[0] }}
-                className="h-36 w-full bg-mist"
-                resizeMode="cover"
-              />
-            ) : null}
-            <View className="p-4">
-              <Text className="text-xs font-black uppercase tracking-wide text-gold">
-                {item.category}
-              </Text>
-              <Text className="mt-1 text-sm font-bold text-ink">
-                {item.name}
-              </Text>
-              <Text className="mt-1 text-xs font-black text-navy">
-                {item.priceLabel || "Request quote"}
-              </Text>
-              <Text
-                className="mt-1 text-xs leading-5 text-muted"
-                numberOfLines={3}
-              >
-                {item.description || item.note}
-              </Text>
-              {!item.active && (
-                <Text className="mt-1 text-[10px] font-black uppercase text-red-500">
-                  Hidden from customers
-                </Text>
-              )}
-              <View className="mt-3 flex-row flex-wrap gap-2">
-                <AdminAction
-                  onPress={() => onEdit(item)}
-                  label="Edit"
-                  tone="navy"
-                />{" "}
-                <AdminAction
-                  onPress={() => setPreview(item)}
-                  label="Preview"
-                  tone="plain"
-                />
-                <AdminAction
-                  onPress={() => onToggleActive(item)}
-                  label={item.active ? "Hide" : "Show"}
-                  tone="plain"
-                />
-                {canDelete && (
-                  <AdminAction
-                    onPress={() => onDelete(item.id)}
-                    label="Delete"
-                    tone="red"
-                  />
-                )}
-              </View>
-            </View>
-          </View>
-        )}
+      <AdminSubTabs
+        label="Project sections"
+        options={PROJECT_SECTIONS}
+        value={section}
+        onChange={setSection}
       />
+      {section !== "Catalog" ? (
+        <ProjectSectionPanel
+          section={section}
+          products={products}
+          pricingById={pricingById}
+          pricingLoading={pricingLoading}
+          pricingError={pricingError}
+          onRetryPricing={() => setPricingAllReload((v) => v + 1)}
+          onOpen={openEditorAt}
+          onFilterCategory={(name) => {
+            setCategory(name);
+            setSection("Catalog");
+          }}
+        />
+      ) : (
+        <FlatList
+          data={shown}
+          keyExtractor={(p) => p.id}
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            paddingBottom: 40,
+          }}
+          ListHeaderComponent={
+            <View className="mb-3">
+              <Text className="font-display text-xl font-bold tracking-tight text-ink">
+                {title}{" "}
+                <Text className="text-base font-bold text-muted">
+                  ({filtered.length})
+                </Text>
+              </Text>
+              <View className="mt-2 flex-row items-center gap-2">
+                <View className="flex-1">
+                  <CategoryDropdown
+                    value={category}
+                    options={categories}
+                    onChange={setCategory}
+                    placeholder="All categories"
+                    title="Filter by category"
+                  />
+                </View>
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search name, SKU, id…"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
+                />
+                <Pressable
+                  onPress={onNew}
+                  className="shrink-0 rounded-full bg-navy px-4 py-2"
+                >
+                  <Text className="text-xs font-black text-white">
+                    + New project
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={
+            <Text className="py-8 text-center text-sm text-muted">
+              No {title.toLowerCase()} found.
+            </Text>
+          }
+          ListFooterComponent={
+            totalPages > 1 ? (
+              <AdminPager
+                page={page}
+                totalPages={totalPages}
+                onPage={setPage}
+              />
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <View className="mb-3 overflow-hidden rounded-xl border border-line bg-card">
+              {galleryImages(item)[0] ? (
+                <Image
+                  source={{ uri: galleryImages(item)[0] }}
+                  className="h-36 w-full bg-mist"
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View className="p-4">
+                <Text className="text-xs font-black uppercase tracking-wide text-gold">
+                  {item.category}
+                </Text>
+                <Text className="mt-1 text-sm font-bold text-ink">
+                  {item.name}
+                </Text>
+                <Text className="mt-1 text-xs font-black text-navy">
+                  {item.priceLabel || "Request quote"}
+                </Text>
+                <Text
+                  className="mt-1 text-xs leading-5 text-muted"
+                  numberOfLines={3}
+                >
+                  {item.description || item.note}
+                </Text>
+                {!item.active && (
+                  <Text className="mt-1 text-[10px] font-black uppercase text-red-500">
+                    Hidden from customers
+                  </Text>
+                )}
+                <View className="mt-3 flex-row flex-wrap gap-2">
+                  <AdminAction
+                    onPress={() => onEdit(item)}
+                    label="Edit"
+                    tone="navy"
+                  />{" "}
+                  <AdminAction
+                    onPress={() => setPreview(item)}
+                    label="Preview"
+                    tone="plain"
+                  />
+                  <AdminAction
+                    onPress={() => onToggleActive(item)}
+                    label={item.active ? "Hide" : "Show"}
+                    tone="plain"
+                  />
+                  {canDelete && (
+                    <AdminAction
+                      onPress={() => onDelete(item.id)}
+                      label="Delete"
+                      tone="red"
+                    />
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      )}
       {preview && (
         <ProductPreviewModal
           product={preview}
@@ -3642,6 +3732,370 @@ function ProjectTab({
         />
       )}
     </View>
+  );
+}
+
+// ── Project section roll-ups ──────────────────────────────────────────
+// 2026-11-18 (owner): the Projects tab mirrors the 3D studio's section strip.
+// Catalog keeps the list; the other five sections answer, across every package
+// at once: how is it filed, is its quote published, is its software/3D/procedure
+// documentation filled in. Each row opens that package's editor on the matching
+// sub-tab, so nothing here is a dead end.
+function ProjectSectionPanel({
+  section,
+  products,
+  pricingById,
+  pricingLoading,
+  pricingError,
+  onRetryPricing,
+  onOpen,
+  onFilterCategory,
+}: {
+  section: Exclude<ProjectSection, "Catalog">;
+  products: AdminProduct[];
+  pricingById: Record<string, ProjectPricing>;
+  pricingLoading: boolean;
+  pricingError: string | null;
+  onRetryPricing: () => void;
+  onOpen: (product: AdminProduct, tab: ProjectEditorTab) => void;
+  onFilterCategory: (name: string) => void;
+}) {
+  const familyOf = (p: AdminProduct) =>
+    PROJECT_CATEGORIES.find((c) => c.slug === p.projectCategory)?.name ??
+    p.projectCategory ??
+    "Uncategorised";
+  const money = (value: number) =>
+    `NPR ${Math.round(value).toLocaleString("en-IN")}`;
+  const total = products.length;
+
+  const families = Array.from(
+    products.reduce((groups, product) => {
+      const key = familyOf(product);
+      const group = groups.get(key) ?? {
+        name: key,
+        total: 0,
+        live: 0,
+        lowest: Number.POSITIVE_INFINITY,
+        highest: 0,
+      };
+      group.total += 1;
+      if (product.active) group.live += 1;
+      group.lowest = Math.min(group.lowest, product.price);
+      group.highest = Math.max(group.highest, product.price);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, { name: string; total: number; live: number; lowest: number; highest: number }>()),
+  ).sort((a, b) => b[1].total - a[1].total);
+
+  const approved = products.filter(
+    (p) => pricingById[p.id]?.priceStatus === "approved",
+  ).length;
+  const draft = products.filter((p) => {
+    const row = pricingById[p.id];
+    return row != null && row.priceStatus !== "approved";
+  }).length;
+  const missingPricing = total - approved - draft;
+
+  const empty = (
+    <Text className="py-8 text-center text-sm text-muted">
+      No project packages yet.
+    </Text>
+  );
+
+  const header = (
+    <>
+      <Text className="font-display text-xl font-bold tracking-tight text-ink">
+        {section}
+      </Text>
+      <Text className="mb-3 mt-1 text-xs leading-5 text-muted">
+        {section === "Categories"
+          ? "How the company's projects are filed. Tap a family to open its packages in the catalog."
+          : section === "Pricing"
+            ? "Every package's quote state. Draft prices stay hidden from customers until an admin approves them."
+            : section === "Software & features"
+              ? "Toolchain, repository and the feature list each package documents for its builder."
+              : section === "3D materials"
+                ? "What each package is printed from: materials, printer profile and print settings."
+                : "The build and flashing procedure each package ships with."}
+      </Text>
+    </>
+  );
+
+  return (
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
+    >
+      {header}
+
+      {section === "Categories"
+        ? families.length === 0
+          ? empty
+          : families.map(([name, group]) => (
+              <Pressable
+                key={name}
+                onPress={() => onFilterCategory(name)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${name} packages in the catalog`}
+                className="mb-3 rounded-xl border border-line bg-card p-4"
+              >
+                <View className="flex-row items-center justify-between gap-2">
+                  <Text
+                    numberOfLines={1}
+                    className="min-w-0 flex-1 text-sm font-bold text-ink"
+                  >
+                    {name}
+                  </Text>
+                  <Text className="shrink-0 text-xs font-black text-gold">
+                    {group.total} {group.total === 1 ? "package" : "packages"}
+                  </Text>
+                </View>
+                <Text className="mt-1 text-xs text-muted">
+                  {group.live} live · {group.total - group.live} hidden ·{" "}
+                  {group.lowest === group.highest
+                    ? money(group.lowest)
+                    : `${money(group.lowest)}–${money(group.highest)}`}
+                </Text>
+              </Pressable>
+            ))
+        : null}
+
+      {section === "Pricing" ? (
+        <>
+          <View className="mb-3 rounded-xl border border-line bg-card p-4">
+            <Text className="text-xs font-black uppercase tracking-widest text-muted">
+              Quote state
+            </Text>
+            <Text className="mt-1 text-sm text-ink">
+              {approved} approved · {draft} draft · {missingPricing} without a
+              pricing row
+            </Text>
+            <Text className="mt-1 text-[11px] leading-4 text-muted">
+              A package without a row uses the editor defaults (zero base
+              charge, no markup) and its prices stay hidden until approved.
+            </Text>
+          </View>
+          {pricingLoading ? (
+            <Text className="py-6 text-center text-sm text-muted">
+              Loading pricing…
+            </Text>
+          ) : pricingError ? (
+            <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-4">
+              <Text className="text-sm font-bold text-red-700">
+                {pricingError}
+              </Text>
+              <Pressable
+                onPress={onRetryPricing}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading project pricing"
+                className="mt-2 self-start rounded-full bg-navy px-4 py-2"
+              >
+                <Text className="text-xs font-black text-white">Retry</Text>
+              </Pressable>
+            </View>
+          ) : total === 0 ? (
+            empty
+          ) : (
+            products.map((product) => {
+              const row = pricingById[product.id];
+              const isApproved = row?.priceStatus === "approved";
+              return (
+                <View
+                  key={product.id}
+                  className="mb-3 rounded-xl border border-line bg-card p-4"
+                >
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text
+                      numberOfLines={1}
+                      className="min-w-0 flex-1 text-sm font-bold text-ink"
+                    >
+                      {product.name}
+                    </Text>
+                    <Text
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${isApproved ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}
+                    >
+                      {row ? (isApproved ? "Approved" : "Draft") : "No row"}
+                    </Text>
+                  </View>
+                  <Text className="mt-1 text-xs text-muted">
+                    {familyOf(product)}
+                  </Text>
+                  <Text className="mt-2 text-xs text-ink">
+                    Base {money(row?.packageBaseCharge ?? 0)} · markup{" "}
+                    {row?.componentMarkupPercent ?? 0}% · minimum{" "}
+                    {money(row?.minimumOrder ?? 0)}
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-muted">
+                    {row?.extras.length
+                      ? `${row.extras.length} extras`
+                      : "No extras"}{" "}
+                    ·{" "}
+                    {row?.bulkTiers.length
+                      ? `${row.bulkTiers.length} bulk tiers`
+                      : "No bulk tiers"}
+                    {row?.priceApprovedAt
+                      ? ` · approved ${row.priceApprovedAt.slice(0, 10)}`
+                      : ""}
+                  </Text>
+                  <View className="mt-2 flex-row flex-wrap gap-2">
+                    <AdminAction
+                      onPress={() => onOpen(product, "Pricing")}
+                      label="Edit pricing"
+                      tone="navy"
+                    />
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </>
+      ) : null}
+
+      {section === "Software & features"
+        ? total === 0
+          ? empty
+          : products.map((product) => {
+              const details = readProjectDetails(product.importMeta);
+              const checks = [
+                Boolean(details.code.language.trim()),
+                Boolean(details.code.repositoryUrl.trim()),
+                Boolean(details.code.libraries.trim()),
+                Boolean(product.objectives.length),
+                Boolean(product.controlMethods.length),
+                Boolean(product.specs.length),
+              ];
+              const filled = checks.filter(Boolean).length;
+              return (
+                <View
+                  key={product.id}
+                  className="mb-3 rounded-xl border border-line bg-card p-4"
+                >
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text
+                      numberOfLines={1}
+                      className="min-w-0 flex-1 text-sm font-bold text-ink"
+                    >
+                      {product.name}
+                    </Text>
+                    <Text className="shrink-0 text-xs font-black text-navy">
+                      {filled}/6
+                    </Text>
+                  </View>
+                  <Text className="mt-1 text-xs text-muted">
+                    {familyOf(product)}
+                  </Text>
+                  <Text className="mt-2 text-xs leading-5 text-ink">
+                    {details.code.language || "No toolchain set"}
+                    {details.code.repositoryUrl
+                      ? " · repo linked"
+                      : " · no repo"}
+                    {details.code.libraries.trim()
+                      ? ` · ${details.code.libraries.split("\n").filter(Boolean).length} libraries`
+                      : ""}
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-muted">
+                    {product.objectives.length} objectives ·{" "}
+                    {product.controlMethods.length} control methods ·{" "}
+                    {product.specs.length} features listed
+                  </Text>
+                  <View className="mt-2 flex-row flex-wrap gap-2">
+                    <AdminAction
+                      onPress={() => onOpen(product, "Code details")}
+                      label="Edit code & features"
+                      tone="navy"
+                    />
+                  </View>
+                </View>
+              );
+            })
+        : null}
+
+      {section === "3D materials"
+        ? total === 0
+          ? empty
+          : products.map((product) => {
+              const details = readProjectDetails(product.importMeta);
+              return (
+                <View
+                  key={product.id}
+                  className="mb-3 rounded-xl border border-line bg-card p-4"
+                >
+                  <Text
+                    numberOfLines={1}
+                    className="text-sm font-bold text-ink"
+                  >
+                    {product.name}
+                  </Text>
+                  <Text className="mt-1 text-xs text-muted">
+                    {familyOf(product)}
+                  </Text>
+                  <Text className="mt-2 text-xs leading-5 text-ink">
+                    {details.material.printer || "No printer set"} ·{" "}
+                    {details.material.filament || "No filament set"}
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-muted">
+                    {details.material.layerHeight || "—"} layer ·{" "}
+                    {details.material.infill || "—"} infill ·{" "}
+                    {details.material.printTime || "no print time"} ·{" "}
+                    {product.materialsRequired.length} materials listed
+                  </Text>
+                  <View className="mt-2 flex-row flex-wrap gap-2">
+                    <AdminAction
+                      onPress={() => onOpen(product, "3D material details")}
+                      label="Edit 3D materials"
+                      tone="navy"
+                    />
+                  </View>
+                </View>
+              );
+            })
+        : null}
+
+      {section === "Coding procedure"
+        ? total === 0
+          ? empty
+          : products.map((product) => {
+              const details = readProjectDetails(product.importMeta);
+              return (
+                <View
+                  key={product.id}
+                  className="mb-3 rounded-xl border border-line bg-card p-4"
+                >
+                  <Text
+                    numberOfLines={1}
+                    className="text-sm font-bold text-ink"
+                  >
+                    {product.name}
+                  </Text>
+                  <Text className="mt-1 text-xs text-muted">
+                    {familyOf(product)}
+                  </Text>
+                  <Text className="mt-2 text-xs leading-5 text-ink">
+                    {product.buildSteps.length} build steps ·{" "}
+                    {details.procedure.steps.length} coding steps
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-muted">
+                    {product.estimatedDuration || "No duration set"}
+                    {details.procedure.notes
+                      ? " · notes added"
+                      : " · no procedure notes"}
+                  </Text>
+                  <View className="mt-2 flex-row flex-wrap gap-2">
+                    <AdminAction
+                      onPress={() => onOpen(product, "Coding procedure")}
+                      label="Edit procedure"
+                      tone="navy"
+                    />
+                  </View>
+                </View>
+              );
+            })
+        : null}
+    </ScrollView>
   );
 }
 
@@ -4184,6 +4638,7 @@ function ProductEditor({
   fromLink,
   saving,
   pricingCard,
+  initialSection,
 }: {
   product: AdminProduct;
   onChange: (next: AdminProduct) => void;
@@ -4195,6 +4650,12 @@ function ProductEditor({
   saving?: boolean;
   /** 2026-11-13: project pricing panel (rendered inside the project block). */
   pricingCard?: React.ReactNode;
+  /**
+   * 2026-11-18: which section the sheet opens on. Projects opens from the
+   * Catalog list (Category), from the Pricing/Software/3D/Procedure roll-ups
+   * (that section), or from Products (undefined → the product default).
+   */
+  initialSection?: string;
 }) {
   // 2026-11-14: full-size preview of an imported photo. Imported images are
   // 64–80px thumbnails; staff could not tell a correct model from a wrong one.
@@ -4223,7 +4684,7 @@ function ProductEditor({
     ? PROJECT_EDITOR_SUBTABS
     : PRODUCT_EDITOR_SUBTABS;
   const [editorSubTab, setEditorSubTab] = useState<string>(
-    isProject ? "Category" : "Basics",
+    initialSection ?? (isProject ? "Category" : "Basics"),
   );
   const projectDetails = readProjectDetails(product.importMeta);
   const patchDetails = (next: ProjectDetails) =>
@@ -4604,7 +5065,9 @@ function ProductEditor({
   return (
     <View className="flex-1">
       <AdminSubTabs
-        label={isProject ? "Project sections" : "Product sections"}
+        label={
+          isProject ? "Project editor sections" : "Product editor sections"
+        }
         options={editorTabs}
         value={editorSubTab}
         onChange={setEditorSubTab}
@@ -5854,6 +6317,156 @@ function UserProjectProfileManager({
 // One user row in the admin Users tab: identity, role + tier badges, the
 // role/tier toggle buttons (admin+), an owner-only delete button, and the
 // expandable robot-preferences manager.
+// ── Project profiles window ───────────────────────────────────────────
+// 2026-11-18 (owner): Users needed proper windowing — a place to read the
+// project profiles builders have saved without opening one account at a time.
+// Read-only by design: repairs still happen on the per-user row in Accounts,
+// which keeps one write path per record.
+function ProjectProfilesTab() {
+  const [profiles, setProfiles] = useState<AdminProjectProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 8;
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    void listAdminCarProfiles()
+      .then((rows) => {
+        if (active) setProfiles(rows);
+      })
+      .catch((e: unknown) => {
+        if (!active) return;
+        setError(
+          e instanceof Error ? e.message : "Could not load project profiles.",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reload]);
+
+  const needle = query.trim().toLowerCase();
+  const filtered = profiles.filter(
+    (profile) =>
+      !needle ||
+      `${profile.carName} ${profile.ownerName} ${profile.ownerEmail} ${profile.profileKey} ${profile.uniqueId}`
+        .toLowerCase()
+        .includes(needle),
+  );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const filterSig = query;
+  const [lastSig, setLastSig] = React.useState(filterSig);
+  if (lastSig !== filterSig) {
+    setLastSig(filterSig);
+    setPage(1);
+  }
+
+  const owners = new Set(profiles.map((profile) => profile.userId)).size;
+
+  return (
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        paddingBottom: 40,
+      }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text className="font-display text-xl font-bold tracking-tight text-ink">
+        Project profiles
+      </Text>
+      <Text className="mt-1 text-xs leading-5 text-muted">
+        Saved car / project profiles across every account. Read-only — open an
+        account in Accounts to repair one.
+      </Text>
+      <Text className="mt-2 text-xs font-bold text-navy">
+        {profiles.length} profiles · {owners} builders
+      </Text>
+      <View className="mt-3 flex-row items-center gap-2">
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search builder, car or profile key…"
+          className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink"
+        />
+        <Pressable
+          onPress={() => setReload((v) => v + 1)}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh project profiles"
+          className="shrink-0 rounded-full border border-line px-4 py-2"
+        >
+          <Text className="text-xs font-black text-ink">Refresh</Text>
+        </Pressable>
+      </View>
+
+      {loading ? (
+        <Text className="py-8 text-center text-sm text-muted">
+          Loading project profiles…
+        </Text>
+      ) : error ? (
+        <View className="mt-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <Text className="text-sm font-bold text-red-700">{error}</Text>
+          <Pressable
+            onPress={() => setReload((v) => v + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading project profiles"
+            className="mt-2 self-start rounded-full bg-navy px-4 py-2"
+          >
+            <Text className="text-xs font-black text-white">Retry</Text>
+          </Pressable>
+        </View>
+      ) : shown.length === 0 ? (
+        <Text className="py-8 text-center text-sm text-muted">
+          {profiles.length === 0
+            ? "No project profiles saved yet."
+            : "No profiles match that search."}
+        </Text>
+      ) : (
+        shown.map((profile) => (
+          <View
+            key={profile.id}
+            className="mb-3 rounded-xl border border-line bg-card p-4"
+          >
+            <View className="flex-row items-center justify-between gap-2">
+              <Text
+                numberOfLines={1}
+                className="min-w-0 flex-1 text-sm font-bold text-ink"
+              >
+                {profile.carName || profile.profileKey}
+              </Text>
+              <Text className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gold">
+                {profile.uniqueId || profile.profileKey}
+              </Text>
+            </View>
+            <Text numberOfLines={1} className="mt-1 text-xs text-muted">
+              {profile.ownerName || "Unnamed builder"} · {profile.ownerEmail}
+            </Text>
+            <Text className="mt-1 text-[11px] text-muted">
+              {Object.keys(profile.settings).length} saved settings
+              {profile.updatedAt
+                ? ` · updated ${profile.updatedAt.slice(0, 10)}`
+                : ""}
+            </Text>
+          </View>
+        ))
+      )}
+      {totalPages > 1 ? (
+        <AdminPager page={page} totalPages={totalPages} onPage={setPage} />
+      ) : null}
+    </ScrollView>
+  );
+}
+
 function UsersSection({
   users,
   total,
@@ -6100,98 +6713,120 @@ function ContentTab({
 }) {
   const inputClass =
     "rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink";
+  // 2026-11-18 (owner: \"the other sub tabs and sub-sub-tabs are also not
+  // proper\"): the Home page panel stacked four unrelated managers in one
+  // scroll. It is now a nested section strip so each record type has its own
+  // window: the hero copy staff edit most, then training, pilot costs and the
+  // curriculum highlights.
+  const [homeSection, setHomeSection] = useState<HomeSection>("Hero");
   return (
-    <ScrollView
-      className="flex-1 overflow-hidden"
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        paddingBottom: 40,
-      }}
-    >
-      <Text className="font-display text-base font-bold text-ink">
-        Home page content
-      </Text>
-      <Text className="mt-1 text-xs leading-5 text-muted">
-        Edit the hero title and body shown on the app home screen and the
-        website homepage.
-      </Text>
-      <View className="mt-4 rounded-xl border border-line bg-card p-4">
-        <Text className="text-xs font-bold uppercase tracking-wide text-muted">
-          Hero title
-        </Text>
-        <TextInput
-          value={contentTitle}
-          onChangeText={onTitleChange}
-          placeholder="Technology you can touch, test, and trust."
-          placeholderTextColor="#94a3b8"
-          className="mt-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-        />
-      </View>
-      <View className="mt-3 rounded-xl border border-line bg-card p-4">
-        <Text className="text-xs font-bold uppercase tracking-wide text-muted">
-          Hero body
-        </Text>
-        <TextInput
-          value={contentBody}
-          onChangeText={onBodyChange}
-          placeholder="Robotics kits, project solutions, fabrication, open tools, and training…"
-          placeholderTextColor="#94a3b8"
-          multiline
-          style={{ textAlignVertical: "top" }}
-          className="mt-1 min-h-24 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
-        />
-      </View>
-      <Pressable
-        onPress={onSave}
-        disabled={saving}
-        className={`mt-4 items-center rounded-full bg-navy py-3 ${saving ? "opacity-60" : ""}`}
+    <View className="flex-1">
+      <AdminSubTabs
+        label="Home page sections"
+        options={HOME_SECTIONS}
+        value={homeSection}
+        onChange={setHomeSection}
+      />
+      <ScrollView
+        className="flex-1 overflow-hidden"
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          paddingBottom: 40,
+        }}
       >
-        <Text className="text-sm font-black text-white">
-          {saving ? "Saving…" : "Save changes"}
-        </Text>
-      </Pressable>
-      {saved && (
-        <Text className="mt-3 text-center text-sm font-semibold text-emerald-700">
-          Saved.
-        </Text>
-      )}
-      {siteContent?.id === 0 && (
-        <Text className="mt-3 text-center text-xs text-amber-600">
-          Showing bundled content — the live content service is unreachable.
-          Save to publish.
-        </Text>
-      )}
-      <View className="mt-5">
-        <TrainingProgramsManager
-          programs={trainingPrograms}
-          setPrograms={setTrainingPrograms}
-          onSave={onSaveProgram}
-          canDelete={canDelete}
-          onDelete={onDeleteProgram}
-          inputClass={inputClass}
-          onEditingChange={() => {}}
-        />
-        <PilotCostManager
-          lines={pilotCostLines}
-          setLines={setPilotCostLines}
-          onSave={onSavePilotLine}
-          canDelete={canDelete}
-          onDelete={onDeletePilotLine}
-          inputClass={inputClass}
-          onEditingChange={() => {}}
-        />
-        <CurriculumManager
-          highlights={curriculumHighlights}
-          setHighlights={setCurriculumHighlights}
-          onSave={onSaveCurriculum}
-          canDelete={canDelete}
-          onDelete={onDeleteCurriculum}
-          inputClass={inputClass}
-          onEditingChange={() => {}}
-        />
-      </View>
-    </ScrollView>
+        {homeSection === "Hero" ? (
+          <>
+            <Text className="font-display text-base font-bold text-ink">
+              Home page content
+            </Text>
+            <Text className="mt-1 text-xs leading-5 text-muted">
+              The hero title and body shown on the app home screen and the
+              website homepage. Both clients read the same record.
+            </Text>
+            <View className="mt-4 rounded-xl border border-line bg-card p-4">
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Hero title
+              </Text>
+              <TextInput
+                value={contentTitle}
+                onChangeText={onTitleChange}
+                placeholder="Technology you can touch, test, and trust."
+                placeholderTextColor="#94a3b8"
+                className="mt-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+              />
+            </View>
+            <View className="mt-3 rounded-xl border border-line bg-card p-4">
+              <Text className="text-xs font-bold uppercase tracking-wide text-muted">
+                Hero body
+              </Text>
+              <TextInput
+                value={contentBody}
+                onChangeText={onBodyChange}
+                placeholder="Robotics kits, project solutions, fabrication, open tools, and training…"
+                placeholderTextColor="#94a3b8"
+                multiline
+                style={{ textAlignVertical: "top" }}
+                className="mt-1 min-h-24 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+              />
+            </View>
+            <Pressable
+              onPress={onSave}
+              disabled={saving}
+              className={`mt-4 items-center rounded-full bg-navy py-3 ${saving ? "opacity-60" : ""}`}
+            >
+              <Text className="text-sm font-black text-white">
+                {saving ? "Saving…" : "Save changes"}
+              </Text>
+            </Pressable>
+            {saved && (
+              <Text className="mt-3 text-center text-sm font-semibold text-emerald-700">
+                Saved.
+              </Text>
+            )}
+            {siteContent?.id === 0 && (
+              <Text className="mt-3 text-center text-xs text-amber-600">
+                Showing bundled content — the live content service is
+                unreachable. Save to publish.
+              </Text>
+            )}
+          </>
+        ) : null}
+        {homeSection === "Training" ? (
+          <TrainingProgramsManager
+            programs={trainingPrograms}
+            setPrograms={setTrainingPrograms}
+            onSave={onSaveProgram}
+            canDelete={canDelete}
+            onDelete={onDeleteProgram}
+            inputClass={inputClass}
+            onEditingChange={() => {}}
+          />
+        ) : null}
+        {homeSection === "Pilot costs" ? (
+          <PilotCostManager
+            lines={pilotCostLines}
+            setLines={setPilotCostLines}
+            onSave={onSavePilotLine}
+            canDelete={canDelete}
+            onDelete={onDeletePilotLine}
+            inputClass={inputClass}
+            onEditingChange={() => {}}
+          />
+        ) : null}
+        {homeSection === "Curriculum" ? (
+          <CurriculumManager
+            highlights={curriculumHighlights}
+            setHighlights={setCurriculumHighlights}
+            onSave={onSaveCurriculum}
+            canDelete={canDelete}
+            onDelete={onDeleteCurriculum}
+            inputClass={inputClass}
+            onEditingChange={() => {}}
+          />
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -6695,9 +7330,18 @@ function LogsTab({
   onDeleteProfileEntry: (row: AdminProfileEntry) => void;
   canDelete: boolean;
 }) {
-  const [section, setSection] = useState<LogSection>("activity");
+  // 2026-11-18: the tab is now called Diagnostics, so it opens on the fleet
+  // diagnostics (crash reports + app logs) rather than on user activity.
+  const [section, setSection] = useState<LogSection>("diagnostics");
   return (
     <View className="flex-1">
+      <Text className="px-4 pt-3 font-display text-xl font-bold tracking-tight text-ink">
+        Diagnostics
+      </Text>
+      <Text className="px-4 pt-1 text-xs leading-5 text-muted">
+        What the fleet and its users did: crash reports, app logs, the activity
+        log and the profile-entry log.
+      </Text>
       <View className="flex-row flex-wrap gap-2 px-4 pb-1 pt-3">
         {LOG_SECTIONS.map((item) => (
           <Pressable
@@ -7429,6 +8073,16 @@ function MessagesTab({
 const SETTINGS_SUBTABS = ["Company", "Content", "Services", "Journal"] as const;
 type SettingsSubTab = (typeof SETTINGS_SUBTABS)[number];
 
+// 2026-11-18: nested sections of Settings → Home page. Four record types used
+// to share one scroll; each has its own window now.
+const HOME_SECTIONS = [
+  "Hero",
+  "Training",
+  "Pilot costs",
+  "Curriculum",
+] as const;
+type HomeSection = (typeof HOME_SECTIONS)[number];
+
 const SETTINGS_SECTIONS = [
   {
     id: "details",
@@ -7448,6 +8102,12 @@ const SETTINGS_SECTIONS = [
 ] as const;
 
 type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
+const SETTINGS_SECTION_IDS = ["details", "contact", "social"] as const;
+const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
+  details: "Details",
+  contact: "Contact",
+  social: "Social",
+};
 
 function SettingsTab({
   company,
@@ -7546,30 +8206,16 @@ function SettingsTab({
           </Text>
         </Pressable>
       </View>
-      <View className="mt-3 flex-row flex-wrap gap-2">
-        {SETTINGS_SECTIONS.map((item) => {
-          const selected = section === item.id;
-          return (
-            <Pressable
-              key={item.id}
-              onPress={() => setSection(item.id)}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={item.label}
-              className={`h-8 items-center justify-center rounded-full border px-3 ${
-                selected ? "border-navy bg-navy" : "border-line bg-card"
-              }`}
-            >
-              <Text
-                className={`text-xs font-bold ${
-                  selected ? "text-white" : "text-muted"
-                }`}
-              >
-                {item.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+      {/* 2026-11-18: the three company groups are a proper nested strip now,
+          the same component the tab and section levels use. */}
+      <View className="mt-3">
+        <AdminSubTabs
+          label="Company sections"
+          options={SETTINGS_SECTION_IDS}
+          value={section}
+          labels={SETTINGS_SECTION_LABELS}
+          onChange={setSection}
+        />
       </View>
       <Text className="mt-2 text-xs text-muted">
         {SETTINGS_SECTIONS.find((item) => item.id === section)?.hint}
@@ -7586,9 +8232,8 @@ function SettingsTab({
         >
           <CompanyInfoEditor
             company={company}
-            setCompany={setCompany}
-            onSaved={(next) => {
-              onCompanySaved(next);
+            onSaved={async (next) => {
+              await onCompanySaved(next);
               setEditing(false);
             }}
             onEditingChange={report("company")}
@@ -7651,25 +8296,55 @@ function SectionCard({
   );
 }
 
+// 2026-11-18 (owner: "the company info things are not well built and not
+// editable in the deep"): this editor now works on a DRAFT, not on the shared
+// record. Typing used to mutate the live record immediately, so Cancel left the
+// read-only view showing unsaved values; there was also no validation and no
+// failure surfaced from the write. Save validates, shows the database error if
+// one comes back, and only then hands the record up.
 function CompanyInfoEditor({
   company,
-  setCompany,
   onSaved,
   inputClass,
   onEditingChange,
   section,
 }: {
   company: AdminCompanyInfo | null;
-  setCompany: (c: AdminCompanyInfo | null) => void;
-  onSaved: (next: AdminCompanyInfo) => void;
+  /** Persists the draft; rejects (or throws) when the database write fails. */
+  onSaved: (next: AdminCompanyInfo) => Promise<void> | void;
   inputClass: string;
   onEditingChange: (v: boolean) => void;
   section: SettingsSection;
 }) {
+  const [draft, setDraft] = useState<AdminCompanyInfo>(() => ({
+    name: "",
+    shortName: "",
+    address: "",
+    city: "",
+    country: "",
+    email: "",
+    phone: "",
+    pan: "",
+    vatLabel: "",
+    description: "",
+    url: "",
+    whatsappNumber: "",
+    facebookUrl: "",
+    instagramUrl: "",
+    tiktokUrl: "",
+    linkedinUrl: "",
+    youtubeUrl: "",
+    ...(company ?? {}),
+  }));
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   function patch(part: Partial<AdminCompanyInfo>) {
-    if (company) setCompany({ ...company, ...part });
+    setDraft((current) => ({ ...current, ...part }));
+    setSaved(false);
   }
+
   // While ANY company field is focused the admin pager must not swipe.
   const focusCount = useRef(0);
   const field = {
@@ -7682,6 +8357,44 @@ function CompanyInfoEditor({
       if (focusCount.current === 0) onEditingChange(false);
     },
   };
+
+  async function save() {
+    const missing: string[] = [];
+    if (!draft.name.trim()) missing.push("company name");
+    if (!draft.email.trim()) missing.push("email");
+    if (missing.length > 0) {
+      setError(`Add the ${missing.join(" and ")} before saving.`);
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(draft.email.trim())) {
+      setError("That email does not look right — it needs an @ and a domain.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSaved({
+        ...draft,
+        name: draft.name.trim(),
+        email: draft.email.trim(),
+        whatsappNumber: draft.whatsappNumber.replace(/[^\d]/g, ""),
+      });
+      setSaved(true);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Could not save the company information.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hint = (text: string) => (
+    <Text className="mt-1 text-[11px] leading-4 text-muted">{text}</Text>
+  );
+
   return (
     <SectionCard
       title="Company information"
@@ -7695,10 +8408,13 @@ function CompanyInfoEditor({
             <>
               <View className="mb-3 flex-row gap-3">
                 <View className="flex-1">
-                  <Text className="mb-1 text-sm font-bold text-ink">Name</Text>
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    Name *
+                  </Text>
                   <TextInput
-                    value={company.name}
+                    value={draft.name}
                     onChangeText={(name) => patch({ name })}
+                    placeholder="GENUM SOLUTIONS PVT. LTD."
                     {...field}
                     className={inputClass}
                   />
@@ -7708,26 +8424,34 @@ function CompanyInfoEditor({
                     Short name
                   </Text>
                   <TextInput
-                    value={company.shortName}
+                    value={draft.shortName}
                     onChangeText={(shortName) => patch({ shortName })}
+                    placeholder="GENUM"
                     {...field}
                     className={inputClass}
                   />
                 </View>
               </View>
-              <Text className="mb-1 text-sm font-bold text-ink">Address</Text>
+              {hint(
+                "The legal name appears on invoices, the About and Legal screens and the site footer; the short name is used where space is tight.",
+              )}
+              <Text className="mb-1 mt-3 text-sm font-bold text-ink">
+                Address
+              </Text>
               <TextInput
-                value={company.address}
+                value={draft.address}
                 onChangeText={(address) => patch({ address })}
                 multiline
+                placeholder="Street, ward, landmark"
+                style={{ textAlignVertical: "top" }}
                 {...field}
-                className={`mb-3 ${inputClass}`}
+                className={`mb-3 min-h-16 ${inputClass}`}
               />
               <View className="mb-3 flex-row gap-3">
                 <View className="flex-1">
                   <Text className="mb-1 text-sm font-bold text-ink">City</Text>
                   <TextInput
-                    value={company.city}
+                    value={draft.city}
                     onChangeText={(city) => patch({ city })}
                     {...field}
                     className={inputClass}
@@ -7738,21 +8462,20 @@ function CompanyInfoEditor({
                     Country
                   </Text>
                   <TextInput
-                    value={company.country}
+                    value={draft.country}
                     onChangeText={(country) => patch({ country })}
                     {...field}
                     className={inputClass}
                   />
                 </View>
               </View>
-              {/* Mirrors the website's Settings groups: Company details →
-              Contact → Social & messaging, same fields in the same order. */}
               <View className="mb-3 flex-row gap-3">
                 <View className="flex-1">
                   <Text className="mb-1 text-sm font-bold text-ink">PAN</Text>
                   <TextInput
-                    value={company.pan}
+                    value={draft.pan}
                     onChangeText={(pan) => patch({ pan })}
+                    placeholder="601234567"
                     {...field}
                     className={inputClass}
                   />
@@ -7762,25 +8485,32 @@ function CompanyInfoEditor({
                     VAT label
                   </Text>
                   <TextInput
-                    value={company.vatLabel}
+                    value={draft.vatLabel}
                     onChangeText={(vatLabel) => patch({ vatLabel })}
+                    placeholder="VAT / 13%"
                     {...field}
                     className={inputClass}
                   />
                 </View>
               </View>
+              {hint(
+                "Tax details print on order summaries. Leave empty if the company is not VAT registered.",
+              )}
             </>
           )}
           {section === "contact" && (
             <>
               <View className="mb-3 flex-row gap-3">
                 <View className="flex-1">
-                  <Text className="mb-1 text-sm font-bold text-ink">Email</Text>
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    Email *
+                  </Text>
                   <TextInput
-                    value={company.email}
+                    value={draft.email}
                     onChangeText={(email) => patch({ email })}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    placeholder="genumsolutions@gmail.com"
                     {...field}
                     className={inputClass}
                   />
@@ -7788,25 +8518,33 @@ function CompanyInfoEditor({
                 <View className="flex-1">
                   <Text className="mb-1 text-sm font-bold text-ink">Phone</Text>
                   <TextInput
-                    value={company.phone}
+                    value={draft.phone}
                     onChangeText={(phone) => patch({ phone })}
                     keyboardType="phone-pad"
+                    placeholder="+977 98…"
                     {...field}
                     className={inputClass}
                   />
                 </View>
               </View>
-              <Text className="mb-1 text-sm font-bold text-ink">
+              {hint(
+                "The public contact address for messages, quotes and order questions.",
+              )}
+              <Text className="mb-1 mt-3 text-sm font-bold text-ink">
                 Description
               </Text>
               <TextInput
-                value={company.description}
+                value={draft.description}
                 onChangeText={(description) => patch({ description })}
                 multiline
+                placeholder="What the company does, in one short paragraph."
                 style={{ textAlignVertical: "top" }}
                 {...field}
                 className={`mb-3 min-h-20 ${inputClass}`}
               />
+              {hint(
+                "Used on the Contact page and in search-engine summaries. Keep it to two or three sentences.",
+              )}
             </>
           )}
           {section === "social" && (
@@ -7818,92 +8556,76 @@ function CompanyInfoEditor({
                 WhatsApp number
               </Text>
               <TextInput
-                value={company.whatsappNumber}
+                value={draft.whatsappNumber}
                 onChangeText={(whatsappNumber) => patch({ whatsappNumber })}
                 keyboardType="phone-pad"
                 placeholder="97798XXXXXXXX"
                 {...field}
                 className={`mb-3 ${inputClass}`}
               />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Facebook URL
-              </Text>
-              <TextInput
-                value={company.facebookUrl}
-                onChangeText={(facebookUrl) => patch({ facebookUrl })}
-                autoCapitalize="none"
-                placeholder="https://facebook.com/…"
-                {...field}
-                className={`mb-3 ${inputClass}`}
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                Instagram URL
-              </Text>
-              <TextInput
-                value={company.instagramUrl}
-                onChangeText={(instagramUrl) => patch({ instagramUrl })}
-                autoCapitalize="none"
-                placeholder="https://instagram.com/…"
-                {...field}
-                className={`mb-3 ${inputClass}`}
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                TikTok URL
-              </Text>
-              <TextInput
-                value={company.tiktokUrl}
-                onChangeText={(tiktokUrl) => patch({ tiktokUrl })}
-                autoCapitalize="none"
-                placeholder="https://tiktok.com/@…"
-                {...field}
-                className={`mb-3 ${inputClass}`}
-              />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                LinkedIn URL
-              </Text>
-              <TextInput
-                value={company.linkedinUrl}
-                onChangeText={(linkedinUrl) => patch({ linkedinUrl })}
-                autoCapitalize="none"
-                placeholder="https://linkedin.com/company/…"
-                {...field}
-                className={`mb-3 ${inputClass}`}
-              />
+              {hint(
+                "Digits only, with the country code and no plus sign. Leave empty to hide the WhatsApp button.",
+              )}
               <Text className="mb-1 text-sm font-bold text-ink">
                 Website URL
               </Text>
               <TextInput
-                value={company.url}
+                value={draft.url ?? ""}
                 onChangeText={(url) => patch({ url })}
                 autoCapitalize="none"
-                placeholder="https://example.com"
+                placeholder="https://genumsolutions.com.np"
                 {...field}
                 className={`mb-3 ${inputClass}`}
               />
-              <Text className="mb-1 text-sm font-bold text-ink">
-                YouTube URL
-              </Text>
-              <TextInput
-                value={company.youtubeUrl}
-                onChangeText={(youtubeUrl) => patch({ youtubeUrl })}
-                autoCapitalize="none"
-                placeholder="https://youtube.com/@…"
-                {...field}
-                className={`mb-3 ${inputClass}`}
-              />
+              {hint("Linked from the app's About screen and the site footer.")}
+              {(
+                [
+                  ["facebookUrl", "Facebook URL", "https://facebook.com/…"],
+                  ["instagramUrl", "Instagram URL", "https://instagram.com/…"],
+                  ["tiktokUrl", "TikTok URL", "https://tiktok.com/@…"],
+                  [
+                    "linkedinUrl",
+                    "LinkedIn URL",
+                    "https://linkedin.com/company/…",
+                  ],
+                  ["youtubeUrl", "YouTube URL", "https://youtube.com/@…"],
+                ] as const
+              ).map(([key, label, placeholder]) => (
+                <View key={key}>
+                  <Text className="mb-1 text-sm font-bold text-ink">
+                    {label}
+                  </Text>
+                  <TextInput
+                    value={draft[key] ?? ""}
+                    onChangeText={(value) => patch({ [key]: value })}
+                    autoCapitalize="none"
+                    placeholder={placeholder}
+                    {...field}
+                    className={`mb-3 ${inputClass}`}
+                  />
+                </View>
+              ))}
+              {hint(
+                "Any social left empty is hidden rather than linking nowhere.",
+              )}
             </>
           )}
+          {error ? (
+            <Text className="mb-2 text-sm font-semibold text-red-600">
+              {error}
+            </Text>
+          ) : null}
           {/* Save is shared by all three groups: one write to company_info. */}
           <View className="mt-1 flex-row items-center gap-3 border-t border-line pt-3">
             <Pressable
-              onPress={() => {
-                onSaved(company);
-                setSaved(true);
-              }}
-              className="rounded-full bg-navy px-5 py-2"
+              onPress={() => void save()}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save company information"
+              className={`rounded-full bg-navy px-5 py-2 ${saving ? "opacity-60" : ""}`}
             >
               <Text className="text-xs font-black text-white">
-                Save company
+                {saving ? "Saving…" : "Save company"}
               </Text>
             </Pressable>
             {saved && (
