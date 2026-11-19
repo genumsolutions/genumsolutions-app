@@ -59,8 +59,25 @@ export function currentCommitSha() {
 }
 
 export function buildReleaseNotes(sha) {
-  const base =
+  // Per-version notes live in mobile/release-notes.json so a release does not
+  // ship the same generic sentence forever. The SHA suffix is load-bearing:
+  // ota-guard.yml refuses an OTA push unless the manifest's notes name a commit
+  // that is an ancestor of the pushed tip, so it must ALWAYS be appended.
+  const fallback =
     "Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates.";
+  let base = fallback;
+  try {
+    const notesPath = resolve(rootDir, "release-notes.json");
+    if (existsSync(notesPath)) {
+      const all = JSON.parse(readFileSync(notesPath, "utf8"));
+      const entry = all?.[VERSION];
+      if (Array.isArray(entry) && entry.length > 0) {
+        base = entry.map((line) => String(line).trim()).join(" • ");
+      }
+    }
+  } catch {
+    // A malformed notes file must never block a release; the fallback stands.
+  }
   return sha ? `${base} (${sha})` : base;
 }
 

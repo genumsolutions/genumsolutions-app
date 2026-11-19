@@ -46,6 +46,15 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # Green unit tests do not prove the tests still EXIST. The suite is mostly
+      # source pins, so a deleted pin file, a stray .skip or a file that stopped
+      # matching the include glob leaves `npm test` green with fewer assertions.
+      # This re-runs vitest with the JSON reporter and fails when the collected
+      # test/file count falls below mobile/test-count.baseline.json. Growth
+      # passes; re-baseline deliberately with `npm run test:count -- --update`.
+      - name: Unit test count did not shrink
+        run: npm run test:count
+
       - name: Expo doctor
         run: npm run doctor
 

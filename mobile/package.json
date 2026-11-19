@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "3.4.3",
+  "version": "3.4.4",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -75,6 +75,7 @@
     "format:check": "prettier --check .",
     "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive",
     "test": "vitest run",
+    "test:count": "node scripts/check-test-count.mjs",
     "test:watch": "vitest",
     "test:e2e": "expo export --platform web && playwright test",
     "prepare": "cd .. && husky",

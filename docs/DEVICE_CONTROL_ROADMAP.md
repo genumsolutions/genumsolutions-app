@@ -399,3 +399,32 @@ Also fixed while there: `services/deviceProfileRegistryService.ts` still synthes
 
 **Verification:** `tsc --noEmit` clean · `eslint .` clean · `expo-doctor` 18/18 ·
 `vitest run` **1090/1090 passed** (81 files). Device/UI gates unaffected.
+
+### 2026-11-19 — 3.4.4 release prep, project-id gates, test-count guard
+
+**Release.** `app.json` 3.4.4 / versionCode 68, `site.ts` `APP_VERSION` 3.4.4,
+`package.json`+`package-lock.json` 3.4.4. Notes now live in
+`mobile/release-notes.json` (keyed by version) and `upload-release.mjs`
+reads them via `buildReleaseNotes(sha)`, so the release SHA that
+`ota-guard.yml` requires stays in the notes. The signed build/upload is left to
+the owner — `release.yml` builds and publishes on any push touching
+`mobile/app.json`, so the bump is committed locally only.
+
+`bump-version.mjs` now skips a missing `android/app/build.gradle` instead of
+throwing: the old throw left `app.json` bumped while `site.ts` and
+`package.json` stayed behind (a half-bump `release:ready` reports as a version
+mismatch).
+
+**Gates.** Both firmware repos pin the project identity end to end:
+`state-project` requires `FW_PROJECT` to equal the repo's canonical id
+(`4wd4mcar` / `2wd1mcar`) and requires the STATE builder to emit
+`;PROJ=%s", FW_PROJECT` — a Bluetooth-only app never sees `/status`, so STATE
+is its only carrier. Mutants M146 (token renamed) and M147 (`FW_NAME` instead of
+the id) are both caught: **141/141 in each repo**.
+
+**CI.** `mobile/scripts/check-test-count.mjs` (+ `test-count.baseline.json`,
+`npm run test:count`, a step after Unit tests) runs vitest with the JSON
+reporter and fails when collected tests or test files fall below the baseline —
+a deleted pin, a stray `.skip` or a file that stopped matching the include glob
+leaves `npm test` green. Baseline: **1107 tests / 83 files**. Growth passes;
+re-baseline with `npm run test:count -- --update`.

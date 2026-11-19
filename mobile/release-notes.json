@@ -1,0 +1,11 @@
+{
+  "3.4.4": [
+    "Remote: the D-pad stays when the car connects, the status note no longer resizes the drive deck, and the control tabs read as one strip.",
+    "Cars: the 4WD4M no longer resets at the start of a cycle; the 2WD1M remembers its steering, trim and telemetry and can switch to another router.",
+    "Each car is identified by its project (4wd4mcar / 2wd1mcar) and shown once per device, not once per connection key.",
+    "Admin: the Users tab no longer duplicates cars, and each account has its own Cars, Preferences and Activity windows."
+  ],
+  "3.4.3": [
+    "Fully native rebuild: native UI, native auth, shared Supabase data, in-app updates."
+  ]
+}

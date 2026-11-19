@@ -91,11 +91,22 @@ console.log(`  app.json            -> ${VERSION} (${VERSION_CODE})`);
 if (!existsSync(appJsonPath)) throw new Error(`File not found: ${appJsonPath}`);
 
 // 1b) Keep the checked-in native Gradle project in sync for local APK builds.
-editFile(resolve(rootDir, "android/app/build.gradle"), (src) =>
-  src
-    .replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`)
-    .replace(/versionName\s+"[^"]+"/, `versionName "${VERSION}"`),
-);
+//     The android/ folder only exists after expo prebuild (the release build
+//     runs from C:/bs), so its absence is NOT an error: the bump must still
+//     write every JS-side value. It used to throw here and leave app.json at
+//     the new version while site.ts/package.json were still old - a half-bump
+//     that makes release:ready report mismatched versions.
+const gradlePath = resolve(rootDir, "android/app/build.gradle");
+if (existsSync(gradlePath)) {
+  editFile(gradlePath, (src) =>
+    src
+      .replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`)
+      .replace(/versionName\s+"[^"]+"/, `versionName "${VERSION}"`),
+  );
+  console.log(`  android/build.gradle -> ${VERSION} (${VERSION_CODE})`);
+} else {
+  console.log("  android/ not present - skipped Gradle sync (prebuild runs in C:/bs)");
+}
 
 // 2) src/config/site.ts -> APP_VERSION
 // Quote-agnostic (2026-09-23 sweep): prettier (pre-commit) renders site.ts
