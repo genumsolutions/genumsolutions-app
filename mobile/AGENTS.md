@@ -89,8 +89,10 @@ SharedArrayBuffer, ArrayBuffer or ArrayBufferView`), verified with
   `@expo/fingerprint` (GHSA-3g3m-2fjr-6pw4, GHSA-g3hv-75wg-m249). Only reachable while
   bundling/prebuilding, against file trees in this repo or CI.
 
-Impact is limited to a local/CI build being made slow or wedged by a hostile file name
-or image; a cracked release build is a failed CI run, not a compromised device. `npm
-audit fix --force` must NOT be used: it proposes downgrading `expo` to 52 or installing
-`expo-updates@58`, which breaks the SDK 54 tree. Re-check when the SDK upgrade happens;
-the Dependabot alerts for these close then.
+Patched versions: `image-size` 2.0.3, `glob` 14.0.2, `minimatch` 11.0.1 — all above the
+ranges Expo SDK 54 pins. Impact is limited to a local/CI build being made slow or
+wedged by a hostile file name or image; a cracked release build is a failed CI run, not
+a compromised device. `npm audit fix --force` must NOT be used: it proposes downgrading
+`expo` to 52 or installing `expo-updates@58`, which breaks the SDK 54 tree. Re-check at
+the SDK upgrade; the Dependabot alerts (8, 7, 53, 52) close then, or can be dismissed as
+"vulnerable code is not reachable" in the meantime by the repo owner.
