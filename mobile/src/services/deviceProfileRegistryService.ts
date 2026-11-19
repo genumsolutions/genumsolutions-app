@@ -58,6 +58,8 @@ export type KnownDevice = {
   mirrored: boolean;
   /** Display name (car name; falls back to the key). */
   name: string;
+  /** Canonical project id from the car (`FW_PROJECT`), null when unknown. */
+  project: string | null;
   /** Firmware board id when the key is fw:<id> (v2 cars). */
   uniqueId: string | null;
   /** Every BT MAC this device has presented (from the local record). */
@@ -147,6 +149,7 @@ function prefsToKnownDevice(
           ? profileKey.slice(5)
           : profileKey),
     uniqueId: prefs?.uniqueId ?? fw,
+    project: prefs?.projectId ?? null,
     btIds: prefs?.btIds ?? [],
     savedRouters: prefs?.savedRouters ?? [],
     lastSeenAt: prefs?.savedAt ?? null,
@@ -170,6 +173,8 @@ function cloudToKnownDevice(row: CarProfileCloudRecord): KnownDevice {
   const device = prefsToKnownDevice(row.profile_key, null, "cloud");
   device.name = row.car_name || device.name;
   device.uniqueId = row.unique_id ?? device.uniqueId;
+  device.project =
+    typeof s.project_id === "string" ? s.project_id : device.project;
   device.savedRouters = Array.isArray(s.saved_routers)
     ? (s.saved_routers as string[])
     : [];
@@ -243,9 +248,14 @@ export async function fetchKnownDevices(): Promise<{
   // than one transport key (fw:/BT MAC/wifi:), collapse those rows into the
   // highest-priority key so a car is never listed twice.
   const deduped = dedupeDevicesByIdentity([...byKey.values()]);
+  // Owner 2026-11-19 (Phase 5, D1/D2): group by the car's CANONICAL project
+  // first (unknown last), then newest first, then name — so two cars of
+  // different projects never interleave in the list.
   const devices = deduped.sort(
     (a, b) =>
-      (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.name.localeCompare(b.name),
+      (a.project ?? "~~~").localeCompare(b.project ?? "~~~") ||
+      (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) ||
+      a.name.localeCompare(b.name),
   );
   return { devices, offline };
 }
@@ -308,6 +318,8 @@ function cloudRowToPrefs(row: CarProfileCloudRecord): DevicePrefs {
     // A1: "dpad" is the canonical default surface; "dual" is a legacy id
     // that means JOYSTICK and must not be synthesized for a known-only device.
     joystickLayout: "dpad",
+    // Owner 2026-11-19: the project key travels with the cloud row.
+    projectId: typeof s.project_id === "string" ? s.project_id : null,
     lastWifiSsid: null,
     lastRouterIp: null,
     savedRouters: Array.isArray(s.saved_routers)
@@ -335,6 +347,8 @@ function stubPrefs(profileKey: string, name: string): DevicePrefs {
     // A1: "dpad" is the canonical default surface; "dual" is a legacy id
     // that means JOYSTICK and must not be synthesized for a known-only device.
     joystickLayout: "dpad",
+    // A known-only device has not reported a project yet.
+    projectId: null,
     lastWifiSsid: null,
     lastRouterIp: null,
     savedRouters: [],
@@ -485,6 +499,7 @@ function dedupeDevicesByIdentity(devices: KnownDevice[]): KnownDevice[] {
       );
       if (!merged.uniqueId && device.uniqueId)
         merged.uniqueId = device.uniqueId;
+      if (!merged.project && device.project) merged.project = device.project;
       if (device.lastSeenAt) {
         merged.lastSeenAt = Math.max(merged.lastSeenAt ?? 0, device.lastSeenAt);
       }

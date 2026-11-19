@@ -166,6 +166,9 @@ export function toCloudRecord(
     wifi_enabled: prefs.wifiEnabled ?? null,
     bt_enabled: prefs.btEnabled ?? null,
     boot_autojoin: prefs.bootAutojoin ?? null,
+    // Owner 2026-11-19 (Phase 5): the car's canonical project id, so the cloud
+    // row keeps the same grouping key the wire reports (and a reinstall keeps it).
+    project_id: prefs.projectId ?? null,
     bt_ids: prefs.btIds ?? [],
     saved_routers: prefs.savedRouters ?? [],
     // U-97: the last firmware restart record for this car, so the diagnostics
@@ -290,6 +293,12 @@ export function prefsFromCloudSettings(
       SYNCABLE_SETTINGS.joystick_layout(s.joystick_layout) ??
       base.joystickLayout,
     fullscreen: base.fullscreen,
+    // Owner 2026-11-19: the canonical project id travels with the profile, so a
+    // fresh install groups this car by project without waiting for a link-up.
+    projectId:
+      typeof s.project_id === "string"
+        ? s.project_id
+        : (base.projectId ?? null),
     savedRouters:
       SYNCABLE_SETTINGS.saved_routers(s.saved_routers) ??
       base.savedRouters ??

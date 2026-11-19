@@ -145,6 +145,32 @@ describe("fetchKnownDevices (the union)", () => {
     expect(devices[0]!.name).toBe("Test car");
   });
 
+  it("groups devices by the car's canonical project id, not by name", async () => {
+    await localMemory.write(
+      "fw:PPPPPP",
+      prefs({
+        address: "fw:PPPPPP",
+        name: "Zed",
+        projectId: "2wd1mcar",
+        savedAt: 3000,
+      }),
+    );
+    await localMemory.write(
+      "fw:QQQQQQ",
+      prefs({
+        address: "fw:QQQQQQ",
+        name: "Alpha",
+        projectId: "4wd4mcar",
+        savedAt: 1000,
+      }),
+    );
+    await rememberDeviceKey("fw:PPPPPP");
+    await rememberDeviceKey("fw:QQQQQQ");
+    const { devices } = await fetchKnownDevices();
+    expect(devices.map((d) => d.project)).toEqual(["2wd1mcar", "4wd4mcar"]);
+    // Within the list, newest-first still decides — but never across projects.
+    expect(devices[0]!.name).toBe("Zed");
+  });
   it("merges a cloud row + local record into one mirrored entry (no duplicates)", async () => {
     await localMemory.write("fw:BBBBBB", prefs({ name: "Local name" }));
     await rememberDeviceKey("fw:BBBBBB");

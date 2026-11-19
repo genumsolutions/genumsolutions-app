@@ -60,6 +60,13 @@ export type DevicePrefs = {
   address: string | null;
   /** Last used car name for display. */
   name: string | null;
+  /**
+   * Owner 2026-11-19 (Phase 5): the car's CANONICAL project id once it has been
+   * reported (`FW_PROJECT` on the wire — "4wd4mcar" / "2wd1mcar"). Names are
+   * free text and can change; this is the grouping key, so the app never has to
+   * guess which project a device belongs to.
+   */
+  projectId?: string | null;
   /** Last selected mode id. */
   modeId: string | null;
   /** Last speed value used by the app. */

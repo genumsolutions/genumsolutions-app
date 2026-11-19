@@ -1392,6 +1392,16 @@ export function useControlHub(routeCategory?: string) {
     telemetry.fwVersion,
   ]);
 
+  // Owner 2026-11-19 (Phase 5): remember the car's CANONICAL project id the
+  // first time it is reported (JSON `project` / STATE `;PROJ=`), so the device
+  // registry can group this car by project even while it is offline. One write
+  // per change; a missing field never clears a known project.
+  useEffect(() => {
+    const project = telemetry.project;
+    if (!project) return;
+    if (savedPrefs?.projectId === project) return;
+    persistPrefsRef.current?.({ projectId: project });
+  }, [telemetry.project, savedPrefs?.projectId]);
   // U-108 Phase 4 (owner 2026-10-13): CAR RESTART detection from the boot
   // counter. The car's boot counter only ever moves forward, so a count HIGHER
   // than the one we last saw for this car means it rebooted. We seed the last

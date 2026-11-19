@@ -73,6 +73,15 @@ export type CarTelemetry = {
    */
   fwVersion?: string;
   /**
+   * Owner 2026-11-19 (Phase 5): the car's CANONICAL project id — JSON
+   * `project` on /status, `;PROJ=` on the STATE line (firmware FW_PROJECT,
+   * e.g. "4wd4mcar"). Free-text names are display facts that change per
+   * release; this token is the stable grouping key every surface uses.
+   * Absent on firmware older than the identity release — treat missing as
+   * unknown, never as "no project".
+   */
+  project?: string;
+  /**
    * U-95/F-79 restart record. The car persisted *why* it rebooted and sends the
    * record on `/status`; before this the phone parsed `free_heap` out of the very
    * same JSON and silently dropped these, so the evidence U-95 was built to
@@ -650,6 +659,8 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       else if (key === "SSID") telemetry.ssid = val;
       else if (key === "IP") telemetry.ip = val;
       else if (key === "ID") telemetry.id = val;
+      // Owner 2026-11-19: the canonical project id rides STATE for BT-only cars.
+      else if (key === "PROJ") telemetry.project = val;
       else if (key === "WIFI") {
         // U-105: the Wi-Fi transport toggle rides STATE as `;WIFI=ON|OFF`.
         telemetry.wifiEnabled = val.toUpperCase() === "ON";
@@ -808,6 +819,8 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       if (typeof j.free_heap === "number") telemetry.freeHeap = j.free_heap;
       // U-96i: the firmware version the car reports about itself.
       if (typeof j.fw === "string") telemetry.fwVersion = j.fw;
+      // Owner 2026-11-19: the canonical project id (identity, not a display name).
+      if (typeof j.project === "string") telemetry.project = j.project;
       // U-95/F-79 restart record. Same JSON, same transport — these were being
       // discarded here while free_heap two lines up was honoured. The firmware
       // sends `phase` (the LIVE phase) too; it is not mapped because it changes

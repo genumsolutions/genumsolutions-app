@@ -63,8 +63,8 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 
 | #   | Requirement                                                                                                         | Status |
 | --- | ------------------------------------------------------------------------------------------------------------------- | ------ |
-| D1  | "the app should act as per the cars used and sort the telemetries and datas as per the different projects and cars" | TODO   |
-| D2  | "keep them arranged and properly synced for the remote screens and all its things properly"                         | TODO   |
+| D1  | "the app should act as per the cars used and sort the telemetries and datas as per the different projects and cars" | DONE (source) |
+| D2  | "keep them arranged and properly synced for the remote screens and all its things properly"                         | DONE (source) |
 
 ### E. 4WD4M car
 
@@ -84,13 +84,13 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 | #   | Requirement                                                                                                                    | Status |
 | --- | ------------------------------------------------------------------------------------------------------------------------------ | ------ |
 | G1  | "the user tab of the admin dashboard is quite confusing and duplicating the things"                                            | TODO   |
-| G2  | "each car should be treated as a unique device"                                                                                | TODO   |
-| G3  | "all the projects have a specific name like 4wd4mcar or 2wd1m car which is standard and should be hardcoded in their own code" | TODO   |
-| G4  | "the app should treat them unique and organised"                                                                               | TODO   |
+| G2  | "each car should be treated as a unique device"                                                                                | DONE (source) |
+| G3  | "all the projects have a specific name like 4wd4mcar or 2wd1m car which is standard and should be hardcoded in their own code" | DONE (source) |
+| G4  | "the app should treat them unique and organised"                                                                               | DONE (source) |
 | G5  | "the user preference should display only its user log about the different car properly"                                        | TODO   |
 | G6  | "so as that later the admin can see such for each user properly in the admin panel user tabs"                                  | TODO   |
 | G7  | "have the tabs of subtabs for the user to see and use things properly"                                                         | TODO   |
-| G8  | "the cars should be uniquely identified and organized and standard in the viewing"                                             | TODO   |
+| G8  | "the cars should be uniquely identified and organized and standard in the viewing"                                             | DONE (source) |
 
 ---
 
@@ -294,6 +294,28 @@ full app Playwright suite **14/14 passed**.
   firmware phases need a checkout first.
 - Scope fixed to the four projects listed at the top.
 
+### 2026-11-19 — Phase 5 (G2–G4, G8, D1/D2): one canonical identity per project
+
+Each firmware now hardcodes its project token — `FW_PROJECT "4wd4mcar"` /
+`"2wd1mcar"` — next to `FW_NAME`, and publishes it on `/status` (`project`) and
+on every STATE line (`;PROJ=`). It is identity, not a display name: `FW_NAME` can
+be reworded, the project token is stable. `FW_VERSION` is deliberately unchanged
+(a bump triggers the first-boot NVS erase of saved routers/transports).
+
+The app now parses the token (`carProtocol.ts`), remembers it per device
+(`DevicePrefs.projectId`, written on first sight and mirrored into the cloud
+profile as `settings.project_id`), exposes it on the registry (`KnownDevice.project`)
+and sorts the device list by project first, then newest, then name — so two
+projects never interleave and the same car under BT/Wi-Fi keys still collapses to
+one row via its board id. `"dpad"` is also now the default layout in the two
+cloud-only registry paths that still synthesized the legacy `"dual"`.
+
+**Gates:** app `tsc`/`eslint`/`prettier` clean · `vitest` **1094/1094** (new
+parsing + grouping tests) · both firmwares `check-firmware-contract` 0 failures,
+`mutate-gates` **139/139** (new M145). The 2WD1M mutation harness had been
+crashing on the old `Genum_4WD4M_CAR.ino` name, so it now actually runs.
+**Not in this phase:** the admin Users tab (Phase 6) still needs to surface the
+project token; the app garage card shows the same device facts as before.
 ### 2026-11-19 — Phase 4 (E1): the 4WD4M reset/freeze has a source fix
 
 Root cause: `L298NControl::drive()` wrote the target duty to both LEDC channels in

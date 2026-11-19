@@ -456,6 +456,31 @@ describe("parseTelemetryLine", () => {
     expect(t.fwVersion).toBeUndefined();
   });
 
+  // ---- Owner 2026-11-19 (Phase 5): the canonical project id ----
+
+  // `fw` is the version and `id` is the board; `project` is the PROJECT. The
+  // app must keep the three apart: names are free text, the project token is
+  // the grouping key the device list sorts by.
+  it("parses the canonical project id from /status", () => {
+    const t = parseTelemetryLine(
+      '{"status":"OK","id":"A1B2C3","fw":"1.3.19","project":"4wd4mcar"}',
+    );
+    expect(t.project).toBe("4wd4mcar");
+    expect(t.fwVersion).toBe("1.3.19");
+    expect(t.id).toBe("A1B2C3");
+  });
+
+  it("parses ;PROJ= from the STATE line (Bluetooth-only cars)", () => {
+    const t = parseTelemetryLine(
+      "STATE;MODE=2WD1M;SPD=120;TRIM=0;STATUS=Forward;PROJ=2wd1mcar",
+    );
+    expect(t.project).toBe("2wd1mcar");
+  });
+
+  it("leaves project absent on firmware that predates the identity field", () => {
+    expect(parseTelemetryLine('{"status":"OK"}').project).toBeUndefined();
+  });
+
   // ---- U-95/F-79: the restart record ----
 
   // These six arrived in the SAME JSON object as free_heap two assertions up and
