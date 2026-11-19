@@ -54,6 +54,7 @@ import PrintAdminPanel, {
   type PrintAdminSection,
 } from "./PrintAdminPanel";
 import { AdminSubTabs } from "../components/admin/AdminSubTabs";
+import { groupProfilesByDevice } from "../services/deviceIdentity";
 import { AdminEditorSheet } from "../components/admin/AdminEditorSheet";
 // 2026-11-18: the three new project blocks (code details, 3D material details,
 // coding procedure) come from products.project_* columns with
@@ -130,6 +131,7 @@ import {
   deleteDeviceCrashReport,
   deleteAppLog,
   listUserActivityLogs,
+  listUserActivityLogsFor,
   deleteUserActivityLog,
   listUserProfileEntries,
   listProfileEntryTypes,
@@ -6173,21 +6175,27 @@ function UserProjectProfileManager({
       </View>
     );
 
+  // Owner 2026-11-19 (Phase 6): group this account's rows by physical car, so
+  // the same device saved under fw:/BT/wifi: keys reads as ONE car here too.
+  const groups = groupProfilesByDevice(rows);
+  const orderedRows = groups.flatMap((group) => group.rows);
+
   return (
     <View className="mt-3 rounded-lg border border-line bg-surface p-3">
       <Text className="text-xs font-black uppercase tracking-widest text-navy">
-        Project profiles ({rows.length})
+        Cars ({groups.length}) · {rows.length} profile row
+        {rows.length === 1 ? "" : "s"}
       </Text>
       <Text className="mt-0.5 text-[11px] leading-4 text-muted">
-        Project profiles saved for this user. Names and settings are shown in
-        plain language; connection details stay hidden.
+        Cars saved for this account, one entry per physical device. Names and
+        settings are shown in plain language; connection details stay hidden.
       </Text>
       {rows.length === 0 ? (
         <Text className="mt-2 text-xs text-muted">
           No project profiles for this user.
         </Text>
       ) : (
-        rows.map((row) => (
+        orderedRows.map((row) => (
           <View
             key={row.id || row.profileKey}
             className="mt-2 rounded border border-line bg-card p-2"
@@ -6222,6 +6230,10 @@ function UserProjectProfileManager({
                 </View>
               )}
             </View>
+            <Text className="mt-0.5 text-[10px] font-bold text-gold">
+              {String(row.settings?.project_id ?? "project unknown")}
+              {row.uniqueId ? ` · device ${row.uniqueId}` : ""}
+            </Text>
             <Text className="mt-0.5 text-[11px] text-muted">
               {Object.keys(row.settings || {}).length} saved settings
             </Text>
@@ -6330,6 +6342,18 @@ function UserProjectProfileManager({
 // project profiles builders have saved without opening one account at a time.
 // Read-only by design: repairs still happen on the per-user row in Accounts,
 // which keeps one write path per record.
+/** Owner line for a grouped device: one entry per owner, de-duplicated. */
+function deviceOwnerLine(rows: AdminProjectProfile[]): string {
+  const owners = new Map<string, string>();
+  for (const row of rows) {
+    owners.set(
+      row.userId,
+      `${row.ownerName || "Unnamed builder"} (${row.ownerEmail || "no email"})`,
+    );
+  }
+  return Array.from(owners.values()).join(" · ") || "No owner on record";
+}
+
 function ProjectProfilesTab() {
   const [profiles, setProfiles] = useState<AdminProjectProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -6363,10 +6387,16 @@ function ProjectProfilesTab() {
   }, [reload]);
 
   const needle = query.trim().toLowerCase();
-  const filtered = profiles.filter(
-    (profile) =>
+  // Owner 2026-11-19 (Phase 6): ONE row per physical car. A car can own a
+  // fw:/BT/wifi: profile row each; the board id is the only stable hardware
+  // identity, so those rows collapse into one device here.
+  const devices = groupProfilesByDevice(profiles);
+  const filtered = devices.filter(
+    (device) =>
       !needle ||
-      `${profile.carName} ${profile.ownerName} ${profile.ownerEmail} ${profile.profileKey} ${profile.uniqueId}`
+      `${device.name} ${device.uniqueId ?? ""} ${device.project ?? ""} ${device.profileKeys.join(" ")} ${device.rows
+        .map((row) => `${row.ownerName} ${row.ownerEmail}`)
+        .join(" ")}`
         .toLowerCase()
         .includes(needle),
   );
@@ -6399,7 +6429,9 @@ function ProjectProfilesTab() {
         account in Accounts to repair one.
       </Text>
       <Text className="mt-2 text-xs font-bold text-navy">
-        {profiles.length} profiles · {owners} builders
+        {devices.length} device{devices.length === 1 ? "" : "s"} ·{" "}
+        {profiles.length} profile row{profiles.length === 1 ? "" : "s"} ·{" "}
+        {owners} builder{owners === 1 ? "" : "s"}
       </Text>
       <View className="mt-3 flex-row items-center gap-2">
         <TextInput
@@ -6441,9 +6473,9 @@ function ProjectProfilesTab() {
             : "No profiles match that search."}
         </Text>
       ) : (
-        shown.map((profile) => (
+        shown.map((device) => (
           <View
-            key={profile.id}
+            key={device.deviceKey}
             className="mb-3 rounded-xl border border-line bg-card p-4"
           >
             <View className="flex-row items-center justify-between gap-2">
@@ -6451,19 +6483,28 @@ function ProjectProfilesTab() {
                 numberOfLines={1}
                 className="min-w-0 flex-1 text-sm font-bold text-ink"
               >
-                {profile.carName || profile.profileKey}
+                {device.name}
               </Text>
               <Text className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gold">
-                {profile.uniqueId || profile.profileKey}
+                {device.project ?? "project unknown"}
               </Text>
             </View>
             <Text numberOfLines={1} className="mt-1 text-xs text-muted">
-              {profile.ownerName || "Unnamed builder"} · {profile.ownerEmail}
+              {device.uniqueId ? `Device ${device.uniqueId}` : device.deviceKey}
+              {" · "}
+              {device.profileKeys.length} saved key
+              {device.profileKeys.length === 1 ? "" : "s"}
+            </Text>
+            <Text numberOfLines={1} className="mt-1 text-[11px] text-muted">
+              {deviceOwnerLine(device.rows)}
+            </Text>
+            <Text numberOfLines={2} className="mt-1 text-[11px] text-muted">
+              {device.profileKeys.join(" · ")}
             </Text>
             <Text className="mt-1 text-[11px] text-muted">
-              {Object.keys(profile.settings).length} saved settings
-              {profile.updatedAt
-                ? ` · updated ${profile.updatedAt.slice(0, 10)}`
+              {Object.keys(device.newest.settings).length} saved settings
+              {device.newest.updatedAt
+                ? ` · updated ${device.newest.updatedAt.slice(0, 10)}`
                 : ""}
             </Text>
           </View>
@@ -6476,6 +6517,172 @@ function ProjectProfilesTab() {
   );
 }
 
+// Owner 2026-11-19 (Phase 6/7): one account's detail used to stack the project
+// profile editor and the robot-preferences editor in a single scroll, so the
+// same car appeared in Accounts AND again in the Project profiles window, and
+// nothing showed that account's own log. The nested strip gives each concern
+// its own window: the cars that account has saved, the robot preferences, and
+// the account's own activity (not the fleet-wide stream).
+const USER_DETAIL_TABS = ["Cars", "Preferences", "Activity"] as const;
+type UserDetailTab = (typeof USER_DETAIL_TABS)[number];
+
+function UserDetailPanel({
+  userId,
+  email,
+  canDelete,
+}: {
+  userId: string;
+  email: string;
+  canDelete: boolean;
+}) {
+  const [tab, setTab] = useState<UserDetailTab>("Cars");
+  return (
+    <View className="mt-3 rounded-lg border border-line bg-card p-2">
+      <AdminSubTabs
+        label="Account detail sections"
+        options={USER_DETAIL_TABS}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === "Cars" ? (
+        <UserProjectProfileManager
+          userId={userId}
+          email={email}
+          canDelete={canDelete}
+        />
+      ) : null}
+      {tab === "Preferences" ? (
+        <UserRobotSettingsManager
+          userId={userId}
+          email={email}
+          canDelete={canDelete}
+        />
+      ) : null}
+      {tab === "Activity" ? (
+        <UserActivityPanel userId={userId} email={email} />
+      ) : null}
+    </View>
+  );
+}
+
+/** The account's OWN activity log — no fleet-wide rows, no other users. */
+function UserActivityPanel({
+  userId,
+  email,
+}: {
+  userId: string;
+  email: string;
+}) {
+  const [entries, setEntries] = useState<AdminUserLog[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(
+    async (nextPage: number) => {
+      setLoading(true);
+      setError("");
+      try {
+        const result = await listUserActivityLogsFor(userId, nextPage);
+        setEntries(result.entries);
+        setPage(result.page);
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+      } catch (e) {
+        logger.error("admin", "User activity load error:", e);
+        setError(
+          e instanceof Error ? e.message : "Could not load this user's log.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load
+    void load(1);
+  }, [load]);
+
+  return (
+    <View className="mt-3 px-1">
+      <Text className="text-xs font-black uppercase tracking-widest text-navy">
+        Activity
+      </Text>
+      <Text className="mt-0.5 text-[11px] leading-4 text-muted">
+        Changes {email} made to their own cars and profile (user_activity_log).
+      </Text>
+      {loading ? (
+        <Text className="py-3 text-xs text-muted">Loading activity…</Text>
+      ) : error ? (
+        <View className="mt-2 rounded border border-red-200 bg-red-50 p-2">
+          <Text className="text-[11px] font-bold text-red-700">{error}</Text>
+          <Pressable
+            onPress={() => void load(page)}
+            className="mt-1 self-start"
+          >
+            <Text className="text-[11px] font-bold text-navy">Retry</Text>
+          </Pressable>
+        </View>
+      ) : entries.length === 0 ? (
+        <Text className="py-3 text-xs text-muted">
+          No activity recorded for this account yet.
+        </Text>
+      ) : (
+        <>
+          <Text className="mt-1 text-[11px] text-muted">
+            {total} entr{total === 1 ? "y" : "ies"}
+          </Text>
+          {entries.map((entry) => (
+            <View
+              key={entry.id}
+              className="mt-2 rounded border border-line bg-surface p-2"
+            >
+              <View className="flex-row items-center justify-between gap-2">
+                <Text
+                  numberOfLines={1}
+                  className="min-w-0 flex-1 text-[11px] font-bold text-ink"
+                >
+                  {entry.action}
+                </Text>
+                <Text className="shrink-0 text-[10px] text-muted">
+                  {entry.createdAt.slice(0, 16).replace("T", " ")}
+                </Text>
+              </View>
+              <Text numberOfLines={1} className="text-[10px] text-muted">
+                {entry.entityType}
+                {entry.entityId ? ` · ${entry.entityId}` : ""}
+              </Text>
+              {Object.keys(entry.details).length > 0 ? (
+                <Text
+                  numberOfLines={2}
+                  className="mt-0.5 text-[10px] text-muted"
+                >
+                  {Object.entries(entry.details)
+                    .map(
+                      ([k, v]) =>
+                        `${k}=${Array.isArray(v) ? v.join("|") : String(v)}`,
+                    )
+                    .join(" · ")}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+          {totalPages > 1 ? (
+            <AdminPager
+              page={page}
+              totalPages={totalPages}
+              onPage={(p) => void load(p)}
+            />
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
 function UsersSection({
   users,
   total,
@@ -6655,18 +6862,11 @@ function UsersSection({
               ) : null}
             </View>
             {expandedUsers[item.id] && (
-              <View className="mt-3">
-                <UserProjectProfileManager
-                  userId={item.id}
-                  email={item.email}
-                  canDelete={canDelete}
-                />
-                <UserRobotSettingsManager
-                  userId={item.id}
-                  email={item.email}
-                  canDelete={canDelete}
-                />
-              </View>
+              <UserDetailPanel
+                userId={item.id}
+                email={item.email}
+                canDelete={canDelete}
+              />
             )}
           </View>
         )}

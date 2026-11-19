@@ -1593,6 +1593,36 @@ export async function listUserActivityLogs(
   };
 }
 
+/**
+ * Owner 2026-11-19 (Phase 6/7): the PER-USER slice of user_activity_log, so
+ * the Users tab can show one account's own cars/robots history instead of the
+ * fleet-wide stream. Same row shape and paging as listUserActivityLogs.
+ */
+export async function listUserActivityLogsFor(
+  userId: string,
+  page = 1,
+  limit = 20,
+): Promise<{
+  entries: AdminUserLog[];
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { data, error, count } = await supabase
+    .from("user_activity_log")
+    .select("*", { count: "exact" })
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+  if (error) throw error;
+  return {
+    entries: (data ?? []).map(mapUserLogRow),
+    total: count ?? 0,
+    page,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / limit)),
+  };
+}
+
 export async function deleteUserActivityLog(id: string) {
   const { error } = await supabase
     .from("user_activity_log")
