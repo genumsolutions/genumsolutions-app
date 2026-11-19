@@ -93,6 +93,6 @@ Patched versions: `image-size` 2.0.3, `glob` 14.0.2, `minimatch` 11.0.1 — all 
 ranges Expo SDK 54 pins. Impact is limited to a local/CI build being made slow or
 wedged by a hostile file name or image; a cracked release build is a failed CI run, not
 a compromised device. `npm audit fix --force` must NOT be used: it proposes downgrading
-`expo` to 52 or installing `expo-updates@58`, which breaks the SDK 54 tree. Re-check at
-the SDK upgrade; the Dependabot alerts (8, 7, 53, 52) close then, or can be dismissed as
+`expo` to 52 or installing `expo-updates@58`, which breaks the SDK 54 tree. Upgrade plan:
+`docs/SDK-58-UPGRADE.md`. Re-check at the SDK upgrade; the Dependabot alerts (8, 7, 53, 52) close then, or can be dismissed as
 "vulnerable code is not reachable" in the meantime by the repo owner.
