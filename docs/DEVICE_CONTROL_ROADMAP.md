@@ -294,6 +294,21 @@ full app Playwright suite **14/14 passed**.
   firmware phases need a checkout first.
 - Scope fixed to the four projects listed at the top.
 
+### 2026-11-19 — bench hand-off + release status
+
+`docs/BENCH-2026-11-19.md` is the one-pass bench sheet for both cars: U-127
+(4WD4M motor soft-start) and U-128 (2WD1M steering/trim/telemetry/router, newly
+written into `Genum_2WD1M_CAR_NEW/TRACKS/DEVICE-TESTS.md`), plus the shared
+project-identity check (U-127-4 / U-128-5) and the app-side admin/device-list
+checks. Results go in each car's DEVICE-TESTS rows; E1 and C1–C4 only leave
+"device pending" after those pass.
+
+**Release status:** `npm run release:ready` reports app.json `3.4.3` (code 67)
+already consistent with the live manifest and the published APK, so none of the
+2026-11-19 app work is on any phone yet. Shipping it is a deliberate release
+(bump `app.json` + `site.ts`, build the signed APK from `C:s`, upload, sync the
+website fallback) or an OTA for the same version — both are owner-run steps and
+were deliberately NOT triggered here.
 ### 2026-11-19 — Phases 6–8 (G1, G5–G7, F1, F2): one car per row, per-account windows, DB hygiene
 
 **Phase 6 — the Users tab stops duplicating cars.** `services/deviceIdentity.ts`
