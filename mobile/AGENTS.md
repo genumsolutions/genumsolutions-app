@@ -72,3 +72,25 @@ scripts/sync-app-fallback.mjs`) and push it.
   newer than the published manifest. `app.json` derives `runtimeVersion` from `appVersion`,
   so an OTA only applies to a native build with that same app version; publish a matching
   native build before changing the app version.
+
+# Dependencies (known advisories)
+
+`npm audit` (2026-11-19) reports 1 high + 16 moderate, all in the Expo/Metro build
+toolchain, none in code that ships inside the APK:
+
+- **high — `image-size` 1.2.1** (JXL/HEIF/ICNS infinite-loop DoS, GHSA-5p2g-fcmc-qvqq,
+  GHSA-w3rx-r6r6-pgpr), reached only through `expo -> @expo/metro -> metro@0.83.3`.
+  Metro calls the 1.x API; forcing `image-size@2.1.0` via a package.json override
+  **breaks bundling** (`assetslogo.png: The "list" argument must be an instance of
+SharedArrayBuffer, ArrayBuffer or ArrayBufferView`), verified with
+  `npx expo export --platform android`. The fix arrives with the Metro release that
+  declares `image-size@^2` (lands with Expo SDK 58) — do not override it.
+- **moderate — `glob` / `minimatch`** inside `@expo/cli`, `expo-updates`,
+  `@expo/fingerprint` (GHSA-3g3m-2fjr-6pw4, GHSA-g3hv-75wg-m249). Only reachable while
+  bundling/prebuilding, against file trees in this repo or CI.
+
+Impact is limited to a local/CI build being made slow or wedged by a hostile file name
+or image; a cracked release build is a failed CI run, not a compromised device. `npm
+audit fix --force` must NOT be used: it proposes downgrading `expo` to 52 or installing
+`expo-updates@58`, which breaks the SDK 54 tree. Re-check when the SDK upgrade happens;
+the Dependabot alerts for these close then.
