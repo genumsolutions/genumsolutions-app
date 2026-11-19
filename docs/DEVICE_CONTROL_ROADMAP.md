@@ -70,7 +70,7 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 
 | #   | Requirement                                                                                           | Status |
 | --- | ----------------------------------------------------------------------------------------------------- | ------ |
-| E1  | "the 4wd4m car was resetting and freezing at the start of some cycle, please check and fix those too" | TODO   |
+| E1  | "the 4wd4m car was resetting and freezing at the start of some cycle, please check and fix those too" | IN PROGRESS (device pending) |
 
 ### F. Database
 
@@ -294,6 +294,22 @@ full app Playwright suite **14/14 passed**.
   firmware phases need a checkout first.
 - Scope fixed to the four projects listed at the top.
 
+### 2026-11-19 — Phase 4 (E1): the 4WD4M reset/freeze has a source fix
+
+Root cause: `L298NControl::drive()` wrote the target duty to both LEDC channels in
+the same call that flipped the H-bridge pins, so all four motors took stall current
+in one instant — the battery rail sagged under the ESP32 brownout threshold and the
+car rebooted mid-cycle (the "freeze" is the reconnection window).
+
+`drive()` now only sets a target; a non-blocking `tick()` advanced from `loop()`
+ramps the duty (`MOTOR_RAMP_STEP` per `MOTOR_RAMP_STEP_MS`, ~260 ms to full). A
+direction change ramps to zero before the pins flip. `STOP` stays immediate, so
+failsafe and low-heap stops still cut power instantly; `setSpeed()` feeds the ramp.
+
+**Gates:** `check-firmware-contract.mjs` 0 failures · `check-webpage-js.mjs` PASS.
+**Left to prove (F-61):** bench rows U-127-1..3 in
+`Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (30 start/stop cycles with no reboot,
+immediate failsafe stop, gentle reversal). E1 stays IN PROGRESS until those pass.
 ### 2026-11-19 — CI repair: the Phase 1/3 source pins were stale (commit `dababd9` failed)
 
 The `CI / Typecheck + Expo doctor` job was red on `dababd9`. Typecheck, lint and
