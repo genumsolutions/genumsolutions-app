@@ -27,6 +27,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -2222,76 +2223,84 @@ function AdminConsole() {
           animationType="fade"
           onRequestClose={dismissImportLink}
         >
-          <Pressable
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(15, 23, 42, 0.7)",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 20,
-            }}
-            onPress={dismissImportLink}
-            accessibilityLabel="Close import by link dialog"
+          {/* The dialog sits in the middle of the screen and carries the URL
+              field, so raising the keyboard used to push "Look up product"
+              under it on phones. */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1 }}
           >
             <Pressable
-              onPress={(e) => e.stopPropagation()}
-              className="w-full max-w-sm rounded-2xl border border-line bg-card p-5"
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(15, 23, 42, 0.7)",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 20,
+              }}
+              onPress={dismissImportLink}
+              accessibilityLabel="Close import by link dialog"
             >
-              <Text className="text-xs font-black uppercase tracking-widest text-navy">
-                Import into{" "}
-                {importDest === "models"
-                  ? "3D Products"
-                  : importDest === "projects"
-                    ? "Projects"
-                    : "Electronic Products"}
-              </Text>
-              <Text className="mt-2 text-sm leading-5 text-muted">
-                Paste a product page URL (makerworld.com, a shop listing, …). We
-                extract the standard details — everything saves into{" "}
-                {importDest === "models"
-                  ? "the 3D Products catalog (/3d-printing)"
-                  : importDest === "projects"
-                    ? "the Projects catalog (/projects)"
-                    : "the Electronic Products catalog (/products)"}
-                . Review them in the editor before saving.
-              </Text>
-              <TextInput
-                value={importLinkDraft}
-                onChangeText={setImportLinkDraft}
-                placeholder="https://makerworld.com/en/models/..."
-                placeholderTextColor="#94a3b8"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                returnKeyType="go"
-                onSubmitEditing={() => void confirmImportLink()}
-                className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink"
-              />
-              {/* The budget is stated where the import starts, not buried in docs:
+              <Pressable
+                onPress={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-2xl border border-line bg-card p-5"
+              >
+                <Text className="text-xs font-black uppercase tracking-widest text-navy">
+                  Import into{" "}
+                  {importDest === "models"
+                    ? "3D Products"
+                    : importDest === "projects"
+                      ? "Projects"
+                      : "Electronic Products"}
+                </Text>
+                <Text className="mt-2 text-sm leading-5 text-muted">
+                  Paste a product page URL (makerworld.com, a shop listing, …).
+                  We extract the standard details — everything saves into{" "}
+                  {importDest === "models"
+                    ? "the 3D Products catalog (/3d-printing)"
+                    : importDest === "projects"
+                      ? "the Projects catalog (/projects)"
+                      : "the Electronic Products catalog (/products)"}
+                  . Review them in the editor before saving.
+                </Text>
+                <TextInput
+                  value={importLinkDraft}
+                  onChangeText={setImportLinkDraft}
+                  placeholder="https://makerworld.com/en/models/..."
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  returnKeyType="go"
+                  onSubmitEditing={() => void confirmImportLink()}
+                  className="mt-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink"
+                />
+                {/* The budget is stated where the import starts, not buried in docs:
                   the edge function re-encodes every picture, keeps at most 8 per
                   item, and skips anything over 4 MB. */}
-              <Text className="mt-2 text-[11px] leading-4 text-muted">
-                {IMAGE_BUDGET_HINT}
-              </Text>
-              <View className="mt-4 flex-row items-center justify-end gap-2">
-                <Pressable
-                  onPress={dismissImportLink}
-                  className="rounded-full border border-line px-4 py-2"
-                >
-                  <Text className="text-xs font-black text-ink">Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void confirmImportLink()}
-                  disabled={!importLinkDraft.trim()}
-                  className={`rounded-full px-4 py-2 ${importLinkDraft.trim() ? "bg-navy" : "bg-slate-300"}`}
-                >
-                  <Text className="text-xs font-black text-white">
-                    Look up product
-                  </Text>
-                </Pressable>
-              </View>
+                <Text className="mt-2 text-[11px] leading-4 text-muted">
+                  {IMAGE_BUDGET_HINT}
+                </Text>
+                <View className="mt-4 flex-row items-center justify-end gap-2">
+                  <Pressable
+                    onPress={dismissImportLink}
+                    className="rounded-full border border-line px-4 py-2"
+                  >
+                    <Text className="text-xs font-black text-ink">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void confirmImportLink()}
+                    disabled={!importLinkDraft.trim()}
+                    className={`rounded-full px-4 py-2 ${importLinkDraft.trim() ? "bg-navy" : "bg-slate-300"}`}
+                  >
+                    <Text className="text-xs font-black text-white">
+                      Look up product
+                    </Text>
+                  </Pressable>
+                </View>
+              </Pressable>
             </Pressable>
-          </Pressable>
+          </KeyboardAvoidingView>
         </Modal>
       )}
     </View>

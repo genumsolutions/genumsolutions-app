@@ -1,4 +1,12 @@
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
@@ -11,6 +19,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  * their header and Save/Cancel row); the default is a bottom sheet for the
  * compact record editors, whose header carries the Cancel action every inline
  * form used to have.
+ *
+ * 2026-11-19 (owner: the add/import/edit windows "don't display properly on
+ * the phone"): a Modal does not move for the keyboard by itself, so the field
+ * being typed into could sit under it — the sheet now shrinks for the keyboard
+ * and keeps the home-indicator inset clear at the bottom.
  */
 export function AdminEditorSheet({
   visible,
@@ -32,6 +45,9 @@ export function AdminEditorSheet({
   // edge (owner report: "the new product page is on too top part of the
   // screen").
   const insets = useSafeAreaInsets();
+  // iOS needs the explicit padding; Android's modal window already resizes
+  // (adjustResize), and adding a second behaviour there shrinks it twice.
+  const keyboard = Platform.OS === "ios" ? "padding" : undefined;
   return (
     <Modal
       visible={visible}
@@ -40,12 +56,24 @@ export function AdminEditorSheet({
       onRequestClose={onClose}
     >
       {full ? (
-        <View className="flex-1 bg-card" style={{ paddingTop: insets.top }}>
-          {children}
-        </View>
+        <KeyboardAvoidingView
+          behavior={keyboard}
+          className="flex-1 bg-card"
+          style={{ paddingTop: insets.top }}
+        >
+          <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
+            {children}
+          </View>
+        </KeyboardAvoidingView>
       ) : (
-        <View className="flex-1 justify-end bg-ink/40">
-          <View className="max-h-[92%] w-full rounded-t-3xl border-t border-line bg-card">
+        <KeyboardAvoidingView
+          behavior={keyboard}
+          className="flex-1 justify-end bg-ink/40"
+        >
+          <View
+            className="max-h-[92%] w-full rounded-t-3xl border-t border-line bg-card"
+            style={{ paddingBottom: insets.bottom }}
+          >
             <View className="flex-row items-start justify-between gap-3 border-b border-line px-5 pb-3 pt-4">
               <View className="min-w-0 flex-1">
                 <Text className="font-display text-base font-bold text-ink">
@@ -73,7 +101,7 @@ export function AdminEditorSheet({
               {children}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
     </Modal>
   );
