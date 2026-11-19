@@ -65,7 +65,18 @@ describe("U-119c · the hub's connection message reaches the screen", () => {
     // screen keeps those pixels for the drive controls.
     expect(count(screen, "hub.connectionMessage")).toBe(3);
     expect(screen).toContain("{hub.connectionMessage || hub.carSilent ? (");
+    // A3/A4 (owner 2026-11-19: "the status message … shifts and moves the
+    // screens at bottom"): the strip is now a ZERO-FLOW overlay pinned to the
+    // deck's bottom edge, so a message appearing never resizes the deck, and
+    // pointerEvents="none" keeps the controls under it drivable.
+    expect(screen).toContain('testID="remote-status-overlay"');
+    expect(screen).toContain('pointerEvents="none"');
     expect(screen).toContain(
+      'className="absolute bottom-2 left-0 right-0 items-center px-2"',
+    );
+    expect(screen).toContain('className="w-full max-w-[460px]"');
+    // …and the old in-flow footer (the thing that moved the deck) is gone.
+    expect(screen).not.toContain(
       'className="mt-1 flex-shrink-0 w-full items-center"',
     );
     expect(screen).not.toContain('className="h-12 flex-shrink-0 justify-end"');

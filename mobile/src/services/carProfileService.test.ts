@@ -425,9 +425,22 @@ describe("profiles sync engine (last-saved-wins)", () => {
 
   it("isFreshDefaultPrefs detects untouched local records", () => {
     expect(isFreshDefaultPrefs(null)).toBe(true);
-    expect(isFreshDefaultPrefs({ ...base, address: null } as DevicePrefs)).toBe(
-      true,
-    );
+    // A1: the canonical default surface id is "dpad"; a legacy "dual"
+    // profile meant JOYSTICK, so it must not read as an untouched record.
+    expect(
+      isFreshDefaultPrefs({
+        ...base,
+        address: null,
+        joystickLayout: "dpad",
+      } as DevicePrefs),
+    ).toBe(true);
+    expect(
+      isFreshDefaultPrefs({
+        ...base,
+        address: null,
+        joystickLayout: "dual",
+      } as DevicePrefs),
+    ).toBe(false);
     expect(
       isFreshDefaultPrefs({
         ...base,

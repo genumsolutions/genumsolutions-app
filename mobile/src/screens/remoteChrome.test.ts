@@ -252,14 +252,16 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
     expect(count(screen, "flex h-9 flex-shrink-0 flex-row")).toBe(1);
     expect(screen).toContain('testID="remote-disconnect-bt"');
     expect(screen).toContain('testID="remote-disconnect-wifi"');
-    // The pill labels are multiline JSX (`>` … D-pad … `<`), so match
-    // across whitespace rather than the adjacent-characters form.
-    expect(
-      (screen.match(/>[\s\n]*D-pad[\s\n]*</g) ?? []).length,
-    ).toBeGreaterThanOrEqual(1);
-    expect(
-      (screen.match(/>[\s\n]*Connectivity[\s\n]*</g) ?? []).length,
-    ).toBeGreaterThanOrEqual(1);
+    // The labels live in the ONE tab-data array (rendered by a .map), so
+    // pin its entries rather than JSX text between `>` and `<`.
+    expect(screen).toContain('{ id: "dpad" as const, label: "D-pad" }');
+    expect(screen).toContain('{ id: "joystick" as const, label: "Joystick" }');
+    expect(screen).toContain(
+      '{ id: "telemetry" as const, label: "Telemetry" }',
+    );
+    expect(screen).toContain(
+      '{ id: "connectivity" as const, label: "Connectivity" }',
+    );
   });
 });
 
@@ -358,9 +360,9 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     // Four tab pills at the new size (U-121 kept, widgets 4→4; U-124 ③
     // re-measured them down to px-3 py-1.5 / 11 px so the LABELS fit the row
     // at 640 px instead of being pushed off its right edge).
-    expect(
-      (screen.match(/rounded-full px-3 py-1.5/g) ?? []).length,
-    ).toBeGreaterThanOrEqual(4);
+    // The four pills share ONE className expression inside the .map, so the
+    // size is pinned once and the four tab entries above prove the count.
+    expect(screen).toContain("rounded-full px-3 py-1.5 ${selected ?");
     expect((screen.match(/rounded-full px-4 py-2/g) ?? []).length).toBe(0);
     // …every disconnect chip carries the transport icon + name + ✕…
     // THREE render sites for TWO chips: Bluetooth, Wi-Fi (hotspot), Wi-Fi —

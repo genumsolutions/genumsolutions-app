@@ -192,11 +192,17 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
     // a user edit and must not write back).
     const at = code.indexOf("const setUseJoystick = (value: boolean) => {");
     expect(at).toBeGreaterThan(0);
-    const block = slice(at, 220);
+    const block = slice(at, 320);
     expect(block).toContain("setUseJoystickState(value);");
+    // A1: the surface id follows the flag, and both halves persist through
+    // the same ref-guarded writer (a layout left on "dpad" while the joystick
+    // is on is the contradiction A1 removed).
     expect(block).toContain(
-      "persistPrefsRef.current?.({ useJoystick: value });",
+      'setJoystickLayoutId(value ? "joystick" : "dpad");',
     );
+    expect(block).toContain("persistPrefsRef.current?.({");
+    expect(block).toContain("useJoystick: value,");
+    expect(block).toContain('joystickLayout: value ? "joystick" : "dpad",');
 
     // the raw state setter exists and is what the restore paths use
     expect(code).toContain(

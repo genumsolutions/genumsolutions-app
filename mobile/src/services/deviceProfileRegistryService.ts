@@ -305,7 +305,9 @@ function cloudRowToPrefs(row: CarProfileCloudRecord): DevicePrefs {
     trim: num(s.trim) ?? 0,
     useJoystick: typeof s.use_joystick === "boolean" ? s.use_joystick : false,
     fullscreen: false,
-    joystickLayout: "dual",
+    // A1: "dpad" is the canonical default surface; "dual" is a legacy id
+    // that means JOYSTICK and must not be synthesized for a known-only device.
+    joystickLayout: "dpad",
     lastWifiSsid: null,
     lastRouterIp: null,
     savedRouters: Array.isArray(s.saved_routers)
@@ -330,7 +332,9 @@ function stubPrefs(profileKey: string, name: string): DevicePrefs {
     trim: 0,
     useJoystick: false,
     fullscreen: false,
-    joystickLayout: "dual",
+    // A1: "dpad" is the canonical default surface; "dual" is a legacy id
+    // that means JOYSTICK and must not be synthesized for a known-only device.
+    joystickLayout: "dpad",
     lastWifiSsid: null,
     lastRouterIp: null,
     savedRouters: [],

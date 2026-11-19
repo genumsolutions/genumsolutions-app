@@ -293,3 +293,25 @@ full app Playwright suite **14/14 passed**.
 - Noted: local `Genum_4WD4M_CAR` / `Genum_2WD1M_CAR_NEW` worktrees are empty (`.git` only) —
   firmware phases need a checkout first.
 - Scope fixed to the four projects listed at the top.
+
+### 2026-11-19 — CI repair: the Phase 1/3 source pins were stale (commit `dababd9` failed)
+
+The `CI / Typecheck + Expo doctor` job was red on `dababd9`. Typecheck, lint and
+`expo-doctor` all pass locally; the failing step was **Unit tests** — five source pins
+still described the pre-Phase-1/3 implementation, so the gate was right to be red even
+though the product code was the intended new shape:
+
+| File | Stale pin | Now pins |
+| --- | --- | --- |
+| `screens/feedbackSurface.test.ts` | the old in-flow footer `mt-1 flex-shrink-0` | the A3/A4 zero-flow overlay (`remote-status-overlay`, `pointerEvents="none"`, `absolute bottom-2 …`), and the old footer is absent |
+| `screens/remoteChrome.test.ts` (Q2) | D-pad/Connectivity as JSX text | the four entries of the one tab-data array (ids + labels) |
+| `screens/remoteChrome.test.ts` (U-121 ⑤) | four literal `px-3 py-1.5` sites | the single shared pill className inside the `.map` (the four tab entries prove the count); `px-4 py-2` still absent |
+| `services/carProfileService.test.ts` | a `joystickLayout: "dual"` record counted as fresh | fresh = `"dpad"`; legacy `"dual"` (which meant JOYSTICK) explicitly NOT fresh |
+| `components/tools/persistenceSync.test.ts` | the one-key persist call | the A1 writer: raw setter + `setJoystickLayoutId` + the two-key `persistPrefsRef` call |
+
+Also fixed while there: `services/deviceProfileRegistryService.ts` still synthesized
+`joystickLayout: "dual"` in `cloudRowToPrefs()` and `stubPrefs()` — the A1 regression
+(a cloud-only device would open on the joystick). Both defaults are now `"dpad"`.
+
+**Verification:** `tsc --noEmit` clean · `eslint .` clean · `expo-doctor` 18/18 ·
+`vitest run` **1090/1090 passed** (81 files). Device/UI gates unaffected.
