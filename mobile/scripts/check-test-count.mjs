@@ -18,7 +18,13 @@
 // A DROP fails. Growth is fine and does NOT need a baseline update — adding
 // tests should never require touching this file, otherwise it becomes noise.
 // =====================================================================
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,7 +47,9 @@ function runVitest() {
   if (result.status !== 0) {
     console.error(result.stdout || "");
     console.error(result.stderr || "");
-    console.error("\ncheck-test-count: vitest itself failed — fix the suite first.");
+    console.error(
+      "\ncheck-test-count: vitest itself failed — fix the suite first.",
+    );
     process.exit(result.status ?? 1);
   }
 }
@@ -68,7 +76,9 @@ const current = { tests, files };
 
 if (update) {
   writeFileSync(baselinePath, JSON.stringify(current, null, 2) + "\n", "utf8");
-  console.log(`check-test-count: baseline set to ${tests} tests in ${files} files.`);
+  console.log(
+    `check-test-count: baseline set to ${tests} tests in ${files} files.`,
+  );
   process.exit(0);
 }
 

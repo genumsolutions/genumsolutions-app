@@ -76,6 +76,7 @@
     "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive",
     "test": "vitest run",
     "test:count": "node scripts/check-test-count.mjs",
+    "check:release-notes": "node scripts/check-release-notes.mjs",
     "test:watch": "vitest",
     "test:e2e": "expo export --platform web && playwright test",
     "prepare": "cd .. && husky",

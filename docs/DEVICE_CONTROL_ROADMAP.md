@@ -428,3 +428,8 @@ reporter and fails when collected tests or test files fall below the baseline �
 a deleted pin, a stray `.skip` or a file that stopped matching the include glob
 leaves `npm test` green. Baseline: **1107 tests / 83 files**. Growth passes;
 re-baseline with `npm run test:count -- --update`.
+
+`npm run check:release-notes` (CI: “Release notes exist for this version”) fails when
+`release-notes.json` has no non-empty entry for `app.json`'s version or when
+`site.ts` / `package.json` disagree with it, so the generic uploader sentence can
+no longer ship by accident and a half-bump fails before a build starts.

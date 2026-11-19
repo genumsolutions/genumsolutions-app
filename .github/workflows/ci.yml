@@ -64,6 +64,14 @@ jobs:
       - name: app.json asset paths exist
         run: node scripts/check-app-json-paths.mjs
 
+      # The uploader falls back to one generic sentence when release-notes.json
+      # has no entry for the shipped version — which is how every release up to
+      # 3.4.3 shipped the same text. A bump is incomplete until its notes exist,
+      # and the three version fields must agree (a half-bump otherwise only
+      # shows up as a manifest mismatch after the APK is built).
+      - name: Release notes exist for this version
+        run: npm run check:release-notes
+
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v3
         env:
