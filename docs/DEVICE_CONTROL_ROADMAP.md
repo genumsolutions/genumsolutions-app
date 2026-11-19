@@ -76,20 +76,20 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 
 | #   | Requirement                                                                                                 | Status |
 | --- | ----------------------------------------------------------------------------------------------------------- | ------ |
-| F1  | "the database might have logged some datas about the device test too, so do so and resolve them if you can" | TODO   |
-| F2  | "make the mechanism so that the things get resolved through the ci cd"                                      | TODO   |
+| F1  | "the database might have logged some datas about the device test too, so do so and resolve them if you can" | DONE (source) |
+| F2  | "make the mechanism so that the things get resolved through the ci cd"                                      | DONE (source) |
 
 ### G. Admin dashboard
 
 | #   | Requirement                                                                                                                    | Status |
 | --- | ------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| G1  | "the user tab of the admin dashboard is quite confusing and duplicating the things"                                            | TODO   |
+| G1  | "the user tab of the admin dashboard is quite confusing and duplicating the things"                                            | DONE (source) |
 | G2  | "each car should be treated as a unique device"                                                                                | DONE (source) |
 | G3  | "all the projects have a specific name like 4wd4mcar or 2wd1m car which is standard and should be hardcoded in their own code" | DONE (source) |
 | G4  | "the app should treat them unique and organised"                                                                               | DONE (source) |
-| G5  | "the user preference should display only its user log about the different car properly"                                        | TODO   |
-| G6  | "so as that later the admin can see such for each user properly in the admin panel user tabs"                                  | TODO   |
-| G7  | "have the tabs of subtabs for the user to see and use things properly"                                                         | TODO   |
+| G5  | "the user preference should display only its user log about the different car properly"                                        | DONE (source) |
+| G6  | "so as that later the admin can see such for each user properly in the admin panel user tabs"                                  | DONE (source) |
+| G7  | "have the tabs of subtabs for the user to see and use things properly"                                                         | DONE (source) |
 | G8  | "the cars should be uniquely identified and organized and standard in the viewing"                                             | DONE (source) |
 
 ---
@@ -294,6 +294,37 @@ full app Playwright suite **14/14 passed**.
   firmware phases need a checkout first.
 - Scope fixed to the four projects listed at the top.
 
+### 2026-11-19 — Phases 6–8 (G1, G5–G7, F1, F2): one car per row, per-account windows, DB hygiene
+
+**Phase 6 — the Users tab stops duplicating cars.** `services/deviceIdentity.ts`
+(pure, tested) collapses `car_profiles` rows into one entry per physical car:
+the board id is the only stable hardware identity, so fw:/BT-address/wifi: rows
+for the same car fold into one device; rows with no board id are NOT guessed
+together. Both the fleet **Project profiles** window and an account's car list
+now render devices (project token, device id, every key, every owner) instead of
+one row per key, so the same car no longer appears twice.
+
+**Phases 6+7 — an account's detail is three windows.** Expanding a user used to
+stack the project-profile editor and the robot-preferences editor; it is now a
+nested tab strip: **Cars** (grouped profiles), **Preferences** (robot settings),
+**Activity** (that account's OWN `user_activity_log`, via the new
+`listUserActivityLogsFor`) — the fleet-wide Diagnostics stream is untouched.
+
+**Phase 8 — test residue is a CI concern now.** `cleanup-test-residue.mjs`
+grew from users/orders to device rows: crash reports from harness users,
+documented fixture board ids, RFC 5737 TEST-NET addresses or `genumtest` SSIDs,
+and car profiles carrying harness markers. New flags: `--fail-on-residue`
+(report gate) and `--apply` (delete; crash reports are deleted before the auth
+cascade would only null their `user_id`). It reads `.env.local` locally or the
+process environment in CI. New CI job **db-hygiene** (skip-with-warning without
+secrets, real gate with them) plus a weekly **DB hygiene** workflow that reports
+on schedule and deletes only on a deliberate `workflow_dispatch` with
+`apply=true`.
+
+**Gates:** app `tsc`/`eslint`/`prettier` clean · `vitest` **1099/1099** (new
+`deviceIdentity.test.ts`) · website script `node --check` + prettier clean.
+**Not done here:** the live deletion itself — this machine has no Supabase
+service-role credentials, so run `npm run db:residue:apply` or the workflow.
 ### 2026-11-19 — Phase 5 (G2–G4, G8, D1/D2): one canonical identity per project
 
 Each firmware now hardcodes its project token — `FW_PROJECT "4wd4mcar"` /
