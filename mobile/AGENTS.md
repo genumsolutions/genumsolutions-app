@@ -94,5 +94,20 @@ ranges Expo SDK 54 pins. Impact is limited to a local/CI build being made slow o
 wedged by a hostile file name or image; a cracked release build is a failed CI run, not
 a compromised device. `npm audit fix --force` must NOT be used: it proposes downgrading
 `expo` to 52 or installing `expo-updates@58`, which breaks the SDK 54 tree. Upgrade plan:
-`docs/SDK-58-UPGRADE.md`. Re-check at the SDK upgrade; the Dependabot alerts (8, 7, 53, 52) close then, or can be dismissed as
-"vulnerable code is not reachable" in the meantime by the repo owner.
+`docs/SDK-58-UPGRADE.md`. The Dependabot alerts (8, 7, 53, 52) close at that upgrade,
+or can be dismissed as "vulnerable code is not reachable" in the meantime by the repo
+owner.
+
+Re-verified 2026-11-20 on 3.4.4: same four advisories, still nothing installable within
+SDK 54. `glob` is flagged over `>=9.0.0 <=14.0.1` and `minimatch` over
+`>=7.0.0 <11.0.1`, and the packages that pull them pin majors that cannot reach the
+fix — `@expo/cli@54.0.28` declares `glob@^13.0.0` + `minimatch@^9.0.0`,
+`expo-updates@29.0.20` declares `glob@^13.0.0`. The two highs stay on
+`@expo/metro@54.2.0 -> metro@0.83.3 -> image-size@1.2.1`; `@expo/metro@latest` moves to
+`metro@0.87.1`, which no longer depends on `image-size` at all, so they close with the
+SDK bump and only with it. Non-forced `npm audit fix` is not a shortcut: the only route
+it offers to `image-size` 2.x is out of Metro's declared range (that is the export
+breakage above), and it otherwise rewrites hundreds of optional platform binaries.
+Overriding `glob@^14` / `minimatch@^11` into `@expo/cli`'s tree is the fallback the
+upgrade plan sanctions, but it belongs after the bump, where `expo export` can confirm
+`@expo/cli` still walks the tree correctly.
