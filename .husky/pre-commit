@@ -1,2 +1,11 @@
 #!/bin/sh
+# Format and lint ONLY the files in this commit (see .lintstagedrc.json).
+#
+# This used to run `npm run lint:check` — `tsc --noEmit && eslint .` over the
+# whole app — on every commit. That is a ~2.5 minute gate whose cost does not
+# depend on the size of the change, and it was long enough that commits were
+# being killed mid-hook and abandoned. `tsc` cannot be narrowed to a subset of
+# files anyway (a single .ts file is not a program), so typechecking moved to
+# where it covers everything and nobody waits on it: CI's quality job runs
+# `npm run typecheck` and the repo-wide `npm run lint` on every push and PR.
 npx --prefix mobile lint-staged

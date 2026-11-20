@@ -5,7 +5,7 @@
 // uses its props, an import nobody reads, or a branch nobody can reach, so
 // dead admin props survived until someone spotted them by eye. The website
 // already fails on those with ESLint; this config gives the app the same gate,
-// both in the pre-commit hook (`npm run lint:check`) and in CI.
+// in CI (`npm run lint`) and, for the files in a commit, in the pre-commit hook.
 //
 // Deliberately errors on unused variables/arguments. Prefix an argument with
 // "_" when a signature needs the position but the body does not read it.

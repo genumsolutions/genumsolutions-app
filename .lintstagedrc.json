@@ -1,7 +1,7 @@
 {
   "mobile/**/*.{ts,tsx,js,jsx}": [
     "prettier --write",
-    "bash -c 'npm run lint:check --prefix mobile'"
+    "bash -c 'cd mobile && ./node_modules/.bin/eslint \"$@\"' _"
   ],
   "mobile/**/*.{css,md,json}": ["prettier --write"]
 }
