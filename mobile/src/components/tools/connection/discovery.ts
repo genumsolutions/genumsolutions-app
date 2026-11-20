@@ -138,12 +138,12 @@ export function subnetCandidates(
  * what makes discovery work BEFORE the app has ever paired, which is the case
  * that matters here — the phone has no profile for a car it has never seen.
  *
- * U-105 (1.3.5): the fleet own-hotspot name is SINGLE — `4WD4MCar_WiFi` (the
- * donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi` are purged;
- * carProtocol.OWN_AP_NAMES carries the one name). `apName` matches ONE exact
- * name (callers that know which car); `apNames` matches ANY of them (callers
- * that only know "one of our cars is on this network" — the sweep that must
- * work before the app has ever paired).
+ * The own-hotspot names are per car (U-105 purged the donor `WirelessCar_Wifi`
+ * and the earlier `4WDCar_Wifi`); carProtocol.OWN_AP_NAMES is the fleet list
+ * and today holds `4WD4MCar_WiFi` and `2WD1MCar_WiFi`. `apName` matches ONE
+ * exact name (callers that know which car); `apNames` matches ANY of them
+ * (callers that only know "one of our cars is on this network" — the sweep
+ * that must work before the app has ever paired).
  */
 export function looksLikeOurCar(
   payload: unknown,

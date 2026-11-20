@@ -22,6 +22,7 @@
 // Pure. Pinned by dial.test.ts.
 // =====================================================================
 
+import { OWN_AP_NAMES } from "../../../services/carProtocol";
 import type { ConnectionTargetId } from "./methods";
 
 /** The fleet WebSocket port (car v2: HTTP :80 + WS :81, always on). */
@@ -55,9 +56,7 @@ function reportedHost(ip: string | null | undefined): string | null {
     octets.length !== 4 ||
     octets.some(
       (octet) =>
-        !/^\d{1,3}$/.test(octet) ||
-        Number(octet) < 0 ||
-        Number(octet) > 255,
+        !/^\d{1,3}$/.test(octet) || Number(octet) < 0 || Number(octet) > 255,
     ) ||
     host === "0.0.0.0"
   ) {
@@ -101,8 +100,11 @@ export function carIsOnOwnHotspot(ctx: {
   return isCarApGateway(ctx.reportedIp);
 }
 
+// ONE source: the fleet registry in carProtocol (4WD4MCar_WiFi and
+// 2WD1MCar_WiFi today). A second literal list here is exactly how a car's own
+// hotspot stops being recognised the day it is renamed or added.
 const CAR_AP_NAMES_UPPER: ReadonlySet<string> = new Set(
-  ["4WD4MCar_WiFi"].map((n) => n.toUpperCase()),
+  OWN_AP_NAMES.map((n) => n.toUpperCase()),
 );
 
 /**

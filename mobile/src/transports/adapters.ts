@@ -277,14 +277,14 @@ function createWifiWsTransport(
 
 const WIFI_AP_TEACHING: TransportTeaching = {
   intro:
-    "The car runs its own access point (4WD4MCar_WiFi on 192.168.245.1). The phone joins that hotspot directly, so no router or home internet is needed at all — the car IS the network.",
+    "The car runs its own access point (4WD4MCar_WiFi on the 4WD4M, 2WD1MCar_WiFi on the 2WD1M — both at 192.168.245.1). The phone joins that hotspot directly, so no router or home internet is needed at all — the car IS the network.",
   needs:
-    "A WiFi phone. The car powered on and broadcasting 4WD4MCar_WiFi (it always does unless it joined a home router and you prefer that).",
+    "A WiFi phone. The car powered on and broadcasting its own hotspot (it always does unless it joined a home router and you prefer that).",
   when: "The easy WiFi default: it works anywhere, no router, no passwords. Use it whenever the car is not already joined to your home router.",
   serverClient:
     "The car is the SERVER and the phone is the CLIENT: the car creates the network and publishes a fixed address (192.168.245.1), then waits for the phone to dial in. The phone must therefore be the one that connects. Because the car chose the network, there is no router, no password and no internet — but only one such car is reachable at a time from a given phone.",
   steps: [
-    "Join 4WD4MCar_WiFi from the phone's WiFi settings (no password).",
+    "Join the car's own hotspot from the phone's WiFi settings (no password).",
     "In Connections → Car access point (WiFi), keep the default ws://192.168.245.1:81 and press Connect.",
     "The row turns Connected once the car answers a STATE request ('verified').",
   ],

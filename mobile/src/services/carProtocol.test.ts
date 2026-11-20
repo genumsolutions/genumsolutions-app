@@ -133,12 +133,16 @@ describe("router-registry commands + protected own network (A-40/A-46)", () => {
     );
   });
 
-  // U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
-  // `4WD4MCar_WiFi`. The donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
-  // are purged from the registry: a stray legacy name may never match again.
-  it("U-105: the own-AP registry is the single fleet name, trimmed case-insensitively", () => {
-    expect(OWN_AP_NAMES).toEqual(["4WD4MCar_WiFi"]);
+  // U-105 (1.3.5) purged the donor `WirelessCar_Wifi` / `4WDCar_Wifi`: a stray
+  // legacy name may never match again. The registry now carries the TWO live
+  // cars' own hotspots — 4WD4M (`4WD4MCar_WiFi`) and the NEW 2WD1M
+  // (`2WD1MCar_WiFi`, Genum_2WD1M_CAR_NEW Config.h) — both on 192.168.245.1.
+  it("U-105: the own-AP registry is the fleet names, trimmed case-insensitively", () => {
+    expect(OWN_AP_NAMES).toEqual(["4WD4MCar_WiFi", "2WD1MCar_WiFi"]);
     expect(OWN_AP_NAMES).toContain("4WD4MCar_WiFi");
+    expect(OWN_AP_NAMES).toContain("2WD1MCar_WiFi");
+    expect(isOwnApName("2WD1MCar_WiFi")).toBe(true);
+    expect(isOwnApName(" 2wd1mcar_wifi ")).toBe(true);
     expect(isOwnApName("4WD4MCar_WiFi")).toBe(true);
     expect(isOwnApName(" 4WD4MCar_WiFi ")).toBe(true);
     expect(isOwnApName("4WD4MCAR_WIFI")).toBe(true);

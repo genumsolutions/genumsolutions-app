@@ -338,15 +338,21 @@ export const FACTORY_RESET_LINE = "FACTORY;RESET";
  * constant. Use `isOwnApName()` everywhere that distinction matters; the
  * registry below is the fleet list it consults.
  *
- * U-105 (1.3.5, owner 2026-10-13): the fleet own-hotspot name is SINGLE —
- * `4WD4MCar_WiFi` — the donor `WirelessCar_Wifi` and the earlier `4WDCar_Wifi`
- * are purged from the registry (both firmware and app). `OWN_AP_NAMES` is kept
- * as a one-element array so every existing caller (`isOwnApName()`, discovery,
- * dial, DevicePrefs) keeps working untouched while a stray legacy name can
- * never match again.
+ * U-105 (1.3.5, owner 2026-10-13) purged the donor `WirelessCar_Wifi` and the
+ * earlier `4WDCar_Wifi`, leaving ONE name. That is no longer the whole fleet:
+ * the new 2WD1M car (`Genum_2WD1M_CAR_NEW`, `Config.h` WIFI_AP_NAME) broadcasts
+ * `2WD1MCar_WiFi` on the same 192.168.245.1 gateway, so the registry carries
+ * both live names.
+ *
+ * `OWN_AP_NAME` stays the 4WD4M name (the first fleet name, and the one every
+ * legacy caller/default expects). Anything that must recognise ANY car's own
+ * network uses `OWN_AP_NAMES` / `isOwnApName()` — never the single constant.
  */
 export const OWN_AP_NAME = "4WD4MCar_WiFi";
-export const OWN_AP_NAMES: readonly string[] = ["4WD4MCar_WiFi"];
+export const OWN_AP_NAMES: readonly string[] = [
+  "4WD4MCar_WiFi",
+  "2WD1MCar_WiFi",
+];
 
 /**
  * True when `name` is ANY car's own AP (protected, never deletable).

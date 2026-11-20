@@ -222,7 +222,7 @@ export class WifiService {
       }
       this.emitStatus(
         "error",
-        `Car not reachable at ${url} within ${CONNECT_TIMEOUT_MS / 1000}s. Check: phone joined the car's Wi-Fi (4WD4MCar_WiFi), the car is powered, and the IP/port are correct.`,
+        `Car not reachable at ${url} within ${CONNECT_TIMEOUT_MS / 1000}s. Check: the phone is joined to the car's own hotspot (4WD4MCar_WiFi on the 4WD4M, 2WD1MCar_WiFi on the 2WD1M), the car is powered, and the IP/port are correct.`,
       );
     }, CONNECT_TIMEOUT_MS);
 

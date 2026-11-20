@@ -25,6 +25,7 @@ import { CollectionProvider } from "./src/context/CollectionContext";
 import { navigationRef, navigate } from "./src/navigation/navigationRef";
 import { clearCart } from "./src/services/cartService";
 import { recordScreenView } from "./src/services/analyticsService";
+import { ensureTransportsRegistered } from "./src/transports/linkManagerHooks";
 
 // ⑤ (owner snag, 2026-10-02 audit): the Control Panel's connect flow
 // collapses the address/scan card the moment a link goes live, and the
@@ -39,6 +40,17 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// ⑥ The transport registry is registered ONCE here, at module load.
+//
+// `src/transports/linkManagerHooks.ts` exists for exactly this call, and until
+// now nothing in `src` made it — the adapters were covered by their own test
+// file and by nothing the app actually ran, so "registered transport" was a
+// claim about a test, not about the app. Registration is idempotent and does no
+// radio work (it only fills LinkManager's table), so doing it before the first
+// render is free; the live command path today is still the hub's direct
+// spp/ble/wifi services.
+ensureTransportsRegistered();
 
 /** Walk the navigation state tree to the focused route and return its name. */
 function getActiveRouteName(state: unknown): string | null {

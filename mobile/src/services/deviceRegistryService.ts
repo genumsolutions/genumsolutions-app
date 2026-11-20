@@ -74,15 +74,20 @@ export const BUNDLED_DEVICE_MODELS: DeviceModel[] = [
     transports: ["classic-bt", "wifi-ap", "wifi-sta", "http", "websocket"],
   },
   {
+    // The LIVE 2WD1M is the NEW project (`Genum_2WD1M_CAR_NEW`, the v2 fleet
+    // reference): BT `2WD1M Car` and its own hotspot `2WD1MCar_WiFi` on
+    // 192.168.245.1, both read from that Config.h. The retired
+    // `Genum_2WD1M_CAR` announced `2 WHEEL DRIVE CAR` and had no AP at all,
+    // which is why pairing the new car matched no model in this registry.
     id: "2wd1m",
     displayName: "2WD + Servo Car (1 Motor)",
-    repo: "Genum_2WD1M_CAR",
-    fwName: "2 Wheel Drive Car",
-    fwVersion: "1.0.4",
-    btName: "2 WHEEL DRIVE CAR",
-    apSsid: null,
-    apIp: null,
-    transports: ["classic-bt"],
+    repo: "Genum_2WD1M_CAR_NEW",
+    fwName: "2WD1M Car",
+    fwVersion: "2.0.0",
+    btName: "2WD1M Car",
+    apSsid: "2WD1MCar_WiFi",
+    apIp: "192.168.245.1",
+    transports: ["classic-bt", "wifi-ap", "wifi-sta", "http", "websocket"],
   },
   {
     id: "self-balancing",

@@ -36,8 +36,11 @@ describe("BUNDLED_DEVICE_MODELS", () => {
   it("points every model at a real repo folder name", () => {
     for (const m of BUNDLED_DEVICE_MODELS) {
       expect(m.repo, `${m.id} repo`).toMatch(/^Genum_[A-Z0-9_]+$/);
+      // `_CAR_NEW` is a real repo suffix: Genum_2WD1M_CAR_NEW is the live
+      // 2WD1M (the retired Genum_2WD1M_CAR is not the car being driven).
       expect(
         m.repo.endsWith("_CAR") ||
+          m.repo.endsWith("_CAR_NEW") ||
           m.repo.endsWith("_ESP32") ||
           m.repo.endsWith("_DUSTBIN"),
       ).toBe(true);
@@ -54,7 +57,8 @@ describe("BUNDLED_DEVICE_MODELS", () => {
     expect(byId["4wd4m"].btName).toBe("4WD4M Car");
     expect(byId["remote-esp32"].btName).toBe("REMOTE_CTRL");
     expect(byId["wireless-car"].btName).toBe("WIRELESS CAR");
-    expect(byId["2wd1m"].btName).toBe("2 WHEEL DRIVE CAR");
+    // The LIVE 2WD1M is the NEW project: Config.h BT_SPP_NAME = "2WD1M Car".
+    expect(byId["2wd1m"].btName).toBe("2WD1M Car");
     expect(byId["self-balancing"].btName).toBe("SELF BALANCING BOT");
     expect(byId["smart-dustbin"].btName).toBeNull();
   });
@@ -62,6 +66,13 @@ describe("BUNDLED_DEVICE_MODELS", () => {
   it("keeps the 4WD4M AP identity it actually advertises", () => {
     const m = BUNDLED_DEVICE_MODELS.find((x) => x.id === "4wd4m");
     expect(m?.apSsid).toBe("4WD4MCar_WiFi");
+    expect(m?.apIp).toBe("192.168.245.1");
+  });
+
+  it("keeps the live 2WD1M identity (the NEW project) it actually advertises", () => {
+    const m = BUNDLED_DEVICE_MODELS.find((x) => x.id === "2wd1m");
+    expect(m?.repo).toBe("Genum_2WD1M_CAR_NEW");
+    expect(m?.apSsid).toBe("2WD1MCar_WiFi");
     expect(m?.apIp).toBe("192.168.245.1");
   });
 
@@ -89,9 +100,9 @@ describe("BUNDLED_DEVICE_MODELS", () => {
     const byId = Object.fromEntries(
       BUNDLED_DEVICE_MODELS.map((m) => [m.id, m]),
     );
-    // R-17 rule: advertised BT name = FW_NAME upper-cased. These three
-    // follow it, and the registry must record the result verbatim.
-    for (const id of ["2wd1m", "self-balancing", "wireless-car"]) {
+    // R-17 rule: advertised BT name = FW_NAME upper-cased. These two follow it,
+    // and the registry must record the result verbatim.
+    for (const id of ["self-balancing", "wireless-car"]) {
       expect(byId[id].btName, `${id} follows the R-17 uppercase rule`).toBe(
         byId[id].fwName.toUpperCase(),
       );
@@ -104,6 +115,11 @@ describe("BUNDLED_DEVICE_MODELS", () => {
     expect(byId["remote-esp32"].btName).not.toBe(
       byId["remote-esp32"].fwName.toUpperCase(),
     );
+    // 2wd1m joined the same deliberate deviation with the NEW project: its
+    // Config.h sets BT_SPP_NAME to the mixed-case identity "2WD1M Car" (U-110
+    // rename, so the phone list, the OLED and the app all say the same thing).
+    expect(byId["2wd1m"].btName).toBe(byId["2wd1m"].fwName);
+    expect(byId["2wd1m"].btName).not.toBe(byId["2wd1m"].fwName.toUpperCase());
   });
 
   it("gives every model at least one transport and a version", () => {

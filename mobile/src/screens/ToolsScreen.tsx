@@ -34,6 +34,7 @@ import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import type { RootStackParamList } from "../navigation/types";
 import { useControlHub } from "../components/tools/useControlHub";
+import { OWN_AP_NAME } from "../services/carProtocol";
 import { ProjectInfo } from "../components/tools/ProjectInfo";
 import { CarProfileCard } from "../components/tools/CarProfileCard";
 import { TelemetryStrip } from "../components/tools/TelemetryStrip";
@@ -253,7 +254,10 @@ export function ToolsScreen() {
     telemetry.connected === true
       ? telemetry.ssid?.trim() || carSsid || null
       : null;
-  const apName = staSsid ? null : carApName?.trim() || "4WD4MCar_WiFi";
+  // The car reports its own AP in telemetry; this fallback only covers the
+  // window before the first STATE arrives, so it uses the fleet default rather
+  // than a second hard-coded SSID (the 2WD1M advertises 2WD1MCar_WiFi).
+  const apName = staSsid ? null : carApName?.trim() || OWN_AP_NAME;
 
   // P2/owner item C: the last reset, resolved once. The HEADLINE is the last
   // reset itself (reason · phase); the count is secondary. Shown in the
