@@ -1521,13 +1521,23 @@ export function RemoteControlScreen({ navigation }: Props) {
                     Webpage
                   </Text>
                 </View>
+                {/* U-128 (owner 2026-11-21: "when the wifi is off the webpage
+                  should be default off in the setting menu"): the page server
+                  is hosted ON the Wi-Fi transport, so with Wi-Fi OFF there is
+                  nothing to serve. Showing a remembered ON here would offer a
+                  switch that cannot do anything; it reads OFF and is disabled,
+                  and the car reports page_on=0 in that state too, so the next
+                  connect adopts the same truth. The stored choice comes back
+                  on its own when Wi-Fi is turned on again. */}
                 <Switch
-                  value={hub.pageOn === true}
+                  value={
+                    hub.wifiEnabled === false ? false : hub.pageOn === true
+                  }
                   onValueChange={(on) => {
                     feedbackTap();
                     hub.setPageOn(on);
                   }}
-                  disabled={!linked}
+                  disabled={!linked || hub.wifiEnabled === false}
                   trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                   thumbColor="#ffffff"
                   accessibilityLabel="Turn the car's web page on or off"
