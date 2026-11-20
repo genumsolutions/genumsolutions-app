@@ -21,6 +21,8 @@
 //      (re)connect while the car kept serving.
 //   6. PANEL — the switch reads the honest name (`hub.pageOn`), and is
 //      disabled while no link is up, like every other car-backed switch.
+//      U-128: it also reads OFF and is disabled while the Wi-Fi transport is
+//      off — the car's page server runs ON that transport.
 //   7. RENAME — `pageOff` held the page-ON value end to end. It is now
 //      `pageOn`; no `pageOff` identifier survives in the code.
 //
@@ -172,8 +174,23 @@ describe("U-117 — the Webpage switch behaves like its siblings", () => {
     // switch is anchored on ITS OWN writer — the rule is about the Switch.
     const at = screen.indexOf("hub.setPageOn(on)");
     expect(at).toBeGreaterThan(0);
-    const block = slice(screen, at - 500, 700);
-    expect(block).toContain("disabled={!linked}");
+    const block = slice(screen, at - 800, 1600);
+    // U-128: still disabled with no link, and now also with the Wi-Fi
+    // transport off — there is no server to serve a page on.
+    expect(block).toContain("disabled={!linked || hub.wifiEnabled === false}");
     expect(block).toContain("hub.setPageOn(on)");
+  });
+
+  // U-128 (owner 2026-11-21: "when the wifi is off the webpage should be
+  // default off in the setting menu"). The page server lives on the Wi-Fi
+  // transport, so the switch must READ off while Wi-Fi is off instead of
+  // showing a remembered ON that the car cannot honour. The car answers
+  // page_on=0 in the same state, so both surfaces agree.
+  it("reads OFF while the Wi-Fi transport is off", () => {
+    const at = screen.indexOf("hub.setPageOn(on)");
+    const block = slice(screen, at - 800, 1600);
+    expect(block).toContain(
+      "hub.wifiEnabled === false ? false : hub.pageOn === true",
+    );
   });
 });
