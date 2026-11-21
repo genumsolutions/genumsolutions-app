@@ -65,8 +65,8 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(screen.length).toBeGreaterThan(5000);
     expect(hub.length).toBeGreaterThan(5000);
     expect(prompt.length).toBeGreaterThan(500);
-    expect(screen).toContain('testID="remote-disconnect-bt"');
-    expect(screen).toContain('testID="remote-disconnect-wifi"');
+    expect(screen).not.toContain('testID="remote-disconnect-bt"');
+    expect(screen).not.toContain('testID="remote-disconnect-wifi"');
     expect(screen).toContain("renderPromptShell(");
   });
 
@@ -114,38 +114,23 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(screen).toContain("text-[12px] font-bold text-navy");
   });
 
-  it("issue 3: chips are per-live-method and each tears down ONLY itself", () => {
-    // The BT chip is gated on the per-method truth (btLinked), not the
-    // shared `connected` flag that a Wi-Fi connect also sets.
-    expect(screen).toContain("{btLinked ? (");
-    // A1 (owner 2026-10-23, FAILSAFE item 4): the Wi-Fi chip is ONE chip in
-    // TWO variants — "Wi-Fi (hotspot)" while the car is on its own AP, "Wi-Fi"
-    // while it is on a router — and the router variant is gated on the Wi-Fi
-    // truth AND NOT on the hotspot, so the two can never render together.
-    //
-    // U-124 ⑥ (owner 2026-10-24, "when i connect the car through the bluetooth
-    // method only … multiple disconnect buttons … another wifi, which is
-    // duplicate") tightens A1: the HOTSPOT variant now requires the Wi-Fi link
-    // too. It used to key on the phone's own network, so a Bluetooth-only
-    // session sitting on the car's hotspot offered "disconnect Wi-Fi" for a
-    // link that was not up. Both variants still can never render together, and
-    // neither can render without a live Wi-Fi link.
-    expect(screen).not.toContain("{onOwnHotspot ? (");
-    expect(screen).toContain("{wifiConnected ? (");
-    expect(screen).toContain('"Disconnect Wi-Fi (router)"');
-    // The stale phone-network chip is not part of the remote status row.
+  it("issue 3: disconnect chips removed — car auto-manages transports (U-107c)", () => {
+    // The disconnect chips (BT + Wi-Fi) were removed from the merged row.
+    // The car now auto-parks the other transport when one connects (exclusive
+    // mode, U-107c / arbitrateLinkOwnership()), so no manual disconnect is
+    // needed — both broadcast again when idle.
+    expect(screen).not.toContain('testID="remote-disconnect-bt"');
+    expect(screen).not.toContain('testID="remote-disconnect-wifi"');
+    expect(screen).not.toContain('"Disconnect Wi-Fi (router)"');
+    expect(screen).not.toContain('"Disconnect Wi-Fi (hotspot)"');
+    expect(screen).not.toContain('"Disconnect Bluetooth"');
+    // Per-method disconnect helpers kept in the hub for the connection flow
+    // (DeviceConnectionScreen), not for the Remote chrome row.
+    expect(screen).not.toContain("void handleBtDisconnect()");
+    expect(screen).not.toContain("void handleWifiDisconnect()");
+    // The phone-network chip is also gone.
     expect(screen).not.toContain('testID="remote-phone-network"');
     expect(screen).not.toContain('name="smartphone"');
-    // Each chip calls its per-method disconnect. The full teardown
-    // (`handleDisconnect`) must not be reachable from this screen anymore —
-    // "handleBtDisconnect()" does NOT contain the "handleDisconnect()"
-    // substring, so this assertion is exact.
-    expect(screen).toContain("void handleBtDisconnect()");
-    expect(screen).toContain("void handleWifiDisconnect()");
-    expect(screen).not.toContain("handleDisconnect()");
-    expect(screen).toContain("disabled={hub.disconnectingLink !== null}");
-    expect(screen).toContain('busy: hub.disconnectingLink === "bluetooth"');
-    expect(screen).toContain('"Disconnecting…"');
   });
 
   it("issue 14: prompts are opaque, high-contrast cards with honest copy", () => {
@@ -247,11 +232,12 @@ describe("Q2 (owner 2026-10-22) — the merged row drops telemetry FIRST", () =>
     ).toBe(true);
   });
 
-  it("the chips and pills render ungated inside the one merged row", () => {
-    // One merged row (issue 2's pin) carrying both controls unconditionally.
+  it("the pills render ungated inside the one merged row — disconnect chips removed (U-107c)", () => {
+    // One merged row (issue 2's pin). Disconnect chips (BT + Wi-Fi) removed:
+    // the car now auto-manages transports (U-107c / arbitrateLinkOwnership()).
     expect(count(screen, "flex h-9 flex-shrink-0 flex-row")).toBe(1);
-    expect(screen).toContain('testID="remote-disconnect-bt"');
-    expect(screen).toContain('testID="remote-disconnect-wifi"');
+    expect(screen).not.toContain('testID="remote-disconnect-bt"');
+    expect(screen).not.toContain('testID="remote-disconnect-wifi"');
     // The labels live in the ONE tab-data array (rendered by a .map), so
     // pin its entries rather than JSX text between `>` and `<`.
     expect(screen).toContain('{ id: "dpad" as const, label: "D-pad" }');
@@ -356,7 +342,7 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
   });
 
-  it("items 5+6: real tap sizes and a real disconnect mark", () => {
+  it("items 5+6: tab pills at real tap sizes — disconnect chips removed (U-107c)", () => {
     // Four tab pills at the new size (U-121 kept, widgets 4→4; U-124 ③
     // re-measured them down to px-3 py-1.5 / 11 px so the LABELS fit the row
     // at 640 px instead of being pushed off its right edge).
@@ -364,15 +350,12 @@ describe("U-121 — the chrome chip is the broadcast IP, only while the page is 
     // size is pinned once and the four tab entries above prove the count.
     expect(screen).toContain("rounded-full px-3 py-1.5 ${selected ?");
     expect((screen.match(/rounded-full px-4 py-2/g) ?? []).length).toBe(0);
-    // …every disconnect chip carries the transport icon + name + ✕…
-    // THREE render sites for TWO chips: Bluetooth, Wi-Fi (hotspot), Wi-Fi —
-    // A1 (owner 2026-10-23) split the Wi-Fi chip into its hotspot/router
-    // variants and each variant must keep its own ✕ (the owner's "not proper
-    // disconnect icon"). The pin was 2 before that split.
-    expect(count(screen, 'name="x-circle"')).toBe(2);
+    // Disconnect chips (BT + Wi-Fi) removed — the car auto-manages transports
+    // (U-107c / arbitrateLinkOwnership()). No ✕ disconnect icons in the row.
+    expect(count(screen, 'name="x-circle"')).toBe(0);
     // The Q2 owner-default: the compact telemetry line is the FIRST thing
     // dropped on narrow screens — controls never hide. Exactly ONE width gate
-    // wraps TelemetryLine, so the chips and pills are ungated.
+    // wraps TelemetryLine, so the pills are ungated.
     expect(count(screen, "width >= MERGED_ROW_TELEMETRY_MIN_PX")).toBe(1);
     // The old 9 px sliver sizing is gone from the row.
     expect(count(screen, "px-2.5 py-0.5")).toBe(0);
