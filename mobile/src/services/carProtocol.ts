@@ -140,6 +140,17 @@ export type CarTelemetry = {
    */
   linkCap?: boolean;
   /**
+   * U-129 (owner 2026-11-21): who OWNS the link right now, from the car's
+   * /status JSON (`"link_owner":"wifi"|"bt"|"both"`). The car offers both
+   * methods at boot; the first one that gets a client parks the other until the
+   * last client disconnects, so the panel can say which method is serving and
+   * which one is paused rather than implying a radio is broken. `"both"` = both
+   * offered, nobody connected. Absent on older firmware, and absent on STATE
+   * lines (this fact rides the WS JSON only) - consumers must treat "missing" as
+   * "don't know" and render nothing.
+   */
+  linkOwner?: "wifi" | "bt" | "both";
+  /**
    * R-4 fleet parity: the car replies `NACK;E=UNKNOWN_MODE;ARG=<token>` (or
    * `:` separators) when it does not recognize a sent mode token. The app
    * surfaces the rejection like the remote (comms.cpp:482-513) and parks the
@@ -858,6 +869,15 @@ export function parseTelemetryLine(line: string): CarTelemetry {
       // car refused the second link; an ABSENT field stays absent = capable
       // (F-88), never denied.
       if (typeof j.link_cap === "number") telemetry.linkCap = j.link_cap !== 0;
+      // U-129: which method owns the link. Only the three known words are
+      // adopted - an unknown string is "don't know", never a guess at a
+      // transport the car did not name.
+      if (
+        j.link_owner === "wifi" ||
+        j.link_owner === "bt" ||
+        j.link_owner === "both"
+      )
+        telemetry.linkOwner = j.link_owner;
       // U-117: the car's web-page server state in the WS JSON — the same fact
       // the STATE line carries as `;PAGE=`. Wrong type / absent stays ABSENT
       // ("don't know"), so the panel never manufactures an OFF.

@@ -95,6 +95,34 @@ describe("P5 — the WS JSON status carries the same verdict", () => {
   });
 });
 
+describe("U-129 — the car says which method OWNS the link", () => {
+  it("each of the car's three words is adopted as the owner", () => {
+    expect(parseTelemetryLine('{"link_owner":"wifi"}').linkOwner).toBe("wifi");
+    expect(parseTelemetryLine('{"link_owner":"bt"}').linkOwner).toBe("bt");
+    expect(parseTelemetryLine('{"link_owner":"both"}').linkOwner).toBe("both");
+  });
+
+  it("an older /status (no link_owner) stays ABSENT - the panel says nothing", () => {
+    const t = parseTelemetryLine('{"status":"OK","link_cap":1}');
+    expect(t.linkOwner).toBeUndefined();
+    expect(t.linkCap).toBe(true);
+  });
+
+  it("an unknown word is never guessed into a transport", () => {
+    // The panel renders a sentence naming a radio, so a wrong value would tell
+    // the owner the wrong method is parked. Only the car's own words count.
+    for (const raw of [
+      '{"link_owner":"WIFI"}',
+      '{"link_owner":"ble"}',
+      '{"link_owner":""}',
+      '{"link_owner":1}',
+      '{"link_owner":null}',
+    ]) {
+      expect(parseTelemetryLine(raw).linkOwner).toBeUndefined();
+    }
+  });
+});
+
 // --- part B: the model — a refusal becomes a renderable reason, first links
 //     are never gated ------------------------------------------------------
 
@@ -112,7 +140,7 @@ describe("P5 — targetUnavailableReason refuses only SECOND-link raises", () =>
     for (const id of ["bt-spp", "car-wifi"] as const) {
       const why = refused(id);
       expect(why).toBeTruthy();
-      expect(why).toContain("one link only");
+      expect(why).toContain("one link at a time");
     }
   });
 

@@ -209,10 +209,13 @@ export function targetUnavailableReason(
     ctx.linkCapRefused &&
     (target.id === "bt-spp" || target.id === "car-wifi")
   ) {
+    // U-129 (owner 2026-11-21): the car OFFERS both methods but SERVES one at a
+    // time - the connected method parks the other until it disconnects. So the
+    // refusal is a pause the owner can end, not (only) a memory emergency.
     return (
-      "The car has low free memory, so it is allowing one link only to prevent " +
-      "a freeze or reset. Keep using the current link, or switch off the other " +
-      "transport in Settings before trying again."
+      "The car serves one link at a time: while your current link is connected, " +
+      "the other method stays paused. Disconnect it, or switch off the other " +
+      "transport in Settings, and this one opens again."
     );
   }
   if (target.needsCarOnRouter && !ctx.carOnOwnRouter) {

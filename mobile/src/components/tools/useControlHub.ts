@@ -354,6 +354,14 @@ export function useControlHub(routeCategory?: string) {
   // telemetry stream and never persisted: the car re-broadcasts it on every
   // STATE line, and the F-88 rule lives at the point of use, not here.
   const [linkCap, setLinkCap] = useState<boolean | null>(null);
+  // U-129 (owner 2026-11-21): which method OWNS the link (`"link_owner"` in the
+  // car's /status JSON). `"wifi"`/`"bt"` = that method is serving and the other
+  // is parked until the last client disconnects; `"both"` = both offered. This
+  // is a LIVE car fact like linkCap, so it is adopted from telemetry and never
+  // persisted. `null` = the car has not said (no /status yet, older firmware).
+  const [linkOwner, setLinkOwner] = useState<"wifi" | "bt" | "both" | null>(
+    null,
+  );
   // v2: default to the NEW 4WD4M car's own-AP WS (192.168.245.1 — the donor
   // owns .244 and the SDK default .4.x is forbidden fleet-wide). The field is
   // user-editable and the remembered per-device URL wins when present.
@@ -1782,6 +1790,8 @@ export function useControlHub(routeCategory?: string) {
       // frame. No commit-grace: this is a car fact, not a user edit, so no
       // optimistic value exists to protect.
       if (typeof t.linkCap === "boolean") setLinkCap(t.linkCap);
+      // U-129: same rule for the link owner - a car fact, no commit-grace.
+      if (t.linkOwner !== undefined) setLinkOwner(t.linkOwner);
       // The car-side scan answer (ROUTERS;SCAN, firmware v2) — feeds the
       // Connectivity panel's nearby list (shown after an explicit Search).
       // Change-guarded so steady frames don't thrash. U-120 item 12: smart-link
@@ -4254,6 +4264,9 @@ export function useControlHub(routeCategory?: string) {
     // absence means CAPABLE, never denied). The connection panel gates the
     // SECOND-link raises on `linkCap === false`.
     linkCap,
+    // U-129: which method owns the link, so the remote screen's settings can
+    // say which radio is serving and which is paused until disconnect.
+    linkOwner,
     reconnectDue,
     reconnectMethod,
     // U-108 Phase 4 (owner 2026-10-13): the network the PHONE is on (safe

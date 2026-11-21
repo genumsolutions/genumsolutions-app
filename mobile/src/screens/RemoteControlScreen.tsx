@@ -1506,6 +1506,39 @@ export function RemoteControlScreen({ navigation }: Props) {
                 />
               </View>
 
+              {/* U-129 (owner 2026-11-21): the car OFFERS both methods but SERVES
+                one at a time — whichever gets connected first parks the other
+                until the last client disconnects, then both open again. Say so
+                here, or a radio that is deliberately paused reads as broken and
+                the owner flips a transport switch trying to fix it. Only shown
+                while both transports are enabled (turning one off is the
+                owner's own choice, not the car parking anything) and only when
+                the car has actually said (`linkOwner` rides the /status JSON). */}
+              {hub.wifiEnabled !== false &&
+                hub.btEnabled !== false &&
+                hub.linkOwner !== null && (
+                  <View className="mt-0.5 flex-row items-center gap-2 pl-1">
+                    <Feather
+                      name={
+                        hub.linkOwner === "wifi"
+                          ? "wifi"
+                          : hub.linkOwner === "bt"
+                            ? "bluetooth"
+                            : "link"
+                      }
+                      size={12}
+                      color="#64748b"
+                    />
+                    <Text className="min-w-0 flex-1 text-[9px] font-semibold leading-tight text-muted">
+                      {hub.linkOwner === "wifi"
+                        ? "Wi-Fi owns the link · Bluetooth is paused until you disconnect."
+                        : hub.linkOwner === "bt"
+                          ? "Bluetooth owns the link · the Wi-Fi hotspot is paused until you disconnect."
+                          : "Both methods open · whichever connects first keeps the link."}
+                    </Text>
+                  </View>
+                )}
+
               {/* Webpage — turn the car-hosted webpage (:80/:81) on or off.
                 Webpage ONLY: this does not touch the Wi-Fi transport toggle
                 (WIFICFG;WIFI;ON|OFF / t_wifi) or the Bluetooth transport toggle
