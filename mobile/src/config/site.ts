@@ -20,3 +20,5 @@ export const SITE_URL = "https://genumsolutions-website.vercel.app";
 export const BUNDLED_HERO_TITLE = "Technology you can touch, test, and trust.";
 export const BUNDLED_HERO_BODY =
   "Robotics kits, project solutions, fabrication, open tools, and training — built in Nepal for hobbyists, students, and small manufacturers.";
+// ci trigger
+// ci trigger
