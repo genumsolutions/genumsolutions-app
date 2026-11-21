@@ -57,6 +57,7 @@ jobs:
         run: npm run test:count
 
       - name: Expo doctor
+        timeout-minutes: 5
         run: npm run doctor
 
       # Font paths in app.json only bite during `expo prebuild`, which the
