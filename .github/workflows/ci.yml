@@ -76,9 +76,6 @@ jobs:
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v3
-        permissions:
-          contents: read
-          security-events: write
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
