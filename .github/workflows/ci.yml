@@ -7,14 +7,20 @@ on:
       - 'mobile/**'
       - 'scripts/**'
       - '.github/workflows/ci.yml'
-      - '.github/workflows/test-ci.yml'
+      - '.github/workflows/ota-only.yml'
+      - '.github/workflows/ota-guard.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/sync-version.yml'
   pull_request:
     branches: [main]
     paths:
       - 'mobile/**'
       - 'scripts/**'
       - '.github/workflows/ci.yml'
-      - '.github/workflows/test-ci.yml'
+      - '.github/workflows/ota-only.yml'
+      - '.github/workflows/ota-guard.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/sync-version.yml'
   workflow_dispatch:
 
 concurrency:
