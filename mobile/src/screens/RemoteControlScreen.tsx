@@ -68,7 +68,6 @@ import {
   InlineMessage,
 } from "../components/tools/connection";
 import {
-  carIsOnOwnHotspot,
   carWebPageIp,
   carWebPageUrl,
 } from "../components/tools/connection/dial";
@@ -362,11 +361,6 @@ export function RemoteControlScreen({ navigation }: Props) {
     carRestartNotice,
     autoJoinRouter,
     setAutoJoinRouter,
-    // U-113 P2 (issue 3): per-method disconnects — each chip tears down ONLY
-    // its own transport. (The full `handleDisconnect` is no longer used here:
-    // the BT chip used to call it and killed the Wi-Fi link too.)
-    handleBtDisconnect,
-    handleWifiDisconnect,
     connMethod,
     setConnMethod,
   } = hub;
@@ -391,13 +385,6 @@ export function RemoteControlScreen({ navigation }: Props) {
   const parallelBoth = connected && wifiConnected;
   const isRobocar = !isDrone && !isNonRobocar;
 
-  // Distinguish the own hotspot from a router so the page address never
-  // falls back to the AP gateway while the car is on a different network.
-  const onOwnHotspot = carIsOnOwnHotspot({
-    reportedSsid: telemetry.ssid ?? null,
-    ownApName: carApName ?? null,
-    reportedIp: telemetry.ip ?? null,
-  });
   // U-113 P2 (owner issue 10): the chrome row shows the car's broadcast IP
   // as THE link to the car's page, so this is the ONE IP expression left.
   // Honesty kept from U-108/W5: a known STA IP first, the AP address (named
@@ -972,85 +959,9 @@ export function RemoteControlScreen({ navigation }: Props) {
             start at the SAME shell inset, so the two bars line up on the left
             edge (the old px-1 pushed this row 4 px right of Back). */}
         <View className="mt-1 flex h-9 flex-shrink-0 flex-row items-center gap-1">
-          {btLinked ? (
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                void handleBtDisconnect();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Disconnect Bluetooth"
-              testID="remote-disconnect-bt"
-              disabled={hub.disconnectingLink !== null}
-              accessibilityState={{
-                disabled: hub.disconnectingLink !== null,
-                busy: hub.disconnectingLink === "bluetooth",
-              }}
-              hitSlop={8}
-              className={`shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 ${hub.disconnectingLink !== null ? "opacity-60" : "active:opacity-70"}`}
-            >
-              <Feather name="bluetooth" size={13} color="#64748b" />
-              <Text className="text-[11px] font-bold text-muted">
-                {hub.disconnectingLink === "bluetooth"
-                  ? "Disconnecting…"
-                  : "Bluetooth"}
-              </Text>
-              {hub.disconnectingLink === "bluetooth" ? (
-                <Feather name="clock" size={13} color="#64748b" />
-              ) : (
-                <Feather name="x-circle" size={14} color="#ef4444" />
-              )}
-            </Pressable>
-          ) : null}
-          {/* U-124 ⑥ (owner 2026-10-24, "when i connect the car through the
-              bluetooth method only … multiple disconnect buttons … another
-              wifi, which is duplicate"): BOTH Wi-Fi variants now require the
-              Wi-Fi link itself. The hotspot variant used to key on the
-              PHONE's network alone, so sitting on the car's own hotspot while
-              only Bluetooth was linked still offered a "disconnect Wi-Fi"
-              button for a link that was not up — a second Wi-Fi control in a
-              BT-only status bar. At most ONE Wi-Fi chip ever renders, and only
-              while there is a Wi-Fi link to tear down. */}
-          {wifiConnected ? (
-            <Pressable
-              onPress={() => {
-                feedbackTap();
-                void handleWifiDisconnect();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                onOwnHotspot
-                  ? "Disconnect Wi-Fi (hotspot)"
-                  : "Disconnect Wi-Fi (router)"
-              }
-              testID="remote-disconnect-wifi"
-              disabled={hub.disconnectingLink !== null}
-              accessibilityState={{
-                disabled: hub.disconnectingLink !== null,
-                busy: hub.disconnectingLink === "wifi",
-              }}
-              hitSlop={8}
-              className={`shrink-0 flex-row items-center gap-1.5 rounded-full border-2 border-line bg-card px-3 py-2 ${hub.disconnectingLink !== null ? "opacity-60" : "active:opacity-70"}`}
-            >
-              <Feather name="wifi" size={13} color="#64748b" />
-              <Text className="text-[11px] font-bold text-muted">
-                {hub.disconnectingLink === "wifi"
-                  ? "Disconnecting…"
-                  : onOwnHotspot
-                    ? "Wi-Fi (hotspot)"
-                    : "Wi-Fi (router)"}
-              </Text>
-              {hub.disconnectingLink === "wifi" ? (
-                <Feather name="clock" size={13} color="#64748b" />
-              ) : (
-                <Feather name="x-circle" size={14} color="#ef4444" />
-              )}
-            </Pressable>
-          ) : null}
-          {/* Q2 default (owner): the compact telemetry line is the FIRST
-              thing dropped when the row gets tight — the disconnect chips and
-              the tab pills are controls and always fit. The same readings are
-              on the Telemetry tab and the readout column. */}
+          {/* Wi-Fi / Bluetooth disconnect chips removed — the car now parks the
+              other transport automatically when one connects (exclusive mode).
+              No manual disconnect needed; both broadcast again when idle. */}
           {isRobocar && width >= MERGED_ROW_TELEMETRY_MIN_PX ? (
             <TelemetryLine {...driveTelemetryArgs} />
           ) : null}
@@ -1455,90 +1366,12 @@ export function RemoteControlScreen({ navigation }: Props) {
               </Pressable>
             </View>
 
-            {/* Group 1 — Car connection: the car's three transport toggles
-                plus the app's auto-join rule, together. */}
+            {/* Group 1 — Car connection: Webpage server + remember-last-router.
+                Wi-Fi and Bluetooth transport toggles are REMOVED here — the car
+                now serves one method at a time automatically (exclusive mode).
+                When one client connects, the other transport parks itself; when
+                idle, both broadcast again. No user switches needed. */}
             <SettingsGroup title="Car connection">
-              {/* U-105 (owner 2026-10-13): the car's transport toggles replace the
-                removed parallel + power-save settings (`WIFICFG;PARALLEL` /
-                `WIFICFG;APSAVE` and their NVS keys are gone). Wi-Fi (`t_wifi`)
-                and Bluetooth (`t_bt`) can never BOTH be off — the car clamps a
-                both-off request, and here the toggle that would leave the pair
-                at two-OFFs is disabled. Each mirrors the car's NVS and rides to
-                DevicePrefs + cloud. (P3 2026-10-15: the third toggle here, the
-                CAR's boot auto-join, was removed — see below.) */}
-              <View className="mt-1 min-h-11 flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Feather name="wifi" size={14} color="#64748b" />
-                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    Wi-Fi
-                  </Text>
-                </View>
-                <Switch
-                  value={hub.wifiEnabled === true}
-                  onValueChange={(on) => {
-                    feedbackTap();
-                    hub.setCarTransportToggle("WIFI", on);
-                  }}
-                  disabled={!linked || hub.btEnabled === false}
-                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                  thumbColor="#ffffff"
-                  accessibilityLabel="Turn the car's Wi-Fi transport on or off"
-                />
-              </View>
-
-              <View className="mt-1 min-h-11 flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Feather name="bluetooth" size={14} color="#64748b" />
-                  <Text className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                    Bluetooth
-                  </Text>
-                </View>
-                <Switch
-                  value={hub.btEnabled === true}
-                  onValueChange={(on) => {
-                    feedbackTap();
-                    hub.setCarTransportToggle("BT", on);
-                  }}
-                  disabled={!linked || hub.wifiEnabled === false}
-                  trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
-                  thumbColor="#ffffff"
-                  accessibilityLabel="Turn the car's Bluetooth transport on or off"
-                />
-              </View>
-
-              {/* U-129 (owner 2026-11-21): the car OFFERS both methods but SERVES
-                one at a time — whichever gets connected first parks the other
-                until the last client disconnects, then both open again. Say so
-                here, or a radio that is deliberately paused reads as broken and
-                the owner flips a transport switch trying to fix it. Only shown
-                while both transports are enabled (turning one off is the
-                owner's own choice, not the car parking anything) and only when
-                the car has actually said (`linkOwner` rides the /status JSON). */}
-              {hub.wifiEnabled !== false &&
-                hub.btEnabled !== false &&
-                hub.linkOwner !== null && (
-                  <View className="mt-0.5 flex-row items-center gap-2 pl-1">
-                    <Feather
-                      name={
-                        hub.linkOwner === "wifi"
-                          ? "wifi"
-                          : hub.linkOwner === "bt"
-                            ? "bluetooth"
-                            : "link"
-                      }
-                      size={12}
-                      color="#64748b"
-                    />
-                    <Text className="min-w-0 flex-1 text-[9px] font-semibold leading-tight text-muted">
-                      {hub.linkOwner === "wifi"
-                        ? "Wi-Fi owns the link · Bluetooth is paused until you disconnect."
-                        : hub.linkOwner === "bt"
-                          ? "Bluetooth owns the link · the Wi-Fi hotspot is paused until you disconnect."
-                          : "Both methods open · whichever connects first keeps the link."}
-                    </Text>
-                  </View>
-                )}
-
               {/* Webpage — turn the car-hosted webpage (:80/:81) on or off.
                 Webpage ONLY: this does not touch the Wi-Fi transport toggle
                 (WIFICFG;WIFI;ON|OFF / t_wifi) or the Bluetooth transport toggle
