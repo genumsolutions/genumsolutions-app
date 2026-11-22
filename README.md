@@ -14,10 +14,13 @@ native app with its own UI/UX. **Not** a WebView wrapper.
 - Shared contract with `genumsolutions-website`:
   - **Supabase project** `jxgmbodzkmxanuwfaqxo` — schema single source of truth is
     `genumsolutions-website/supabase/schema.sql` (this repo's `mobile/supabase/` is empty).
-  - **DB tables:** `products`, `services`, `carts`, `orders`, `profiles`,
+  - **Shared tables this app uses** (the full schema — ~50 tables — lives in
+    `schema.sql`): `products`, `services`, `carts`, `orders`, `profiles`,
     `robo_car_modes`, `company_info`, `site_content`, `customer_messages`,
-    `push_tokens`.
-  - **Current published version** is `3.4.3` / Android `versionCode` `67`, matching
+    `push_tokens`, plus the car/device side: `car_profiles`, `car_telemetry`,
+    `car_connection_sessions`, `device_models`, `devices`, `user_devices`,
+    `device_crash_reports`.
+  - **Current published version** is `3.4.5` / Android `versionCode` `69`, matching
     `mobile/app.json`, `mobile/package.json`, `mobile/src/config/site.ts`, and the
     public `release.json` manifest. Keep app-side version fields synchronized when
     preparing a release; do not advance the website fallback before the APK is published.

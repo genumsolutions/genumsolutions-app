@@ -61,28 +61,28 @@ Every line below is a commitment. Status values: `TODO` / `IN PROGRESS` / `DONE`
 
 ### D. App data organisation
 
-| #   | Requirement                                                                                                         | Status |
-| --- | ------------------------------------------------------------------------------------------------------------------- | ------ |
+| #   | Requirement                                                                                                         | Status        |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ------------- |
 | D1  | "the app should act as per the cars used and sort the telemetries and datas as per the different projects and cars" | DONE (source) |
 | D2  | "keep them arranged and properly synced for the remote screens and all its things properly"                         | DONE (source) |
 
 ### E. 4WD4M car
 
-| #   | Requirement                                                                                           | Status |
-| --- | ----------------------------------------------------------------------------------------------------- | ------ |
+| #   | Requirement                                                                                           | Status                       |
+| --- | ----------------------------------------------------------------------------------------------------- | ---------------------------- |
 | E1  | "the 4wd4m car was resetting and freezing at the start of some cycle, please check and fix those too" | IN PROGRESS (device pending) |
 
 ### F. Database
 
-| #   | Requirement                                                                                                 | Status |
-| --- | ----------------------------------------------------------------------------------------------------------- | ------ |
+| #   | Requirement                                                                                                 | Status        |
+| --- | ----------------------------------------------------------------------------------------------------------- | ------------- |
 | F1  | "the database might have logged some datas about the device test too, so do so and resolve them if you can" | DONE (source) |
 | F2  | "make the mechanism so that the things get resolved through the ci cd"                                      | DONE (source) |
 
 ### G. Admin dashboard
 
-| #   | Requirement                                                                                                                    | Status |
-| --- | ------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| #   | Requirement                                                                                                                    | Status        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------ | ------------- |
 | G1  | "the user tab of the admin dashboard is quite confusing and duplicating the things"                                            | DONE (source) |
 | G2  | "each car should be treated as a unique device"                                                                                | DONE (source) |
 | G3  | "all the projects have a specific name like 4wd4mcar or 2wd1m car which is standard and should be hardcoded in their own code" | DONE (source) |
@@ -303,12 +303,19 @@ project-identity check (U-127-4 / U-128-5) and the app-side admin/device-list
 checks. Results go in each car's DEVICE-TESTS rows; E1 and C1–C4 only leave
 "device pending" after those pass.
 
+> **Correction (2026-11-23):** neither U-127 nor U-128 was ever written into the
+> car repos, and the firmware behaviours they test (motor soft-start / reversal
+> dead-time, `FW_PROJECT` → `;PROJ=` / `"project"`) are absent from both car
+> trees. See the BLOCKED banner in `docs/BENCH-2026-11-19.md` before running
+> this round.
+
 **Release status:** `npm run release:ready` reports app.json `3.4.3` (code 67)
 already consistent with the live manifest and the published APK, so none of the
 2026-11-19 app work is on any phone yet. Shipping it is a deliberate release
 (bump `app.json` + `site.ts`, build the signed APK from `C:s`, upload, sync the
 website fallback) or an OTA for the same version — both are owner-run steps and
 were deliberately NOT triggered here.
+
 ### 2026-11-19 — Phases 6–8 (G1, G5–G7, F1, F2): one car per row, per-account windows, DB hygiene
 
 **Phase 6 — the Users tab stops duplicating cars.** `services/deviceIdentity.ts`
@@ -340,6 +347,7 @@ on schedule and deletes only on a deliberate `workflow_dispatch` with
 `deviceIdentity.test.ts`) · website script `node --check` + prettier clean.
 **Not done here:** the live deletion itself — this machine has no Supabase
 service-role credentials, so run `npm run db:residue:apply` or the workflow.
+
 ### 2026-11-19 — Phase 5 (G2–G4, G8, D1/D2): one canonical identity per project
 
 Each firmware now hardcodes its project token — `FW_PROJECT "4wd4mcar"` /
@@ -362,6 +370,7 @@ parsing + grouping tests) · both firmwares `check-firmware-contract` 0 failures
 crashing on the old `Genum_4WD4M_CAR.ino` name, so it now actually runs.
 **Not in this phase:** the admin Users tab (Phase 6) still needs to surface the
 project token; the app garage card shows the same device facts as before.
+
 ### 2026-11-19 — Phase 4 (E1): the 4WD4M reset/freeze has a source fix
 
 Root cause: `L298NControl::drive()` wrote the target duty to both LEDC channels in
@@ -378,6 +387,7 @@ failsafe and low-heap stops still cut power instantly; `setSpeed()` feeds the ra
 **Left to prove (F-61):** bench rows U-127-1..3 in
 `Genum_4WD4M_CAR/TRACKS/DEVICE-TESTS.md` (30 start/stop cycles with no reboot,
 immediate failsafe stop, gentle reversal). E1 stays IN PROGRESS until those pass.
+
 ### 2026-11-19 — CI repair: the Phase 1/3 source pins were stale (commit `dababd9` failed)
 
 The `CI / Typecheck + Expo doctor` job was red on `dababd9`. Typecheck, lint and
@@ -385,13 +395,13 @@ The `CI / Typecheck + Expo doctor` job was red on `dababd9`. Typecheck, lint and
 still described the pre-Phase-1/3 implementation, so the gate was right to be red even
 though the product code was the intended new shape:
 
-| File | Stale pin | Now pins |
-| --- | --- | --- |
-| `screens/feedbackSurface.test.ts` | the old in-flow footer `mt-1 flex-shrink-0` | the A3/A4 zero-flow overlay (`remote-status-overlay`, `pointerEvents="none"`, `absolute bottom-2 …`), and the old footer is absent |
-| `screens/remoteChrome.test.ts` (Q2) | D-pad/Connectivity as JSX text | the four entries of the one tab-data array (ids + labels) |
-| `screens/remoteChrome.test.ts` (U-121 ⑤) | four literal `px-3 py-1.5` sites | the single shared pill className inside the `.map` (the four tab entries prove the count); `px-4 py-2` still absent |
-| `services/carProfileService.test.ts` | a `joystickLayout: "dual"` record counted as fresh | fresh = `"dpad"`; legacy `"dual"` (which meant JOYSTICK) explicitly NOT fresh |
-| `components/tools/persistenceSync.test.ts` | the one-key persist call | the A1 writer: raw setter + `setJoystickLayoutId` + the two-key `persistPrefsRef` call |
+| File                                       | Stale pin                                          | Now pins                                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `screens/feedbackSurface.test.ts`          | the old in-flow footer `mt-1 flex-shrink-0`        | the A3/A4 zero-flow overlay (`remote-status-overlay`, `pointerEvents="none"`, `absolute bottom-2 …`), and the old footer is absent |
+| `screens/remoteChrome.test.ts` (Q2)        | D-pad/Connectivity as JSX text                     | the four entries of the one tab-data array (ids + labels)                                                                          |
+| `screens/remoteChrome.test.ts` (U-121 ⑤)   | four literal `px-3 py-1.5` sites                   | the single shared pill className inside the `.map` (the four tab entries prove the count); `px-4 py-2` still absent                |
+| `services/carProfileService.test.ts`       | a `joystickLayout: "dual"` record counted as fresh | fresh = `"dpad"`; legacy `"dual"` (which meant JOYSTICK) explicitly NOT fresh                                                      |
+| `components/tools/persistenceSync.test.ts` | the one-key persist call                           | the A1 writer: raw setter + `setJoystickLayoutId` + the two-key `persistPrefsRef` call                                             |
 
 Also fixed while there: `services/deviceProfileRegistryService.ts` still synthesized
 `joystickLayout: "dual"` in `cloudRowToPrefs()` and `stubPrefs()` — the A1 regression
