@@ -1,4 +1,7 @@
 {
+  "3.4.5": [
+    "Bug fixes and quality improvements across the cars, D-pad, status bar and admin screens."
+  ],
   "3.4.4": [
     "Remote: the D-pad stays when the car connects, the status note no longer resizes the drive deck, and the control tabs read as one strip.",
     "Cars: the 4WD4M no longer resets at the start of a cycle; the 2WD1M remembers its steering, trim and telemetry and can switch to another router.",
