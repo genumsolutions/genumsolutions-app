@@ -114,23 +114,48 @@ describe("U-113 P2 — the Remote chrome rebuild", () => {
     expect(screen).toContain("text-[12px] font-bold text-navy");
   });
 
-  it("issue 3: disconnect chips removed — car auto-manages transports (U-107c)", () => {
-    // The disconnect chips (BT + Wi-Fi) were removed from the merged row.
-    // The car now auto-parks the other transport when one connects (exclusive
-    // mode, U-107c / arbitrateLinkOwnership()), so no manual disconnect is
-    // needed — both broadcast again when idle.
+  it("issue 3, amended by S-03: ONE disconnect control, not two chips", () => {
+    // HISTORY: U-107c removed the two per-method chips because the car parks the
+    // sibling transport by itself (exclusive mode, arbitrateLinkOwnership()), so
+    // "disconnect" looked unnecessary.
+    //
+    // S-03 (owner bench report 2026-11-23: *"the app is missing the disconnect
+    // button on the remote screen"*) reverses the UI half of that: the owner has
+    // no way to drop a link on purpose, which is also the only way to exercise
+    // the reconnect path they reported as broken. The AUTOMATIC parking stays —
+    // nothing here re-introduces the two small chips, which is what U-121's
+    // "too small to click" was about. One button, in the chrome row, labelled.
+    expect(screen).toContain('testID="remote-disconnect"');
+    // The old per-method chips are still gone: their IDs, their four labels and
+    // the phone-network chip that shared the row.
     expect(screen).not.toContain('testID="remote-disconnect-bt"');
     expect(screen).not.toContain('testID="remote-disconnect-wifi"');
     expect(screen).not.toContain('"Disconnect Wi-Fi (router)"');
     expect(screen).not.toContain('"Disconnect Wi-Fi (hotspot)"');
     expect(screen).not.toContain('"Disconnect Bluetooth"');
-    // Per-method disconnect helpers kept in the hub for the connection flow
-    // (DeviceConnectionScreen), not for the Remote chrome row.
-    expect(screen).not.toContain("void handleBtDisconnect()");
-    expect(screen).not.toContain("void handleWifiDisconnect()");
-    // The phone-network chip is also gone.
     expect(screen).not.toContain('testID="remote-phone-network"');
     expect(screen).not.toContain('name="smartphone"');
+
+    // The one button closes the link the CAR says owns the link, and falls back
+    // to whichever radio is actually up — never to the app's memory of what it
+    // dialled. Both hub helpers are reachable, each closing only its own
+    // transport (U-113 issue 3's rule, preserved).
+    expect(screen).toContain('if (linkOwner === "wifi")');
+    expect(screen).toContain('if (linkOwner === "bt")');
+    expect(screen).toContain("void handleWifiDisconnect();");
+    expect(screen).toContain("void handleBtDisconnect();");
+    expect(screen).toContain("if (btLinked)");
+    // The four inputs are read from the hub once, with the rest of the
+    // component's state — not through `hub.` inside the callback, which would
+    // make its dependency list the whole per-render hub object.
+    expect(screen).toContain("disconnectingLink,");
+    expect(screen).toContain("linkOwner,");
+
+    // It exists only while a link is up, and it is single-shot: while the
+    // teardown runs the button disables itself, so a double tap cannot fire a
+    // second teardown over a link that is already closing.
+    expect(screen).toContain("{linked ? (");
+    expect(screen).toContain("disabled={hub.disconnectingLink != null}");
   });
 
   it("issue 14: prompts are opaque, high-contrast cards with honest copy", () => {

@@ -175,9 +175,18 @@ describe("U-117 — the Webpage switch behaves like its siblings", () => {
     const at = screen.indexOf("hub.setPageOn(on)");
     expect(at).toBeGreaterThan(0);
     const block = slice(screen, at - 800, 1600);
-    // U-128: still disabled with no link, and now also with the Wi-Fi
-    // transport off — there is no server to serve a page on.
-    expect(block).toContain("disabled={!linked || hub.wifiEnabled === false}");
+    // U-128: still disabled with no link, and also with the Wi-Fi transport
+    // off — there is no server to serve a page on.
+    //
+    // S-12 (owner 2026-11-23: "when bluetooth is connected the webpage should be
+    // off by default"): and while Bluetooth owns the link, where the car has
+    // stopped its server too. Offering a tap there cannot take effect until the
+    // BT client disconnects, so the switch is disabled instead of letting a
+    // truthful OFF read as a broken control. Its own explanation line sits right
+    // below it, pinned by the next test.
+    expect(block).toContain(
+      "!linked || hub.wifiEnabled === false || pageOffWhileBt",
+    );
     expect(block).toContain("hub.setPageOn(on)");
   });
 
@@ -189,8 +198,17 @@ describe("U-117 — the Webpage switch behaves like its siblings", () => {
   it("reads OFF while the Wi-Fi transport is off", () => {
     const at = screen.indexOf("hub.setPageOn(on)");
     const block = slice(screen, at - 800, 1600);
-    expect(block).toContain(
-      "hub.wifiEnabled === false ? false : hub.pageOn === true",
-    );
+    expect(block).toContain("hub.wifiEnabled === false || pageOffWhileBt");
+    expect(block).toContain(": hub.pageOn === true");
+  });
+
+  // S-12: the switch must not flip itself off with no explanation. The owner's
+  // report read exactly that as a broken toggle, so the reason is on screen and
+  // the value is derived from the car's own link owner, never from what this
+  // phone dialled.
+  it("names WHY the page is off while Bluetooth owns the link", () => {
+    expect(screen).toContain('const pageOffWhileBt = hub.linkOwner === "bt"');
+    expect(screen).toContain("{pageOffWhileBt ? (");
+    expect(screen).toContain("Off while Bluetooth is connected");
   });
 });

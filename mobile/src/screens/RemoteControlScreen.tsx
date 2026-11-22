@@ -363,9 +363,49 @@ export function RemoteControlScreen({ navigation }: Props) {
     setAutoJoinRouter,
     connMethod,
     setConnMethod,
+    // S-03: the one disconnect control's four inputs.
+    disconnectingLink,
+    linkOwner,
+    handleBtDisconnect,
+    handleWifiDisconnect,
   } = hub;
 
   const linked = connected || wifiConnected;
+  // S-03: the one deliberate disconnect. Which radio to close is the CAR's fact
+  // (`linkOwner`, adopted from ;LINK= / "link_owner"), because the car parks the
+  // sibling transport the moment one owns the link — so "the live method" is
+  // exactly what the car named. The fallbacks cover the two honest gaps: a
+  // firmware too old to publish an owner, and the moment before the first STATE
+  // lands. Nothing here guesses from the app's own memory of what it dialled.
+  const disconnectLiveLink = useCallback(() => {
+    if (disconnectingLink != null) return;
+    feedbackTap();
+    if (linkOwner === "wifi") {
+      void handleWifiDisconnect();
+      return;
+    }
+    if (linkOwner === "bt") {
+      void handleBtDisconnect();
+      return;
+    }
+    if (btLinked) {
+      void handleBtDisconnect();
+      return;
+    }
+    if (wifiConnected) void handleWifiDisconnect();
+  }, [
+    btLinked,
+    disconnectingLink,
+    handleBtDisconnect,
+    handleWifiDisconnect,
+    linkOwner,
+    wifiConnected,
+  ]);
+  // S-12's app half: while the car says Bluetooth owns the link, its page server
+  // is stopped (S-12 firmware half), so this app must not show a page that is
+  // serving. `linkOwner` is adopted from the car, so this is a fact, not a guess
+  // about what this phone dialled.
+  const pageOffWhileBt = hub.linkOwner === "bt";
   // U-120: the local page-server truth gate. This screen derives `pageLinkReady`
   // from the HUB's public page-serving opinion only (`hub.carPageServing.current`).
   // Any other consumer of that truth (the page toggle, future reachability checks)
@@ -921,6 +961,48 @@ export function RemoteControlScreen({ navigation }: Props) {
 
           {isRobocar && (
             <View className="shrink-0 flex-row items-center gap-2">
+              {/* S-03 (owner bench report 2026-11-23: *"the app is missing the
+                  disconnect button on the remote screen"*): U-107c deleted the
+                  two per-method chips because the car parks the sibling
+                  transport automatically, and that reasoning was sound — but it
+                  left the owner with NO way to drop a link on purpose, which is
+                  also the only way to exercise the reconnect path. So the
+                  control comes back as ONE button, not two chips: it closes the
+                  link the CAR says owns the link (linkOwner, adopted from
+                  STATE), and falls back to whichever radio is actually up.
+                  Closing only that transport is exactly what the hub's
+                  per-method handlers already do (U-113 issue 3), so a live
+                  sibling link survives. Single-shot: it disables and shows
+                  pending while the teardown runs, so a double tap cannot send a
+                  second teardown over a link that is already closing. */}
+              {linked ? (
+                <Pressable
+                  onPress={disconnectLiveLink}
+                  disabled={hub.disconnectingLink != null}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect the car"
+                  accessibilityState={{
+                    disabled: hub.disconnectingLink != null,
+                  }}
+                  testID="remote-disconnect"
+                  hitSlop={8}
+                >
+                  <View
+                    className={`h-11 flex-row items-center gap-1.5 rounded-full border border-line px-3 ${hub.disconnectingLink != null ? "opacity-50" : "bg-card"}`}
+                  >
+                    <Feather
+                      name="slash"
+                      size={14}
+                      color={themeMode === "dark" ? "#fca5a5" : "#b91c1c"}
+                    />
+                    <Text className="text-[11px] font-bold text-muted">
+                      {hub.disconnectingLink != null
+                        ? "Closing…"
+                        : "Disconnect"}
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={() => setShowSettings((v) => !v)}
                 accessibilityRole="button"
@@ -1336,13 +1418,25 @@ export function RemoteControlScreen({ navigation }: Props) {
               (connection / driving / danger) behind one header row with a real
               close mark, instead of one undifferentiated strip of switches. U-123: the scroll
               indicator is ON — on a short landscape screen the Danger zone
-              sits below the fold and must stay discoverable. */}
+              sits below the fold and must stay discoverable.
+
+              S-07 (owner bench report 2026-11-23: *"the reset car is also not
+              properly displayed in that space of the settings, its bottom
+              overlaps the bottom border of the setting page"*): the Danger zone
+              is the LAST child of this scroll view, so on the shortest landscape
+              height it lands exactly at the sheet's floor and its red border
+              reads as sitting on the panel's own bottom border. The sheet owns
+              that floor gap below (paddingBottom), because it cannot come from
+              the child - a scrolled-to-end child has nothing beneath it. */}
           <ScrollView
             className="absolute z-40 w-96 max-w-[94%] rounded-2xl border border-line bg-card p-3 shadow-xl"
             style={{
               top: 56,
               right: Math.max(insets.right, 12),
               maxHeight: height - 56 - Math.max(insets.bottom, 8) - 12,
+            }}
+            contentContainerStyle={{
+              paddingBottom: 10,
             }}
             showsVerticalScrollIndicator={true}
           >
@@ -1397,18 +1491,36 @@ export function RemoteControlScreen({ navigation }: Props) {
                   on its own when Wi-Fi is turned on again. */}
                 <Switch
                   value={
-                    hub.wifiEnabled === false ? false : hub.pageOn === true
+                    hub.wifiEnabled === false || pageOffWhileBt
+                      ? false
+                      : hub.pageOn === true
                   }
                   onValueChange={(on) => {
                     feedbackTap();
                     hub.setPageOn(on);
                   }}
-                  disabled={!linked || hub.wifiEnabled === false}
+                  disabled={
+                    !linked || hub.wifiEnabled === false || pageOffWhileBt
+                  }
                   trackColor={{ false: "#cbd5e1", true: "#1e3a8a" }}
                   thumbColor="#ffffff"
                   accessibilityLabel="Turn the car's web page on or off"
                 />
               </View>
+              {/* S-12 (owner 2026-11-23: "when bluetooth is connected the webpage
+                should be off by default"): the car now reports page_on=0 while
+                Bluetooth owns the link, because suspendAP() really has stopped
+                the server. Without this line the switch would flip itself off and
+                the owner would read it as broken - so the reason is named, and
+                the switch is disabled rather than offering a tap that cannot
+                take effect until the BT client disconnects. The stored choice is
+                untouched; the page returns by itself on the disconnect. */}
+              {pageOffWhileBt ? (
+                <Text className="-mt-0.5 pb-1 text-[9px] leading-tight text-muted">
+                  Off while Bluetooth is connected — it comes back when the
+                  car's Bluetooth client disconnects.
+                </Text>
+              ) : null}
 
               {/* The car checks the remembered router at boot and keeps its
                 own access point when the router is absent. */}

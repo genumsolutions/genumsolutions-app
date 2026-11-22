@@ -624,6 +624,16 @@ export function ConnectionSection({
 
       {/* ── LEFT pane: method select + setup + the this-car inventory ── */}
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
+        {/* S-10 (owner 2026-11-23: *"the connectivity tab … is also not properly
+            built of the ui ux … fix those all the separate section of the pages
+            and their operations too"*): this half had no heading at all while
+            the manager half has carried "Car network" since U-124 — so the pane
+            with the METHOD choice, the connect action and the inventory read as
+            one undifferentiated stack of cards. One label makes the two halves
+            siblings and names what this one does: the link. */}
+        <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
+          Link
+        </Text>
         {/* M1: the method row is the METHOD ONLY — no status text, no
             disconnect, no Bluetooth details (all in the strip above). */}
 
@@ -733,7 +743,13 @@ export function ConnectionSection({
           rows appear only after an explicit Search (WifiPanel `showScanned`).
           The "Other ESP / IoT projects" entry card is deleted per the owner
           (2026-10-23/24); the in-place add form below is the way in. */}
-      <View className="min-w-[240px] min-w-0 flex-1 gap-1.5">
+      {/* S-10: this pane carried BOTH `min-w-[240px]` and `min-w-0` — two
+          contradictory minimums on one view. In NativeWind the later class is
+          the one that lands, so the manager half could collapse to zero width
+          and its cards would sit on top of each other; on the widths where the
+          two panes wrap it instead took the full row because `flex-1` had
+          nothing to fight. One minimum, full width when wrapped. */}
+      <View className="w-full min-w-[240px] flex-1 gap-1.5">
         {method === "wifi" || method === "bluetooth" ? (
           <>
             {/* U-124 ⑩ (owner 2026-10-24): "you can merge these two sections

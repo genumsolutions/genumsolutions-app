@@ -254,4 +254,37 @@ describe("P7 — issue 8: settings store promptly and stay in sync", () => {
     // it fires immediately — never behind an interval
     expect(block).not.toContain("setInterval");
   });
+
+  // S-05/S-06 (owner bench report 2026-11-23): "the 2wd1m car is also not
+  // following the settings of the 2wd1m car too, the things like remember last
+  // saved router, trim, steering angle". The car persisted all of them; the APP
+  // wrote its own defaults over them. The drive-setup push ran the moment the
+  // link came up - before the car's first STATE had been adopted - so on a fresh
+  // install (no per-device profile) `STEER_LIMIT_DEFAULT` and trim 0 replaced
+  // whatever the owner had saved on the car, at every connect.
+  it("pushes steer/trim only AFTER the car's own values were adopted (S-05/S-06)", () => {
+    // 1. the adopt block is what unlocks the push
+    const adopt = code.indexOf("if (t.trim != null || t.steerLimit != null)");
+    expect(adopt).toBeGreaterThan(0);
+    expect(slice(adopt, 200)).toContain("setupAdoptedRef.current = true;");
+
+    // 2. the push is gated on it, and the gate is BEFORE the sends
+    const sync = code.indexOf("if (!setupAdoptedRef.current) {");
+    expect(sync).toBeGreaterThan(0);
+    const gated = slice(sync, 700);
+    expect(gated).toContain("setTimeout(");
+    expect(gated).toContain("setupAdoptedRef.current = true;");
+    const steerSend = code.indexOf("sendCommand(buildSteer(steerLimit));");
+    expect(steerSend).toBeGreaterThan(sync);
+
+    // 3. the fallback is bounded, so a car that does not publish those keys
+    //    still receives its servo offset instead of waiting forever
+    expect(code).toContain("}, DRIVE_SETUP_ADOPT_TIMEOUT_MS);");
+    expect(code).toContain("const DRIVE_SETUP_ADOPT_TIMEOUT_MS = 2500;");
+
+    // 4. a dropped link forgets the adoption, so a reconnect adopts again
+    const reset = code.indexOf("driveSetupSyncedRef.current = false;");
+    expect(reset).toBeGreaterThan(0);
+    expect(slice(reset, 120)).toContain("setupAdoptedRef.current = false;");
+  });
 });

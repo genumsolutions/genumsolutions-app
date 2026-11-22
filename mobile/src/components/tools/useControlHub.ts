@@ -145,6 +145,15 @@ const LAST_DEVICE_KEY = "genum.lastDevice";
 const ROUTER_SWITCH_NOTICE_MS = 4 * 60 * 1000;
 
 /**
+ * S-05/S-06: how long the drive-setup push waits for the car to report its own
+ * steer/trim before falling back to sending the app's values. Long enough for
+ * the first STATE frame on a slow link (the car broadcasts every 1 s and the
+ * app polls REQ_STATE every 2 s), short enough that a firmware which does not
+ * publish those keys still gets its servo offset promptly.
+ */
+const DRIVE_SETUP_ADOPT_TIMEOUT_MS = 2500;
+
+/**
  * Commands that must reach the car over EVERY live link, regardless of the
  * active mode's transport. Mode tokens (any live link can switch the car
  * into that mode â€” the car renders its own frame), plus the neutral /
@@ -752,6 +761,11 @@ export function useControlHub(routeCategory?: string) {
   const mountedRef = useRef(true);
   const manualCloseRef = useRef(false);
   const disconnectingRef = useRef(false);
+  // S-05/S-06: has the car reported its own steer/trim since this link came up?
+  // The drive-setup push waits for this so the app's defaults can never be
+  // written over a value the owner saved on the car. Declared here, above
+  // applyTelemetry, because that is where it is set. See the sync effect below.
+  const setupAdoptedRef = useRef(false);
   const lastDriveCmdAtRef = useRef<Record<string, number>>({});
   const connectionMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -1650,6 +1664,12 @@ export function useControlHub(routeCategory?: string) {
         }
       }
       if (t.trim != null) setTrim(t.trim);
+      // S-05/S-06: the car has now reported its own drive setup, so the push
+      // below is allowed to run. Either value is enough - both ride every STATE
+      // line from a firmware that publishes them at all, and waiting for both
+      // would let a partial report strand the servo offset on the 2WD1M.
+      if (t.trim != null || t.steerLimit != null)
+        setupAdoptedRef.current = true;
       // R-19: car-truth trip metrics (2WD1M family STATE extras)
       if (t.trip != null) setTripAvg(t.trip);
       if (t.maxSteer != null) setMaxSteer(t.maxSteer);
@@ -3333,18 +3353,56 @@ export function useControlHub(routeCategory?: string) {
   }, [addressForMemory]);
 
   const driveSetupSyncedRef = useRef(false);
+  // S-05/S-06 (owner bench report 2026-11-23: *"the 2wd1m car is also not
+  // following the settings of the 2wd1m car too, the things like remember last
+  // saved router, trim, steering angle"*): ADOPT BEFORE PUSH.
+  //
+  // The sync effect below re-sends steer/trim/servo on every fresh link, which
+  // it must - those values live on the car and the app is the surface that sets
+  // them. But it used to run the moment the link came up, i.e. BEFORE the car's
+  // first STATE had been adopted. With no per-device profile (a fresh install, a
+  // cleared app) `steerLimit` is STEER_LIMIT_DEFAULT and `trim` is 0, so the
+  // app's own defaults were written over whatever the owner had saved on the
+  // car - and once S-11 moved the default to 30, that silently rewrote a saved
+  // 60/45/... every connect. The car looked like it had forgotten its settings
+  // because the app kept overwriting them with its own.
+  //
+  // So the push waits until the car has actually reported a value since this
+  // link came up. Nothing is pushed that the car did not just send, which also
+  // means a car that already holds the right value sees an idempotent write.
+  // `setupAdoptedRef` (declared with the other link-lifecycle refs above) is
+  // set by the transport-adopt block in applyTelemetry and cleared with the
+  // link, so a reconnect always adopts again.
+  // A car that never reports (an older firmware that omits ;TRIM=/;STEER=) must
+  // still get its servo offset, so the wait is bounded: after this the push
+  // happens anyway rather than never. That is the old behaviour, restored only
+  // where adoption cannot happen.
+  const [setupAdoptTick, setSetupAdoptTick] = useState(0);
   useEffect(() => {
     if (!connected && !linkVerified) {
       driveSetupSyncedRef.current = false;
+      setupAdoptedRef.current = false;
       return;
     }
     if (driveSetupSyncedRef.current) return;
+    if (!setupAdoptedRef.current) {
+      const timer = setTimeout(() => {
+        if (driveSetupSyncedRef.current) return;
+        // Give up waiting for car truth and push - the same bounded fallback
+        // the link verification itself uses. Marked as adopted so the effect
+        // does not re-arm on the next render.
+        setupAdoptedRef.current = true;
+        setSetupAdoptTick((n) => n + 1);
+      }, DRIVE_SETUP_ADOPT_TIMEOUT_MS);
+      return () => clearTimeout(timer);
+    }
     driveSetupSyncedRef.current = true;
     sendCommand(buildSteer(steerLimit));
     sendCommand(buildTrim(trim));
     if (activeMode.controls.includes("drive-2wd1m"))
       sendCommand(buildServo(servo));
   }, [
+    setupAdoptTick,
     connected,
     linkVerified,
     activeMode,
