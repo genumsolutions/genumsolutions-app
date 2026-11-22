@@ -105,6 +105,7 @@ import {
   SPEED_MAX,
   STEER_LIMIT_MIN,
   STEER_LIMIT_MAX,
+  STEER_LIMIT_DEFAULT,
   buildSteer,
   buildServo,
   buildTrim,
@@ -459,9 +460,10 @@ export function useControlHub(routeCategory?: string) {
   const [activeMode, setActiveMode] = useState<CarMode>(LOCAL_CAR_MODES[0]);
   const [speed, setSpeed] = useState(170);
   const [servo, setServo] = useState(90);
-  // R-20: steerLimit = the steering travel LIMIT (max |servo − 90|, 10..90).
+  // R-20: steerLimit = the steering travel LIMIT (max |servo − 90|, 10..60).
   // Car truth rides STATE ;STEER=; edits send STEER<n> and the car echoes.
-  const [steerLimit, setSteerLimit] = useState(90);
+  // S-11: a fresh car starts at 30, not at the old ceiling.
+  const [steerLimit, setSteerLimit] = useState(STEER_LIMIT_DEFAULT);
   const [trim, setTrim] = useState(0);
   // R-19 (FIN-45): car-truth trip mirrors (STATE TRIP=/MSTEER=; telemetry-only,
   // never persisted — the car owns them).
@@ -1025,7 +1027,7 @@ export function useControlHub(routeCategory?: string) {
         modeId: null,
         speed: 170,
         servo: 90,
-        steerLimit: 90,
+        steerLimit: STEER_LIMIT_DEFAULT,
         trim: 0,
         useJoystick: false,
         fullscreen: false,

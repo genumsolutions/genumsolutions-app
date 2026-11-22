@@ -16,7 +16,12 @@
 // =====================================================================
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../config/supabase";
-import { SPEED_MAX, SPEED_MIN, isOwnApName } from "./carProtocol";
+import {
+  SPEED_MAX,
+  SPEED_MIN,
+  STEER_LIMIT_DEFAULT,
+  isOwnApName,
+} from "./carProtocol";
 import type { CarDiagnostics, DevicePrefs } from "../components/tools/types";
 
 export type WifiHistoryEntry = { ssid: string; lastSeen: number };
@@ -341,7 +346,7 @@ export function isFreshDefaultPrefs(prefs: DevicePrefs | null): boolean {
   return (
     prefs.speed === 170 &&
     prefs.servo === 90 &&
-    prefs.steerLimit === 90 &&
+    prefs.steerLimit === STEER_LIMIT_DEFAULT &&
     prefs.trim === 0 &&
     prefs.useJoystick === false &&
     // A1: the canonical "default surface" id is "dpad". Legacy profiles

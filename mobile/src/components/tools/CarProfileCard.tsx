@@ -14,6 +14,7 @@ import React from "react";
 import { Switch, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { DevicePrefs } from "./types";
+import { STEER_LIMIT_DEFAULT } from "../../services/carProtocol";
 import type { ProfileSyncState } from "../../services/carProfileService";
 import type { CarLogRow } from "./carLogModel";
 
@@ -305,7 +306,8 @@ export function CarProfileCard({
               savedPrefs?.speed != null ? `${savedPrefs.speed} / 255` : "—"
             }
           />
-          {(savedPrefs?.steerLimit != null && savedPrefs.steerLimit !== 90) ||
+          {(savedPrefs?.steerLimit != null &&
+            savedPrefs.steerLimit !== STEER_LIMIT_DEFAULT) ||
           modeName === "2WD1M" ? (
             <SettingRow
               icon="move"

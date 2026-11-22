@@ -89,7 +89,8 @@ describe("command builders (wire format)", () => {
   it("builds newline-terminated-free command lines the car parses", () => {
     expect(buildSpd(120.4)).toBe("SPD120");
     expect(buildServo(90)).toBe("SERVO90");
-    // R-20: STEER is the steering travel LIMIT (max |servo − 90|, 10..90),
+    // R-20: STEER is the steering travel LIMIT (max |servo − 90|, 10..60 after
+    // S-11; it was 10..90 before the owner capped the travel),
     // not direct degrees — always positive.
     expect(buildSteer(45.6)).toBe("STEER46");
     expect(buildSteer(90)).toBe("STEER90");

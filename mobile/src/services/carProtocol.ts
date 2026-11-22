@@ -227,9 +227,17 @@ export const SPEED_STEP = 5;
  * R-20 steering travel limit range (STEER token / STATE ;STEER=): the max
  * |servo − 90| the 2WD1M drive model may command. Car-persisted; remote +
  * app mirror the car's value. Floor 10 keeps at least a sliver of steering.
+ * S-11 (owner 2026-11-23): the ceiling is 60°, not 90° — the car's servo model
+ * over-steered past the useful mechanical travel, so 60 is the new maximum.
  */
 export const STEER_LIMIT_MIN = 10;
-export const STEER_LIMIT_MAX = 90;
+export const STEER_LIMIT_MAX = 60;
+/**
+ * S-11: starting travel when nothing has been saved for this car yet. The owner
+ * asked for "the middle value like 30 degree" rather than the old 90, which
+ * meant a fresh car steered with its full old range on the first touch.
+ */
+export const STEER_LIMIT_DEFAULT = 30;
 
 /**
  * Exact port of the ESP remote's quantizeSpeedToStep() (ui_misc.cpp):

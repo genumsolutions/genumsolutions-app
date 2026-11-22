@@ -57,6 +57,7 @@ import {
   sanitizeDiagnostics,
   WIFI_HISTORY_CAP,
 } from "./carProfileService";
+import { STEER_LIMIT_DEFAULT } from "./carProtocol";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -427,11 +428,16 @@ describe("profiles sync engine (last-saved-wins)", () => {
     expect(isFreshDefaultPrefs(null)).toBe(true);
     // A1: the canonical default surface id is "dpad"; a legacy "dual"
     // profile meant JOYSTICK, so it must not read as an untouched record.
+    // S-11: `base` carries the OLD 90 steer ceiling, so a record that is meant
+    // to be untouched has to state the new default explicitly - leaving 90 in
+    // would make this a record the owner had edited, which is exactly what the
+    // function is supposed to notice.
     expect(
       isFreshDefaultPrefs({
         ...base,
         address: null,
         joystickLayout: "dpad",
+        steerLimit: STEER_LIMIT_DEFAULT,
       } as DevicePrefs),
     ).toBe(true);
     expect(
