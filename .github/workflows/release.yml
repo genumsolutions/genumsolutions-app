@@ -93,6 +93,11 @@ jobs:
     defaults:
       run:
         working-directory: mobile
+        # A job-level `defaults.run` block REPLACES the workflow-level one, so
+        # the `shell: bash` set at the top of this file does not reach this
+        # job. Restate it here or the runner hands these steps to Windows
+        # PowerShell (there is no PowerShell 7 on the runner).
+        shell: bash
     steps:
       - uses: actions/checkout@v5
 
