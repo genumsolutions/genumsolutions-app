@@ -11,6 +11,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The self-hosted runner is Windows and has no PowerShell 7, so every `run:`
+# step was silently handed to Windows PowerShell while these steps are written
+# as bash (set -e, if/then/fi, curl). That is what made each job die ~1s into
+# its first command. Pin bash (Git Bash ships with the runner's Git).
+defaults:
+  run:
+    shell: bash
+
 jobs:
   quality:
     name: Typecheck + Expo doctor
@@ -104,7 +112,7 @@ jobs:
         run: npm ci
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       # No .env.local in CI, so the bundle keeps the placeholder Supabase host:
       # every read fails fast and the screens paint their bundled content. That
@@ -207,9 +215,9 @@ jobs:
           fi
           echo "bundled catalog matches the website"
 
-      - name: Install Chromium
+      - name: Install Chromium (parity)
         working-directory: mobile
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Export web bundle
         working-directory: mobile

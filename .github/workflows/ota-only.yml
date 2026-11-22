@@ -39,6 +39,11 @@ concurrency:
   group: ota-only
   cancel-in-progress: false
 
+# Self-hosted runner is Windows without PowerShell 7; these steps are bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   ota-publish:
     if: github.ref == 'refs/heads/main'

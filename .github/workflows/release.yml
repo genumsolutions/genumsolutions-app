@@ -69,6 +69,11 @@ concurrency:
   group: release-apk
   cancel-in-progress: false
 
+# Self-hosted runner is Windows without PowerShell 7; these steps are bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-and-release:
     if: github.ref == 'refs/heads/main'

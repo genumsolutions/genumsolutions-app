@@ -21,6 +21,11 @@ on:
     # The old push trigger raced with release.yml: sync-version.mjs would
     # abort because the APK wasn't uploaded yet (release.yml was still building).
 
+# Self-hosted runner is Windows without PowerShell 7; these steps are bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   sync-manifest:
     name: Upload release manifest
