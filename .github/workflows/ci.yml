@@ -44,7 +44,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -116,7 +115,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -179,7 +177,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
             mobile/package-lock.json
             website/package-lock.json
 

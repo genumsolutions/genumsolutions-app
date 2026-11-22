@@ -76,7 +76,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
 
       # ── Decide whether this push should publish an OTA bundle ─────────
       # Standard practice for this repo:

@@ -45,7 +45,6 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
 
       - name: Check secrets
         id: check-secrets
