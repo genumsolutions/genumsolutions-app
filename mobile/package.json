@@ -81,7 +81,8 @@
     "test:e2e": "expo export --platform web && playwright test",
     "prepare": "cd .. && husky",
     "release:ready": "npx tsx scripts/release-ready-check.mjs",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "publish:ota:legacy": "node scripts/publish-ota-legacy.mjs"
   },
   "private": true,
   "overrides": {
