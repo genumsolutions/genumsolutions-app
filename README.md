@@ -20,10 +20,14 @@ native app with its own UI/UX. **Not** a WebView wrapper.
     `push_tokens`, plus the car/device side: `car_profiles`, `car_telemetry`,
     `car_connection_sessions`, `device_models`, `devices`, `user_devices`,
     `device_crash_reports`.
-  - **Current published version** is `3.4.5` / Android `versionCode` `69`, matching
-    `mobile/app.json`, `mobile/package.json`, `mobile/src/config/site.ts`, and the
-    public `release.json` manifest. Keep app-side version fields synchronized when
-    preparing a release; do not advance the website fallback before the APK is published.
+  - **App-side version fields** agree on `3.4.5` / Android `versionCode` `69` in
+    `mobile/app.json`, `mobile/package.json`, `mobile/src/config/site.ts`, and
+    `mobile/release-notes.json`. These are **ready to publish** but the public
+    `release.json` manifest on the Supabase bucket still reports **3.4.4 / 68**
+    until the signed 3.4.5 APK is built on the release mirror and uploaded with
+    `mobile/scripts/upload-release.mjs`. Keep app-side version fields
+    synchronized when preparing a release; do not advance the website fallback
+    before the APK is published.
   - **Brand palette:** navy/ink/gold, `Inter + Sora` fonts — mirrored in the website's
     `tailwind.config.ts`.
   - Keep `mobile/src/config/roboCarCatalog.ts` (and the other fallback catalogs) in sync

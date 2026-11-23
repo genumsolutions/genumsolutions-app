@@ -73,7 +73,7 @@
     "lint:check": "tsc --noEmit && eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "publish:ota": "npx eas-cli update --branch main --message \"OTA update\" --non-interactive",
+    "publish:ota": "npx eas-cli update --channel production --message \"OTA update\" --non-interactive",
     "test": "vitest run",
     "test:count": "node scripts/check-test-count.mjs",
     "check:release-notes": "node scripts/check-release-notes.mjs",

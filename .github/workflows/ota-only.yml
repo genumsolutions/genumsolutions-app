@@ -140,7 +140,7 @@ jobs:
         id: publish-ota
         run: |
           set +e
-          npx eas-cli update --branch main --message "OTA-only push (${{ github.sha }})" --non-interactive
+          npx eas-cli update --channel production --message "OTA-only push (${{ github.sha }})" --non-interactive
           PUBLISH_EXIT=$?
           if [ $PUBLISH_EXIT -eq 0 ]; then
             echo "✅ OTA bundle published: ${{ github.sha }}"
