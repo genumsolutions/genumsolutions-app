@@ -3,3 +3,6 @@ release.json
 
 # Debug APKs (large build artifacts; keep release APKs tracked)
 *-debug*.apk
+
+# Local rebuilds for on-device testing - never commit
+*-local-test.apk
