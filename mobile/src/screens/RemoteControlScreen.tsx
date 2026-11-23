@@ -601,12 +601,26 @@ export function RemoteControlScreen({ navigation }: Props) {
   // default the method to Bluetooth so the left=method / right=network panes
   // both render on open — a null default left the panel as one full-width
   // column until a method was picked ("two separate formats").
-  //
-  // U-124 (owner item ⑧): the pick is the HUB's, not this screen's — it is
+  //                // U-124 (owner item ⑧): the pick is the HUB's, not this screen's — it is
   // persisted per device (`DevicePrefs.connMethod`), so reopening the Remote
   // shows the method the user last raised (bluetooth first on a fresh device),
   // and a connect raised through it is the radio `routeCommand` prefers when
   // both links are live.
+
+  // ── Last active view ──
+  // The Remote carries FOUR views across ONE segmented strip on the merged row
+  // (D-pad / Joystick / Telemetry / Connectivity). The drive surfaces persist per
+  // device (`useJoystick`); telemetry/connectivity are plain inspection surfaces and
+  // stay session-only. Until there is a reason to restore an inspection surface by
+  // default, the strip opens on the drive surface the device profile says last time
+  // (or D-pad on a fresh device) — so the owner's "tabs not remembered" reads as
+  // "the deck sits on D-pad even after I was on Connectivity" rather than a shipped
+  // preference that does nothing. They are remembered where it is worth restoring by
+  // default (the drive surface); the connection-led positioning is handled by the car
+  // instead of a fragile tab-memory: when the active mode is the website-server mode
+  // the strip already opens on Connectivity by construction (above), so the page-led
+  // flows land on the right view without inventing one more persisted preference that
+  // would only ever be stale.
 
   // ── Orientation lock ──
   const priorLockRef = useRef<ScreenOrientation.OrientationLock | null>(null);

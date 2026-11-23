@@ -240,6 +240,24 @@ export const STEER_LIMIT_MAX = 60;
 export const STEER_LIMIT_DEFAULT = 30;
 
 /**
+ * S-11 (owner 2026-11-23, finalized): the turn mode the app marks as the
+ * DEFAULT surface for the 2WD1M car — the drive surface a fresh phone / fresh
+ * car opens on in the Remote. 2WD1M exposes two drive surfaces (D-pad letters
+ * and joystick), and the app must choose ONE to show first; D-pad is the
+ * default because it is the most explicit, least fat-finger surface and the
+ * one that preserves the car's stored settings across the drive deck. Joystick
+ * is a session choice, NOT a default.
+ *
+ * The app does NOT ship a separate "last tab" memory for the Remote's four
+ * views (D-pad / Joystick / Telemetry / Connectivity). Telemetry and
+ * Connectivity are plain inspection views and stay session-only; the drive
+ * surface is the only one that is worth restoring by default, and it is
+ * restored by the drive-surface preference (`useJoystick`) instead of a second
+ * fragile tab-memory.
+ */
+export const DEFAULT_2WD1M_DRIVE_SURFACE: "dpad" | "joystick" = "dpad";
+
+/**
  * Exact port of the ESP remote's quantizeSpeedToStep() (ui_misc.cpp):
  * snap a raw value to the nearest SPEED_STEP grid point inside
  * SPEED_MIN..SPEED_MAX. Values at/below the floor clamp to SPEED_MIN

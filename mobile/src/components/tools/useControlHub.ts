@@ -1020,6 +1020,14 @@ export function useControlHub(routeCategory?: string) {
         }
         return;
       }
+      // We have a cloud row — the remaining step is a local-vs-cloud
+      // last-write-wins merge (see mergeCloudProfile): if the phone holds the
+      // newer save it pushes; if the cloud is newer (or the phone holds only
+      // factory defaults) the cloud row is adopted into the device prefs and
+      // the adoption restores mode/speed/steer/trim/joystick + saved routers +
+      // wifi history + the connection-method picks on this device. Nothing
+      // secret (BT/Wi-Fi passwords, gmail credentials) ever lands in a
+      // car_profiles row — those are either car-NVS-only or in-flight only.
       const local = await deviceMemory.read(addressForMemory);
       if (!isFreshDefaultPrefs(local) && local?.savedAt) {
         const localTime = local.savedAt;

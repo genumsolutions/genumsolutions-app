@@ -626,11 +626,11 @@ export function ConnectionSection({
       <View className="min-w-[210px] w-[42%] max-w-[300px] flex-1 gap-2">
         {/* S-10 (owner 2026-11-23: *"the connectivity tab … is also not properly
             built of the ui ux … fix those all the separate section of the pages
-            and their operations too"*): this half had no heading at all while
-            the manager half has carried "Car network" since U-124 — so the pane
-            with the METHOD choice, the connect action and the inventory read as
-            one undifferentiated stack of cards. One label makes the two halves
-            siblings and names what this one does: the link. */}
+            and their operations too"*): the LEFT pane now has its own heading so
+            it reads as the link-pick + setup + this-car inventory sibling of the
+            right pane's Networks / Car network heading, not one undifferentiated
+            stack of cards. The panes are siblings: left picks and connects, right
+            switches and manages. */}
         <Text className="text-[10px] font-black uppercase tracking-widest text-navy">
           Link
         </Text>

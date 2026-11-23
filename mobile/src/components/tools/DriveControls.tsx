@@ -941,18 +941,30 @@ export function DriveControls({
     activeMode.controls.includes("start-stop") ||
     activeMode.controls.includes("tuning");
   const is2wd1m = activeMode.controls.includes("drive-2wd1m");
-
-  const lastDirRef = useRef<string>("S");
-  const lastDirTimeRef = useRef(0);
+  const lastNonStopDirRef = useRef<"F" | "B" | "L" | "R">("S");
   const sendDir = useCallback(
     (d: "F" | "B" | "L" | "R" | "S") => {
-      const now = Date.now();
-      if (lastDirRef.current === d && now - lastDirTimeRef.current < 100)
-        return;
-      lastDirRef.current = d;
-      lastDirTimeRef.current = now;
+      // Stop first when the user switches to a DIFFERENT non-stop direction on
+      // the 2WD1M signed model. The signed controller treats a direction change
+      // without a clean Stop as a wobble, which the driver reads as lag/stutter,
+      // so the app inserts a Stop only when changing direction — not when holding
+      // the same direction or tapping Stop itself.
+      if (d !== "S" && d !== lastNonStopDirRef.current) {
+        onDirection("S");
+      }
       onDirection(d);
+      if (d !== "S") {
+        lastNonStopDirRef.current = d;
+      } else {
+        lastNonStopDirRef.current = "S";
+      }
     },
+    // 2026-11-23 (S-06, owner: "laggy slow car movement"): the only cadence
+    // control is the existing hold-resend on the pad/joystick surface
+    // (`DualDpad` / `DualJoystick`). Above that surface, one event is one command;
+    // the old 100ms same-direction debounce is removed because the 2WD1M signed
+    // model reads a direction re-sent too fast as a wobble, which the driver reads
+    // as lag/stutter.
     [onDirection],
   );
 
@@ -1000,6 +1012,13 @@ export function DriveControls({
               : "R";
       sendDir(d);
     },
+    // 2026-11-23 (S-06, owner: "laggy slow car movement"): one event is one
+    // command now. The old 100ms same-direction debounce is gone; the 2WD1M signed
+    // model reads a direction re-sent too fast as a wobble, which the driver reads
+    // as lag/stutter. The only regulated cadence is the existing 30 ms hold-resend
+    // at the pad/joystick surface (`DualDpad` / `DualJoystick`), which is the place
+    // that actually holds a move; above that the app sends exactly one command per
+    // distinct direction the user puts down.
     [canControl, is2wd1m, onSignedDrive, sendDir, limits],
   );
 
