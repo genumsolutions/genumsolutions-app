@@ -1,4 +1,8 @@
 {
+  "3.4.8": [
+    "Updates: if Android answers \"App not installed\", the update panel now says why — this phone still carries a build signed with a different key, so uninstall GENUM and install the downloaded file again; your cloud data returns when you sign in.",
+    "Downloads: the release is retried and falls back to a second transfer path, so a dropped 42 MB upload no longer leaves the update manifest pointing at the previous version."
+  ],
   "3.4.7": [
     "Cars: the slowest speed setting now moves the car instead of stopping it, and a held stick reaches full speed instead of crawling — the speed floor and the soft-start ramp were both eating the demand.",
     "Cars: during a router switch the OLED names the router it is joining and counts the seconds it has been trying, so a slow switch is no longer indistinguishable from one that never happened.",

@@ -33,6 +33,12 @@ const GUIDE_STEPS = [
   "When the installer opens, tap INSTALL.",
   "If Android warns about unknown sources, allow it once (the APK is signed by GENUM).",
   "Open GENUM again — your data is kept.",
+  // Android's installer refuses an APK signed with a different key than the
+  // installed app and only says "App not installed", which reads like a broken
+  // download. Releases built on a different machine happen to carry a different
+  // debug key, so this is a real, recurring case — name the cause and the fix
+  // instead of letting the user retry the download forever.
+  'If Android says "App not installed", this phone still has a build signed with a different key: uninstall GENUM, then open the downloaded APK again. Sign in afterwards and your cloud data comes back.',
 ];
 
 export function UpdateScreen({ visible, onClose }: Props) {
