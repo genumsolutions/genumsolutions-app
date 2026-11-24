@@ -9,7 +9,7 @@
 // Display version for the app (menu -> "App v…"). Keep in sync with
 // "version" in ../app.json and bump BOTH on every release (version + android
 // .versionCode must increase) so installs update over-the-top.
-export const APP_VERSION = "3.4.5";
+export const APP_VERSION = "3.4.6";
 
 /** Public storefront, used for previews/links opened outside the app. */
 export const SITE_URL = "https://genumsolutions-website.vercel.app";
