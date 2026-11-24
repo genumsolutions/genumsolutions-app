@@ -68,12 +68,9 @@ async function main() {
   ];
 
   let changed = false;
-  const lines = [
-    "# Root APK directory",
-    "",
-    "All published release APKs mirrored here for offline / local use.",
-    "",
-  ];
+  // The mirror state is appended under its own heading so the hand-maintained
+  // manifest table in apk/.apk-notes.md is never destroyed by a sync.
+  const lines = [];
 
   for (const { url, localName, remoteSize } of toMirror) {
     const localPath = resolve(APK_DIR, localName);
@@ -131,7 +128,6 @@ async function main() {
   }
 
   lines.push(
-    "",
     `- manifest version: ${version}`,
     `- manifest version_code: ${code}`,
     `- manifest size: ${manifestSizeMb != null ? manifestSizeMb + " MB" : "?"}`,
@@ -141,9 +137,21 @@ async function main() {
     lines.push(`- removed stale placeholder(s): ${removed.join(", ")}`);
   }
 
+  const notesPath = resolve(APK_DIR, ".apk-notes.md");
+  const SYNC_HEADING = "## Mirror sync";
+  let existing = "";
+  if (existsSync(notesPath)) {
+    existing = readFileSync(notesPath, "utf8");
+    const cut = existing.indexOf(SYNC_HEADING);
+    if (cut !== -1) existing = existing.slice(0, cut);
+  }
+  const head = existing.trim()
+    ? existing.trimEnd() + "\n\n"
+    : "# Root APK directory\n\nAll published release APKs mirrored here for offline / local use.\n\n";
+
   writeFileSync(
-    resolve(APK_DIR, ".apk-notes.md"),
-    lines.join("\n") + "\n",
+    notesPath,
+    `${head}${SYNC_HEADING}\n\n` + lines.join("\n") + "\n",
     { flag: "w" },
   );
 

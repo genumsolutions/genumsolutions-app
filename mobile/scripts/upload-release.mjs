@@ -16,7 +16,7 @@
 //   node scripts/upload-release.mjs --keep <n>            (versioned APKs to keep)
 // =====================================================================
 import { readFileSync, existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSupabaseEnv } from "./supabase-env.mjs";
@@ -86,6 +86,99 @@ const LATEST_FILE = "genum-solutions-latest.apk";
 const VERSIONED_FILE = `genum-solutions-${VERSION}.apk`;
 const MANIFEST_NAME = "release.json";
 const CONTENT_TYPE = "application/vnd.android.package-archive";
+
+// ── Large-object upload with retries ─────────────────────────────
+// A 42 MB APK over a home uplink is the fragile part of a release. Node's
+// fetch (undici) surfaces any mid-body reset as a bare "fetch failed" and the
+// script used to abort the whole publish on the first one. Retry a few times,
+// then fall back to curl, which handles resets and slow links far better.
+function curlAvailable() {
+  const probe = spawnSync("curl", ["--version"], { stdio: "ignore" });
+  return probe.status === 0;
+}
+
+function curlUpload(url, key, fileName, apkPath, contentType) {
+  const res = spawnSync(
+    "curl",
+    [
+      "-sS",
+      "-m",
+      "1800",
+      "--retry",
+      "3",
+      "--retry-delay",
+      "5",
+      "-X",
+      "POST",
+      `${url}/storage/v1/object/${BUCKET}/${fileName}`,
+      "-H",
+      `Authorization: Bearer ${key}`,
+      "-H",
+      `Content-Type: ${contentType}`,
+      "-H",
+      "x-upsert: true",
+      "-H",
+      "cache-control: 3600",
+      "--data-binary",
+      `@${apkPath}`,
+      "-w",
+      "%{http_code}",
+    ],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 * 8 },
+  );
+  const status = String(res.stdout || "").trim().slice(-3);
+  if (res.status !== 0 || !/^2\d\d$/.test(status)) {
+    const detail = (res.stderr || res.stdout || "").toString().trim();
+    throw new Error(
+      `curl upload failed for ${fileName} (exit ${res.status}, HTTP ${status || "?"}) ${detail}`,
+    );
+  }
+}
+
+async function uploadApk(url, key, fileName, body, apkPath, sizeMb) {
+  const attempts = 3;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    console.log(
+      `Uploading ${apkPath} (${sizeMb} MB) to ${BUCKET}/${fileName} ...` +
+        (attempt > 1 ? ` (attempt ${attempt}/${attempts})` : ""),
+    );
+    try {
+      const upload = await fetch(
+        `${url}/storage/v1/object/${BUCKET}/${fileName}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": CONTENT_TYPE,
+            "x-upsert": "true",
+            "cache-control": "3600",
+          },
+          body,
+        },
+      );
+      if (upload.ok) return;
+      const text = await upload.text().catch(() => "");
+      lastErr = new Error(
+        `Upload failed for ${fileName}: ${upload.status} ${text}`,
+      );
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
+    console.warn(`  ${fileName}: ${lastErr.message} — retrying`);
+    if (attempt < attempts) {
+      await new Promise((r) => setTimeout(r, 3000 * attempt));
+    }
+  }
+  if (curlAvailable()) {
+    console.warn(`  ${fileName}: falling back to curl`);
+    curlUpload(url, key, fileName, apkPath, CONTENT_TYPE);
+    return;
+  }
+  throw new Error(
+    `${lastErr?.message || "Upload failed"} (and curl is not available for a fallback)`,
+  );
+}
 
 function parseArgs(argv) {
   const args = { apk: null, keep: 3 };
@@ -212,28 +305,7 @@ async function main() {
   const actualSizeMb = +(sizeBytes / 1_000_000).toFixed(1);
   // Upload as both versioned and latest filenames
   for (const fileName of [VERSIONED_FILE, LATEST_FILE]) {
-    console.log(
-      `Uploading ${apkPath} (${actualSizeMb} MB) to ${BUCKET}/${fileName} ...`,
-    );
-    const upload = await fetch(
-      `${url}/storage/v1/object/${BUCKET}/${fileName}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${serviceKey}`,
-          "Content-Type": CONTENT_TYPE,
-          "x-upsert": "true",
-          "cache-control": "3600",
-        },
-        body,
-      },
-    );
-    if (!upload.ok) {
-      const text = await upload.text().catch(() => "");
-      throw new Error(
-        `Upload failed for ${fileName}: ${upload.status} ${text}`,
-      );
-    }
+    await uploadApk(url, serviceKey, fileName, body, apkPath, actualSizeMb);
   }
 
   // Verify what was actually stored matches the bytes we sent — catches any
