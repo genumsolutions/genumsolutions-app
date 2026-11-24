@@ -358,27 +358,49 @@ export type OledDisplayProps = {
   /** Renders at the physical 1.3" OLED's 2:1 shape for the game remote:
       tighter padding/fonts and only the essential lines (no PID/Angle/echo). */
   compact?: boolean;
-  /** ESP-remote dashboard parity (ui.md): which top-bar field is highlighted
-      in NAV mode ('none' = DRIVE). Inverted-box highlight mirrors u8g2. */
+  /**
+   * Nav highlight: which top-bar field is inverted-box highlighted in NAV
+   * mode ('none' = DRIVE). Mirrors u8g2 drawBox + setDrawColor(0).
+   * Static parity: the car OLED top bar never shows 'steer' — it shows
+   * FW_NAME | Mode name | Speed/Trim(LIMIT or live), so 'steer' stays a
+   * app-only NAV affordance, not a car-derived field.
+   */
   topField?: "mode" | "speed" | "steer" | "none";
   /** While browsing modes in NAV, the PREVIEWED mode is shown (top bar +
-      body title / dashboard preview) before Select confirms — exactly like
-      previewModeIndex on the physical remote. */
+      body title / dashboard preview) before Select confirms. */
   previewMode?: CarMode | null;
-  /** Unavailable firmware modes preview as COMING SOON (ui.md screen 9). */
+  /** Unavailable firmware modes preview as COMING SOON. */
   previewComingSoon?: boolean;
   /**
-   * R-10 (replaces relying on the boolean alone): the previewed mode's car
-   * truth availability — LIVE draws the real dashboard, WIP draws
-   * "WORK IN PROGRESS", CS draws "COMING SOON" (remote drawAvailMarkBody
-   * parity). Falls back to previewComingSoon when undef.
+   * R-10: the previewed mode's car-truth availability — LIVE draws the real
+   * dashboard, WIP draws "WORK IN PROGRESS", CS draws "COMING SOON";
+   * GONE (U-81) draws "NOT ON THIS CAR". Falls back to previewComingSoon
+   * when undef.
    */
   previewModeAvail?: ModeAvailReport;
-  /** 2WD1M: the user-set MAX steer limit for the top bar — the ESP remote
-      top bar shows the LIMIT, never the live servo angle. */
+  /** 2WD1M: the user-set MAX steer limit for the top bar — the car top bar
+      shows the LIMIT, never the live servo angle. */
   steerLimit?: number;
-  /** 2WD1M: the user-set trim offset (-90..90) for top bar display. */
+  /** 2WD1M: the user-set trim offset (-90..90) for the separate trim readout
+      and top-bar fallback value when no live trim frame has arrived yet. */
   trim?: number;
+  /**
+   * 4WD4M v2 fleet identity so the app OLED can render the header strip and
+   * the two transport rows exactly as the firmware paints them.
+   */
+  carName?: string; // FW_NAME: "4WD4M Car" / "2WD1M Car" / null.
+  btSpoName?: string; // BT_SPP_NAME / advertised BT name: "4WD4M Car" / "2WD1M Car".
+  wifiApName?: string; // WIFI_AP_NAME: "4WD4MCar_WiFi" / "2WD1MCar_WiFi" / null.
+  wifiApIp?: string; // WIFI_AP_IP: "192.168.245.1" / null.
+  /**
+   * Whether the car's exclusive-mode logic is gating the transport rows off.
+   * When true the app mirrors U-107c: the two transport rows (3 and 4) are
+   * hidden and only the header strip + Mode + Speed/Trim + bottom status
+   * remain, exactly like the stationary car face display. The car sets this
+   * state per mode from its own 'is exclusive' logic; the app mirrors it via
+   * the car's report.
+   */
+  exclusiveMode?: boolean;
 };
 
 export type BalanceControlsProps = {
