@@ -941,7 +941,12 @@ export function DriveControls({
     activeMode.controls.includes("start-stop") ||
     activeMode.controls.includes("tuning");
   const is2wd1m = activeMode.controls.includes("drive-2wd1m");
-  const lastNonStopDirRef = useRef<"F" | "B" | "L" | "R">("S");
+  // The ref remembers the last NON-stop direction, but it is seeded (and reset)
+  // with "S" so the first tap of any direction never emits a leading Stop. The
+  // type must therefore include "S" — it did not, and the initial value plus every
+  // reset assignment were type errors that `tsc --noEmit` rejected (Metro does not
+  // typecheck, so the 3.4.6 APK shipped with them).
+  const lastNonStopDirRef = useRef<"F" | "B" | "L" | "R" | "S">("S");
   const sendDir = useCallback(
     (d: "F" | "B" | "L" | "R" | "S") => {
       // Stop first when the user switches to a DIFFERENT non-stop direction on
@@ -990,6 +995,10 @@ export function DriveControls({
           onSignedDrive(0);
           return;
         }
+        // S-06 / S-13: the joystick maps 0..1 to 255 THEN quantises to the)
+        // app's SPD step (5). The car's ramp/clamp + OLED mirror both work from the
+        // same 0..255 speed the app commits (SPEED_MIN (100) .. 255 after clamp).
+        // One command per event — see the sendDir note.
         const raw = Math.round((Math.min(1, Math.abs(y)) * 255) / 5) * 5;
         const mag = clampSigned(raw, limits);
         onSignedDrive(y < 0 ? mag : -mag);

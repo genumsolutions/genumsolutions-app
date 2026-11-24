@@ -1,4 +1,13 @@
 {
+  "3.4.7": [
+    "Cars: the slowest speed setting now moves the car instead of stopping it, and a held stick reaches full speed instead of crawling — the speed floor and the soft-start ramp were both eating the demand.",
+    "Cars: during a router switch the OLED names the router it is joining and counts the seconds it has been trying, so a slow switch is no longer indistinguishable from one that never happened.",
+    "Reset car: the panel now clears the holding values (speed, servo, steer limit, trim, mode, status) and shows the boot defaults, instead of keeping the last values until each control was nudged.",
+    "Google sign-in says plainly when the build is missing its Google config instead of surfacing a raw SDK error."
+  ],
+  "3.4.6": [
+    "The app's OLED mirror carries the same car identity and transport rows the 4WD4M / 2WD1M firmware paints."
+  ],
   "3.4.5": [
     "Bug fixes and quality improvements across the cars, D-pad, status bar and admin screens."
   ],

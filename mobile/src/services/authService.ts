@@ -279,6 +279,27 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
     return { status: "cancelled" };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Google sign-in failed.";
+    // U-133 (owner 2026-11-24: "Google sign-in is broken"): a build without the
+    // Google Web Client ID / Android OAuth SHA-1 fails inside the native module,
+    // and the raw SDK text (or a bare "180003") told the owner nothing. These are
+    // the shapes those failures actually take, so they get a plain message that
+    // says what is missing and what still works. This is a MESSAGE fix only — the
+    // config itself (EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, the Supabase Google
+    // provider, the OAuth SHA-1) lives outside the repo and must be set where the
+    // build runs.
+    if (
+      message.includes("180003") ||
+      message.includes("no accounts") ||
+      message.includes("hasPlayServices") ||
+      message.includes("GoogleSignin") ||
+      message.includes("DEVELOPER_ERROR")
+    ) {
+      return {
+        status: "error",
+        message:
+          "Google sign-in isn't configured for this build (missing Google Web Client ID / Android OAuth SHA-1). Use email & password, or rebuild with the Google config in place.",
+      };
+    }
     return { status: "error", message };
   }
 }

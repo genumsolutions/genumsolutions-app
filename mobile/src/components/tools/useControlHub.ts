@@ -761,7 +761,7 @@ export function useControlHub(routeCategory?: string) {
   const mountedRef = useRef(true);
   const manualCloseRef = useRef(false);
   const disconnectingRef = useRef(false);
-  // S-05/S-06: has the car reported its own steer/trim since this link came up?
+  // S-05/S-06/S-07: has the car reported its own steer/trim since this link came up?
   // The drive-setup push waits for this so the app's defaults can never be
   // written over a value the owner saved on the car. Declared here, above
   // applyTelemetry, because that is where it is set. See the sync effect below.
@@ -788,6 +788,14 @@ export function useControlHub(routeCategory?: string) {
   const sppLastAddressRef = useRef<string | null>(
     sppService.getConnectionInfo().address,
   );
+  // U-95: the shared, namespaced event ring + restart record persistence lives in
+  // CrashLog.cpp / CrashLog.h and is the car's S-08/S-09/S-10 sink (FACTORY;RESET is the
+  // clean-start gate, U-108 Phase 7). The app does NOT mirror those fields — it reads the
+  // restart record only as a transient STATE payload (;RST=;/BC=;/CC=;/PH=;/LH=), so the app's
+  // handleDisconnect/reset paths intentionally do NOT own or re-send that ring; the app's job is
+  // to clear its own per-car prefs/OTA queue/car profile row and, on reset-car-data success,
+  // prompt the user to hard-reboot the board (U-108 Phase 7: FACTORY;RESET reboots the car via
+  // ESP.restart()) so the wiped bootstrap is actually the one that boots next.
 
   /**
    * U-125 (4WD4M freeze/reset loop, owner 2026-11-08): when a link drops
@@ -4140,6 +4148,31 @@ export function useControlHub(routeCategory?: string) {
       setWifiEnabled(true);
       setBtEnabled(true);
       setBootAutojoin(true);
+
+      // 5) Clear the HOLDING VALUES too (owner 2026-11-24: "reset car should
+      // clear the holding values and show the defaults after boot"). Wiping
+      // storage alone left every control showing the last held speed / servo /
+      // steer limit / trim / mode, so the panel disagreed with the freshly
+      // factory-reset car until each control was nudged. These are the same
+      // boot defaults the useState declarations above start from — speed 170
+      // (the ESP remote's speedValue), servo 90 (centred), the shared
+      // STEER_LIMIT_DEFAULT, trim 0, mode index 0, idle status and Stop
+      // direction — so the app now shows exactly what the car will boot with.
+      setSpeed(170);
+      setServo(90);
+      setSteerLimit(STEER_LIMIT_DEFAULT);
+      setTrim(0);
+      setActiveMode(LOCAL_CAR_MODES[0]);
+      setTripAvg(0);
+      setMaxSteer(0);
+      setDriveStatus("Stop");
+      setDriveDir("S");
+      // The adopt gate is the next link's business, so forget this one.
+      setupAdoptedRef.current = false;
+      // The car is about to reboot (FACTORY;RESET ends in ESP.restart()), so no
+      // link survives the reset: drop the app's link belief with it rather than
+      // leaving a "linked" chrome row pointing at a board that is restarting.
+      setLinkOwner(null);
       // The method is a device choice, not a car fact: a factory reset of the
       // car leaves the next connect on whatever the user picked (default
       // bluetooth), so nothing to clear here. A pick that resets a saved
