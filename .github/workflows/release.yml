@@ -147,6 +147,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: mobile/package-lock.json
 
       # ---- Caching: Gradle + Expo prebuild ----
       # Cache Gradle task outputs (~/.gradle/caches + wrapper) so unchanged
