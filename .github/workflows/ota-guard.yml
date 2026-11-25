@@ -34,7 +34,7 @@ concurrency:
   group: ota-guard
   cancel-in-progress: false
 
-# Self-hosted runner is Windows without PowerShell 7; these steps are bash.
+# Hosted Ubuntu runner; these steps are bash.
 defaults:
   run:
     shell: bash
@@ -43,7 +43,7 @@ jobs:
   verify-delivery:
     if: github.ref == 'refs/heads/main'
     name: A JS push must end in a published bundle
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

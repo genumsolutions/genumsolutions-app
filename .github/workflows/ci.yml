@@ -11,10 +11,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The self-hosted runner is Windows and has no PowerShell 7, so every `run:`
-# step was silently handed to Windows PowerShell while these steps are written
-# as bash (set -e, if/then/fi, curl). That is what made each job die ~1s into
-# its first command. Pin bash (Git Bash ships with the runner's Git).
+# These steps are bash (set -e, if/then/fi, curl); pin it explicitly so the
+# hosted Ubuntu runner never substitutes a different shell.
 defaults:
   run:
     shell: bash
@@ -22,7 +20,7 @@ defaults:
 jobs:
   quality:
     name: Typecheck + Expo doctor
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     defaults:
@@ -30,8 +28,7 @@ jobs:
         working-directory: mobile
         # A job-level `defaults.run` block REPLACES the workflow-level one, so
         # the `shell: bash` set at the top of this file does not reach this
-        # job. Restate it here or the runner hands these steps to Windows
-        # PowerShell (there is no PowerShell 7 on the runner).
+        # job; restate it here.
         shell: bash
     steps:
       # Full history required: gitleaks-action resolves the pushed commit
@@ -97,7 +94,7 @@ jobs:
   # title clamped to "K–5 Ro…" and a card title to "Robotics Lab Consul…".
   e2e:
     name: Layout smoke (Playwright)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     defaults:
@@ -105,8 +102,7 @@ jobs:
         working-directory: mobile
         # A job-level `defaults.run` block REPLACES the workflow-level one, so
         # the `shell: bash` set at the top of this file does not reach this
-        # job. Restate it here or the runner hands these steps to Windows
-        # PowerShell (there is no PowerShell 7 on the runner).
+        # job; restate it here.
         shell: bash
     steps:
       - uses: actions/checkout@v5
@@ -156,7 +152,7 @@ jobs:
   # curriculum band the website lists exists in the app.
   parity:
     name: App vs website (Playwright)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       contents: read
@@ -256,7 +252,7 @@ jobs:
   # file and this job fails when the two copies differ.
   order-items-contract:
     name: Order items contract matches website
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       contents: read

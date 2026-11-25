@@ -69,7 +69,7 @@ concurrency:
   group: release-apk
   cancel-in-progress: false
 
-# Self-hosted runner is Windows without PowerShell 7; these steps are bash.
+# Hosted Ubuntu runner; these steps are bash.
 defaults:
   run:
     shell: bash
@@ -78,7 +78,7 @@ jobs:
   build-and-release:
     if: github.ref == 'refs/heads/main'
     name: Build + upload signed APK
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -95,8 +95,7 @@ jobs:
         working-directory: mobile
         # A job-level `defaults.run` block REPLACES the workflow-level one, so
         # the `shell: bash` set at the top of this file does not reach this
-        # job. Restate it here or the runner hands these steps to Windows
-        # PowerShell (there is no PowerShell 7 on the runner).
+        # job; restate it here.
         shell: bash
     steps:
       - uses: actions/checkout@v5
