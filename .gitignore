@@ -13,3 +13,6 @@ node_modules/
 
 # Local build tooling (JDK/CMake/NDK shims) - never commit
 .tools/
+
+# Local secret vault mirror (release keystore + CI secret values) - never commit
+Secret/
