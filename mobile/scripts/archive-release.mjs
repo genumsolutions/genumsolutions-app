@@ -105,7 +105,8 @@ const idx = builds.builds.findIndex(
 if (idx > -1) builds.builds[idx] = entry;
 else builds.builds.push(entry);
 builds.builds.sort(
-  (a, b) => b.version_code - a.version_code || a.version.localeCompare(b.version),
+  (a, b) =>
+    b.version_code - a.version_code || a.version.localeCompare(b.version),
 );
 builds.updated_at = entry.archived_at;
 writeFileSync(buildsPath, `${JSON.stringify(builds, null, 2)}\n`);
@@ -139,4 +140,6 @@ writeFileSync(join(archiveDir, "BUILD.md"), lines.join("\n"));
 
 console.log(`Saved ${fileName} (${entry.size_mb} MB)`);
 console.log(`SHA-256 ${sha256}`);
-console.log(`Archive now holds ${builds.builds.length} build(s): ${archiveDir}`);
+console.log(
+  `Archive now holds ${builds.builds.length} build(s): ${archiveDir}`,
+);
