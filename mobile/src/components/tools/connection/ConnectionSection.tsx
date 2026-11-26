@@ -248,6 +248,10 @@ export function ConnectionSection({
     linkCap,
     // U-142: which radio the CAR says is serving, and which it has paused.
     linkOwner,
+    // U-142: the two per-method teardowns, so a refused second-link raise can
+    // offer the one action that ends the pause instead of dead-ending.
+    handleBtDisconnect,
+    handleWifiDisconnect,
     handleScan,
     handleConnect,
     handleWifiConnect,
@@ -726,6 +730,26 @@ export function ConnectionSection({
             the reason shown when the owner presses the paused action. */}
         {linkOwnerLine ? (
           <InlineMessage tone="info">{linkOwnerLine}</InlineMessage>
+        ) : null}
+
+        {/* U-142 (owner: the controls "become dull and don't allow sometimes"):
+            a refused second-link raise used to leave a muted control with no
+            way forward. Keep the refusal — it is the car's own verdict — but
+            pair it with the ONE action that ends the pause, so the panel never
+            shows a disabled button and nothing else. */}
+        {secondLinkRefused ? (
+          <ActionButton
+            label={
+              linkOwner === "bt" ? "Disconnect Bluetooth" : "Disconnect Wi-Fi"
+            }
+            variant="danger"
+            compact
+            testID="second-link-release"
+            onPress={() => {
+              if (linkOwner === "bt") void handleBtDisconnect();
+              else void handleWifiDisconnect();
+            }}
+          />
         ) : null}
 
         {/* ONE message surface for the whole section — it sits at the top of

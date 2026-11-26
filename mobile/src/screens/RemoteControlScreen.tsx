@@ -907,6 +907,43 @@ export function RemoteControlScreen({ navigation }: Props) {
             </View>
           </Pressable>
 
+          {/* S-03 + U-142 (owner 2026-11-27: *"the disconnect button should be on
+              the left side of the screen and fixed position on the right of the
+              back button"*): the ONE disconnect control MOVED here from the
+              right-hand cluster. It sits in the chrome row, which is
+              flex-shrink-0, so it is fixed and never scrolls with the card
+              body. It closes the link the CAR says owns the link (`linkOwner`,
+              adopted from STATE) and falls back to whichever radio is actually
+              up, so a live sibling link survives. Single-shot: it disables and
+              shows pending while the teardown runs, so a double tap cannot send
+              a second teardown over a link that is already closing. */}
+          {linked ? (
+            <Pressable
+              onPress={disconnectLiveLink}
+              disabled={hub.disconnectingLink != null}
+              accessibilityRole="button"
+              accessibilityLabel="Disconnect the car"
+              accessibilityState={{
+                disabled: hub.disconnectingLink != null,
+              }}
+              testID="remote-disconnect"
+              hitSlop={8}
+            >
+              <View
+                className={`h-11 flex-row items-center gap-1.5 rounded-full border border-line px-3 ${hub.disconnectingLink != null ? "opacity-50" : "bg-card"}`}
+              >
+                <Feather
+                  name="slash"
+                  size={14}
+                  color={themeMode === "dark" ? "#fca5a5" : "#b91c1c"}
+                />
+                <Text className="text-[11px] font-bold text-muted">
+                  {hub.disconnectingLink != null ? "Closing…" : "Disconnect"}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+
           {/* U-121 (owner 2026-10-23, items 1+2) + owner clarification
               (2026-10-23): the ONE chip right of Back is the BROADCAST IP ALONE
               — no transport label, no car network name — and only while the car
@@ -975,48 +1012,6 @@ export function RemoteControlScreen({ navigation }: Props) {
 
           {isRobocar && (
             <View className="shrink-0 flex-row items-center gap-2">
-              {/* S-03 (owner bench report 2026-11-23: *"the app is missing the
-                  disconnect button on the remote screen"*): U-107c deleted the
-                  two per-method chips because the car parks the sibling
-                  transport automatically, and that reasoning was sound — but it
-                  left the owner with NO way to drop a link on purpose, which is
-                  also the only way to exercise the reconnect path. So the
-                  control comes back as ONE button, not two chips: it closes the
-                  link the CAR says owns the link (linkOwner, adopted from
-                  STATE), and falls back to whichever radio is actually up.
-                  Closing only that transport is exactly what the hub's
-                  per-method handlers already do (U-113 issue 3), so a live
-                  sibling link survives. Single-shot: it disables and shows
-                  pending while the teardown runs, so a double tap cannot send a
-                  second teardown over a link that is already closing. */}
-              {linked ? (
-                <Pressable
-                  onPress={disconnectLiveLink}
-                  disabled={hub.disconnectingLink != null}
-                  accessibilityRole="button"
-                  accessibilityLabel="Disconnect the car"
-                  accessibilityState={{
-                    disabled: hub.disconnectingLink != null,
-                  }}
-                  testID="remote-disconnect"
-                  hitSlop={8}
-                >
-                  <View
-                    className={`h-11 flex-row items-center gap-1.5 rounded-full border border-line px-3 ${hub.disconnectingLink != null ? "opacity-50" : "bg-card"}`}
-                  >
-                    <Feather
-                      name="slash"
-                      size={14}
-                      color={themeMode === "dark" ? "#fca5a5" : "#b91c1c"}
-                    />
-                    <Text className="text-[11px] font-bold text-muted">
-                      {hub.disconnectingLink != null
-                        ? "Closing…"
-                        : "Disconnect"}
-                    </Text>
-                  </View>
-                </Pressable>
-              ) : null}
               <Pressable
                 onPress={() => setShowSettings((v) => !v)}
                 accessibilityRole="button"
