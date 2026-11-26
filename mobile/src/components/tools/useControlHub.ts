@@ -40,6 +40,7 @@ import { bleService } from "../../services/bleService";
 import { wifiService } from "../../services/wifiService";
 import { DEFAULT_SAFETY_LIMITS, type DevicePrefs } from "./types";
 import {
+  deleteCarProfile,
   fetchCarProfiles,
   isFreshDefaultPrefs,
   mergeCloudProfile,
@@ -140,6 +141,60 @@ export function normalizeJoystickLayout(
 }
 
 const LAST_DEVICE_KEY = "genum.lastDevice";
+
+// T10 (2026-11-26 device round): "reset car" must clear the car AND its
+// `car_profiles` row, or the next sync restores what was just reset. The car is
+// always wiped first (it owns the truth); the cloud delete is best-effort and
+// retried from a persisted queue, because the usual failure is a transient one
+// (signed out, offline, RLS blip) that must not lose the reset.
+const PENDING_PROFILE_DELETES_KEY = "genum.carProfile.delete.pending";
+
+async function readPendingProfileDeletes(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_PROFILE_DELETES_KEY);
+    const list: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list)
+      ? list.filter((k): k is string => typeof k === "string" && k.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Retry every queued delete; keep only the keys the cloud did NOT confirm. */
+async function flushPendingProfileDeletes(): Promise<void> {
+  const queued = await readPendingProfileDeletes();
+  if (!queued.length) return;
+  const remaining: string[] = [];
+  for (const key of queued) {
+    const res = await deleteCarProfile(key);
+    if (!res.ok) remaining.push(key);
+  }
+  if (remaining.length) {
+    await AsyncStorage.setItem(
+      PENDING_PROFILE_DELETES_KEY,
+      JSON.stringify(remaining),
+    ).catch(() => undefined);
+  } else {
+    await AsyncStorage.removeItem(PENDING_PROFILE_DELETES_KEY).catch(
+      () => undefined,
+    );
+  }
+}
+
+/** Queue one cloud-profile delete (idempotent) and try it immediately. */
+async function forgetCarProfileCloud(profileKey: string): Promise<void> {
+  if (!profileKey) return;
+  const queued = await readPendingProfileDeletes();
+  if (!queued.includes(profileKey)) {
+    queued.push(profileKey);
+    await AsyncStorage.setItem(
+      PENDING_PROFILE_DELETES_KEY,
+      JSON.stringify(queued),
+    ).catch(() => undefined);
+  }
+  await flushPendingProfileDeletes();
+}
 
 /** U-80: how long the "join <ssid> on this phone" prompt stays up. */
 const ROUTER_SWITCH_NOTICE_MS = 4 * 60 * 1000;
@@ -864,6 +919,12 @@ export function useControlHub(routeCategory?: string) {
   const profileKeyRef = useRef<string | null>(null);
   profileKeyRef.current = addressForMemory;
   const profileKey = addressForMemory;
+  // T10: replay a queued `car_profiles` delete the moment a link resolves this
+  // car's profile key — the reset may have been pressed while offline/signed out.
+  useEffect(() => {
+    if (!profileKey) return;
+    void flushPendingProfileDeletes();
+  }, [profileKey]);
   const [savedPrefs, setSavedPrefs] = useState<DevicePrefs | null>(null);
   // Live mirror for the phone-network watcher (avoids a stale closure).
   const savedPrefsRef = useRef(savedPrefs);
@@ -4109,6 +4170,12 @@ export function useControlHub(routeCategory?: string) {
         }
       }
 
+      // 1b) Clear the CLOUD row too (T10, 2026-11-26 device round). Car first,
+      // cloud second: a failed DB step stays queued and is retried on the next
+      // link (never the other way round, which could leave the car holding the
+      // pre-reset state while the DB looked clean).
+      await forgetCarProfileCloud(addressForMemory ?? "");
+
       // 2) Clear local car-related AsyncStorage keys.
       const keysToRemove: string[] = [
         "genum.device.index",
@@ -4184,8 +4251,10 @@ export function useControlHub(routeCategory?: string) {
         ok: false,
         error: e instanceof Error ? e.message : "Reset failed",
       };
+      // T10: `addressForMemory` is this car's profile key — the reset deletes
+      // THAT row, so the callback must be rebuilt when the key resolves.
     }
-  }, [connected, wifiConnected]);
+  }, [connected, wifiConnected, addressForMemory]);
 
   // Derived helpers
   const usesBtComm =

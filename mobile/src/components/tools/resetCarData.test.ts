@@ -94,3 +94,36 @@ describe("S-07 — reset car clears the holding values", () => {
     );
   });
 });
+
+// =====================================================================
+// T10 (2026-11-26 device round): the reset must clear the car AND its
+// `car_profiles` row. Wiping only the car meant the next sync restored the
+// profile that had just been reset. CAR FIRST, CLOUD SECOND — a failed cloud
+// delete is queued and retried on the next link, and can never leave the car
+// holding pre-reset state. Same source-pin approach as above (F-83).
+// =====================================================================
+describe("T10 — reset clears the car's cloud profile too", () => {
+  it("sends the car reset before touching the cloud row", () => {
+    const at = code.indexOf("const resetCarData = useCallback(");
+    const block = code.slice(at, at + 4000);
+    const carAt = block.indexOf("wifiService.sendLine(FACTORY_RESET_LINE)");
+    const cloudAt = block.indexOf("forgetCarProfileCloud(");
+    expect(carAt).toBeGreaterThan(0);
+    expect(cloudAt).toBeGreaterThan(carAt);
+  });
+
+  it("deletes the row for THIS car's profile key, not the whole account", () => {
+    const at = code.indexOf("const resetCarData = useCallback(");
+    const block = code.slice(at, at + 4000);
+    expect(block).toContain('forgetCarProfileCloud(addressForMemory ?? "")');
+  });
+
+  it("queues the delete idempotently and keeps only the failures", () => {
+    // Pressing reset twice must not enqueue the key twice, and a delete the
+    // cloud did not confirm must stay queued for the next link.
+    expect(code).toContain("queued.includes(profileKey)");
+    expect(code).toContain("PENDING_PROFILE_DELETES_KEY");
+    expect(code).toContain("if (!res.ok) remaining.push(key);");
+    expect(code).toContain("void flushPendingProfileDeletes();");
+  });
+});

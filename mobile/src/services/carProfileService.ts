@@ -534,11 +534,17 @@ export async function deleteCarProfile(
   profileKey: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    const userId = await currentUserId();
+    // T10 (2026-11-26 device round): an empty user id used to go through as
+    // `.eq("user_id", "")` — it deletes nothing and REPORTS SUCCESS, which made
+    // the reset's retry queue believe the row was gone and drop it. Callers rely
+    // on ok:false to keep the key queued until a signed-in attempt lands.
+    if (!userId) return { ok: false, error: "Not signed in." };
     const { error } = await supabase
       .from("car_profiles")
       .delete()
       .eq("profile_key", profileKey)
-      .eq("user_id", await currentUserId());
+      .eq("user_id", userId);
     if (error)
       return { ok: false, error: error.message || "Could not delete." };
     const { rows } = await fetchCarProfiles();
