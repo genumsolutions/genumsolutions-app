@@ -1,4 +1,7 @@
 {
+  "4.0.2": [
+    "Follow-up release that keeps the app manifest, npm package and in-app \"App v…\" display in sync at 4.0.2."
+  ],
   "4.0.1": [
     "Cars: the car now notices when the app goes away — it drops the held speed, stops the motors in the same loop and shows \"Disconnected\" on its own screen instead of holding the last throttle.",
     "Cars: a power-up returns the car to its last switched router by itself, and the panel names the router it is joining plus the seconds spent trying; if the router is gone the car stays on its own hotspot instead of rebooting.",
