@@ -226,3 +226,38 @@ export function targetUnavailableReason(
   }
   return null;
 }
+
+/**
+ * U-142: name the radio the CAR says is serving the link, and the one it has
+ * paused — or `null` when nothing is parked.
+ *
+ * The car OFFERS both methods but SERVES one at a time (U-129): the owning
+ * transport parks its sibling until it disconnects. `targetUnavailableReason`
+ * already explains WHY the paused action is unavailable, but only when the
+ * owner goes to press it — nothing on the panel said WHICH radio was paused, so
+ * a deliberate pause read exactly like a fault (the owner's bench report was
+ * "it connects once and then doesn't respond").
+ *
+ * The words are the car's own (`"bt"` / `"wifi"` / `"both"`, adopted from the
+ * STATE line and `/status` `link_owner`). An absent or unknown word says
+ * nothing at all — the same F-88 discipline as LINKCAP: never guess a
+ * transport, because naming the wrong radio tells the owner the wrong method is
+ * paused.
+ */
+export function describeLinkOwner(
+  linkOwner: "wifi" | "bt" | "both" | null | undefined,
+): string | null {
+  if (linkOwner === "bt") {
+    return (
+      "Bluetooth is serving this car, so its own Wi-Fi hotspot is paused. " +
+      "It opens again by itself a few seconds after Bluetooth disconnects."
+    );
+  }
+  if (linkOwner === "wifi") {
+    return (
+      "Wi-Fi is serving this car, so Bluetooth is paused. " +
+      "It comes back by itself a few seconds after Wi-Fi disconnects."
+    );
+  }
+  return null;
+}

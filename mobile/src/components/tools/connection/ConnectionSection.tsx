@@ -94,6 +94,7 @@ import {
   normalizeRouters,
   planSwitch,
   resolveDial,
+  describeLinkOwner,
   targetUnavailableReason,
   type ConnectionMethodId,
   type ConnectionTarget,
@@ -245,6 +246,8 @@ export function ConnectionSection({
     // itself refused a second link; `null`/`true` = nothing denied (F-88:
     // an absent field means CAPABLE — this gate never reads a mere null).
     linkCap,
+    // U-142: which radio the CAR says is serving, and which it has paused.
+    linkOwner,
     handleScan,
     handleConnect,
     handleWifiConnect,
@@ -320,6 +323,12 @@ export function ConnectionSection({
     connectingAddress,
     linkCap,
   });
+  // U-142: name the radio that is SERVING and the one the car has PAUSED. The
+  // car offers both methods but serves one at a time (U-129), so a paused method
+  // is not a broken one — but nothing on the panel said so, and a pause with no
+  // words reads exactly like a fault. `null` when nothing is parked, so an older
+  // car (and the `both` offer state) renders nothing at all.
+  const linkOwnerLine = describeLinkOwner(linkOwner);
   const reportedIp = telemetry.ip ?? null;
   // Car truth first (what the car is broadcasting right now), then the SSID it
   // has configured, then the owner's own answer — so the field is auto-filled
@@ -710,6 +719,13 @@ export function ConnectionSection({
           <InlineMessage tone={secondLink.refusedByCar ? "error" : "info"}>
             {secondLink.line}
           </InlineMessage>
+        ) : null}
+
+        {/* U-142: the car serves one link at a time (U-129), so the paused
+            radio is named HERE, beside the link facts, rather than only inside
+            the reason shown when the owner presses the paused action. */}
+        {linkOwnerLine ? (
+          <InlineMessage tone="info">{linkOwnerLine}</InlineMessage>
         ) : null}
 
         {/* ONE message surface for the whole section — it sits at the top of

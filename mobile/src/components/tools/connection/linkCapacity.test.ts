@@ -26,7 +26,7 @@ import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { readSource } from "../../../../test-utils/readSource";
 import { parseTelemetryLine } from "../../../services/carProtocol";
-import { targetUnavailableReason } from "./methods";
+import { describeLinkOwner, targetUnavailableReason } from "./methods";
 
 // --- part A: the parse — both surfaces, F-88 on every absent/garbage path ---
 
@@ -243,6 +243,46 @@ describe("P5 — ConnectionSection gates the second-link raise on the car's verd
     // inventory a real recovery needs (the paired list lives outside the
     // connect gate; see dualLinkConnect.test.ts which already pins that).
     expect(section).toContain("<BtInventory");
+  });
+});
+
+// --- part C2: U-142 — the PAUSED radio is named, not merely gated ----------
+
+describe("U-142 — describeLinkOwner names the serving and the paused radio", () => {
+  it("Bluetooth serving says the hotspot is paused, and that it returns", () => {
+    const line = describeLinkOwner("bt");
+    expect(typeof line).toBe("string");
+    expect(line).toContain("Bluetooth is serving");
+    expect(line).toContain("Wi-Fi hotspot is paused");
+    expect(line).toContain("disconnects");
+  });
+
+  it("Wi-Fi serving says Bluetooth is paused, and that it returns", () => {
+    const line = describeLinkOwner("wifi");
+    expect(typeof line).toBe("string");
+    expect(line).toContain("Wi-Fi is serving");
+    expect(line).toContain("Bluetooth is paused");
+    expect(line).toContain("disconnects");
+  });
+
+  it("nothing parked says NOTHING — `both`, absent and unknown render no line", () => {
+    // F-88 discipline, same as LINKCAP: an absent verdict never speaks. A line
+    // here would tell the owner a radio is paused when the car never said so.
+    expect(describeLinkOwner("both")).toBeNull();
+    expect(describeLinkOwner(null)).toBeNull();
+    expect(describeLinkOwner(undefined)).toBeNull();
+  });
+
+  it("ConnectionSection reads linkOwner and renders the line only when it exists", () => {
+    expect(section).toContain("    linkOwner,\n");
+    expect(section).toContain(
+      "const linkOwnerLine = describeLinkOwner(linkOwner)",
+    );
+    const flat = section.replace(/\s+/g, " ");
+    expect(flat).toContain("linkOwnerLine ?");
+    expect(flat).toMatch(
+      /<InlineMessage tone="info">\s*\{linkOwnerLine\}\s*<\/InlineMessage>/,
+    );
   });
 });
 
