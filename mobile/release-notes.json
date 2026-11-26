@@ -1,4 +1,9 @@
 {
+  "4.0.1": [
+    "Cars: the car now notices when the app goes away — it drops the held speed, stops the motors in the same loop and shows \"Disconnected\" on its own screen instead of holding the last throttle.",
+    "Cars: a power-up returns the car to its last switched router by itself, and the panel names the router it is joining plus the seconds spent trying; if the router is gone the car stays on its own hotspot instead of rebooting.",
+    "Reset car: the reset now clears the car's cloud profile too, so signing in on another phone no longer brings back the settings that were just wiped. An offline reset is retried on the next connection."
+  ],
   "4.0.0": [
     "Version 4 is a new release line for the same app: install it over the current build and sign in — your account, orders, saved cars and settings carry over.",
     "Cars: the slowest speed setting now moves the car instead of stopping it, a held stick reaches full speed, and a router switch shows the router being joined plus the seconds spent trying.",
